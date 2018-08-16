@@ -1,7 +1,15 @@
 package main
 
-import "fmt"
+import (
+	"./algo"
+	"./data"
+	"./cv"
+	"golang.org/x/exp/rand"
+)
 
 func main() {
-	fmt.Print("Welcome to Go Recommender System Engine")
+	rand.Seed(100)
+	random := &algo.Random{}
+	set := data.LoadDataSet()
+	cv.CrossValidate(random, set, []string{"RMSE"}, 5)
 }
