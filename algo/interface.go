@@ -11,6 +11,19 @@ type Option struct {
 	regularization float64
 	learningRate   float64
 	nEpoch         int
+	nFactors       int
+}
+
+func Copy(dst []float64, src []float64) []float64 {
+	copy(dst, src)
+	return dst
+}
+
+func MulConst(c float64, dst []float64) []float64 {
+	for i := 0; i < len(dst); i++ {
+		dst[i] *= c
+	}
+	return dst
 }
 
 type OptionEditor func(*Option)
@@ -30,5 +43,11 @@ func SetRegularization(regularization float64) OptionEditor {
 func SetNEpoch(nEpoch int) OptionEditor {
 	return func(option *Option) {
 		option.nEpoch = nEpoch
+	}
+}
+
+func SetNFactors(nFactors int) OptionEditor {
+	return func(option *Option) {
+		option.nFactors = nFactors
 	}
 }

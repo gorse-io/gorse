@@ -1,4 +1,4 @@
-// Algorithm [Kor10] predicting the baseline estimate for given user and item.
+// Algorithm predicting the baseline estimate for given user and item.
 //
 //                   \hat{r}_{ui} = b_{ui} = μ + b_u + b_i
 //
@@ -28,15 +28,6 @@ func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
 }
 
 func (baseLine *BaseLine) Fit(trainSet data.Set, options ...OptionEditor) {
-	// Initialize parameters
-	baseLine.userBias = make(map[int]float64)
-	baseLine.itemBias = make(map[int]float64)
-	for _, userId := range trainSet.AllUsers() {
-		baseLine.userBias[userId] = 0
-	}
-	for _, itemId := range trainSet.AllItems() {
-		baseLine.itemBias[itemId] = 0
-	}
 	// Setup options
 	option := Option{
 		regularization: 0.02,
@@ -45,6 +36,15 @@ func (baseLine *BaseLine) Fit(trainSet data.Set, options ...OptionEditor) {
 	}
 	for _, editor := range options {
 		editor(&option)
+	}
+	// Initialize parameters
+	baseLine.userBias = make(map[int]float64)
+	baseLine.itemBias = make(map[int]float64)
+	for _, userId := range trainSet.AllUsers() {
+		baseLine.userBias[userId] = 0
+	}
+	for _, itemId := range trainSet.AllItems() {
+		baseLine.itemBias[itemId] = 0
 	}
 	// Stochastic Gradient Descent
 	users, items, ratings := trainSet.AllInteraction()
