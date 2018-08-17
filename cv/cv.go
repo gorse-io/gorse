@@ -3,10 +3,9 @@ package cv
 import "../algo"
 import (
 	"../data"
-	"fmt"
 	"github.com/gonum/floats"
-	"math"
 	"github.com/gonum/stat"
+	"math"
 )
 
 func AbsTo(dst []float64, a []float64) {
@@ -33,22 +32,22 @@ func MeanAbsoluteError(predictions []float64, truth []float64) float64 {
 	return stat.Mean(temp, nil)
 }
 
-func CrossValidate(recommender algo.Algorithm, dataSet data.Set, measures []string, cv int) {
+func CrossValidate(recommender algo.Algorithm, dataSet data.Set, measures []string, cv int) [][]float64 {
+	a := make([][]float64, cv)
 	// Split data set
 	trainFolds, testFolds := dataSet.KFold(cv)
 	for i := 0; i < cv; i++ {
-		fmt.Printf("Fold %d\n", i+1)
 		trainFold := trainFolds[i]
 		testFold := testFolds[i]
-		recommender.Fit(data.Set{trainFold, trainFold.Nrow()})
+		recommender.Fit(data.NewDataSet(trainFold))
 		result := make([]float64, testFold.Nrow())
 		for j := 0; j < testFold.Nrow(); j++ {
-			userId, _ := testFold.Elem(j,0).Int()
-			itemId, _ := testFold.Elem(j,1).Int()
+			userId, _ := testFold.Elem(j, 0).Int()
+			itemId, _ := testFold.Elem(j, 1).Int()
 			result[j] = recommender.Predict(userId, itemId)
 		}
 		tr := testFold.Col("X2").Float()
-		fmt.Println(RootMeanSquareError(result, tr))
-		fmt.Println(MeanAbsoluteError(result, tr))
+		a[i] = []float64{RootMeanSquareError(result, tr), MeanAbsoluteError(result, tr)}
 	}
+	return a
 }

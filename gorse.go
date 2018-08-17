@@ -2,14 +2,18 @@ package main
 
 import (
 	"./algo"
-	"./data"
 	"./cv"
+	"./data"
+	"fmt"
 	"golang.org/x/exp/rand"
+	"time"
 )
 
 func main() {
-	rand.Seed(100)
-	random := &algo.Random{}
+	rand.Seed(uint64(time.Now().UTC().UnixNano()))
+	random := algo.NewRandomRecommend()
+	baseline := algo.NewBaseLineRecommend()
 	set := data.LoadDataSet()
-	cv.CrossValidate(random, set, []string{"RMSE"}, 5)
+	fmt.Println(cv.CrossValidate(random, set, []string{"RMSE"}, 5))
+	fmt.Println(cv.CrossValidate(baseline, set, []string{"RMSE"}, 5))
 }
