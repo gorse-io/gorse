@@ -3,4 +3,4 @@ language: go
 go:
  - "1.10.2"
 
-install:
+go_import_path: $HOME/gopath/src/github.com/ZhangZhenghao/gorse
