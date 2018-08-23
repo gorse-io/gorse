@@ -3,5 +3,5 @@ language: go
 go:
  - "1.10.2"
 
-install:
+before_install:
   - export GOPATH=$HOME/gopath/src/github.com/ZhangZhenghao/gorse
