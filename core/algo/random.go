@@ -13,19 +13,19 @@ import (
 )
 
 type Random struct {
-	mean   float64
-	stdDev float64
+	mean   float64 // mu
+	stdDev float64 // sigma
 }
 
 func NewRandomRecommend() *Random {
-	return &Random{}
+	return new(Random)
 }
 
 func (random *Random) Predict(userId int, itemId int) float64 {
 	return rand.NormFloat64()*random.stdDev + random.mean
 }
 
-func (random *Random) Fit(trainSet data.Set, options ...OptionEditor) {
+func (random *Random) Fit(trainSet data.Set, options ...OptionSetter) {
 	ratings := trainSet.AllRatings()
 	random.mean = stat.Mean(ratings, nil)
 	random.stdDev = stat.StdDev(ratings, nil)

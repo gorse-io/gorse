@@ -7,18 +7,16 @@
 
 package algo
 
-import (
-	"../data"
-)
+import "../data"
 
 type BaseLine struct {
-	userBias   map[int]float64
-	itemBias   map[int]float64
-	globalBias float64
+	userBias   map[int]float64 // b_u
+	itemBias   map[int]float64 // b_i
+	globalBias float64         // mu
 }
 
 func NewBaseLineRecommend() *BaseLine {
-	return &BaseLine{}
+	return new(BaseLine)
 }
 
 func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
@@ -27,12 +25,12 @@ func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
 	return userBias + itemBias + baseLine.globalBias
 }
 
-func (baseLine *BaseLine) Fit(trainSet data.Set, options ...OptionEditor) {
+func (baseLine *BaseLine) Fit(trainSet data.Set, options ...OptionSetter) {
 	// Setup options
 	option := Option{
-		regularization: 0.02,
-		learningRate:   0.005,
-		nEpoch:         20,
+		reg:     0.02,
+		lr:      0.005,
+		nEpochs: 20,
 	}
 	for _, editor := range options {
 		editor(&option)
@@ -48,7 +46,7 @@ func (baseLine *BaseLine) Fit(trainSet data.Set, options ...OptionEditor) {
 	}
 	// Stochastic Gradient Descent
 	users, items, ratings := trainSet.AllInteraction()
-	for epoch := 0; epoch < option.nEpoch; epoch++ {
+	for epoch := 0; epoch < option.nEpochs; epoch++ {
 		for i := 0; i < trainSet.NRow(); i++ {
 			userId := users[i]
 			itemId := items[i]
@@ -56,14 +54,14 @@ func (baseLine *BaseLine) Fit(trainSet data.Set, options ...OptionEditor) {
 			userBias, _ := baseLine.userBias[userId]
 			itemBias, _ := baseLine.itemBias[itemId]
 			// Compute gradient
-			diff := rating - baseLine.globalBias - userBias - itemBias
-			gradGlobalBias := -2 * diff
-			gradUserBias := -2*diff + 2*option.regularization*userBias
-			gradItemBias := -2*diff + 2*option.regularization*itemBias
+			diff := baseLine.Predict(userId, itemId) - rating
+			gradGlobalBias := diff
+			gradUserBias := diff + option.reg*userBias
+			gradItemBias := diff + option.reg*itemBias
 			// Update parameters
-			baseLine.globalBias -= option.learningRate * gradGlobalBias
-			baseLine.userBias[userId] -= option.learningRate * gradUserBias
-			baseLine.itemBias[itemId] -= option.learningRate * gradItemBias
+			baseLine.globalBias -= option.lr * gradGlobalBias
+			baseLine.userBias[userId] -= option.lr * gradUserBias
+			baseLine.itemBias[itemId] -= option.lr * gradItemBias
 		}
 	}
 }

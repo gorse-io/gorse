@@ -14,36 +14,39 @@ import (
 )
 
 type SVD struct {
-	userFactor map[int][]float64
-	itemFactor map[int][]float64
-	userBias   map[int]float64
-	itemBias   map[int]float64
-	globalBias float64
+	userFactor map[int][]float64 // p_u
+	itemFactor map[int][]float64 // q_i
+	userBias   map[int]float64   // b_u
+	itemBias   map[int]float64   // b_i
+	globalBias float64           // mu
 }
 
 func NewSVDRecommend() *SVD {
-	return &SVD{}
+	return new(SVD)
 }
 
 func (svd *SVD) Predict(userId int, itemId int) float64 {
 	userFactor, _ := svd.userFactor[userId]
 	itemFactor, _ := svd.itemFactor[itemId]
-	dot := .0
+	product := .0
 	if len(userFactor) == len(itemFactor) {
-		dot = floats.Dot(userFactor, itemFactor)
+		product = floats.Dot(userFactor, itemFactor)
 	}
 	userBias, _ := svd.userBias[userId]
 	itemBias, _ := svd.itemBias[itemId]
-	return svd.globalBias + userBias + itemBias + dot
+	return svd.globalBias + userBias + itemBias + product
 }
 
-func (svd *SVD) Fit(trainSet data.Set, options ...OptionEditor) {
+func (svd *SVD) Fit(trainSet data.Set, options ...OptionSetter) {
 	// Setup options
 	option := Option{
-		nFactors:       100,
-		nEpoch:         20,
-		learningRate:   0.005,
-		regularization: 0.02,
+		nFactors:   100,
+		nEpochs:    20,
+		lr:         0.005,
+		reg:        0.02,
+		biased:     true,
+		initMean:   0,
+		initStdDev: 0.1,
 	}
 	for _, editor := range options {
 		editor(&option)
@@ -55,16 +58,16 @@ func (svd *SVD) Fit(trainSet data.Set, options ...OptionEditor) {
 	svd.itemFactor = make(map[int][]float64)
 	for _, userId := range trainSet.AllUsers() {
 		svd.userBias[userId] = 0
-		svd.userFactor[userId] = make([]float64, option.nFactors)
+		svd.userFactor[userId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 	for _, itemId := range trainSet.AllItems() {
 		svd.itemBias[itemId] = 0
-		svd.itemFactor[itemId] = make([]float64, option.nFactors)
+		svd.itemFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 	// Stochastic Gradient Descent
 	users, items, ratings := trainSet.AllInteraction()
 	buffer := make([]float64, option.nFactors)
-	for epoch := 0; epoch < option.nEpoch; epoch++ {
+	for epoch := 0; epoch < option.nEpochs; epoch++ {
 		for i := 0; i < trainSet.NRow(); i++ {
 			userId := users[i]
 			itemId := items[i]
@@ -74,24 +77,24 @@ func (svd *SVD) Fit(trainSet data.Set, options ...OptionEditor) {
 			userFactor, _ := svd.userFactor[userId]
 			itemFactor, _ := svd.itemFactor[itemId]
 			// Compute error
-			diff := rating - svd.globalBias - userBias - itemBias - floats.Dot(userFactor, itemFactor)
+			diff := svd.Predict(userId, itemId) - rating
 			// Update global bias
-			gradGlobalBias := -2 * diff
-			svd.globalBias -= option.learningRate * gradGlobalBias
+			gradGlobalBias := 2 * diff
+			svd.globalBias -= option.lr * gradGlobalBias
 			// Update user bias
-			gradUserBias := -2*diff + 2*option.regularization*userBias
-			svd.userBias[userId] -= option.learningRate * gradUserBias
+			gradUserBias := 2*diff + 2*option.reg*userBias
+			svd.userBias[userId] -= option.lr * gradUserBias
 			// Update item bias
-			gradItemBias := -2*diff + 2*option.regularization*itemBias
-			svd.itemBias[itemId] -= option.learningRate * gradItemBias
+			gradItemBias := 2*diff + 2*option.reg*itemBias
+			svd.itemBias[itemId] -= option.lr * gradItemBias
 			// Update user latent factor
-			gradUserFactor := Copy(buffer, userFactor)
-			floats.Sub(MulConst(-2*diff, itemFactor), MulConst(2*option.regularization, userFactor))
-			floats.Sub(svd.userFactor[userId], MulConst(option.learningRate, gradUserFactor))
+			gradUserFactor := Copy(buffer, itemFactor)
+			floats.Add(MulConst(2*diff, gradUserFactor), MulConst(2*option.reg, userFactor))
+			floats.Sub(svd.userFactor[userId], MulConst(option.lr, gradUserFactor))
 			// Update item latent factor
-			gradItemFactor := Copy(buffer, itemFactor)
-			floats.Sub(MulConst(-2*diff, userFactor), MulConst(2*option.regularization, itemFactor))
-			floats.Sub(svd.itemFactor[itemId], MulConst(option.learningRate, gradItemFactor))
+			gradItemFactor := Copy(buffer, userFactor)
+			floats.Add(MulConst(2*diff, gradItemFactor), MulConst(2*option.reg, itemFactor))
+			floats.Sub(svd.itemFactor[itemId], MulConst(option.lr, gradItemFactor))
 		}
 	}
 }
