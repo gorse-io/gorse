@@ -4,10 +4,9 @@
 // where \hat{μ} and \hat{σ}^2 are estimated from the training data
 // using Maximum Likelihood Estimation
 
-package algo
+package core
 
 import (
-	"core/data"
 	"github.com/gonum/stat"
 	"math/rand"
 )
@@ -25,7 +24,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return rand.NormFloat64()*random.stdDev + random.mean
 }
 
-func (random *Random) Fit(trainSet data.Set, options ...OptionSetter) {
+func (random *Random) Fit(trainSet Set, options ...OptionSetter) {
 	ratings := trainSet.AllRatings()
 	random.mean = stat.Mean(ratings, nil)
 	random.stdDev = stat.StdDev(ratings, nil)

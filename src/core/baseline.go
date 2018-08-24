@@ -5,9 +5,7 @@
 // If user u is unknown, then the bias bu is assumed to be zero. The same
 // applies for item i with bi.
 
-package algo
-
-import "core/data"
+package core
 
 type BaseLine struct {
 	userBias   map[int]float64 // b_u
@@ -25,7 +23,7 @@ func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
 	return userBias + itemBias + baseLine.globalBias
 }
 
-func (baseLine *BaseLine) Fit(trainSet data.Set, options ...OptionSetter) {
+func (baseLine *BaseLine) Fit(trainSet Set, options ...OptionSetter) {
 	// Setup options
 	option := Option{
 		reg:     0.02,

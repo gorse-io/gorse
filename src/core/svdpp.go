@@ -9,10 +9,10 @@
 // then the bias b_u and the factors p_u are assumed to be zero. The same
 // applies for item i with b_i, q_i and y_i.
 
-package algo
+package core
 
+/*
 import (
-	"core/data"
 	"github.com/gonum/floats"
 	"math"
 )
@@ -66,7 +66,7 @@ func (pp *SVDPP) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (pp *SVDPP) Fit(trainSet data.Set, options ...OptionSetter) {
+func (pp *SVDPP) Fit(trainSet Set, options ...OptionSetter) {
 	// Setup options
 	option := Option{
 		nFactors:   20,
@@ -151,3 +151,4 @@ func (pp *SVDPP) Fit(trainSet data.Set, options ...OptionSetter) {
 		}
 	}
 }
+*/

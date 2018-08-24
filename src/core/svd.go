@@ -6,10 +6,10 @@
 // If user u is unknown, then the bias bu and the factors pu are
 // assumed to be zero. The same applies for item i with bi and qi.
 
-package algo
+package core
 
+/*
 import (
-	"core/data"
 	"github.com/gonum/floats"
 )
 
@@ -37,7 +37,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	return svd.globalBias + userBias + itemBias + product
 }
 
-func (svd *SVD) Fit(trainSet data.Set, options ...OptionSetter) {
+func (svd *SVD) Fit(trainSet Set, options ...OptionSetter) {
 	// Setup options
 	option := Option{
 		nFactors:   100,
@@ -88,9 +88,13 @@ func (svd *SVD) Fit(trainSet data.Set, options ...OptionSetter) {
 			gradItemBias := 2*diff + 2*option.reg*itemBias
 			svd.itemBias[itemId] -= option.lr * gradItemBias
 			// Update user latent factor
-			gradUserFactor := Copy(buffer, itemFactor)
-			floats.Add(MulConst(2*diff, gradUserFactor), MulConst(2*option.reg, userFactor))
-			floats.Sub(svd.userFactor[userId], MulConst(option.lr, gradUserFactor))
+			gradUserFactor := buffer
+			copy(gradUserFactor, itemFactor)
+			MulConst(2*diff, gradUserFactor)
+			MulConst(2*option.reg, userFactor)
+			floats.Add(gradUserFactor, userFactor)
+			MulConst(option.lr, gradUserFactor)
+			floats.Sub(svd.userFactor[userId], gradUserFactor)
 			// Update item latent factor
 			gradItemFactor := Copy(buffer, userFactor)
 			floats.Add(MulConst(2*diff, gradItemFactor), MulConst(2*option.reg, itemFactor))
@@ -98,3 +102,4 @@ func (svd *SVD) Fit(trainSet data.Set, options ...OptionSetter) {
 		}
 	}
 }
+*/

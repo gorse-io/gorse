@@ -1,10 +1,8 @@
-package algo
-
-import "core/data"
+package core
 
 type Algorithm interface {
 	Predict(userId int, itemId int) float64
-	Fit(trainSet data.Set, options ...OptionSetter)
+	Fit(trainSet Set, options ...OptionSetter)
 }
 
 type Option struct {

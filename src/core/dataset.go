@@ -1,4 +1,4 @@
-package data
+package core
 
 import (
 	"bufio"
@@ -97,7 +97,7 @@ func NewDataSet(df dataframe.DataFrame) Set {
 }
 
 func LoadDataSet() Set {
-	return NewDataSet(readCSV("data/ml-100k/u.data"))
+	return NewDataSet(readCSV("C:\\Users\\zhenzh\\Desktop\\data\\ml-100k\\u.data"))
 }
 
 func readCSV(fileName string) dataframe.DataFrame {
