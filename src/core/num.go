@@ -51,7 +51,7 @@ func NewUniformVector(size int, low float64, high float64) []float64 {
 func RootMeanSquareError(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))
 	floats.SubTo(temp, predictions, truth)
-	floats.MulTo(temp, temp, temp)
+	floats.Mul(temp, temp)
 	return math.Sqrt(stat.Mean(temp, nil))
 }
 
