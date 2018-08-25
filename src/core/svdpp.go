@@ -11,7 +11,6 @@
 
 package core
 
-/*
 import (
 	"github.com/gonum/floats"
 	"math"
@@ -22,51 +21,64 @@ type SVDPP struct {
 	userFactor  map[int][]float64 // p_u
 	itemFactor  map[int][]float64 // q_i
 	implFactor  map[int][]float64 // y_i
-	cacheFactor map[int][]float64 // |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right
 	userBias    map[int]float64   // b_u
 	itemBias    map[int]float64   // b_i
 	globalBias  float64           // mu
+	// Optimization with cache
+	//cacheFailed bool
+	//cacheFactor map[int][]float64 // |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right
 }
 
 func NewSVDPP() *SVDPP {
 	return new(SVDPP)
 }
 
-func (pp *SVDPP) Predict(userId int, itemId int) float64 {
+func (pp *SVDPP) EnsembleImplFactors(userId int) ([]float64, bool) {
+	history, exist := pp.userHistory[userId]
+	emImpFactor := make([]float64, 0)
+	// User history doesn't exist
+	if !exist {
+		return emImpFactor, false
+	}
+	// User history exists
+	for _, itemId := range history {
+		if len(emImpFactor) == 0 {
+			// Create ensemble implicit factor
+			emImpFactor = make([]float64, len(pp.implFactor[itemId]))
+		}
+		floats.Add(emImpFactor, pp.implFactor[itemId])
+	}
+	DivConst(math.Sqrt(float64(len(history))), emImpFactor)
+	return emImpFactor, true
+}
+
+func (pp *SVDPP) InternalPredict(userId int, itemId int) (float64, []float64) {
 	ret := .0
 	userFactor, _ := pp.userFactor[userId]
 	itemFactor, _ := pp.itemFactor[itemId]
+	emImpFactor, _ := pp.EnsembleImplFactors(userId)
 	if len(itemFactor) > 0 {
 		temp := make([]float64, len(itemFactor))
-		// + y_i
-		history, historyAvailable := pp.userHistory[userId]
-		cacheFactor, cacheAvailable := pp.cacheFactor[userId]
-		if cacheAvailable {
-			// Cache available
-			floats.Add(temp, cacheFactor)
-		} else if historyAvailable {
-			// History available
-			pp.cacheFactor[userId] = make([]float64, len(userFactor))
-			for _, itemId := range history {
-				floats.Add(pp.cacheFactor[userId], pp.implFactor[itemId])
-			}
-			DivConst(math.Sqrt(float64(len(history))), pp.cacheFactor[userId])
-			floats.Add(temp, pp.cacheFactor[userId])
-		}
-		// + p_u
 		if len(userFactor) > 0 {
 			floats.Add(temp, userFactor)
 		}
-		ret = floats.Dot(itemFactor, temp)
+		if len(emImpFactor) > 0 {
+			floats.Add(temp, emImpFactor)
+		}
+		ret = floats.Dot(temp, itemFactor)
 	}
-	// + b_u + b_i + mu
 	userBias, _ := pp.userBias[userId]
 	itemBias, _ := pp.itemBias[itemId]
 	ret += userBias + itemBias + pp.globalBias
+	return ret, emImpFactor
+}
+
+func (pp *SVDPP) Predict(userId int, itemId int) float64 {
+	ret, _ := pp.InternalPredict(userId, itemId)
 	return ret
 }
 
-func (pp *SVDPP) Fit(trainSet Set, options ...OptionSetter) {
+func (pp *SVDPP) Fit(trainSet TrainSet, options ...OptionSetter) {
 	// Setup options
 	option := Option{
 		nFactors:   20,
@@ -85,19 +97,19 @@ func (pp *SVDPP) Fit(trainSet Set, options ...OptionSetter) {
 	pp.userFactor = make(map[int][]float64)
 	pp.itemFactor = make(map[int][]float64)
 	pp.implFactor = make(map[int][]float64)
-	pp.cacheFactor = make(map[int][]float64)
-	for _, userId := range trainSet.AllUsers() {
+	//pp.cacheFactor = make(map[int][]float64)
+	for _, userId := range trainSet.Users() {
 		pp.userBias[userId] = 0
 		pp.userFactor[userId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
-	for _, itemId := range trainSet.AllItems() {
+	for _, itemId := range trainSet.Items() {
 		pp.itemBias[itemId] = 0
 		pp.itemFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 		pp.implFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 	// Build user rating set
 	pp.userHistory = make(map[int][]int)
-	users, items, ratings := trainSet.AllInteraction()
+	users, items, ratings := trainSet.Interactions()
 	for i := 0; i < len(users); i++ {
 		userId := users[i]
 		itemId := items[i]
@@ -108,10 +120,12 @@ func (pp *SVDPP) Fit(trainSet Set, options ...OptionSetter) {
 		// Insert item
 		pp.userHistory[userId] = append(pp.userHistory[userId], itemId)
 	}
+	// Create buffers
+	a := make([]float64, option.nFactors)
+	b := make([]float64, option.nFactors)
 	// Stochastic Gradient Descent
-	buffer := make([]float64, option.nFactors)
 	for epoch := 0; epoch < option.nEpochs; epoch++ {
-		for i := 0; i < trainSet.NRow(); i++ {
+		for i := 0; i < trainSet.Length(); i++ {
 			userId := users[i]
 			itemId := items[i]
 			rating := ratings[i]
@@ -120,7 +134,8 @@ func (pp *SVDPP) Fit(trainSet Set, options ...OptionSetter) {
 			userFactor, _ := pp.userFactor[userId]
 			itemFactor, _ := pp.itemFactor[itemId]
 			// Compute error
-			diff := pp.Predict(userId, itemId) - rating
+			pred, emImpFactor := pp.InternalPredict(userId, itemId)
+			diff := pred - rating
 			// Update global bias
 			gradGlobalBias := diff
 			pp.globalBias -= option.lr * gradGlobalBias
@@ -131,24 +146,37 @@ func (pp *SVDPP) Fit(trainSet Set, options ...OptionSetter) {
 			gradItemBias := diff + option.reg*itemBias
 			pp.itemBias[itemId] -= option.lr * gradItemBias
 			// Update user latent factor
-			gradUserFactor := Copy(buffer, itemFactor)
-			floats.Add(MulConst(diff, gradUserFactor), MulConst(option.reg, userFactor))
-			floats.Sub(pp.userFactor[userId], MulConst(option.lr, gradUserFactor))
+			copy(a, itemFactor)
+			MulConst(diff, a)
+			copy(b, userFactor)
+			MulConst(option.reg, b)
+			floats.Add(a, b)
+			MulConst(option.lr, a)
+			floats.Sub(pp.userFactor[userId], a)
 			// Update item latent factor
-			gradItemFactor := Copy(buffer, userFactor)
-			floats.Add(MulConst(diff, gradItemFactor), MulConst(option.reg, itemFactor))
-			floats.Sub(pp.itemFactor[itemId], MulConst(option.lr, gradItemFactor))
+			copy(a, userFactor)
+			if len(emImpFactor) > 0 {
+				floats.Add(a, emImpFactor)
+			}
+			MulConst(diff, a)
+			copy(b, itemFactor)
+			MulConst(option.reg, b)
+			floats.Add(a, b)
+			MulConst(option.lr, a)
+			floats.Sub(pp.itemFactor[itemId], a)
 			// Update implicit latent factor
 			set, _ := pp.userHistory[userId]
 			for _, itemId := range set {
 				implFactor := pp.implFactor[itemId]
-				gradImplFactor := Copy(buffer, implFactor)
-				MulConst(diff, gradItemFactor)
-				DivConst(math.Sqrt(float64(len(set))), gradImplFactor)
-				floats.Add(gradImplFactor, MulConst(option.reg, implFactor))
-				floats.Sub(pp.implFactor[itemId], MulConst(option.lr, gradImplFactor))
+				copy(a, itemFactor)
+				MulConst(diff, a)
+				DivConst(math.Sqrt(float64(len(set))), a)
+				copy(b, implFactor)
+				MulConst(option.reg, b)
+				floats.Add(a, b)
+				MulConst(option.lr, a)
+				floats.Sub(pp.implFactor[itemId], a)
 			}
 		}
 	}
 }
-*/

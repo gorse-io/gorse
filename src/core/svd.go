@@ -8,7 +8,6 @@
 
 package core
 
-/*
 import (
 	"github.com/gonum/floats"
 )
@@ -37,7 +36,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	return svd.globalBias + userBias + itemBias + product
 }
 
-func (svd *SVD) Fit(trainSet Set, options ...OptionSetter) {
+func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 	// Setup options
 	option := Option{
 		nFactors:   100,
@@ -56,19 +55,21 @@ func (svd *SVD) Fit(trainSet Set, options ...OptionSetter) {
 	svd.itemBias = make(map[int]float64)
 	svd.userFactor = make(map[int][]float64)
 	svd.itemFactor = make(map[int][]float64)
-	for _, userId := range trainSet.AllUsers() {
+	for _, userId := range trainSet.Users() {
 		svd.userBias[userId] = 0
 		svd.userFactor[userId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
-	for _, itemId := range trainSet.AllItems() {
+	for _, itemId := range trainSet.Items() {
 		svd.itemBias[itemId] = 0
 		svd.itemFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
+	// Create buffers
+	a := make([]float64, option.nFactors)
+	b := make([]float64, option.nFactors)
 	// Stochastic Gradient Descent
-	users, items, ratings := trainSet.AllInteraction()
-	buffer := make([]float64, option.nFactors)
+	users, items, ratings := trainSet.Interactions()
 	for epoch := 0; epoch < option.nEpochs; epoch++ {
-		for i := 0; i < trainSet.NRow(); i++ {
+		for i := 0; i < trainSet.Length(); i++ {
 			userId := users[i]
 			itemId := items[i]
 			rating := ratings[i]
@@ -79,27 +80,30 @@ func (svd *SVD) Fit(trainSet Set, options ...OptionSetter) {
 			// Compute error
 			diff := svd.Predict(userId, itemId) - rating
 			// Update global bias
-			gradGlobalBias := 2 * diff
+			gradGlobalBias := diff
 			svd.globalBias -= option.lr * gradGlobalBias
 			// Update user bias
-			gradUserBias := 2*diff + 2*option.reg*userBias
+			gradUserBias := diff + option.reg*userBias
 			svd.userBias[userId] -= option.lr * gradUserBias
 			// Update item bias
-			gradItemBias := 2*diff + 2*option.reg*itemBias
+			gradItemBias := diff + option.reg*itemBias
 			svd.itemBias[itemId] -= option.lr * gradItemBias
 			// Update user latent factor
-			gradUserFactor := buffer
-			copy(gradUserFactor, itemFactor)
-			MulConst(2*diff, gradUserFactor)
-			MulConst(2*option.reg, userFactor)
-			floats.Add(gradUserFactor, userFactor)
-			MulConst(option.lr, gradUserFactor)
-			floats.Sub(svd.userFactor[userId], gradUserFactor)
+			copy(a, itemFactor)
+			MulConst(diff, a)
+			copy(b, userFactor)
+			MulConst(option.reg, b)
+			floats.Add(a, b)
+			MulConst(option.lr, a)
+			floats.Sub(svd.userFactor[userId], a)
 			// Update item latent factor
-			gradItemFactor := Copy(buffer, userFactor)
-			floats.Add(MulConst(2*diff, gradItemFactor), MulConst(2*option.reg, itemFactor))
-			floats.Sub(svd.itemFactor[itemId], MulConst(option.lr, gradItemFactor))
+			copy(a, userFactor)
+			MulConst(diff, a)
+			copy(b, itemFactor)
+			MulConst(option.reg, b)
+			floats.Add(a, b)
+			MulConst(option.lr, a)
+			floats.Sub(svd.itemFactor[itemId], a)
 		}
 	}
 }
-*/

@@ -11,6 +11,8 @@ type BaseLine struct {
 	userBias   map[int]float64 // b_u
 	itemBias   map[int]float64 // b_i
 	globalBias float64         // mu
+	low        float64
+	high       float64
 }
 
 func NewBaseLine() *BaseLine {
@@ -20,10 +22,17 @@ func NewBaseLine() *BaseLine {
 func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
 	userBias, _ := baseLine.userBias[userId]
 	itemBias, _ := baseLine.itemBias[itemId]
-	return userBias + itemBias + baseLine.globalBias
+	ret := userBias + itemBias + baseLine.globalBias
+	if ret < baseLine.low {
+		ret = baseLine.low
+	} else if ret > baseLine.high {
+		ret = baseLine.high
+	}
+	return ret
 }
 
-func (baseLine *BaseLine) Fit(trainSet Set, options ...OptionSetter) {
+func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...OptionSetter) {
+	baseLine.low, baseLine.high = trainSet.RatingRange()
 	// Setup options
 	option := Option{
 		reg:     0.02,
@@ -36,16 +45,16 @@ func (baseLine *BaseLine) Fit(trainSet Set, options ...OptionSetter) {
 	// Initialize parameters
 	baseLine.userBias = make(map[int]float64)
 	baseLine.itemBias = make(map[int]float64)
-	for _, userId := range trainSet.AllUsers() {
+	for _, userId := range trainSet.Users() {
 		baseLine.userBias[userId] = 0
 	}
-	for _, itemId := range trainSet.AllItems() {
+	for _, itemId := range trainSet.Items() {
 		baseLine.itemBias[itemId] = 0
 	}
 	// Stochastic Gradient Descent
-	users, items, ratings := trainSet.AllInteraction()
+	users, items, ratings := trainSet.Interactions()
 	for epoch := 0; epoch < option.nEpochs; epoch++ {
-		for i := 0; i < trainSet.NRow(); i++ {
+		for i := 0; i < trainSet.Length(); i++ {
 			userId := users[i]
 			itemId := items[i]
 			rating := ratings[i]

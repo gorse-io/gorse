@@ -26,7 +26,7 @@ func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	return 0
 }
 
-func (nmf *NMF) Fit(trainSet Set, options ...OptionSetter) {
+func (nmf *NMF) Fit(trainSet TrainSet, options ...OptionSetter) {
 	option := Option{
 		nFactors: 15,
 		nEpochs:  50,
@@ -41,10 +41,10 @@ func (nmf *NMF) Fit(trainSet Set, options ...OptionSetter) {
 	// Initialize parameters
 	nmf.userFactor = make(map[int][]float64)
 	nmf.itemFactor = make(map[int][]float64)
-	for _, userId := range trainSet.AllUsers() {
+	for _, userId := range trainSet.Users() {
 		nmf.userFactor[userId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
-	for _, itemId := range trainSet.AllItems() {
+	for _, itemId := range trainSet.Items() {
 		nmf.itemFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 }

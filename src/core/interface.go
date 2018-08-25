@@ -2,7 +2,7 @@ package core
 
 type Algorithm interface {
 	Predict(userId int, itemId int) float64
-	Fit(trainSet Set, options ...OptionSetter)
+	Fit(trainSet TrainSet, options ...OptionSetter)
 }
 
 type Option struct {

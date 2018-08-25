@@ -7,6 +7,40 @@ import (
 	"math/rand"
 )
 
+func Concatenate(arrs ...[]int) []int {
+	// Sum lengths
+	total := 0
+	for _, arr := range arrs {
+		total += len(arr)
+	}
+	// Concatenate
+	ret := make([]int, total)
+	pos := 0
+	for _, arr := range arrs {
+		for _, val := range arr {
+			ret[pos] = val
+			pos++
+		}
+	}
+	return ret
+}
+
+func SelectFloat(a []float64, indices []int) []float64 {
+	ret := make([]float64, len(indices))
+	for i, index := range indices {
+		ret[i] = a[index]
+	}
+	return ret
+}
+
+func SelectInt(a []int, indices []int) []int {
+	ret := make([]int, len(indices))
+	for i, index := range indices {
+		ret[i] = a[index]
+	}
+	return ret
+}
+
 // Linear algebra
 
 func Abs(dst []float64) {
@@ -27,7 +61,7 @@ func DivConst(c float64, dst []float64) {
 	}
 }
 
-// Probability theory
+// Generator
 
 func NewNormalVector(size int, mean float64, stdDev float64) []float64 {
 	ret := make([]float64, size)
@@ -47,6 +81,8 @@ func NewUniformVector(size int, low float64, high float64) []float64 {
 }
 
 // Metrics
+
+type Metrics func([]float64, []float64) float64
 
 func RootMeanSquareError(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))

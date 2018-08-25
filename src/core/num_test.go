@@ -7,6 +7,36 @@ import (
 	"testing"
 )
 
+func EqualInt(a []int, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestSelectFloat(t *testing.T) {
+	a := []float64{-1.0, 0, 1.0}
+	b := []float64{1.0, 0, 1.0}
+	c := []int{2, 1, 2}
+	if !floats.Equal(SelectFloat(a, c), b) {
+		t.Fail()
+	}
+}
+
+func TestSelectInt(t *testing.T) {
+	a := []int{1, 2, 3}
+	b := []int{2, 3, 3}
+	c := []int{1, 2, 2}
+	if !EqualInt(SelectInt(a, c), b) {
+		t.Fail()
+	}
+}
+
 func TestAbs(t *testing.T) {
 	a := []float64{-1.0, 0, 1.0}
 	b := []float64{1.0, 0, 1.0}

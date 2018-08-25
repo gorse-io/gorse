@@ -2,102 +2,85 @@ package core
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/kniren/gota/dataframe"
 	"gonum.org/v1/gonum/floats"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
+	"strings"
 )
 
-type Set struct {
-	Interactions dataframe.DataFrame
-	NRatings     int
-	users        []int
-	items        []int
-	UserMap      map[int]int
-	ItemMap      map[int]int
+type TrainSet struct {
+	ratings []float64
+	users   []int
+	items   []int
 }
 
-func Unique(a []int) []int {
-	memo := make(map[int]bool)
-	ret := make([]int, 0, len(a))
-	for _, val := range a {
-		if _, exist := memo[val]; !exist {
-			memo[val] = true
-			ret = append(ret, val)
-		}
-	}
-	return ret
+func (set *TrainSet) Length() int {
+	return len(set.ratings)
 }
 
-func (set *Set) NRow() int {
-	return set.Interactions.Nrow()
+func (set *TrainSet) Interactions() ([]int, []int, []float64) {
+	return set.users, set.items, set.ratings
 }
 
-func (set *Set) AllInteraction() ([]int, []int, []float64) {
-	users, _ := set.Interactions.Col("X0").Int()
-	items, _ := set.Interactions.Col("X1").Int()
-	ratings := set.Interactions.Col("X2").Float()
-	return users, items, ratings
-}
-
-func (set *Set) AllUsers() []int {
+func (set *TrainSet) Users() []int {
 	return set.users
 }
 
-func (set *Set) AllItems() []int {
+func (set *TrainSet) Items() []int {
 	return set.items
 }
 
-func (set *Set) AllRatings() []float64 {
-	return set.Interactions.Col("X2").Float()
+func (set *TrainSet) Ratings() []float64 {
+	return set.ratings
 }
 
-func (set *Set) RatingRange() (float64, float64) {
-	ratings := set.AllRatings()
+func (set *TrainSet) RatingRange() (float64, float64) {
+	ratings := set.Ratings()
 	return floats.Min(ratings), floats.Max(ratings)
 }
 
-func (set *Set) KFold(k int, seed int64) ([]dataframe.DataFrame, []dataframe.DataFrame) {
-	trainFolds := make([]dataframe.DataFrame, k)
-	testFolds := make([]dataframe.DataFrame, k)
-	rand.Seed(seed)
-	perm := rand.Perm(set.NRatings)
-	foldSize := set.NRatings / k
+func (set *TrainSet) KFold(k int, seed int64) ([]TrainSet, []TrainSet) {
+	trainFolds := make([]TrainSet, k)
+	testFolds := make([]TrainSet, k)
+	rand.Seed(0)
+	perm := rand.Perm(set.Length())
+	foldSize := set.Length() / k
+	begin, end := 0, 0
 	for i := 0; i < k; i++ {
-		begin := i * foldSize
-		end := begin + foldSize
-		if i+1 == k {
-			end = set.NRatings
+		end += foldSize
+		if i < set.Length()%k {
+			end++
 		}
-		testFolds[i] = set.Interactions.Subset(perm[begin:end]).Copy()
-		trainFolds[i] = set.Interactions.Subset(append(perm[0:begin], perm[end:set.NRatings]...)).Copy()
+		// Test set
+		testIndex := perm[begin:end]
+		testFolds[i].users = SelectInt(set.users, testIndex)
+		testFolds[i].items = SelectInt(set.items, testIndex)
+		testFolds[i].ratings = SelectFloat(set.ratings, testIndex)
+		// Train set
+		trainTest := Concatenate(perm[0:begin], perm[end:set.Length()])
+		trainFolds[i].users = SelectInt(set.users, trainTest)
+		trainFolds[i].items = SelectInt(set.items, trainTest)
+		trainFolds[i].ratings = SelectFloat(set.ratings, trainTest)
+		begin = end
 	}
 	return trainFolds, testFolds
 }
 
-func NewDataSet(df dataframe.DataFrame) Set {
-	set := Set{}
-	set.Interactions = df
-	set.NRatings = set.Interactions.Nrow()
-	// Create user table
-	users, _ := set.Interactions.Col("X0").Int()
-	set.users = Unique(users)
-	set.UserMap = make(map[int]int)
-	for innerUserId, userId := range set.users {
-		set.UserMap[userId] = innerUserId
-	}
-	// Create item table
-	items, _ := set.Interactions.Col("X1").Int()
-	set.items = Unique(items)
-	set.ItemMap = make(map[int]int)
-	for innerItemId, itemId := range set.items {
-		set.ItemMap[itemId] = innerItemId
-	}
+func NewDataSet(df dataframe.DataFrame) TrainSet {
+	set := TrainSet{}
+	set.users, _ = df.Col("X0").Int()
+	set.items, _ = df.Col("X1").Int()
+	set.ratings = df.Col("X2").Float()
 	return set
 }
 
-func LoadDataSet() Set {
-	return NewDataSet(readCSV("C:\\Users\\zhenzh\\Desktop\\data\\ml-100k\\u.data"))
+func LoadDataFromBuiltIn() TrainSet {
+	df := readCSV("C:\\Users\\zhenzh\\Desktop\\data\\ml-100k\\u.data")
+	return NewDataSet(df)
 }
 
 func readCSV(fileName string) dataframe.DataFrame {
@@ -107,4 +90,33 @@ func readCSV(fileName string) dataframe.DataFrame {
 		dataframe.WithDelimiter('\t'),
 		dataframe.HasHeader(false))
 	return df
+}
+
+// Utils
+
+func downloadFromUrl(url string) {
+	tokens := strings.Split(url, "/")
+	fileName := tokens[len(tokens)-1]
+	// TODO: check file existence first with io.IsExist
+	output, err := os.Create(fileName)
+	if err != nil {
+		fmt.Println("Error while creating", fileName, "-", err)
+		return
+	}
+	defer output.Close()
+
+	response, err := http.Get(url)
+	if err != nil {
+		fmt.Println("Error while downloading", url, "-", err)
+		return
+	}
+	defer response.Body.Close()
+
+	n, err := io.Copy(output, response.Body)
+	if err != nil {
+		fmt.Println("Error while downloading", url, "-", err)
+		return
+	}
+
+	fmt.Println(n, "bytes downloaded.")
 }

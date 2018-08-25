@@ -14,6 +14,8 @@ import (
 type Random struct {
 	mean   float64 // mu
 	stdDev float64 // sigma
+	low    float64
+	high   float64
 }
 
 func NewRandom() *Random {
@@ -21,11 +23,18 @@ func NewRandom() *Random {
 }
 
 func (random *Random) Predict(userId int, itemId int) float64 {
-	return rand.NormFloat64()*random.stdDev + random.mean
+	ret := rand.NormFloat64()*random.stdDev + random.mean
+	if ret < random.low {
+		ret = random.low
+	} else if ret > random.high {
+		ret = random.high
+	}
+	return ret
 }
 
-func (random *Random) Fit(trainSet Set, options ...OptionSetter) {
-	ratings := trainSet.AllRatings()
+func (random *Random) Fit(trainSet TrainSet, options ...OptionSetter) {
+	ratings := trainSet.Ratings()
 	random.mean = stat.Mean(ratings, nil)
 	random.stdDev = stat.StdDev(ratings, nil)
+	random.low, random.high = trainSet.RatingRange()
 }
