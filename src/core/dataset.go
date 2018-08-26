@@ -2,11 +2,13 @@ package core
 
 import (
 	"bufio"
-	"github.com/kniren/gota/dataframe"
 	"gonum.org/v1/gonum/floats"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 type TrainSet struct {
@@ -67,34 +69,42 @@ func (set *TrainSet) KFold(k int, seed int64) ([]TrainSet, []TrainSet) {
 	return trainFolds, testFolds
 }
 
-func NewDataSet(df dataframe.DataFrame) TrainSet {
-	set := TrainSet{}
-	set.users, _ = df.Col("X0").Int()
-	set.items, _ = df.Col("X1").Int()
-	set.ratings = df.Col("X2").Float()
-	return set
-}
-
 func LoadDataFromBuiltIn() TrainSet {
 	const dataFolder = "data"
 	const tempFolder = "temp"
-	dataFileName := filepath.Join(dataFolder, "ml-100k\\u.data")
+	dataFileName := filepath.Join(dataFolder, "ml-100k/u.data")
 	zipFileName := filepath.Join(tempFolder, "ml-100k.zip")
 	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
 		DownloadFromUrl("http://files.grouplens.org/datasets/movielens/ml-100k.zip", tempFolder)
 		Unzip(zipFileName, dataFolder)
 	}
-	df := readCSV(dataFileName)
-	return NewDataSet(df)
+	return LoadDataFromFile(dataFileName)
 }
 
-func readCSV(fileName string) dataframe.DataFrame {
+func LoadDataFromFile(fileName string) TrainSet {
+	set := TrainSet{}
+	set.users = make([]int, 0)
+	set.items = make([]int, 0)
+	set.ratings = make([]float64, 0)
+	// Open file
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
 	// Read CSV file
-	file, _ := os.Open(fileName)
-	df := dataframe.ReadCSV(bufio.NewReader(file),
-		dataframe.WithDelimiter('\t'),
-		dataframe.HasHeader(false))
-	return df
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, "\t")
+		user, _ := strconv.Atoi(fields[0])
+		item, _ := strconv.Atoi(fields[1])
+		rating, _ := strconv.Atoi(fields[2])
+		set.users = append(set.users, user)
+		set.items = append(set.items, item)
+		set.ratings = append(set.ratings, float64(rating))
+	}
+	return set
 }
 
 // Utils
