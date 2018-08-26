@@ -65,12 +65,12 @@ func TestDivConst(t *testing.T) {
 }
 
 func TestNewNormalVector(t *testing.T) {
-	a := NewNormalVector(100, 1, 2)
+	a := NewNormalVector(1000, 1, 2)
 	mean := stat.Mean(a, nil)
 	stdDev := stat.StdDev(a, nil)
-	if math.Abs(mean-1) > 0.25 {
+	if math.Abs(mean-1) > 0.05 {
 		t.Fail()
-	} else if math.Abs(stdDev-2) > 0.25 {
+	} else if math.Abs(stdDev-2) > 0.05 {
 		t.Fail()
 	}
 }
