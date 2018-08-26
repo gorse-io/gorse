@@ -68,10 +68,10 @@ func TestNewNormalVector(t *testing.T) {
 	a := NewNormalVector(1000, 1, 2)
 	mean := stat.Mean(a, nil)
 	stdDev := stat.StdDev(a, nil)
-	if math.Abs(mean-1) > 0.05 {
-		t.Fail()
-	} else if math.Abs(stdDev-2) > 0.05 {
-		t.Fail()
+	if math.Abs(mean-1) > 0.1 {
+		t.Fatalf("Mean(%.4f) doesn't match %.4f", mean, 1.0)
+	} else if math.Abs(stdDev-2) > 0.1 {
+		t.Fatalf("Std(%.4f) doesn't match %.4f", stdDev, 2.0)
 	}
 }
 
