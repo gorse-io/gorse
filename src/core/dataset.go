@@ -76,14 +76,15 @@ func NewDataSet(df dataframe.DataFrame) TrainSet {
 }
 
 func LoadDataFromBuiltIn() TrainSet {
-	const dataFolder = "C:\\Users\\zhenzh\\Desktop\\data"
-	const tempFolder = "C:\\Users\\zhenzh\\Desktop\\temp"
-	fileName := filepath.Join(tempFolder, "ml-100k\\u.data")
-	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+	const dataFolder = "data"
+	const tempFolder = "temp"
+	dataFileName := filepath.Join(dataFolder, "ml-100k\\u.data")
+	zipFileName := filepath.Join(tempFolder, "ml-100k.zip")
+	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
 		DownloadFromUrl("http://files.grouplens.org/datasets/movielens/ml-100k.zip", tempFolder)
-		Unzip(fileName, dataFolder)
+		Unzip(zipFileName, dataFolder)
 	}
-	df := readCSV("C:\\Users\\zhenzh\\Desktop\\data\\ml-100k\\u.data")
+	df := readCSV(dataFileName)
 	return NewDataSet(df)
 }
 
