@@ -1,14 +1,8 @@
 package core
 
-import (
-	"github.com/gonum/stat"
-	"math"
-	"testing"
-)
-
 const EPSILON float64 = 0.05
 
-func TestRandom(t *testing.T) {
+/*func TestRandom(t *testing.T) {
 	const expectRMSE = 1.514
 	const expectMAE = 1.215
 	// Cross validation
@@ -26,3 +20,4 @@ func TestRandom(t *testing.T) {
 		t.Fatalf("MAE(%.3f) not in %.3f±%.3f", mae, expectMAE, EPSILON)
 	}
 }
+*/
