@@ -33,7 +33,8 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	}
 	userBias, _ := svd.userBias[userId]
 	itemBias, _ := svd.itemBias[itemId]
-	return svd.globalBias + userBias + itemBias + product
+	ret := svd.globalBias + userBias + itemBias + product
+	return ret
 }
 
 func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {

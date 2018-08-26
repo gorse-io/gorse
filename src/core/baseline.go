@@ -11,8 +11,6 @@ type BaseLine struct {
 	userBias   map[int]float64 // b_u
 	itemBias   map[int]float64 // b_i
 	globalBias float64         // mu
-	low        float64
-	high       float64
 }
 
 func NewBaseLine() *BaseLine {
@@ -23,16 +21,10 @@ func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
 	userBias, _ := baseLine.userBias[userId]
 	itemBias, _ := baseLine.itemBias[itemId]
 	ret := userBias + itemBias + baseLine.globalBias
-	if ret < baseLine.low {
-		ret = baseLine.low
-	} else if ret > baseLine.high {
-		ret = baseLine.high
-	}
 	return ret
 }
 
 func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...OptionSetter) {
-	baseLine.low, baseLine.high = trainSet.RatingRange()
 	// Setup options
 	option := Option{
 		reg:     0.02,

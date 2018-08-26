@@ -24,6 +24,7 @@ func NewRandom() *Random {
 
 func (random *Random) Predict(userId int, itemId int) float64 {
 	ret := rand.NormFloat64()*random.stdDev + random.mean
+	// Crop prediction
 	if ret < random.low {
 		ret = random.low
 	} else if ret > random.high {
