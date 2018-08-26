@@ -2,14 +2,11 @@ package core
 
 import (
 	"bufio"
-	"fmt"
 	"github.com/kniren/gota/dataframe"
 	"gonum.org/v1/gonum/floats"
-	"io"
 	"math/rand"
-	"net/http"
 	"os"
-	"strings"
+	"path/filepath"
 )
 
 type TrainSet struct {
@@ -79,6 +76,13 @@ func NewDataSet(df dataframe.DataFrame) TrainSet {
 }
 
 func LoadDataFromBuiltIn() TrainSet {
+	const dataFolder = "C:\\Users\\zhenzh\\Desktop\\data"
+	const tempFolder = "C:\\Users\\zhenzh\\Desktop\\temp"
+	fileName := filepath.Join(tempFolder, "ml-100k\\u.data")
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		DownloadFromUrl("http://files.grouplens.org/datasets/movielens/ml-100k.zip", tempFolder)
+		Unzip(fileName, dataFolder)
+	}
 	df := readCSV("C:\\Users\\zhenzh\\Desktop\\data\\ml-100k\\u.data")
 	return NewDataSet(df)
 }
@@ -93,30 +97,3 @@ func readCSV(fileName string) dataframe.DataFrame {
 }
 
 // Utils
-
-func downloadFromUrl(url string) {
-	tokens := strings.Split(url, "/")
-	fileName := tokens[len(tokens)-1]
-	// TODO: check file existence first with io.IsExist
-	output, err := os.Create(fileName)
-	if err != nil {
-		fmt.Println("Error while creating", fileName, "-", err)
-		return
-	}
-	defer output.Close()
-
-	response, err := http.Get(url)
-	if err != nil {
-		fmt.Println("Error while downloading", url, "-", err)
-		return
-	}
-	defer response.Body.Close()
-
-	n, err := io.Copy(output, response.Body)
-	if err != nil {
-		fmt.Println("Error while downloading", url, "-", err)
-		return
-	}
-
-	fmt.Println(n, "bytes downloaded.")
-}
