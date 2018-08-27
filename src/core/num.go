@@ -7,13 +7,13 @@ import (
 	"math/rand"
 )
 
-func Concatenate(arrs ...[]int) []int {
+func concatenate(arrs ...[]int) []int {
 	// Sum lengths
 	total := 0
 	for _, arr := range arrs {
 		total += len(arr)
 	}
-	// Concatenate
+	// concatenate
 	ret := make([]int, total)
 	pos := 0
 	for _, arr := range arrs {
@@ -25,7 +25,7 @@ func Concatenate(arrs ...[]int) []int {
 	return ret
 }
 
-func SelectFloat(a []float64, indices []int) []float64 {
+func selectFloat(a []float64, indices []int) []float64 {
 	ret := make([]float64, len(indices))
 	for i, index := range indices {
 		ret[i] = a[index]
@@ -33,7 +33,7 @@ func SelectFloat(a []float64, indices []int) []float64 {
 	return ret
 }
 
-func SelectInt(a []int, indices []int) []int {
+func selectInt(a []int, indices []int) []int {
 	ret := make([]int, len(indices))
 	for i, index := range indices {
 		ret[i] = a[index]
@@ -41,21 +41,29 @@ func SelectInt(a []int, indices []int) []int {
 	return ret
 }
 
+func unique(a []int) Set {
+	set := make(map[int]interface{})
+	for _, val := range a {
+		set[val] = nil
+	}
+	return set
+}
+
 // Linear algebra
 
-func Abs(dst []float64) {
+func abs(dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] = math.Abs(dst[i])
 	}
 }
 
-func MulConst(c float64, dst []float64) {
+func mulConst(c float64, dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] *= c
 	}
 }
 
-func DivConst(c float64, dst []float64) {
+func divConst(c float64, dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] /= c
 	}
@@ -63,7 +71,7 @@ func DivConst(c float64, dst []float64) {
 
 // Generator
 
-func NewNormalVector(size int, mean float64, stdDev float64) []float64 {
+func newNormalVector(size int, mean float64, stdDev float64) []float64 {
 	ret := make([]float64, size)
 	for i := 0; i < len(ret); i++ {
 		ret[i] = rand.NormFloat64()*stdDev + mean
@@ -71,7 +79,7 @@ func NewNormalVector(size int, mean float64, stdDev float64) []float64 {
 	return ret
 }
 
-func NewUniformVector(size int, low float64, high float64) []float64 {
+func newUniformVector(size int, low float64, high float64) []float64 {
 	ret := make([]float64, size)
 	scale := high - low
 	for i := 0; i < len(ret); i++ {
@@ -94,6 +102,6 @@ func RootMeanSquareError(predictions []float64, truth []float64) float64 {
 func MeanAbsoluteError(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))
 	floats.SubTo(temp, predictions, truth)
-	Abs(temp)
+	abs(temp)
 	return stat.Mean(temp, nil)
 }

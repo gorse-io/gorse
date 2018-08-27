@@ -12,48 +12,51 @@ import (
 
 type BuildInDataSet struct {
 	url  string
-	file string
+	path string
 	sep  string
 }
 
 var buildInDataSet = map[string]BuildInDataSet{
 	"ml-100k": {
 		url:  "http://files.grouplens.org/datasets/movielens/ml-100k.zip",
-		file: "ml-100k/u.data",
+		path: "ml-100k/u.data",
 		sep:  "\t",
 	},
-	"ml-1m":  {url: "http://files.grouplens.org/datasets/movielens/ml-1m.zip"},
+	"ml-1m": {
+		url: "http://files.grouplens.org/datasets/movielens/ml-1m.zip",
+		sep: "::",
+	},
 	"jester": {url: "http://eigentaste.berkeley.edu/dataset/jester_dataset_2.zip"},
 }
 
-func DownloadFromUrl(src string, dst string) error {
+func DownloadFromUrl(src string, dst string) (string, error) {
 	// Extract file name
 	tokens := strings.Split(src, "/")
 	fileName := filepath.Join(dst, tokens[len(tokens)-1])
 	// Create file
 	if err := os.MkdirAll(filepath.Dir(fileName), os.ModePerm); err != nil {
-		return err
+		return fileName, err
 	}
 	output, err := os.Create(fileName)
 	if err != nil {
 		fmt.Println("Error while creating", fileName, "-", err)
-		return err
+		return fileName, err
 	}
 	defer output.Close()
 	// Download file
 	response, err := http.Get(src)
 	if err != nil {
 		fmt.Println("Error while downloading", src, "-", err)
-		return err
+		return fileName, err
 	}
 	defer response.Body.Close()
 	// Save file
 	_, err = io.Copy(output, response.Body)
 	if err != nil {
 		fmt.Println("Error while downloading", src, "-", err)
-		return err
+		return fileName, err
 	}
-	return nil
+	return fileName, nil
 }
 
 func Unzip(src string, dst string) ([]string, error) {

@@ -13,12 +13,13 @@ func CrossValidate(algorithm Algorithm, dataSet TrainSet, metrics []Metrics, cv 
 		testFold := testFolds[i]
 		algorithm.Fit(trainFold, options...)
 		predictions := make([]float64, testFold.Length())
+		interactionUsers, interactionItems, _ := testFold.Interactions()
 		for j := 0; j < testFold.Length(); j++ {
-			userId := testFold.Users()[j]
-			itemId := testFold.Items()[j]
+			userId := interactionUsers[j]
+			itemId := interactionItems[j]
 			predictions[j] = algorithm.Predict(userId, itemId)
 		}
-		truth := testFold.Ratings()
+		_, _, truth := testFold.Interactions()
 		// Metrics
 		for j := 0; j < len(ret); j++ {
 			ret[j][i] = metrics[j](predictions, truth)

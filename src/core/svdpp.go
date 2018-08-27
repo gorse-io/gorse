@@ -1,10 +1,10 @@
 // The SVD++ algorithm, an extension of SVD taking into account implicit
-// ratings. The prediction \hat{r}_{ui} is set as:
+// interactionRatings. The prediction \hat{r}_{ui} is set as:
 //
 // \hat{r}_{ui} = \mu + b_u + b_i + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
 //
 // Where the y_j terms are a new set of item factors that capture implicit
-// ratings. Here, an implicit rating describes the fact that a user u
+// interactionRatings. Here, an implicit rating describes the fact that a user u
 // userHistory an item j, regardless of the rating value. If user u is unknown,
 // then the bias b_u and the factors p_u are assumed to be zero. The same
 // applies for item i with b_i, q_i and y_i.
@@ -48,7 +48,7 @@ func (pp *SVDPP) EnsembleImplFactors(userId int) ([]float64, bool) {
 		}
 		floats.Add(emImpFactor, pp.implFactor[itemId])
 	}
-	DivConst(math.Sqrt(float64(len(history))), emImpFactor)
+	divConst(math.Sqrt(float64(len(history))), emImpFactor)
 	return emImpFactor, true
 }
 
@@ -98,14 +98,14 @@ func (pp *SVDPP) Fit(trainSet TrainSet, options ...OptionSetter) {
 	pp.itemFactor = make(map[int][]float64)
 	pp.implFactor = make(map[int][]float64)
 	//pp.cacheFactor = make(map[int][]float64)
-	for _, userId := range trainSet.Users() {
+	for userId := range trainSet.Users() {
 		pp.userBias[userId] = 0
-		pp.userFactor[userId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
+		pp.userFactor[userId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
-	for _, itemId := range trainSet.Items() {
+	for itemId := range trainSet.Items() {
 		pp.itemBias[itemId] = 0
-		pp.itemFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
-		pp.implFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
+		pp.itemFactor[itemId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
+		pp.implFactor[itemId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 	// Build user rating set
 	pp.userHistory = make(map[int][]int)
@@ -147,34 +147,34 @@ func (pp *SVDPP) Fit(trainSet TrainSet, options ...OptionSetter) {
 			pp.itemBias[itemId] -= option.lr * gradItemBias
 			// Update user latent factor
 			copy(a, itemFactor)
-			MulConst(diff, a)
+			mulConst(diff, a)
 			copy(b, userFactor)
-			MulConst(option.reg, b)
+			mulConst(option.reg, b)
 			floats.Add(a, b)
-			MulConst(option.lr, a)
+			mulConst(option.lr, a)
 			floats.Sub(pp.userFactor[userId], a)
 			// Update item latent factor
 			copy(a, userFactor)
 			if len(emImpFactor) > 0 {
 				floats.Add(a, emImpFactor)
 			}
-			MulConst(diff, a)
+			mulConst(diff, a)
 			copy(b, itemFactor)
-			MulConst(option.reg, b)
+			mulConst(option.reg, b)
 			floats.Add(a, b)
-			MulConst(option.lr, a)
+			mulConst(option.lr, a)
 			floats.Sub(pp.itemFactor[itemId], a)
 			// Update implicit latent factor
 			set, _ := pp.userHistory[userId]
 			for _, itemId := range set {
 				implFactor := pp.implFactor[itemId]
 				copy(a, itemFactor)
-				MulConst(diff, a)
-				DivConst(math.Sqrt(float64(len(set))), a)
+				mulConst(diff, a)
+				divConst(math.Sqrt(float64(len(set))), a)
 				copy(b, implFactor)
-				MulConst(option.reg, b)
+				mulConst(option.reg, b)
 				floats.Add(a, b)
-				MulConst(option.lr, a)
+				mulConst(option.lr, a)
 				floats.Sub(pp.implFactor[itemId], a)
 			}
 		}

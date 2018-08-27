@@ -11,35 +11,53 @@ import (
 	"strings"
 )
 
+type Set map[int]interface{}
+
 type TrainSet struct {
-	ratings []float64
-	users   []int
-	items   []int
+	interactionRatings []float64
+	interactionUsers   []int
+	interactionItems   []int
 }
 
+// Get data set size.
 func (set *TrainSet) Length() int {
-	return len(set.ratings)
+	return len(set.interactionRatings)
 }
 
+// Get all ratings. Return three slice of user IDs, item IDs and ratings.
 func (set *TrainSet) Interactions() ([]int, []int, []float64) {
-	return set.users, set.items, set.ratings
+	return set.interactionUsers, set.interactionItems, set.interactionRatings
 }
 
-func (set *TrainSet) Users() []int {
-	return set.users
+// Get all users. Return a slice of unique user IDs.
+func (set *TrainSet) Users() Set {
+	return unique(set.interactionUsers)
 }
 
-func (set *TrainSet) Items() []int {
-	return set.items
+// Get all items. Return a slice of unique item IDs.
+func (set *TrainSet) Items() Set {
+	return unique(set.interactionItems)
 }
 
-func (set *TrainSet) Ratings() []float64 {
-	return set.ratings
-}
-
+// Get the range of ratings. Return minimum and maximum.
 func (set *TrainSet) RatingRange() (float64, float64) {
-	ratings := set.Ratings()
-	return floats.Min(ratings), floats.Max(ratings)
+	return floats.Min(set.interactionRatings), floats.Max(set.interactionRatings)
+}
+
+func (set *TrainSet) UserHistory() map[int][]int {
+	histories := make(map[int][]int)
+	users, items, _ := set.Interactions()
+	for i := 0; i < len(users); i++ {
+		userId := users[i]
+		itemId := items[i]
+		// Create slice at first time
+		if _, exist := histories[userId]; !exist {
+			histories[userId] = make([]int, 0)
+		}
+		// Insert item
+		histories[userId] = append(histories[userId], itemId)
+	}
+	return histories
 }
 
 func (set *TrainSet) KFold(k int, seed int64) ([]TrainSet, []TrainSet) {
@@ -56,36 +74,40 @@ func (set *TrainSet) KFold(k int, seed int64) ([]TrainSet, []TrainSet) {
 		}
 		// Test set
 		testIndex := perm[begin:end]
-		testFolds[i].users = SelectInt(set.users, testIndex)
-		testFolds[i].items = SelectInt(set.items, testIndex)
-		testFolds[i].ratings = SelectFloat(set.ratings, testIndex)
+		testFolds[i].interactionUsers = selectInt(set.interactionUsers, testIndex)
+		testFolds[i].interactionItems = selectInt(set.interactionItems, testIndex)
+		testFolds[i].interactionRatings = selectFloat(set.interactionRatings, testIndex)
 		// Train set
-		trainTest := Concatenate(perm[0:begin], perm[end:set.Length()])
-		trainFolds[i].users = SelectInt(set.users, trainTest)
-		trainFolds[i].items = SelectInt(set.items, trainTest)
-		trainFolds[i].ratings = SelectFloat(set.ratings, trainTest)
+		trainTest := concatenate(perm[0:begin], perm[end:set.Length()])
+		trainFolds[i].interactionUsers = selectInt(set.interactionUsers, trainTest)
+		trainFolds[i].interactionItems = selectInt(set.interactionItems, trainTest)
+		trainFolds[i].interactionRatings = selectFloat(set.interactionRatings, trainTest)
 		begin = end
 	}
 	return trainFolds, testFolds
 }
 
-func LoadDataFromBuiltIn() TrainSet {
+func LoadDataFromBuiltIn(dataSetName string) TrainSet {
+	// Extract data set information
+	dataSet, exist := buildInDataSet[dataSetName]
+	if !exist {
+		log.Fatal("no such data set", dataSetName)
+	}
 	const dataFolder = "data"
 	const tempFolder = "temp"
-	dataFileName := filepath.Join(dataFolder, "ml-100k/u.data")
-	zipFileName := filepath.Join(tempFolder, "ml-100k.zip")
+	dataFileName := filepath.Join(dataFolder, dataSet.path)
 	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
-		DownloadFromUrl("http://files.grouplens.org/datasets/movielens/ml-100k.zip", tempFolder)
+		zipFileName, _ := DownloadFromUrl(dataSet.url, tempFolder)
 		Unzip(zipFileName, dataFolder)
 	}
-	return LoadDataFromFile(dataFileName)
+	return LoadDataFromFile(dataFileName, dataSet.sep)
 }
 
-func LoadDataFromFile(fileName string) TrainSet {
+func LoadDataFromFile(fileName string, sep string) TrainSet {
 	set := TrainSet{}
-	set.users = make([]int, 0)
-	set.items = make([]int, 0)
-	set.ratings = make([]float64, 0)
+	set.interactionUsers = make([]int, 0)
+	set.interactionItems = make([]int, 0)
+	set.interactionRatings = make([]float64, 0)
 	// Open file
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -100,9 +122,9 @@ func LoadDataFromFile(fileName string) TrainSet {
 		user, _ := strconv.Atoi(fields[0])
 		item, _ := strconv.Atoi(fields[1])
 		rating, _ := strconv.Atoi(fields[2])
-		set.users = append(set.users, user)
-		set.items = append(set.items, item)
-		set.ratings = append(set.ratings, float64(rating))
+		set.interactionUsers = append(set.interactionUsers, user)
+		set.interactionItems = append(set.interactionItems, item)
+		set.interactionRatings = append(set.interactionRatings, float64(rating))
 	}
 	return set
 }

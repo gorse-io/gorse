@@ -19,6 +19,10 @@ type Option struct {
 	initStdDev    float64
 	initLow       float64
 	initHigh      float64
+	// Neighborhood-based recommendation method
+	k          int
+	minK       int
+	similarity Similarity
 }
 
 type OptionSetter func(*Option)
@@ -46,3 +50,9 @@ func SetNFactors(nFactors int) OptionSetter {
 		option.nFactors = nFactors
 	}
 }
+
+type Similarity struct {
+	UserBased bool
+}
+
+type SimTable map[int]map[int]float64

@@ -37,10 +37,10 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...OptionSetter) {
 	// Initialize parameters
 	baseLine.userBias = make(map[int]float64)
 	baseLine.itemBias = make(map[int]float64)
-	for _, userId := range trainSet.Users() {
+	for userId := range trainSet.Users() {
 		baseLine.userBias[userId] = 0
 	}
-	for _, itemId := range trainSet.Items() {
+	for itemId := range trainSet.Items() {
 		baseLine.itemBias[itemId] = 0
 	}
 	// Stochastic Gradient Descent

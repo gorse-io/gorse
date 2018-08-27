@@ -56,13 +56,13 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 	svd.itemBias = make(map[int]float64)
 	svd.userFactor = make(map[int][]float64)
 	svd.itemFactor = make(map[int][]float64)
-	for _, userId := range trainSet.Users() {
+	for userId := range trainSet.Users() {
 		svd.userBias[userId] = 0
-		svd.userFactor[userId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
+		svd.userFactor[userId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
-	for _, itemId := range trainSet.Items() {
+	for itemId := range trainSet.Items() {
 		svd.itemBias[itemId] = 0
-		svd.itemFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
+		svd.itemFactor[itemId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 	// Create buffers
 	a := make([]float64, option.nFactors)
@@ -91,19 +91,19 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 			svd.itemBias[itemId] -= option.lr * gradItemBias
 			// Update user latent factor
 			copy(a, itemFactor)
-			MulConst(diff, a)
+			mulConst(diff, a)
 			copy(b, userFactor)
-			MulConst(option.reg, b)
+			mulConst(option.reg, b)
 			floats.Add(a, b)
-			MulConst(option.lr, a)
+			mulConst(option.lr, a)
 			floats.Sub(svd.userFactor[userId], a)
 			// Update item latent factor
 			copy(a, userFactor)
-			MulConst(diff, a)
+			mulConst(diff, a)
 			copy(b, itemFactor)
-			MulConst(option.reg, b)
+			mulConst(option.reg, b)
 			floats.Add(a, b)
-			MulConst(option.lr, a)
+			mulConst(option.lr, a)
 			floats.Sub(svd.itemFactor[itemId], a)
 		}
 	}

@@ -41,10 +41,10 @@ func (nmf *NMF) Fit(trainSet TrainSet, options ...OptionSetter) {
 	// Initialize parameters
 	nmf.userFactor = make(map[int][]float64)
 	nmf.itemFactor = make(map[int][]float64)
-	for _, userId := range trainSet.Users() {
-		nmf.userFactor[userId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
+	for userId := range trainSet.Users() {
+		nmf.userFactor[userId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
-	for _, itemId := range trainSet.Items() {
-		nmf.itemFactor[itemId] = NewNormalVector(option.nFactors, option.initMean, option.initStdDev)
+	for itemId := range trainSet.Items() {
+		nmf.itemFactor[itemId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 }

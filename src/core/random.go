@@ -34,7 +34,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 }
 
 func (random *Random) Fit(trainSet TrainSet, options ...OptionSetter) {
-	ratings := trainSet.Ratings()
+	_, _, ratings := trainSet.Interactions()
 	random.mean = stat.Mean(ratings, nil)
 	random.stdDev = stat.StdDev(ratings, nil)
 	random.low, random.high = trainSet.RatingRange()
