@@ -2,11 +2,9 @@ package core
 
 import "math"
 
-func (sim *Similarity) Sim(trainSet TrainSet) SimTable {
-	return nil
-}
+type Sim func(map[int]float64, map[int]float64) float64
 
-// Compute the cosine similarity between a pair of users (or items)
+// Compute the cosine similarity between a pair of users (or items).
 func Cosine(a map[int]float64, b map[int]float64) float64 {
 	m, n, l := .0, .0, .0
 	for id, ratingA := range a {
@@ -60,8 +58,4 @@ func Pearson(a map[int]float64, b map[int]float64) float64 {
 		}
 	}
 	return l / (math.Sqrt(m) * math.Sqrt(n))
-}
-
-func PearsonBaseLine(a map[int]float64, b map[int]float64) float64 {
-	return 0
 }

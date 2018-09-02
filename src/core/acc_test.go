@@ -40,3 +40,7 @@ func TestSVD(t *testing.T) {
 //func TestSVDPP(t *testing.T) {
 //	Evaluate(t, NewSVDPP(), LoadDataFromBuiltIn(), 0.92, 0.722)
 //}
+
+func TestKNN(t *testing.T) {
+	Evaluate(t, NewKNN(), LoadDataFromBuiltIn("ml-100k"), 0.98, 0.774)
+}

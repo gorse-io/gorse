@@ -33,7 +33,3 @@ func TestPearson(t *testing.T) {
 		t.Fatal(sim, "!=", 0.0)
 	}
 }
-
-func TestPearsonBaseLine(t *testing.T) {
-
-}

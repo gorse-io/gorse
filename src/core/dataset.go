@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"github.com/gonum/stat"
 	"gonum.org/v1/gonum/floats"
 	"log"
 	"math/rand"
@@ -17,6 +18,8 @@ type TrainSet struct {
 	interactionRatings []float64
 	interactionUsers   []int
 	interactionItems   []int
+	userRatings        map[int]map[int]float64
+	itemRatings        map[int]map[int]float64
 }
 
 // Get data set size.
@@ -44,20 +47,44 @@ func (set *TrainSet) RatingRange() (float64, float64) {
 	return floats.Min(set.interactionRatings), floats.Max(set.interactionRatings)
 }
 
-func (set *TrainSet) UserHistory() map[int][]int {
-	histories := make(map[int][]int)
-	users, items, _ := set.Interactions()
-	for i := 0; i < len(users); i++ {
-		userId := users[i]
-		itemId := items[i]
-		// Create slice at first time
-		if _, exist := histories[userId]; !exist {
-			histories[userId] = make([]int, 0)
+func (set *TrainSet) GlobalMean() float64 {
+	return stat.Mean(set.interactionRatings, nil)
+}
+
+func (set *TrainSet) UserRatings() map[int]map[int]float64 {
+	if set.userRatings == nil {
+		set.userRatings = make(map[int]map[int]float64)
+		users, items, ratings := set.Interactions()
+		for i := 0; i < len(users); i++ {
+			userId := users[i]
+			itemId := items[i]
+			// Create slice at first time
+			if _, exist := set.userRatings[userId]; !exist {
+				set.userRatings[userId] = make(map[int]float64)
+			}
+			// Insert item
+			set.userRatings[userId][itemId] = ratings[i]
 		}
-		// Insert item
-		histories[userId] = append(histories[userId], itemId)
 	}
-	return histories
+	return set.userRatings
+}
+
+func (set *TrainSet) ItemRatings() map[int]map[int]float64 {
+	if set.itemRatings == nil {
+		set.itemRatings = make(map[int]map[int]float64)
+		users, items, ratings := set.Interactions()
+		for i := 0; i < len(users); i++ {
+			userId := users[i]
+			itemId := items[i]
+			// Create slice at first time
+			if _, exist := set.itemRatings[itemId]; !exist {
+				set.itemRatings[itemId] = make(map[int]float64)
+			}
+			// Insert item
+			set.itemRatings[itemId][userId] = ratings[i]
+		}
+	}
+	return set.itemRatings
 }
 
 func (set *TrainSet) KFold(k int, seed int64) ([]TrainSet, []TrainSet) {
