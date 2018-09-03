@@ -2,28 +2,28 @@ package core
 
 import "math"
 
-type Sim func(map[int]float64, map[int]float64) float64
+type Sim func([]float64, []float64) float64
 
 // Compute the cosine similarity between a pair of users (or items).
-func Cosine(a map[int]float64, b map[int]float64) float64 {
+func Cosine(a []float64, b []float64) float64 {
 	m, n, l := .0, .0, .0
-	for id, ratingA := range a {
-		if ratingB, exist := b[id]; exist {
-			m += ratingA * ratingA
-			n += ratingB * ratingB
-			l += ratingA * ratingB
+	for i := range a {
+		if !math.IsNaN(a[i]) && !math.IsNaN(b[i]) {
+			m += a[i] * a[i]
+			n += b[i] * b[i]
+			l += a[i] * b[i]
 		}
 	}
 	return l / (math.Sqrt(m) * math.Sqrt(n))
 }
 
 // Compute the Mean Squared Difference similarity between a pair of users (or items).
-func MSD(a map[int]float64, b map[int]float64) float64 {
+func MSD(a []float64, b []float64) float64 {
 	count := 0.0
 	sum := 0.0
-	for id, ratingA := range a {
-		if ratingB, exist := b[id]; exist {
-			sum += (ratingA - ratingB) * (ratingA - ratingB)
+	for i := range a {
+		if !math.IsNaN(a[i]) && !math.IsNaN(b[i]) {
+			sum += (a[i] - b[i]) * (a[i] - b[i])
 			count += 1
 		}
 	}
@@ -31,7 +31,7 @@ func MSD(a map[int]float64, b map[int]float64) float64 {
 }
 
 // Compute the Pearson correlation coefficient between a pair of users (or items).
-func Pearson(a map[int]float64, b map[int]float64) float64 {
+func Pearson(a []float64, b []float64) float64 {
 	// Mean of a
 	count, sum := .0, .0
 	for _, rating := range a {
@@ -48,10 +48,10 @@ func Pearson(a map[int]float64, b map[int]float64) float64 {
 	meanB := sum / count
 	// Mean-centered cosine
 	m, n, l := .0, .0, .0
-	for id, ratingA := range a {
-		if ratingB, exist := b[id]; exist {
-			ratingA -= meanA
-			ratingB -= meanB
+	for i := range a {
+		if !math.IsNaN(a[i]) && !math.IsNaN(b[i]) {
+			ratingA := a[i] - meanA
+			ratingB := b[i] - meanB
 			m += ratingA * ratingA
 			n += ratingB * ratingB
 			l += ratingA * ratingB

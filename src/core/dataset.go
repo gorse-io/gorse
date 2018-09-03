@@ -18,9 +18,15 @@ type TrainSet struct {
 	interactionRatings []float64
 	interactionUsers   []int
 	interactionItems   []int
-	userRatings        map[int]map[int]float64
-	itemRatings        map[int]map[int]float64
+	userCount          int
+	itemCount          int
+	innerUserIds       map[int]int // userId -> innerUserId
+	innerItemIds       map[int]int // itemId -> innerItemId
+	userRatings        [][]float64
+	itemRatings        [][]float64
 }
+
+const noBody = -1
 
 // Get data set size.
 func (set *TrainSet) Length() int {
@@ -51,37 +57,49 @@ func (set *TrainSet) GlobalMean() float64 {
 	return stat.Mean(set.interactionRatings, nil)
 }
 
-func (set *TrainSet) UserRatings() map[int]map[int]float64 {
+func (set *TrainSet) UserCount() int {
+	return set.userCount
+}
+
+func (set *TrainSet) ItemCount() int {
+	return set.itemCount
+}
+
+func (set *TrainSet) ConvertUserId(userId int) int {
+	if innerUserId, exist := set.innerUserIds[userId]; exist {
+		return innerUserId
+	}
+	return noBody
+}
+
+func (set *TrainSet) ConvertItemId(itemId int) int {
+	if innerItemId, exist := set.innerItemIds[itemId]; exist {
+		return innerItemId
+	}
+	return noBody
+}
+
+func (set *TrainSet) UserRatings() [][]float64 {
 	if set.userRatings == nil {
-		set.userRatings = make(map[int]map[int]float64)
+		set.userRatings = newNanMatrix(set.userCount, set.itemCount)
 		users, items, ratings := set.Interactions()
 		for i := 0; i < len(users); i++ {
-			userId := users[i]
-			itemId := items[i]
-			// Create slice at first time
-			if _, exist := set.userRatings[userId]; !exist {
-				set.userRatings[userId] = make(map[int]float64)
-			}
-			// Insert item
-			set.userRatings[userId][itemId] = ratings[i]
+			innerUserId := set.ConvertUserId(users[i])
+			innerItemId := set.ConvertItemId(items[i])
+			set.userRatings[innerUserId][innerItemId] = ratings[i]
 		}
 	}
 	return set.userRatings
 }
 
-func (set *TrainSet) ItemRatings() map[int]map[int]float64 {
+func (set *TrainSet) ItemRatings() [][]float64 {
 	if set.itemRatings == nil {
-		set.itemRatings = make(map[int]map[int]float64)
+		set.itemRatings = newNanMatrix(set.itemCount, set.userCount)
 		users, items, ratings := set.Interactions()
 		for i := 0; i < len(users); i++ {
-			userId := users[i]
-			itemId := items[i]
-			// Create slice at first time
-			if _, exist := set.itemRatings[itemId]; !exist {
-				set.itemRatings[itemId] = make(map[int]float64)
-			}
-			// Insert item
-			set.itemRatings[itemId][userId] = ratings[i]
+			innerUserId := set.ConvertUserId(users[i])
+			innerItemId := set.ConvertItemId(items[i])
+			set.itemRatings[innerItemId][innerUserId] = ratings[i]
 		}
 	}
 	return set.itemRatings
@@ -101,19 +119,44 @@ func (set *TrainSet) KFold(k int, seed int64) ([]TrainSet, []TrainSet) {
 		}
 		// Test set
 		testIndex := perm[begin:end]
-		testFolds[i].interactionUsers = selectInt(set.interactionUsers, testIndex)
-		testFolds[i].interactionItems = selectInt(set.interactionItems, testIndex)
-		testFolds[i].interactionRatings = selectFloat(set.interactionRatings, testIndex)
+		testFolds[i] = NewTrainSet(selectInt(set.interactionUsers, testIndex),
+			selectInt(set.interactionItems, testIndex),
+			selectFloat(set.interactionRatings, testIndex))
 		// Train set
-		trainTest := concatenate(perm[0:begin], perm[end:set.Length()])
-		trainFolds[i].interactionUsers = selectInt(set.interactionUsers, trainTest)
-		trainFolds[i].interactionItems = selectInt(set.interactionItems, trainTest)
-		trainFolds[i].interactionRatings = selectFloat(set.interactionRatings, trainTest)
+		trainIndex := concatenate(perm[0:begin], perm[end:set.Length()])
+		trainFolds[i] = NewTrainSet(selectInt(set.interactionUsers, trainIndex),
+			selectInt(set.interactionItems, trainIndex),
+			selectFloat(set.interactionRatings, trainIndex))
 		begin = end
 	}
 	return trainFolds, testFolds
 }
 
+func NewTrainSet(users, items []int, ratings []float64) TrainSet {
+	set := TrainSet{}
+	set.interactionUsers = users
+	set.interactionItems = items
+	set.interactionRatings = ratings
+	// Create userId -> innerUserId map
+	set.innerUserIds = make(map[int]int)
+	for _, userId := range set.interactionUsers {
+		if _, exist := set.innerUserIds[userId]; !exist {
+			set.innerUserIds[userId] = set.userCount
+			set.userCount++
+		}
+	}
+	// Create itemId -> innerItemId map
+	set.innerItemIds = make(map[int]int)
+	for _, itemId := range set.interactionItems {
+		if _, exist := set.innerItemIds[itemId]; !exist {
+			set.innerItemIds[itemId] = set.itemCount
+			set.itemCount++
+		}
+	}
+	return set
+}
+
+// Load build in data set
 func LoadDataFromBuiltIn(dataSetName string) TrainSet {
 	// Extract data set information
 	dataSet, exist := buildInDataSet[dataSetName]
@@ -130,11 +173,11 @@ func LoadDataFromBuiltIn(dataSetName string) TrainSet {
 	return LoadDataFromFile(dataFileName, dataSet.sep)
 }
 
+// Load data from file
 func LoadDataFromFile(fileName string, sep string) TrainSet {
-	set := TrainSet{}
-	set.interactionUsers = make([]int, 0)
-	set.interactionItems = make([]int, 0)
-	set.interactionRatings = make([]float64, 0)
+	interactionUsers := make([]int, 0)
+	interactionItems := make([]int, 0)
+	interactionRatings := make([]float64, 0)
 	// Open file
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -149,11 +192,9 @@ func LoadDataFromFile(fileName string, sep string) TrainSet {
 		user, _ := strconv.Atoi(fields[0])
 		item, _ := strconv.Atoi(fields[1])
 		rating, _ := strconv.Atoi(fields[2])
-		set.interactionUsers = append(set.interactionUsers, user)
-		set.interactionItems = append(set.interactionItems, item)
-		set.interactionRatings = append(set.interactionRatings, float64(rating))
+		interactionUsers = append(interactionUsers, user)
+		interactionItems = append(interactionItems, item)
+		interactionRatings = append(interactionRatings, float64(rating))
 	}
-	return set
+	return NewTrainSet(interactionUsers, interactionItems, interactionRatings)
 }
-
-// Utils

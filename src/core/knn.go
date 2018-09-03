@@ -6,18 +6,19 @@ import (
 )
 
 type KNN struct {
-	option  Option
-	mean    float64
-	sims    map[int]map[int]float64
-	ratings map[int]map[int]float64
+	option   Option
+	mean     float64
+	sims     [][]float64
+	ratings  [][]float64
+	trainSet TrainSet
 }
 
 type CandidateSet struct {
-	similarities map[int]float64
+	similarities []float64
 	candidates   []int
 }
 
-func NewCandidateSet(sim map[int]float64, candidates []int) *CandidateSet {
+func NewCandidateSet(sim []float64, candidates []int) *CandidateSet {
 	neighbors := CandidateSet{}
 	neighbors.similarities = sim
 	neighbors.candidates = candidates
@@ -41,17 +42,22 @@ func NewKNN() *KNN {
 }
 
 func (knn *KNN) Predict(userId int, itemId int) float64 {
+	innerUserId := knn.trainSet.ConvertUserId(userId)
+	innerItemId := knn.trainSet.ConvertItemId(itemId)
 	// Set user based or item based
 	var leftId, rightId int
 	if knn.option.userBased {
-		leftId, rightId = userId, itemId
+		leftId, rightId = innerUserId, innerItemId
 	} else {
-		leftId, rightId = itemId, userId
+		leftId, rightId = innerItemId, innerUserId
+	}
+	if leftId == noBody || rightId == noBody {
+		return knn.mean
 	}
 	// Find user (item) interacted with item (user)
 	candidates := make([]int, 0)
 	for otherId := range knn.ratings {
-		if _, exist := knn.ratings[otherId][rightId]; exist && !math.IsNaN(knn.sims[leftId][otherId]) {
+		if !math.IsNaN(knn.ratings[otherId][rightId]) && !math.IsNaN(knn.sims[leftId][otherId]) {
 			candidates = append(candidates, otherId)
 		}
 	}
@@ -72,7 +78,7 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 	weightRating := 0.0
 	for _, otherId := range candidateSet.candidates[0:numNeighbors] {
 		weightSum += knn.sims[leftId][otherId]
-		weightRating += knn.sims[userId][otherId] * knn.ratings[otherId][itemId]
+		weightRating += knn.sims[leftId][otherId] * knn.ratings[otherId][rightId]
 	}
 	return weightRating / weightSum
 }
@@ -91,27 +97,21 @@ func (knn *KNN) Fit(trainSet TrainSet, options ...OptionSetter) {
 		setter(&knn.option)
 	}
 	// Set global mean for new users (items)
+	knn.trainSet = trainSet
 	knn.mean = trainSet.GlobalMean()
 	// Retrieve user (item) ratings
 	if knn.option.userBased {
 		knn.ratings = trainSet.UserRatings()
+		knn.sims = newNanMatrix(trainSet.UserCount(), trainSet.UserCount())
 	} else {
 		knn.ratings = trainSet.ItemRatings()
+		knn.sims = newNanMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	}
 	// Pairwise similarity
-	knn.sims = make(map[int]map[int]float64)
 	for leftId, leftRatings := range knn.ratings {
 		for rightId, rightRatings := range knn.ratings {
 			if leftId != rightId {
-				// Create secondary map
-				if _, exist := knn.sims[leftId]; !exist {
-					knn.sims[leftId] = make(map[int]float64)
-				}
-				if _, exist := knn.sims[rightId]; !exist {
-					knn.sims[rightId] = make(map[int]float64)
-				}
-				// Set similarity values
-				if _, exist := knn.sims[leftId][rightId]; !exist {
+				if math.IsNaN(knn.sims[leftId][rightId]) {
 					ret := knn.option.sim(leftRatings, rightRatings)
 					if !math.IsNaN(ret) {
 						knn.sims[leftId][rightId] = ret

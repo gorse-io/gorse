@@ -13,11 +13,12 @@ import (
 )
 
 type SVD struct {
-	userFactor map[int][]float64 // p_u
-	itemFactor map[int][]float64 // q_i
-	userBias   map[int]float64   // b_u
-	itemBias   map[int]float64   // b_i
-	globalBias float64           // mu
+	userFactor [][]float64 // p_u
+	itemFactor [][]float64 // q_i
+	userBias   []float64   // b_u
+	itemBias   []float64   // b_i
+	globalBias float64     // mu
+	trainSet   TrainSet
 }
 
 func NewSVD() *SVD {
@@ -25,15 +26,23 @@ func NewSVD() *SVD {
 }
 
 func (svd *SVD) Predict(userId int, itemId int) float64 {
-	userFactor, _ := svd.userFactor[userId]
-	itemFactor, _ := svd.itemFactor[itemId]
-	product := .0
-	if len(userFactor) == len(itemFactor) {
-		product = floats.Dot(userFactor, itemFactor)
+	innerUserId := svd.trainSet.ConvertUserId(userId)
+	innerItemId := svd.trainSet.ConvertItemId(itemId)
+	ret := svd.globalBias
+	// + b_u
+	if innerUserId != noBody {
+		ret += svd.userBias[innerUserId]
 	}
-	userBias, _ := svd.userBias[userId]
-	itemBias, _ := svd.itemBias[itemId]
-	ret := svd.globalBias + userBias + itemBias + product
+	// + b_i
+	if innerItemId != noBody {
+		ret += svd.itemBias[innerItemId]
+	}
+	// + q_i^Tp_u
+	if innerItemId != noBody && innerUserId != noBody {
+		userFactor := svd.userFactor[innerUserId]
+		itemFactor := svd.itemFactor[innerItemId]
+		ret += floats.Dot(userFactor, itemFactor)
+	}
 	return ret
 }
 
@@ -52,17 +61,16 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 		editor(&option)
 	}
 	// Initialize parameters
-	svd.userBias = make(map[int]float64)
-	svd.itemBias = make(map[int]float64)
-	svd.userFactor = make(map[int][]float64)
-	svd.itemFactor = make(map[int][]float64)
-	for userId := range trainSet.Users() {
-		svd.userBias[userId] = 0
-		svd.userFactor[userId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
+	svd.trainSet = trainSet
+	svd.userBias = make([]float64, trainSet.UserCount())
+	svd.itemBias = make([]float64, trainSet.ItemCount())
+	svd.userFactor = make([][]float64, trainSet.UserCount())
+	svd.itemFactor = make([][]float64, trainSet.ItemCount())
+	for innerUserId := range svd.userFactor {
+		svd.userFactor[innerUserId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
-	for itemId := range trainSet.Items() {
-		svd.itemBias[itemId] = 0
-		svd.itemFactor[itemId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
+	for innerItemId := range svd.itemFactor {
+		svd.itemFactor[innerItemId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
 	}
 	// Create buffers
 	a := make([]float64, option.nFactors)
@@ -71,13 +79,13 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 	users, items, ratings := trainSet.Interactions()
 	for epoch := 0; epoch < option.nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
-			userId := users[i]
-			itemId := items[i]
-			rating := ratings[i]
-			userBias, _ := svd.userBias[userId]
-			itemBias, _ := svd.itemBias[itemId]
-			userFactor, _ := svd.userFactor[userId]
-			itemFactor, _ := svd.itemFactor[itemId]
+			userId, itemId, rating := users[i], items[i], ratings[i]
+			innerUserId := trainSet.ConvertUserId(userId)
+			innerItemId := trainSet.ConvertItemId(itemId)
+			userBias := svd.userBias[innerUserId]
+			itemBias := svd.itemBias[innerItemId]
+			userFactor := svd.userFactor[innerUserId]
+			itemFactor := svd.itemFactor[innerItemId]
 			// Compute error
 			diff := svd.Predict(userId, itemId) - rating
 			// Update global bias
@@ -85,10 +93,10 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 			svd.globalBias -= option.lr * gradGlobalBias
 			// Update user bias
 			gradUserBias := diff + option.reg*userBias
-			svd.userBias[userId] -= option.lr * gradUserBias
+			svd.userBias[innerUserId] -= option.lr * gradUserBias
 			// Update item bias
 			gradItemBias := diff + option.reg*itemBias
-			svd.itemBias[itemId] -= option.lr * gradItemBias
+			svd.itemBias[innerItemId] -= option.lr * gradItemBias
 			// Update user latent factor
 			copy(a, itemFactor)
 			mulConst(diff, a)
@@ -96,7 +104,7 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 			mulConst(option.reg, b)
 			floats.Add(a, b)
 			mulConst(option.lr, a)
-			floats.Sub(svd.userFactor[userId], a)
+			floats.Sub(svd.userFactor[innerUserId], a)
 			// Update item latent factor
 			copy(a, userFactor)
 			mulConst(diff, a)
@@ -104,7 +112,7 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...OptionSetter) {
 			mulConst(option.reg, b)
 			floats.Add(a, b)
 			mulConst(option.lr, a)
-			floats.Sub(svd.itemFactor[itemId], a)
+			floats.Sub(svd.itemFactor[innerItemId], a)
 		}
 	}
 }

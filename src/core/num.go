@@ -88,6 +88,17 @@ func newUniformVector(size int, low float64, high float64) []float64 {
 	return ret
 }
 
+func newNanMatrix(row, col int) [][]float64 {
+	ret := make([][]float64, row)
+	for i := range ret {
+		ret[i] = make([]float64, col)
+		for j := range ret[i] {
+			ret[i][j] = math.NaN()
+		}
+	}
+	return ret
+}
+
 // Metrics
 
 type Metrics func([]float64, []float64) float64

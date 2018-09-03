@@ -8,9 +8,10 @@
 package core
 
 type BaseLine struct {
-	userBias   map[int]float64 // b_u
-	itemBias   map[int]float64 // b_i
-	globalBias float64         // mu
+	userBias   []float64 // b_u
+	itemBias   []float64 // b_i
+	globalBias float64   // mu
+	trainSet   TrainSet
 }
 
 func NewBaseLine() *BaseLine {
@@ -18,9 +19,16 @@ func NewBaseLine() *BaseLine {
 }
 
 func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
-	userBias, _ := baseLine.userBias[userId]
-	itemBias, _ := baseLine.itemBias[itemId]
-	ret := userBias + itemBias + baseLine.globalBias
+	// Convert to inner Id
+	innerUserId := baseLine.trainSet.ConvertUserId(userId)
+	innerItemId := baseLine.trainSet.ConvertItemId(itemId)
+	ret := baseLine.globalBias
+	if innerUserId != noBody {
+		ret += baseLine.userBias[innerUserId]
+	}
+	if innerItemId != noBody {
+		ret += baseLine.itemBias[innerItemId]
+	}
 	return ret
 }
 
@@ -35,23 +43,18 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...OptionSetter) {
 		editor(&option)
 	}
 	// Initialize parameters
-	baseLine.userBias = make(map[int]float64)
-	baseLine.itemBias = make(map[int]float64)
-	for userId := range trainSet.Users() {
-		baseLine.userBias[userId] = 0
-	}
-	for itemId := range trainSet.Items() {
-		baseLine.itemBias[itemId] = 0
-	}
+	baseLine.trainSet = trainSet
+	baseLine.userBias = make([]float64, trainSet.UserCount())
+	baseLine.itemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
 	users, items, ratings := trainSet.Interactions()
 	for epoch := 0; epoch < option.nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
-			userId := users[i]
-			itemId := items[i]
-			rating := ratings[i]
-			userBias, _ := baseLine.userBias[userId]
-			itemBias, _ := baseLine.itemBias[itemId]
+			userId, itemId, rating := users[i], items[i], ratings[i]
+			innerUserId := trainSet.ConvertUserId(userId)
+			innerItemId := trainSet.ConvertItemId(itemId)
+			userBias := baseLine.userBias[innerUserId]
+			itemBias := baseLine.itemBias[innerItemId]
 			// Compute gradient
 			diff := baseLine.Predict(userId, itemId) - rating
 			gradGlobalBias := diff
@@ -59,8 +62,8 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...OptionSetter) {
 			gradItemBias := diff + option.reg*itemBias
 			// Update parameters
 			baseLine.globalBias -= option.lr * gradGlobalBias
-			baseLine.userBias[userId] -= option.lr * gradUserBias
-			baseLine.itemBias[itemId] -= option.lr * gradItemBias
+			baseLine.userBias[innerUserId] -= option.lr * gradUserBias
+			baseLine.itemBias[innerItemId] -= option.lr * gradItemBias
 		}
 	}
 }
