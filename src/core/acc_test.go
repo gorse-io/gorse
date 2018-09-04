@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const EPSILON float64 = 0.05
+const EPSILON float64 = 0.01
 
 func Evaluate(t *testing.T, algo Algorithm, dataSet TrainSet,
 	expectRMSE float64, expectMAE float64) {
@@ -43,4 +43,12 @@ func TestSVD(t *testing.T) {
 
 func TestKNN(t *testing.T) {
 	Evaluate(t, NewKNN(), LoadDataFromBuiltIn("ml-100k"), 0.98, 0.774)
+}
+
+func TestKNNWithMean(t *testing.T) {
+	Evaluate(t, NewKNNWithMean(), LoadDataFromBuiltIn("ml-100k"), 0.951, 0.749)
+}
+
+func TestKNNBaseLine(t *testing.T) {
+	Evaluate(t, NewKNNBaseLine(), LoadDataFromBuiltIn("ml-100k"), 0.931, 0.733)
 }
