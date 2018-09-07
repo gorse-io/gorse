@@ -23,8 +23,9 @@ var buildInDataSet = map[string]BuildInDataSet{
 		sep:  "\t",
 	},
 	"ml-1m": {
-		url: "http://files.grouplens.org/datasets/movielens/ml-1m.zip",
-		sep: "::",
+		url:  "http://files.grouplens.org/datasets/movielens/ml-1m.zip",
+		path: "ml-1m/ratings.dat",
+		sep:  "::",
 	},
 	"jester": {url: "http://eigentaste.berkeley.edu/dataset/jester_dataset_2.zip"},
 }

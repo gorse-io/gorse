@@ -26,7 +26,7 @@ type TrainSet struct {
 	itemRatings        [][]float64
 }
 
-const noBody = -1
+const newId = -1
 
 // Get data set size.
 func (set *TrainSet) Length() int {
@@ -69,14 +69,14 @@ func (set *TrainSet) ConvertUserId(userId int) int {
 	if innerUserId, exist := set.innerUserIds[userId]; exist {
 		return innerUserId
 	}
-	return noBody
+	return newId
 }
 
 func (set *TrainSet) ConvertItemId(itemId int) int {
 	if innerItemId, exist := set.innerItemIds[itemId]; exist {
 		return innerItemId
 	}
-	return noBody
+	return newId
 }
 
 func (set *TrainSet) UserRatings() [][]float64 {
@@ -130,6 +130,11 @@ func (set *TrainSet) KFold(k int, seed int64) ([]TrainSet, []TrainSet) {
 		begin = end
 	}
 	return trainFolds, testFolds
+}
+
+// TODO: Train test split. Return train set and test set.
+func (set *TrainSet) Split(testSize int) (TrainSet, TrainSet) {
+	return TrainSet{}, TrainSet{}
 }
 
 func NewTrainSet(users, items []int, ratings []float64) TrainSet {
@@ -188,7 +193,7 @@ func LoadDataFromFile(fileName string, sep string) TrainSet {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fields := strings.Split(line, "\t")
+		fields := strings.Split(line, sep)
 		user, _ := strconv.Atoi(fields[0])
 		item, _ := strconv.Atoi(fields[1])
 		rating, _ := strconv.Atoi(fields[2])

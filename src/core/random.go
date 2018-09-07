@@ -33,7 +33,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet TrainSet, options ...OptionSetter) {
+func (random *Random) Fit(trainSet TrainSet, options Options) {
 	_, _, ratings := trainSet.Interactions()
 	random.mean = stat.Mean(ratings, nil)
 	random.stdDev = stat.StdDev(ratings, nil)

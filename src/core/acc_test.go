@@ -11,7 +11,7 @@ const EPSILON float64 = 0.01
 func Evaluate(t *testing.T, algo Algorithm, dataSet TrainSet,
 	expectRMSE float64, expectMAE float64) {
 	// Cross validation
-	results := CrossValidate(algo, dataSet, []Metrics{RootMeanSquareError, MeanAbsoluteError}, 5, 0)
+	results := CrossValidate(algo, dataSet, []Metrics{RootMeanSquareError, MeanAbsoluteError}, 5, 0, DefaultOptions())
 	// Check RMSE
 	rmse := stat.Mean(results[0], nil)
 	if math.Abs(rmse-expectRMSE) > EPSILON {
@@ -40,6 +40,10 @@ func TestSVD(t *testing.T) {
 //func TestSVDPP(t *testing.T) {
 //	Evaluate(t, NewSVDPP(), LoadDataFromBuiltIn(), 0.92, 0.722)
 //}
+
+func TestNMF(t *testing.T) {
+	Evaluate(t, NewNMF(), LoadDataFromBuiltIn("ml-100k"), 0.963, 0.758)
+}
 
 func TestKNN(t *testing.T) {
 	Evaluate(t, NewKNN(), LoadDataFromBuiltIn("ml-100k"), 0.98, 0.774)

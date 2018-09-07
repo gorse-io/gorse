@@ -23,32 +23,33 @@ func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
 	innerUserId := baseLine.trainSet.ConvertUserId(userId)
 	innerItemId := baseLine.trainSet.ConvertItemId(itemId)
 	ret := baseLine.globalBias
-	if innerUserId != noBody {
+	if innerUserId != newId {
 		ret += baseLine.userBias[innerUserId]
 	}
-	if innerItemId != noBody {
+	if innerItemId != newId {
 		ret += baseLine.itemBias[innerItemId]
 	}
 	return ret
 }
 
-func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...OptionSetter) {
+// Fit a baseline model.
+// Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 lr 		- The learning rate of SGD. Default is 0.005.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
+func (baseLine *BaseLine) Fit(trainSet TrainSet, options Options) {
 	// Setup options
-	option := Option{
-		reg:     0.02,
-		lr:      0.005,
-		nEpochs: 20,
-	}
-	for _, editor := range options {
-		editor(&option)
-	}
+	reg := options.GetFloat64("reg", 0.02)
+	lr := options.GetFloat64("lr", 0.005)
+	nEpochs := options.GetInt("nEpochs", 20)
 	// Initialize parameters
 	baseLine.trainSet = trainSet
 	baseLine.userBias = make([]float64, trainSet.UserCount())
 	baseLine.itemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
 	users, items, ratings := trainSet.Interactions()
-	for epoch := 0; epoch < option.nEpochs; epoch++ {
+	for epoch := 0; epoch < nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
 			userId, itemId, rating := users[i], items[i], ratings[i]
 			innerUserId := trainSet.ConvertUserId(userId)
@@ -58,12 +59,12 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...OptionSetter) {
 			// Compute gradient
 			diff := baseLine.Predict(userId, itemId) - rating
 			gradGlobalBias := diff
-			gradUserBias := diff + option.reg*userBias
-			gradItemBias := diff + option.reg*itemBias
+			gradUserBias := diff + reg*userBias
+			gradItemBias := diff + reg*itemBias
 			// Update parameters
-			baseLine.globalBias -= option.lr * gradGlobalBias
-			baseLine.userBias[innerUserId] -= option.lr * gradUserBias
-			baseLine.itemBias[innerItemId] -= option.lr * gradItemBias
+			baseLine.globalBias -= lr * gradGlobalBias
+			baseLine.userBias[innerUserId] -= lr * gradUserBias
+			baseLine.itemBias[innerItemId] -= lr * gradItemBias
 		}
 	}
 }

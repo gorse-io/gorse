@@ -1,16 +1,19 @@
 // A collaborative filtering algorithm based on Non-negative
-// Matrix Factorization.  This algorithm is very similar to
-// SVD. The prediction \hat{r}_{ui} is set as:
+// Matrix Factorization.
+//
+// [1] Luo, Xin, et al. "An efficient non-negative matrix-
+// factorization-based approach to collaborative filtering
+// for recommender systems." IEEE Transactions on Industrial
+// Informatics 10.2 (2014): 1273-1284.
 
 package core
 
-import (
-	"github.com/gonum/floats"
-)
+import "github.com/gonum/floats"
 
 type NMF struct {
-	userFactor map[int][]float64 // p_u
-	itemFactor map[int][]float64 // q_i
+	userFactor [][]float64 // p_u
+	itemFactor [][]float64 // q_i
+	trainSet   TrainSet
 }
 
 func NewNMF() *NMF {
@@ -18,33 +21,79 @@ func NewNMF() *NMF {
 }
 
 func (nmf *NMF) Predict(userId int, itemId int) float64 {
-	userFactor, _ := nmf.userFactor[userId]
-	itemFactor, _ := nmf.itemFactor[itemId]
-	if len(userFactor) == len(itemFactor) {
-		return floats.Dot(userFactor, itemFactor)
+	innerUserId := nmf.trainSet.ConvertUserId(userId)
+	innerItemId := nmf.trainSet.ConvertItemId(itemId)
+	if innerItemId != newId && innerUserId != newId {
+		return floats.Dot(nmf.userFactor[innerUserId], nmf.itemFactor[innerItemId])
 	}
 	return 0
 }
 
-func (nmf *NMF) Fit(trainSet TrainSet, options ...OptionSetter) {
-	option := Option{
-		nFactors: 15,
-		nEpochs:  50,
-		initLow:  0,
-		initHigh: 1,
-		reg:      0.06,
-		lr:       0.005,
-	}
-	for _, editor := range options {
-		editor(&option)
-	}
+func (nmf *NMF) Fit(trainSet TrainSet, options Options) {
+	nFactors := options.GetInt("nFactors", 15)
+	nEpochs := options.GetInt("nEpochs", 50)
+	initLow := options.GetFloat64("initLow", 0)
+	initHigh := options.GetFloat64("initHigh", 1)
+	reg := options.GetFloat64("reg", 0.06)
+	//lr := options.GetFloat64("lr", 0.005)
 	// Initialize parameters
-	nmf.userFactor = make(map[int][]float64)
-	nmf.itemFactor = make(map[int][]float64)
-	for userId := range trainSet.Users() {
-		nmf.userFactor[userId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
-	}
-	for itemId := range trainSet.Items() {
-		nmf.itemFactor[itemId] = newNormalVector(option.nFactors, option.initMean, option.initStdDev)
+	nmf.trainSet = trainSet
+	nmf.userFactor = newUniformMatrix(trainSet.UserCount(), nFactors, initLow, initHigh)
+	nmf.itemFactor = newUniformMatrix(trainSet.ItemCount(), nFactors, initLow, initHigh)
+	// Create intermediate matrix buffer
+	buffer := make([]float64, nFactors)
+	userUp := newZeroMatrix(trainSet.UserCount(), nFactors)
+	userDown := newZeroMatrix(trainSet.UserCount(), nFactors)
+	itemUp := newZeroMatrix(trainSet.ItemCount(), nFactors)
+	itemDown := newZeroMatrix(trainSet.ItemCount(), nFactors)
+	// Stochastic Gradient Descent
+	users, items, ratings := trainSet.Interactions()
+	for epoch := 0; epoch < nEpochs; epoch++ {
+		// Reset intermediate matrices
+		resetZeroMatrix(userUp)
+		resetZeroMatrix(userDown)
+		resetZeroMatrix(itemUp)
+		resetZeroMatrix(itemDown)
+		// Calculate intermediate matrices
+		for i := 0; i < len(ratings); i++ {
+			userId, itemId, rating := users[i], items[i], ratings[i]
+			innerUserId := trainSet.ConvertUserId(userId)
+			innerItemId := trainSet.ConvertItemId(itemId)
+			prediction := nmf.Predict(userId, itemId)
+			// Update userUp
+			copy(buffer, nmf.itemFactor[innerItemId])
+			mulConst(rating, buffer)
+			floats.Add(userUp[innerUserId], buffer)
+			// Update userDown
+			copy(buffer, nmf.itemFactor[innerItemId])
+			mulConst(prediction, buffer)
+			floats.Add(userDown[innerUserId], buffer)
+			copy(buffer, nmf.userFactor[innerUserId])
+			mulConst(reg, buffer)
+			floats.Add(userDown[innerUserId], buffer)
+			// Update itemUp
+			copy(buffer, nmf.userFactor[innerUserId])
+			mulConst(rating, buffer)
+			floats.Add(itemUp[innerItemId], buffer)
+			// Update itemDown
+			copy(buffer, nmf.userFactor[innerUserId])
+			mulConst(prediction, buffer)
+			floats.Add(itemDown[innerItemId], buffer)
+			copy(buffer, nmf.itemFactor[innerItemId])
+			mulConst(reg, buffer)
+			floats.Add(itemDown[innerItemId], buffer)
+		}
+		// Update user factors
+		for u := range nmf.userFactor {
+			copy(buffer, userUp[u])
+			floats.Div(buffer, userDown[u])
+			floats.Mul(nmf.userFactor[u], buffer)
+		}
+		// Update item factors
+		for i := range nmf.itemFactor {
+			copy(buffer, itemUp[i])
+			floats.Div(buffer, itemDown[i])
+			floats.Mul(nmf.itemFactor[i], buffer)
+		}
 	}
 }

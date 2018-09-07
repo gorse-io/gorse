@@ -76,11 +76,11 @@ func TestNewNormalVector(t *testing.T) {
 }
 
 func TestNewUniformVector(t *testing.T) {
-	a := newUniformVector(100, 10, 100)
+	a := newUniformVectorInt(100, 10, 100)
 	for _, val := range a {
 		if val < 10 {
 			t.Fail()
-		} else if val > 100 {
+		} else if val >= 100 {
 			t.Fail()
 		}
 	}

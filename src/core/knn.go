@@ -8,11 +8,12 @@ import (
 const (
 	basic    = 0
 	centered = 1
-	baseline = 2
+	zscore   = 2
+	baseline = 3
 )
 
 type KNN struct {
-	option     Option
+	option     Options
 	tpe        int
 	globalMean float64
 	sims       [][]float64
@@ -20,6 +21,10 @@ type KNN struct {
 	trainSet   TrainSet
 	means      []float64 // Centered KNN: user (item) mean
 	bias       []float64 // KNN Baseline: bias
+	// Parameters
+	userBased bool
+	k         int
+	minK      int
 }
 
 type CandidateSet struct {
@@ -58,6 +63,12 @@ func NewKNNWithMean() *KNN {
 	return knn
 }
 
+func NewKNNWithZScore() *KNN {
+	knn := new(KNN)
+	knn.tpe = zscore
+	return knn
+}
+
 func NewKNNBaseLine() *KNN {
 	knn := new(KNN)
 	knn.tpe = baseline
@@ -69,12 +80,12 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 	innerItemId := knn.trainSet.ConvertItemId(itemId)
 	// Set user based or item based
 	var leftId, rightId int
-	if knn.option.userBased {
+	if knn.userBased {
 		leftId, rightId = innerUserId, innerItemId
 	} else {
 		leftId, rightId = innerItemId, innerUserId
 	}
-	if leftId == noBody || rightId == noBody {
+	if leftId == newId || rightId == newId {
 		return knn.globalMean
 	}
 	// Find user (item) interacted with item (user)
@@ -85,14 +96,14 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 		}
 	}
 	// Set global globalMean for a user (item) with the number of neighborhoods less than min k
-	if len(candidates) <= knn.option.minK {
+	if len(candidates) <= knn.minK {
 		return knn.globalMean
 	}
 	// Sort users (items) by similarity
 	candidateSet := NewCandidateSet(knn.sims[leftId], candidates)
 	sort.Sort(candidateSet)
 	// Find neighborhoods
-	numNeighbors := knn.option.k
+	numNeighbors := knn.k
 	if numNeighbors > candidateSet.Len() {
 		numNeighbors = candidateSet.Len()
 	}
@@ -117,24 +128,17 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 	return prediction
 }
 
-func (knn *KNN) Fit(trainSet TrainSet, options ...OptionSetter) {
+func (knn *KNN) Fit(trainSet TrainSet, options Options) {
 	// Setup options
-	knn.option = Option{
-		sim:       MSD,
-		userBased: true,
-		k:         40, // the (max) number of neighbors to take into account for aggregation
-		minK:      1,  // The minimum number of neighbors to take into account for aggregation.
-		// If there are not enough neighbors, the prediction is set the global
-		// globalMean of all interactionRatings
-	}
-	for _, setter := range options {
-		setter(&knn.option)
-	}
+	sim := options.GetSim("sim", MSD)
+	knn.userBased = options.GetBool("userBased", true)
+	knn.k = options.GetInt("k", 40)
+	knn.minK = options.GetInt("minK", 1)
 	// Set global globalMean for new users (items)
 	knn.trainSet = trainSet
 	knn.globalMean = trainSet.GlobalMean()
 	// Retrieve user (item) ratings
-	if knn.option.userBased {
+	if knn.userBased {
 		knn.ratings = trainSet.UserRatings()
 		knn.sims = newNanMatrix(trainSet.UserCount(), trainSet.UserCount())
 	} else {
@@ -156,8 +160,8 @@ func (knn *KNN) Fit(trainSet TrainSet, options ...OptionSetter) {
 		}
 	} else if knn.tpe == baseline {
 		baseLine := NewBaseLine()
-		baseLine.Fit(trainSet, options...)
-		if knn.option.userBased {
+		baseLine.Fit(trainSet, options)
+		if knn.userBased {
 			knn.bias = baseLine.userBias
 		} else {
 			knn.bias = baseLine.itemBias
@@ -168,7 +172,7 @@ func (knn *KNN) Fit(trainSet TrainSet, options ...OptionSetter) {
 		for rightId, rightRatings := range knn.ratings {
 			if leftId != rightId {
 				if math.IsNaN(knn.sims[leftId][rightId]) {
-					ret := knn.option.sim(leftRatings, rightRatings)
+					ret := sim(leftRatings, rightRatings)
 					if !math.IsNaN(ret) {
 						knn.sims[leftId][rightId] = ret
 						knn.sims[rightId][leftId] = ret

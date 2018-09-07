@@ -15,4 +15,8 @@ Here are the average RMSE, MAE and total execution time of various algorithms (w
 | SVD      | 0.938568 | 0.736788 | 00:10 |
 | SVD++    | 0.924482 | 0.722409 | 06:04 |
 
+## References
 
+1. Hug, Nicolas. Surprise, a Python library for recommender systems. http://surpriselib.com, 2017.
+
+2. Luo, Xin, et al. "An efficient non-negative matrix-factorization-based approach to collaborative filtering for recommender systems." IEEE Transactions on Industrial Informatics 10.2 (2014): 1273-1284.
