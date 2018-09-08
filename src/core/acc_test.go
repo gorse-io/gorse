@@ -45,6 +45,10 @@ func TestNMF(t *testing.T) {
 	Evaluate(t, NewNMF(), LoadDataFromBuiltIn("ml-100k"), 0.963, 0.758)
 }
 
+func TestSlopeOne(t *testing.T) {
+	Evaluate(t, NewSlopOne(), LoadDataFromBuiltIn("ml-100k"), 0.946, 0.743)
+}
+
 func TestKNN(t *testing.T) {
 	Evaluate(t, NewKNN(), LoadDataFromBuiltIn("ml-100k"), 0.98, 0.774)
 }

@@ -147,6 +147,14 @@ func resetZeroMatrix(m [][]float64) {
 	}
 }
 
+func newSparseMatrix(row int) []map[int]float64 {
+	m := make([]map[int]float64, row)
+	for i := range m {
+		m[i] = make(map[int]float64)
+	}
+	return m
+}
+
 // Metrics
 
 type Metrics func([]float64, []float64) float64
