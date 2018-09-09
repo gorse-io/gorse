@@ -1,9 +1,3 @@
-// Algorithm predicting a random rating based on the distribution of
-// the training set, which is assumed to be normal. The prediction
-// \hat{r}_{ui} is generated from a normal distribution N(\hat{μ},\hat{σ}^2)
-// where \hat{μ} and \hat{σ}^2 are estimated from the training data
-// using Maximum Likelihood Estimation
-
 package core
 
 import (
@@ -11,11 +5,16 @@ import (
 	"math/rand"
 )
 
+// Algorithm predicting a random rating based on the distribution of
+// the training set, which is assumed to be normal. The prediction
+// \hat{r}_{ui} is generated from a normal distribution N(\hat{μ},\hat{σ}^2)
+// where \hat{μ} and \hat{σ}^2 are estimated from the training data
+// using Maximum Likelihood Estimation
 type Random struct {
 	mean   float64 // mu
 	stdDev float64 // sigma
-	low    float64
-	high   float64
+	low    float64 // The lower bound of rating scores
+	high   float64 // The upper bound of rating scores
 }
 
 func NewRandom() *Random {
@@ -33,7 +32,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet TrainSet, options Options) {
+func (random *Random) Fit(trainSet TrainSet, params Parameters) {
 	_, _, ratings := trainSet.Interactions()
 	random.mean = stat.Mean(ratings, nil)
 	random.stdDev = stat.StdDev(ratings, nil)

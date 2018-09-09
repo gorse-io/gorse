@@ -13,7 +13,7 @@ const (
 )
 
 type KNN struct {
-	option     Options
+	option     parameterReader
 	tpe        int
 	globalMean float64
 	sims       [][]float64
@@ -128,12 +128,13 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 	return prediction
 }
 
-func (knn *KNN) Fit(trainSet TrainSet, options Options) {
-	// Setup options
-	sim := options.GetSim("sim", MSD)
-	knn.userBased = options.GetBool("userBased", true)
-	knn.k = options.GetInt("k", 40)
-	knn.minK = options.GetInt("minK", 1)
+func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
+	// Setup parameters
+	reader := newParameterReader(params)
+	sim := reader.getSim("sim", MSD)
+	knn.userBased = reader.getBool("userBased", true)
+	knn.k = reader.getInt("k", 40)
+	knn.minK = reader.getInt("minK", 1)
 	// Set global globalMean for new users (items)
 	knn.trainSet = trainSet
 	knn.globalMean = trainSet.GlobalMean()
@@ -160,7 +161,7 @@ func (knn *KNN) Fit(trainSet TrainSet, options Options) {
 		}
 	} else if knn.tpe == baseline {
 		baseLine := NewBaseLine()
-		baseLine.Fit(trainSet, options)
+		baseLine.Fit(trainSet, params)
 		if knn.userBased {
 			knn.bias = baseLine.userBias
 		} else {

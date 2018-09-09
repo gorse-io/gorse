@@ -1,12 +1,11 @@
+package core
+
 // Algorithm predicting the baseline estimate for given user and item.
 //
 //                   \hat{r}_{ui} = b_{ui} = μ + b_u + b_i
 //
-// If user u is unknown, then the bias bu is assumed to be zero. The same
-// applies for item i with bi.
-
-package core
-
+// If user u is unknown, then the bias b_u is assumed to be zero. The same
+// applies for item i with b_i.
 type BaseLine struct {
 	userBias   []float64 // b_u
 	itemBias   []float64 // b_i
@@ -18,7 +17,7 @@ func NewBaseLine() *BaseLine {
 	return new(BaseLine)
 }
 
-func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
+func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
 	innerUserId := baseLine.trainSet.ConvertUserId(userId)
 	innerItemId := baseLine.trainSet.ConvertItemId(itemId)
@@ -38,11 +37,12 @@ func (baseLine *BaseLine) Predict(userId int, itemId int) float64 {
 // 				  optimized. Default is 0.02.
 //	 lr 		- The learning rate of SGD. Default is 0.005.
 //	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
-func (baseLine *BaseLine) Fit(trainSet TrainSet, options Options) {
-	// Setup options
-	reg := options.GetFloat64("reg", 0.02)
-	lr := options.GetFloat64("lr", 0.005)
-	nEpochs := options.GetInt("nEpochs", 20)
+func (baseLine *BaseLine) Fit(trainSet TrainSet, params Parameters) {
+	// Setup parameters
+	reader := newParameterReader(params)
+	reg := reader.getFloat64("reg", 0.02)
+	lr := reader.getFloat64("lr", 0.005)
+	nEpochs := reader.getInt("nEpochs", 20)
 	// Initialize parameters
 	baseLine.trainSet = trainSet
 	baseLine.userBias = make([]float64, trainSet.UserCount())

@@ -1,19 +1,18 @@
-// A simple yet accurate collaborative filtering algorithm.
+package core
+
+import "math"
+
+// A simple yet accurate collaborative filtering algorithm. Papers:
 //
 // [1] Lemire, Daniel, and Anna Maclachlan. "Slope one predictors
 // for online rating-based collaborative filtering." Proceedings
 // of the 2005 SIAM International Conference on Data Mining.
 // Society for Industrial and Applied Mathematics, 2005.
-
-package core
-
-import "math"
-
 type SlopeOne struct {
 	globalMean  float64
 	userRatings [][]float64
 	userMeans   []float64
-	dev         [][]float64 // average difference between the ratings of i and those of j
+	dev         [][]float64 // The average differences between the ratings of i and those of j
 	trainSet    TrainSet
 }
 
@@ -46,7 +45,7 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-func (so *SlopeOne) Fit(trainSet TrainSet, options Options) {
+func (so *SlopeOne) Fit(trainSet TrainSet, params Parameters) {
 	so.trainSet = trainSet
 	so.globalMean = trainSet.GlobalMean()
 	so.userRatings = trainSet.UserRatings()

@@ -1,14 +1,3 @@
-// The SVD++ algorithm, an extension of SVD taking into account implicit
-// interactionRatings. The prediction \hat{r}_{ui} is set as:
-//
-// \hat{r}_{ui} = \mu + b_u + b_i + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
-//
-// Where the y_j terms are a new set of item factors that capture implicit
-// interactionRatings. Here, an implicit rating describes the fact that a user u
-// userHistory an item j, regardless of the rating value. If user u is unknown,
-// then the bias b_u and the factors p_u are assumed to be zero. The same
-// applies for item i with b_i, q_i and y_i.
-
 package core
 
 import (
@@ -16,7 +5,17 @@ import (
 	"math"
 )
 
-type SVDPP struct {
+// The SVD++ algorithm, an extension of SVD taking into account implicit
+// interactionRatings. The prediction \hat{r}_{ui} is set as:
+//
+// 	\hat{r}_{ui} = \mu + b_u + b_i + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
+//
+// Where the y_j terms are a new set of item factors that capture implicit
+// interactionRatings. Here, an implicit rating describes the fact that a user u
+// userHistory an item j, regardless of the rating value. If user u is unknown,
+// then the bias b_u and the factors p_u are assumed to be zero. The same
+// applies for item i with b_i, q_i and y_i.
+type SVDpp struct {
 	userHistory [][]float64 // I_u
 	userFactor  [][]float64 // p_u
 	itemFactor  [][]float64 // q_i
@@ -30,43 +29,43 @@ type SVDPP struct {
 	//cacheFactor map[int][]float64 // |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right
 }
 
-func NewSVDPP() *SVDPP {
-	return new(SVDPP)
+func NewSVDpp() *SVDpp {
+	return new(SVDpp)
 }
 
-func (svdpp *SVDPP) EnsembleImplFactors(innerUserId int) []float64 {
-	history := svdpp.userHistory[innerUserId]
+func (svd *SVDpp) ensembleImplFactors(innerUserId int) []float64 {
+	history := svd.userHistory[innerUserId]
 	emImpFactor := make([]float64, 0)
 	// User history exists
 	for itemId := range history {
 		if len(emImpFactor) == 0 {
 			// Create ensemble implicit factor
-			emImpFactor = make([]float64, len(svdpp.implFactor[itemId]))
+			emImpFactor = make([]float64, len(svd.implFactor[itemId]))
 		}
-		floats.Add(emImpFactor, svdpp.implFactor[itemId])
+		floats.Add(emImpFactor, svd.implFactor[itemId])
 	}
 	divConst(math.Sqrt(float64(len(history))), emImpFactor)
 	return emImpFactor
 }
 
-func (svdpp *SVDPP) InternalPredict(userId int, itemId int) (float64, []float64) {
+func (svd *SVDpp) internalPredict(userId int, itemId int) (float64, []float64) {
 	// Convert to inner Id
-	innerUserId := svdpp.trainSet.ConvertUserId(userId)
-	innerItemId := svdpp.trainSet.ConvertItemId(itemId)
-	ret := svdpp.globalBias
+	innerUserId := svd.trainSet.ConvertUserId(userId)
+	innerItemId := svd.trainSet.ConvertItemId(itemId)
+	ret := svd.globalBias
 	// + b_u
 	if innerUserId != newId {
-		ret += svdpp.userBias[innerUserId]
+		ret += svd.userBias[innerUserId]
 	}
 	// + b_i
 	if innerItemId != newId {
-		ret += svdpp.itemBias[innerItemId]
+		ret += svd.itemBias[innerItemId]
 	}
 	// + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
 	if innerItemId != newId && innerUserId != newId {
-		userFactor := svdpp.userFactor[innerUserId]
-		itemFactor := svdpp.itemFactor[innerItemId]
-		emImpFactor := svdpp.EnsembleImplFactors(innerUserId)
+		userFactor := svd.userFactor[innerUserId]
+		itemFactor := svd.itemFactor[innerItemId]
+		emImpFactor := svd.ensembleImplFactors(innerUserId)
 		temp := make([]float64, len(itemFactor))
 		floats.Add(temp, userFactor)
 		floats.Add(temp, emImpFactor)
@@ -76,36 +75,46 @@ func (svdpp *SVDPP) InternalPredict(userId int, itemId int) (float64, []float64)
 	return ret, []float64{}
 }
 
-func (svdpp *SVDPP) Predict(userId int, itemId int) float64 {
-	ret, _ := svdpp.InternalPredict(userId, itemId)
+func (svd *SVDpp) Predict(userId int, itemId int) float64 {
+	ret, _ := svd.internalPredict(userId, itemId)
 	return ret
 }
 
-func (svdpp *SVDPP) Fit(trainSet TrainSet, options Options) {
-	// Setup options
-	nFactors := options.GetInt("nFactors", 20)
-	nEpochs := options.GetInt("nEpochs", 20)
-	lr := options.GetFloat64("lr", 0.007)
-	reg := options.GetFloat64("reg", 0.02)
-	initMean := options.GetFloat64("initMean", 0)
-	initStdDev := options.GetFloat64("initStdDev", 0.1)
+// Fit a SVD++ model.
+// Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 lr 		- The learning rate of SGD. Default is 0.007.
+//	 nFactors	- The number of latent factors. Default is 20.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
+//	 initMean	- The mean of initial random latent factors. Default is 0.
+//	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+func (svd *SVDpp) Fit(trainSet TrainSet, params Parameters) {
+	// Setup parameters
+	reader := newParameterReader(params)
+	nFactors := reader.getInt("nFactors", 20)
+	nEpochs := reader.getInt("nEpochs", 20)
+	lr := reader.getFloat64("lr", 0.007)
+	reg := reader.getFloat64("reg", 0.02)
+	initMean := reader.getFloat64("initMean", 0)
+	initStdDev := reader.getFloat64("initStdDev", 0.1)
 	// Initialize parameters
-	svdpp.trainSet = trainSet
-	svdpp.userBias = make([]float64, trainSet.UserCount())
-	svdpp.itemBias = make([]float64, trainSet.ItemCount())
-	svdpp.userFactor = make([][]float64, trainSet.UserCount())
-	svdpp.itemFactor = make([][]float64, trainSet.ItemCount())
-	svdpp.implFactor = make([][]float64, trainSet.ItemCount())
-	//svdpp.cacheFactor = make(map[int][]float64)
-	for innerUserId := range svdpp.userBias {
-		svdpp.userFactor[innerUserId] = newNormalVector(nFactors, initMean, initStdDev)
+	svd.trainSet = trainSet
+	svd.userBias = make([]float64, trainSet.UserCount())
+	svd.itemBias = make([]float64, trainSet.ItemCount())
+	svd.userFactor = make([][]float64, trainSet.UserCount())
+	svd.itemFactor = make([][]float64, trainSet.ItemCount())
+	svd.implFactor = make([][]float64, trainSet.ItemCount())
+	//svd.cacheFactor = make(map[int][]float64)
+	for innerUserId := range svd.userBias {
+		svd.userFactor[innerUserId] = newNormalVector(nFactors, initMean, initStdDev)
 	}
-	for innerItemId := range svdpp.itemBias {
-		svdpp.itemFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
-		svdpp.implFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
+	for innerItemId := range svd.itemBias {
+		svd.itemFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
+		svd.implFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
 	}
 	// Build user rating set
-	svdpp.userHistory = trainSet.UserRatings()
+	svd.userHistory = trainSet.UserRatings()
 	// Create buffers
 	a := make([]float64, nFactors)
 	b := make([]float64, nFactors)
@@ -116,22 +125,22 @@ func (svdpp *SVDPP) Fit(trainSet TrainSet, options Options) {
 			userId, itemId, rating := users[i], items[i], ratings[i]
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
-			userBias := svdpp.userBias[innerUserId]
-			itemBias := svdpp.itemBias[innerItemId]
-			userFactor := svdpp.userFactor[innerUserId]
-			itemFactor := svdpp.itemFactor[innerItemId]
+			userBias := svd.userBias[innerUserId]
+			itemBias := svd.itemBias[innerItemId]
+			userFactor := svd.userFactor[innerUserId]
+			itemFactor := svd.itemFactor[innerItemId]
 			// Compute error
-			pred, emImpFactor := svdpp.InternalPredict(userId, itemId)
+			pred, emImpFactor := svd.internalPredict(userId, itemId)
 			diff := pred - rating
 			// Update global bias
 			gradGlobalBias := diff
-			svdpp.globalBias -= lr * gradGlobalBias
+			svd.globalBias -= lr * gradGlobalBias
 			// Update user bias
 			gradUserBias := diff + reg*userBias
-			svdpp.userBias[innerUserId] -= lr * gradUserBias
+			svd.userBias[innerUserId] -= lr * gradUserBias
 			// Update item bias
 			gradItemBias := diff + reg*itemBias
-			svdpp.itemBias[innerItemId] -= lr * gradItemBias
+			svd.itemBias[innerItemId] -= lr * gradItemBias
 			// Update user latent factor
 			copy(a, itemFactor)
 			mulConst(diff, a)
@@ -139,7 +148,7 @@ func (svdpp *SVDPP) Fit(trainSet TrainSet, options Options) {
 			mulConst(reg, b)
 			floats.Add(a, b)
 			mulConst(lr, a)
-			floats.Sub(svdpp.userFactor[innerUserId], a)
+			floats.Sub(svd.userFactor[innerUserId], a)
 			// Update item latent factor
 			copy(a, userFactor)
 			if len(emImpFactor) > 0 {
@@ -150,12 +159,12 @@ func (svdpp *SVDPP) Fit(trainSet TrainSet, options Options) {
 			mulConst(reg, b)
 			floats.Add(a, b)
 			mulConst(lr, a)
-			floats.Sub(svdpp.itemFactor[innerItemId], a)
+			floats.Sub(svd.itemFactor[innerItemId], a)
 			// Update implicit latent factor
-			set := svdpp.userHistory[innerUserId]
+			set := svd.userHistory[innerUserId]
 			for itemId := range set {
-				if !math.IsNaN(svdpp.userHistory[innerUserId][itemId]) {
-					implFactor := svdpp.implFactor[itemId]
+				if !math.IsNaN(svd.userHistory[innerUserId][itemId]) {
+					implFactor := svd.implFactor[itemId]
 					copy(a, itemFactor)
 					mulConst(diff, a)
 					divConst(math.Sqrt(float64(len(set))), a)
@@ -163,7 +172,7 @@ func (svdpp *SVDPP) Fit(trainSet TrainSet, options Options) {
 					mulConst(reg, b)
 					floats.Add(a, b)
 					mulConst(lr, a)
-					floats.Sub(svdpp.implFactor[itemId], a)
+					floats.Sub(svd.implFactor[itemId], a)
 				}
 			}
 		}

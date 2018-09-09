@@ -164,7 +164,7 @@ func NewTrainSet(users, items []int, ratings []float64) TrainSet {
 // Load build in data set
 func LoadDataFromBuiltIn(dataSetName string) TrainSet {
 	// Extract data set information
-	dataSet, exist := buildInDataSet[dataSetName]
+	dataSet, exist := buildInDataSets[dataSetName]
 	if !exist {
 		log.Fatal("no such data set", dataSetName)
 	}

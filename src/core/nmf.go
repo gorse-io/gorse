@@ -1,15 +1,14 @@
+package core
+
+import "github.com/gonum/floats"
+
 // A collaborative filtering algorithm based on Non-negative
-// Matrix Factorization.
+// Matrix Factorization. Papers:
 //
 // [1] Luo, Xin, et al. "An efficient non-negative matrix-
 // factorization-based approach to collaborative filtering
 // for recommender systems." IEEE Transactions on Industrial
 // Informatics 10.2 (2014): 1273-1284.
-
-package core
-
-import "github.com/gonum/floats"
-
 type NMF struct {
 	userFactor [][]float64 // p_u
 	itemFactor [][]float64 // q_i
@@ -29,13 +28,21 @@ func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	return 0
 }
 
-func (nmf *NMF) Fit(trainSet TrainSet, options Options) {
-	nFactors := options.GetInt("nFactors", 15)
-	nEpochs := options.GetInt("nEpochs", 50)
-	initLow := options.GetFloat64("initLow", 0)
-	initHigh := options.GetFloat64("initHigh", 1)
-	reg := options.GetFloat64("reg", 0.06)
-	//lr := options.GetFloat64("lr", 0.005)
+// Fit a NMF model.
+// Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.06.
+//	 nFactors	- The number of latent factors. Default is 15.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 50.
+//	 initLow	- The lower bound of initial random latent factor. Default is 0.
+//	 initHigh	- The upper bound of initial random latent factor. Default is 1.
+func (nmf *NMF) Fit(trainSet TrainSet, params Parameters) {
+	reader := newParameterReader(params)
+	nFactors := reader.getInt("nFactors", 15)
+	nEpochs := reader.getInt("nEpochs", 50)
+	initLow := reader.getFloat64("initLow", 0)
+	initHigh := reader.getFloat64("initHigh", 1)
+	reg := reader.getFloat64("reg", 0.06)
 	// Initialize parameters
 	nmf.trainSet = trainSet
 	nmf.userFactor = newUniformMatrix(trainSet.UserCount(), nFactors, initLow, initHigh)

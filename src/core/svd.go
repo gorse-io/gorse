@@ -1,17 +1,16 @@
-// The famous SVD algorithm, as popularized by Simon Funk during the
-// Netflix Prize. When baselines are not used, this is equivalent to
-// Probabilistic Matrix Factorization [SM08] (see note below). The
-// prediction r^ui is set as:
-//               \hat{r}_{ui} = μ + b_u + b_i + q_i^Tp_u
-// If user u is unknown, then the bias bu and the factors pu are
-// assumed to be zero. The same applies for item i with bi and qi.
-
 package core
 
 import (
 	"github.com/gonum/floats"
 )
 
+// The famous SVD algorithm, as popularized by Simon Funk during the
+// Netflix Prize. The prediction \hat{r}_{ui} is set as:
+//
+//               \hat{r}_{ui} = μ + b_u + b_i + q_i^Tp_u
+//
+// If user u is unknown, then the bias b_u and the factors p_u are
+// assumed to be zero. The same applies for item i with b_i and q_i.
 type SVD struct {
 	userFactor [][]float64 // p_u
 	itemFactor [][]float64 // q_i
@@ -46,15 +45,24 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (svd *SVD) Fit(trainSet TrainSet, options Options) {
-	// Setup options
-	nFactors := options.GetInt("nFactors", 100)
-	nEpochs := options.GetInt("nEpochs", 20)
-	lr := options.GetFloat64("lr", 0.005)
-	reg := options.GetFloat64("reg", 0.02)
-	//biased := options.GetBool("biased", true)
-	initMean := options.GetFloat64("initMean", 0)
-	initStdDev := options.GetFloat64("initStdDev", 0.1)
+// Fit a SVD model.
+// Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 lr 		- The learning rate of SGD. Default is 0.005.
+//	 nFactors	- The number of latent factors. Default is 100.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
+//	 initMean	- The mean of initial random latent factors. Default is 0.
+//	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+func (svd *SVD) Fit(trainSet TrainSet, params Parameters) {
+	// Setup parameters
+	reader := newParameterReader(params)
+	nFactors := reader.getInt("nFactors", 100)
+	nEpochs := reader.getInt("nEpochs", 20)
+	lr := reader.getFloat64("lr", 0.005)
+	reg := reader.getFloat64("reg", 0.02)
+	initMean := reader.getFloat64("initMean", 0)
+	initStdDev := reader.getFloat64("initStdDev", 0.1)
 	// Initialize parameters
 	svd.trainSet = trainSet
 	svd.userBias = make([]float64, trainSet.UserCount())

@@ -103,6 +103,12 @@ func newUniformVector(size int, low, high float64) []float64 {
 	return ret
 }
 
+func resetZeroVector(a []float64) {
+	for i := range a {
+		a[i] = 0
+	}
+}
+
 func newUniformVectorInt(size, low, high int) []int {
 	ret := make([]int, size)
 	scale := high - low

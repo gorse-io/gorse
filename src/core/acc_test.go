@@ -38,7 +38,7 @@ func TestSVD(t *testing.T) {
 
 // Comment out SVD++ test to avoid time out
 //func TestSVDPP(t *testing.T) {
-//	Evaluate(t, NewSVDPP(), LoadDataFromBuiltIn(), 0.92, 0.722)
+//	Evaluate(t, NewSVDpp(), LoadDataFromBuiltIn(), 0.92, 0.722)
 //}
 
 func TestNMF(t *testing.T) {
@@ -59,4 +59,14 @@ func TestKNNWithMean(t *testing.T) {
 
 func TestKNNBaseLine(t *testing.T) {
 	Evaluate(t, NewKNNBaseLine(), LoadDataFromBuiltIn("ml-100k"), 0.931, 0.733)
+}
+
+func TestGridSearchCV(t *testing.T) {
+	paramGrid := map[string][]interface{}{
+		"nEpochs": {10, 20},
+		"reg":     {0.01, 0.02},
+		"lr":      {0.001, 0.005},
+	}
+	GridSearchCV(NewBaseLine(), LoadDataFromBuiltIn("ml-100k"), paramGrid,
+		[]Metrics{RootMeanSquareError, MeanAbsoluteError}, 5, 0)
 }

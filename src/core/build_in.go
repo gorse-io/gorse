@@ -10,13 +10,13 @@ import (
 	"strings"
 )
 
-type BuildInDataSet struct {
+type buildInDataSet struct {
 	url  string
 	path string
 	sep  string
 }
 
-var buildInDataSet = map[string]BuildInDataSet{
+var buildInDataSets = map[string]buildInDataSet{
 	"ml-100k": {
 		url:  "http://files.grouplens.org/datasets/movielens/ml-100k.zip",
 		path: "ml-100k/u.data",
