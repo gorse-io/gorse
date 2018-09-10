@@ -172,8 +172,8 @@ func LoadDataFromBuiltIn(dataSetName string) TrainSet {
 	const tempFolder = "temp"
 	dataFileName := filepath.Join(dataFolder, dataSet.path)
 	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
-		zipFileName, _ := DownloadFromUrl(dataSet.url, tempFolder)
-		Unzip(zipFileName, dataFolder)
+		zipFileName, _ := downloadFromUrl(dataSet.url, tempFolder)
+		unzip(zipFileName, dataFolder)
 	}
 	return LoadDataFromFile(dataFileName, dataSet.sep)
 }

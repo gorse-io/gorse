@@ -30,7 +30,7 @@ var buildInDataSets = map[string]buildInDataSet{
 	"jester": {url: "http://eigentaste.berkeley.edu/dataset/jester_dataset_2.zip"},
 }
 
-func DownloadFromUrl(src string, dst string) (string, error) {
+func downloadFromUrl(src string, dst string) (string, error) {
 	// Extract file name
 	tokens := strings.Split(src, "/")
 	fileName := filepath.Join(dst, tokens[len(tokens)-1])
@@ -60,7 +60,7 @@ func DownloadFromUrl(src string, dst string) (string, error) {
 	return fileName, nil
 }
 
-func Unzip(src string, dst string) ([]string, error) {
+func unzip(src string, dst string) ([]string, error) {
 	var fileNames []string
 	// Open zip file
 	r, err := zip.OpenReader(src)
