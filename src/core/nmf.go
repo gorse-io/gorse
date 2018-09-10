@@ -3,7 +3,7 @@ package core
 import "github.com/gonum/floats"
 
 // A collaborative filtering algorithm based on Non-negative
-// Matrix Factorization. Papers:
+// Matrix Factorization[1].
 //
 // [1] Luo, Xin, et al. "An efficient non-negative matrix-
 // factorization-based approach to collaborative filtering

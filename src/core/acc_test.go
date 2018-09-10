@@ -11,7 +11,7 @@ const EPSILON float64 = 0.01
 func Evaluate(t *testing.T, algo Algorithm, dataSet TrainSet,
 	expectRMSE float64, expectMAE float64) {
 	// Cross validation
-	results := CrossValidate(algo, dataSet, []Metrics{RootMeanSquareError, MeanAbsoluteError}, 5, 0, DefaultOptions())
+	results := CrossValidate(algo, dataSet, []Metrics{RootMeanSquareError, MeanAbsoluteError}, 5, 0, nil)
 	// Check RMSE
 	rmse := stat.Mean(results[0], nil)
 	if math.Abs(rmse-expectRMSE) > EPSILON {
@@ -57,8 +57,16 @@ func TestKNNWithMean(t *testing.T) {
 	Evaluate(t, NewKNNWithMean(), LoadDataFromBuiltIn("ml-100k"), 0.951, 0.749)
 }
 
+func TestNewKNNZScore(t *testing.T) {
+	Evaluate(t, NewKNNWithZScore(), LoadDataFromBuiltIn("ml-100k"), 0.951, 0.746)
+}
+
 func TestKNNBaseLine(t *testing.T) {
 	Evaluate(t, NewKNNBaseLine(), LoadDataFromBuiltIn("ml-100k"), 0.931, 0.733)
+}
+
+func TestCoClustering(t *testing.T) {
+	Evaluate(t, NewCoClustering(), LoadDataFromBuiltIn("ml-100k"), 0.963, 0.753)
 }
 
 func TestGridSearchCV(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 const (
 	basic    = 0
 	centered = 1
-	zscore   = 2
+	zScore   = 2
 	baseline = 3
 )
 
@@ -20,35 +20,12 @@ type KNN struct {
 	ratings    [][]float64
 	trainSet   TrainSet
 	means      []float64 // Centered KNN: user (item) mean
+	stds       []float64 // KNN with Z Score: user (item) standard deviation
 	bias       []float64 // KNN Baseline: bias
 	// Parameters
 	userBased bool
 	k         int
 	minK      int
-}
-
-type CandidateSet struct {
-	similarities []float64
-	candidates   []int
-}
-
-func NewCandidateSet(sim []float64, candidates []int) *CandidateSet {
-	neighbors := CandidateSet{}
-	neighbors.similarities = sim
-	neighbors.candidates = candidates
-	return &neighbors
-}
-
-func (n *CandidateSet) Len() int {
-	return len(n.candidates)
-}
-
-func (n *CandidateSet) Less(i, j int) bool {
-	return n.similarities[n.candidates[i]] > n.similarities[n.candidates[j]]
-}
-
-func (n *CandidateSet) Swap(i, j int) {
-	n.candidates[i], n.candidates[j] = n.candidates[j], n.candidates[i]
 }
 
 func NewKNN() *KNN {
@@ -65,7 +42,7 @@ func NewKNNWithMean() *KNN {
 
 func NewKNNWithZScore() *KNN {
 	knn := new(KNN)
-	knn.tpe = zscore
+	knn.tpe = zScore
 	return knn
 }
 
@@ -75,7 +52,7 @@ func NewKNNBaseLine() *KNN {
 	return knn
 }
 
-func (knn *KNN) Predict(userId int, itemId int) float64 {
+func (knn *KNN) Predict(userId, itemId int) float64 {
 	innerUserId := knn.trainSet.ConvertUserId(userId)
 	innerItemId := knn.trainSet.ConvertItemId(itemId)
 	// Set user based or item based
@@ -100,7 +77,7 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 		return knn.globalMean
 	}
 	// Sort users (items) by similarity
-	candidateSet := NewCandidateSet(knn.sims[leftId], candidates)
+	candidateSet := newCandidateSet(knn.sims[leftId], candidates)
 	sort.Sort(candidateSet)
 	// Find neighborhoods
 	numNeighbors := knn.k
@@ -112,15 +89,21 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 	weightRating := 0.0
 	for _, otherId := range candidateSet.candidates[0:numNeighbors] {
 		weightSum += knn.sims[leftId][otherId]
-		weightRating += knn.sims[leftId][otherId] * knn.ratings[otherId][rightId]
+		rating := knn.ratings[otherId][rightId]
 		if knn.tpe == centered {
-			weightRating -= knn.sims[leftId][otherId] * knn.means[otherId]
+			rating -= knn.means[otherId]
+		} else if knn.tpe == zScore {
+			rating = (rating - knn.means[otherId]) / knn.stds[otherId]
 		} else if knn.tpe == baseline {
-			weightRating -= knn.sims[leftId][otherId] * knn.bias[otherId]
+			rating -= knn.bias[otherId]
 		}
+		weightRating += knn.sims[leftId][otherId] * rating
 	}
 	prediction := weightRating / weightSum
 	if knn.tpe == centered {
+		prediction += knn.means[leftId]
+	} else if knn.tpe == zScore {
+		prediction *= knn.stds[leftId]
 		prediction += knn.means[leftId]
 	} else if knn.tpe == baseline {
 		prediction += knn.bias[leftId]
@@ -128,6 +111,11 @@ func (knn *KNN) Predict(userId int, itemId int) float64 {
 	return prediction
 }
 
+// Fit a KNN model. Parameters:
+//   sim		-
+//   userBased	-
+//	 k			-
+//	 minK		-
 func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 	// Setup parameters
 	reader := newParameterReader(params)
@@ -147,7 +135,7 @@ func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 		knn.sims = newNanMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	}
 	// Retrieve user (item) mean
-	if knn.tpe == centered {
+	if knn.tpe == centered || knn.tpe == zScore {
 		knn.means = make([]float64, len(knn.ratings))
 		for i := range knn.means {
 			sum, count := 0.0, 0.0
@@ -159,7 +147,21 @@ func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 			}
 			knn.means[i] = sum / count
 		}
-	} else if knn.tpe == baseline {
+	}
+	if knn.tpe == zScore {
+		knn.stds = make([]float64, len(knn.ratings))
+		for i := range knn.means {
+			sum, count := 0.0, 0.0
+			for j := range knn.ratings[i] {
+				if !math.IsNaN(knn.ratings[i][j]) {
+					sum += (knn.ratings[i][j] - knn.means[i]) * (knn.ratings[i][j] - knn.means[i])
+					count++
+				}
+			}
+			knn.stds[i] = math.Sqrt(sum / count)
+		}
+	}
+	if knn.tpe == baseline {
 		baseLine := NewBaseLine()
 		baseLine.Fit(trainSet, params)
 		if knn.userBased {
@@ -182,4 +184,28 @@ func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 			}
 		}
 	}
+}
+
+type candidateSet struct {
+	similarities []float64
+	candidates   []int
+}
+
+func newCandidateSet(sim []float64, candidates []int) *candidateSet {
+	neighbors := candidateSet{}
+	neighbors.similarities = sim
+	neighbors.candidates = candidates
+	return &neighbors
+}
+
+func (n *candidateSet) Len() int {
+	return len(n.candidates)
+}
+
+func (n *candidateSet) Less(i, j int) bool {
+	return n.similarities[n.candidates[i]] > n.similarities[n.candidates[j]]
+}
+
+func (n *candidateSet) Swap(i, j int) {
+	n.candidates[i], n.candidates[j] = n.candidates[j], n.candidates[i]
 }

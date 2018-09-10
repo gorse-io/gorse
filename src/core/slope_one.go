@@ -2,7 +2,7 @@ package core
 
 import "math"
 
-// A simple yet accurate collaborative filtering algorithm. Papers:
+// A simple yet accurate collaborative filtering algorithm[1].
 //
 // [1] Lemire, Daniel, and Anna Maclachlan. "Slope one predictors
 // for online rating-based collaborative filtering." Proceedings
