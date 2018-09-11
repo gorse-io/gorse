@@ -5,22 +5,48 @@
 [![Document](https://godoc.org/github.com/ZhangZhenghao/gorse?status.svg)](https://godoc.org/github.com/ZhangZhenghao/gorse)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ZhangZhenghao/gorse)](https://goreportcard.com/report/github.com/ZhangZhenghao/gorse)
 
+## Installation
+
+```bash
+go get -t -v -u github.com/ZhangZhenghao/gorse/core
+```
+
 ## Usage
 
 ```go
-import "github.com/ZhangZhenghao/gorse/core"
+// Load build-in data
+data := core.LoadDataFromBuiltIn("ml-100k")
+// Create a recommender
+algo := core.NewSVD()
+// Cross validate
+cv := core.CrossValidate(algo, data, []core.Evaluator{core.RMSE, core.MAE},5, 0, nil)
+// Print RMSE & MAE
+fmt.Printf("RMSE = %f, MAE = %f\n", 
+           stat.Mean(cv[0].Tests, nil), 
+           stat.Mean(cv[1].Tests, nil))
+```
+
+**Output**:
+
+```
+RMSE = 0.938904, MAE = 0.737349
 ```
 
 ## Benchmarks
 
-Here are the average RMSE, MAE and total execution time of various algorithms (with their default parameters) on a 5-fold cross-validation procedure. The datasets are the [Movielens](http://grouplens.org/datasets/movielens/) 100k and 1M datasets. The folds are the same for all the algorithms.
-
-|   [Movielens 100k](http://grouplens.org/datasets/movielens/100k)   |   RMSE   |   MAE    |    Time  |
-| - | - | - | - |
-| Random   | 1.518610 | 1.218645 | 00:01 |
-| BaseLine | 0.943741 | 0.741738 | 00:01 |
-| SVD      | 0.938568 | 0.736788 | 00:10 |
-| SVD++    | 0.924482 | 0.722409 | 06:04 |
+|   [Movielens 100k](http://grouplens.org/datasets/movielens/100k)   |   RMSE   |   MAE    |    Time  | RMSE[Ref] |  MAE[Ref]  |
+| - | - | - | - | - | - |
+| Random        | 1.518610 | 1.218645 | 00:01   | 1.514[1] | 1.215[1] |
+| BaseLine      | 0.943741 | 0.741738 | 00:01  | 0.944[1] | 0.748[1] |
+| SVD           | 0.938904 | 0.737349 | 00:05  | 0.934[1] | 0.737[1] |
+| SVD++         | <span style="color:red">0.933238</span> | 0.730298 | 05:03 | 0.92[1] | 0.722[1] |
+| NMF[3]           | 0.970431 | 0.762025 | 00:07  | 0.963[1] | 0.758[1] |
+| KNN           | 0.978720 | 0.773133 | 00:07  | 0.98[1] | 0.774[1] |
+| Centered k-NN | 0.952906 | 0.751667 | 00:07  | 0.951[1] | 0.749[1] |
+| k-NN Z-Score  | 0.953099 | 0.748451 | 00:07  |   |   |
+| k-NN Baseline | 0.933491 | 0.734687 | 00:09  | 0.931[1] | 0.733[1] |
+| Slope One[4]  | 0.940748 | 0.741195 | 00:09  | 0.946[1] | 0.743[1] |
+| Co-Clustering[5] | 0.967668 | 0.760593 | 00:05  | 0.963[1] | 0.753[1] |
 
 ## References
 

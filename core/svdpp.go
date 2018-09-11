@@ -37,19 +37,23 @@ func (svd *SVDpp) ensembleImplFactors(innerUserId int) []float64 {
 	history := svd.userHistory[innerUserId]
 	emImpFactor := make([]float64, 0)
 	// User history exists
+	count := 0
 	for itemId := range history {
-		if len(emImpFactor) == 0 {
-			// Create ensemble implicit factor
-			emImpFactor = make([]float64, len(svd.implFactor[itemId]))
+		if !math.IsNaN(history[itemId]) {
+			if len(emImpFactor) == 0 {
+				// Create ensemble implicit factor
+				emImpFactor = make([]float64, len(svd.implFactor[itemId]))
+			}
+			floats.Add(emImpFactor, svd.implFactor[itemId])
 		}
-		floats.Add(emImpFactor, svd.implFactor[itemId])
+		count++
 	}
-	divConst(math.Sqrt(float64(len(history))), emImpFactor)
+	divConst(math.Sqrt(float64(count)), emImpFactor)
 	return emImpFactor
 }
 
 func (svd *SVDpp) internalPredict(userId int, itemId int) (float64, []float64) {
-	// Convert to inner Id
+	// Convert to inner ID
 	innerUserId := svd.trainSet.ConvertUserId(userId)
 	innerItemId := svd.trainSet.ConvertItemId(itemId)
 	ret := svd.globalBias
@@ -69,7 +73,7 @@ func (svd *SVDpp) internalPredict(userId int, itemId int) (float64, []float64) {
 		temp := make([]float64, len(itemFactor))
 		floats.Add(temp, userFactor)
 		floats.Add(temp, emImpFactor)
-		ret = floats.Dot(temp, itemFactor)
+		ret += floats.Dot(temp, itemFactor)
 		return ret, emImpFactor
 	}
 	return ret, []float64{}
