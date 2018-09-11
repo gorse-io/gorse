@@ -119,10 +119,9 @@ func (svd *SVDpp) Fit(trainSet TrainSet, params Parameters) {
 	a := make([]float64, nFactors)
 	b := make([]float64, nFactors)
 	// Stochastic Gradient Descent
-	users, items, ratings := trainSet.Interactions()
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
-			userId, itemId, rating := users[i], items[i], ratings[i]
+			userId, itemId, rating := trainSet.Index(i)
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
 			userBias := svd.userBias[innerUserId]

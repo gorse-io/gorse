@@ -161,18 +161,18 @@ func newSparseMatrix(row int) []map[int]float64 {
 	return m
 }
 
-// Metrics
+// Evaluator
 
-type Metrics func([]float64, []float64) float64
+type Evaluator func([]float64, []float64) float64
 
-func RootMeanSquareError(predictions []float64, truth []float64) float64 {
+func RMSE(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))
 	floats.SubTo(temp, predictions, truth)
 	floats.Mul(temp, temp)
 	return math.Sqrt(stat.Mean(temp, nil))
 }
 
-func MeanAbsoluteError(predictions []float64, truth []float64) float64 {
+func MAE(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))
 	floats.SubTo(temp, predictions, truth)
 	abs(temp)

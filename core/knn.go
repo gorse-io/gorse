@@ -112,10 +112,10 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 }
 
 // Fit a KNN model. Parameters:
-//   sim		-
-//   userBased	-
-//	 k			-
-//	 minK		-
+//   sim		- The similarity function. Default is MSD.
+//   userBased	- User based or item based? Default is true.
+//	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
+//	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
 func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 	// Setup parameters
 	reader := newParameterReader(params)

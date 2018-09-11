@@ -48,10 +48,9 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, params Parameters) {
 	baseLine.userBias = make([]float64, trainSet.UserCount())
 	baseLine.itemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
-	users, items, ratings := trainSet.Interactions()
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
-			userId, itemId, rating := users[i], items[i], ratings[i]
+			userId, itemId, rating := trainSet.Users[i], trainSet.Items[i], trainSet.Ratings[i]
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
 			userBias := baseLine.userBias[innerUserId]

@@ -54,7 +54,6 @@ func (nmf *NMF) Fit(trainSet TrainSet, params Parameters) {
 	itemUp := newZeroMatrix(trainSet.ItemCount(), nFactors)
 	itemDown := newZeroMatrix(trainSet.ItemCount(), nFactors)
 	// Stochastic Gradient Descent
-	users, items, ratings := trainSet.Interactions()
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		// Reset intermediate matrices
 		resetZeroMatrix(userUp)
@@ -62,8 +61,8 @@ func (nmf *NMF) Fit(trainSet TrainSet, params Parameters) {
 		resetZeroMatrix(itemUp)
 		resetZeroMatrix(itemDown)
 		// Calculate intermediate matrices
-		for i := 0; i < len(ratings); i++ {
-			userId, itemId, rating := users[i], items[i], ratings[i]
+		for i := 0; i < trainSet.Length(); i++ {
+			userId, itemId, rating := trainSet.Index(i)
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
 			prediction := nmf.Predict(userId, itemId)
