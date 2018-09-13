@@ -58,23 +58,22 @@ func (coc *CoClustering) Predict(userId, itemId int) float64 {
 //	 nItemClusters	- The number of item clusters.
 func (coc *CoClustering) Fit(trainSet TrainSet, params Parameters) {
 	// Setup parameters
-	reader := newParameterReader(params)
-	nUserClusters := reader.getInt("nUserClusters", 3)
-	nItemClusters := reader.getInt("nItemClusters", 3)
-	nEpochs := reader.getInt("nEpochs", 20)
+	nUserClusters := params.GetInt("nUserClusters", 3)
+	nItemClusters := params.GetInt("nItemClusters", 3)
+	nEpochs := params.GetInt("nEpochs", 20)
 	// Initialize parameters
 	coc.trainSet = trainSet
 	coc.globalMean = trainSet.GlobalMean
-	coc.userMeans = means(trainSet.UserRatings())
-	coc.itemMeans = means(trainSet.ItemRatings())
+	userRatings := trainSet.UserRatings()
+	itemRatings := trainSet.ItemRatings()
+	coc.userMeans = means(userRatings)
+	coc.itemMeans = means(itemRatings)
 	coc.userClusters = newUniformVectorInt(trainSet.UserCount, 0, nUserClusters)
 	coc.itemClusters = newUniformVectorInt(trainSet.ItemCount, 0, nItemClusters)
 	coc.userClusterMeans = make([]float64, nUserClusters)
 	coc.itemClusterMeans = make([]float64, nItemClusters)
 	coc.coClusterMeans = newZeroMatrix(nUserClusters, nItemClusters)
 	// A^{tmp1}_{ij} = A_{ij} - A^R_i - A^C_j
-	userRatings := trainSet.UserRatings()
-	itemRatings := trainSet.ItemRatings()
 	tmp1 := newNanMatrix(trainSet.UserCount, trainSet.ItemCount)
 	for i := range tmp1 {
 		for _, idRating := range userRatings[i] {
@@ -84,8 +83,8 @@ func (coc *CoClustering) Fit(trainSet TrainSet, params Parameters) {
 	// Clustering
 	for ep := 0; ep < nEpochs; ep++ {
 		// Compute averages A^{COC}, A^{RC}, A^{CC}, A^R, A^C
-		clusterMean(coc.userClusterMeans, coc.userClusters, trainSet.UserRatings())
-		clusterMean(coc.itemClusterMeans, coc.itemClusters, trainSet.ItemRatings())
+		clusterMean(coc.userClusterMeans, coc.userClusters, userRatings)
+		clusterMean(coc.itemClusterMeans, coc.itemClusters, itemRatings)
 		coClusterMean(coc.coClusterMeans, coc.userClusters, coc.itemClusters, userRatings)
 		// Update row (user) cluster assignments
 		for i := range coc.userClusters {
@@ -94,10 +93,11 @@ func (coc *CoClustering) Fit(trainSet TrainSet, params Parameters) {
 				// \sum^n_{j=1}W_{ij}(A^{tmp1}_{ij}-A^{COC)_{gy(j)}+A^{RC}_g+A^{RC}_{y(j)})^2
 				cost := 0.0
 				for _, ir := range userRatings[i] {
-					cost += tmp1[i][ir.Id] -
+					temp := tmp1[i][ir.Id] -
 						coc.coClusterMeans[k][coc.itemClusters[ir.Id]] +
 						coc.userClusterMeans[k] +
 						coc.itemClusterMeans[coc.itemClusters[ir.Id]]
+					cost += temp * temp
 				}
 				if cost < leastCost {
 					bestCluster = k
@@ -113,10 +113,11 @@ func (coc *CoClustering) Fit(trainSet TrainSet, params Parameters) {
 				// \sum^m_{i=1}W_{ij}(A^{tmp1}_{ij}-A^{COC)_{p(i)h}+A^{RC}_{p(i)}+A^{RC}_h)^2
 				cost := 0.0
 				for _, ur := range itemRatings[j] {
-					cost += tmp1[ur.Id][j] -
+					temp := tmp1[ur.Id][j] -
 						coc.coClusterMeans[coc.userClusters[ur.Id]][k] +
 						coc.userClusterMeans[coc.userClusters[ur.Id]] +
 						coc.itemClusterMeans[k]
+					cost += temp * temp
 				}
 				if cost < leastCost {
 					bestCluster = k
@@ -126,10 +127,6 @@ func (coc *CoClustering) Fit(trainSet TrainSet, params Parameters) {
 			coc.itemClusters[j] = bestCluster
 		}
 	}
-	// Compute final average
-	clusterMean(coc.userClusterMeans, coc.userClusters, trainSet.UserRatings())
-	clusterMean(coc.itemClusterMeans, coc.itemClusters, trainSet.ItemRatings())
-	coClusterMean(coc.coClusterMeans, coc.userClusters, coc.itemClusters, userRatings)
 }
 
 func clusterMean(dst []float64, clusters []int, idRatings [][]IdRating) {

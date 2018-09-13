@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/gonum/floats"
 	"github.com/gonum/stat"
 	"math"
 )
@@ -13,7 +14,7 @@ type CrossValidateResult struct {
 	Tests  []float64
 }
 
-func CrossValidate(algorithm Algorithm, dataSet DataSet, metrics []Evaluator, cv int, seed int64,
+func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv int, seed int64,
 	params Parameters) []CrossValidateResult {
 	// Create return structures
 	ret := make([]CrossValidateResult, len(metrics))
@@ -26,13 +27,13 @@ func CrossValidate(algorithm Algorithm, dataSet DataSet, metrics []Evaluator, cv
 	for i := 0; i < cv; i++ {
 		trainFold := trainFolds[i]
 		testFold := testFolds[i]
-		algorithm.Fit(trainFold, params)
+		estimator.Fit(trainFold, params)
 		predictions := make([]float64, testFold.Length())
 		interactionUsers, interactionItems := testFold.Users, testFold.Items
 		for j := 0; j < testFold.Length(); j++ {
 			userId := interactionUsers[j]
 			itemId := interactionItems[j]
-			predictions[j] = algorithm.Predict(userId, itemId)
+			predictions[j] = estimator.Predict(userId, itemId)
 		}
 		truth := testFold.Ratings
 		// Evaluate on test set
@@ -42,6 +43,8 @@ func CrossValidate(algorithm Algorithm, dataSet DataSet, metrics []Evaluator, cv
 	}
 	return ret
 }
+
+/* Model Selection */
 
 // The return structure of grid search
 type GridSearchResult struct {
@@ -53,7 +56,7 @@ type GridSearchResult struct {
 }
 
 // Tune algorithm parameters with GridSearchCV
-func GridSearchCV(algo Algorithm, dataSet DataSet, paramGrid ParameterGrid,
+func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
 	evaluators []Evaluator, cv int, seed int64) []GridSearchResult {
 	// Retrieve parameter names and length
 	params := make([]string, 0, len(paramGrid))
@@ -75,7 +78,7 @@ func GridSearchCV(algo Algorithm, dataSet DataSet, paramGrid ParameterGrid,
 	dfs = func(deep int, options Parameters) {
 		if deep == len(params) {
 			// Cross validate
-			cvResults := CrossValidate(algo, dataSet, evaluators, cv, seed, options)
+			cvResults := CrossValidate(estimator, dataSet, evaluators, cv, seed, options)
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
 				results[i].AllParams = append(results[i].AllParams, options.Copy())
@@ -98,4 +101,25 @@ func GridSearchCV(algo Algorithm, dataSet DataSet, paramGrid ParameterGrid,
 	options := make(map[string]interface{})
 	dfs(0, options)
 	return results
+}
+
+/* Evaluator */
+
+// Evaluator function
+type Evaluator func([]float64, []float64) float64
+
+// Root mean square error.
+func RMSE(predictions []float64, truth []float64) float64 {
+	temp := make([]float64, len(predictions))
+	floats.SubTo(temp, predictions, truth)
+	floats.Mul(temp, temp)
+	return math.Sqrt(stat.Mean(temp, nil))
+}
+
+// Mean absolute error.
+func MAE(predictions []float64, truth []float64) float64 {
+	temp := make([]float64, len(predictions))
+	floats.SubTo(temp, predictions, truth)
+	abs(temp)
+	return stat.Mean(temp, nil)
 }

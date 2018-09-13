@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"testing"
 )
 
@@ -21,6 +22,22 @@ func TestGridSearchCV(t *testing.T) {
 	} else if reader.getFloat64("reg", -1) != 0.4 {
 		t.Fail()
 	} else if reader.getFloat64("lr", -1) != 0.005 {
+		t.Fail()
+	}
+}
+
+func TestRMSE(t *testing.T) {
+	a := []float64{-2.0, 0, 2.0}
+	b := []float64{0, 0, 0}
+	if math.Abs(RMSE(a, b)-1.63299) > 0.00001 {
+		t.Fail()
+	}
+}
+
+func TestMAE(t *testing.T) {
+	a := []float64{-2.0, 0, 2.0}
+	b := []float64{0, 0, 0}
+	if math.Abs(MAE(a, b)-1.33333) > 0.00001 {
 		t.Fail()
 	}
 }

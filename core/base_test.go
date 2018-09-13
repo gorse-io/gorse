@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const estimatorEpsilon float64 = 0.01
+const estimatorEpsilon float64 = 0.008
 
 func Evaluate(t *testing.T, algo Algorithm, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {

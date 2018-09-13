@@ -5,29 +5,30 @@ import (
 	"sort"
 )
 
+// KNN for collaborate filtering.
+type KNN struct {
+	_type         int
+	globalMean    float64
+	sims          [][]float64
+	leftRatings   [][]IdRating
+	rightRatings  [][]IdRating
+	means         []float64 // Centered KNN: user (item) mean
+	stdDeviations []float64 // KNN with Z Score: user (item) standard deviation
+	bias          []float64 // KNN Baseline: bias
+	trainSet      TrainSet
+	// Parameters
+	userBased bool
+	k         int
+	minK      int
+}
+
+// KNN type
 const (
 	basic    = 0
 	centered = 1
 	zScore   = 2
 	baseline = 3
 )
-
-type KNN struct {
-	option        parameterReader
-	_type         int
-	globalMean    float64
-	sims          [][]float64
-	leftRatings   [][]IdRating
-	rightRatings  [][]IdRating
-	trainSet      TrainSet
-	means         []float64 // Centered KNN: user (item) mean
-	stdDeviations []float64 // KNN with Z Score: user (item) standard deviation
-	bias          []float64 // KNN Baseline: bias
-	// Parameters
-	userBased bool
-	k         int
-	minK      int
-}
 
 func NewKNN() *KNN {
 	knn := new(KNN)
@@ -119,11 +120,10 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
 func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 	// Setup parameters
-	reader := newParameterReader(params)
-	sim := reader.getSim("sim", MSD)
-	knn.userBased = reader.getBool("userBased", true)
-	knn.k = reader.getInt("k", 40)
-	knn.minK = reader.getInt("minK", 1)
+	sim := params.GetSim("sim", MSD)
+	knn.userBased = params.GetBool("userBased", true)
+	knn.k = params.GetInt("k", 40)
+	knn.minK = params.GetInt("minK", 1)
 	// Set global globalMean for new users (items)
 	knn.trainSet = trainSet
 	knn.globalMean = trainSet.GlobalMean
@@ -179,26 +179,27 @@ func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 	}
 }
 
-type candidateSet struct {
+// A data structure used to sort candidates by similarity.
+type _CandidateSet struct {
 	similarities []float64
 	candidates   []IdRating
 }
 
-func newCandidateSet(sim []float64, candidates []IdRating) *candidateSet {
-	neighbors := candidateSet{}
+func newCandidateSet(sim []float64, candidates []IdRating) *_CandidateSet {
+	neighbors := _CandidateSet{}
 	neighbors.similarities = sim
 	neighbors.candidates = candidates
 	return &neighbors
 }
 
-func (n *candidateSet) Len() int {
-	return len(n.candidates)
+func (cs *_CandidateSet) Len() int {
+	return len(cs.candidates)
 }
 
-func (n *candidateSet) Less(i, j int) bool {
-	return n.similarities[n.candidates[i].Id] > n.similarities[n.candidates[j].Id]
+func (cs *_CandidateSet) Less(i, j int) bool {
+	return cs.similarities[cs.candidates[i].Id] > cs.similarities[cs.candidates[j].Id]
 }
 
-func (n *candidateSet) Swap(i, j int) {
-	n.candidates[i], n.candidates[j] = n.candidates[j], n.candidates[i]
+func (cs *_CandidateSet) Swap(i, j int) {
+	cs.candidates[i], cs.candidates[j] = cs.candidates[j], cs.candidates[i]
 }

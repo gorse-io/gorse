@@ -1,8 +1,6 @@
 package core
 
 import (
-	"github.com/gonum/floats"
-	"github.com/gonum/stat"
 	"math"
 	"math/rand"
 )
@@ -157,22 +155,4 @@ func newSparseMatrix(row int) []map[int]float64 {
 		m[i] = make(map[int]float64)
 	}
 	return m
-}
-
-// Evaluator
-
-type Evaluator func([]float64, []float64) float64
-
-func RMSE(predictions []float64, truth []float64) float64 {
-	temp := make([]float64, len(predictions))
-	floats.SubTo(temp, predictions, truth)
-	floats.Mul(temp, temp)
-	return math.Sqrt(stat.Mean(temp, nil))
-}
-
-func MAE(predictions []float64, truth []float64) float64 {
-	temp := make([]float64, len(predictions))
-	floats.SubTo(temp, predictions, truth)
-	abs(temp)
-	return stat.Mean(temp, nil)
 }

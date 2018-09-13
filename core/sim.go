@@ -4,6 +4,7 @@ import (
 	"math"
 )
 
+// Similarity function.
 type Sim func(SortedIdRatings, SortedIdRatings) float64
 
 // Compute the cosine similarity between a pair of users (or items).

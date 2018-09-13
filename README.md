@@ -34,6 +34,8 @@ RMSE = 0.938904, MAE = 0.737349
 
 ## Benchmarks
 
+All algorithms are tested on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) and 16.0GB RAM. RMSE scores and MAE scores are used to check the correctness comparing to other implementation but not the best performance. Parameters are set as default values and identical to other implementation.
+
 |   [Movielens 100k](http://grouplens.org/datasets/movielens/100k)   |   RMSE   |   MAE    |    Time  | RMSE[Ref] |  MAE[Ref]  |
 | - | - | - | - | - | - |
 | Random        | 1.518610 | 1.218645 | 0:00:01   | 1.514[1] | 1.215[1] |
@@ -42,11 +44,11 @@ RMSE = 0.938904, MAE = 0.737349
 | SVD++ | 0.922710 | 0.721740 | 0:04:21 | 0.92[1] | 0.722[1] |
 | NMF[3]           | 0.970431 | 0.762025 | 0:00:07  | 0.963[1] | 0.758[1] |
 | KNN           | 0.978720 | 0.773133 | 0:00:03 | 0.98[1] | 0.774[1] |
-| Centered k-NN | 0.952928 | 0.751693 | 0:00:3 | 0.951[1] | 0.749[1] |
-| k-NN Z-Score  | 0.953098 | 0.748464 | 0:00:3 |   |   |
-| k-NN Baseline | 0.933512 | 0.734706 | 0:00:4 | 0.931[1] | 0.733[1] |
+| Centered k-NN | 0.952928 | 0.751693 | 0:00:03 | 0.951[1] | 0.749[1] |
+| k-NN Z-Score  | 0.953098 | 0.748464 | 0:00:03 |   |   |
+| k-NN Baseline | 0.933512 | 0.734706 | 0:00:04 | 0.931[1] | 0.733[1] |
 | Slope One[4] | 0.940748 | 0.741195 | 0:00:02 | 0.946[1] | 0.743[1] |
-| Co-Clustering | 0.967668 | 0.760593 | 0:00:01 | 0.963[1] | 0.753[1] |
+| Co-Clustering[5] | 0.968219 | 0.760593 | 0:00:01 | 0.963[1] | 0.753[1] |
 
 |   [Movielens 1m](http://grouplens.org/datasets/movielens/1m)   |   RMSE   |   MAE    |    Time  | RMSE[Ref] |  MAE[Ref]  |
 | - | - | - | - | - | - |
@@ -60,6 +62,7 @@ RMSE = 0.938904, MAE = 0.737349
 | k-NN Z-Score | 0.930754 | 0.737239 | 0:03:38 | | |
 | k-NN Baseline | 0.896017 | 0.707469 | 0:03:36 | 0.895[1]|	0.706[1]|
 | Slope One[4] | 0.908397 | 0.717344 | 0:00:54 | 0.907[1]|	0.715[1]|
+| Co-Clustering[5] | 0.916752 | 0.720052 | 0:00:10 |0.915[1]|0.717[1]|
 
 ## References
 

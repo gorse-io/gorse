@@ -85,19 +85,3 @@ func TestNewUniformVector(t *testing.T) {
 		}
 	}
 }
-
-func TestRootMeanSquareError(t *testing.T) {
-	a := []float64{-2.0, 0, 2.0}
-	b := []float64{0, 0, 0}
-	if math.Abs(RMSE(a, b)-1.63299) > 0.00001 {
-		t.Fail()
-	}
-}
-
-func TestMeanAbsoluteError(t *testing.T) {
-	a := []float64{-2.0, 0, 2.0}
-	b := []float64{0, 0, 0}
-	if math.Abs(MAE(a, b)-1.33333) > 0.00001 {
-		t.Fail()
-	}
-}
