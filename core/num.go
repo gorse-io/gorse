@@ -69,15 +69,13 @@ func divConst(c float64, dst []float64) {
 	}
 }
 
-func means(a [][]float64) []float64 {
+func means(a [][]IdRating) []float64 {
 	m := make([]float64, len(a))
 	for i := range a {
 		sum, count := 0.0, 0.0
-		for j := range a[i] {
-			if !math.IsNaN(a[i][j]) {
-				sum += a[i][j]
-				count++
-			}
+		for _, ir := range a[i] {
+			sum += ir.Rating
+			count++
 		}
 		m[i] = sum / count
 	}

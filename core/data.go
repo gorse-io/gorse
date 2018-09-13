@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -67,12 +68,15 @@ func (dataSet *DataSet) KFold(k int, seed int64) ([]TrainSet, []DataSet) {
 // Train data set.
 type TrainSet struct {
 	DataSet
-	userCount    int
-	itemCount    int
+	GlobalMean   float64
+	UserCount    int
+	ItemCount    int
 	innerUserIds map[int]int // userId -> innerUserId
 	innerItemIds map[int]int // itemId -> innerItemId
-	userRatings  [][]float64
-	itemRatings  [][]float64
+	userRatings2 [][]float64
+	itemRatings2 [][]float64
+	userRatings  [][]IdRating
+	itemRatings  [][]IdRating
 }
 
 type Set map[int]interface{}
@@ -89,23 +93,12 @@ func (trainSet *TrainSet) ItemSet() Set {
 	return unique(trainSet.Items)
 }
 
-// Get the range of ratings. Return minimum and maximum.
+// Get the range of leftRatings. Return minimum and maximum.
 func (trainSet *TrainSet) RatingRange() (float64, float64) {
 	return floats.Min(trainSet.Ratings), floats.Max(trainSet.Ratings)
 }
 
-func (trainSet *TrainSet) GlobalMean() float64 {
-	return stat.Mean(trainSet.Ratings, nil)
-}
-
-func (trainSet *TrainSet) UserCount() int {
-	return trainSet.userCount
-}
-
-func (trainSet *TrainSet) ItemCount() int {
-	return trainSet.itemCount
-}
-
+// Convert user ID to inner user ID
 func (trainSet *TrainSet) ConvertUserId(userId int) int {
 	if innerUserId, exist := trainSet.innerUserIds[userId]; exist {
 		return innerUserId
@@ -113,6 +106,7 @@ func (trainSet *TrainSet) ConvertUserId(userId int) int {
 	return newId
 }
 
+// Convert item ID to inner item ID
 func (trainSet *TrainSet) ConvertItemId(itemId int) int {
 	if innerItemId, exist := trainSet.innerItemIds[itemId]; exist {
 		return innerItemId
@@ -120,28 +114,65 @@ func (trainSet *TrainSet) ConvertItemId(itemId int) int {
 	return newId
 }
 
-func (trainSet *TrainSet) UserRatings() [][]float64 {
+type IdRating struct {
+	Id     int
+	Rating float64
+}
+
+// Get users' leftRatings: an array of <itemId, rating> for each user.
+func (trainSet *TrainSet) UserRatings() [][]IdRating {
 	if trainSet.userRatings == nil {
-		trainSet.userRatings = newNanMatrix(trainSet.userCount, trainSet.itemCount)
+		trainSet.userRatings = make([][]IdRating, trainSet.UserCount)
+		for innerUserId := range trainSet.userRatings {
+			trainSet.userRatings[innerUserId] = make([]IdRating, 0)
+		}
 		for i := 0; i < len(trainSet.Users); i++ {
 			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
 			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
-			trainSet.userRatings[innerUserId][innerItemId] = trainSet.Ratings[i]
+			trainSet.userRatings[innerUserId] = append(trainSet.userRatings[innerUserId], IdRating{innerItemId, trainSet.Ratings[i]})
 		}
 	}
 	return trainSet.userRatings
 }
 
-func (trainSet *TrainSet) ItemRatings() [][]float64 {
+// Get items' leftRatings: an array of <userId, Rating> for each item.
+func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 	if trainSet.itemRatings == nil {
-		trainSet.itemRatings = newNanMatrix(trainSet.itemCount, trainSet.userCount)
-		for i := 0; i < len(trainSet.Users); i++ {
+		trainSet.itemRatings = make([][]IdRating, trainSet.ItemCount)
+		for innerItemId := range trainSet.itemRatings {
+			trainSet.itemRatings[innerItemId] = make([]IdRating, 0)
+		}
+		for i := 0; i < len(trainSet.Items); i++ {
 			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
 			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
-			trainSet.itemRatings[innerItemId][innerUserId] = trainSet.Ratings[i]
+			trainSet.itemRatings[innerItemId] = append(trainSet.itemRatings[innerItemId], IdRating{innerUserId, trainSet.Ratings[i]})
 		}
 	}
 	return trainSet.itemRatings
+}
+
+func (trainSet *TrainSet) UserRatings2() [][]float64 {
+	if trainSet.userRatings2 == nil {
+		trainSet.userRatings2 = newNanMatrix(trainSet.UserCount, trainSet.ItemCount)
+		for i := 0; i < len(trainSet.Users); i++ {
+			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
+			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
+			trainSet.userRatings2[innerUserId][innerItemId] = trainSet.Ratings[i]
+		}
+	}
+	return trainSet.userRatings2
+}
+
+func (trainSet *TrainSet) ItemRatings2() [][]float64 {
+	if trainSet.itemRatings2 == nil {
+		trainSet.itemRatings2 = newNanMatrix(trainSet.ItemCount, trainSet.UserCount)
+		for i := 0; i < len(trainSet.Users); i++ {
+			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
+			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
+			trainSet.itemRatings2[innerItemId][innerUserId] = trainSet.Ratings[i]
+		}
+	}
+	return trainSet.itemRatings2
 }
 
 // TODO: Train test split. Return train set and test set.
@@ -152,20 +183,21 @@ func (trainSet *TrainSet) Split(testSize int) (TrainSet, TrainSet) {
 func NewTrainSet(rawSet DataSet) TrainSet {
 	set := TrainSet{}
 	set.DataSet = rawSet
+	set.GlobalMean = stat.Mean(rawSet.Ratings, nil)
 	// Create userId -> innerUserId map
 	set.innerUserIds = make(map[int]int)
 	for _, userId := range set.Users {
 		if _, exist := set.innerUserIds[userId]; !exist {
-			set.innerUserIds[userId] = set.userCount
-			set.userCount++
+			set.innerUserIds[userId] = set.UserCount
+			set.UserCount++
 		}
 	}
 	// Create itemId -> innerItemId map
 	set.innerItemIds = make(map[int]int)
 	for _, itemId := range set.Items {
 		if _, exist := set.innerItemIds[itemId]; !exist {
-			set.innerItemIds[itemId] = set.itemCount
-			set.itemCount++
+			set.innerItemIds[itemId] = set.ItemCount
+			set.ItemCount++
 		}
 	}
 	return set
@@ -212,4 +244,35 @@ func LoadDataFromFile(fileName string, sep string) DataSet {
 		ratings = append(ratings, float64(rating))
 	}
 	return NewRawSet(users, items, ratings)
+}
+
+func sorts(idRatings [][]IdRating) []SortedIdRatings {
+	a := make([]SortedIdRatings, len(idRatings))
+	for i := range idRatings {
+		a[i] = SortedIdRatings{idRatings[i]}
+		sort.Sort(a[i])
+	}
+	return a
+}
+
+type SortedIdRatings struct {
+	data []IdRating
+}
+
+func NewSortedIdRatings(a []IdRating) SortedIdRatings {
+	b := SortedIdRatings{a}
+	sort.Sort(b)
+	return b
+}
+
+func (sir SortedIdRatings) Len() int {
+	return len(sir.data)
+}
+
+func (sir SortedIdRatings) Swap(i, j int) {
+	sir.data[i], sir.data[j] = sir.data[j], sir.data[i]
+}
+
+func (sir SortedIdRatings) Less(i, j int) bool {
+	return sir.data[i].Id < sir.data[j].Id
 }

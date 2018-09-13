@@ -45,14 +45,14 @@ func (nmf *NMF) Fit(trainSet TrainSet, params Parameters) {
 	reg := reader.getFloat64("reg", 0.06)
 	// Initialize parameters
 	nmf.trainSet = trainSet
-	nmf.userFactor = newUniformMatrix(trainSet.UserCount(), nFactors, initLow, initHigh)
-	nmf.itemFactor = newUniformMatrix(trainSet.ItemCount(), nFactors, initLow, initHigh)
+	nmf.userFactor = newUniformMatrix(trainSet.UserCount, nFactors, initLow, initHigh)
+	nmf.itemFactor = newUniformMatrix(trainSet.ItemCount, nFactors, initLow, initHigh)
 	// Create intermediate matrix buffer
 	buffer := make([]float64, nFactors)
-	userUp := newZeroMatrix(trainSet.UserCount(), nFactors)
-	userDown := newZeroMatrix(trainSet.UserCount(), nFactors)
-	itemUp := newZeroMatrix(trainSet.ItemCount(), nFactors)
-	itemDown := newZeroMatrix(trainSet.ItemCount(), nFactors)
+	userUp := newZeroMatrix(trainSet.UserCount, nFactors)
+	userDown := newZeroMatrix(trainSet.UserCount, nFactors)
+	itemUp := newZeroMatrix(trainSet.ItemCount, nFactors)
+	itemDown := newZeroMatrix(trainSet.ItemCount, nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		// Reset intermediate matrices

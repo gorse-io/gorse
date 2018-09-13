@@ -12,17 +12,17 @@ import (
 //
 // Where the y_j terms are a new set of item factors that capture implicit
 // interactionRatings. Here, an implicit rating describes the fact that a user u
-// userHistory an item j, regardless of the rating value. If user u is unknown,
+// userRatings an item j, regardless of the rating value. If user u is unknown,
 // then the bias b_u and the factors p_u are assumed to be zero. The same
 // applies for item i with b_i, q_i and y_i.
 type SVDpp struct {
-	userHistory [][]float64 // I_u
-	userFactor  [][]float64 // p_u
-	itemFactor  [][]float64 // q_i
-	implFactor  [][]float64 // y_i
-	userBias    []float64   // b_u
-	itemBias    []float64   // b_i
-	globalBias  float64     // mu
+	userRatings [][]IdRating // I_u
+	userFactor  [][]float64  // p_u
+	itemFactor  [][]float64  // q_i
+	implFactor  [][]float64  // y_i
+	userBias    []float64    // b_u
+	itemBias    []float64    // b_i
+	globalBias  float64      // mu
 	trainSet    TrainSet
 	// Optimization with cache
 	//cacheFailed bool
@@ -34,18 +34,15 @@ func NewSVDpp() *SVDpp {
 }
 
 func (svd *SVDpp) ensembleImplFactors(innerUserId int) []float64 {
-	history := svd.userHistory[innerUserId]
 	emImpFactor := make([]float64, 0)
 	// User history exists
 	count := 0
-	for itemId := range history {
-		if !math.IsNaN(history[itemId]) {
-			if len(emImpFactor) == 0 {
-				// Create ensemble implicit factor
-				emImpFactor = make([]float64, len(svd.implFactor[itemId]))
-			}
-			floats.Add(emImpFactor, svd.implFactor[itemId])
+	for _, ir := range svd.userRatings[innerUserId] {
+		if len(emImpFactor) == 0 {
+			// Create ensemble implicit factor
+			emImpFactor = make([]float64, len(svd.implFactor[ir.Id]))
 		}
+		floats.Add(emImpFactor, svd.implFactor[ir.Id])
 		count++
 	}
 	divConst(math.Sqrt(float64(count)), emImpFactor)
@@ -104,11 +101,11 @@ func (svd *SVDpp) Fit(trainSet TrainSet, params Parameters) {
 	initStdDev := reader.getFloat64("initStdDev", 0.1)
 	// Initialize parameters
 	svd.trainSet = trainSet
-	svd.userBias = make([]float64, trainSet.UserCount())
-	svd.itemBias = make([]float64, trainSet.ItemCount())
-	svd.userFactor = make([][]float64, trainSet.UserCount())
-	svd.itemFactor = make([][]float64, trainSet.ItemCount())
-	svd.implFactor = make([][]float64, trainSet.ItemCount())
+	svd.userBias = make([]float64, trainSet.UserCount)
+	svd.itemBias = make([]float64, trainSet.ItemCount)
+	svd.userFactor = make([][]float64, trainSet.UserCount)
+	svd.itemFactor = make([][]float64, trainSet.ItemCount)
+	svd.implFactor = make([][]float64, trainSet.ItemCount)
 	//svd.cacheFactor = make(map[int][]float64)
 	for innerUserId := range svd.userBias {
 		svd.userFactor[innerUserId] = newNormalVector(nFactors, initMean, initStdDev)
@@ -118,7 +115,7 @@ func (svd *SVDpp) Fit(trainSet TrainSet, params Parameters) {
 		svd.implFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
 	}
 	// Build user rating set
-	svd.userHistory = trainSet.UserRatings()
+	svd.userRatings = trainSet.UserRatings()
 	// Create buffers
 	a := make([]float64, nFactors)
 	b := make([]float64, nFactors)
@@ -164,19 +161,16 @@ func (svd *SVDpp) Fit(trainSet TrainSet, params Parameters) {
 			mulConst(lr, a)
 			floats.Sub(svd.itemFactor[innerItemId], a)
 			// Update implicit latent factor
-			set := svd.userHistory[innerUserId]
-			for itemId := range set {
-				if !math.IsNaN(svd.userHistory[innerUserId][itemId]) {
-					implFactor := svd.implFactor[itemId]
-					copy(a, itemFactor)
-					mulConst(diff, a)
-					divConst(math.Sqrt(float64(len(set))), a)
-					copy(b, implFactor)
-					mulConst(reg, b)
-					floats.Add(a, b)
-					mulConst(lr, a)
-					floats.Sub(svd.implFactor[itemId], a)
-				}
+			for _, ir := range svd.userRatings[innerUserId] {
+				implFactor := svd.implFactor[ir.Id]
+				copy(a, itemFactor)
+				mulConst(diff, a)
+				divConst(math.Sqrt(float64(len(svd.userRatings[innerUserId]))), a)
+				copy(b, implFactor)
+				mulConst(reg, b)
+				floats.Add(a, b)
+				mulConst(lr, a)
+				floats.Sub(svd.implFactor[ir.Id], a)
 			}
 		}
 	}

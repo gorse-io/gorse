@@ -65,10 +65,10 @@ func (svd *SVD) Fit(trainSet TrainSet, params Parameters) {
 	initStdDev := reader.getFloat64("initStdDev", 0.1)
 	// Initialize parameters
 	svd.trainSet = trainSet
-	svd.userBias = make([]float64, trainSet.UserCount())
-	svd.itemBias = make([]float64, trainSet.ItemCount())
-	svd.userFactor = make([][]float64, trainSet.UserCount())
-	svd.itemFactor = make([][]float64, trainSet.ItemCount())
+	svd.userBias = make([]float64, trainSet.UserCount)
+	svd.itemBias = make([]float64, trainSet.ItemCount)
+	svd.userFactor = make([][]float64, trainSet.UserCount)
+	svd.itemFactor = make([][]float64, trainSet.ItemCount)
 	for innerUserId := range svd.userFactor {
 		svd.userFactor[innerUserId] = newNormalVector(nFactors, initMean, initStdDev)
 	}

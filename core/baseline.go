@@ -45,8 +45,8 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, params Parameters) {
 	nEpochs := reader.getInt("nEpochs", 20)
 	// Initialize parameters
 	baseLine.trainSet = trainSet
-	baseLine.userBias = make([]float64, trainSet.UserCount())
-	baseLine.itemBias = make([]float64, trainSet.ItemCount())
+	baseLine.userBias = make([]float64, trainSet.UserCount)
+	baseLine.itemBias = make([]float64, trainSet.ItemCount)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {

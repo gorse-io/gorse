@@ -2,11 +2,10 @@ package core
 
 import (
 	"github.com/gonum/stat"
-	"math"
 	"testing"
 )
 
-const EPSILON float64 = 0.01
+const estimatorEpsilon float64 = 0.01
 
 func Evaluate(t *testing.T, algo Algorithm, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {
@@ -14,13 +13,13 @@ func Evaluate(t *testing.T, algo Algorithm, dataSet DataSet,
 	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, 5, 0, nil)
 	// Check RMSE
 	rmse := stat.Mean(results[0].Tests, nil)
-	if math.Abs(rmse-expectRMSE) > EPSILON {
-		t.Fatalf("RMSE(%.3f) not in %.3f±%.3f", rmse, expectRMSE, EPSILON)
+	if rmse > expectRMSE+estimatorEpsilon {
+		t.Fatalf("RMSE(%.3f) > %.3f+%.3f", rmse, expectRMSE, estimatorEpsilon)
 	}
 	// Check MAE
 	mae := stat.Mean(results[1].Tests, nil)
-	if math.Abs(mae-expectMAE) > EPSILON {
-		t.Fatalf("MAE(%.3f) not in %.3f±%.3f", mae, expectMAE, EPSILON)
+	if mae > expectMAE+estimatorEpsilon {
+		t.Fatalf("MAE(%.3f) > %.3f+%.3f", mae, expectMAE, estimatorEpsilon)
 	}
 }
 
