@@ -16,12 +16,11 @@ func TestGridSearchCV(t *testing.T) {
 		[]Evaluator{RMSE, MAE}, 5, 0)
 	// Check best parameters
 	bestParams := out[0].BestParams
-	reader := newParameterReader(bestParams)
-	if reader.getInt("nEpochs", -1) != 10 {
+	if bestParams.GetInt("nEpochs", -1) != 10 {
 		t.Fail()
-	} else if reader.getFloat64("reg", -1) != 0.4 {
+	} else if bestParams.GetFloat64("reg", -1) != 0.4 {
 		t.Fail()
-	} else if reader.getFloat64("lr", -1) != 0.005 {
+	} else if bestParams.GetFloat64("lr", -1) != 0.005 {
 		t.Fail()
 	}
 }

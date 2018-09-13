@@ -1,8 +1,8 @@
 package core
 
 import (
-	"github.com/gonum/floats"
-	"github.com/gonum/stat"
+	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/stat"
 	"math"
 	"testing"
 )

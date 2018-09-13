@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/gonum/stat"
+	"gonum.org/v1/gonum/stat"
 	"math/rand"
 )
 

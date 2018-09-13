@@ -1,8 +1,8 @@
 package core
 
 import (
-	"github.com/gonum/floats"
-	"github.com/gonum/stat"
+	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/stat"
 	"math"
 )
 
@@ -49,7 +49,7 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv
 // The return structure of grid search
 type GridSearchResult struct {
 	BestScore  float64
-	BestParams map[string]interface{}
+	BestParams Parameters
 	BestIndex  int
 	CVResults  []CrossValidateResult
 	AllParams  []Parameters

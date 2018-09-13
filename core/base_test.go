@@ -1,13 +1,13 @@
 package core
 
 import (
-	"github.com/gonum/stat"
+	"gonum.org/v1/gonum/stat"
 	"testing"
 )
 
 const estimatorEpsilon float64 = 0.008
 
-func Evaluate(t *testing.T, algo Algorithm, dataSet DataSet,
+func Evaluate(t *testing.T, algo Estimator, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {
 	// Cross validation
 	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, 5, 0, nil)
