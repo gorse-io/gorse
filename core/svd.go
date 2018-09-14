@@ -32,15 +32,15 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	innerItemId := svd.trainSet.ConvertItemId(itemId)
 	ret := svd.globalBias
 	// + b_u
-	if innerUserId != newId {
+	if innerUserId != NewId {
 		ret += svd.userBias[innerUserId]
 	}
 	// + b_i
-	if innerItemId != newId {
+	if innerItemId != NewId {
 		ret += svd.itemBias[innerItemId]
 	}
 	// + q_i^Tp_u
-	if innerItemId != newId && innerUserId != newId {
+	if innerItemId != NewId && innerUserId != NewId {
 		userFactor := svd.userFactor[innerUserId]
 		itemFactor := svd.itemFactor[innerItemId]
 		ret += floats.Dot(userFactor, itemFactor)
@@ -143,7 +143,7 @@ func NewNMF() *NMF {
 func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	innerUserId := nmf.trainSet.ConvertUserId(userId)
 	innerItemId := nmf.trainSet.ConvertItemId(itemId)
-	if innerItemId != newId && innerUserId != newId {
+	if innerItemId != NewId && innerUserId != NewId {
 		return floats.Dot(nmf.userFactor[innerUserId], nmf.itemFactor[innerItemId])
 	}
 	return 0
@@ -276,15 +276,15 @@ func (svd *SVDpp) internalPredict(userId int, itemId int) (float64, []float64) {
 	innerItemId := svd.trainSet.ConvertItemId(itemId)
 	ret := svd.globalBias
 	// + b_u
-	if innerUserId != newId {
+	if innerUserId != NewId {
 		ret += svd.userBias[innerUserId]
 	}
 	// + b_i
-	if innerItemId != newId {
+	if innerItemId != NewId {
 		ret += svd.itemBias[innerItemId]
 	}
 	// + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
-	if innerItemId != newId && innerUserId != newId {
+	if innerItemId != NewId && innerUserId != NewId {
 		userFactor := svd.userFactor[innerUserId]
 		itemFactor := svd.itemFactor[innerItemId]
 		emImpFactor := svd.ensembleImplFactors(innerUserId)

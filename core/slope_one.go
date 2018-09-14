@@ -23,12 +23,12 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	innerUserId := so.trainSet.ConvertUserId(userId)
 	innerItemId := so.trainSet.ConvertItemId(itemId)
 	prediction := 0.0
-	if innerUserId != newId {
+	if innerUserId != NewId {
 		prediction = so.userMeans[innerUserId]
 	} else {
 		prediction = so.globalMean
 	}
-	if innerItemId != newId {
+	if innerItemId != NewId {
 		sum, count := 0.0, 0.0
 		for _, ir := range so.userRatings[innerUserId] {
 			sum += so.dev[innerItemId][ir.Id]

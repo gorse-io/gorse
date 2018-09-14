@@ -39,14 +39,6 @@ func selectInt(a []int, indices []int) []int {
 	return ret
 }
 
-func unique(a []int) Set {
-	set := make(map[int]interface{})
-	for _, val := range a {
-		set[val] = nil
-	}
-	return set
-}
-
 // Linear algebra
 
 func abs(dst []float64) {
@@ -65,19 +57,6 @@ func divConst(c float64, dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] /= c
 	}
-}
-
-func means(a [][]IdRating) []float64 {
-	m := make([]float64, len(a))
-	for i := range a {
-		sum, count := 0.0, 0.0
-		for _, ir := range a[i] {
-			sum += ir.Rating
-			count++
-		}
-		m[i] = sum / count
-	}
-	return m
 }
 
 // Generator
@@ -147,12 +126,4 @@ func resetZeroMatrix(m [][]float64) {
 			m[i][j] = 0
 		}
 	}
-}
-
-func newSparseMatrix(row int) []map[int]float64 {
-	m := make([]map[int]float64, row)
-	for i := range m {
-		m[i] = make(map[int]float64)
-	}
-	return m
 }

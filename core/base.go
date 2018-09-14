@@ -126,10 +126,10 @@ func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
 	innerUserId := baseLine.trainSet.ConvertUserId(userId)
 	innerItemId := baseLine.trainSet.ConvertItemId(itemId)
 	ret := baseLine.globalBias
-	if innerUserId != newId {
+	if innerUserId != NewId {
 		ret += baseLine.userBias[innerUserId]
 	}
-	if innerItemId != newId {
+	if innerItemId != NewId {
 		ret += baseLine.itemBias[innerItemId]
 	}
 	return ret

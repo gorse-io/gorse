@@ -17,6 +17,31 @@ import (
 	"strings"
 )
 
+/* Build-in */
+
+// Build-in data set
+type _BuildInDataSet struct {
+	url  string
+	path string
+	sep  string
+}
+
+var buildInDataSets = map[string]_BuildInDataSet{
+	"ml-100k": {
+		url:  "http://files.grouplens.org/datasets/movielens/ml-100k.zip",
+		path: "ml-100k/u.data",
+		sep:  "\t",
+	},
+	"ml-1m": {
+		url:  "http://files.grouplens.org/datasets/movielens/ml-1m.zip",
+		path: "ml-1m/ratings.dat",
+		sep:  "::",
+	},
+	"jester": {url: "http://eigentaste.berkeley.edu/dataset/jester_dataset_2.zip"},
+}
+
+/* Data Set */
+
 // Raw data set. An array of (userId, itemId, rating).
 type DataSet struct {
 	Ratings []float64
@@ -24,6 +49,7 @@ type DataSet struct {
 	Items   []int
 }
 
+// Create a new raw data set.
 func NewRawSet(users, items []int, ratings []float64) DataSet {
 	return DataSet{
 		Users:   users,
@@ -32,14 +58,17 @@ func NewRawSet(users, items []int, ratings []float64) DataSet {
 	}
 }
 
+// Get the number of ratings in the data set.
 func (dataSet *DataSet) Length() int {
 	return len(dataSet.Ratings)
 }
 
+// Get the i-th <userId, itemId, rating>.
 func (dataSet *DataSet) Index(i int) (int, int, float64) {
 	return dataSet.Users[i], dataSet.Items[i], dataSet.Ratings[i]
 }
 
+// Get a subset of the data set.
 func (dataSet *DataSet) SubSet(indices []int) DataSet {
 	return NewRawSet(selectInt(dataSet.Users, indices),
 		selectInt(dataSet.Items, indices),
@@ -69,32 +98,59 @@ func (dataSet *DataSet) KFold(k int, seed int64) ([]TrainSet, []DataSet) {
 	return trainFolds, testFolds
 }
 
+// Train test split. Return train set and test set.
+func (dataSet *DataSet) Split(testSize float64, seed int) (TrainSet, DataSet) {
+	rand.Seed(0)
+	perm := rand.Perm(dataSet.Length())
+	mid := int(float64(dataSet.Length()) * testSize)
+	testSet := dataSet.SubSet(perm[:mid])
+	trainSet := dataSet.SubSet(perm[mid:])
+	return NewTrainSet(trainSet), testSet
+}
+
 // Train data set.
 type TrainSet struct {
 	DataSet
 	GlobalMean   float64
 	UserCount    int
 	ItemCount    int
-	innerUserIds map[int]int // userId -> innerUserId
-	innerItemIds map[int]int // itemId -> innerItemId
-	userRatings2 [][]float64
-	itemRatings2 [][]float64
+	InnerUserIds map[int]int // userId -> innerUserId
+	InnerItemIds map[int]int // itemId -> innerItemId
 	userRatings  [][]IdRating
 	itemRatings  [][]IdRating
 }
 
-type Set map[int]interface{}
-
-const newId = -1
-
-// Get all users. Return a slice of unique user IDs.
-func (trainSet *TrainSet) UserSet() Set {
-	return unique(trainSet.Users)
+// <userId, rating> or <itemId, rating>
+type IdRating struct {
+	Id     int
+	Rating float64
 }
 
-// Get all items. Return a slice of unique item IDs.
-func (trainSet *TrainSet) ItemSet() Set {
-	return unique(trainSet.Items)
+// An ID not existed in the data set.
+const NewId = -1
+
+// Create a train set from a raw data set.
+func NewTrainSet(rawSet DataSet) TrainSet {
+	set := TrainSet{}
+	set.DataSet = rawSet
+	set.GlobalMean = stat.Mean(rawSet.Ratings, nil)
+	// Create userId -> innerUserId map
+	set.InnerUserIds = make(map[int]int)
+	for _, userId := range set.Users {
+		if _, exist := set.InnerUserIds[userId]; !exist {
+			set.InnerUserIds[userId] = set.UserCount
+			set.UserCount++
+		}
+	}
+	// Create itemId -> innerItemId map
+	set.InnerItemIds = make(map[int]int)
+	for _, itemId := range set.Items {
+		if _, exist := set.InnerItemIds[itemId]; !exist {
+			set.InnerItemIds[itemId] = set.ItemCount
+			set.ItemCount++
+		}
+	}
+	return set
 }
 
 // Get the range of leftRatings. Return minimum and maximum.
@@ -104,23 +160,18 @@ func (trainSet *TrainSet) RatingRange() (float64, float64) {
 
 // Convert user ID to inner user ID
 func (trainSet *TrainSet) ConvertUserId(userId int) int {
-	if innerUserId, exist := trainSet.innerUserIds[userId]; exist {
+	if innerUserId, exist := trainSet.InnerUserIds[userId]; exist {
 		return innerUserId
 	}
-	return newId
+	return NewId
 }
 
 // Convert item ID to inner item ID
 func (trainSet *TrainSet) ConvertItemId(itemId int) int {
-	if innerItemId, exist := trainSet.innerItemIds[itemId]; exist {
+	if innerItemId, exist := trainSet.InnerItemIds[itemId]; exist {
 		return innerItemId
 	}
-	return newId
-}
-
-type IdRating struct {
-	Id     int
-	Rating float64
+	return NewId
 }
 
 // Get users' leftRatings: an array of <itemId, rating> for each user.
@@ -155,57 +206,7 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 	return trainSet.itemRatings
 }
 
-func (trainSet *TrainSet) UserRatings2() [][]float64 {
-	if trainSet.userRatings2 == nil {
-		trainSet.userRatings2 = newNanMatrix(trainSet.UserCount, trainSet.ItemCount)
-		for i := 0; i < len(trainSet.Users); i++ {
-			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
-			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
-			trainSet.userRatings2[innerUserId][innerItemId] = trainSet.Ratings[i]
-		}
-	}
-	return trainSet.userRatings2
-}
-
-func (trainSet *TrainSet) ItemRatings2() [][]float64 {
-	if trainSet.itemRatings2 == nil {
-		trainSet.itemRatings2 = newNanMatrix(trainSet.ItemCount, trainSet.UserCount)
-		for i := 0; i < len(trainSet.Users); i++ {
-			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
-			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
-			trainSet.itemRatings2[innerItemId][innerUserId] = trainSet.Ratings[i]
-		}
-	}
-	return trainSet.itemRatings2
-}
-
-// TODO: Train test split. Return train set and test set.
-func (trainSet *TrainSet) Split(testSize int) (TrainSet, TrainSet) {
-	return TrainSet{}, TrainSet{}
-}
-
-func NewTrainSet(rawSet DataSet) TrainSet {
-	set := TrainSet{}
-	set.DataSet = rawSet
-	set.GlobalMean = stat.Mean(rawSet.Ratings, nil)
-	// Create userId -> innerUserId map
-	set.innerUserIds = make(map[int]int)
-	for _, userId := range set.Users {
-		if _, exist := set.innerUserIds[userId]; !exist {
-			set.innerUserIds[userId] = set.UserCount
-			set.UserCount++
-		}
-	}
-	// Create itemId -> innerItemId map
-	set.innerItemIds = make(map[int]int)
-	for _, itemId := range set.Items {
-		if _, exist := set.innerItemIds[itemId]; !exist {
-			set.innerItemIds[itemId] = set.ItemCount
-			set.ItemCount++
-		}
-	}
-	return set
-}
+/* Loader */
 
 // Load build in data set
 func LoadDataFromBuiltIn(dataSetName string) DataSet {
@@ -248,60 +249,6 @@ func LoadDataFromFile(fileName string, sep string) DataSet {
 		ratings = append(ratings, float64(rating))
 	}
 	return NewRawSet(users, items, ratings)
-}
-
-func sorts(idRatings [][]IdRating) []SortedIdRatings {
-	a := make([]SortedIdRatings, len(idRatings))
-	for i := range idRatings {
-		a[i] = SortedIdRatings{idRatings[i]}
-		sort.Sort(a[i])
-	}
-	return a
-}
-
-type SortedIdRatings struct {
-	data []IdRating
-}
-
-func NewSortedIdRatings(a []IdRating) SortedIdRatings {
-	b := SortedIdRatings{a}
-	sort.Sort(b)
-	return b
-}
-
-func (sir SortedIdRatings) Len() int {
-	return len(sir.data)
-}
-
-func (sir SortedIdRatings) Swap(i, j int) {
-	sir.data[i], sir.data[j] = sir.data[j], sir.data[i]
-}
-
-func (sir SortedIdRatings) Less(i, j int) bool {
-	return sir.data[i].Id < sir.data[j].Id
-}
-
-/* Build-in */
-
-// Build-in data set
-type _BuildInDataSet struct {
-	url  string
-	path string
-	sep  string
-}
-
-var buildInDataSets = map[string]_BuildInDataSet{
-	"ml-100k": {
-		url:  "http://files.grouplens.org/datasets/movielens/ml-100k.zip",
-		path: "ml-100k/u.data",
-		sep:  "\t",
-	},
-	"ml-1m": {
-		url:  "http://files.grouplens.org/datasets/movielens/ml-1m.zip",
-		path: "ml-1m/ratings.dat",
-		sep:  "::",
-	},
-	"jester": {url: "http://eigentaste.berkeley.edu/dataset/jester_dataset_2.zip"},
 }
 
 // Download file from URL.
@@ -385,4 +332,53 @@ func unzip(src string, dst string) ([]string, error) {
 		rc.Close()
 	}
 	return fileNames, nil
+}
+
+/* Utils */
+
+// Get the mean of ratings for each user (item).
+func means(a [][]IdRating) []float64 {
+	m := make([]float64, len(a))
+	for i := range a {
+		sum, count := 0.0, 0.0
+		for _, ir := range a[i] {
+			sum += ir.Rating
+			count++
+		}
+		m[i] = sum / count
+	}
+	return m
+}
+
+// Sort users' (items') ratings.
+func sorts(idRatings [][]IdRating) []SortedIdRatings {
+	a := make([]SortedIdRatings, len(idRatings))
+	for i := range idRatings {
+		a[i] = NewSortedIdRatings(idRatings[i])
+	}
+	return a
+}
+
+// An array of <id, rating> sorted by id.
+type SortedIdRatings struct {
+	data []IdRating
+}
+
+// Create a sorted array of <id, rating>
+func NewSortedIdRatings(a []IdRating) SortedIdRatings {
+	b := SortedIdRatings{a}
+	sort.Sort(b)
+	return b
+}
+
+func (sir SortedIdRatings) Len() int {
+	return len(sir.data)
+}
+
+func (sir SortedIdRatings) Swap(i, j int) {
+	sir.data[i], sir.data[j] = sir.data[j], sir.data[i]
+}
+
+func (sir SortedIdRatings) Less(i, j int) bool {
+	return sir.data[i].Id < sir.data[j].Id
 }

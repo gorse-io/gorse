@@ -31,17 +31,17 @@ func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	innerUserId := coc.trainSet.ConvertUserId(userId)
 	innerItemId := coc.trainSet.ConvertItemId(itemId)
 	prediction := 0.0
-	if innerUserId != newId && innerItemId != newId {
+	if innerUserId != NewId && innerItemId != NewId {
 		// old user - old item
 		userCluster := coc.userClusters[innerUserId]
 		itemCluster := coc.itemClusters[innerItemId]
 		prediction = coc.userMeans[innerUserId] + coc.itemMeans[innerItemId] -
 			coc.userClusterMeans[userCluster] - coc.itemClusterMeans[itemCluster] +
 			coc.coClusterMeans[userCluster][itemCluster]
-	} else if innerUserId != newId {
+	} else if innerUserId != NewId {
 		// old user - new item
 		prediction = coc.userMeans[innerUserId]
-	} else if innerItemId != newId {
+	} else if innerItemId != NewId {
 		// new user - old item
 		prediction = coc.itemMeans[innerItemId]
 	} else {

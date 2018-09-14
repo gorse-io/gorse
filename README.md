@@ -5,6 +5,14 @@
 [![Document](https://godoc.org/github.com/ZhangZhenghao/gorse?status.svg)](https://godoc.org/github.com/ZhangZhenghao/gorse)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ZhangZhenghao/gorse)](https://goreportcard.com/report/github.com/ZhangZhenghao/gorse)
 
+`gorse` is a recommender system engine implemented by golang provide:
+
+- Algorithm: Predict ratings based on collaborate filtering. Including matrix factorization and neighborhood based method.
+
+- Data: Load data from build-in dataset or file. Split data to train set and test set.
+
+- Evaluator: Evaluate models by cross validation using RMSE or MAE.
+
 ## Installation
 
 ```bash
@@ -36,7 +44,7 @@ RMSE = 0.938904, MAE = 0.737349
 
 All algorithms are tested on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) and 16.0GB RAM. RMSE scores and MAE scores are used to check the correctness comparing to other implementation but not the best performance. Parameters are set as default values and identical to other implementation.
 
-|   [Movielens 100k](http://grouplens.org/datasets/movielens/100k)   |   RMSE   |   MAE    |    Time  | RMSE[Ref] |  MAE[Ref]  |
+|   [Movielens 100K](http://grouplens.org/datasets/movielens/100k)   |   RMSE   |   MAE    |    Time  | RMSE[REF] |  MAE[REF]  |
 | - | - | - | - | - | - |
 | Random        | 1.518610 | 1.218645 | 0:00:01   | 1.514[1] | 1.215[1] |
 | BaseLine      | 0.943741 | 0.741738 | 0:00:01  | 0.944[1] | 0.748[1] |
@@ -50,7 +58,7 @@ All algorithms are tested on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) a
 | Slope One[4] | 0.940748 | 0.741195 | 0:00:02 | 0.946[1] | 0.743[1] |
 | Co-Clustering[5] | 0.968219 | 0.760593 | 0:00:01 | 0.963[1] | 0.753[1] |
 
-|   [Movielens 1m](http://grouplens.org/datasets/movielens/1m)   |   RMSE   |   MAE    |    Time  | RMSE[Ref] |  MAE[Ref]  |
+|   [Movielens 1M](http://grouplens.org/datasets/movielens/1m)   |   RMSE   |   MAE    |    Time  | RMSE[REF] |  MAE[REF]  |
 | - | - | - | - | - | - |
 | Random   | 1.506756 | 1.208171 | 0:00:01   | 1.504[1]|	1.206[1]|
 | BaseLine | 0.909781 | 0.717029 | 0:00:09   | 0.909[1]|	0.719[1]|
