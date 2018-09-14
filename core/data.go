@@ -17,16 +17,16 @@ import (
 	"strings"
 )
 
-/* Build-in */
+/* Built-in */
 
-// Build-in data set
-type _BuildInDataSet struct {
+// Built-in data set
+type _BuiltInDataSet struct {
 	url  string
 	path string
 	sep  string
 }
 
-var buildInDataSets = map[string]_BuildInDataSet{
+var builtInDataSets = map[string]_BuiltInDataSet{
 	"ml-100k": {
 		url:  "http://files.grouplens.org/datasets/movielens/ml-100k.zip",
 		path: "ml-100k/u.data",
@@ -37,7 +37,6 @@ var buildInDataSets = map[string]_BuildInDataSet{
 		path: "ml-1m/ratings.dat",
 		sep:  "::",
 	},
-	"jester": {url: "http://eigentaste.berkeley.edu/dataset/jester_dataset_2.zip"},
 }
 
 /* Data Set */
@@ -211,7 +210,7 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 // Load build in data set
 func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	// Extract data set information
-	dataSet, exist := buildInDataSets[dataSetName]
+	dataSet, exist := builtInDataSets[dataSetName]
 	if !exist {
 		log.Fatal("no such data set", dataSetName)
 	}
