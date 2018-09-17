@@ -107,6 +107,16 @@ func (dataSet *DataSet) Split(testSize float64, seed int) (TrainSet, DataSet) {
 	return NewTrainSet(trainSet), testSet
 }
 
+// Predict ratings for a set of <userId, itemId>s.
+func (dataSet *DataSet) Predict(estimator Estimator) []float64 {
+	predictions := make([]float64, dataSet.Length())
+	for j := 0; j < dataSet.Length(); j++ {
+		userId, itemId, _ := dataSet.Index(j)
+		predictions[j] = estimator.Predict(userId, itemId)
+	}
+	return predictions
+}
+
 // Train data set.
 type TrainSet struct {
 	DataSet

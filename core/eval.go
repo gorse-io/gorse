@@ -8,12 +8,15 @@ import (
 
 type ParameterGrid map[string][]interface{}
 
+/* Cross Validation */
+
 // The return data structure of cross validate
 type CrossValidateResult struct {
 	Trains []float64
 	Tests  []float64
 }
 
+// Cross validation
 func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv int, seed int64,
 	params Parameters) []CrossValidateResult {
 	// Create return structures
@@ -28,17 +31,17 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv
 		trainFold := trainFolds[i]
 		testFold := testFolds[i]
 		estimator.Fit(trainFold, params)
-		predictions := make([]float64, testFold.Length())
-		interactionUsers, interactionItems := testFold.Users, testFold.Items
-		for j := 0; j < testFold.Length(); j++ {
-			userId := interactionUsers[j]
-			itemId := interactionItems[j]
-			predictions[j] = estimator.Predict(userId, itemId)
-		}
-		truth := testFold.Ratings
-		// Evaluate on test set
+		// Evaluate on train set
+		trainRatings := trainFold.Ratings
+		trainPredictions := trainFold.Predict(estimator)
 		for j := 0; j < len(ret); j++ {
-			ret[j].Tests[i] = metrics[j](predictions, truth)
+			ret[j].Trains[i] = metrics[j](trainPredictions, trainRatings)
+		}
+		// Evaluate on test set
+		testRatings := testFold.Ratings
+		testPredictions := testFold.Predict(estimator)
+		for j := 0; j < len(ret); j++ {
+			ret[j].Tests[i] = metrics[j](testPredictions, testRatings)
 		}
 	}
 	return ret
