@@ -10,6 +10,7 @@ import (
 // An algorithm interface to predict ratings. Any estimator in this
 // package should implement it.
 type Estimator interface {
+	// Set parameters.
 	SetParams(params Parameters)
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId int) float64
@@ -71,20 +72,20 @@ func (parameters Parameters) GetSim(name string, _default Sim) Sim {
 
 // Base structure of all estimators.
 type Base struct {
-	params   Parameters
-	trainSet TrainSet
-}
-
-func (base *Base) Predict(userId, itemId int) float64 {
-	return 0
-}
-
-func (base *Base) Fit(trainSet TrainSet) {
-
+	Params Parameters
+	Data   TrainSet
 }
 
 func (base *Base) SetParams(params Parameters) {
-	base.params = params
+	base.Params = params
+}
+
+func (base *Base) Predict(userId, itemId int) float64 {
+	panic("Predict() not implemented")
+}
+
+func (base *Base) Fit(trainSet TrainSet) {
+	panic("Fit() not implemented")
 }
 
 /* Random */
@@ -96,35 +97,35 @@ func (base *Base) SetParams(params Parameters) {
 // using Maximum Likelihood Estimation
 type Random struct {
 	Base
-	mean   float64 // mu
-	stdDev float64 // sigma
-	low    float64 // The lower bound of rating scores
-	high   float64 // The upper bound of rating scores
+	Mean   float64 // mu
+	StdDev float64 // sigma
+	Low    float64 // The lower bound of rating scores
+	High   float64 // The upper bound of rating scores
 }
 
 // Create a random model.
 func NewRandom(params Parameters) *Random {
 	random := new(Random)
-	random.params = params
+	random.Params = params
 	return random
 }
 
 func (random *Random) Predict(userId int, itemId int) float64 {
-	ret := rand.NormFloat64()*random.stdDev + random.mean
+	ret := rand.NormFloat64()*random.StdDev + random.Mean
 	// Crop prediction
-	if ret < random.low {
-		ret = random.low
-	} else if ret > random.high {
-		ret = random.high
+	if ret < random.Low {
+		ret = random.Low
+	} else if ret > random.High {
+		ret = random.High
 	}
 	return ret
 }
 
 func (random *Random) Fit(trainSet TrainSet) {
 	ratings := trainSet.Ratings
-	random.mean = stat.Mean(ratings, nil)
-	random.stdDev = stat.StdDev(ratings, nil)
-	random.low, random.high = trainSet.RatingRange()
+	random.Mean = stat.Mean(ratings, nil)
+	random.StdDev = stat.StdDev(ratings, nil)
+	random.Low, random.High = trainSet.RatingRange()
 }
 
 /* Baseline */
@@ -133,13 +134,13 @@ func (random *Random) Fit(trainSet TrainSet) {
 //
 //                   \hat{r}_{ui} = b_{ui} = μ + b_u + b_i
 //
-// If user u is unknown, then the bias b_u is assumed to be zero. The same
+// If user u is unknown, then the Bias b_u is assumed to be zero. The same
 // applies for item i with b_i.
 type BaseLine struct {
 	Base
-	userBias   []float64 // b_u
-	itemBias   []float64 // b_i
-	globalBias float64   // mu
+	UserBias   []float64 // b_u
+	ItemBias   []float64 // b_i
+	GlobalBias float64   // mu
 }
 
 // Create a baseline model. Parameters:
@@ -149,50 +150,50 @@ type BaseLine struct {
 //	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
 func NewBaseLine(params Parameters) *BaseLine {
 	baseLine := new(BaseLine)
-	baseLine.SetParams(params)
+	baseLine.Params = params
 	return baseLine
 }
 
 func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
-	innerUserId := baseLine.trainSet.ConvertUserId(userId)
-	innerItemId := baseLine.trainSet.ConvertItemId(itemId)
-	ret := baseLine.globalBias
+	innerUserId := baseLine.Data.ConvertUserId(userId)
+	innerItemId := baseLine.Data.ConvertItemId(itemId)
+	ret := baseLine.GlobalBias
 	if innerUserId != NewId {
-		ret += baseLine.userBias[innerUserId]
+		ret += baseLine.UserBias[innerUserId]
 	}
 	if innerItemId != NewId {
-		ret += baseLine.itemBias[innerItemId]
+		ret += baseLine.ItemBias[innerItemId]
 	}
 	return ret
 }
 
 func (baseLine *BaseLine) Fit(trainSet TrainSet) {
 	// Setup parameters
-	reg := baseLine.params.GetFloat64("reg", 0.02)
-	lr := baseLine.params.GetFloat64("lr", 0.005)
-	nEpochs := baseLine.params.GetInt("nEpochs", 20)
+	reg := baseLine.Params.GetFloat64("reg", 0.02)
+	lr := baseLine.Params.GetFloat64("lr", 0.005)
+	nEpochs := baseLine.Params.GetInt("nEpochs", 20)
 	// Initialize parameters
-	baseLine.trainSet = trainSet
-	baseLine.userBias = make([]float64, trainSet.UserCount)
-	baseLine.itemBias = make([]float64, trainSet.ItemCount)
+	baseLine.Data = trainSet
+	baseLine.UserBias = make([]float64, trainSet.UserCount)
+	baseLine.ItemBias = make([]float64, trainSet.ItemCount)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
 			userId, itemId, rating := trainSet.Users[i], trainSet.Items[i], trainSet.Ratings[i]
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
-			userBias := baseLine.userBias[innerUserId]
-			itemBias := baseLine.itemBias[innerItemId]
+			userBias := baseLine.UserBias[innerUserId]
+			itemBias := baseLine.ItemBias[innerItemId]
 			// Compute gradient
 			diff := baseLine.Predict(userId, itemId) - rating
 			gradGlobalBias := diff
 			gradUserBias := diff + reg*userBias
 			gradItemBias := diff + reg*itemBias
 			// Update parameters
-			baseLine.globalBias -= lr * gradGlobalBias
-			baseLine.userBias[innerUserId] -= lr * gradUserBias
-			baseLine.itemBias[innerItemId] -= lr * gradItemBias
+			baseLine.GlobalBias -= lr * gradGlobalBias
+			baseLine.UserBias[innerUserId] -= lr * gradUserBias
+			baseLine.ItemBias[innerItemId] -= lr * gradItemBias
 		}
 	}
 }

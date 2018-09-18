@@ -8,14 +8,14 @@ import (
 // KNN for collaborate filtering.
 type KNN struct {
 	Base
-	_type         int
-	globalMean    float64
-	sims          [][]float64
-	leftRatings   [][]IdRating
-	rightRatings  [][]IdRating
-	means         []float64 // Centered KNN: user (item) mean
-	stdDeviations []float64 // KNN with Z Score: user (item) standard deviation
-	bias          []float64 // KNN Baseline: bias
+	KNNType      int
+	GlobalMean   float64
+	Sims         [][]float64
+	LeftRatings  [][]IdRating
+	RightRatings [][]IdRating
+	Means        []float64 // Centered KNN: user (item) Mean
+	StdDevs      []float64 // KNN with Z Score: user (item) standard deviation
+	Bias         []float64 // KNN Baseline: Bias
 }
 
 // KNN type
@@ -33,20 +33,20 @@ const (
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
 func NewKNN(params Parameters) *KNN {
 	knn := new(KNN)
-	knn._type = basic
-	knn.SetParams(params)
+	knn.KNNType = basic
+	knn.Params = params
 	return knn
 }
 
-// Create a KNN model with mean. Parameters:
+// Create a KNN model with Mean. Parameters:
 //   sim		- The similarity function. Default is MSD.
 //   userBased	- User based or item based? Default is true.
 //	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
 func NewKNNWithMean(params Parameters) *KNN {
 	knn := new(KNN)
-	knn._type = centered
-	knn.SetParams(params)
+	knn.KNNType = centered
+	knn.Params = params
 	return knn
 }
 
@@ -57,8 +57,8 @@ func NewKNNWithMean(params Parameters) *KNN {
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
 func NewKNNWithZScore(params Parameters) *KNN {
 	knn := new(KNN)
-	knn._type = zScore
-	knn.SetParams(params)
+	knn.KNNType = zScore
+	knn.Params = params
 	return knn
 }
 
@@ -69,18 +69,18 @@ func NewKNNWithZScore(params Parameters) *KNN {
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
 func NewKNNBaseLine(params Parameters) *KNN {
 	knn := new(KNN)
-	knn._type = baseline
-	knn.SetParams(params)
+	knn.KNNType = baseline
+	knn.Params = params
 	return knn
 }
 
 func (knn *KNN) Predict(userId, itemId int) float64 {
-	innerUserId := knn.trainSet.ConvertUserId(userId)
-	innerItemId := knn.trainSet.ConvertItemId(itemId)
+	innerUserId := knn.Data.ConvertUserId(userId)
+	innerItemId := knn.Data.ConvertItemId(itemId)
 	// Retrieve parameters
-	userBased := knn.params.GetBool("userBased", true)
-	k := knn.params.GetInt("k", 40)
-	minK := knn.params.GetInt("minK", 1)
+	userBased := knn.Params.GetBool("userBased", true)
+	k := knn.Params.GetInt("k", 40)
+	minK := knn.Params.GetInt("minK", 1)
 	// Set user based or item based
 	var leftId, rightId int
 	if userBased {
@@ -89,106 +89,106 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 		leftId, rightId = innerItemId, innerUserId
 	}
 	if leftId == NewId || rightId == NewId {
-		return knn.globalMean
+		return knn.GlobalMean
 	}
 	// Find user (item) interacted with item (user)
 	candidates := make([]IdRating, 0)
-	for _, ir := range knn.rightRatings[rightId] {
-		if !math.IsNaN(knn.sims[leftId][ir.Id]) {
+	for _, ir := range knn.RightRatings[rightId] {
+		if !math.IsNaN(knn.Sims[leftId][ir.Id]) {
 			candidates = append(candidates, ir)
 		}
 	}
-	// Set global globalMean for a user (item) with the number of neighborhoods less than min k
+	// Set global GlobalMean for a user (item) with the number of neighborhoods less than min k
 	if len(candidates) <= minK {
-		return knn.globalMean
+		return knn.GlobalMean
 	}
 	// Sort users (items) by similarity
-	candidateSet := newCandidateSet(knn.sims[leftId], candidates)
+	candidateSet := newCandidateSet(knn.Sims[leftId], candidates)
 	sort.Sort(candidateSet)
 	// Find neighborhoods
 	numNeighbors := k
 	if numNeighbors > candidateSet.Len() {
 		numNeighbors = candidateSet.Len()
 	}
-	// Predict the rating by weighted globalMean
+	// Predict the rating by weighted GlobalMean
 	weightSum := 0.0
 	weightRating := 0.0
 	for _, or := range candidateSet.candidates[0:numNeighbors] {
-		weightSum += knn.sims[leftId][or.Id]
+		weightSum += knn.Sims[leftId][or.Id]
 		rating := or.Rating
-		if knn._type == centered {
-			rating -= knn.means[or.Id]
-		} else if knn._type == zScore {
-			rating = (rating - knn.means[or.Id]) / knn.stdDeviations[or.Id]
-		} else if knn._type == baseline {
-			rating -= knn.bias[or.Id]
+		if knn.KNNType == centered {
+			rating -= knn.Means[or.Id]
+		} else if knn.KNNType == zScore {
+			rating = (rating - knn.Means[or.Id]) / knn.StdDevs[or.Id]
+		} else if knn.KNNType == baseline {
+			rating -= knn.Bias[or.Id]
 		}
-		weightRating += knn.sims[leftId][or.Id] * rating
+		weightRating += knn.Sims[leftId][or.Id] * rating
 	}
 	prediction := weightRating / weightSum
-	if knn._type == centered {
-		prediction += knn.means[leftId]
-	} else if knn._type == zScore {
-		prediction *= knn.stdDeviations[leftId]
-		prediction += knn.means[leftId]
-	} else if knn._type == baseline {
-		prediction += knn.bias[leftId]
+	if knn.KNNType == centered {
+		prediction += knn.Means[leftId]
+	} else if knn.KNNType == zScore {
+		prediction *= knn.StdDevs[leftId]
+		prediction += knn.Means[leftId]
+	} else if knn.KNNType == baseline {
+		prediction += knn.Bias[leftId]
 	}
 	return prediction
 }
 
 func (knn *KNN) Fit(trainSet TrainSet) {
 	// Setup parameters
-	sim := knn.params.GetSim("sim", MSD)
-	userBased := knn.params.GetBool("userBased", true)
-	// Set global globalMean for new users (items)
-	knn.trainSet = trainSet
-	knn.globalMean = trainSet.GlobalMean
+	sim := knn.Params.GetSim("sim", MSD)
+	userBased := knn.Params.GetBool("userBased", true)
+	// Set global GlobalMean for new users (items)
+	knn.Data = trainSet
+	knn.GlobalMean = trainSet.GlobalMean
 	// Retrieve user (item) iRatings
 	if userBased {
-		knn.leftRatings = trainSet.UserRatings()
-		knn.rightRatings = trainSet.ItemRatings()
-		knn.sims = newNanMatrix(trainSet.UserCount, trainSet.UserCount)
+		knn.LeftRatings = trainSet.UserRatings()
+		knn.RightRatings = trainSet.ItemRatings()
+		knn.Sims = newNanMatrix(trainSet.UserCount, trainSet.UserCount)
 	} else {
-		knn.leftRatings = trainSet.ItemRatings()
-		knn.rightRatings = trainSet.UserRatings()
-		knn.sims = newNanMatrix(trainSet.ItemCount, trainSet.ItemCount)
+		knn.LeftRatings = trainSet.ItemRatings()
+		knn.RightRatings = trainSet.UserRatings()
+		knn.Sims = newNanMatrix(trainSet.ItemCount, trainSet.ItemCount)
 	}
-	// Retrieve user (item) mean
-	if knn._type == centered || knn._type == zScore {
-		knn.means = means(knn.leftRatings)
+	// Retrieve user (item) Mean
+	if knn.KNNType == centered || knn.KNNType == zScore {
+		knn.Means = means(knn.LeftRatings)
 	}
 	// Retrieve user (item) standard deviation
-	if knn._type == zScore {
-		knn.stdDeviations = make([]float64, len(knn.leftRatings))
-		for i := range knn.means {
+	if knn.KNNType == zScore {
+		knn.StdDevs = make([]float64, len(knn.LeftRatings))
+		for i := range knn.Means {
 			sum, count := 0.0, 0.0
-			for _, ir := range knn.leftRatings[i] {
-				sum += (ir.Rating - knn.means[i]) * (ir.Rating - knn.means[i])
+			for _, ir := range knn.LeftRatings[i] {
+				sum += (ir.Rating - knn.Means[i]) * (ir.Rating - knn.Means[i])
 				count++
 			}
-			knn.stdDeviations[i] = math.Sqrt(sum/count) + 1e-5
+			knn.StdDevs[i] = math.Sqrt(sum/count) + 1e-5
 		}
 	}
-	if knn._type == baseline {
-		baseLine := NewBaseLine(knn.params)
+	if knn.KNNType == baseline {
+		baseLine := NewBaseLine(knn.Params)
 		baseLine.Fit(trainSet)
 		if userBased {
-			knn.bias = baseLine.userBias
+			knn.Bias = baseLine.UserBias
 		} else {
-			knn.bias = baseLine.itemBias
+			knn.Bias = baseLine.ItemBias
 		}
 	}
 	// Pairwise similarity
-	sortedLeftRatings := sorts(knn.leftRatings)
+	sortedLeftRatings := sorts(knn.LeftRatings)
 	for iId, iRatings := range sortedLeftRatings {
 		for jId, jRatings := range sortedLeftRatings {
 			if iId != jId {
-				if math.IsNaN(knn.sims[iId][jId]) {
+				if math.IsNaN(knn.Sims[iId][jId]) {
 					ret := sim(iRatings, jRatings)
 					if !math.IsNaN(ret) {
-						knn.sims[iId][jId] = ret
-						knn.sims[jId][iId] = ret
+						knn.Sims[iId][jId] = ret
+						knn.Sims[jId][iId] = ret
 					}
 				}
 			}

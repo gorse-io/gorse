@@ -86,10 +86,10 @@ func (dataSet *DataSet) KFold(k int, seed int64) ([]TrainSet, []DataSet) {
 		if i < dataSet.Length()%k {
 			end++
 		}
-		// Test trainSet
+		// Test Data
 		testIndex := perm[begin:end]
 		testFolds[i] = dataSet.SubSet(testIndex)
-		// Train trainSet
+		// Train Data
 		trainIndex := concatenate(perm[0:begin], perm[end:dataSet.Length()])
 		trainFolds[i] = NewTrainSet(dataSet.SubSet(trainIndex))
 		begin = end
@@ -105,6 +105,22 @@ func (dataSet *DataSet) Split(testSize float64, seed int) (TrainSet, DataSet) {
 	testSet := dataSet.SubSet(perm[:mid])
 	trainSet := dataSet.SubSet(perm[mid:])
 	return NewTrainSet(trainSet), testSet
+}
+
+// Save data set to csv.
+func (dataSet *DataSet) ToCSV(fileName string, sep string) error {
+	file, err := os.Create(fileName)
+	defer file.Close()
+	if err == nil {
+		writer := bufio.NewWriter(file)
+		for i := range dataSet.Ratings {
+			writer.WriteString(fmt.Sprintf("%v%s%v%s%v\n",
+				dataSet.Users[i], sep,
+				dataSet.Items[i], sep,
+				dataSet.Ratings[i]))
+		}
+	}
+	return err
 }
 
 // Train data set.
@@ -152,7 +168,7 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 	return set
 }
 
-// Get the range of leftRatings. Return minimum and maximum.
+// Get the range of LeftRatings. Return minimum and maximum.
 func (trainSet *TrainSet) RatingRange() (float64, float64) {
 	return floats.Min(trainSet.Ratings), floats.Max(trainSet.Ratings)
 }
@@ -173,7 +189,7 @@ func (trainSet *TrainSet) ConvertItemId(itemId int) int {
 	return NewId
 }
 
-// Get users' leftRatings: an array of <itemId, rating> for each user.
+// Get users' LeftRatings: an array of <itemId, rating> for each user.
 func (trainSet *TrainSet) UserRatings() [][]IdRating {
 	if trainSet.userRatings == nil {
 		trainSet.userRatings = make([][]IdRating, trainSet.UserCount)
@@ -189,7 +205,7 @@ func (trainSet *TrainSet) UserRatings() [][]IdRating {
 	return trainSet.userRatings
 }
 
-// Get items' leftRatings: an array of <userId, Rating> for each item.
+// Get items' LeftRatings: an array of <userId, Rating> for each item.
 func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 	if trainSet.itemRatings == nil {
 		trainSet.itemRatings = make([][]IdRating, trainSet.ItemCount)
@@ -335,7 +351,7 @@ func unzip(src string, dst string) ([]string, error) {
 
 /* Utils */
 
-// Get the mean of ratings for each user (item).
+// Get the Mean of ratings for each user (item).
 func means(a [][]IdRating) []float64 {
 	m := make([]float64, len(a))
 	for i := range a {

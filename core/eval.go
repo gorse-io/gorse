@@ -109,7 +109,7 @@ func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
 // Evaluator function
 type Evaluator func([]float64, []float64) float64
 
-// Root mean square error.
+// Root Mean square error.
 func RMSE(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))
 	floats.SubTo(temp, predictions, truth)
