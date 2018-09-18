@@ -11,6 +11,7 @@ import (
 // framework based on co-clustering." Data Mining, Fifth IEEE international
 // conference on. IEEE, 2005.
 type CoClustering struct {
+	Base
 	globalMean       float64     // A^{global}
 	userMeans        []float64   // A^{R}
 	itemMeans        []float64   // A^{R}
@@ -19,11 +20,16 @@ type CoClustering struct {
 	userClusterMeans []float64   // A^{RC}
 	itemClusterMeans []float64   // A^{CC}
 	coClusterMeans   [][]float64 // A^{COC}
-	trainSet         TrainSet
 }
 
-func NewCoClustering() *CoClustering {
-	return new(CoClustering)
+// Create a co-clustering model. Parameters:
+//	 nEpochs		- The number of iteration of the SGD procedure. Default is 20.
+//	 nUserClusters	- The number of user clusters.
+//	 nItemClusters	- The number of item clusters.
+func NewCoClustering(params Parameters) *CoClustering {
+	cc := new(CoClustering)
+	cc.SetParams(params)
+	return cc
 }
 
 func (coc *CoClustering) Predict(userId, itemId int) float64 {
@@ -51,16 +57,11 @@ func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-// Fit a co-clustering model.
-// Parameters:
-//	 nEpochs		- The number of iteration of the SGD procedure. Default is 20.
-//	 nUserClusters	- The number of user clusters.
-//	 nItemClusters	- The number of item clusters.
-func (coc *CoClustering) Fit(trainSet TrainSet, params Parameters) {
+func (coc *CoClustering) Fit(trainSet TrainSet) {
 	// Setup parameters
-	nUserClusters := params.GetInt("nUserClusters", 3)
-	nItemClusters := params.GetInt("nItemClusters", 3)
-	nEpochs := params.GetInt("nEpochs", 20)
+	nUserClusters := coc.params.GetInt("nUserClusters", 3)
+	nItemClusters := coc.params.GetInt("nItemClusters", 3)
+	nEpochs := coc.params.GetInt("nEpochs", 20)
 	// Initialize parameters
 	coc.trainSet = trainSet
 	coc.globalMean = trainSet.GlobalMean

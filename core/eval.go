@@ -27,7 +27,8 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv
 	for i := 0; i < cv; i++ {
 		trainFold := trainFolds[i]
 		testFold := testFolds[i]
-		estimator.Fit(trainFold, params)
+		estimator.SetParams(params)
+		estimator.Fit(trainFold)
 		predictions := make([]float64, testFold.Length())
 		interactionUsers, interactionItems := testFold.Users, testFold.Items
 		for j := 0; j < testFold.Length(); j++ {

@@ -10,10 +10,11 @@ import (
 // An algorithm interface to predict ratings. Any estimator in this
 // package should implement it.
 type Estimator interface {
+	SetParams(params Parameters)
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId int) float64
 	// Fit a model with a train set and parameters.
-	Fit(trainSet TrainSet, params Parameters)
+	Fit(trainSet TrainSet)
 }
 
 // Parameters for an algorithm. Given by:
@@ -66,6 +67,26 @@ func (parameters Parameters) GetSim(name string, _default Sim) Sim {
 	return _default
 }
 
+/* Base */
+
+// Base structure of all estimators.
+type Base struct {
+	params   Parameters
+	trainSet TrainSet
+}
+
+func (base *Base) Predict(userId, itemId int) float64 {
+	return 0
+}
+
+func (base *Base) Fit(trainSet TrainSet) {
+
+}
+
+func (base *Base) SetParams(params Parameters) {
+	base.params = params
+}
+
 /* Random */
 
 // Algorithm predicting a random rating based on the distribution of
@@ -74,14 +95,18 @@ func (parameters Parameters) GetSim(name string, _default Sim) Sim {
 // where \hat{μ} and \hat{σ}^2 are estimated from the training data
 // using Maximum Likelihood Estimation
 type Random struct {
+	Base
 	mean   float64 // mu
 	stdDev float64 // sigma
 	low    float64 // The lower bound of rating scores
 	high   float64 // The upper bound of rating scores
 }
 
-func NewRandom() *Random {
-	return new(Random)
+// Create a random model.
+func NewRandom(params Parameters) *Random {
+	random := new(Random)
+	random.params = params
+	return random
 }
 
 func (random *Random) Predict(userId int, itemId int) float64 {
@@ -95,7 +120,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet TrainSet, params Parameters) {
+func (random *Random) Fit(trainSet TrainSet) {
 	ratings := trainSet.Ratings
 	random.mean = stat.Mean(ratings, nil)
 	random.stdDev = stat.StdDev(ratings, nil)
@@ -111,14 +136,21 @@ func (random *Random) Fit(trainSet TrainSet, params Parameters) {
 // If user u is unknown, then the bias b_u is assumed to be zero. The same
 // applies for item i with b_i.
 type BaseLine struct {
+	Base
 	userBias   []float64 // b_u
 	itemBias   []float64 // b_i
 	globalBias float64   // mu
-	trainSet   TrainSet
 }
 
-func NewBaseLine() *BaseLine {
-	return new(BaseLine)
+// Create a baseline model. Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 lr 		- The learning rate of SGD. Default is 0.005.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
+func NewBaseLine(params Parameters) *BaseLine {
+	baseLine := new(BaseLine)
+	baseLine.SetParams(params)
+	return baseLine
 }
 
 func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
@@ -135,17 +167,11 @@ func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
 	return ret
 }
 
-// Fit a baseline model.
-// Parameters:
-//	 reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.02.
-//	 lr 		- The learning rate of SGD. Default is 0.005.
-//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
-func (baseLine *BaseLine) Fit(trainSet TrainSet, params Parameters) {
+func (baseLine *BaseLine) Fit(trainSet TrainSet) {
 	// Setup parameters
-	reg := params.GetFloat64("reg", 0.02)
-	lr := params.GetFloat64("lr", 0.005)
-	nEpochs := params.GetInt("nEpochs", 20)
+	reg := baseLine.params.GetFloat64("reg", 0.02)
+	lr := baseLine.params.GetFloat64("lr", 0.005)
+	nEpochs := baseLine.params.GetInt("nEpochs", 20)
 	// Initialize parameters
 	baseLine.trainSet = trainSet
 	baseLine.userBias = make([]float64, trainSet.UserCount)

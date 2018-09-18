@@ -12,7 +12,7 @@ func TestGridSearchCV(t *testing.T) {
 		"reg":     {0.4, 0.6},
 		"lr":      {0.002, 0.005},
 	}
-	out := GridSearchCV(NewBaseLine(), LoadDataFromBuiltIn("ml-100k"), paramGrid,
+	out := GridSearchCV(NewBaseLine(nil), LoadDataFromBuiltIn("ml-100k"), paramGrid,
 		[]Evaluator{RMSE, MAE}, 5, 0)
 	// Check best parameters
 	bestParams := out[0].BestParams

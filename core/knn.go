@@ -7,6 +7,7 @@ import (
 
 // KNN for collaborate filtering.
 type KNN struct {
+	Base
 	_type         int
 	globalMean    float64
 	sims          [][]float64
@@ -15,11 +16,6 @@ type KNN struct {
 	means         []float64 // Centered KNN: user (item) mean
 	stdDeviations []float64 // KNN with Z Score: user (item) standard deviation
 	bias          []float64 // KNN Baseline: bias
-	trainSet      TrainSet
-	// Parameters
-	userBased bool
-	k         int
-	minK      int
 }
 
 // KNN type
@@ -30,36 +26,64 @@ const (
 	baseline = 3
 )
 
-func NewKNN() *KNN {
+// Create a KNN model. Parameters:
+//   sim		- The similarity function. Default is MSD.
+//   userBased	- User based or item based? Default is true.
+//	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
+//	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+func NewKNN(params Parameters) *KNN {
 	knn := new(KNN)
 	knn._type = basic
+	knn.SetParams(params)
 	return knn
 }
 
-func NewKNNWithMean() *KNN {
+// Create a KNN model with mean. Parameters:
+//   sim		- The similarity function. Default is MSD.
+//   userBased	- User based or item based? Default is true.
+//	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
+//	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+func NewKNNWithMean(params Parameters) *KNN {
 	knn := new(KNN)
 	knn._type = centered
+	knn.SetParams(params)
 	return knn
 }
 
-func NewKNNWithZScore() *KNN {
+// Create a KNN model with Z-Score. Parameters:
+//   sim		- The similarity function. Default is MSD.
+//   userBased	- User based or item based? Default is true.
+//	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
+//	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+func NewKNNWithZScore(params Parameters) *KNN {
 	knn := new(KNN)
 	knn._type = zScore
+	knn.SetParams(params)
 	return knn
 }
 
-func NewKNNBaseLine() *KNN {
+// Create a KNN model with baseline. Parameters:
+//   sim		- The similarity function. Default is MSD.
+//   userBased	- User based or item based? Default is true.
+//	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
+//	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+func NewKNNBaseLine(params Parameters) *KNN {
 	knn := new(KNN)
 	knn._type = baseline
+	knn.SetParams(params)
 	return knn
 }
 
 func (knn *KNN) Predict(userId, itemId int) float64 {
 	innerUserId := knn.trainSet.ConvertUserId(userId)
 	innerItemId := knn.trainSet.ConvertItemId(itemId)
+	// Retrieve parameters
+	userBased := knn.params.GetBool("userBased", true)
+	k := knn.params.GetInt("k", 40)
+	minK := knn.params.GetInt("minK", 1)
 	// Set user based or item based
 	var leftId, rightId int
-	if knn.userBased {
+	if userBased {
 		leftId, rightId = innerUserId, innerItemId
 	} else {
 		leftId, rightId = innerItemId, innerUserId
@@ -75,14 +99,14 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 		}
 	}
 	// Set global globalMean for a user (item) with the number of neighborhoods less than min k
-	if len(candidates) <= knn.minK {
+	if len(candidates) <= minK {
 		return knn.globalMean
 	}
 	// Sort users (items) by similarity
 	candidateSet := newCandidateSet(knn.sims[leftId], candidates)
 	sort.Sort(candidateSet)
 	// Find neighborhoods
-	numNeighbors := knn.k
+	numNeighbors := k
 	if numNeighbors > candidateSet.Len() {
 		numNeighbors = candidateSet.Len()
 	}
@@ -113,22 +137,15 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-// Fit a KNN model. Parameters:
-//   sim		- The similarity function. Default is MSD.
-//   userBased	- User based or item based? Default is true.
-//	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
-//	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
-func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
+func (knn *KNN) Fit(trainSet TrainSet) {
 	// Setup parameters
-	sim := params.GetSim("sim", MSD)
-	knn.userBased = params.GetBool("userBased", true)
-	knn.k = params.GetInt("k", 40)
-	knn.minK = params.GetInt("minK", 1)
+	sim := knn.params.GetSim("sim", MSD)
+	userBased := knn.params.GetBool("userBased", true)
 	// Set global globalMean for new users (items)
 	knn.trainSet = trainSet
 	knn.globalMean = trainSet.GlobalMean
 	// Retrieve user (item) iRatings
-	if knn.userBased {
+	if userBased {
 		knn.leftRatings = trainSet.UserRatings()
 		knn.rightRatings = trainSet.ItemRatings()
 		knn.sims = newNanMatrix(trainSet.UserCount, trainSet.UserCount)
@@ -154,9 +171,9 @@ func (knn *KNN) Fit(trainSet TrainSet, params Parameters) {
 		}
 	}
 	if knn._type == baseline {
-		baseLine := NewBaseLine()
-		baseLine.Fit(trainSet, params)
-		if knn.userBased {
+		baseLine := NewBaseLine(knn.params)
+		baseLine.Fit(trainSet)
+		if userBased {
 			knn.bias = baseLine.userBias
 		} else {
 			knn.bias = baseLine.itemBias

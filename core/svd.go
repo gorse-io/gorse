@@ -15,16 +15,26 @@ import (
 // If user u is unknown, then the bias b_u and the factors p_u are
 // assumed to be zero. The same applies for item i with b_i and q_i.
 type SVD struct {
+	Base
 	userFactor [][]float64 // p_u
 	itemFactor [][]float64 // q_i
 	userBias   []float64   // b_u
 	itemBias   []float64   // b_i
 	globalBias float64     // mu
-	trainSet   TrainSet
 }
 
-func NewSVD() *SVD {
-	return new(SVD)
+// Create a SVD model. Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 lr 		- The learning rate of SGD. Default is 0.005.
+//	 nFactors	- The number of latent factors. Default is 100.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
+//	 initMean	- The mean of initial random latent factors. Default is 0.
+//	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+func NewSVD(params Parameters) *SVD {
+	svd := new(SVD)
+	svd.SetParams(params)
+	return svd
 }
 
 func (svd *SVD) Predict(userId int, itemId int) float64 {
@@ -48,23 +58,14 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-// Fit a SVD model.
-// Parameters:
-//	 reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.02.
-//	 lr 		- The learning rate of SGD. Default is 0.005.
-//	 nFactors	- The number of latent factors. Default is 100.
-//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
-//	 initMean	- The mean of initial random latent factors. Default is 0.
-//	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
-func (svd *SVD) Fit(trainSet TrainSet, params Parameters) {
+func (svd *SVD) Fit(trainSet TrainSet) {
 	// Setup parameters
-	nFactors := params.GetInt("nFactors", 100)
-	nEpochs := params.GetInt("nEpochs", 20)
-	lr := params.GetFloat64("lr", 0.005)
-	reg := params.GetFloat64("reg", 0.02)
-	initMean := params.GetFloat64("initMean", 0)
-	initStdDev := params.GetFloat64("initStdDev", 0.1)
+	nFactors := svd.params.GetInt("nFactors", 100)
+	nEpochs := svd.params.GetInt("nEpochs", 20)
+	lr := svd.params.GetFloat64("lr", 0.005)
+	reg := svd.params.GetFloat64("reg", 0.02)
+	initMean := svd.params.GetFloat64("initMean", 0)
+	initStdDev := svd.params.GetFloat64("initStdDev", 0.1)
 	// Initialize parameters
 	svd.trainSet = trainSet
 	svd.userBias = make([]float64, trainSet.UserCount)
@@ -131,13 +132,22 @@ func (svd *SVD) Fit(trainSet TrainSet, params Parameters) {
 // for recommender systems." IEEE Transactions on Industrial
 // Informatics 10.2 (2014): 1273-1284.
 type NMF struct {
+	Base
 	userFactor [][]float64 // p_u
 	itemFactor [][]float64 // q_i
-	trainSet   TrainSet
 }
 
-func NewNMF() *NMF {
-	return new(NMF)
+// Create a NMF model. Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.06.
+//	 nFactors	- The number of latent factors. Default is 15.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 50.
+//	 initLow	- The lower bound of initial random latent factor. Default is 0.
+//	 initHigh	- The upper bound of initial random latent factor. Default is 1.
+func NewNMF(params Parameters) *NMF {
+	nmf := new(NMF)
+	nmf.SetParams(params)
+	return nmf
 }
 
 func (nmf *NMF) Predict(userId int, itemId int) float64 {
@@ -149,20 +159,12 @@ func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	return 0
 }
 
-// Fit a NMF model.
-// Parameters:
-//	 reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.06.
-//	 nFactors	- The number of latent factors. Default is 15.
-//	 nEpochs	- The number of iteration of the SGD procedure. Default is 50.
-//	 initLow	- The lower bound of initial random latent factor. Default is 0.
-//	 initHigh	- The upper bound of initial random latent factor. Default is 1.
-func (nmf *NMF) Fit(trainSet TrainSet, params Parameters) {
-	nFactors := params.GetInt("nFactors", 15)
-	nEpochs := params.GetInt("nEpochs", 50)
-	initLow := params.GetFloat64("initLow", 0)
-	initHigh := params.GetFloat64("initHigh", 1)
-	reg := params.GetFloat64("reg", 0.06)
+func (nmf *NMF) Fit(trainSet TrainSet) {
+	nFactors := nmf.params.GetInt("nFactors", 15)
+	nEpochs := nmf.params.GetInt("nEpochs", 50)
+	initLow := nmf.params.GetFloat64("initLow", 0)
+	initHigh := nmf.params.GetFloat64("initHigh", 1)
+	reg := nmf.params.GetFloat64("reg", 0.06)
 	// Initialize parameters
 	nmf.trainSet = trainSet
 	nmf.userFactor = newUniformMatrix(trainSet.UserCount, nFactors, initLow, initHigh)
@@ -237,6 +239,7 @@ func (nmf *NMF) Fit(trainSet TrainSet, params Parameters) {
 // then the bias b_u and the factors p_u are assumed to be zero. The same
 // applies for item i with b_i, q_i and y_i.
 type SVDpp struct {
+	Base
 	userRatings [][]IdRating // I_u
 	userFactor  [][]float64  // p_u
 	itemFactor  [][]float64  // q_i
@@ -244,14 +247,23 @@ type SVDpp struct {
 	userBias    []float64    // b_u
 	itemBias    []float64    // b_i
 	globalBias  float64      // mu
-	trainSet    TrainSet
 	// Optimization with cache
 	//cacheFailed bool
 	//cacheFactor map[int][]float64 // |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right
 }
 
-func NewSVDpp() *SVDpp {
-	return new(SVDpp)
+// Create a SVD++ model. Parameters:
+//	 reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 lr 		- The learning rate of SGD. Default is 0.007.
+//	 nFactors	- The number of latent factors. Default is 20.
+//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
+//	 initMean	- The mean of initial random latent factors. Default is 0.
+//	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+func NewSVDpp(params Parameters) *SVDpp {
+	svd := new(SVDpp)
+	svd.SetParams(params)
+	return svd
 }
 
 func (svd *SVDpp) ensembleImplFactors(innerUserId int) []float64 {
@@ -302,23 +314,14 @@ func (svd *SVDpp) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-// Fit a SVD++ model.
-// Parameters:
-//	 reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.02.
-//	 lr 		- The learning rate of SGD. Default is 0.007.
-//	 nFactors	- The number of latent factors. Default is 20.
-//	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
-//	 initMean	- The mean of initial random latent factors. Default is 0.
-//	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
-func (svd *SVDpp) Fit(trainSet TrainSet, params Parameters) {
+func (svd *SVDpp) Fit(trainSet TrainSet) {
 	// Setup parameters
-	nFactors := params.GetInt("nFactors", 20)
-	nEpochs := params.GetInt("nEpochs", 20)
-	lr := params.GetFloat64("lr", 0.007)
-	reg := params.GetFloat64("reg", 0.02)
-	initMean := params.GetFloat64("initMean", 0)
-	initStdDev := params.GetFloat64("initStdDev", 0.1)
+	nFactors := svd.params.GetInt("nFactors", 20)
+	nEpochs := svd.params.GetInt("nEpochs", 20)
+	lr := svd.params.GetFloat64("lr", 0.007)
+	reg := svd.params.GetFloat64("reg", 0.02)
+	initMean := svd.params.GetFloat64("initMean", 0)
+	initStdDev := svd.params.GetFloat64("initStdDev", 0.1)
 	// Initialize parameters
 	svd.trainSet = trainSet
 	svd.userBias = make([]float64, trainSet.UserCount)
