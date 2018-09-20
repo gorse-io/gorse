@@ -47,7 +47,7 @@ All algorithms are tested on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) a
 | [Random](https://godoc.org/github.com/ZhangZhenghao/gorse/core#Random)        | 1.518610 | 1.218645 | 0:00:01   | 1.514[1] | 1.215[1] |
 | [BaseLine](https://godoc.org/github.com/ZhangZhenghao/gorse/core#BaseLine) | 0.943741 | 0.741738 | 0:00:01  | 0.944[1] | 0.748[1] |
 | [SVD](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVD) | 0.938904 | 0.737349 | 0:00:05  | 0.934[1] | 0.737[1] |
-| [SVD++](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.922710 | 0.721740 | 0:04:21 | 0.92[1] | 0.722[1] |
+| [SVD++](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.922710 | 0.721740 | 0:03:27 | 0.92[1] | 0.722[1] |
 | [NMF](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NMF)[3] | 0.970431 | 0.762025 | 0:00:07  | 0.963[1] | 0.758[1] |
 | [KNN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNN) | 0.978720 | 0.773133 | 0:00:03 | 0.98[1] | 0.774[1] |
 | [Centered k-NN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithMean) | 0.952928 | 0.751693 | 0:00:03 | 0.951[1] | 0.749[1] |
@@ -61,7 +61,7 @@ All algorithms are tested on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) a
 | [Random](https://godoc.org/github.com/ZhangZhenghao/gorse/core#Random) | 1.506756 | 1.208171 | 0:00:01   | 1.504[1]|	1.206[1]|
 | [BaseLine](https://godoc.org/github.com/ZhangZhenghao/gorse/core#BaseLine) | 0.909781 | 0.717029 | 0:00:09   | 0.909[1]|	0.719[1]|
 | [SVD](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVD) | 0.877262 | 0.688397 | 0:01:07 | 0.873[1]|	0.686[1]|
-| [SVD++](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.865424 | 0.677274 | 1:22:51 |0.862[1]|	0.673[1]|
+| [SVD++](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.865424 | 0.677274 | 0:59:08 |0.862[1]|	0.673[1]|
 | [NMF](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NMF)[3] | 0.917979 | 0.726059 | 0:01:33 | 0.916[1] |	0.724[1] |
 | [KNN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNN) | 0.922540 | 0.727227 | 0:03:15 | 0.923[1]|	0.727[1]|
 | [Centered k-NN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithMean) | 0.929107 | 0.738920 | 0:03:39 | 0.929[1]|	0.738[1]|
