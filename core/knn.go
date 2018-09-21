@@ -2,7 +2,9 @@ package core
 
 import (
 	"math"
+	"runtime"
 	"sort"
+	"sync"
 )
 
 // KNN for collaborate filtering.
@@ -31,6 +33,7 @@ const (
 //   userBased	- User based or item based? Default is true.
 //	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+//	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNN(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.KNNType = basic
@@ -43,6 +46,7 @@ func NewKNN(params Parameters) *KNN {
 //   userBased	- User based or item based? Default is true.
 //	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+//	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNWithMean(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.KNNType = centered
@@ -55,6 +59,7 @@ func NewKNNWithMean(params Parameters) *KNN {
 //   userBased	- User based or item based? Default is true.
 //	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+//	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNWithZScore(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.KNNType = zScore
@@ -67,6 +72,7 @@ func NewKNNWithZScore(params Parameters) *KNN {
 //   userBased	- User based or item based? Default is true.
 //	 k			- The maximum k neighborhoods to predict the rating. Default is 40.
 //	 minK		- The minimum k neighborhoods to predict the rating. Default is 1.
+//	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNBaseLine(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.KNNType = baseline
@@ -141,6 +147,7 @@ func (knn *KNN) Fit(trainSet TrainSet) {
 	// Setup parameters
 	sim := knn.Params.GetSim("sim", MSD)
 	userBased := knn.Params.GetBool("userBased", true)
+	nJob := knn.Params.GetInt("nJob", runtime.NumCPU())
 	// Set global GlobalMean for new users (items)
 	knn.Data = trainSet
 	knn.GlobalMean = trainSet.GlobalMean
@@ -181,19 +188,31 @@ func (knn *KNN) Fit(trainSet TrainSet) {
 	}
 	// Pairwise similarity
 	sortedLeftRatings := sorts(knn.LeftRatings)
-	for iId, iRatings := range sortedLeftRatings {
-		for jId, jRatings := range sortedLeftRatings {
-			if iId != jId {
-				if math.IsNaN(knn.Sims[iId][jId]) {
-					ret := sim(iRatings, jRatings)
-					if !math.IsNaN(ret) {
-						knn.Sims[iId][jId] = ret
-						knn.Sims[jId][iId] = ret
+	length := len(sortedLeftRatings)
+	var wg sync.WaitGroup
+	wg.Add(nJob)
+	for j := 0; j < nJob; j++ {
+		go func(jobId int) {
+			begin := length * jobId / nJob
+			end := length * (jobId + 1) / nJob
+			for iId := begin; iId < end; iId++ {
+				iRatings := sortedLeftRatings[iId]
+				for jId, jRatings := range sortedLeftRatings {
+					if iId != jId {
+						if math.IsNaN(knn.Sims[iId][jId]) {
+							ret := sim(iRatings, jRatings)
+							if !math.IsNaN(ret) {
+								knn.Sims[iId][jId] = ret
+								knn.Sims[jId][iId] = ret
+							}
+						}
 					}
 				}
 			}
-		}
+			wg.Done()
+		}(j)
 	}
+	wg.Wait()
 }
 
 // A data structure used to sort candidates by similarity.

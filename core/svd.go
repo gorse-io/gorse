@@ -3,6 +3,8 @@ package core
 import (
 	"gonum.org/v1/gonum/floats"
 	"math"
+	"runtime"
+	"sync"
 )
 
 /* SVD */
@@ -247,9 +249,6 @@ type SVDpp struct {
 	UserBias    []float64    // b_u
 	ItemBias    []float64    // b_i
 	GlobalBias  float64      // mu
-	// Optimization with cache
-	//cacheFailed bool
-	//cacheFactor map[int][]float64 // |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right
 }
 
 // Create a SVD++ model. Parameters:
@@ -258,8 +257,9 @@ type SVDpp struct {
 //	 lr 		- The learning rate of SGD. Default is 0.007.
 //	 nFactors	- The number of latent factors. Default is 20.
 //	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
-//	 initMean	- The Mean of initial random latent factors. Default is 0.
+//	 initMean	- The mean of initial random latent factors. Default is 0.
 //	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+//	 nJobs		- The number of goroutines to update implicit factors. Default is the number of CPUs.
 func NewSVDpp(params Parameters) *SVDpp {
 	svd := new(SVDpp)
 	svd.Params = params
@@ -267,14 +267,11 @@ func NewSVDpp(params Parameters) *SVDpp {
 }
 
 func (svd *SVDpp) ensembleImplFactors(innerUserId int) []float64 {
-	emImpFactor := make([]float64, 0)
+	nFactors := svd.Params.GetInt("nFactors", 20)
+	emImpFactor := make([]float64, nFactors)
 	// User history exists
 	count := 0
 	for _, ir := range svd.UserRatings[innerUserId] {
-		if len(emImpFactor) == 0 {
-			// Create ensemble implicit factor
-			emImpFactor = make([]float64, len(svd.ImplFactor[ir.Id]))
-		}
 		floats.Add(emImpFactor, svd.ImplFactor[ir.Id])
 		count++
 	}
@@ -322,6 +319,7 @@ func (svd *SVDpp) Fit(trainSet TrainSet) {
 	reg := svd.Params.GetFloat64("reg", 0.02)
 	initMean := svd.Params.GetFloat64("initMean", 0)
 	initStdDev := svd.Params.GetFloat64("initStdDev", 0.1)
+	nJobs := svd.Params.GetInt("nJobs", runtime.NumCPU())
 	// Initialize parameters
 	svd.Data = trainSet
 	svd.UserBias = make([]float64, trainSet.UserCount)
@@ -384,17 +382,30 @@ func (svd *SVDpp) Fit(trainSet TrainSet) {
 			mulConst(lr, a)
 			floats.Sub(svd.ItemFactor[innerItemId], a)
 			// Update implicit latent factor
-			for _, ir := range svd.UserRatings[innerUserId] {
-				implFactor := svd.ImplFactor[ir.Id]
-				copy(a, itemFactor)
-				mulConst(diff, a)
-				divConst(math.Sqrt(float64(len(svd.UserRatings[innerUserId]))), a)
-				copy(b, implFactor)
-				mulConst(reg, b)
-				floats.Add(a, b)
-				mulConst(lr, a)
-				floats.Sub(svd.ImplFactor[ir.Id], a)
+			nRating := len(svd.UserRatings[innerUserId])
+			var wg sync.WaitGroup
+			wg.Add(nJobs)
+			for j := 0; j < nJobs; j++ {
+				go func(jobId int) {
+					low := nRating * jobId / nJobs
+					high := nRating * (jobId + 1) / nJobs
+					a := make([]float64, nFactors)
+					b := make([]float64, nFactors)
+					for i := low; i < high; i++ {
+						implFactor := svd.ImplFactor[svd.UserRatings[innerUserId][i].Id]
+						copy(a, itemFactor)
+						mulConst(diff, a)
+						divConst(math.Sqrt(float64(len(svd.UserRatings[innerUserId]))), a)
+						copy(b, implFactor)
+						mulConst(reg, b)
+						floats.Add(a, b)
+						mulConst(lr, a)
+						floats.Sub(svd.ImplFactor[svd.UserRatings[innerUserId][i].Id], a)
+					}
+					wg.Done()
+				}(j)
 			}
+			wg.Wait()
 		}
 	}
 }
