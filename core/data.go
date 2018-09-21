@@ -28,7 +28,7 @@ type _BuiltInDataSet struct {
 
 var builtInDataSets = map[string]_BuiltInDataSet{
 	"ml-100k": {
-		url:  "http://files.grouplens.org/datasets/movielens/ml-100k.zip",
+		url:  "https://cdn.sine-x.com/datasets/movielens/ml-100k.zip",
 		path: "ml-100k/u.data",
 		sep:  "\t",
 	},
