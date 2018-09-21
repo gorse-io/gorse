@@ -1,5 +1,10 @@
 package core
 
+import (
+	"runtime"
+	"sync"
+)
+
 // A simple yet accurate collaborative filtering algorithm[1].
 //
 // [1] Lemire, Daniel, and Anna Maclachlan. "Slope one predictors
@@ -14,7 +19,8 @@ type SlopeOne struct {
 	Dev         [][]float64 // The average differences between the LeftRatings of i and those of j
 }
 
-// Create a slop one model.
+// Create a slop one model. Parameters:
+//	 nJobs		- The number of goroutines to compute deviation. Default is the number of CPUs.
 func NewSlopOne(params Parameters) *SlopeOne {
 	so := new(SlopeOne)
 	so.Params = params
@@ -45,6 +51,7 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 }
 
 func (so *SlopeOne) Fit(trainSet TrainSet) {
+	nJobs := runtime.NumCPU()
 	so.Data = trainSet
 	so.GlobalMean = trainSet.GlobalMean
 	so.UserRatings = trainSet.UserRatings()
@@ -52,24 +59,35 @@ func (so *SlopeOne) Fit(trainSet TrainSet) {
 	so.Dev = newZeroMatrix(trainSet.ItemCount, trainSet.ItemCount)
 	itemRatings := trainSet.ItemRatings()
 	sorts(itemRatings)
-	for i := range itemRatings {
-		for j := 0; j < i; j++ {
-			count, sum, ptr := 0.0, 0.0, 0
-			// Find common user's ratings
-			for k := 0; k < len(itemRatings[i]) && ptr < len(itemRatings[j]); k++ {
-				ur := itemRatings[i][k]
-				for ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id < ur.Id {
-					ptr++
-				}
-				if ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id == ur.Id {
-					count++
-					sum += ur.Rating - itemRatings[j][ptr].Rating
+	length := len(itemRatings)
+	var wg sync.WaitGroup
+	wg.Add(nJobs)
+	for j := 0; j < nJobs; j++ {
+		go func(jobId int) {
+			begin := length * jobId / nJobs
+			end := length * (jobId + 1) / nJobs
+			for i := begin; i < end; i++ {
+				for j := 0; j < i; j++ {
+					count, sum, ptr := 0.0, 0.0, 0
+					// Find common user's ratings
+					for k := 0; k < len(itemRatings[i]) && ptr < len(itemRatings[j]); k++ {
+						ur := itemRatings[i][k]
+						for ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id < ur.Id {
+							ptr++
+						}
+						if ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id == ur.Id {
+							count++
+							sum += ur.Rating - itemRatings[j][ptr].Rating
+						}
+					}
+					if count > 0 {
+						so.Dev[i][j] = sum / count
+						so.Dev[j][i] = -so.Dev[i][j]
+					}
 				}
 			}
-			if count > 0 {
-				so.Dev[i][j] = sum / count
-				so.Dev[j][i] = -so.Dev[i][j]
-			}
-		}
+			wg.Done()
+		}(j)
 	}
+	wg.Wait()
 }
