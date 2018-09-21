@@ -7,31 +7,34 @@ package core
 // of the 2005 SIAM International Conference on Data Mining.
 // Society for Industrial and Applied Mathematics, 2005.
 type SlopeOne struct {
-	globalMean  float64
-	userRatings [][]IdRating
-	userMeans   []float64
-	dev         [][]float64 // The average differences between the leftRatings of i and those of j
-	trainSet    TrainSet
+	Base
+	GlobalMean  float64
+	UserRatings [][]IdRating
+	UserMeans   []float64
+	Dev         [][]float64 // The average differences between the LeftRatings of i and those of j
 }
 
-func NewSlopOne() *SlopeOne {
-	return new(SlopeOne)
+// Create a slop one model.
+func NewSlopOne(params Parameters) *SlopeOne {
+	so := new(SlopeOne)
+	so.Params = params
+	return so
 }
 
 func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
-	innerUserId := so.trainSet.ConvertUserId(userId)
-	innerItemId := so.trainSet.ConvertItemId(itemId)
+	innerUserId := so.Data.ConvertUserId(userId)
+	innerItemId := so.Data.ConvertItemId(itemId)
 	prediction := 0.0
 	if innerUserId != NewId {
-		prediction = so.userMeans[innerUserId]
+		prediction = so.UserMeans[innerUserId]
 	} else {
-		prediction = so.globalMean
+		prediction = so.GlobalMean
 	}
 	if innerItemId != NewId {
 		sum, count := 0.0, 0.0
-		for _, ir := range so.userRatings[innerUserId] {
-			sum += so.dev[innerItemId][ir.Id]
+		for _, ir := range so.UserRatings[innerUserId] {
+			sum += so.Dev[innerItemId][ir.Id]
 			count++
 		}
 		if count > 0 {
@@ -41,13 +44,12 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-// Fit a SlopeOne model
-func (so *SlopeOne) Fit(trainSet TrainSet, params Parameters) {
-	so.trainSet = trainSet
-	so.globalMean = trainSet.GlobalMean
-	so.userRatings = trainSet.UserRatings()
-	so.userMeans = means(so.userRatings)
-	so.dev = newZeroMatrix(trainSet.ItemCount, trainSet.ItemCount)
+func (so *SlopeOne) Fit(trainSet TrainSet) {
+	so.Data = trainSet
+	so.GlobalMean = trainSet.GlobalMean
+	so.UserRatings = trainSet.UserRatings()
+	so.UserMeans = means(so.UserRatings)
+	so.Dev = newZeroMatrix(trainSet.ItemCount, trainSet.ItemCount)
 	itemRatings := trainSet.ItemRatings()
 	sorts(itemRatings)
 	for i := range itemRatings {
@@ -65,8 +67,8 @@ func (so *SlopeOne) Fit(trainSet TrainSet, params Parameters) {
 				}
 			}
 			if count > 0 {
-				so.dev[i][j] = sum / count
-				so.dev[j][i] = -so.dev[i][j]
+				so.Dev[i][j] = sum / count
+				so.Dev[j][i] = -so.Dev[i][j]
 			}
 		}
 	}
