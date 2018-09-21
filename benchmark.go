@@ -11,9 +11,9 @@ import (
 
 func main() {
 	// Parse arguments
-	dataset := "ml-100k"
+	dataSet := "ml-100k"
 	if len(os.Args) > 1 {
-		dataset = os.Args[1]
+		dataSet = os.Args[1]
 	}
 	// Cross validation
 	estimators := map[string]core.Estimator{
@@ -29,7 +29,7 @@ func main() {
 		"k-NN Z-Score":  core.NewKNNWithZScore(nil),
 		"Co-Clustering": core.NewCoClustering(nil),
 	}
-	set := core.LoadDataFromBuiltIn(dataset)
+	set := core.LoadDataFromBuiltIn(dataSet)
 	var start time.Time
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Name", "RMSE", "MAE", "Time"})

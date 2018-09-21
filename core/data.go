@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -37,6 +38,19 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		path: "ml-1m/ratings.dat",
 		sep:  "::",
 	},
+}
+
+// The data directories
+var (
+	downloadDir string
+	datasetDir  string
+)
+
+func init() {
+	usr, _ := user.Current()
+	gorseDir := usr.HomeDir + "/.gorse"
+	downloadDir = gorseDir + "/download"
+	datasetDir = gorseDir + "/datasets"
 }
 
 /* Data Set */
@@ -240,12 +254,10 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	if !exist {
 		log.Fatal("no such data set", dataSetName)
 	}
-	const dataFolder = "data"
-	const tempFolder = "temp"
-	dataFileName := filepath.Join(dataFolder, dataSet.path)
+	dataFileName := filepath.Join(datasetDir, dataSet.path)
 	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
-		zipFileName, _ := downloadFromUrl(dataSet.url, tempFolder)
-		unzip(zipFileName, dataFolder)
+		zipFileName, _ := downloadFromUrl(dataSet.url, downloadDir)
+		unzip(zipFileName, datasetDir)
 	}
 	return LoadDataFromFile(dataFileName, dataSet.sep)
 }

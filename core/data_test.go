@@ -26,18 +26,18 @@ func MD5Sum(fileName string) string {
 
 func TestDownloadFromUrl(t *testing.T) {
 	// Download
-	downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", "download")
+	fileName, _ := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
 	// Checksum
-	if MD5Sum("download/ml-100k.zip") != "0e33842e24a9c977be4e0107933c0723" {
+	if MD5Sum(fileName) != "0e33842e24a9c977be4e0107933c0723" {
 		t.Fatal("MD5 sum doesn't match")
 	}
 }
 
 func TestUnzip(t *testing.T) {
 	// Download
-	downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", "download")
+	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
 	// Extract files
-	fileNames, err := unzip("download/ml-100k.zip", "unzip")
+	fileNames, err := unzip(zipName, datasetDir)
 	// Check
 	if err != nil {
 		t.Fatal("unzip file failed ", err)
