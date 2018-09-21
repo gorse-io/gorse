@@ -17,17 +17,17 @@ func main() {
 	}
 	// Cross validation
 	estimators := map[string]core.Estimator{
-		"Random":        core.NewRandom(),
-		"BaseLine":      core.NewBaseLine(),
-		"SVD":           core.NewSVD(),
-		"SVD++":         core.NewSVDpp(),
-		"NMF":           core.NewNMF(),
-		"Slope One":     core.NewSlopOne(),
-		"KNN":           core.NewKNN(),
-		"Centered k-NN": core.NewKNNWithMean(),
-		"k-NN Baseline": core.NewKNNBaseLine(),
-		"k-NN Z-Score":  core.NewKNNWithZScore(),
-		"Co-Clustering": core.NewCoClustering(),
+		"Random":        core.NewRandom(nil),
+		"BaseLine":      core.NewBaseLine(nil),
+		"SVD":           core.NewSVD(nil),
+		"SVD++":         core.NewSVDpp(nil),
+		"NMF":           core.NewNMF(nil),
+		"Slope One":     core.NewSlopOne(nil),
+		"KNN":           core.NewKNN(nil),
+		"Centered k-NN": core.NewKNNWithMean(nil),
+		"k-NN Baseline": core.NewKNNBaseLine(nil),
+		"k-NN Z-Score":  core.NewKNNWithZScore(nil),
+		"Co-Clustering": core.NewCoClustering(nil),
 	}
 	set := core.LoadDataFromBuiltIn(dataset)
 	var start time.Time

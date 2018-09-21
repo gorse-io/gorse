@@ -123,7 +123,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 
 func (random *Random) Fit(trainSet TrainSet) {
 	ratings := trainSet.Ratings
-	random.Mean = stat.Mean(ratings, nil)
+	random.Mean = trainSet.GlobalMean
 	random.StdDev = stat.StdDev(ratings, nil)
 	random.Low, random.High = trainSet.RatingRange()
 }

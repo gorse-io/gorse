@@ -35,7 +35,6 @@ func TestSVD(t *testing.T) {
 	Evaluate(t, NewSVD(nil), LoadDataFromBuiltIn("ml-100k"), 0.934, 0.737)
 }
 
-// Comment out SVD++ test to avoid time out
 //func TestSVDPP(t *testing.T) {
 //	Evaluate(t, NewSVDpp(), LoadDataFromBuiltIn(), 0.92, 0.722)
 //}

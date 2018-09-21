@@ -39,7 +39,7 @@ func selectInt(a []int, indices []int) []int {
 	return ret
 }
 
-// Linear algebra
+/* Linear Algebra */
 
 func abs(dst []float64) {
 	for i := 0; i < len(dst); i++ {
@@ -59,7 +59,7 @@ func divConst(c float64, dst []float64) {
 	}
 }
 
-// Generator
+/* Generator */
 
 func newNormalVector(size int, mean, stdDev float64) []float64 {
 	ret := make([]float64, size)
