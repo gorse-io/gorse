@@ -7,9 +7,9 @@
 
 `gorse` is a recommender system engine implemented by the go programming language provide
 
-- Algorithm: Predict ratings based on collaborate filtering. Including matrix factorization and neighborhood-based method.
-- Data: Load data from the built-in dataset or file. Split data to train set and test set.
-- Evaluator: Evaluate models by cross-validation using RMSE or MAE.
+- **Algorithm**: Predict ratings based on collaborate filtering. Including matrix factorization and neighborhood-based method.
+- **Data**: Load data from the built-in dataset or file. Split data to train set and test set.
+- **Evaluator**: Evaluate models by cross-validation using RMSE or MAE.
 
 ## Installation
 
@@ -23,7 +23,7 @@ go get -t -v -u github.com/ZhangZhenghao/gorse/core
 // Load build-in data
 data := core.LoadDataFromBuiltIn("ml-100k")
 // Create a recommender
-algo := core.NewSVD()
+algo := core.NewSVD(nil)
 // Cross validate
 cv := core.CrossValidate(algo, data, []core.Evaluator{core.RMSE, core.MAE},5, 0, nil)
 // Print RMSE & MAE

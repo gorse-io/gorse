@@ -39,8 +39,8 @@ func main() {
 			5, 0, nil)
 		tm := time.Since(start)
 		table.Append([]string{name,
-			fmt.Sprintf("%f", stat.Mean(out[0].Tests, nil)),
-			fmt.Sprintf("%f", stat.Mean(out[1].Tests, nil)),
+			fmt.Sprintf("%.3f", stat.Mean(out[0].Tests, nil)),
+			fmt.Sprintf("%.3f", stat.Mean(out[1].Tests, nil)),
 			fmt.Sprint(tm),
 		})
 	}

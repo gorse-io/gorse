@@ -32,17 +32,17 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv
 		testFold := testFolds[i]
 		estimator.SetParams(params)
 		estimator.Fit(trainFold)
-		// Evaluate on train set
-		trainRatings := trainFold.Ratings
-		trainPredictions := trainFold.Predict(estimator)
-		for j := 0; j < len(ret); j++ {
-			ret[j].Trains[i] = metrics[j](trainPredictions, trainRatings)
-		}
 		// Evaluate on test set
 		testRatings := testFold.Ratings
 		testPredictions := testFold.Predict(estimator)
 		for j := 0; j < len(ret); j++ {
 			ret[j].Tests[i] = metrics[j](testPredictions, testRatings)
+		}
+		// Evaluate on train set
+		trainRatings := trainFold.Ratings
+		trainPredictions := trainFold.Predict(estimator)
+		for j := 0; j < len(ret); j++ {
+			ret[j].Trains[i] = metrics[j](trainPredictions, trainRatings)
 		}
 	}
 	return ret
