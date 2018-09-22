@@ -34,9 +34,19 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		sep:  "\t",
 	},
 	"ml-1m": {
-		url:  "http://files.grouplens.org/datasets/movielens/ml-1m.zip",
+		url:  "https://cdn.sine-x.com/datasets/movielens/ml-1m.zip",
 		path: "ml-1m/ratings.dat",
 		sep:  "::",
+	},
+	"ml-10m": {
+		url:  "https://cdn.sine-x.com/datasets/movielens/ml-10m.zip",
+		path: "ml-10M100K/ratings.dat",
+		sep:  "::",
+	},
+	"ml-20m": {
+		url:  "https://cdn.sine-x.com/datasets/movielens/ml-20m.zip",
+		path: "ml-20m/ratings.csv",
+		sep:  ",",
 	},
 }
 

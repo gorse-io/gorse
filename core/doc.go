@@ -1,5 +1,3 @@
 package core
 
-/*
-	The algorithm package of gorse.
-*/
+// Package core implements datasets, estimators and evaluators for recommender system.
