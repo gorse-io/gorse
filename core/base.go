@@ -60,6 +60,14 @@ func (parameters Parameters) GetFloat64(name string, _default float64) float64 {
 	return _default
 }
 
+// Get a string parameter
+func (parameters Parameters) GetString(name string, _default string) string {
+	if val, exist := parameters[name]; exist {
+		return val.(string)
+	}
+	return _default
+}
+
 // Get a similarity function from parameters.
 func (parameters Parameters) GetSim(name string, _default Sim) Sim {
 	if val, exist := parameters[name]; exist {

@@ -262,7 +262,7 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	// Extract data set information
 	dataSet, exist := builtInDataSets[dataSetName]
 	if !exist {
-		log.Fatal("no such data set", dataSetName)
+		log.Fatal("no such data set ", dataSetName)
 	}
 	dataFileName := filepath.Join(datasetDir, dataSet.path)
 	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {

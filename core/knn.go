@@ -10,7 +10,7 @@ import (
 // KNN for collaborate filtering.
 type KNN struct {
 	Base
-	KNNType      int
+	KNNType      string
 	GlobalMean   float64
 	Sims         [][]float64
 	LeftRatings  [][]IdRating
@@ -22,10 +22,10 @@ type KNN struct {
 
 // KNN type
 const (
-	basic    = 0
-	centered = 1
-	zScore   = 2
-	baseline = 3
+	basic    = "basic"
+	centered = "centered"
+	zScore   = "zscore"
+	baseline = "baseline"
 )
 
 // Create a KNN model. Parameters:
@@ -36,8 +36,8 @@ const (
 //	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNN(params Parameters) *KNN {
 	knn := new(KNN)
-	knn.KNNType = basic
 	knn.Params = params
+	knn.KNNType = knn.Params.GetString("type", basic)
 	return knn
 }
 
@@ -49,8 +49,8 @@ func NewKNN(params Parameters) *KNN {
 //	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNWithMean(params Parameters) *KNN {
 	knn := new(KNN)
-	knn.KNNType = centered
 	knn.Params = params
+	knn.KNNType = knn.Params.GetString("type", centered)
 	return knn
 }
 
@@ -62,8 +62,8 @@ func NewKNNWithMean(params Parameters) *KNN {
 //	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNWithZScore(params Parameters) *KNN {
 	knn := new(KNN)
-	knn.KNNType = zScore
 	knn.Params = params
+	knn.KNNType = knn.Params.GetString("type", zScore)
 	return knn
 }
 
@@ -75,8 +75,8 @@ func NewKNNWithZScore(params Parameters) *KNN {
 //	 nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNBaseLine(params Parameters) *KNN {
 	knn := new(KNN)
-	knn.KNNType = baseline
 	knn.Params = params
+	knn.KNNType = knn.Params.GetString("type", baseline)
 	return knn
 }
 
