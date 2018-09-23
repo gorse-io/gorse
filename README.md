@@ -38,6 +38,10 @@ fmt.Printf("RMSE = %f, MAE = %f\n",
 RMSE = 0.938904, MAE = 0.737349
 ```
 
+## Tutorial
+
+- [实现一个推荐系统引擎(一)：评分预测](https://sine-x.com/gorse-1/)
+
 ## Benchmarks
 
 All algorithms are tested on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) and 16.0GB RAM. RMSE scores and MAE scores are used to check the correctness comparing to other implementation but not the best performance. Parameters are set as default values and identical to other implementation.

@@ -257,7 +257,11 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 
 /* Loader */
 
-// Load build in data set
+// Load build in data set. Now support:
+//   ml-100k	- MovieLens 100K
+//   ml-1m		- MovieLens 1M
+//   ml-10m		- MovieLens 10M
+//   ml-20m		- MovieLens 20M
 func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	// Extract data set information
 	dataSet, exist := builtInDataSets[dataSetName]
@@ -269,11 +273,24 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 		zipFileName, _ := downloadFromUrl(dataSet.url, downloadDir)
 		unzip(zipFileName, datasetDir)
 	}
-	return LoadDataFromFile(dataFileName, dataSet.sep)
+	return LoadDataFromFile(dataFileName, dataSet.sep, false)
 }
 
-// Load data from file
-func LoadDataFromFile(fileName string, sep string) DataSet {
+// Load data from text file. The text file should be:
+//
+//   [optional header]
+// 	 <userId 1> <sep> <itemId 1> <sep> <rating 1> <sep> <extras>
+// 	 <userId 2> <sep> <itemId 2> <sep> <rating 2> <sep> <extras>
+// 	 <userId 3> <sep> <itemId 3> <sep> <rating 3> <sep> <extras>
+//	 ...
+//
+// For example, the `u.data` from MovieLens 100K is:
+//
+//  196\t242\t3\t881250949
+//  186\t302\t3\t891717742
+//  22\t377\t1\t878887116
+//
+func LoadDataFromFile(fileName string, sep string, hasHeader bool) DataSet {
 	users := make([]int, 0)
 	items := make([]int, 0)
 	ratings := make([]float64, 0)
@@ -287,6 +304,11 @@ func LoadDataFromFile(fileName string, sep string) DataSet {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
+		// Ignore header
+		if hasHeader {
+			hasHeader = false
+			continue
+		}
 		fields := strings.Split(line, sep)
 		user, _ := strconv.Atoi(fields[0])
 		item, _ := strconv.Atoi(fields[1])
