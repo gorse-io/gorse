@@ -53,14 +53,16 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 // The data directories
 var (
 	downloadDir string
-	datasetDir  string
+	dataSetDir  string
+	tempDir     string
 )
 
 func init() {
 	usr, _ := user.Current()
 	gorseDir := usr.HomeDir + "/.gorse"
 	downloadDir = gorseDir + "/download"
-	datasetDir = gorseDir + "/datasets"
+	dataSetDir = gorseDir + "/datasets"
+	tempDir = gorseDir + "/temp"
 }
 
 /* Data Set */
@@ -81,17 +83,17 @@ func NewRawSet(users, items []int, ratings []float64) DataSet {
 	}
 }
 
-// Get the number of ratings in the data set.
+// Length returns the number of ratings in the data set.
 func (dataSet *DataSet) Length() int {
 	return len(dataSet.Ratings)
 }
 
-// Get the i-th <userId, itemId, rating>.
+// Index returns the i-th <userId, itemId, rating>.
 func (dataSet *DataSet) Index(i int) (int, int, float64) {
 	return dataSet.Users[i], dataSet.Items[i], dataSet.Ratings[i]
 }
 
-// Get a subset of the data set.
+// Subset returns a subset of the data set.
 func (dataSet *DataSet) SubSet(indices []int) DataSet {
 	return NewRawSet(selectInt(dataSet.Users, indices),
 		selectInt(dataSet.Items, indices),
@@ -268,10 +270,10 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	if !exist {
 		log.Fatal("no such data set ", dataSetName)
 	}
-	dataFileName := filepath.Join(datasetDir, dataSet.path)
+	dataFileName := filepath.Join(dataSetDir, dataSet.path)
 	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
 		zipFileName, _ := downloadFromUrl(dataSet.url, downloadDir)
-		unzip(zipFileName, datasetDir)
+		unzip(zipFileName, dataSetDir)
 	}
 	return LoadDataFromFile(dataFileName, dataSet.sep, false)
 }

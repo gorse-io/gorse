@@ -37,7 +37,7 @@ func TestUnzip(t *testing.T) {
 	// Download
 	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
 	// Extract files
-	fileNames, err := unzip(zipName, datasetDir)
+	fileNames, err := unzip(zipName, dataSetDir)
 	// Check
 	if err != nil {
 		t.Fatal("unzip file failed ", err)
