@@ -5,7 +5,7 @@
 [![Document](https://godoc.org/github.com/ZhangZhenghao/gorse?status.svg)](https://godoc.org/github.com/ZhangZhenghao/gorse)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ZhangZhenghao/gorse)](https://goreportcard.com/report/github.com/ZhangZhenghao/gorse)
 
-`gorse` is a recommender system engine implemented by the go programming language provide
+`gorse` is a recommender system engine implemented by the go programming language. It provides
 
 - **Algorithm**: Predict ratings based on collaborate filtering. Including matrix factorization and neighborhood-based method.
 - **Data**: Load data from the built-in dataset or file. Split data to train set and test set.
@@ -46,33 +46,33 @@ RMSE = 0.938904, MAE = 0.737349
 
 All algorithms are tested on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) and 16.0GB RAM. RMSE scores and MAE scores are used to check the correctness comparing to other implementation but not the best performance. Parameters are set as default values and identical to other implementation.
 
-|   [Movielens 100K](http://grouplens.org/datasets/movielens/100k)   |   RMSE   |   MAE    |    Time  | RMSE[REF] |  MAE[REF]  |
-| - | - | - | - | - | - |
-| [Random](https://godoc.org/github.com/ZhangZhenghao/gorse/core#Random)        | 1.518610 | 1.218645 | 0:00:01   | 1.514[1] | 1.215[1] |
-| [BaseLine](https://godoc.org/github.com/ZhangZhenghao/gorse/core#BaseLine) | 0.943741 | 0.741738 | 0:00:01  | 0.944[1] | 0.748[1] |
-| [SVD](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVD) | 0.938904 | 0.737349 | 0:00:05  | 0.934[1] | 0.737[1] |
-| [SVD++](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.922710 | 0.721740 | 0:03:27 | 0.92[1] | 0.722[1] |
-| [NMF](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NMF)[3] | 0.970431 | 0.762025 | 0:00:07  | 0.963[1] | 0.758[1] |
-| [KNN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNN) | 0.978720 | 0.773133 | 0:00:03 | 0.98[1] | 0.774[1] |
-| [Centered k-NN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithMean) | 0.952928 | 0.751693 | 0:00:03 | 0.951[1] | 0.749[1] |
-| [k-NN Z-Score](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithZScore) | 0.953098 | 0.748464 | 0:00:03 |   |   |
-| [k-NN Baseline](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNBaseLine) | 0.933512 | 0.734706 | 0:00:04 | 0.931[1] | 0.733[1] |
-| [Slope One](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SlopeOne)[4] | 0.940748 | 0.741195 | 0:00:02 | 0.946[1] | 0.743[1] |
-| [Co-Clustering](https://godoc.org/github.com/ZhangZhenghao/gorse/core#CoClustering)[5] | 0.968219 | 0.760593 | 0:00:01 | 0.963[1] | 0.753[1] |
+| ml-100k                                                      | RMSE  | MAE   | Time    |
+| ------------------------------------------------------------ | ----- | ----- | ------- |
+| [SVD](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#SVD) | 0.939 | 0.737 | 0:00:02 |
+| [SVD++](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.925 | 0.722 | 0:01:41 |
+| [NMF[3]](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NMF) | 0.970 | 0.761 | 0:00:02 |
+| [Slope One[4]](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#SlopeOne) | 0.941 | 0.741 | 0:00:01 |
+| [KNN](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNN) | 0.979 | 0.773 | 0:00:03 |
+| [Centered k-NN](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithMean) | 0.953 | 0.752 | 0:00:03 |
+| [k-NN Baseline](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNBaseLine) | 0.934 | 0.735 | 0:00:03 |
+| [k-NN Z-Score](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithZScore) | 0.953 | 0.748 | 0:00:03 |
+| [Co-Clustering[5]](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#CoClustering) | 0.968 | 0.761 | 0:00:00 |
+| [BaseLine](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#BaseLine) | 0.944 | 0.742 | 0:00:00 |
+| [Random](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#Random) | 1.518 | 1.218 | 0:00:00 |
 
-|   [Movielens 1M](http://grouplens.org/datasets/movielens/1m)   |   RMSE   |   MAE    |    Time  | RMSE[REF] |  MAE[REF]  |
-| - | - | - | - | - | - |
-| [Random](https://godoc.org/github.com/ZhangZhenghao/gorse/core#Random) | 1.506756 | 1.208171 | 0:00:01   | 1.504[1]|	1.206[1]|
-| [BaseLine](https://godoc.org/github.com/ZhangZhenghao/gorse/core#BaseLine) | 0.909781 | 0.717029 | 0:00:09   | 0.909[1]|	0.719[1]|
-| [SVD](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVD) | 0.877262 | 0.688397 | 0:01:07 | 0.873[1]|	0.686[1]|
-| [SVD++](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.865424 | 0.677274 | 0:59:08 |0.862[1]|	0.673[1]|
-| [NMF](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NMF)[3] | 0.917979 | 0.726059 | 0:01:33 | 0.916[1] |	0.724[1] |
-| [KNN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNN) | 0.922540 | 0.727227 | 0:03:15 | 0.923[1]|	0.727[1]|
-| [Centered k-NN](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithMean) | 0.929107 | 0.738920 | 0:03:39 | 0.929[1]|	0.738[1]|
-| [k-NN Z-Score](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithZScore) | 0.930754 | 0.737239 | 0:03:38 | | |
-| [k-NN Baseline](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNBaseLine) | 0.896017 | 0.707469 | 0:03:36 | 0.895[1]|	0.706[1]|
-| [Slope One](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SlopeOne)[4] | 0.908397 | 0.717344 | 0:00:54 | 0.907[1]|	0.715[1]|
-| [Co-Clustering](https://godoc.org/github.com/ZhangZhenghao/gorse/core#CoClustering)[5] | 0.916752 | 0.720052 | 0:00:10 |0.915[1]|0.717[1]|
+| ml-1m                                                        | RMSE  | MAE   | Time    |
+| ------------------------------------------------------------ | ----- | ----- | ------- |
+| [SVD](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVD) | 0.877 | 0.688 | 0:00:29 |
+| [SVD++](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SVDpp) | 0.865 | 0.678 | 0:27:54 |
+| [NMF[3]](https://godoc.org/github.com/ZhangZhenghao/gorse/core#NMF) | 0.918 | 0.726 | 0:00:44 |
+| [Slope One[4]](https://godoc.org/github.com/ZhangZhenghao/gorse/core#SlopeOne) | 0.906 | 0.715 | 0:00:23 |
+| [KNN](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNN) | 0.923 | 0.727 | 0:03:27 |
+| [Centered k-NN](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithMean) | 0.929 | 0.739 | 0:03:40 |
+| [k-NN Baseline](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNBaseLine) | 0.896 | 0.707 | 0:03:36 |
+| [k-NN Z-Score](https://goDoc.org/github.com/ZhangZhenghao/gorse/core#NewKNNWithZScore) | 0.931 | 0.737 | 0:03:28 |
+| [Co-Clustering[5]](https://godoc.org/github.com/ZhangZhenghao/gorse/core#CoClustering) | 0.917 | 0.720 | 0:00:04 |
+| [BaseLine](https://godoc.org/github.com/ZhangZhenghao/gorse/core#BaseLine) | 0.910 | 0.717 | 0:00:03 |
+| [Random](https://godoc.org/github.com/ZhangZhenghao/gorse/core#Random) | 1.505 | 1.207 | 0:00:01 |
 
 ## References
 

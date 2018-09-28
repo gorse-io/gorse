@@ -2,7 +2,6 @@ package core
 
 import (
 	"runtime"
-	"sync"
 )
 
 // A simple yet accurate collaborative filtering algorithm[1].
@@ -19,7 +18,7 @@ type SlopeOne struct {
 	Dev         [][]float64 // The average differences between the LeftRatings of i and those of j
 }
 
-// Create a slop one model. Parameters:
+// NewSlopOne creates a slop one model. Parameters:
 //	 nJobs		- The number of goroutines to compute deviation. Default is the number of CPUs.
 func NewSlopOne(params Parameters) *SlopeOne {
 	so := new(SlopeOne)
@@ -27,6 +26,7 @@ func NewSlopOne(params Parameters) *SlopeOne {
 	return so
 }
 
+// Predict by a SlopOne model.
 func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
 	innerUserId := so.Data.ConvertUserId(userId)
@@ -50,6 +50,7 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
+// Fit a SlopeOne model.
 func (so *SlopeOne) Fit(trainSet TrainSet) {
 	nJobs := runtime.NumCPU()
 	so.Data = trainSet
@@ -59,35 +60,26 @@ func (so *SlopeOne) Fit(trainSet TrainSet) {
 	so.Dev = newZeroMatrix(trainSet.ItemCount, trainSet.ItemCount)
 	itemRatings := trainSet.ItemRatings()
 	sorts(itemRatings)
-	length := len(itemRatings)
-	var wg sync.WaitGroup
-	wg.Add(nJobs)
-	for j := 0; j < nJobs; j++ {
-		go func(jobId int) {
-			begin := length * jobId / nJobs
-			end := length * (jobId + 1) / nJobs
-			for i := begin; i < end; i++ {
-				for j := 0; j < i; j++ {
-					count, sum, ptr := 0.0, 0.0, 0
-					// Find common user's ratings
-					for k := 0; k < len(itemRatings[i]) && ptr < len(itemRatings[j]); k++ {
-						ur := itemRatings[i][k]
-						for ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id < ur.Id {
-							ptr++
-						}
-						if ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id == ur.Id {
-							count++
-							sum += ur.Rating - itemRatings[j][ptr].Rating
-						}
+	parallel(len(itemRatings), nJobs, func(begin, end int) {
+		for i := begin; i < end; i++ {
+			for j := 0; j < i; j++ {
+				count, sum, ptr := 0.0, 0.0, 0
+				// Find common user's ratings
+				for k := 0; k < len(itemRatings[i]) && ptr < len(itemRatings[j]); k++ {
+					ur := itemRatings[i][k]
+					for ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id < ur.Id {
+						ptr++
 					}
-					if count > 0 {
-						so.Dev[i][j] = sum / count
-						so.Dev[j][i] = -so.Dev[i][j]
+					if ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id == ur.Id {
+						count++
+						sum += ur.Rating - itemRatings[j][ptr].Rating
 					}
 				}
+				if count > 0 {
+					so.Dev[i][j] = sum / count
+					so.Dev[j][i] = -so.Dev[i][j]
+				}
 			}
-			wg.Done()
-		}(j)
-	}
-	wg.Wait()
+		}
+	})
 }

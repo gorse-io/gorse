@@ -4,21 +4,23 @@ import (
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"math"
+	"reflect"
 )
 
+// ParameterGrid contains candidate for grid search.
 type ParameterGrid map[string][]interface{}
 
 /* Cross Validation */
 
-// The return data structure of cross validate
+// CrossValidateResult contains the result of cross validate
 type CrossValidateResult struct {
 	Trains []float64
 	Tests  []float64
 }
 
-// Cross validation
+// CrossValidation evaluates a model by k-fold cross validation.
 func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv int, seed int64,
-	params Parameters) []CrossValidateResult {
+	params Parameters, nJobs int) []CrossValidateResult {
 	// Create return structures
 	ret := make([]CrossValidateResult, len(metrics))
 	for i := 0; i < len(ret); i++ {
@@ -27,30 +29,34 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv
 	}
 	// Split data set
 	trainFolds, testFolds := dataSet.KFold(cv, seed)
-	for i := 0; i < cv; i++ {
-		trainFold := trainFolds[i]
-		testFold := testFolds[i]
-		estimator.SetParams(params)
-		estimator.Fit(trainFold)
-		// Evaluate on test set
-		testRatings := testFold.Ratings
-		testPredictions := testFold.Predict(estimator)
-		for j := 0; j < len(ret); j++ {
-			ret[j].Tests[i] = metrics[j](testPredictions, testRatings)
+	parallel(cv, nJobs, func(begin, end int) {
+		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Estimator)
+		Copy(cp, estimator)
+		for i := begin; i < end; i++ {
+			trainFold := trainFolds[i]
+			testFold := testFolds[i]
+			cp.SetParams(params)
+			cp.Fit(trainFold)
+			// Evaluate on test set
+			testRatings := testFold.Ratings
+			testPredictions := testFold.Predict(cp)
+			for j := 0; j < len(ret); j++ {
+				ret[j].Tests[i] = metrics[j](testPredictions, testRatings)
+			}
+			// Evaluate on train set
+			trainRatings := trainFold.Ratings
+			trainPredictions := trainFold.Predict(cp)
+			for j := 0; j < len(ret); j++ {
+				ret[j].Trains[i] = metrics[j](trainPredictions, trainRatings)
+			}
 		}
-		// Evaluate on train set
-		trainRatings := trainFold.Ratings
-		trainPredictions := trainFold.Predict(estimator)
-		for j := 0; j < len(ret); j++ {
-			ret[j].Trains[i] = metrics[j](trainPredictions, trainRatings)
-		}
-	}
+	})
 	return ret
 }
 
 /* Model Selection */
 
-// The return structure of grid search
+// GridSearchResult contains the return of grid search.
 type GridSearchResult struct {
 	BestScore  float64
 	BestParams Parameters
@@ -59,9 +65,9 @@ type GridSearchResult struct {
 	AllParams  []Parameters
 }
 
-// Tune algorithm parameters with GridSearchCV
+// GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
-	evaluators []Evaluator, cv int, seed int64) []GridSearchResult {
+	evaluators []Evaluator, cv int, seed int64, nJobs int) []GridSearchResult {
 	// Retrieve parameter names and length
 	params := make([]string, 0, len(paramGrid))
 	count := 1
@@ -82,7 +88,7 @@ func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
 	dfs = func(deep int, options Parameters) {
 		if deep == len(params) {
 			// Cross validate
-			cvResults := CrossValidate(estimator, dataSet, evaluators, cv, seed, options)
+			cvResults := CrossValidate(estimator, dataSet, evaluators, cv, seed, options, nJobs)
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
 				results[i].AllParams = append(results[i].AllParams, options.Copy())
@@ -109,10 +115,10 @@ func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
 
 /* Evaluator */
 
-// Evaluator function
+// Evaluator function type.
 type Evaluator func([]float64, []float64) float64
 
-// Root mean square error.
+// RMSE is root mean square error.
 func RMSE(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))
 	floats.SubTo(temp, predictions, truth)
@@ -120,7 +126,7 @@ func RMSE(predictions []float64, truth []float64) float64 {
 	return math.Sqrt(stat.Mean(temp, nil))
 }
 
-// Mean absolute error.
+// MAE is mean absolute error.
 func MAE(predictions []float64, truth []float64) float64 {
 	temp := make([]float64, len(predictions))
 	floats.SubTo(temp, predictions, truth)

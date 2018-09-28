@@ -3,6 +3,7 @@ package core
 import (
 	"math"
 	"math/rand"
+	"sync"
 )
 
 func concatenate(arrs ...[]int) []int {
@@ -126,4 +127,20 @@ func resetZeroMatrix(m [][]float64) {
 			m[i][j] = 0
 		}
 	}
+}
+
+/* Parallel Computing */
+
+func parallel(nTask int, nJob int, worker func(begin, end int)) {
+	var wg sync.WaitGroup
+	wg.Add(nJob)
+	for j := 0; j < nJob; j++ {
+		go func(jobId int) {
+			begin := nTask * jobId / nJob
+			end := nTask * (jobId + 1) / nJob
+			worker(begin, end)
+			wg.Done()
+		}(j)
+	}
+	wg.Wait()
 }

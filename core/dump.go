@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/gob"
 	"os"
 	"path/filepath"
@@ -30,4 +31,12 @@ func Save(fileName string, object interface{}) error {
 		encoder.Encode(object)
 	}
 	return err
+}
+
+func Copy(dst, src interface{}) {
+	buffer := new(bytes.Buffer)
+	encoder := gob.NewEncoder(buffer)
+	encoder.Encode(src)
+	decoder := gob.NewDecoder(buffer)
+	decoder.Decode(dst)
 }

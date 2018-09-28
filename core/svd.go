@@ -9,7 +9,7 @@ import (
 
 /* SVD */
 
-// The famous SVD algorithm, as popularized by Simon Funk during the
+// SVD algorithm, as popularized by Simon Funk during the
 // Netflix Prize. The prediction \hat{r}_{ui} is set as:
 //
 //               \hat{r}_{ui} = μ + b_u + b_i + q_i^Tp_u
@@ -25,7 +25,7 @@ type SVD struct {
 	GlobalBias float64     // mu
 }
 
-// Create a SVD model. Parameters:
+// NewSVD creates a SVD model. Parameters:
 //	 reg 		- The regularization parameter of the cost function that is
 // 				  optimized. Default is 0.02.
 //	 lr 		- The learning rate of SGD. Default is 0.005.

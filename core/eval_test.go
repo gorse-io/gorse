@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"runtime"
 	"testing"
 )
 
@@ -13,7 +14,7 @@ func TestGridSearchCV(t *testing.T) {
 		"lr":      {0.002, 0.005},
 	}
 	out := GridSearchCV(NewBaseLine(nil), LoadDataFromBuiltIn("ml-100k"), paramGrid,
-		[]Evaluator{RMSE, MAE}, 5, 0)
+		[]Evaluator{RMSE, MAE}, 5, 0, runtime.NumCPU())
 	// Check best parameters
 	bestParams := out[0].BestParams
 	if bestParams.GetInt("nEpochs", -1) != 10 {

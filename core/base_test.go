@@ -2,6 +2,7 @@ package core
 
 import (
 	"gonum.org/v1/gonum/stat"
+	"runtime"
 	"testing"
 )
 
@@ -10,7 +11,7 @@ const estimatorEpsilon float64 = 0.008
 func Evaluate(t *testing.T, algo Estimator, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {
 	// Cross validation
-	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, 5, 0, nil)
+	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, 5, 0, nil, runtime.NumCPU())
 	// Check RMSE
 	rmse := stat.Mean(results[0].Tests, nil)
 	if rmse > expectRMSE+estimatorEpsilon {
