@@ -3,6 +3,7 @@ package core
 import (
 	"gonum.org/v1/gonum/stat"
 	"math/rand"
+	"time"
 )
 
 /* Base */
@@ -80,6 +81,7 @@ func (parameters Parameters) GetSim(name string, _default Sim) Sim {
 
 // Base structure of all estimators.
 type Base struct {
+	rng    *rand.Rand
 	Params Parameters
 	Data   TrainSet
 }
@@ -93,7 +95,45 @@ func (base *Base) Predict(userId, itemId int) float64 {
 }
 
 func (base *Base) Fit(trainSet TrainSet) {
-	panic("Fit() not implemented")
+	// Setup train set
+	base.Data = trainSet
+	// Setup random state
+	randState := base.Params.GetInt("randState", int(time.Now().UnixNano()))
+	base.rng = rand.New(rand.NewSource(int64(randState)))
+}
+
+func (base *Base) newUniformVectorInt(size, low, high int) []int {
+	ret := make([]int, size)
+	scale := high - low
+	for i := 0; i < len(ret); i++ {
+		ret[i] = base.rng.Intn(scale) + low
+	}
+	return ret
+}
+
+func (base *Base) newUniformVector(size int, low, high float64) []float64 {
+	ret := make([]float64, size)
+	scale := high - low
+	for i := 0; i < len(ret); i++ {
+		ret[i] = base.rng.Float64()*scale + low
+	}
+	return ret
+}
+
+func (base *Base) newNormalVector(size int, mean, stdDev float64) []float64 {
+	ret := make([]float64, size)
+	for i := 0; i < len(ret); i++ {
+		ret[i] = base.rng.NormFloat64()*stdDev + mean
+	}
+	return ret
+}
+
+func (base *Base) newUniformMatrix(row, col int, low, high float64) [][]float64 {
+	ret := make([][]float64, row)
+	for i := range ret {
+		ret[i] = base.newUniformVector(col, low, high)
+	}
+	return ret
 }
 
 /* Random */
@@ -119,7 +159,12 @@ func NewRandom(params Parameters) *Random {
 }
 
 func (random *Random) Predict(userId int, itemId int) float64 {
-	ret := rand.NormFloat64()*random.StdDev + random.Mean
+	// Setup random state
+	if random.rng == nil {
+		randState := random.Params.GetInt("randState", int(time.Now().UnixNano()))
+		random.rng = rand.New(rand.NewSource(int64(randState)))
+	}
+	ret := random.rng.NormFloat64()*random.StdDev + random.Mean
 	// Crop prediction
 	if ret < random.Low {
 		ret = random.Low

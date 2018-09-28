@@ -22,16 +22,18 @@ type CoClustering struct {
 	CoClusterMeans   [][]float64 // A^{COC}
 }
 
-// Create a co-clustering model. Parameters:
-//	 nEpochs		- The number of iteration of the SGD procedure. Default is 20.
-//	 nUserClusters	- The number of user clusters.
-//	 nItemClusters	- The number of item clusters.
+// NewCoClustering creates a co-clustering model. Parameters:
+//   nEpochs       - The number of iteration of the SGD procedure. Default is 20.
+//   nUserClusters - The number of user clusters. Default is 3.
+//   nItemClusters - The number of item clusters. Default is 3.
+//   randState     - The random seed. Default is UNIX time step.
 func NewCoClustering(params Parameters) *CoClustering {
 	cc := new(CoClustering)
 	cc.Params = params
 	return cc
 }
 
+// Predict by a co-clustering model.
 func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
 	innerUserId := coc.Data.ConvertUserId(userId)
@@ -57,20 +59,21 @@ func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
+// Fit a co-clustering model.
 func (coc *CoClustering) Fit(trainSet TrainSet) {
+	coc.Base.Fit(trainSet)
 	// Setup parameters
 	nUserClusters := coc.Params.GetInt("nUserClusters", 3)
 	nItemClusters := coc.Params.GetInt("nItemClusters", 3)
 	nEpochs := coc.Params.GetInt("nEpochs", 20)
 	// Initialize parameters
-	coc.Data = trainSet
 	coc.GlobalMean = trainSet.GlobalMean
 	userRatings := trainSet.UserRatings()
 	itemRatings := trainSet.ItemRatings()
 	coc.UserMeans = means(userRatings)
 	coc.ItemMeans = means(itemRatings)
-	coc.UserClusters = newUniformVectorInt(trainSet.UserCount, 0, nUserClusters)
-	coc.ItemClusters = newUniformVectorInt(trainSet.ItemCount, 0, nItemClusters)
+	coc.UserClusters = coc.newUniformVectorInt(trainSet.UserCount, 0, nUserClusters)
+	coc.ItemClusters = coc.newUniformVectorInt(trainSet.ItemCount, 0, nItemClusters)
 	coc.UserClusterMeans = make([]float64, nUserClusters)
 	coc.ItemClusterMeans = make([]float64, nItemClusters)
 	coc.CoClusterMeans = newZeroMatrix(nUserClusters, nItemClusters)

@@ -19,7 +19,7 @@ const goDoc = "https://goDoc.org/github.com/ZhangZhenghao/gorse/core"
 
 func main() {
 	// Parse arguments
-	dataSet := "ml-1m"
+	dataSet := "ml-100k"
 	if len(os.Args) > 1 {
 		dataSet = os.Args[1]
 	}
@@ -44,7 +44,9 @@ func main() {
 	for _, model := range estimators {
 		start = time.Now()
 		out := core.CrossValidate(model.estimator, set, []core.Evaluator{core.RMSE, core.MAE},
-			5, 0, nil, runtime.NumCPU())
+			5, 0, core.Parameters{
+				"randState": 0,
+			}, runtime.NumCPU())
 		tm := time.Since(start)
 		fmt.Printf("| [%s](%s%s) | %.3f | %.3f | %d:%02d:%02d |\n",
 			model.name, goDoc, model.doc,

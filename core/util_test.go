@@ -2,8 +2,6 @@ package core
 
 import (
 	"gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/stat"
-	"math"
 	"testing"
 )
 
@@ -61,27 +59,5 @@ func TestDivConst(t *testing.T) {
 	divConst(2.0, a)
 	if !floats.Equal(a, b) {
 		t.Fail()
-	}
-}
-
-func TestNewNormalVector(t *testing.T) {
-	a := newNormalVector(1000, 1, 2)
-	mean := stat.Mean(a, nil)
-	stdDev := stat.StdDev(a, nil)
-	if math.Abs(mean-1) > 0.2 {
-		t.Fatalf("Mean(%.4f) doesn't match %.4f", mean, 1.0)
-	} else if math.Abs(stdDev-2) > 0.2 {
-		t.Fatalf("Std(%.4f) doesn't match %.4f", stdDev, 2.0)
-	}
-}
-
-func TestNewUniformVector(t *testing.T) {
-	a := newUniformVectorInt(100, 10, 100)
-	for _, val := range a {
-		if val < 10 {
-			t.Fail()
-		} else if val >= 100 {
-			t.Fail()
-		}
 	}
 }

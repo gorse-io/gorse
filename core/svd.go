@@ -61,6 +61,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 }
 
 func (svd *SVD) Fit(trainSet TrainSet) {
+	svd.Base.Fit(trainSet)
 	// Setup parameters
 	nFactors := svd.Params.GetInt("nFactors", 100)
 	nEpochs := svd.Params.GetInt("nEpochs", 20)
@@ -69,16 +70,15 @@ func (svd *SVD) Fit(trainSet TrainSet) {
 	initMean := svd.Params.GetFloat64("initMean", 0)
 	initStdDev := svd.Params.GetFloat64("initStdDev", 0.1)
 	// Initialize parameters
-	svd.Data = trainSet
 	svd.UserBias = make([]float64, trainSet.UserCount)
 	svd.ItemBias = make([]float64, trainSet.ItemCount)
 	svd.UserFactor = make([][]float64, trainSet.UserCount)
 	svd.ItemFactor = make([][]float64, trainSet.ItemCount)
 	for innerUserId := range svd.UserFactor {
-		svd.UserFactor[innerUserId] = newNormalVector(nFactors, initMean, initStdDev)
+		svd.UserFactor[innerUserId] = svd.newNormalVector(nFactors, initMean, initStdDev)
 	}
 	for innerItemId := range svd.ItemFactor {
-		svd.ItemFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
+		svd.ItemFactor[innerItemId] = svd.newNormalVector(nFactors, initMean, initStdDev)
 	}
 	// Create buffers
 	a := make([]float64, nFactors)
@@ -162,15 +162,15 @@ func (nmf *NMF) Predict(userId int, itemId int) float64 {
 }
 
 func (nmf *NMF) Fit(trainSet TrainSet) {
+	nmf.Base.Fit(trainSet)
 	nFactors := nmf.Params.GetInt("nFactors", 15)
 	nEpochs := nmf.Params.GetInt("nEpochs", 50)
 	initLow := nmf.Params.GetFloat64("initLow", 0)
 	initHigh := nmf.Params.GetFloat64("initHigh", 1)
 	reg := nmf.Params.GetFloat64("reg", 0.06)
 	// Initialize parameters
-	nmf.Data = trainSet
-	nmf.UserFactor = newUniformMatrix(trainSet.UserCount, nFactors, initLow, initHigh)
-	nmf.ItemFactor = newUniformMatrix(trainSet.ItemCount, nFactors, initLow, initHigh)
+	nmf.UserFactor = nmf.newUniformMatrix(trainSet.UserCount, nFactors, initLow, initHigh)
+	nmf.ItemFactor = nmf.newUniformMatrix(trainSet.ItemCount, nFactors, initLow, initHigh)
 	// Create intermediate matrix buffer
 	buffer := make([]float64, nFactors)
 	userUp := newZeroMatrix(trainSet.UserCount, nFactors)
@@ -329,11 +329,11 @@ func (svd *SVDpp) Fit(trainSet TrainSet) {
 	svd.ImplFactor = make([][]float64, trainSet.ItemCount)
 	//svd.cacheFactor = make(map[int][]float64)
 	for innerUserId := range svd.UserBias {
-		svd.UserFactor[innerUserId] = newNormalVector(nFactors, initMean, initStdDev)
+		svd.UserFactor[innerUserId] = svd.newNormalVector(nFactors, initMean, initStdDev)
 	}
 	for innerItemId := range svd.ItemBias {
-		svd.ItemFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
-		svd.ImplFactor[innerItemId] = newNormalVector(nFactors, initMean, initStdDev)
+		svd.ItemFactor[innerItemId] = svd.newNormalVector(nFactors, initMean, initStdDev)
+		svd.ImplFactor[innerItemId] = svd.newNormalVector(nFactors, initMean, initStdDev)
 	}
 	// Build user rating set
 	svd.UserRatings = trainSet.UserRatings()

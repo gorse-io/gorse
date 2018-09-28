@@ -4,10 +4,10 @@ import (
 	"math"
 )
 
-// Similarity function.
+// Sim is the prototype of similarity functions.
 type Sim func(SortedIdRatings, SortedIdRatings) float64
 
-// Compute the cosine similarity between a pair of users (or items).
+// Cosine computes the cosine similarity between a pair of users (or items).
 func Cosine(a SortedIdRatings, b SortedIdRatings) float64 {
 	m, n, l, ptr := .0, .0, .0, 0
 	for _, ir := range a.data {
@@ -24,7 +24,7 @@ func Cosine(a SortedIdRatings, b SortedIdRatings) float64 {
 	return l / (math.Sqrt(m) * math.Sqrt(n))
 }
 
-// Compute the Mean Squared Difference similarity between a pair of users (or items).
+// MSD computes the Mean Squared Difference similarity between a pair of users (or items).
 func MSD(a SortedIdRatings, b SortedIdRatings) float64 {
 	count, sum, ptr := 0.0, 0.0, 0
 	for _, ir := range a.data {
@@ -40,7 +40,7 @@ func MSD(a SortedIdRatings, b SortedIdRatings) float64 {
 	return 1.0 / (sum/count + 1)
 }
 
-// Compute the Pearson correlation coefficient between a pair of users (or items).
+// Pearson computes the Pearson correlation coefficient between a pair of users (or items).
 func Pearson(a SortedIdRatings, b SortedIdRatings) float64 {
 	// Mean of a
 	count, sum := .0, .0

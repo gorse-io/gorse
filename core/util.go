@@ -2,7 +2,6 @@ package core
 
 import (
 	"math"
-	"math/rand"
 	"sync"
 )
 
@@ -60,46 +59,12 @@ func divConst(c float64, dst []float64) {
 	}
 }
 
-/* Generator */
-
-func newNormalVector(size int, mean, stdDev float64) []float64 {
-	ret := make([]float64, size)
-	for i := 0; i < len(ret); i++ {
-		ret[i] = rand.NormFloat64()*stdDev + mean
-	}
-	return ret
-}
-
-func newUniformVector(size int, low, high float64) []float64 {
-	ret := make([]float64, size)
-	scale := high - low
-	for i := 0; i < len(ret); i++ {
-		ret[i] = rand.Float64()*scale + low
-	}
-	return ret
-}
+/* Vectors */
 
 func resetZeroVector(a []float64) {
 	for i := range a {
 		a[i] = 0
 	}
-}
-
-func newUniformVectorInt(size, low, high int) []int {
-	ret := make([]int, size)
-	scale := high - low
-	for i := 0; i < len(ret); i++ {
-		ret[i] = rand.Intn(scale) + low
-	}
-	return ret
-}
-
-func newUniformMatrix(row, col int, low, high float64) [][]float64 {
-	ret := make([][]float64, row)
-	for i := range ret {
-		ret[i] = newUniformVector(col, low, high)
-	}
-	return ret
 }
 
 func newNanMatrix(row, col int) [][]float64 {

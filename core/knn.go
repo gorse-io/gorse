@@ -27,12 +27,12 @@ const (
 	baseline = "baseline"
 )
 
-// Create a KNN model. Parameters:
-//   sim		- The similarity function. Default is MSD.
-//   userBased	- User based or item based? Default is true.
-//   k			- The maximum k neighborhoods to predict the rating. Default is 40.
-//   minK		- The minimum k neighborhoods to predict the rating. Default is 1.
-//   nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
+// NewKNN creates a KNN model. Parameters:
+//   sim       - The similarity function. Default is MSD.
+//   userBased - User based or item based? Default is true.
+//   k         - The maximum k neighborhoods to predict the rating. Default is 40.
+//   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
+//   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNN(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.Params = params
@@ -40,12 +40,12 @@ func NewKNN(params Parameters) *KNN {
 	return knn
 }
 
-// Create a KNN model with Mean. Parameters:
-//   sim		- The similarity function. Default is MSD.
-//   userBased	- User based or item based? Default is true.
-//   k			- The maximum k neighborhoods to predict the rating. Default is 40.
-//   minK		- The minimum k neighborhoods to predict the rating. Default is 1.
-//   nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
+// NewKNNWithMean creates a KNN model with Mean. Parameters:
+//   sim       - The similarity function. Default is MSD.
+//   userBased - User based or item based? Default is true.
+//   k         - The maximum k neighborhoods to predict the rating. Default is 40.
+//   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
+//   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNWithMean(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.Params = params
@@ -53,12 +53,12 @@ func NewKNNWithMean(params Parameters) *KNN {
 	return knn
 }
 
-// Create a KNN model with Z-Score. Parameters:
-//   sim		- The similarity function. Default is MSD.
-//   userBased	- User based or item based? Default is true.
-//   k			- The maximum k neighborhoods to predict the rating. Default is 40.
-//   minK		- The minimum k neighborhoods to predict the rating. Default is 1.
-//   nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
+// NewKNNWithZScore creates a KNN model with Z-Score. Parameters:
+//   sim       - The similarity function. Default is MSD.
+//   userBased - User based or item based? Default is true.
+//   k         - The maximum k neighborhoods to predict the rating. Default is 40.
+//   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
+//   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNWithZScore(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.Params = params
@@ -66,12 +66,12 @@ func NewKNNWithZScore(params Parameters) *KNN {
 	return knn
 }
 
-// Create a KNN model with baseline. Parameters:
-//   sim		- The similarity function. Default is MSD.
-//   userBased	- User based or item based? Default is true.
-//   k			- The maximum k neighborhoods to predict the rating. Default is 40.
-//   minK		- The minimum k neighborhoods to predict the rating. Default is 1.
-//   nJobs		- The number of goroutines to compute similarity. Default is the number of CPUs.
+// NewKNNBaseLine creates a KNN model with baseline. Parameters:
+//   sim       - The similarity function. Default is MSD.
+//   userBased - User based or item based? Default is true.
+//   k         - The maximum k neighborhoods to predict the rating. Default is 40.
+//   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
+//   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
 func NewKNNBaseLine(params Parameters) *KNN {
 	knn := new(KNN)
 	knn.Params = params
@@ -79,6 +79,7 @@ func NewKNNBaseLine(params Parameters) *KNN {
 	return knn
 }
 
+// Predict by a KNN model.
 func (knn *KNN) Predict(userId, itemId int) float64 {
 	innerUserId := knn.Data.ConvertUserId(userId)
 	innerItemId := knn.Data.ConvertItemId(itemId)
@@ -142,13 +143,14 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
+// Fit a KNN model.
 func (knn *KNN) Fit(trainSet TrainSet) {
+	knn.Base.Fit(trainSet)
 	// Setup parameters
 	sim := knn.Params.GetSim("sim", MSD)
 	userBased := knn.Params.GetBool("userBased", true)
 	nJobs := knn.Params.GetInt("nJobs", runtime.NumCPU())
 	// Set global GlobalMean for new users (items)
-	knn.Data = trainSet
 	knn.GlobalMean = trainSet.GlobalMean
 	// Retrieve user (item) iRatings
 	if userBased {
