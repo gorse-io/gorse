@@ -39,6 +39,7 @@ func NewSVD(params Parameters) *SVD {
 	return svd
 }
 
+// Predict by a SVD model.
 func (svd *SVD) Predict(userId int, itemId int) float64 {
 	innerUserId := svd.Data.ConvertUserId(userId)
 	innerItemId := svd.Data.ConvertItemId(itemId)
@@ -60,6 +61,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
+// Fit a SVD model.
 func (svd *SVD) Fit(trainSet TrainSet) {
 	svd.Base.Fit(trainSet)
 	// Setup parameters
@@ -126,8 +128,7 @@ func (svd *SVD) Fit(trainSet TrainSet) {
 
 /* NMF */
 
-// A collaborative filtering algorithm based on Non-negative
-// Matrix Factorization[1].
+// NMF: Non-negative Matrix Factorization[1].
 //
 // [1] Luo, Xin, et al. "An efficient non-negative matrix-
 // factorization-based approach to collaborative filtering
@@ -139,19 +140,20 @@ type NMF struct {
 	ItemFactor [][]float64 // q_i
 }
 
-// Create a NMF model. Parameters:
-//	 reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.06.
-//	 nFactors	- The number of latent factors. Default is 15.
-//	 nEpochs	- The number of iteration of the SGD procedure. Default is 50.
-//	 initLow	- The lower bound of initial random latent factor. Default is 0.
-//	 initHigh	- The upper bound of initial random latent factor. Default is 1.
+// NewNMF creates a NMF model. Parameters:
+//	 reg      - The regularization parameter of the cost function that is
+//              optimized. Default is 0.06.
+//	 nFactors - The number of latent factors. Default is 15.
+//	 nEpochs  - The number of iteration of the SGD procedure. Default is 50.
+//	 initLow  - The lower bound of initial random latent factor. Default is 0.
+//	 initHigh - The upper bound of initial random latent factor. Default is 1.
 func NewNMF(params Parameters) *NMF {
 	nmf := new(NMF)
 	nmf.Params = params
 	return nmf
 }
 
+// Predict by a NMF model.
 func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	innerUserId := nmf.Data.ConvertUserId(userId)
 	innerItemId := nmf.Data.ConvertItemId(itemId)
@@ -161,6 +163,7 @@ func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	return 0
 }
 
+// Fit a NMF model.
 func (nmf *NMF) Fit(trainSet TrainSet) {
 	nmf.Base.Fit(trainSet)
 	nFactors := nmf.Params.GetInt("nFactors", 15)
@@ -230,7 +233,7 @@ func (nmf *NMF) Fit(trainSet TrainSet) {
 
 /* SVD++ */
 
-// The SVD++ algorithm, an extension of SVD taking into account implicit
+// SVD++ algorithm, an extension of SVD taking into account implicit
 // interactionRatings. The prediction \hat{r}_{ui} is set as:
 //
 // 	\hat{r}_{ui} = \mu + b_u + b_i + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
@@ -251,7 +254,7 @@ type SVDpp struct {
 	GlobalBias  float64      // mu
 }
 
-// Create a SVD++ model. Parameters:
+// NewSVDpp creates a SVD++ model. Parameters:
 //	 reg 		- The regularization parameter of the cost function that is
 // 				  optimized. Default is 0.02.
 //	 lr 		- The learning rate of SGD. Default is 0.007.
@@ -306,11 +309,13 @@ func (svd *SVDpp) internalPredict(userId int, itemId int) (float64, []float64) {
 	return ret, []float64{}
 }
 
+// Predict by a SVD++ model.
 func (svd *SVDpp) Predict(userId int, itemId int) float64 {
 	ret, _ := svd.internalPredict(userId, itemId)
 	return ret
 }
 
+// Fit a SVD++ model.
 func (svd *SVDpp) Fit(trainSet TrainSet) {
 	// Setup parameters
 	nFactors := svd.Params.GetInt("nFactors", 20)

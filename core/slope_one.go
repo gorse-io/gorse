@@ -4,7 +4,7 @@ import (
 	"runtime"
 )
 
-// A simple yet accurate collaborative filtering algorithm[1].
+// SlopeOne, a collaborative filtering algorithm[1].
 //
 // [1] Lemire, Daniel, and Anna Maclachlan. "Slope one predictors
 // for online rating-based collaborative filtering." Proceedings

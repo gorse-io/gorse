@@ -18,7 +18,7 @@ type CrossValidateResult struct {
 	Tests  []float64
 }
 
-// CrossValidation evaluates a model by k-fold cross validation.
+// CrossValidate evaluates a model by k-fold cross validation.
 func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv int, seed int64,
 	params Parameters, nJobs int) []CrossValidateResult {
 	// Create return structures

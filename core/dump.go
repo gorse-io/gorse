@@ -33,6 +33,7 @@ func Save(fileName string, object interface{}) error {
 	return err
 }
 
+// Copy a object from src to dst.
 func Copy(dst, src interface{}) {
 	buffer := new(bytes.Buffer)
 	encoder := gob.NewEncoder(buffer)

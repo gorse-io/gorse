@@ -48,6 +48,11 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		path: "ml-20m/ratings.csv",
 		sep:  ",",
 	},
+	"netflix": {
+		url:  "https://cdn.sine-x.com/datasets/netflix/netflix-prize-data.zip",
+		path: "netflix/training_set.txt",
+		sep:  ",",
+	},
 }
 
 // The data directories
@@ -180,7 +185,7 @@ type IdRating struct {
 // An ID not existed in the data set.
 const NewId = -1
 
-// Create a train set from a raw data set.
+// NewTrainSet creates a train set from a raw data set.
 func NewTrainSet(rawSet DataSet) TrainSet {
 	set := TrainSet{}
 	set.DataSet = rawSet
@@ -204,12 +209,12 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 	return set
 }
 
-// Get the range of LeftRatings. Return minimum and maximum.
+// RatingRange gets the range of ratings. Return minimum and maximum.
 func (trainSet *TrainSet) RatingRange() (float64, float64) {
 	return floats.Min(trainSet.Ratings), floats.Max(trainSet.Ratings)
 }
 
-// Convert user ID to inner user ID
+// ConvertUserId converts user ID to inner user ID.
 func (trainSet *TrainSet) ConvertUserId(userId int) int {
 	if innerUserId, exist := trainSet.InnerUserIds[userId]; exist {
 		return innerUserId
@@ -217,7 +222,7 @@ func (trainSet *TrainSet) ConvertUserId(userId int) int {
 	return NewId
 }
 
-// Convert item ID to inner item ID
+// ConvertItemId converts item ID to inner item ID.
 func (trainSet *TrainSet) ConvertItemId(itemId int) int {
 	if innerItemId, exist := trainSet.InnerItemIds[itemId]; exist {
 		return innerItemId
@@ -225,7 +230,7 @@ func (trainSet *TrainSet) ConvertItemId(itemId int) int {
 	return NewId
 }
 
-// Get users' LeftRatings: an array of <itemId, rating> for each user.
+// UserRatings: an array of <itemId, rating> for each user.
 func (trainSet *TrainSet) UserRatings() [][]IdRating {
 	if trainSet.userRatings == nil {
 		trainSet.userRatings = make([][]IdRating, trainSet.UserCount)
@@ -241,7 +246,7 @@ func (trainSet *TrainSet) UserRatings() [][]IdRating {
 	return trainSet.userRatings
 }
 
-// Get items' LeftRatings: an array of <userId, Rating> for each item.
+// ItemRatings: an array of <userId, Rating> for each item.
 func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 	if trainSet.itemRatings == nil {
 		trainSet.itemRatings = make([][]IdRating, trainSet.ItemCount)
@@ -259,7 +264,7 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 
 /* Loader */
 
-// Load build in data set. Now support:
+// LoadDataFromBuiltIn loads a built-in data set. Now support:
 //   ml-100k	- MovieLens 100K
 //   ml-1m		- MovieLens 1M
 //   ml-10m		- MovieLens 10M
@@ -278,7 +283,7 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	return LoadDataFromFile(dataFileName, dataSet.sep, false)
 }
 
-// Load data from text file. The text file should be:
+// LoadDataFromFile loads data from a text file. The text file should be:
 //
 //   [optional header]
 // 	 <userId 1> <sep> <itemId 1> <sep> <rating 1> <sep> <extras>
@@ -324,6 +329,7 @@ func LoadDataFromFile(fileName string, sep string, hasHeader bool) DataSet {
 
 // Download file from URL.
 func downloadFromUrl(src string, dst string) (string, error) {
+	fmt.Printf("Download dataset from %s\n", src)
 	// Extract file name
 	tokens := strings.Split(src, "/")
 	fileName := filepath.Join(dst, tokens[len(tokens)-1])
@@ -355,6 +361,7 @@ func downloadFromUrl(src string, dst string) (string, error) {
 
 // Unzip zip file.
 func unzip(src string, dst string) ([]string, error) {
+	fmt.Printf("Unzip dataset %s\n", src)
 	var fileNames []string
 	// Open zip file
 	r, err := zip.OpenReader(src)
@@ -430,12 +437,12 @@ func sorts(idRatings [][]IdRating) []SortedIdRatings {
 	return a
 }
 
-// An array of <id, rating> sorted by id.
+// SortedIdRatings is an array of <id, rating> sorted by id.
 type SortedIdRatings struct {
 	data []IdRating
 }
 
-// Create a sorted array of <id, rating>
+// NewSortedIdRatings creates a sorted array of <id, rating>
 func NewSortedIdRatings(a []IdRating) SortedIdRatings {
 	b := SortedIdRatings{a}
 	sort.Sort(b)
