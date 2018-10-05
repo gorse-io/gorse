@@ -44,7 +44,7 @@ func main() {
 	for _, model := range estimators {
 		start = time.Now()
 		out := core.CrossValidate(model.estimator, set, []core.Evaluator{core.RMSE, core.MAE},
-			5, 0, core.Parameters{
+			core.NewKFoldSplitter(5), 0, core.Parameters{
 				"randState": 0,
 			}, runtime.NumCPU())
 		tm := time.Since(start)

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"math"
 	"reflect"
@@ -19,17 +18,19 @@ type CrossValidateResult struct {
 }
 
 // CrossValidation evaluates a model by k-fold cross validation.
-func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv int, seed int64,
+func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, splitter Splitter, seed int64,
 	params Parameters, nJobs int) []CrossValidateResult {
+	// Split data set
+	trainFolds, testFolds := splitter(dataSet, seed)
+	length := len(trainFolds)
 	// Create return structures
 	ret := make([]CrossValidateResult, len(metrics))
 	for i := 0; i < len(ret); i++ {
-		ret[i].Trains = make([]float64, cv)
-		ret[i].Tests = make([]float64, cv)
+		ret[i].Trains = make([]float64, length)
+		ret[i].Tests = make([]float64, length)
 	}
-	// Split data set
-	trainFolds, testFolds := dataSet.KFold(cv, seed)
-	parallel(cv, nJobs, func(begin, end int) {
+	// Cross validation
+	parallel(length, nJobs, func(begin, end int) {
 		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Estimator)
 		Copy(cp, estimator)
 		for i := begin; i < end; i++ {
@@ -38,16 +39,12 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, cv
 			cp.SetParams(params)
 			cp.Fit(trainFold)
 			// Evaluate on test set
-			testRatings := testFold.Ratings
-			testPredictions := testFold.Predict(cp)
 			for j := 0; j < len(ret); j++ {
-				ret[j].Tests[i] = metrics[j](testPredictions, testRatings)
+				ret[j].Tests[i] = metrics[j](cp, testFold)
 			}
 			// Evaluate on train set
-			trainRatings := trainFold.Ratings
-			trainPredictions := trainFold.Predict(cp)
 			for j := 0; j < len(ret); j++ {
-				ret[j].Trains[i] = metrics[j](trainPredictions, trainRatings)
+				ret[j].Trains[i] = metrics[j](cp, trainFold.DataSet)
 			}
 		}
 	})
@@ -88,7 +85,7 @@ func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
 	dfs = func(deep int, options Parameters) {
 		if deep == len(params) {
 			// Cross validate
-			cvResults := CrossValidate(estimator, dataSet, evaluators, cv, seed, options, nJobs)
+			cvResults := CrossValidate(estimator, dataSet, evaluators, NewKFoldSplitter(5), seed, options, nJobs)
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
 				results[i].AllParams = append(results[i].AllParams, options.Copy())
@@ -116,20 +113,67 @@ func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
 /* Evaluator */
 
 // Evaluator function type.
-type Evaluator func([]float64, []float64) float64
+type Evaluator func(Estimator, DataSet) float64
 
 // RMSE is root mean square error.
-func RMSE(predictions []float64, truth []float64) float64 {
-	temp := make([]float64, len(predictions))
-	floats.SubTo(temp, predictions, truth)
-	floats.Mul(temp, temp)
-	return math.Sqrt(stat.Mean(temp, nil))
+func RMSE(estimator Estimator, testSet DataSet) float64 {
+	sum := 0.0
+	for j := 0; j < testSet.Length(); j++ {
+		userId, itemId, rating := testSet.Index(j)
+		prediction := estimator.Predict(userId, itemId)
+		sum += (prediction - rating) * (prediction - rating)
+	}
+	return math.Sqrt(sum / float64(testSet.Length()))
 }
 
 // MAE is mean absolute error.
-func MAE(predictions []float64, truth []float64) float64 {
-	temp := make([]float64, len(predictions))
-	floats.SubTo(temp, predictions, truth)
-	abs(temp)
-	return stat.Mean(temp, nil)
+func MAE(estimator Estimator, testSet DataSet) float64 {
+	sum := 0.0
+	for j := 0; j < testSet.Length(); j++ {
+		userId, itemId, rating := testSet.Index(j)
+		prediction := estimator.Predict(userId, itemId)
+		sum += math.Abs(prediction - rating)
+	}
+	return sum / float64(testSet.Length())
+}
+
+// NewAUC creates a AUC evaluator.
+func NewAUC(fullSet DataSet) Evaluator {
+	return func(estimator Estimator, testSet DataSet) float64 {
+		full := NewTrainSet(fullSet)
+		test := NewTrainSet(testSet)
+		sum, count := 0.0, 0.0
+		// Find all userIds
+		for innerUserIdTest, irs := range test.UserRatings() {
+			userId := test.outerUserIds[innerUserIdTest]
+			// Find all <userId, j>s in full data set
+			innerUserIdFull := full.ConvertUserId(userId)
+			fullRatedItem := make(map[int]float64)
+			for _, jr := range full.UserRatings()[innerUserIdFull] {
+				itemId := full.outerItemIds[jr.Id]
+				fullRatedItem[itemId] = jr.Rating
+			}
+			// Find all <userId, i>s in test data set
+			indicatorSum, ratedCount := 0.0, 0.0
+			for _, ir := range irs {
+				iItemId := test.outerItemIds[ir.Id]
+				// Find all <userId, j>s not in full data set
+				for j := 0; j < full.ItemCount; j++ {
+					jItemId := full.outerItemIds[j]
+					if _, exist := fullRatedItem[jItemId]; !exist {
+						// I(\hat{x}_{ui} - \hat{x}_{uj})
+						if estimator.Predict(userId, iItemId) > estimator.Predict(userId, jItemId) {
+							indicatorSum++
+						}
+						ratedCount++
+					}
+				}
+			}
+			// += \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
+			sum += indicatorSum / ratedCount
+			count++
+		}
+		// \frac{1}{|U|} \sum_u \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
+		return sum / count
+	}
 }

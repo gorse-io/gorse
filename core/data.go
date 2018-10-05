@@ -100,29 +100,6 @@ func (dataSet *DataSet) SubSet(indices []int) DataSet {
 		selectFloat(dataSet.Ratings, indices))
 }
 
-func (dataSet *DataSet) KFold(k int, seed int64) ([]TrainSet, []DataSet) {
-	trainFolds := make([]TrainSet, k)
-	testFolds := make([]DataSet, k)
-	rand.Seed(0)
-	perm := rand.Perm(dataSet.Length())
-	foldSize := dataSet.Length() / k
-	begin, end := 0, 0
-	for i := 0; i < k; i++ {
-		end += foldSize
-		if i < dataSet.Length()%k {
-			end++
-		}
-		// Test Data
-		testIndex := perm[begin:end]
-		testFolds[i] = dataSet.SubSet(testIndex)
-		// Train Data
-		trainIndex := concatenate(perm[0:begin], perm[end:dataSet.Length()])
-		trainFolds[i] = NewTrainSet(dataSet.SubSet(trainIndex))
-		begin = end
-	}
-	return trainFolds, testFolds
-}
-
 // Train test split. Return train set and test set.
 func (dataSet *DataSet) Split(testSize float64, seed int) (TrainSet, DataSet) {
 	rand.Seed(0)
@@ -167,6 +144,8 @@ type TrainSet struct {
 	ItemCount    int
 	InnerUserIds map[int]int // userId -> innerUserId
 	InnerItemIds map[int]int // itemId -> innerItemId
+	outerUserIds []int
+	outerItemIds []int
 	userRatings  [][]IdRating
 	itemRatings  [][]IdRating
 }
@@ -187,16 +166,20 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 	set.GlobalMean = stat.Mean(rawSet.Ratings, nil)
 	// Create userId -> innerUserId map
 	set.InnerUserIds = make(map[int]int)
+	set.outerUserIds = make([]int, 0)
 	for _, userId := range set.Users {
 		if _, exist := set.InnerUserIds[userId]; !exist {
+			set.outerUserIds = append(set.outerUserIds, userId)
 			set.InnerUserIds[userId] = set.UserCount
 			set.UserCount++
 		}
 	}
 	// Create itemId -> innerItemId map
 	set.InnerItemIds = make(map[int]int)
+	set.outerItemIds = make([]int, 0)
 	for _, itemId := range set.Items {
 		if _, exist := set.InnerItemIds[itemId]; !exist {
+			set.outerItemIds = append(set.outerItemIds, itemId)
 			set.InnerItemIds[itemId] = set.ItemCount
 			set.ItemCount++
 		}
@@ -403,6 +386,75 @@ func unzip(src string, dst string) ([]string, error) {
 		rc.Close()
 	}
 	return fileNames, nil
+}
+
+/* Split */
+
+type Splitter func(set DataSet, seed int64) ([]TrainSet, []DataSet)
+
+// NewKFoldSplitter creates a k-fold splitter.
+func NewKFoldSplitter(k int) Splitter {
+	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
+		trainFolds := make([]TrainSet, k)
+		testFolds := make([]DataSet, k)
+		rand.Seed(seed)
+		perm := rand.Perm(dataSet.Length())
+		foldSize := dataSet.Length() / k
+		begin, end := 0, 0
+		for i := 0; i < k; i++ {
+			end += foldSize
+			if i < dataSet.Length()%k {
+				end++
+			}
+			// Test Data
+			testIndex := perm[begin:end]
+			testFolds[i] = dataSet.SubSet(testIndex)
+			// Train Data
+			trainIndex := concatenate(perm[0:begin], perm[end:dataSet.Length()])
+			trainFolds[i] = NewTrainSet(dataSet.SubSet(trainIndex))
+			begin = end
+		}
+		return trainFolds, testFolds
+	}
+}
+
+// NewUserLOOSplitter creates a per-user leave-one-out data splitter.
+func NewUserLOOSplitter(repeat int) Splitter {
+	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
+		trainFolds := make([]TrainSet, repeat)
+		testFolds := make([]DataSet, repeat)
+		rand.Seed(seed)
+		trainSet := NewTrainSet(dataSet)
+		for i := 0; i < repeat; i++ {
+			trainUsers, trainItems, trainRatings :=
+				make([]int, 0, trainSet.Length()-trainSet.UserCount),
+				make([]int, 0, trainSet.Length()-trainSet.UserCount),
+				make([]float64, 0, trainSet.Length()-trainSet.UserCount)
+			testUsers, testItems, testRatings :=
+				make([]int, 0, trainSet.UserCount),
+				make([]int, 0, trainSet.UserCount),
+				make([]float64, 0, trainSet.UserCount)
+			for innerUserId, irs := range trainSet.UserRatings() {
+				userId := trainSet.outerUserIds[innerUserId]
+				out := rand.Intn(len(irs))
+				for index, ir := range irs {
+					itemId := trainSet.outerItemIds[ir.Id]
+					if index == out {
+						testUsers = append(testUsers, userId)
+						testItems = append(testItems, itemId)
+						testRatings = append(testRatings, ir.Rating)
+					} else {
+						trainUsers = append(trainUsers, userId)
+						trainItems = append(trainItems, itemId)
+						trainRatings = append(trainRatings, ir.Rating)
+					}
+				}
+			}
+			trainFolds[i] = NewTrainSet(NewRawSet(trainUsers, trainItems, trainRatings))
+			testFolds[i] = NewRawSet(testUsers, testItems, testRatings)
+		}
+		return trainFolds, testFolds
+	}
 }
 
 /* Utils */

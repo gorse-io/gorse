@@ -312,6 +312,7 @@ func (svd *SVDpp) Predict(userId int, itemId int) float64 {
 }
 
 func (svd *SVDpp) Fit(trainSet TrainSet) {
+	svd.Base.Fit(trainSet)
 	// Setup parameters
 	nFactors := svd.Params.GetInt("nFactors", 20)
 	nEpochs := svd.Params.GetInt("nEpochs", 20)
@@ -321,7 +322,6 @@ func (svd *SVDpp) Fit(trainSet TrainSet) {
 	initStdDev := svd.Params.GetFloat64("initStdDev", 0.1)
 	nJobs := svd.Params.GetInt("nJobs", runtime.NumCPU())
 	// Initialize parameters
-	svd.Data = trainSet
 	svd.UserBias = make([]float64, trainSet.UserCount)
 	svd.ItemBias = make([]float64, trainSet.ItemCount)
 	svd.UserFactor = make([][]float64, trainSet.UserCount)

@@ -41,6 +41,16 @@ func selectInt(a []int, indices []int) []int {
 
 /* Linear Algebra */
 
+func max(a []int) int {
+	maximum := 0
+	for _, m := range a {
+		if m > maximum {
+			maximum = m
+		}
+	}
+	return maximum
+}
+
 func abs(dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] = math.Abs(dst[i])
