@@ -17,12 +17,7 @@ type Model struct {
 
 const goDoc = "https://goDoc.org/github.com/ZhangZhenghao/gorse/core"
 
-func main() {
-	// Parse arguments
-	dataSet := "ml-100k"
-	if len(os.Args) > 1 {
-		dataSet = os.Args[1]
-	}
+func benchmarks(dataSet string) {
 	// Cross validation
 	estimators := []Model{
 		{"SVD", "#SVD", core.NewSVD(nil)},
@@ -53,5 +48,48 @@ func main() {
 			stat.Mean(out[0].Tests, nil),
 			stat.Mean(out[1].Tests, nil),
 			int(tm.Hours()), int(tm.Minutes())%60, int(tm.Seconds())%60)
+	}
+}
+
+func benchmarkTopN(dataSet string) {
+	// Cross validation
+	estimators := []Model{
+		{"SVD", "#SVD", core.NewSVD(nil)},
+		{"Random", "#Random", core.NewRandom(nil)},
+	}
+	set := core.LoadDataFromBuiltIn(dataSet)
+	var start time.Time
+	fmt.Printf("| %s | AUC | Time |\n", dataSet)
+	fmt.Println("| - | - | - |")
+	for _, model := range estimators {
+		start = time.Now()
+		out := core.CrossValidate(model.estimator, set, []core.Evaluator{core.NewAUC(set)},
+			core.NewUserLOOSplitter(1), 0, core.Parameters{
+				"randState": 0,
+			}, runtime.NumCPU())
+		tm := time.Since(start)
+		fmt.Printf("| [%s](%s%s) | %.3f | %d:%02d:%02d |\n",
+			model.name, goDoc, model.doc,
+			stat.Mean(out[0].Tests, nil),
+			int(tm.Hours()), int(tm.Minutes())%60, int(tm.Seconds())%60)
+	}
+}
+
+func main() {
+	benchmarkName := "rating"
+	dataSet := "ml-100k"
+	if len(os.Args) > 1 {
+		benchmarkName = os.Args[1]
+	}
+	if len(os.Args) > 2 {
+		dataSet = os.Args[2]
+	}
+	switch benchmarkName {
+	case "rating":
+		benchmarks(dataSet)
+	case "topn":
+		benchmarkTopN(dataSet)
+	default:
+		benchmarks(dataSet)
 	}
 }
