@@ -5,7 +5,7 @@ import (
 	"math"
 )
 
-// Collaborative filtering based on co-clustering[1].
+// CoClustering: Collaborative filtering based on co-clustering[1].
 //
 // [1] George, Thomas, and Srujana Merugu. "A scalable collaborative filtering
 // framework based on co-clustering." Data Mining, Fifth IEEE international
