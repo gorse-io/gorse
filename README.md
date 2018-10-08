@@ -1,10 +1,10 @@
 # gorse: Go Recommender System Engine
 
-[![Build Status](https://travis-ci.org/ZhangZhenghao/gorse.svg?branch=master)](https://travis-ci.org/ZhangZhenghao/gorse)
-[![codecov](https://codecov.io/gh/ZhangZhenghao/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/ZhangZhenghao/gorse)
-[![GoDoc](https://godoc.org/github.com/ZhangZhenghao/gorse?status.svg)](https://godoc.org/github.com/ZhangZhenghao/gorse)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ZhangZhenghao/gorse)](https://goreportcard.com/report/github.com/ZhangZhenghao/gorse)
-[![](https://img.shields.io/badge/stability-experimental-orange.svg)]()
+[![Build Status](https://travis-ci.org/zhenghaoz/gorse.svg?branch=master)](https://travis-ci.org/zhenghaoz/gorse)
+[![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse)
+[![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse)
+[![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
+[![](https://img.shields.io/badge/stability-experimental-orange.svg)](#)
 
 `gorse` is a recommender system engine implemented by the go programming language. It provides
 
@@ -15,7 +15,7 @@
 ## Installation
 
 ```bash
-go get -t -v -u github.com/ZhangZhenghao/gorse/core
+go get -t -v -u github.com/zhenghaoz/gorse/core
 ```
 
 ## Usage
@@ -26,7 +26,8 @@ data := core.LoadDataFromBuiltIn("ml-100k")
 // Create a recommender
 algo := core.NewSVD(nil)
 // Cross validate
-cv := core.CrossValidate(algo, data, []core.Evaluator{core.RMSE, core.MAE},5, 0, nil)
+cv := core.CrossValidate(algo, data, []core.Evaluator{core.RMSE, core.MAE}, 
+           core.NewKFoldSplitter(5), 0, nil, runtime.NumCPU())
 // Print RMSE & MAE
 fmt.Printf("RMSE = %f, MAE = %f\n", 
            stat.Mean(cv[0].Tests, nil), 
