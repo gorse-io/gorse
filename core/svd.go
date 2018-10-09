@@ -74,14 +74,8 @@ func (svd *SVD) Fit(trainSet TrainSet) {
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount)
 	svd.ItemBias = make([]float64, trainSet.ItemCount)
-	svd.UserFactor = make([][]float64, trainSet.UserCount)
-	svd.ItemFactor = make([][]float64, trainSet.ItemCount)
-	for innerUserId := range svd.UserFactor {
-		svd.UserFactor[innerUserId] = svd.newNormalVector(nFactors, initMean, initStdDev)
-	}
-	for innerItemId := range svd.ItemFactor {
-		svd.ItemFactor[innerItemId] = svd.newNormalVector(nFactors, initMean, initStdDev)
-	}
+	svd.UserFactor = svd.newNormalMatrix(trainSet.UserCount, nFactors, initMean, initStdDev)
+	svd.ItemFactor = svd.newNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
 	// Create buffers
 	a := make([]float64, nFactors)
 	b := make([]float64, nFactors)
@@ -329,17 +323,10 @@ func (svd *SVDpp) Fit(trainSet TrainSet) {
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount)
 	svd.ItemBias = make([]float64, trainSet.ItemCount)
-	svd.UserFactor = make([][]float64, trainSet.UserCount)
-	svd.ItemFactor = make([][]float64, trainSet.ItemCount)
-	svd.ImplFactor = make([][]float64, trainSet.ItemCount)
+	svd.UserFactor = svd.newNormalMatrix(trainSet.UserCount, nFactors, initMean, initStdDev)
+	svd.ItemFactor = svd.newNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
+	svd.ImplFactor = svd.newNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
 	//svd.cacheFactor = make(map[int][]float64)
-	for innerUserId := range svd.UserBias {
-		svd.UserFactor[innerUserId] = svd.newNormalVector(nFactors, initMean, initStdDev)
-	}
-	for innerItemId := range svd.ItemBias {
-		svd.ItemFactor[innerItemId] = svd.newNormalVector(nFactors, initMean, initStdDev)
-		svd.ImplFactor[innerItemId] = svd.newNormalVector(nFactors, initMean, initStdDev)
-	}
 	// Build user rating set
 	svd.UserRatings = trainSet.UserRatings()
 	// Create buffers

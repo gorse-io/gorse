@@ -128,6 +128,14 @@ func (base *Base) newNormalVector(size int, mean, stdDev float64) []float64 {
 	return ret
 }
 
+func (base *Base) newNormalMatrix(row, col int, mean, stdDev float64) [][]float64 {
+	ret := make([][]float64, row)
+	for i := range ret {
+		ret[i] = base.newNormalVector(col, mean, stdDev)
+	}
+	return ret
+}
+
 func (base *Base) newUniformMatrix(row, col int, low, high float64) [][]float64 {
 	ret := make([][]float64, row)
 	for i := range ret {
