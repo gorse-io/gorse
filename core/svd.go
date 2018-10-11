@@ -18,11 +18,23 @@ import (
 // assumed to be zero. The same applies for item i with b_i and q_i.
 type SVD struct {
 	Base
+	// Model parameters
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
 	UserBias   []float64   // b_u
 	ItemBias   []float64   // b_i
 	GlobalBias float64     // mu
+	// Hyper parameters
+	nFactors   int
+	nEpochs    int
+	lr         float64
+	reg        float64
+	initMean   float64
+	initStdDev float64
+	optimizer  Optimizer
+	// Optimization
+	a []float64 // Pre-allocated buffer 'a'
+	b []float64 // Pre-allocated buffer 'b'
 }
 
 // NewSVD creates a SVD model. Parameters:
@@ -31,12 +43,25 @@ type SVD struct {
 //	 lr 		- The learning rate of SGD. Default is 0.005.
 //	 nFactors	- The number of latent factors. Default is 100.
 //	 nEpochs	- The number of iteration of the SGD procedure. Default is 20.
-//	 initMean	- The Mean of initial random latent factors. Default is 0.
+//	 initMean	- The mean of initial random latent factors. Default is 0.
 //	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+//   optimizer  - The optimizer to optimize model parameters. Default is SGDOptimizer.
 func NewSVD(params Parameters) *SVD {
 	svd := new(SVD)
-	svd.Params = params
+	svd.Base.SetParams(params)
 	return svd
+}
+
+// SetParams sets hyper parameters.
+func (svd *SVD) SetParams(params Parameters) {
+	svd.Base.SetParams(params)
+	svd.nFactors = svd.Params.GetInt("nFactors", 100)
+	svd.nEpochs = svd.Params.GetInt("nEpochs", 20)
+	svd.lr = svd.Params.GetFloat64("lr", 0.005)
+	svd.reg = svd.Params.GetFloat64("reg", 0.02)
+	svd.initMean = svd.Params.GetFloat64("initMean", 0)
+	svd.initStdDev = svd.Params.GetFloat64("initStdDev", 0.1)
+	svd.optimizer = svd.Params.GetOptimizer("optimizer", SGDOptimizer)
 }
 
 // Predict by a SVD model.
@@ -64,60 +89,73 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 // Fit a SVD model.
 func (svd *SVD) Fit(trainSet TrainSet) {
 	svd.Base.Fit(trainSet)
-	// Setup parameters
-	nFactors := svd.Params.GetInt("nFactors", 100)
-	nEpochs := svd.Params.GetInt("nEpochs", 20)
-	lr := svd.Params.GetFloat64("lr", 0.005)
-	reg := svd.Params.GetFloat64("reg", 0.02)
-	initMean := svd.Params.GetFloat64("initMean", 0)
-	initStdDev := svd.Params.GetFloat64("initStdDev", 0.1)
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount)
 	svd.ItemBias = make([]float64, trainSet.ItemCount)
-	svd.UserFactor = svd.newNormalMatrix(trainSet.UserCount, nFactors, initMean, initStdDev)
-	svd.ItemFactor = svd.newNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
+	svd.UserFactor = svd.newNormalMatrix(trainSet.UserCount, svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.ItemFactor = svd.newNormalMatrix(trainSet.ItemCount, svd.nFactors, svd.initMean, svd.initStdDev)
 	// Create buffers
-	a := make([]float64, nFactors)
-	b := make([]float64, nFactors)
-	// Stochastic Gradient Descent
-	for epoch := 0; epoch < nEpochs; epoch++ {
-		for i := 0; i < trainSet.Length(); i++ {
-			userId, itemId, rating := trainSet.Index(i)
-			innerUserId := trainSet.ConvertUserId(userId)
-			innerItemId := trainSet.ConvertItemId(itemId)
-			userBias := svd.UserBias[innerUserId]
-			itemBias := svd.ItemBias[innerItemId]
-			userFactor := svd.UserFactor[innerUserId]
-			itemFactor := svd.ItemFactor[innerItemId]
-			// Compute error
-			diff := svd.Predict(userId, itemId) - rating
-			// Update global Bias
-			gradGlobalBias := diff
-			svd.GlobalBias -= lr * gradGlobalBias
-			// Update user Bias
-			gradUserBias := diff + reg*userBias
-			svd.UserBias[innerUserId] -= lr * gradUserBias
-			// Update item Bias
-			gradItemBias := diff + reg*itemBias
-			svd.ItemBias[innerItemId] -= lr * gradItemBias
-			// Update user latent factor
-			copy(a, itemFactor)
-			mulConst(diff, a)
-			copy(b, userFactor)
-			mulConst(reg, b)
-			floats.Add(a, b)
-			mulConst(lr, a)
-			floats.Sub(svd.UserFactor[innerUserId], a)
-			// Update item latent factor
-			copy(a, userFactor)
-			mulConst(diff, a)
-			copy(b, itemFactor)
-			mulConst(reg, b)
-			floats.Add(a, b)
-			mulConst(lr, a)
-			floats.Sub(svd.ItemFactor[innerItemId], a)
-		}
-	}
+	svd.a = make([]float64, svd.nFactors)
+	svd.b = make([]float64, svd.nFactors)
+	// Optimize
+	svd.optimizer(svd, trainSet, svd.nEpochs)
+}
+
+// PointUpdate updates model parameters by point.
+func (svd *SVD) PointUpdate(upGrad float64, innerUserId, innerItemId int) {
+	userBias := svd.UserBias[innerUserId]
+	itemBias := svd.ItemBias[innerItemId]
+	userFactor := svd.UserFactor[innerUserId]
+	itemFactor := svd.ItemFactor[innerItemId]
+	// Update global Bias
+	gradGlobalBias := upGrad
+	svd.GlobalBias -= svd.lr * gradGlobalBias
+	// Update user Bias
+	gradUserBias := upGrad + svd.reg*userBias
+	svd.UserBias[innerUserId] -= svd.lr * gradUserBias
+	// Update item Bias
+	gradItemBias := upGrad + svd.reg*itemBias
+	svd.ItemBias[innerItemId] -= svd.lr * gradItemBias
+	// Update user latent factor
+	copy(svd.a, itemFactor)
+	mulConst(upGrad, svd.a)
+	copy(svd.b, userFactor)
+	mulConst(svd.reg, svd.b)
+	floats.Add(svd.a, svd.b)
+	mulConst(svd.lr, svd.a)
+	floats.Sub(svd.UserFactor[innerUserId], svd.a)
+	// Update item latent factor
+	copy(svd.a, userFactor)
+	mulConst(upGrad, svd.a)
+	copy(svd.b, itemFactor)
+	mulConst(svd.reg, svd.b)
+	floats.Add(svd.a, svd.b)
+	mulConst(svd.lr, svd.a)
+	floats.Sub(svd.ItemFactor[innerItemId], svd.a)
+}
+
+// PairUpdate updates model parameters by pair.
+func (svd *SVD) PairUpdate(upGrad float64, innerUserId, positiveItemId, negativeItemId int) {
+	userFactor := svd.UserFactor[innerUserId]
+	positiveItemFactor := svd.ItemFactor[positiveItemId]
+	negativeItemFactor := svd.ItemFactor[negativeItemId]
+	// Update positive item latent factor: +w_u
+	copy(svd.a, userFactor)
+	mulConst(upGrad, svd.a)
+	mulConst(svd.lr, svd.a)
+	floats.Add(svd.ItemFactor[positiveItemId], svd.a)
+	// Update negative item latent factor: -w_u
+	copy(svd.a, userFactor)
+	neg(svd.a)
+	mulConst(upGrad, svd.a)
+	mulConst(svd.lr, svd.a)
+	floats.Add(svd.ItemFactor[negativeItemId], svd.a)
+	// Update user latent factor: h_i-h_j
+	copy(svd.a, positiveItemFactor)
+	floats.Sub(svd.a, negativeItemFactor)
+	mulConst(upGrad, svd.a)
+	mulConst(svd.lr, svd.a)
+	floats.Add(svd.UserFactor[innerUserId], svd.a)
 }
 
 /* NMF */

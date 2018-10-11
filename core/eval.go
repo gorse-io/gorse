@@ -18,7 +18,7 @@ type CrossValidateResult struct {
 }
 
 // CrossValidation evaluates a model by k-fold cross validation.
-func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, splitter Splitter, seed int64,
+func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitter Splitter, seed int64,
 	params Parameters, nJobs int) []CrossValidateResult {
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, seed)
@@ -31,7 +31,7 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, sp
 	}
 	// Cross validation
 	parallel(length, nJobs, func(begin, end int) {
-		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Estimator)
+		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Model)
 		Copy(cp, estimator)
 		for i := begin; i < end; i++ {
 			trainFold := trainFolds[i]
@@ -41,10 +41,6 @@ func CrossValidate(estimator Estimator, dataSet DataSet, metrics []Evaluator, sp
 			// Evaluate on test set
 			for j := 0; j < len(ret); j++ {
 				ret[j].Tests[i] = metrics[j](cp, testFold)
-			}
-			// Evaluate on train set
-			for j := 0; j < len(ret); j++ {
-				ret[j].Trains[i] = metrics[j](cp, trainFold.DataSet)
 			}
 		}
 	})
@@ -63,7 +59,7 @@ type GridSearchResult struct {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
+func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 	evaluators []Evaluator, cv int, seed int64, nJobs int) []GridSearchResult {
 	// Retrieve parameter names and length
 	params := make([]string, 0, len(paramGrid))
@@ -108,72 +104,4 @@ func GridSearchCV(estimator Estimator, dataSet DataSet, paramGrid ParameterGrid,
 	options := make(map[string]interface{})
 	dfs(0, options)
 	return results
-}
-
-/* Evaluator */
-
-// Evaluator function type.
-type Evaluator func(Estimator, DataSet) float64
-
-// RMSE is root mean square error.
-func RMSE(estimator Estimator, testSet DataSet) float64 {
-	sum := 0.0
-	for j := 0; j < testSet.Length(); j++ {
-		userId, itemId, rating := testSet.Index(j)
-		prediction := estimator.Predict(userId, itemId)
-		sum += (prediction - rating) * (prediction - rating)
-	}
-	return math.Sqrt(sum / float64(testSet.Length()))
-}
-
-// MAE is mean absolute error.
-func MAE(estimator Estimator, testSet DataSet) float64 {
-	sum := 0.0
-	for j := 0; j < testSet.Length(); j++ {
-		userId, itemId, rating := testSet.Index(j)
-		prediction := estimator.Predict(userId, itemId)
-		sum += math.Abs(prediction - rating)
-	}
-	return sum / float64(testSet.Length())
-}
-
-// NewAUC creates a AUC evaluator.
-func NewAUC(fullSet DataSet) Evaluator {
-	return func(estimator Estimator, testSet DataSet) float64 {
-		full := NewTrainSet(fullSet)
-		test := NewTrainSet(testSet)
-		sum, count := 0.0, 0.0
-		// Find all userIds
-		for innerUserIdTest, irs := range test.UserRatings() {
-			userId := test.outerUserIds[innerUserIdTest]
-			// Find all <userId, j>s in full data set
-			innerUserIdFull := full.ConvertUserId(userId)
-			fullRatedItem := make(map[int]float64)
-			for _, jr := range full.UserRatings()[innerUserIdFull] {
-				itemId := full.outerItemIds[jr.Id]
-				fullRatedItem[itemId] = jr.Rating
-			}
-			// Find all <userId, i>s in test data set
-			indicatorSum, ratedCount := 0.0, 0.0
-			for _, ir := range irs {
-				iItemId := test.outerItemIds[ir.Id]
-				// Find all <userId, j>s not in full data set
-				for j := 0; j < full.ItemCount; j++ {
-					jItemId := full.outerItemIds[j]
-					if _, exist := fullRatedItem[jItemId]; !exist {
-						// I(\hat{x}_{ui} - \hat{x}_{uj})
-						if estimator.Predict(userId, iItemId) > estimator.Predict(userId, jItemId) {
-							indicatorSum++
-						}
-						ratedCount++
-					}
-				}
-			}
-			// += \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
-			sum += indicatorSum / ratedCount
-			count++
-		}
-		// \frac{1}{|U|} \sum_u \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
-		return sum / count
-	}
 }

@@ -81,7 +81,7 @@ func TestAUC(t *testing.T) {
 		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
 		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
 	b := NewRawSet([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0})
-	c := NewAUC(b)
+	c := NewAUCEvaluator(b)
 	if c(a, b) != 1.0 {
 		t.Fail()
 	}

@@ -1,7 +1,7 @@
 package core
 
 type BPREstimator interface {
-	Estimator
+	Model
 	FitBPR()
 }
 
@@ -12,19 +12,19 @@ type BPREstimator interface {
 // twenty-fifth conference on uncertainty in artificial
 // intelligence. AUAI Press, 2009.
 type BPR struct {
-	Estimator
+	Model
 }
 
 // NewBPR creates a new BPR model.
-func NewBPR(estimator Estimator) *BPR {
+func NewBPR(estimator Model) *BPR {
 	bpr := new(BPR)
-	bpr.Estimator = estimator
+	bpr.Model = estimator
 	return bpr
 }
 
 // Predict a rating for ranking.
 func (bpr *BPR) Predict(userId, itemId int) float64 {
-	return bpr.Estimator.Predict(userId, itemId)
+	return bpr.Model.Predict(userId, itemId)
 }
 
 func (bpr *BPR) Fit(set TrainSet) {

@@ -4,8 +4,8 @@ import (
 	"math"
 )
 
-// Sim is the prototype of similarity functions.
-type Sim func(SortedIdRatings, SortedIdRatings) float64
+// Similarity computes the similarity between two lists of rating history.
+type Similarity func(SortedIdRatings, SortedIdRatings) float64
 
 // Cosine computes the cosine similarity between a pair of users (or items).
 func Cosine(a SortedIdRatings, b SortedIdRatings) float64 {
