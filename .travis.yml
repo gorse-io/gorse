@@ -1,7 +1,9 @@
 language: go
 
 go:
- - "1.10.2"
+ - "1.10.x"
+ - "1.11.x"
+ -  master
 
 before_install:
   - go get -t -v ./...

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"../core"
 	"fmt"
+	"github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/stat"
 	"os"
 	"runtime"
