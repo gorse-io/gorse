@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-/* Base */
+/* Model */
 
 // An algorithm interface to predict ratings. Any estimator in this
 // package should implement it.
@@ -79,7 +79,7 @@ func (parameters Parameters) GetSim(name string, _default Similarity) Similarity
 
 func (parameters Parameters) GetOptimizer(name string, _default Optimizer) Optimizer {
 	if val, exist := parameters[name]; exist {
-		return val.(Optimizer)
+		return val.(func(OptModel, TrainSet, int))
 	}
 	return _default
 }
@@ -88,13 +88,15 @@ func (parameters Parameters) GetOptimizer(name string, _default Optimizer) Optim
 
 // Base structure of all estimators.
 type Base struct {
-	rng    *rand.Rand
-	Params Parameters
-	Data   TrainSet
+	rng       *rand.Rand
+	Params    Parameters
+	Data      TrainSet
+	randState int
 }
 
 func (base *Base) SetParams(params Parameters) {
 	base.Params = params
+	base.randState = base.Params.GetInt("randState", int(time.Now().UnixNano()))
 }
 
 func (base *Base) Predict(userId, itemId int) float64 {
@@ -105,8 +107,7 @@ func (base *Base) Fit(trainSet TrainSet) {
 	// Setup train set
 	base.Data = trainSet
 	// Setup random state
-	randState := base.Params.GetInt("randState", int(time.Now().UnixNano()))
-	base.rng = rand.New(rand.NewSource(int64(randState)))
+	base.rng = rand.New(rand.NewSource(int64(base.randState)))
 }
 
 func (base *Base) newUniformVectorInt(size, low, high int) []int {

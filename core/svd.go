@@ -25,6 +25,7 @@ type SVD struct {
 	ItemBias   []float64   // b_i
 	GlobalBias float64     // mu
 	// Hyper parameters
+	bias       bool
 	nFactors   int
 	nEpochs    int
 	lr         float64
@@ -38,6 +39,7 @@ type SVD struct {
 }
 
 // NewSVD creates a SVD model. Parameters:
+//   bias       - Add bias in SVD model. Default is true.
 //	 reg 		- The regularization parameter of the cost function that is
 // 				  optimized. Default is 0.02.
 //	 lr 		- The learning rate of SGD. Default is 0.005.
@@ -55,6 +57,7 @@ func NewSVD(params Parameters) *SVD {
 // SetParams sets hyper parameters.
 func (svd *SVD) SetParams(params Parameters) {
 	svd.Base.SetParams(params)
+	svd.bias = svd.Params.GetBool("bias", true)
 	svd.nFactors = svd.Params.GetInt("nFactors", 100)
 	svd.nEpochs = svd.Params.GetInt("nEpochs", 20)
 	svd.lr = svd.Params.GetFloat64("lr", 0.005)
@@ -103,35 +106,37 @@ func (svd *SVD) Fit(trainSet TrainSet) {
 
 // PointUpdate updates model parameters by point.
 func (svd *SVD) PointUpdate(upGrad float64, innerUserId, innerItemId int) {
-	userBias := svd.UserBias[innerUserId]
-	itemBias := svd.ItemBias[innerItemId]
+	if svd.bias {
+		userBias := svd.UserBias[innerUserId]
+		itemBias := svd.ItemBias[innerItemId]
+		// Update global Bias
+		gradGlobalBias := upGrad
+		svd.GlobalBias += svd.lr * gradGlobalBias
+		// Update user Bias
+		gradUserBias := upGrad + svd.reg*userBias
+		svd.UserBias[innerUserId] += svd.lr * gradUserBias
+		// Update item Bias
+		gradItemBias := upGrad + svd.reg*itemBias
+		svd.ItemBias[innerItemId] += svd.lr * gradItemBias
+	}
 	userFactor := svd.UserFactor[innerUserId]
 	itemFactor := svd.ItemFactor[innerItemId]
-	// Update global Bias
-	gradGlobalBias := upGrad
-	svd.GlobalBias -= svd.lr * gradGlobalBias
-	// Update user Bias
-	gradUserBias := upGrad + svd.reg*userBias
-	svd.UserBias[innerUserId] -= svd.lr * gradUserBias
-	// Update item Bias
-	gradItemBias := upGrad + svd.reg*itemBias
-	svd.ItemBias[innerItemId] -= svd.lr * gradItemBias
 	// Update user latent factor
 	copy(svd.a, itemFactor)
 	mulConst(upGrad, svd.a)
 	copy(svd.b, userFactor)
 	mulConst(svd.reg, svd.b)
-	floats.Add(svd.a, svd.b)
+	floats.Sub(svd.a, svd.b)
 	mulConst(svd.lr, svd.a)
-	floats.Sub(svd.UserFactor[innerUserId], svd.a)
+	floats.Add(svd.UserFactor[innerUserId], svd.a)
 	// Update item latent factor
 	copy(svd.a, userFactor)
 	mulConst(upGrad, svd.a)
 	copy(svd.b, itemFactor)
 	mulConst(svd.reg, svd.b)
-	floats.Add(svd.a, svd.b)
+	floats.Sub(svd.a, svd.b)
 	mulConst(svd.lr, svd.a)
-	floats.Sub(svd.ItemFactor[innerItemId], svd.a)
+	floats.Add(svd.ItemFactor[innerItemId], svd.a)
 }
 
 // PairUpdate updates model parameters by pair.

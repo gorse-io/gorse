@@ -13,8 +13,7 @@ type ParameterGrid map[string][]interface{}
 
 // CrossValidateResult contains the result of cross validate
 type CrossValidateResult struct {
-	Trains []float64
-	Tests  []float64
+	Tests []float64
 }
 
 // CrossValidation evaluates a model by k-fold cross validation.
@@ -26,7 +25,6 @@ func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitt
 	// Create return structures
 	ret := make([]CrossValidateResult, len(metrics))
 	for i := 0; i < len(ret); i++ {
-		ret[i].Trains = make([]float64, length)
 		ret[i].Tests = make([]float64, length)
 	}
 	// Cross validation

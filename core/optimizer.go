@@ -15,7 +15,7 @@ type OptModel interface {
 }
 
 // Optimizer optimizes OptModel.
-type Optimizer func(model OptModel, trainSet TrainSet, nEpochs int)
+type Optimizer func(OptModel, TrainSet, int)
 
 // SGDOptimizer optimizes a factor by SGD on square error.
 func SGDOptimizer(model OptModel, trainSet TrainSet, nEpochs int) {
@@ -25,7 +25,7 @@ func SGDOptimizer(model OptModel, trainSet TrainSet, nEpochs int) {
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
 			// Compute error
-			diff := model.Predict(userId, itemId) - rating
+			diff := rating - model.Predict(userId, itemId)
 			// Point-wise update
 			model.PointUpdate(diff, innerUserId, innerItemId)
 		}

@@ -67,3 +67,21 @@ func NewAUCEvaluator(fullSet DataSet) Evaluator {
 		return sum / count
 	}
 }
+
+func NewNDCG(n int) Evaluator {
+	return func(model Model, dataSet DataSet) float64 {
+		return 0
+	}
+}
+
+func NewHR() Evaluator {
+	return func(model Model, dataSet DataSet) float64 {
+		return 0
+	}
+}
+
+func NewRecall() Evaluator {
+	return func(model Model, set DataSet) float64 {
+		return 0
+	}
+}
