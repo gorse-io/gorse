@@ -1,6 +1,14 @@
-'''This module runs a 5-Fold CV for all the algorithms (default parameters) on
-the movielens datasets, and reports average RMSE, MAE, and total computation
-time.  It is used for making tables in the README.md file'''
+# This script runs a 5-Fold CV for all the algorithms (default parameters) on
+# the movielens datasets, and reports average RMSE, MAE, and total computation
+# time. Usage:
+#
+#   python3 benchmark_surprise.py [dataset]
+#
+# For example:
+#
+#   python3 benchmark_surprise.py ml-100k
+#
+# The command runs the benchmark on ml-100k dataset.
 
 import datetime
 import random
