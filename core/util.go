@@ -57,6 +57,12 @@ func abs(dst []float64) {
 	}
 }
 
+func neg(dst []float64) {
+	for i := 0; i < len(dst); i++ {
+		dst[i] = -dst[i]
+	}
+}
+
 func mulConst(c float64, dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] *= c

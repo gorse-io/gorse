@@ -10,7 +10,7 @@ import (
 
 // An algorithm interface to predict ratings. Any estimator in this
 // package should implement it.
-type Estimator interface {
+type Model interface {
 	// Set parameters.
 	SetParams(params Parameters)
 	// Predict the rating given by a user (userId) to a item (itemId).
@@ -70,9 +70,16 @@ func (parameters Parameters) GetString(name string, _default string) string {
 }
 
 // Get a similarity function from parameters.
-func (parameters Parameters) GetSim(name string, _default Sim) Sim {
+func (parameters Parameters) GetSim(name string, _default Similarity) Similarity {
 	if val, exist := parameters[name]; exist {
-		return val.(Sim)
+		return val.(Similarity)
+	}
+	return _default
+}
+
+func (parameters Parameters) GetOptimizer(name string, _default Optimizer) Optimizer {
+	if val, exist := parameters[name]; exist {
+		return val.(Optimizer)
 	}
 	return _default
 }
@@ -124,6 +131,14 @@ func (base *Base) newNormalVector(size int, mean, stdDev float64) []float64 {
 	ret := make([]float64, size)
 	for i := 0; i < len(ret); i++ {
 		ret[i] = base.rng.NormFloat64()*stdDev + mean
+	}
+	return ret
+}
+
+func (base *Base) newNormalMatrix(row, col int, mean, stdDev float64) [][]float64 {
+	ret := make([][]float64, row)
+	for i := range ret {
+		ret[i] = base.newNormalVector(col, mean, stdDev)
 	}
 	return ret
 }
