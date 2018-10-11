@@ -1,12 +1,12 @@
 language: go
 
 go:
- - "1.10.x"
- - "1.11.x"
  -  master
 
 before_install:
   - go get -v ./core
+
+install: true
 
 script:
   - go test -v ./core -coverprofile=coverage.txt -covermode=atomic
