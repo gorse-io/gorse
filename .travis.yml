@@ -6,7 +6,7 @@ go:
  -  master
 
 before_install:
-  - go get -t -v ./...
+  - go get -v ./core
 
 script:
   - go test -v ./core -coverprofile=coverage.txt -covermode=atomic
