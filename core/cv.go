@@ -17,7 +17,7 @@ type CrossValidateResult struct {
 }
 
 // CrossValidation evaluates a model by k-fold cross validation.
-func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitter Splitter, seed int64,
+func CrossValidate(estimator Model, dataSet RawDataSet, metrics []Evaluator, splitter Splitter, seed int64,
 	params Parameters, nJobs int) []CrossValidateResult {
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, seed)
@@ -57,7 +57,7 @@ type GridSearchResult struct {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
+func GridSearchCV(estimator Model, dataSet RawDataSet, paramGrid ParameterGrid,
 	evaluators []Evaluator, cv int, seed int64, nJobs int) []GridSearchResult {
 	// Retrieve parameter names and length
 	params := make([]string, 0, len(paramGrid))

@@ -43,7 +43,7 @@ func benchmark(dataSet string) {
 }
 
 func main() {
-	dataSet := "ml-100k"
+	dataSet := "ml-1m"
 	if len(os.Args) > 1 {
 		dataSet = os.Args[1]
 	}

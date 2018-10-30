@@ -20,16 +20,16 @@ const goDoc = "https://goDoc.org/github.com/ZhangZhenghao/gorse/core"
 func benchmark(dataSet string) {
 	// Cross validation
 	models := []Model{
-		{"SVD", "#SVD", core.NewSVD(nil)},
-		{"SVD++", "#SVDpp", core.NewSVDpp(nil)},
-		{"NMF[3]", "#NMF", core.NewNMF(nil)},
-		{"Slope One[4]", "#SlopeOne", core.NewSlopOne(nil)},
-		{"KNN", "#NewKNN", core.NewKNN(nil)},
-		{"Centered k-NN", "#NewKNNWithMean", core.NewKNNWithMean(nil)},
-		{"k-NN Baseline", "#NewKNNBaseLine", core.NewKNNBaseLine(nil)},
-		{"k-NN Z-Score", "#NewKNNWithZScore", core.NewKNNWithZScore(nil)},
-		{"Co-Clustering[5]", "#CoClustering", core.NewCoClustering(nil)},
-		{"BaseLine", "#BaseLine", core.NewBaseLine(nil)},
+		//{"SVD", "#SVD", core.NewSVD(nil)},
+		//{"SVD++", "#SVDpp", core.NewSVDpp(nil)},
+		//{"NMF[3]", "#NMF", core.NewNMF(nil)},
+		//{"Slope One[4]", "#SlopeOne", core.NewSlopOne(nil)},
+		//{"KNN", "#NewKNN", core.NewKNN(nil)},
+		//{"Centered k-NN", "#NewKNNWithMean", core.NewKNNWithMean(nil)},
+		//{"k-NN Baseline", "#NewKNNBaseLine", core.NewKNNBaseLine(nil)},
+		//{"k-NN Z-Score", "#NewKNNWithZScore", core.NewKNNWithZScore(nil)},
+		//{"Co-Clustering[5]", "#CoClustering", core.NewCoClustering(nil)},
+		//{"BaseLine", "#BaseLine", core.NewBaseLine(nil)},
 		{"Random", "#Random", core.NewRandom(nil)},
 	}
 	set := core.LoadDataFromBuiltIn(dataSet)

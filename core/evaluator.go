@@ -3,10 +3,10 @@ package core
 import "math"
 
 // Evaluator evaluates the performance of a estimator on the test set.
-type Evaluator func(Model, DataSet) float64
+type Evaluator func(Model, RawDataSet) float64
 
 // RMSE is root mean square error.
-func RMSE(estimator Model, testSet DataSet) float64 {
+func RMSE(estimator Model, testSet RawDataSet) float64 {
 	sum := 0.0
 	for j := 0; j < testSet.Length(); j++ {
 		userId, itemId, rating := testSet.Index(j)
@@ -17,7 +17,7 @@ func RMSE(estimator Model, testSet DataSet) float64 {
 }
 
 // MAE is mean absolute error.
-func MAE(estimator Model, testSet DataSet) float64 {
+func MAE(estimator Model, testSet RawDataSet) float64 {
 	sum := 0.0
 	for j := 0; j < testSet.Length(); j++ {
 		userId, itemId, rating := testSet.Index(j)
@@ -28,8 +28,8 @@ func MAE(estimator Model, testSet DataSet) float64 {
 }
 
 // NewAUCEvaluator creates a AUC evaluator.
-func NewAUCEvaluator(fullSet DataSet) Evaluator {
-	return func(estimator Model, testSet DataSet) float64 {
+func NewAUCEvaluator(fullSet RawDataSet) Evaluator {
+	return func(estimator Model, testSet RawDataSet) float64 {
 		full := NewTrainSet(fullSet)
 		test := NewTrainSet(testSet)
 		sum, count := 0.0, 0.0
@@ -69,19 +69,19 @@ func NewAUCEvaluator(fullSet DataSet) Evaluator {
 }
 
 func NewNDCG(n int) Evaluator {
-	return func(model Model, dataSet DataSet) float64 {
+	return func(model Model, dataSet RawDataSet) float64 {
 		return 0
 	}
 }
 
 func NewHR() Evaluator {
-	return func(model Model, dataSet DataSet) float64 {
+	return func(model Model, dataSet RawDataSet) float64 {
 		return 0
 	}
 }
 
 func NewRecall() Evaluator {
-	return func(model Model, set DataSet) float64 {
+	return func(model Model, set RawDataSet) float64 {
 		return 0
 	}
 }

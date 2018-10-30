@@ -22,36 +22,42 @@ import (
 
 // Built-in data set
 type _BuiltInDataSet struct {
-	url  string
-	path string
-	sep  string
+	url    string
+	path   string
+	sep    string
+	loader func(string, string, bool) RawDataSet
 }
 
 var builtInDataSets = map[string]_BuiltInDataSet{
 	"ml-100k": {
-		url:  "https://cdn.sine-x.com/datasets/movielens/ml-100k.zip",
-		path: "ml-100k/u.data",
-		sep:  "\t",
+		url:    "https://cdn.sine-x.com/datasets/movielens/ml-100k.zip",
+		path:   "ml-100k/u.data",
+		sep:    "\t",
+		loader: LoadDataFromFile,
 	},
 	"ml-1m": {
-		url:  "https://cdn.sine-x.com/datasets/movielens/ml-1m.zip",
-		path: "ml-1m/ratings.dat",
-		sep:  "::",
+		url:    "https://cdn.sine-x.com/datasets/movielens/ml-1m.zip",
+		path:   "ml-1m/ratings.dat",
+		sep:    "::",
+		loader: LoadDataFromFile,
 	},
 	"ml-10m": {
-		url:  "https://cdn.sine-x.com/datasets/movielens/ml-10m.zip",
-		path: "ml-10M100K/ratings.dat",
-		sep:  "::",
+		url:    "https://cdn.sine-x.com/datasets/movielens/ml-10m.zip",
+		path:   "ml-10M100K/ratings.dat",
+		sep:    "::",
+		loader: LoadDataFromFile,
 	},
 	"ml-20m": {
-		url:  "https://cdn.sine-x.com/datasets/movielens/ml-20m.zip",
-		path: "ml-20m/ratings.csv",
-		sep:  ",",
+		url:    "https://cdn.sine-x.com/datasets/movielens/ml-20m.zip",
+		path:   "ml-20m/ratings.csv",
+		sep:    ",",
+		loader: LoadDataFromFile,
 	},
 	"netflix": {
-		url:  "https://cdn.sine-x.com/datasets/netflix/netflix-prize-data.zip",
-		path: "netflix/training_set.txt",
-		sep:  ",",
+		url:    "https://cdn.sine-x.com/datasets/netflix/netflix-prize-data.zip",
+		path:   "netflix/training_set.txt",
+		sep:    ",",
+		loader: LoadDataFromNetflix,
 	},
 }
 
@@ -72,41 +78,65 @@ func init() {
 
 /* Data Set */
 
+type DataSet interface {
+	Length() int
+	Index(i int) (int, int, float64)
+}
+
 // Raw data set. An array of (userId, itemId, rating).
-type DataSet struct {
+type RawDataSet struct {
 	Ratings []float64
 	Users   []int
 	Items   []int
 }
 
-// Create a new raw data set.
-func NewRawSet(users, items []int, ratings []float64) DataSet {
-	return DataSet{
+type VirtualDataSet struct {
+	data *RawDataSet
+	index []int
+}
+
+func NewVirtualDataSet(dataSet *RawDataSet, index []int) VirtualDataSet {
+	return VirtualDataSet{
+		data: dataSet,
+		index: index,
+	}
+}
+
+// NewRawDataSet creates a new raw data set.
+func NewRawDataSet(users, items []int, ratings []float64) RawDataSet {
+	return RawDataSet{
 		Users:   users,
 		Items:   items,
 		Ratings: ratings,
 	}
 }
 
+func (dataSet *VirtualDataSet) Length() int {
+	return len(dataSet.index)
+}
+
+func (dataSet *VirtualDataSet) Index(i int) (int, int, float64) {
+	indexInData := dataSet.index[i]
+	return dataSet.data.Index(indexInData)
+}
+
 // Length returns the number of ratings in the data set.
-func (dataSet *DataSet) Length() int {
+func (dataSet *RawDataSet) Length() int {
 	return len(dataSet.Ratings)
 }
 
 // Index returns the i-th <userId, itemId, rating>.
-func (dataSet *DataSet) Index(i int) (int, int, float64) {
+func (dataSet *RawDataSet) Index(i int) (int, int, float64) {
 	return dataSet.Users[i], dataSet.Items[i], dataSet.Ratings[i]
 }
 
 // Subset returns a subset of the data set.
-func (dataSet *DataSet) SubSet(indices []int) DataSet {
-	return NewRawSet(selectInt(dataSet.Users, indices),
-		selectInt(dataSet.Items, indices),
-		selectFloat(dataSet.Ratings, indices))
+func (dataSet *RawDataSet) SubSet(indices []int) VirtualDataSet {
+	return NewVirtualDataSet(dataSet, indices)
 }
 
 // Train test split. Return train set and test set.
-func (dataSet *DataSet) Split(testSize float64, seed int) (TrainSet, DataSet) {
+func (dataSet *RawDataSet) Split(testSize float64, seed int) (TrainSet, RawDataSet) {
 	rand.Seed(0)
 	perm := rand.Perm(dataSet.Length())
 	mid := int(float64(dataSet.Length()) * testSize)
@@ -116,7 +146,7 @@ func (dataSet *DataSet) Split(testSize float64, seed int) (TrainSet, DataSet) {
 }
 
 // Save data set to csv.
-func (dataSet *DataSet) ToCSV(fileName string, sep string) error {
+func (dataSet *RawDataSet) ToCSV(fileName string, sep string) error {
 	file, err := os.Create(fileName)
 	defer file.Close()
 	if err == nil {
@@ -132,7 +162,7 @@ func (dataSet *DataSet) ToCSV(fileName string, sep string) error {
 }
 
 // Predict ratings for a set of <userId, itemId>s.
-func (dataSet *DataSet) Predict(estimator Model) []float64 {
+func (dataSet *RawDataSet) Predict(estimator Model) []float64 {
 	predictions := make([]float64, dataSet.Length())
 	for j := 0; j < dataSet.Length(); j++ {
 		userId, itemId, _ := dataSet.Index(j)
@@ -252,7 +282,7 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 //   ml-1m		- MovieLens 1M
 //   ml-10m		- MovieLens 10M
 //   ml-20m		- MovieLens 20M
-func LoadDataFromBuiltIn(dataSetName string) DataSet {
+func LoadDataFromBuiltIn(dataSetName string) RawDataSet {
 	// Extract data set information
 	dataSet, exist := builtInDataSets[dataSetName]
 	if !exist {
@@ -263,7 +293,7 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 		zipFileName, _ := downloadFromUrl(dataSet.url, downloadDir)
 		unzip(zipFileName, dataSetDir)
 	}
-	return LoadDataFromFile(dataFileName, dataSet.sep, false)
+	return dataSet.loader(dataFileName, dataSet.sep, false)
 }
 
 // LoadDataFromFile loads data from a text file. The text file should be:
@@ -280,7 +310,7 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 //  186\t302\t3\t891717742
 //  22\t377\t1\t878887116
 //
-func LoadDataFromFile(fileName string, sep string, hasHeader bool) DataSet {
+func LoadDataFromFile(fileName string, sep string, hasHeader bool) RawDataSet {
 	users := make([]int, 0)
 	items := make([]int, 0)
 	ratings := make([]float64, 0)
@@ -307,7 +337,40 @@ func LoadDataFromFile(fileName string, sep string, hasHeader bool) DataSet {
 		items = append(items, item)
 		ratings = append(ratings, float64(rating))
 	}
-	return NewRawSet(users, items, ratings)
+	return NewRawDataSet(users, items, ratings)
+}
+
+func LoadDataFromNetflix(fileName string, sep string, hasHeader bool) RawDataSet {
+	users := make([]int, 0)
+	items := make([]int, 0)
+	ratings := make([]float64, 0)
+	// Open file
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	// Read file
+	scanner := bufio.NewScanner(file)
+	itemId := -1
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line[len(line)-1] == ':' {
+			// <itemId>:
+			if itemId, err = strconv.Atoi(line[0 : len(line)-1]); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			// <userId>, <rating>, <date>
+			fields := strings.Split(line, ",")
+			userId, _ := strconv.Atoi(fields[0])
+			rating, _ := strconv.Atoi(fields[1])
+			users = append(users, userId)
+			items = append(items, itemId)
+			ratings = append(ratings, float64(rating))
+		}
+	}
+	return NewRawDataSet(users, items, ratings)
 }
 
 // Download file from URL.

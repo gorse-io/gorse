@@ -3,13 +3,13 @@ package core
 import "math/rand"
 
 // Splitter split data to train set and test set.
-type Splitter func(set DataSet, seed int64) ([]TrainSet, []DataSet)
+type Splitter func(set RawDataSet, seed int64) ([]TrainSet, []RawDataSet)
 
 // NewKFoldSplitter creates a k-fold splitter.
 func NewKFoldSplitter(k int) Splitter {
-	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
+	return func(dataSet RawDataSet, seed int64) ([]TrainSet, []RawDataSet) {
 		trainFolds := make([]TrainSet, k)
-		testFolds := make([]DataSet, k)
+		testFolds := make([]RawDataSet, k)
 		rand.Seed(seed)
 		perm := rand.Perm(dataSet.Length())
 		foldSize := dataSet.Length() / k
@@ -33,9 +33,9 @@ func NewKFoldSplitter(k int) Splitter {
 
 // NewUserLOOSplitter creates a per-user leave-one-out data splitter.
 func NewUserLOOSplitter(repeat int) Splitter {
-	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
+	return func(dataSet RawDataSet, seed int64) ([]TrainSet, []RawDataSet) {
 		trainFolds := make([]TrainSet, repeat)
-		testFolds := make([]DataSet, repeat)
+		testFolds := make([]RawDataSet, repeat)
 		rand.Seed(seed)
 		trainSet := NewTrainSet(dataSet)
 		for i := 0; i < repeat; i++ {
@@ -63,8 +63,8 @@ func NewUserLOOSplitter(repeat int) Splitter {
 					}
 				}
 			}
-			trainFolds[i] = NewTrainSet(NewRawSet(trainUsers, trainItems, trainRatings))
-			testFolds[i] = NewRawSet(testUsers, testItems, testRatings)
+			trainFolds[i] = NewTrainSet(NewRawDataSet(trainUsers, trainItems, trainRatings))
+			testFolds[i] = NewRawDataSet(testUsers, testItems, testRatings)
 		}
 		return trainFolds, testFolds
 	}
