@@ -5,11 +5,7 @@ import (
 	"math"
 )
 
-// CoClustering: Collaborative filtering based on co-clustering[1].
-//
-// [1] George, Thomas, and Srujana Merugu. "A scalable collaborative filtering
-// framework based on co-clustering." Data Mining, Fifth IEEE international
-// conference on. IEEE, 2005.
+// CoClustering: Collaborative filtering based on co-clustering[5].
 type CoClustering struct {
 	Base
 	GlobalMean       float64     // A^{global}
@@ -90,41 +86,67 @@ func (coc *CoClustering) Fit(trainSet TrainSet) {
 		clusterMean(coc.UserClusterMeans, coc.UserClusters, userRatings)
 		clusterMean(coc.ItemClusterMeans, coc.ItemClusters, itemRatings)
 		coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, userRatings)
+		// A^{tmp2}_{ih} = \frac {\sum_{j'|y(j')=h}A^{tmp1}_{ij'}} {\sum_{j'|y(j')=h}W_{ij'}} + A^{CC}_h
+		tmp2 := newZeroMatrix(trainSet.UserCount, nItemClusters)
+		count2 := newZeroMatrix(trainSet.UserCount, nItemClusters)
+		for i := range tmp2 {
+			for _, ir := range userRatings[i] {
+				itemClass := coc.ItemClusters[ir.Id]
+				tmp2[i][itemClass] += tmp1[i][ir.Id]
+				count2[i][itemClass]++
+			}
+			for h := range tmp2[i] {
+				tmp2[i][h] /= count2[i][h]
+				tmp2[i][h] += coc.ItemClusterMeans[h]
+			}
+		}
 		// Update row (user) cluster assignments
 		for i := range coc.UserClusters {
 			bestCluster, leastCost := coc.UserClusters[i], math.Inf(1)
-			for k := 0; k < nUserClusters; k++ {
-				// \sum^n_{j=1}W_{ij}(A^{tmp1}_{ij}-A^{COC)_{gy(j)}+A^{RC}_g+A^{RC}_{y(j)})^2
+			for g := 0; g < nUserClusters; g++ {
+				// \sum^l_{h=1} A^{tmp2}_{ig} - A^{COC}_{gh} + A^{RC}_g
 				cost := 0.0
-				for _, ir := range userRatings[i] {
-					temp := tmp1[i][ir.Id] -
-						coc.CoClusterMeans[k][coc.ItemClusters[ir.Id]] +
-						coc.UserClusterMeans[k] +
-						coc.ItemClusterMeans[coc.ItemClusters[ir.Id]]
-					cost += temp * temp
+				for h := 0; h < nItemClusters; h++ {
+					if !math.IsNaN(tmp2[i][h]) {
+						temp := tmp2[i][h] - coc.CoClusterMeans[g][h] + coc.UserClusterMeans[g]
+						cost += temp * temp
+					}
 				}
 				if cost < leastCost {
-					bestCluster = k
+					bestCluster = g
 					leastCost = cost
 				}
 			}
 			coc.UserClusters[i] = bestCluster
 		}
+		// A^{tmp3}_{gj} = \frac {\sum_{i'|p(i')=g}A^{tmp1}_{i'j}} {\sum_{i'|p(i')=g}W_{i'j}} + A^{RC}_g
+		tmp3 := newZeroMatrix(nUserClusters, trainSet.ItemCount)
+		count3 := newZeroMatrix(nUserClusters, trainSet.ItemCount)
+		for j := range coc.ItemClusters {
+			for _, ur := range itemRatings[j] {
+				userClass := coc.UserClusters[ur.Id]
+				tmp3[userClass][j] += tmp1[ur.Id][j]
+				count3[userClass][j]++
+			}
+			for g := range tmp3 {
+				tmp3[g][j] /= count3[g][j]
+				tmp3[g][j] += coc.UserClusterMeans[g]
+			}
+		}
 		// Update column (item) cluster assignments
 		for j := range coc.ItemClusters {
 			bestCluster, leastCost := coc.ItemClusters[j], math.Inf(1)
-			for k := 0; k < nItemClusters; k++ {
-				// \sum^m_{i=1}W_{ij}(A^{tmp1}_{ij}-A^{COC)_{p(i)h}+A^{RC}_{p(i)}+A^{RC}_h)^2
+			for h := 0; h < nItemClusters; h++ {
+				// \sum^k_{h=1} A^{tmp3}_{gj} - A^{COC}_{gh} + A^{CC}_h
 				cost := 0.0
-				for _, ur := range itemRatings[j] {
-					temp := tmp1[ur.Id][j] -
-						coc.CoClusterMeans[coc.UserClusters[ur.Id]][k] +
-						coc.UserClusterMeans[coc.UserClusters[ur.Id]] +
-						coc.ItemClusterMeans[k]
-					cost += temp * temp
+				for g := 0; g < nUserClusters; g++ {
+					if !math.IsNaN(tmp3[g][j]) {
+						temp := tmp3[g][j] - coc.CoClusterMeans[g][h] + coc.ItemClusterMeans[h]
+						cost += temp * temp
+					}
 				}
 				if cost < leastCost {
-					bestCluster = k
+					bestCluster = h
 					leastCost = cost
 				}
 			}
