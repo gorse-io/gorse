@@ -50,7 +50,7 @@ type SVD struct {
 //   optimizer  - The optimizer to optimize model parameters. Default is SGDOptimizer.
 func NewSVD(params Parameters) *SVD {
 	svd := new(SVD)
-	svd.Base.SetParams(params)
+	svd.SetParams(params)
 	return svd
 }
 

@@ -8,6 +8,7 @@ import (
 	"gonum.org/v1/gonum/stat"
 	"io"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -25,7 +26,7 @@ type _BuiltInDataSet struct {
 	url    string
 	path   string
 	sep    string
-	loader func(string, string, bool) RawDataSet
+	loader func(string, string, bool) DataSet
 }
 
 var builtInDataSets = map[string]_BuiltInDataSet{
@@ -81,43 +82,28 @@ func init() {
 type DataSet interface {
 	Length() int
 	Index(i int) (int, int, float64)
+	Mean() float64
+	StdDev() float64
+	Min() float64
+	Max() float64
+	ForEach(f func(userId, itemId int, rating float64))
+	SubSet(indices []int) DataSet
 }
 
-// Raw data set. An array of (userId, itemId, rating).
+// RawDataSet is an array of (userId, itemId, rating).
 type RawDataSet struct {
 	Ratings []float64
 	Users   []int
 	Items   []int
 }
 
-type VirtualDataSet struct {
-	data *RawDataSet
-	index []int
-}
-
-func NewVirtualDataSet(dataSet *RawDataSet, index []int) VirtualDataSet {
-	return VirtualDataSet{
-		data: dataSet,
-		index: index,
-	}
-}
-
 // NewRawDataSet creates a new raw data set.
-func NewRawDataSet(users, items []int, ratings []float64) RawDataSet {
-	return RawDataSet{
+func NewRawDataSet(users, items []int, ratings []float64) *RawDataSet {
+	return &RawDataSet{
 		Users:   users,
 		Items:   items,
 		Ratings: ratings,
 	}
-}
-
-func (dataSet *VirtualDataSet) Length() int {
-	return len(dataSet.index)
-}
-
-func (dataSet *VirtualDataSet) Index(i int) (int, int, float64) {
-	indexInData := dataSet.index[i]
-	return dataSet.data.Index(indexInData)
 }
 
 // Length returns the number of ratings in the data set.
@@ -130,19 +116,117 @@ func (dataSet *RawDataSet) Index(i int) (int, int, float64) {
 	return dataSet.Users[i], dataSet.Items[i], dataSet.Ratings[i]
 }
 
+func (dataSet *RawDataSet) ForEach(f func(userId, itemId int, rating float64)) {
+	for i := 0; i < dataSet.Length(); i++ {
+		f(dataSet.Users[i], dataSet.Items[i], dataSet.Ratings[i])
+	}
+}
+
+func (dataSet *RawDataSet) Mean() float64 {
+	return stat.Mean(dataSet.Ratings, nil)
+}
+
+func (dataSet *RawDataSet) StdDev() float64 {
+	return stat.StdDev(dataSet.Ratings, nil)
+}
+
+func (dataSet *RawDataSet) Min() float64 {
+	return floats.Min(dataSet.Ratings)
+}
+
+func (dataSet *RawDataSet) Max() float64 {
+	return floats.Max(dataSet.Ratings)
+}
+
 // Subset returns a subset of the data set.
-func (dataSet *RawDataSet) SubSet(indices []int) VirtualDataSet {
+func (dataSet *RawDataSet) SubSet(indices []int) DataSet {
 	return NewVirtualDataSet(dataSet, indices)
 }
 
+// VirtualDataSet is a virtual subset of RawDataSet.
+type VirtualDataSet struct {
+	data  *RawDataSet
+	index []int
+}
+
+// NewVirtualDataSet creates a new virtual data set.
+func NewVirtualDataSet(dataSet *RawDataSet, index []int) *VirtualDataSet {
+	return &VirtualDataSet{
+		data:  dataSet,
+		index: index,
+	}
+}
+
+func (dataSet *VirtualDataSet) Length() int {
+	return len(dataSet.index)
+}
+
+func (dataSet *VirtualDataSet) Index(i int) (int, int, float64) {
+	indexInData := dataSet.index[i]
+	return dataSet.data.Index(indexInData)
+}
+
+func (dataSet *VirtualDataSet) ForEach(f func(userId, itemId int, rating float64)) {
+	for i := 0; i < dataSet.Length(); i++ {
+		userId, itemId, rating := dataSet.Index(i)
+		f(userId, itemId, rating)
+	}
+}
+
+func (dataSet *VirtualDataSet) Mean() float64 {
+	mean := 0.0
+	dataSet.ForEach(func(userId, itemId int, rating float64) {
+		mean += rating
+	})
+	return mean / float64(dataSet.Length())
+}
+
+func (dataSet *VirtualDataSet) StdDev() float64 {
+	mean := dataSet.Mean()
+	sum := 0.0
+	dataSet.ForEach(func(userId, itemId int, rating float64) {
+		sum += (rating - mean) * (rating - mean)
+	})
+	return math.Sqrt(mean / float64(dataSet.Length()))
+}
+
+func (dataSet *VirtualDataSet) Min() float64 {
+	_, _, min := dataSet.Index(0)
+	dataSet.ForEach(func(userId, itemId int, rating float64) {
+		if rating < min {
+			rating = min
+		}
+	})
+	return min
+}
+
+func (dataSet *VirtualDataSet) Max() float64 {
+	_, _, max := dataSet.Index(0)
+	dataSet.ForEach(func(userId, itemId int, rating float64) {
+		if rating > max {
+			max = rating
+		}
+	})
+	return max
+}
+
+// Subset returns a subset of the data set.
+func (dataSet *VirtualDataSet) SubSet(indices []int) DataSet {
+	rawIndices := make([]int, len(indices))
+	for i, index := range indices {
+		rawIndices[i] = dataSet.index[index]
+	}
+	return NewVirtualDataSet(dataSet.data, rawIndices)
+}
+
 // Train test split. Return train set and test set.
-func (dataSet *RawDataSet) Split(testSize float64, seed int) (TrainSet, RawDataSet) {
+func Split(dataSet DataSet, testSize float64, seed int) (DataSet, DataSet) {
 	rand.Seed(0)
 	perm := rand.Perm(dataSet.Length())
 	mid := int(float64(dataSet.Length()) * testSize)
 	testSet := dataSet.SubSet(perm[:mid])
 	trainSet := dataSet.SubSet(perm[mid:])
-	return NewTrainSet(trainSet), testSet
+	return trainSet, testSet
 }
 
 // Save data set to csv.
@@ -162,7 +246,7 @@ func (dataSet *RawDataSet) ToCSV(fileName string, sep string) error {
 }
 
 // Predict ratings for a set of <userId, itemId>s.
-func (dataSet *RawDataSet) Predict(estimator Model) []float64 {
+func Predict(dataSet DataSet, estimator Model) []float64 {
 	predictions := make([]float64, dataSet.Length())
 	for j := 0; j < dataSet.Length(); j++ {
 		userId, itemId, _ := dataSet.Index(j)
@@ -198,33 +282,33 @@ const NewId = -1
 func NewTrainSet(rawSet DataSet) TrainSet {
 	set := TrainSet{}
 	set.DataSet = rawSet
-	set.GlobalMean = stat.Mean(rawSet.Ratings, nil)
+	set.GlobalMean = rawSet.Mean()
 	// Create userId -> innerUserId map
 	set.InnerUserIds = make(map[int]int)
 	set.outerUserIds = make([]int, 0)
-	for _, userId := range set.Users {
+	rawSet.ForEach(func(userId, itemId int, rating float64) {
 		if _, exist := set.InnerUserIds[userId]; !exist {
 			set.outerUserIds = append(set.outerUserIds, userId)
 			set.InnerUserIds[userId] = set.UserCount
 			set.UserCount++
 		}
-	}
+	})
 	// Create itemId -> innerItemId map
 	set.InnerItemIds = make(map[int]int)
 	set.outerItemIds = make([]int, 0)
-	for _, itemId := range set.Items {
+	rawSet.ForEach(func(userId, itemId int, rating float64) {
 		if _, exist := set.InnerItemIds[itemId]; !exist {
 			set.outerItemIds = append(set.outerItemIds, itemId)
 			set.InnerItemIds[itemId] = set.ItemCount
 			set.ItemCount++
 		}
-	}
+	})
 	return set
 }
 
 // RatingRange gets the range of ratings. Return minimum and maximum.
 func (trainSet *TrainSet) RatingRange() (float64, float64) {
-	return floats.Min(trainSet.Ratings), floats.Max(trainSet.Ratings)
+	return trainSet.Min(), trainSet.Max()
 }
 
 // ConvertUserId converts user ID to inner user ID.
@@ -250,11 +334,11 @@ func (trainSet *TrainSet) UserRatings() [][]IdRating {
 		for innerUserId := range trainSet.userRatings {
 			trainSet.userRatings[innerUserId] = make([]IdRating, 0)
 		}
-		for i := 0; i < len(trainSet.Users); i++ {
-			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
-			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
-			trainSet.userRatings[innerUserId] = append(trainSet.userRatings[innerUserId], IdRating{innerItemId, trainSet.Ratings[i]})
-		}
+		trainSet.ForEach(func(userId, itemId int, rating float64) {
+			innerUserId := trainSet.ConvertUserId(userId)
+			innerItemId := trainSet.ConvertItemId(itemId)
+			trainSet.userRatings[innerUserId] = append(trainSet.userRatings[innerUserId], IdRating{innerItemId, rating})
+		})
 	}
 	return trainSet.userRatings
 }
@@ -266,11 +350,11 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 		for innerItemId := range trainSet.itemRatings {
 			trainSet.itemRatings[innerItemId] = make([]IdRating, 0)
 		}
-		for i := 0; i < len(trainSet.Items); i++ {
-			innerUserId := trainSet.ConvertUserId(trainSet.Users[i])
-			innerItemId := trainSet.ConvertItemId(trainSet.Items[i])
-			trainSet.itemRatings[innerItemId] = append(trainSet.itemRatings[innerItemId], IdRating{innerUserId, trainSet.Ratings[i]})
-		}
+		trainSet.ForEach(func(userId, itemId int, rating float64) {
+			innerUserId := trainSet.ConvertUserId(userId)
+			innerItemId := trainSet.ConvertItemId(itemId)
+			trainSet.itemRatings[innerItemId] = append(trainSet.itemRatings[innerItemId], IdRating{innerUserId, rating})
+		})
 	}
 	return trainSet.itemRatings
 }
@@ -282,7 +366,7 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 //   ml-1m		- MovieLens 1M
 //   ml-10m		- MovieLens 10M
 //   ml-20m		- MovieLens 20M
-func LoadDataFromBuiltIn(dataSetName string) RawDataSet {
+func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	// Extract data set information
 	dataSet, exist := builtInDataSets[dataSetName]
 	if !exist {
@@ -310,7 +394,7 @@ func LoadDataFromBuiltIn(dataSetName string) RawDataSet {
 //  186\t302\t3\t891717742
 //  22\t377\t1\t878887116
 //
-func LoadDataFromFile(fileName string, sep string, hasHeader bool) RawDataSet {
+func LoadDataFromFile(fileName string, sep string, hasHeader bool) DataSet {
 	users := make([]int, 0)
 	items := make([]int, 0)
 	ratings := make([]float64, 0)
@@ -340,7 +424,7 @@ func LoadDataFromFile(fileName string, sep string, hasHeader bool) RawDataSet {
 	return NewRawDataSet(users, items, ratings)
 }
 
-func LoadDataFromNetflix(fileName string, sep string, hasHeader bool) RawDataSet {
+func LoadDataFromNetflix(fileName string, sep string, hasHeader bool) DataSet {
 	users := make([]int, 0)
 	items := make([]int, 0)
 	ratings := make([]float64, 0)

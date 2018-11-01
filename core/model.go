@@ -1,7 +1,6 @@
 package core
 
 import (
-	"gonum.org/v1/gonum/stat"
 	"math/rand"
 	"time"
 )
@@ -191,9 +190,8 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 }
 
 func (random *Random) Fit(trainSet TrainSet) {
-	ratings := trainSet.Ratings
-	random.Mean = trainSet.GlobalMean
-	random.StdDev = stat.StdDev(ratings, nil)
+	random.Mean = trainSet.Mean()
+	random.StdDev = trainSet.StdDev()
 	random.Low, random.High = trainSet.RatingRange()
 }
 
@@ -249,7 +247,7 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet) {
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
-			userId, itemId, rating := trainSet.Users[i], trainSet.Items[i], trainSet.Ratings[i]
+			userId, itemId, rating := trainSet.Index(i)
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
 			userBias := baseLine.UserBias[innerUserId]
