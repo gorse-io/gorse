@@ -8,7 +8,7 @@ import (
 
 const estimatorEpsilon float64 = 0.008
 
-func Evaluate(t *testing.T, algo Model, dataSet RawDataSet,
+func Evaluate(t *testing.T, algo Model, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {
 	// Cross validation
 	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, NewKFoldSplitter(5), 0, Parameters{
