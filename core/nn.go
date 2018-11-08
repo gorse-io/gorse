@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
 )
@@ -13,12 +14,15 @@ type AutoRec struct {
 	in, out *gorgonia.Node
 	// Hyper parameters
 	bias       bool
+	batchSize  int
 	nFactors   int
 	nEpochs    int
 	lr         float64
 	reg        float64
 	initMean   float64
 	initStdDev float64
+	userBased  bool
+	verbose    bool
 	// Cache
 	inputCache  []*tensor.Dense
 	outputCache [][]float64
@@ -33,12 +37,15 @@ func NewAutoRec(params Parameters) *AutoRec {
 func (auto *AutoRec) SetParams(params Parameters) {
 	auto.Base.SetParams(params)
 	auto.bias = auto.Params.GetBool("bias", true)
+	auto.batchSize = auto.Params.GetInt("batchSize", 500)
 	auto.nFactors = auto.Params.GetInt("nFactors", 50)
-	auto.nEpochs = auto.Params.GetInt("nEpochs", 3)
-	auto.lr = auto.Params.GetFloat64("lr", 0.001)
-	auto.reg = auto.Params.GetFloat64("reg", 0.01)
+	auto.nEpochs = auto.Params.GetInt("nEpochs", 50)
+	auto.lr = auto.Params.GetFloat64("lr", 1e-3)
+	auto.reg = auto.Params.GetFloat64("reg", 0.05)
 	auto.initMean = auto.Params.GetFloat64("initMean", 0)
-	auto.initStdDev = auto.Params.GetFloat64("initStdDev", 0.1)
+	auto.initStdDev = auto.Params.GetFloat64("initStdDev", 0.03)
+	auto.userBased = auto.Params.GetBool("userBased", false)
+	auto.verbose = auto.Params.GetBool("verbose", true)
 }
 
 func (auto *AutoRec) Predict(userId int, itemId int) float64 {
@@ -75,25 +82,32 @@ func (auto *AutoRec) Fit(set TrainSet) {
 	auto.in = gorgonia.NewVector(auto.g, gorgonia.Float64,
 		gorgonia.WithShape(set.UserCount))
 	b1 := gorgonia.NewVector(auto.g, gorgonia.Float64,
+		gorgonia.WithName("b1"),
 		gorgonia.WithShape(auto.nFactors),
 		gorgonia.WithInit(gorgonia.Zeroes()))
-	//b2 := gorgonia.NewVector(auto.g, gorgonia.Float64,
-	//	gorgonia.WithShape(set.UserCount),
-	//	gorgonia.WithInit(gorgonia.Zeroes()))
+	b2 := gorgonia.NewVector(auto.g, gorgonia.Float64,
+		gorgonia.WithName("b2"),
+		gorgonia.WithShape(set.UserCount),
+		gorgonia.WithInit(gorgonia.Zeroes()))
 	w1 := gorgonia.NewMatrix(auto.g, gorgonia.Float64,
+		gorgonia.WithName("w1"),
 		gorgonia.WithShape(set.UserCount, auto.nFactors),
 		gorgonia.WithInit(gorgonia.Gaussian(auto.initMean, auto.initStdDev)))
 	w2 := gorgonia.NewMatrix(auto.g, gorgonia.Float64,
+		gorgonia.WithName("w2"),
 		gorgonia.WithShape(auto.nFactors, set.UserCount),
 		gorgonia.WithInit(gorgonia.Gaussian(auto.initMean, auto.initStdDev)))
 	hidden := gorgonia.Must(gorgonia.Sigmoid(
 		gorgonia.Must(gorgonia.Add(
 			gorgonia.Must(gorgonia.Mul(auto.in, w1)), b1))))
-	auto.out = gorgonia.Must(gorgonia.Mul(hidden, w2))
-	parameters := gorgonia.Nodes{w1, w2, b1}
+	auto.out = gorgonia.Must(gorgonia.Add(
+		gorgonia.Must(gorgonia.Mul(hidden, w2)), b2))
+	parameters := gorgonia.Nodes{w1, w2, b1, b2}
 	// Cost function: \sum^n_{i=1} || r^i - h(r^i;\theta) ||^2_O
-	cost := gorgonia.Must(gorgonia.Gt(auto.in, gorgonia.NewConstant(0.0), true))
-	cost = gorgonia.Must(gorgonia.Sum(gorgonia.Must(gorgonia.Mul(cost, gorgonia.Must(gorgonia.Square(gorgonia.Must(gorgonia.Sub(auto.in, auto.out))))))))
+	mask := gorgonia.Must(gorgonia.Gt(auto.in, gorgonia.NewConstant(0.0), true))
+	diff := gorgonia.Must(gorgonia.Sub(auto.in, auto.out))
+	cost := gorgonia.Must(gorgonia.Mul(mask, gorgonia.Must(gorgonia.Square(diff))))
+	rmse := gorgonia.Must(gorgonia.Sqrt(gorgonia.Must(gorgonia.Div(cost, gorgonia.Must(gorgonia.Sum(mask))))))
 	// + ||W||_F^2
 	cost = gorgonia.Must(gorgonia.Add(cost,
 		gorgonia.Must(gorgonia.Mul(
@@ -110,23 +124,29 @@ func (auto *AutoRec) Fit(set TrainSet) {
 	if _, err := gorgonia.Grad(cost, parameters...); err != nil {
 		panic(err)
 	}
-	solver := gorgonia.NewRMSPropSolver(gorgonia.WithLearnRate(auto.lr))
+	solver := gorgonia.NewAdamSolver(gorgonia.WithBatchSize(float64(auto.batchSize)))
 	vm := gorgonia.NewTapeMachine(auto.g,
 		gorgonia.BindDualValues(parameters...),
 		gorgonia.UseCudaFor("mul", "add", "sigmoid"))
 	for ep := 0; ep < auto.nEpochs; ep++ {
-		for i := range auto.inputCache {
+		rmseVal := 0.0
+		// Generate batch
+		batch := auto.rng.Perm(set.ItemCount)[:auto.batchSize]
+		// Batch Training
+		for _, i := range batch {
 			if err := gorgonia.Let(auto.in, auto.inputCache[i]); err != nil {
 				panic(err)
 			}
 			if err := vm.RunAll(); err != nil {
 				panic(err)
 			}
+			rmseVal += rmse.Value().Data().(float64)
 			if err := solver.Step(gorgonia.NodesToValueGrads(parameters)); err != nil {
 				panic(err)
 			}
 			vm.Reset()
 		}
+		fmt.Printf("Epoch %d/%d: %f\n", ep+1, auto.nEpochs, rmseVal/float64(auto.batchSize))
 	}
 }
 
