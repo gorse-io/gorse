@@ -69,3 +69,56 @@ func NewUserLOOSplitter(repeat int) Splitter {
 		return trainFolds, testFolds
 	}
 }
+
+// NewUserKeepNSplitter splits users to a training set and a test set. Then,
+// add all ratings of train users and n ratings of test users to the training
+// set. The rest ratings of test set are added to the test set.
+func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
+	return func(set DataSet, seed int64) ([]TrainSet, []DataSet) {
+		trainFolds := make([]TrainSet, repeat)
+		testFolds := make([]DataSet, repeat)
+		rand.Seed(seed)
+		trainSet := NewTrainSet(set)
+		testSize := int(float64(trainSet.UserCount) * testRatio)
+		for i := 0; i < repeat; i++ {
+			trainUsers, trainItems, trainRatings :=
+				make([]int, 0, trainSet.Length()-trainSet.UserCount),
+				make([]int, 0, trainSet.Length()-trainSet.UserCount),
+				make([]float64, 0, trainSet.Length()-trainSet.UserCount)
+			testUsers, testItems, testRatings :=
+				make([]int, 0, trainSet.UserCount),
+				make([]int, 0, trainSet.UserCount),
+				make([]float64, 0, trainSet.UserCount)
+			userPerm := rand.Perm(trainSet.UserCount)
+			userTest := userPerm[:testSize]
+			userTrain := userPerm[testSize:]
+			userRatings := trainSet.UserRatings()
+			// Add all train user's ratings to train set
+			for _, userId := range userTrain {
+				for _, ir := range userRatings[userId] {
+					trainUsers = append(trainUsers, userId)
+					trainItems = append(trainItems, ir.Id)
+					trainRatings = append(trainRatings, ir.Rating)
+				}
+			}
+			// Add test user's ratings to train set and test set
+			for _, userId := range userTest {
+				ratingPerm := rand.Perm(len(userRatings[userId]))
+				for i, index := range ratingPerm {
+					if i < n {
+						trainUsers = append(trainUsers, userId)
+						trainItems = append(trainItems, userRatings[userId][index].Id)
+						trainRatings = append(trainRatings, userRatings[userId][index].Rating)
+					} else {
+						testUsers = append(testUsers, userId)
+						testItems = append(testItems, userRatings[userId][index].Id)
+						testRatings = append(testRatings, userRatings[userId][index].Rating)
+					}
+				}
+			}
+			trainFolds[i] = NewTrainSet(NewRawDataSet(trainUsers, trainItems, trainRatings))
+			testFolds[i] = NewRawDataSet(testUsers, testItems, testRatings)
+		}
+		return trainFolds, testFolds
+	}
+}
