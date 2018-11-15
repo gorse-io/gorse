@@ -1,6 +1,9 @@
 package core
 
-import "math"
+import (
+	"gonum.org/v1/gonum/floats"
+	"math"
+)
 
 // Evaluator evaluates the performance of a estimator on the test set.
 type Evaluator func(Model, DataSet) float64
@@ -68,9 +71,55 @@ func NewAUCEvaluator(fullSet DataSet) Evaluator {
 	}
 }
 
+// NewNDCG creates a Normalized Discounted Cumulative Gain evaluator.
 func NewNDCG(n int) Evaluator {
-	return func(model Model, dataSet DataSet) float64 {
-		return 0
+	return func(model Model, data DataSet) float64 {
+		testSet := NewTrainSet(data)
+		sum := 0.0
+		// For all users
+		for innerUserIdTest, irs := range testSet.UserRatings() {
+			userId := testSet.outerUserIds[innerUserIdTest]
+			// Find top-n items in test set
+			relSet := make(map[int]float64)
+			relIndex := make([]int, len(irs))
+			relRating := make([]float64, len(irs))
+			for i, ir := range irs {
+				relIndex[i] = i
+				relRating[i] = -ir.Rating
+			}
+			floats.Argsort(relRating, relIndex)
+			for i := 0; i < n && i < len(irs); i++ {
+				index := relIndex[i]
+				ir := irs[index]
+				relSet[ir.Id] = ir.Rating
+			}
+			// Find top-n items in predictions
+			topIndex := make([]int, len(irs))
+			topRating := make([]float64, len(irs))
+			for i, ir := range irs {
+				itemId := testSet.outerItemIds[ir.Id]
+				topIndex[i] = i
+				topRating[i] = -model.Predict(userId, itemId)
+			}
+			floats.Argsort(topRating, topIndex)
+			// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
+			idcg := 0.0
+			for i := 0; i < n && i < len(irs); i++ {
+				idcg += 1.0 / math.Log2(float64(i)+2.0)
+			}
+			// DCG = \sum^{N}_{i=1} \frac {2^{rel_i}-1} {\log_2(i+1)}
+			dcg := 0.0
+			for i := 0; i < n && i < len(irs); i++ {
+				index := topIndex[i]
+				ir := irs[index]
+				if _, exist := relSet[ir.Id]; exist {
+					dcg += 1.0 / math.Log2(float64(i)+2.0)
+				}
+			}
+			// NDCG = DCG / IDCG
+			sum += dcg / idcg
+		}
+		return sum / float64(testSet.UserCount)
 	}
 }
 
