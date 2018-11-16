@@ -416,10 +416,10 @@ func LoadDataFromFile(fileName string, sep string, hasHeader bool) DataSet {
 		fields := strings.Split(line, sep)
 		user, _ := strconv.Atoi(fields[0])
 		item, _ := strconv.Atoi(fields[1])
-		rating, _ := strconv.Atoi(fields[2])
+		rating, _ := strconv.ParseFloat(fields[2], 32)
 		users = append(users, user)
 		items = append(items, item)
-		ratings = append(ratings, float64(rating))
+		ratings = append(ratings, rating)
 	}
 	return NewRawDataSet(users, items, ratings)
 }
