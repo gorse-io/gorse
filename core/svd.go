@@ -32,7 +32,7 @@ type SVD struct {
 	reg        float64
 	initMean   float64
 	initStdDev float64
-	optimizer  Optimizer
+	batchSize  int
 	// Optimization
 	a []float64 // Pre-allocated buffer 'a'
 	b []float64 // Pre-allocated buffer 'b'
@@ -64,7 +64,7 @@ func (svd *SVD) SetParams(params Parameters) {
 	svd.reg = svd.Params.GetFloat64("reg", 0.02)
 	svd.initMean = svd.Params.GetFloat64("initMean", 0)
 	svd.initStdDev = svd.Params.GetFloat64("initStdDev", 0.1)
-	svd.optimizer = svd.Params.GetOptimizer("optimizer", SGDOptimizer)
+	svd.batchSize = svd.Params.GetInt("batchSize", 100)
 }
 
 // Predict by a SVD model.
@@ -101,42 +101,48 @@ func (svd *SVD) Fit(trainSet TrainSet) {
 	svd.a = make([]float64, svd.nFactors)
 	svd.b = make([]float64, svd.nFactors)
 	// Optimize
-	svd.optimizer(svd, trainSet, svd.nEpochs)
-}
-
-// PointUpdate updates model parameters by point.
-func (svd *SVD) PointUpdate(upGrad float64, innerUserId, innerItemId int) {
-	if svd.bias {
-		userBias := svd.UserBias[innerUserId]
-		itemBias := svd.ItemBias[innerItemId]
-		// Update global Bias
-		gradGlobalBias := upGrad
-		svd.GlobalBias += svd.lr * gradGlobalBias
-		// Update user Bias
-		gradUserBias := upGrad + svd.reg*userBias
-		svd.UserBias[innerUserId] += svd.lr * gradUserBias
-		// Update item Bias
-		gradItemBias := upGrad + svd.reg*itemBias
-		svd.ItemBias[innerItemId] += svd.lr * gradItemBias
+	for epoch := 0; epoch < svd.nEpochs; epoch++ {
+		perm := svd.rng.Perm(trainSet.Length())
+		for _, i := range perm {
+			userId, itemId, rating := trainSet.Index(i)
+			innerUserId := trainSet.ConvertUserId(userId)
+			innerItemId := trainSet.ConvertItemId(itemId)
+			// Compute error
+			upGrad := rating - svd.Predict(userId, itemId)
+			// Point-wise update
+			if svd.bias {
+				userBias := svd.UserBias[innerUserId]
+				itemBias := svd.ItemBias[innerItemId]
+				// Update global Bias
+				gradGlobalBias := upGrad
+				svd.GlobalBias += svd.lr * gradGlobalBias
+				// Update user Bias
+				gradUserBias := upGrad + svd.reg*userBias
+				svd.UserBias[innerUserId] += svd.lr * gradUserBias
+				// Update item Bias
+				gradItemBias := upGrad + svd.reg*itemBias
+				svd.ItemBias[innerItemId] += svd.lr * gradItemBias
+			}
+			userFactor := svd.UserFactor[innerUserId]
+			itemFactor := svd.ItemFactor[innerItemId]
+			// Update user latent factor
+			copy(svd.a, itemFactor)
+			mulConst(upGrad, svd.a)
+			copy(svd.b, userFactor)
+			mulConst(svd.reg, svd.b)
+			floats.Sub(svd.a, svd.b)
+			mulConst(svd.lr, svd.a)
+			floats.Add(svd.UserFactor[innerUserId], svd.a)
+			// Update item latent factor
+			copy(svd.a, userFactor)
+			mulConst(upGrad, svd.a)
+			copy(svd.b, itemFactor)
+			mulConst(svd.reg, svd.b)
+			floats.Sub(svd.a, svd.b)
+			mulConst(svd.lr, svd.a)
+			floats.Add(svd.ItemFactor[innerItemId], svd.a)
+		}
 	}
-	userFactor := svd.UserFactor[innerUserId]
-	itemFactor := svd.ItemFactor[innerItemId]
-	// Update user latent factor
-	copy(svd.a, itemFactor)
-	mulConst(upGrad, svd.a)
-	copy(svd.b, userFactor)
-	mulConst(svd.reg, svd.b)
-	floats.Sub(svd.a, svd.b)
-	mulConst(svd.lr, svd.a)
-	floats.Add(svd.UserFactor[innerUserId], svd.a)
-	// Update item latent factor
-	copy(svd.a, userFactor)
-	mulConst(upGrad, svd.a)
-	copy(svd.b, itemFactor)
-	mulConst(svd.reg, svd.b)
-	floats.Sub(svd.a, svd.b)
-	mulConst(svd.lr, svd.a)
-	floats.Add(svd.ItemFactor[innerItemId], svd.a)
 }
 
 // PairUpdate updates model parameters by pair.
@@ -377,7 +383,8 @@ func (svd *SVDpp) Fit(trainSet TrainSet) {
 	b := make([]float64, nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nEpochs; epoch++ {
-		for i := 0; i < trainSet.Length(); i++ {
+		perm := svd.rng.Perm(trainSet.Length())
+		for _, i := range perm {
 			userId, itemId, rating := trainSet.Index(i)
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)
