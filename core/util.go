@@ -3,6 +3,7 @@ package core
 import (
 	"gonum.org/v1/gonum/stat"
 	"math"
+	"math/rand"
 	"sync"
 )
 
@@ -78,6 +79,14 @@ func divConst(c float64, dst []float64) {
 
 /* Vectors */
 
+func newRange(start, end int) []int {
+	a := make([]int, end-start)
+	for i := range a {
+		a[i] = start + i
+	}
+	return a
+}
+
 func resetZeroVector(a []float64) {
 	for i := range a {
 		a[i] = 0
@@ -99,6 +108,22 @@ func newZeroMatrix(row, col int) [][]float64 {
 	ret := make([][]float64, row)
 	for i := range ret {
 		ret[i] = make([]float64, col)
+	}
+	return ret
+}
+
+func newVector(size int, v float64) []float64 {
+	ret := make([]float64, size)
+	for j := range ret {
+		ret[j] = v
+	}
+	return ret
+}
+
+func newMatrix(row, col int, v float64) [][]float64 {
+	ret := make([][]float64, row)
+	for i := range ret {
+		ret[i] = newVector(col, v)
 	}
 	return ret
 }
@@ -137,10 +162,27 @@ func parallelMean(nTask int, nJob int, worker func(begin, end int) float64) floa
 			begin := nTask * jobId / nJob
 			end := nTask * (jobId + 1) / nJob
 			results = append(results, worker(begin, end))
-			weights = append(weights, float64(end - begin) / float64(nTask))
+			weights = append(weights, float64(end-begin)/float64(nTask))
 			wg.Done()
 		}(j)
 	}
 	wg.Wait()
 	return stat.Mean(results, weights)
+}
+
+func randomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

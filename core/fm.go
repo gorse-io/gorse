@@ -8,15 +8,15 @@ type FM struct {
 	ItemFactor [][]float64
 }
 
-func NewFM(params Parameters) *FM {
+func NewFM(params Params) *FM {
 	fm := new(FM)
 	fm.SetParams(params)
 	return fm
 }
 
 func (fm *FM) Predict(userId, itemId int) float64 {
-	innerUserId := fm.Data.ConvertUserId(userId)
-	innerItemId := fm.Data.ConvertItemId(itemId)
+	innerUserId := fm.UserIdSet.ToDenseId(userId)
+	innerItemId := fm.UserIdSet.ToDenseId(itemId)
 	if innerUserId == NewId || innerItemId == NewId {
 		return 0
 	}
@@ -33,8 +33,8 @@ func (fm *FM) Fit(set TrainSet) {
 	initMean := fm.Params.GetFloat64("initMean", 0)
 	initStdDev := fm.Params.GetFloat64("initStdDev", 0.1)
 	// Initialize parameters
-	fm.UserFactor = fm.newNormalMatrix(set.UserCount, nFactors, initMean, initStdDev)
-	fm.ItemFactor = fm.newNormalMatrix(set.ItemCount, nFactors, initMean, initStdDev)
+	fm.UserFactor = fm.rng.MakeNormalMatrix(set.UserCount, nFactors, initMean, initStdDev)
+	fm.ItemFactor = fm.rng.MakeNormalMatrix(set.ItemCount, nFactors, initMean, initStdDev)
 	a := make([]float64, nFactors)
 	b := make([]float64, nFactors)
 	// Stochastic Gradient Descent

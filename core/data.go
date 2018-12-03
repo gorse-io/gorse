@@ -74,7 +74,20 @@ func init() {
 	gorseDir := usr.HomeDir + "/.gorse"
 	downloadDir = gorseDir + "/download"
 	dataSetDir = gorseDir + "/datasets"
-	tempDir = gorseDir + "/temp"
+	tempDir = gorseDir + "/_userCluster"
+}
+
+type SparseIdSet struct {
+	DenseIds  map[int]int
+	SparseIds []int
+}
+
+func (set *SparseIdSet) ToDenseId(id int) int {
+	return 0
+}
+
+func (set *SparseIdSet) ToSparseId(id int) int {
+	return 0
 }
 
 /* Data Set */
@@ -267,6 +280,8 @@ type TrainSet struct {
 	outerItemIds []int
 	userRatings  [][]IdRating
 	itemRatings  [][]IdRating
+	UserIdSet    SparseIdSet // Users' ID set
+	ItemIdSet    SparseIdSet // Items' ID set
 }
 
 // <userId, rating> or <itemId, rating>
@@ -306,8 +321,8 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 	return set
 }
 
-// RatingRange gets the range of ratings. Return minimum and maximum.
-func (trainSet *TrainSet) RatingRange() (float64, float64) {
+// Range gets the range of ratings. Return minimum and maximum.
+func (trainSet *TrainSet) Range() (float64, float64) {
 	return trainSet.Min(), trainSet.Max()
 }
 
@@ -357,6 +372,17 @@ func (trainSet *TrainSet) ItemRatings() [][]IdRating {
 		})
 	}
 	return trainSet.itemRatings
+}
+
+func (trainSet *TrainSet) Stat() map[string]float64 {
+	ret := make(map[string]float64)
+	//
+	sum := 0
+	for _, irs := range trainSet.UserRatings() {
+		sum += len(irs)
+	}
+	ret["n_rating_per_user"] = float64(sum) / float64(trainSet.UserCount)
+	return ret
 }
 
 /* Loader */

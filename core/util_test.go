@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"gonum.org/v1/gonum/floats"
 	"testing"
 )
@@ -60,4 +61,10 @@ func TestDivConst(t *testing.T) {
 	if !floats.Equal(a, b) {
 		t.Fail()
 	}
+}
+
+func TestSoftMax(t *testing.T) {
+	a := []float64{1e-10, 1e-10, 1e-10}
+	softMax(a)
+	fmt.Println(a)
 }

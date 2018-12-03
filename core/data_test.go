@@ -46,3 +46,8 @@ func TestUnzip(t *testing.T) {
 		t.Fatal("Number of file doesn't match")
 	}
 }
+
+func TestA(t *testing.T) {
+	data := NewTrainSet(LoadDataFromBuiltIn("ml-100k"))
+	data.PlotHistogram()
+}

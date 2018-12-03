@@ -129,8 +129,9 @@ func NewHR() Evaluator {
 	}
 }
 
-func NewRecall() Evaluator {
-	return func(model Model, set DataSet) float64 {
+// NewRecall creates a Recall evaluator.
+func NewRecall(n int) Evaluator {
+	return func(model Model, data DataSet) float64 {
 		return 0
 	}
 }

@@ -18,12 +18,12 @@ type CoClustering struct {
 	CoClusterMeans   [][]float64 // A^{COC}
 }
 
-// NewCoClustering creates a co-clustering model. Parameters:
+// NewCoClustering creates a co-clustering model. Params:
 //   nEpochs       - The number of iteration of the SGD procedure. Default is 20.
 //   nUserClusters - The number of user clusters. Default is 3.
 //   nItemClusters - The number of item clusters. Default is 3.
 //   randState     - The random seed. Default is UNIX time step.
-func NewCoClustering(params Parameters) *CoClustering {
+func NewCoClustering(params Params) *CoClustering {
 	cc := new(CoClustering)
 	cc.Params = params
 	return cc
@@ -32,8 +32,8 @@ func NewCoClustering(params Parameters) *CoClustering {
 // Predict by a co-clustering model.
 func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
-	innerUserId := coc.Data.ConvertUserId(userId)
-	innerItemId := coc.Data.ConvertItemId(itemId)
+	innerUserId := coc.UserIdSet.ToDenseId(userId)
+	innerItemId := coc.ItemIdSet.ToDenseId(itemId)
 	prediction := 0.0
 	if innerUserId != NewId && innerItemId != NewId {
 		// old user - old item
@@ -68,8 +68,8 @@ func (coc *CoClustering) Fit(trainSet TrainSet) {
 	itemRatings := trainSet.ItemRatings()
 	coc.UserMeans = means(userRatings)
 	coc.ItemMeans = means(itemRatings)
-	coc.UserClusters = coc.newUniformVectorInt(trainSet.UserCount, 0, nUserClusters)
-	coc.ItemClusters = coc.newUniformVectorInt(trainSet.ItemCount, 0, nItemClusters)
+	coc.UserClusters = coc.rng.MakeUniformVectorInt(trainSet.UserCount, 0, nUserClusters)
+	coc.ItemClusters = coc.rng.MakeUniformVectorInt(trainSet.ItemCount, 0, nItemClusters)
 	coc.UserClusterMeans = make([]float64, nUserClusters)
 	coc.ItemClusterMeans = make([]float64, nItemClusters)
 	coc.CoClusterMeans = newZeroMatrix(nUserClusters, nItemClusters)

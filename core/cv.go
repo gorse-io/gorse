@@ -7,7 +7,7 @@ import (
 )
 
 // ParameterGrid contains candidate for grid search.
-type ParameterGrid map[string][]interface{}
+type ParameterGrid map[ParamName][]interface{}
 
 /* Cross Validation */
 
@@ -18,7 +18,7 @@ type CrossValidateResult struct {
 
 // CrossValidation evaluates a model by k-fold cross validation.
 func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitter Splitter, seed int64,
-	params Parameters, nJobs int) []CrossValidateResult {
+	params Params, nJobs int) []CrossValidateResult {
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, seed)
 	length := len(trainFolds)
@@ -50,17 +50,17 @@ func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitt
 // GridSearchResult contains the return of grid search.
 type GridSearchResult struct {
 	BestScore  float64
-	BestParams Parameters
+	BestParams Params
 	BestIndex  int
 	CVResults  []CrossValidateResult
-	AllParams  []Parameters
+	AllParams  []Params
 }
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 	evaluators []Evaluator, cv int, seed int64, nJobs int) []GridSearchResult {
 	// Retrieve parameter names and length
-	params := make([]string, 0, len(paramGrid))
+	params := make([]ParamName, 0, len(paramGrid))
 	count := 1
 	for param, values := range paramGrid {
 		params = append(params, param)
@@ -72,11 +72,11 @@ func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 		results[i] = GridSearchResult{}
 		results[i].BestScore = math.Inf(1)
 		results[i].CVResults = make([]CrossValidateResult, 0, count)
-		results[i].AllParams = make([]Parameters, 0, count)
+		results[i].AllParams = make([]Params, 0, count)
 	}
 	// Construct DFS procedure
-	var dfs func(deep int, options Parameters)
-	dfs = func(deep int, options Parameters) {
+	var dfs func(deep int, options Params)
+	dfs = func(deep int, options Params) {
 		if deep == len(params) {
 			// Cross validate
 			cvResults := CrossValidate(estimator, dataSet, evaluators, NewKFoldSplitter(5), seed, options, nJobs)
@@ -99,7 +99,7 @@ func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 			}
 		}
 	}
-	options := make(map[string]interface{})
+	options := make(map[ParamName]interface{})
 	dfs(0, options)
 	return results
 }

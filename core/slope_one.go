@@ -18,9 +18,9 @@ type SlopeOne struct {
 	Dev         [][]float64 // The average differences between the LeftRatings of i and those of j
 }
 
-// NewSlopOne creates a slop one model. Parameters:
+// NewSlopOne creates a slop one model. Params:
 //	 nJobs		- The number of goroutines to compute deviation. Default is the number of CPUs.
-func NewSlopOne(params Parameters) *SlopeOne {
+func NewSlopOne(params Params) *SlopeOne {
 	so := new(SlopeOne)
 	so.Params = params
 	return so
@@ -29,8 +29,8 @@ func NewSlopOne(params Parameters) *SlopeOne {
 // Predict by a SlopOne model.
 func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
-	innerUserId := so.Data.ConvertUserId(userId)
-	innerItemId := so.Data.ConvertItemId(itemId)
+	innerUserId := so.UserIdSet.ToSparseId(userId)
+	innerItemId := so.ItemIdSet.ToSparseId(itemId)
 	prediction := 0.0
 	if innerUserId != NewId {
 		prediction = so.UserMeans[innerUserId]
@@ -52,8 +52,8 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 
 // Fit a SlopeOne model.
 func (so *SlopeOne) Fit(trainSet TrainSet) {
+	so.Init(trainSet)
 	nJobs := runtime.NumCPU()
-	so.Data = trainSet
 	so.GlobalMean = trainSet.GlobalMean
 	so.UserRatings = trainSet.UserRatings()
 	so.UserMeans = means(so.UserRatings)

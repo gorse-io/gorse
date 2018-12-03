@@ -38,7 +38,7 @@ type SVD struct {
 	b []float64 // Pre-allocated buffer 'b'
 }
 
-// NewSVD creates a SVD model. Parameters:
+// NewSVD creates a SVD model. Params:
 //   bias       - Add bias in SVD model. Default is true.
 //	 reg 		- The regularization parameter of the cost function that is
 // 				  optimized. Default is 0.02.
@@ -48,14 +48,14 @@ type SVD struct {
 //	 initMean	- The mean of initial random latent factors. Default is 0.
 //	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
 //   optimizer  - The optimizer to optimize model parameters. Default is SGDOptimizer.
-func NewSVD(params Parameters) *SVD {
+func NewSVD(params Params) *SVD {
 	svd := new(SVD)
 	svd.SetParams(params)
 	return svd
 }
 
 // SetParams sets hyper parameters.
-func (svd *SVD) SetParams(params Parameters) {
+func (svd *SVD) SetParams(params Params) {
 	svd.Base.SetParams(params)
 	svd.bias = svd.Params.GetBool("bias", true)
 	svd.nFactors = svd.Params.GetInt("nFactors", 100)
@@ -69,8 +69,8 @@ func (svd *SVD) SetParams(params Parameters) {
 
 // Predict by a SVD model.
 func (svd *SVD) Predict(userId int, itemId int) float64 {
-	innerUserId := svd.Data.ConvertUserId(userId)
-	innerItemId := svd.Data.ConvertItemId(itemId)
+	innerUserId := svd.UserIdSet.ToDenseId(userId)
+	innerItemId := svd.ItemIdSet.ToDenseId(itemId)
 	ret := svd.GlobalBias
 	// + b_u
 	if innerUserId != NewId {
@@ -95,8 +95,8 @@ func (svd *SVD) Fit(trainSet TrainSet) {
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount)
 	svd.ItemBias = make([]float64, trainSet.ItemCount)
-	svd.UserFactor = svd.newNormalMatrix(trainSet.UserCount, svd.nFactors, svd.initMean, svd.initStdDev)
-	svd.ItemFactor = svd.newNormalMatrix(trainSet.ItemCount, svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount, svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.ItemFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount, svd.nFactors, svd.initMean, svd.initStdDev)
 	// Create buffers
 	svd.a = make([]float64, svd.nFactors)
 	svd.b = make([]float64, svd.nFactors)
@@ -183,14 +183,14 @@ type NMF struct {
 	ItemFactor [][]float64 // q_i
 }
 
-// NewNMF creates a NMF model. Parameters:
+// NewNMF creates a NMF model. Params:
 //	 reg      - The regularization parameter of the cost function that is
 //              optimized. Default is 0.06.
 //	 nFactors - The number of latent factors. Default is 15.
 //	 nEpochs  - The number of iteration of the SGD procedure. Default is 50.
 //	 initLow  - The lower bound of initial random latent factor. Default is 0.
 //	 initHigh - The upper bound of initial random latent factor. Default is 1.
-func NewNMF(params Parameters) *NMF {
+func NewNMF(params Params) *NMF {
 	nmf := new(NMF)
 	nmf.Params = params
 	return nmf
@@ -198,8 +198,8 @@ func NewNMF(params Parameters) *NMF {
 
 // Predict by a NMF model.
 func (nmf *NMF) Predict(userId int, itemId int) float64 {
-	innerUserId := nmf.Data.ConvertUserId(userId)
-	innerItemId := nmf.Data.ConvertItemId(itemId)
+	innerUserId := nmf.UserIdSet.ToDenseId(userId)
+	innerItemId := nmf.ItemIdSet.ToDenseId(itemId)
 	if innerItemId != NewId && innerUserId != NewId {
 		return floats.Dot(nmf.UserFactor[innerUserId], nmf.ItemFactor[innerItemId])
 	}
@@ -215,8 +215,8 @@ func (nmf *NMF) Fit(trainSet TrainSet) {
 	initHigh := nmf.Params.GetFloat64("initHigh", 1)
 	reg := nmf.Params.GetFloat64("reg", 0.06)
 	// Initialize parameters
-	nmf.UserFactor = nmf.newUniformMatrix(trainSet.UserCount, nFactors, initLow, initHigh)
-	nmf.ItemFactor = nmf.newUniformMatrix(trainSet.ItemCount, nFactors, initLow, initHigh)
+	nmf.UserFactor = nmf.rng.MakeUniformMatrix(trainSet.UserCount, nFactors, initLow, initHigh)
+	nmf.ItemFactor = nmf.rng.MakeUniformMatrix(trainSet.ItemCount, nFactors, initLow, initHigh)
 	// Create intermediate matrix buffer
 	buffer := make([]float64, nFactors)
 	userUp := newZeroMatrix(trainSet.UserCount, nFactors)
@@ -297,7 +297,7 @@ type SVDpp struct {
 	GlobalBias  float64      // mu
 }
 
-// NewSVDpp creates a SVD++ model. Parameters:
+// NewSVDpp creates a SVD++ model. Params:
 //	 reg 		- The regularization parameter of the cost function that is
 // 				  optimized. Default is 0.02.
 //	 lr 		- The learning rate of SGD. Default is 0.007.
@@ -306,7 +306,7 @@ type SVDpp struct {
 //	 initMean	- The mean of initial random latent factors. Default is 0.
 //	 initStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
 //	 nJobs		- The number of goroutines to update implicit factors. Default is the number of CPUs.
-func NewSVDpp(params Parameters) *SVDpp {
+func NewSVDpp(params Params) *SVDpp {
 	svd := new(SVDpp)
 	svd.Params = params
 	return svd
@@ -327,8 +327,8 @@ func (svd *SVDpp) ensembleImplFactors(innerUserId int) []float64 {
 
 func (svd *SVDpp) internalPredict(userId int, itemId int) (float64, []float64) {
 	// Convert to inner ID
-	innerUserId := svd.Data.ConvertUserId(userId)
-	innerItemId := svd.Data.ConvertItemId(itemId)
+	innerUserId := svd.UserIdSet.ToDenseId(userId)
+	innerItemId := svd.ItemIdSet.ToDenseId(itemId)
 	ret := svd.GlobalBias
 	// + b_u
 	if innerUserId != NewId {
@@ -372,9 +372,9 @@ func (svd *SVDpp) Fit(trainSet TrainSet) {
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount)
 	svd.ItemBias = make([]float64, trainSet.ItemCount)
-	svd.UserFactor = svd.newNormalMatrix(trainSet.UserCount, nFactors, initMean, initStdDev)
-	svd.ItemFactor = svd.newNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
-	svd.ImplFactor = svd.newNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
+	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount, nFactors, initMean, initStdDev)
+	svd.ItemFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
+	svd.ImplFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount, nFactors, initMean, initStdDev)
 	//svd.cacheFactor = make(map[int][]float64)
 	// Build user rating set
 	svd.UserRatings = trainSet.UserRatings()

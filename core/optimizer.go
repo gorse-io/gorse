@@ -20,7 +20,8 @@ type Optimizer func(OptModel, TrainSet, int)
 // SGDOptimizer optimizes a factor by SGD on square error.
 func SGDOptimizer(model OptModel, trainSet TrainSet, nEpochs int) {
 	for epoch := 0; epoch < nEpochs; epoch++ {
-		for i := 0; i < trainSet.Length(); i++ {
+		perm := rand.Perm(trainSet.Length())
+		for _, i := range perm {
 			userId, itemId, rating := trainSet.Index(i)
 			innerUserId := trainSet.ConvertUserId(userId)
 			innerItemId := trainSet.ConvertItemId(itemId)

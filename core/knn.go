@@ -27,52 +27,52 @@ const (
 	baseline = "baseline"
 )
 
-// NewKNN creates a KNN model. Parameters:
+// NewKNN creates a KNN model. Params:
 //   sim       - The similarity function. Default is MSD.
 //   userBased - User based or item based? Default is true.
 //   k         - The maximum k neighborhoods to predict the rating. Default is 40.
 //   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
 //   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
-func NewKNN(params Parameters) *KNN {
+func NewKNN(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
 	knn.KNNType = knn.Params.GetString("type", basic)
 	return knn
 }
 
-// NewKNNWithMean creates a KNN model with Mean. Parameters:
+// NewKNNWithMean creates a KNN model with Mean. Params:
 //   sim       - The similarity function. Default is MSD.
 //   userBased - User based or item based? Default is true.
 //   k         - The maximum k neighborhoods to predict the rating. Default is 40.
 //   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
 //   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
-func NewKNNWithMean(params Parameters) *KNN {
+func NewKNNWithMean(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
 	knn.KNNType = knn.Params.GetString("type", centered)
 	return knn
 }
 
-// NewKNNWithZScore creates a KNN model with Z-Score. Parameters:
+// NewKNNWithZScore creates a KNN model with Z-Score. Params:
 //   sim       - The similarity function. Default is MSD.
 //   userBased - User based or item based? Default is true.
 //   k         - The maximum k neighborhoods to predict the rating. Default is 40.
 //   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
 //   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
-func NewKNNWithZScore(params Parameters) *KNN {
+func NewKNNWithZScore(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
 	knn.KNNType = knn.Params.GetString("type", zScore)
 	return knn
 }
 
-// NewKNNBaseLine creates a KNN model with baseline. Parameters:
+// NewKNNBaseLine creates a KNN model with baseline. Params:
 //   sim       - The similarity function. Default is MSD.
 //   userBased - User based or item based? Default is true.
 //   k         - The maximum k neighborhoods to predict the rating. Default is 40.
 //   minK      - The minimum k neighborhoods to predict the rating. Default is 1.
 //   nJobs     - The number of goroutines to compute similarity. Default is the number of CPUs.
-func NewKNNBaseLine(params Parameters) *KNN {
+func NewKNNBaseLine(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
 	knn.KNNType = knn.Params.GetString("type", baseline)
@@ -81,8 +81,8 @@ func NewKNNBaseLine(params Parameters) *KNN {
 
 // Predict by a KNN model.
 func (knn *KNN) Predict(userId, itemId int) float64 {
-	innerUserId := knn.Data.ConvertUserId(userId)
-	innerItemId := knn.Data.ConvertItemId(itemId)
+	innerUserId := knn.UserIdSet.ToDenseId(userId)
+	innerItemId := knn.ItemIdSet.ToDenseId(itemId)
 	// Retrieve parameters
 	userBased := knn.Params.GetBool("userBased", true)
 	k := knn.Params.GetInt("k", 40)

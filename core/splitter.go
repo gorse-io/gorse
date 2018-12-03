@@ -31,6 +31,25 @@ func NewKFoldSplitter(k int) Splitter {
 	}
 }
 
+func NewRatioSplitter(repeat int, testRatio float64) Splitter {
+	return func(set DataSet, seed int64) ([]TrainSet, []DataSet) {
+		trainFolds := make([]TrainSet, repeat)
+		testFolds := make([]DataSet, repeat)
+		testSize := int(float64(set.Length()) * testRatio)
+		rand.Seed(seed)
+		for i := 0; i < repeat; i++ {
+			perm := rand.Perm(set.Length())
+			// Test Data
+			testIndex := perm[:testSize]
+			testFolds[i] = set.SubSet(testIndex)
+			// Train Data
+			trainIndex := perm[testSize:]
+			trainFolds[i] = NewTrainSet(set.SubSet(trainIndex))
+		}
+		return trainFolds, testFolds
+	}
+}
+
 // NewUserLOOSplitter creates a per-user leave-one-out data splitter.
 func NewUserLOOSplitter(repeat int) Splitter {
 	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
