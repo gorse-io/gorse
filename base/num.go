@@ -59,19 +59,19 @@ func abs(dst []float64) {
 	}
 }
 
-func neg(dst []float64) {
+func Neg(dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] = -dst[i]
 	}
 }
 
-func mulConst(c float64, dst []float64) {
+func MulConst(c float64, dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] *= c
 	}
 }
 
-func divConst(c float64, dst []float64) {
+func DivConst(c float64, dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] /= c
 	}
@@ -87,13 +87,13 @@ func newRange(start, end int) []int {
 	return a
 }
 
-func resetZeroVector(a []float64) {
+func ResetZeroVector(a []float64) {
 	for i := range a {
 		a[i] = 0
 	}
 }
 
-func newNanMatrix(row, col int) [][]float64 {
+func NewNanMatrix(row, col int) [][]float64 {
 	ret := make([][]float64, row)
 	for i := range ret {
 		ret[i] = make([]float64, col)
@@ -104,7 +104,7 @@ func newNanMatrix(row, col int) [][]float64 {
 	return ret
 }
 
-func zeros(row, col int) [][]float64 {
+func Zeros(row, col int) [][]float64 {
 	ret := make([][]float64, row)
 	for i := range ret {
 		ret[i] = make([]float64, col)
@@ -136,7 +136,7 @@ func newMatrix(row, col int, v float64) [][]float64 {
 	return ret
 }
 
-func resetZeroMatrix(m [][]float64) {
+func ResetZeroMatrix(m [][]float64) {
 	for i := range m {
 		for j := range m[i] {
 			m[i][j] = 0

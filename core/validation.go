@@ -1,7 +1,7 @@
 package core
 
 import (
-	. "github.com/zhenghaoz/gorse/core/base"
+	. "github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/stat"
 	"math"
 	"reflect"

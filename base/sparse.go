@@ -1,5 +1,7 @@
 package base
 
+import "gonum.org/v1/gonum/stat"
+
 type SparseIdSet struct {
 	DenseIds  map[int]int
 	SparseIds []int
@@ -55,6 +57,14 @@ func MakeDenseSparseMatrix(row int) []SparseVector {
 		mat[i] = MakeSparseVector()
 	}
 	return mat
+}
+
+func Means(a []SparseVector) []float64 {
+	m := make([]float64, len(a))
+	for i := range a {
+		m[i] = stat.Mean(a[i].Values, nil)
+	}
+	return m
 }
 
 func (vec *SparseVector) Length() int {

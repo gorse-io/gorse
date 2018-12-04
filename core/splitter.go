@@ -1,7 +1,7 @@
 package core
 
 import "math/rand"
-import . "github.com/zhenghaoz/gorse/core/base"
+import . "github.com/zhenghaoz/gorse/base"
 
 // Splitter split data to train set and test set.
 type Splitter func(set DataSet, seed int64) ([]TrainSet, []DataSet)

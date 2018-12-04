@@ -21,13 +21,11 @@ const (
 )
 
 // KNN types
-type KNNTypeValue string
-
 const (
-	basic    KNNTypeValue = "basic"
-	centered KNNTypeValue = "centered"
-	zScore   KNNTypeValue = "z_score"
-	baseline KNNTypeValue = "baseline"
+	Basic    = "basic"
+	Centered = "centered"
+	ZScore   = "z_score"
+	Baseline = "baseline"
 )
 
 // Params for an algorithm. Given by:

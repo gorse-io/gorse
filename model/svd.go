@@ -1,8 +1,8 @@
 package model
 
 import (
+	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
-	. "github.com/zhenghaoz/gorse/core/base"
 	"gonum.org/v1/gonum/floats"
 	"math"
 	"sync"
@@ -127,19 +127,19 @@ func (svd *SVD) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 			itemFactor := svd.ItemFactor[innerItemId]
 			// Update user latent factor
 			copy(svd.a, itemFactor)
-			mulConst(upGrad, svd.a)
+			MulConst(upGrad, svd.a)
 			copy(svd.b, userFactor)
-			mulConst(svd.reg, svd.b)
+			MulConst(svd.reg, svd.b)
 			floats.Sub(svd.a, svd.b)
-			mulConst(svd.lr, svd.a)
+			MulConst(svd.lr, svd.a)
 			floats.Add(svd.UserFactor[innerUserId], svd.a)
 			// Update item latent factor
 			copy(svd.a, userFactor)
-			mulConst(upGrad, svd.a)
+			MulConst(upGrad, svd.a)
 			copy(svd.b, itemFactor)
-			mulConst(svd.reg, svd.b)
+			MulConst(svd.reg, svd.b)
 			floats.Sub(svd.a, svd.b)
-			mulConst(svd.lr, svd.a)
+			MulConst(svd.lr, svd.a)
 			floats.Add(svd.ItemFactor[innerItemId], svd.a)
 		}
 	}
@@ -152,20 +152,20 @@ func (svd *SVD) PairUpdate(upGrad float64, innerUserId, positiveItemId, negative
 	negativeItemFactor := svd.ItemFactor[negativeItemId]
 	// Update positive item latent factor: +w_u
 	copy(svd.a, userFactor)
-	mulConst(upGrad, svd.a)
-	mulConst(svd.lr, svd.a)
+	MulConst(upGrad, svd.a)
+	MulConst(svd.lr, svd.a)
 	floats.Add(svd.ItemFactor[positiveItemId], svd.a)
 	// Update negative item latent factor: -w_u
 	copy(svd.a, userFactor)
-	neg(svd.a)
-	mulConst(upGrad, svd.a)
-	mulConst(svd.lr, svd.a)
+	Neg(svd.a)
+	MulConst(upGrad, svd.a)
+	MulConst(svd.lr, svd.a)
 	floats.Add(svd.ItemFactor[negativeItemId], svd.a)
 	// Update user latent factor: h_i-h_j
 	copy(svd.a, positiveItemFactor)
 	floats.Sub(svd.a, negativeItemFactor)
-	mulConst(upGrad, svd.a)
-	mulConst(svd.lr, svd.a)
+	MulConst(upGrad, svd.a)
+	MulConst(svd.lr, svd.a)
 	floats.Add(svd.UserFactor[innerUserId], svd.a)
 }
 
@@ -226,17 +226,17 @@ func (nmf *NMF) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 	nmf.ItemFactor = nmf.rng.MakeUniformMatrix(trainSet.ItemCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	// Create intermediate matrix buffer
 	buffer := make([]float64, nmf.nFactors)
-	userUp := zeros(trainSet.UserCount(), nmf.nFactors)
-	userDown := zeros(trainSet.UserCount(), nmf.nFactors)
-	itemUp := zeros(trainSet.ItemCount(), nmf.nFactors)
-	itemDown := zeros(trainSet.ItemCount(), nmf.nFactors)
+	userUp := Zeros(trainSet.UserCount(), nmf.nFactors)
+	userDown := Zeros(trainSet.UserCount(), nmf.nFactors)
+	itemUp := Zeros(trainSet.ItemCount(), nmf.nFactors)
+	itemDown := Zeros(trainSet.ItemCount(), nmf.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nmf.nEpochs; epoch++ {
 		// Reset intermediate matrices
-		resetZeroMatrix(userUp)
-		resetZeroMatrix(userDown)
-		resetZeroMatrix(itemUp)
-		resetZeroMatrix(itemDown)
+		ResetZeroMatrix(userUp)
+		ResetZeroMatrix(userDown)
+		ResetZeroMatrix(itemUp)
+		ResetZeroMatrix(itemDown)
 		// Calculate intermediate matrices
 		for i := 0; i < trainSet.Length(); i++ {
 			userId, itemId, rating := trainSet.Index(i)
@@ -245,25 +245,25 @@ func (nmf *NMF) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 			prediction := nmf.Predict(userId, itemId)
 			// Update userUp
 			copy(buffer, nmf.ItemFactor[innerItemId])
-			mulConst(rating, buffer)
+			MulConst(rating, buffer)
 			floats.Add(userUp[innerUserId], buffer)
 			// Update userDown
 			copy(buffer, nmf.ItemFactor[innerItemId])
-			mulConst(prediction, buffer)
+			MulConst(prediction, buffer)
 			floats.Add(userDown[innerUserId], buffer)
 			copy(buffer, nmf.UserFactor[innerUserId])
-			mulConst(nmf.reg, buffer)
+			MulConst(nmf.reg, buffer)
 			floats.Add(userDown[innerUserId], buffer)
 			// Update itemUp
 			copy(buffer, nmf.UserFactor[innerUserId])
-			mulConst(rating, buffer)
+			MulConst(rating, buffer)
 			floats.Add(itemUp[innerItemId], buffer)
 			// Update itemDown
 			copy(buffer, nmf.UserFactor[innerUserId])
-			mulConst(prediction, buffer)
+			MulConst(prediction, buffer)
 			floats.Add(itemDown[innerItemId], buffer)
 			copy(buffer, nmf.ItemFactor[innerItemId])
-			mulConst(nmf.reg, buffer)
+			MulConst(nmf.reg, buffer)
 			floats.Add(itemDown[innerItemId], buffer)
 		}
 		// Update user factors
@@ -343,7 +343,7 @@ func (svd *SVDpp) ensembleImplFactors(innerUserId int) []float64 {
 		floats.Add(emImpFactor, svd.ImplFactor[index])
 		count++
 	})
-	divConst(math.Sqrt(float64(count)), emImpFactor)
+	DivConst(math.Sqrt(float64(count)), emImpFactor)
 	return emImpFactor
 }
 
@@ -419,22 +419,22 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 			svd.ItemBias[innerItemId] -= svd.lr * gradItemBias
 			// Update user latent factor
 			copy(a, itemFactor)
-			mulConst(diff, a)
+			MulConst(diff, a)
 			copy(b, userFactor)
-			mulConst(svd.reg, b)
+			MulConst(svd.reg, b)
 			floats.Add(a, b)
-			mulConst(svd.lr, a)
+			MulConst(svd.lr, a)
 			floats.Sub(svd.UserFactor[innerUserId], a)
 			// Update item latent factor
 			copy(a, userFactor)
 			if len(emImpFactor) > 0 {
 				floats.Add(a, emImpFactor)
 			}
-			mulConst(diff, a)
+			MulConst(diff, a)
 			copy(b, itemFactor)
-			mulConst(svd.reg, b)
+			MulConst(svd.reg, b)
 			floats.Add(a, b)
-			mulConst(svd.lr, a)
+			MulConst(svd.lr, a)
 			floats.Sub(svd.ItemFactor[innerItemId], a)
 			// Update implicit latent factor
 			nRating := svd.UserRatings[innerUserId].Length()
@@ -449,12 +449,12 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 					for i := low; i < high; i++ {
 						implFactor := svd.ImplFactor[svd.UserRatings[innerUserId].Indices[i]]
 						copy(a, itemFactor)
-						mulConst(diff, a)
-						divConst(math.Sqrt(float64(svd.UserRatings[innerUserId].Length())), a)
+						MulConst(diff, a)
+						DivConst(math.Sqrt(float64(svd.UserRatings[innerUserId].Length())), a)
 						copy(b, implFactor)
-						mulConst(svd.reg, b)
+						MulConst(svd.reg, b)
 						floats.Add(a, b)
-						mulConst(svd.lr, a)
+						MulConst(svd.lr, a)
 						floats.Sub(svd.ImplFactor[svd.UserRatings[innerUserId].Indices[i]], a)
 					}
 					wg.Done()

@@ -1,8 +1,8 @@
 package model
 
 import (
+	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
-	. "github.com/zhenghaoz/gorse/core/base"
 	"math"
 	"runtime"
 	"sort"
@@ -11,7 +11,7 @@ import (
 // KNN for collaborate filtering.
 type KNN struct {
 	Base
-	KNNType      KNNTypeValue
+	KNNType      string
 	GlobalMean   float64
 	Sims         [][]float64
 	LeftRatings  []SparseVector
@@ -30,7 +30,7 @@ type KNN struct {
 func NewKNN(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
-	knn.KNNType = knn.Params.GetString("type", basic)
+	knn.KNNType = knn.Params.GetString("type", Basic)
 	return knn
 }
 
@@ -43,7 +43,7 @@ func NewKNN(params Params) *KNN {
 func NewKNNWithMean(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
-	knn.KNNType = knn.Params.GetString("type", centered)
+	knn.KNNType = knn.Params.GetString("type", Centered)
 	return knn
 }
 
@@ -56,7 +56,7 @@ func NewKNNWithMean(params Params) *KNN {
 func NewKNNWithZScore(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
-	knn.KNNType = knn.Params.GetString("type", zScore)
+	knn.KNNType = knn.Params.GetString("type", ZScore)
 	return knn
 }
 
@@ -69,7 +69,7 @@ func NewKNNWithZScore(params Params) *KNN {
 func NewKNNBaseLine(params Params) *KNN {
 	knn := new(KNN)
 	knn.Params = params
-	knn.KNNType = knn.Params.GetString("type", baseline)
+	knn.KNNType = knn.Params.GetString("type", Baseline)
 	return knn
 }
 
@@ -116,22 +116,22 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	for _, or := range candidateSet.candidates[0:numNeighbors] {
 		weightSum += knn.Sims[leftId][or.Id]
 		rating := or.Rating
-		if knn.KNNType == centered {
+		if knn.KNNType == Centered {
 			rating -= knn.Means[or.Id]
-		} else if knn.KNNType == zScore {
+		} else if knn.KNNType == ZScore {
 			rating = (rating - knn.Means[or.Id]) / knn.StdDevs[or.Id]
-		} else if knn.KNNType == baseline {
+		} else if knn.KNNType == Baseline {
 			rating -= knn.Bias[or.Id]
 		}
 		weightRating += knn.Sims[leftId][or.Id] * rating
 	}
 	prediction := weightRating / weightSum
-	if knn.KNNType == centered {
+	if knn.KNNType == Centered {
 		prediction += knn.Means[leftId]
-	} else if knn.KNNType == zScore {
+	} else if knn.KNNType == ZScore {
 		prediction *= knn.StdDevs[leftId]
 		prediction += knn.Means[leftId]
-	} else if knn.KNNType == baseline {
+	} else if knn.KNNType == Baseline {
 		prediction += knn.Bias[leftId]
 	}
 	return prediction
@@ -150,18 +150,18 @@ func (knn *KNN) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 	if userBased {
 		knn.LeftRatings = trainSet.UserRatings
 		knn.RightRatings = trainSet.ItemRatings
-		knn.Sims = newNanMatrix(trainSet.UserCount(), trainSet.UserCount())
+		knn.Sims = NewNanMatrix(trainSet.UserCount(), trainSet.UserCount())
 	} else {
 		knn.LeftRatings = trainSet.ItemRatings
 		knn.RightRatings = trainSet.UserRatings
-		knn.Sims = newNanMatrix(trainSet.ItemCount(), trainSet.ItemCount())
+		knn.Sims = NewNanMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	}
 	// Retrieve user (item) Mean
-	if knn.KNNType == centered || knn.KNNType == zScore {
-		knn.Means = means(knn.LeftRatings)
+	if knn.KNNType == Centered || knn.KNNType == ZScore {
+		knn.Means = Means(knn.LeftRatings)
 	}
 	// Retrieve user (item) standard deviation
-	if knn.KNNType == zScore {
+	if knn.KNNType == ZScore {
 		knn.StdDevs = make([]float64, len(knn.LeftRatings))
 		for i := range knn.Means {
 			sum, count := 0.0, 0.0
@@ -172,7 +172,7 @@ func (knn *KNN) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 			knn.StdDevs[i] = math.Sqrt(sum/count) + 1e-5
 		}
 	}
-	if knn.KNNType == baseline {
+	if knn.KNNType == Baseline {
 		baseLine := NewBaseLine(knn.Params)
 		baseLine.Fit(trainSet)
 		if userBased {
@@ -182,7 +182,7 @@ func (knn *KNN) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 		}
 	}
 	// Pairwise similarity
-	parallel(len(knn.LeftRatings), nJobs, func(begin, end int) {
+	Parallel(len(knn.LeftRatings), nJobs, func(begin, end int) {
 		for iId := begin; iId < end; iId++ {
 			iRatings := knn.LeftRatings[iId]
 			for jId, jRatings := range knn.LeftRatings {

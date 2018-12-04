@@ -1,8 +1,8 @@
 package model
 
 import (
+	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
-	. "github.com/zhenghaoz/gorse/core/base"
 	"gonum.org/v1/gonum/floats"
 	"math"
 )
@@ -73,15 +73,15 @@ func (coc *CoClustering) Fit(trainSet TrainSet) {
 	coc.GlobalMean = trainSet.GlobalMean
 	userRatings := trainSet.UserRatings
 	itemRatings := trainSet.ItemRatings
-	coc.UserMeans = means(userRatings)
-	coc.ItemMeans = means(itemRatings)
+	coc.UserMeans = Means(userRatings)
+	coc.ItemMeans = Means(itemRatings)
 	coc.UserClusters = coc.rng.MakeUniformVectorInt(trainSet.UserCount(), 0, coc.nUserClusters)
 	coc.ItemClusters = coc.rng.MakeUniformVectorInt(trainSet.ItemCount(), 0, coc.nItemClusters)
 	coc.UserClusterMeans = make([]float64, coc.nUserClusters)
 	coc.ItemClusterMeans = make([]float64, coc.nItemClusters)
-	coc.CoClusterMeans = zeros(coc.nUserClusters, coc.nItemClusters)
+	coc.CoClusterMeans = Zeros(coc.nUserClusters, coc.nItemClusters)
 	// A^{tmp1}_{ij} = A_{ij} - A^R_i - A^C_j
-	tmp1 := newNanMatrix(trainSet.UserCount(), trainSet.ItemCount())
+	tmp1 := NewNanMatrix(trainSet.UserCount(), trainSet.ItemCount())
 	for i := range tmp1 {
 		userRatings[i].ForEach(func(i, index int, value float64) {
 			tmp1[i][index] = value - coc.UserMeans[i] - coc.ItemMeans[index]
@@ -94,8 +94,8 @@ func (coc *CoClustering) Fit(trainSet TrainSet) {
 		clusterMean(coc.ItemClusterMeans, coc.ItemClusters, itemRatings)
 		coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, userRatings)
 		// A^{tmp2}_{ih} = \frac {\sum_{j'|y(j')=h}A^{tmp1}_{ij'}} {\sum_{j'|y(j')=h}W_{ij'}} + A^{CC}_h
-		tmp2 := zeros(trainSet.UserCount(), coc.nItemClusters)
-		count2 := zeros(trainSet.UserCount(), coc.nItemClusters)
+		tmp2 := Zeros(trainSet.UserCount(), coc.nItemClusters)
+		count2 := Zeros(trainSet.UserCount(), coc.nItemClusters)
 		for i := range tmp2 {
 			userRatings[i].ForEach(func(i, index int, value float64) {
 				itemClass := coc.ItemClusters[index]
@@ -127,8 +127,8 @@ func (coc *CoClustering) Fit(trainSet TrainSet) {
 			coc.UserClusters[i] = bestCluster
 		}
 		// A^{tmp3}_{gj} = \frac {\sum_{i'|p(i')=g}A^{tmp1}_{i'j}} {\sum_{i'|p(i')=g}W_{i'j}} + A^{RC}_g
-		tmp3 := zeros(coc.nUserClusters, trainSet.ItemCount())
-		count3 := zeros(coc.nUserClusters, trainSet.ItemCount())
+		tmp3 := Zeros(coc.nUserClusters, trainSet.ItemCount())
+		count3 := Zeros(coc.nUserClusters, trainSet.ItemCount())
 		for j := range coc.ItemClusters {
 			itemRatings[j].ForEach(func(i, index int, value float64) {
 				userClass := coc.UserClusters[index]
@@ -163,7 +163,7 @@ func (coc *CoClustering) Fit(trainSet TrainSet) {
 }
 
 func clusterMean(dst []float64, clusters []int, idRatings []SparseVector) {
-	resetZeroVector(dst)
+	ResetZeroVector(dst)
 	count := make([]float64, len(dst))
 	for id, cluster := range clusters {
 		idRatings[id].ForEach(func(i, index int, value float64) {
@@ -175,8 +175,8 @@ func clusterMean(dst []float64, clusters []int, idRatings []SparseVector) {
 }
 
 func coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []SparseVector) {
-	resetZeroMatrix(dst)
-	count := zeros(len(dst), len(dst[0]))
+	ResetZeroMatrix(dst)
+	count := Zeros(len(dst), len(dst[0]))
 	for userId, userCluster := range userClusters {
 		userRatings[userId].ForEach(func(i, index int, value float64) {
 			itemCluster := itemClusters[index]

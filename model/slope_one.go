@@ -1,8 +1,8 @@
 package model
 
 import (
+	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
-	. "github.com/zhenghaoz/gorse/core/base"
 	"runtime"
 )
 
@@ -58,10 +58,10 @@ func (so *SlopeOne) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 	nJobs := runtime.NumCPU()
 	so.GlobalMean = trainSet.GlobalMean
 	so.UserRatings = trainSet.UserRatings
-	so.UserMeans = means(so.UserRatings)
-	so.Dev = zeros(trainSet.ItemCount(), trainSet.ItemCount())
+	so.UserMeans = Means(so.UserRatings)
+	so.Dev = Zeros(trainSet.ItemCount(), trainSet.ItemCount())
 	itemRatings := trainSet.ItemRatings
-	parallel(len(itemRatings), nJobs, func(begin, end int) {
+	Parallel(len(itemRatings), nJobs, func(begin, end int) {
 		for i := begin; i < end; i++ {
 			for j := 0; j < i; j++ {
 				count, sum := 0.0, 0.0

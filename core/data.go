@@ -4,7 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"fmt"
-	. "github.com/zhenghaoz/gorse/core/base"
+	. "github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"io"
@@ -505,13 +505,6 @@ func unzip(src string, dst string) ([]string, error) {
 /* Utils */
 
 // Get the mean of ratings for each user (item).
-func means(a []SparseVector) []float64 {
-	m := make([]float64, len(a))
-	for i := range a {
-		m[i] = stat.Mean(a[i].Values, nil)
-	}
-	return m
-}
 
 // Sort users' (items') ratings.
 func sorts(idRatings [][]IdRating) []SortedIdRatings {
