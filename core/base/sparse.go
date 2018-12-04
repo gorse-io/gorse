@@ -1,9 +1,12 @@
-package core
+package base
 
 type SparseIdSet struct {
 	DenseIds  map[int]int
 	SparseIds []int
 }
+
+// An ID not existed in the data set.
+const NewId = -1
 
 func MakeSparseIdSet() SparseIdSet {
 	return SparseIdSet{

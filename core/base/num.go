@@ -1,4 +1,4 @@
-package core
+package base
 
 import (
 	"gonum.org/v1/gonum/stat"
@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-func concatenate(arrs ...[]int) []int {
+func Concatenate(arrs ...[]int) []int {
 	// Sum lengths
 	total := 0
 	for _, arr := range arrs {
@@ -146,7 +146,7 @@ func resetZeroMatrix(m [][]float64) {
 
 /* Parallel Computing */
 
-func parallel(nTask int, nJob int, worker func(begin, end int)) {
+func Parallel(nTask int, nJob int, worker func(begin, end int)) {
 	var wg sync.WaitGroup
 	wg.Add(nJob)
 	for j := 0; j < nJob; j++ {

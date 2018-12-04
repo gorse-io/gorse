@@ -1,21 +1,34 @@
-package core
+package base
 
 // ParamName is a string.
 type ParamName string
 
 // Predefined parameter names
-const Lr ParamName = "lr"
-const Reg ParamName = "reg"
-const NEpochs ParamName = "n_epochs"
-const NFactors ParamName = "n_factors"
-const RandomState ParamName = "random_state"
-const UseBias ParamName = "use_bias"
-const InitMean ParamName = "init_mean"
-const InitStdDev ParamName = "init_std_dev"
-const InitLow ParamName = "init_low"
-const InitHigh ParamName = "init_high"
-const NUserClusters ParamName = "n_user_clusters"
-const NItemClusters ParamName = "n_item_clusters"
+const (
+	Lr            ParamName = "lr"
+	Reg           ParamName = "reg"
+	NEpochs       ParamName = "n_epochs"
+	NFactors      ParamName = "n_factors"
+	RandomState   ParamName = "random_state"
+	UseBias       ParamName = "use_bias"
+	InitMean      ParamName = "init_mean"
+	InitStdDev    ParamName = "init_std_dev"
+	InitLow       ParamName = "init_low"
+	InitHigh      ParamName = "init_high"
+	NUserClusters ParamName = "n_user_clusters"
+	NItemClusters ParamName = "n_item_clusters"
+	KNNType       ParamName = "knn_type"
+)
+
+// KNN types
+type KNNTypeValue string
+
+const (
+	basic    KNNTypeValue = "basic"
+	centered KNNTypeValue = "centered"
+	zScore   KNNTypeValue = "z_score"
+	baseline KNNTypeValue = "baseline"
+)
 
 // Params for an algorithm. Given by:
 //  map[string]interface{}{

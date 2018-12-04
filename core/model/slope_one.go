@@ -1,6 +1,8 @@
-package core
+package model
 
 import (
+	. "github.com/zhenghaoz/gorse/core"
+	. "github.com/zhenghaoz/gorse/core/base"
 	"runtime"
 )
 

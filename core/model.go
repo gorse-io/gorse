@@ -1,5 +1,7 @@
 package core
 
+import . "github.com/zhenghaoz/gorse/core/base"
+
 /* Model */
 
 // Model is the interface for all models. Any model in this

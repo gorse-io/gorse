@@ -1,6 +1,7 @@
 package core
 
 import "math/rand"
+import . "github.com/zhenghaoz/gorse/core/base"
 
 // Splitter split data to train set and test set.
 type Splitter func(set DataSet, seed int64) ([]TrainSet, []DataSet)
@@ -23,7 +24,7 @@ func NewKFoldSplitter(k int) Splitter {
 			testIndex := perm[begin:end]
 			testFolds[i] = dataSet.SubSet(testIndex)
 			// Train Data
-			trainIndex := concatenate(perm[0:begin], perm[end:dataSet.Length()])
+			trainIndex := Concatenate(perm[0:begin], perm[end:dataSet.Length()])
 			trainFolds[i] = NewTrainSet(dataSet.SubSet(trainIndex))
 			begin = end
 		}

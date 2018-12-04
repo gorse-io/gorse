@@ -1,6 +1,8 @@
-package core
+package model
 
 import (
+	. "github.com/zhenghaoz/gorse/core"
+	. "github.com/zhenghaoz/gorse/core/base"
 	"math"
 	"runtime"
 	"sort"
@@ -9,7 +11,7 @@ import (
 // KNN for collaborate filtering.
 type KNN struct {
 	Base
-	KNNType      string
+	KNNType      KNNTypeValue
 	GlobalMean   float64
 	Sims         [][]float64
 	LeftRatings  []SparseVector
@@ -18,14 +20,6 @@ type KNN struct {
 	StdDevs      []float64 // KNN with Z Score: user (item) standard deviation
 	Bias         []float64 // KNN Baseline: Bias
 }
-
-// KNN type
-const (
-	basic    = "basic"
-	centered = "centered"
-	zScore   = "zscore"
-	baseline = "baseline"
-)
 
 // NewKNN creates a KNN model. Params:
 //   sim       - The similarity function. Default is MSD.
@@ -144,11 +138,11 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 }
 
 // Fit a KNN model.
-func (knn *KNN) Fit(trainSet TrainSet) {
+func (knn *KNN) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 	knn.Base.Fit(trainSet)
 	// Setup parameters
 	sim := knn.Params.GetSim("sim", MSD)
-	userBased := knn.Params.GetBool("userBased", true)
+	userBased := knn.Params.GetBool(UseBias, true)
 	nJobs := knn.Params.GetInt("nJobs", runtime.NumCPU())
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean

@@ -1,6 +1,8 @@
-package core
+package model
 
 import (
+	. "github.com/zhenghaoz/gorse/core"
+	. "github.com/zhenghaoz/gorse/core/base"
 	"gonum.org/v1/gonum/floats"
 	"math"
 )

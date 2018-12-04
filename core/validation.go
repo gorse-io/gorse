@@ -1,6 +1,7 @@
 package core
 
 import (
+	. "github.com/zhenghaoz/gorse/core/base"
 	"gonum.org/v1/gonum/stat"
 	"math"
 	"reflect"
@@ -28,7 +29,7 @@ func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitt
 		ret[i].Tests = make([]float64, length)
 	}
 	// Cross validation
-	parallel(length, nJobs, func(begin, end int) {
+	Parallel(length, nJobs, func(begin, end int) {
 		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Model)
 		Copy(cp, estimator)
 		for i := begin; i < end; i++ {

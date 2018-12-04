@@ -1,4 +1,4 @@
-package core
+package base
 
 // RuntimeOptions defined options used in run time.
 type RuntimeOptions struct {

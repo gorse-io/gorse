@@ -1,4 +1,4 @@
-package core
+package base
 
 import (
 	"gonum.org/v1/gonum/stat"

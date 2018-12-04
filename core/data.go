@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"fmt"
+	. "github.com/zhenghaoz/gorse/core/base"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"io"
@@ -270,9 +271,6 @@ type IdRating struct {
 	Id     int
 	Rating float64
 }
-
-// An ID not existed in the data set.
-const NewId = -1
 
 // NewTrainSet creates a train set from a raw data set.
 func NewTrainSet(rawSet DataSet) TrainSet {
