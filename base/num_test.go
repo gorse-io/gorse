@@ -1,7 +1,6 @@
 package base
 
 import (
-	"fmt"
 	"gonum.org/v1/gonum/floats"
 	"testing"
 )
@@ -48,7 +47,7 @@ func TestAbs(t *testing.T) {
 func TestMulConst(t *testing.T) {
 	a := []float64{0.0, 1.0, 2.0}
 	b := []float64{0.0, 2.0, 4.0}
-	mulConst(2.0, a)
+	MulConst(2.0, a)
 	if !floats.Equal(a, b) {
 		t.Fail()
 	}
@@ -57,14 +56,8 @@ func TestMulConst(t *testing.T) {
 func TestDivConst(t *testing.T) {
 	a := []float64{0.0, 1.0, 2.0}
 	b := []float64{0.0, 0.5, 1.0}
-	divConst(2.0, a)
+	DivConst(2.0, a)
 	if !floats.Equal(a, b) {
 		t.Fail()
 	}
-}
-
-func TestSoftMax(t *testing.T) {
-	a := []float64{1e-10, 1e-10, 1e-10}
-	softMax(a)
-	fmt.Println(a)
 }

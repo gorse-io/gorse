@@ -51,6 +51,13 @@ func MakeSparseVector() SparseVector {
 	}
 }
 
+func NewSparseVector() *SparseVector {
+	return &SparseVector{
+		Indices: make([]int, 0),
+		Values:  make([]float64, 0),
+	}
+}
+
 func MakeDenseSparseMatrix(row int) []SparseVector {
 	mat := make([]SparseVector, row)
 	for i := range mat {
