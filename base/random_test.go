@@ -1,6 +1,7 @@
 package base
 
 import (
+	"github.com/stretchr/testify/assert"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"math"
@@ -12,21 +13,13 @@ const randomEpsilon = 0.1
 func TestRandomGenerator_MakeNormalVector(t *testing.T) {
 	rng := NewRandomGenerator(0)
 	vec := rng.MakeNormalVector(1000, 1, 2)
-	if mean := stat.Mean(vec, nil); math.Abs(mean-1) > randomEpsilon {
-		t.Fatal("mean is not 1 but", mean)
-	}
-	if std := stat.StdDev(vec, nil); math.Abs(std-2) > randomEpsilon {
-		t.Fatal("stddev is not 2 but", std)
-	}
+	assert.False(t, math.Abs(stat.Mean(vec, nil)-1) > randomEpsilon)
+	assert.False(t, math.Abs(stat.StdDev(vec, nil)-2) > randomEpsilon)
 }
 
 func TestRandomGenerator_MakeUniformVector(t *testing.T) {
 	rng := NewRandomGenerator(0)
 	vec := rng.MakeUniformVector(100, 1, 2)
-	if floats.Min(vec) < 1 {
-		t.Fatal("minimum is less than 1")
-	}
-	if floats.Max(vec) > 2 {
-		t.Fatal("maximum is greater than 2")
-	}
+	assert.False(t, floats.Min(vec) < 1)
+	assert.False(t, floats.Max(vec) > 2)
 }

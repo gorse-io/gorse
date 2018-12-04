@@ -79,6 +79,16 @@ func DivConst(c float64, dst []float64) {
 
 /* Vectors */
 
+func Argmin(a []float64) int {
+	minIndex := 0
+	for index, value := range a {
+		if value < a[minIndex] {
+			minIndex = index
+		}
+	}
+	return minIndex
+}
+
 func newRange(start, end int) []int {
 	a := make([]int, end-start)
 	for i := range a {

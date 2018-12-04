@@ -1,11 +1,12 @@
 package base
 
 import (
+	"github.com/stretchr/testify/assert"
 	"math"
 	"testing"
 )
 
-const simTestEpsilon = 1e-6
+const simTestEpsilon = 1e-3
 
 func TestCosine(t *testing.T) {
 	a := NewSparseVector()
@@ -17,9 +18,7 @@ func TestCosine(t *testing.T) {
 	b.Add(1, 1)
 	b.Add(2, 2)
 	sim := Cosine(a, b)
-	if math.Abs(sim-0.978) > simTestEpsilon {
-		t.Fatal(sim, "!=", 0.978)
-	}
+	assert.False(t, math.Abs(sim-0.978) > simTestEpsilon)
 }
 
 func TestMSD(t *testing.T) {
@@ -32,9 +31,7 @@ func TestMSD(t *testing.T) {
 	b.Add(1, 1)
 	b.Add(2, 2)
 	sim := MSD(a, b)
-	if math.Abs(sim-0.1) > simTestEpsilon {
-		t.Fatal(sim, "!=", 0.1)
-	}
+	assert.False(t, math.Abs(sim-0.1) > simTestEpsilon)
 }
 
 func TestPearson(t *testing.T) {
@@ -47,7 +44,5 @@ func TestPearson(t *testing.T) {
 	b.Add(1, 1)
 	b.Add(2, 2)
 	sim := Pearson(a, b)
-	if math.Abs(sim) > simTestEpsilon {
-		t.Fatal(sim, "!=", 0.0)
-	}
+	assert.False(t, math.Abs(sim) > simTestEpsilon)
 }
