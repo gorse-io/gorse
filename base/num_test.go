@@ -1,63 +1,42 @@
 package base
 
 import (
-	"gonum.org/v1/gonum/floats"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func EqualInt(a []int, b []int) bool {
-	if len(a) != len(b) {
-		return false
+func TestConcatenate(t *testing.T) {
+	a := [][]int{
+		{1, 2, 3},
+		{5, 6, 7},
+		{9, 10, 11},
 	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	b := []int{1, 2, 3, 5, 6, 7, 9, 10, 11}
+	assert.Equal(t, b, Concatenate(a...))
 }
 
-func TestSelectFloat(t *testing.T) {
-	a := []float64{-1.0, 0, 1.0}
-	b := []float64{1.0, 0, 1.0}
-	c := []int{2, 1, 2}
-	if !floats.Equal(selectFloat(a, c), b) {
-		t.Fail()
-	}
-}
-
-func TestSelectInt(t *testing.T) {
-	a := []int{1, 2, 3}
-	b := []int{2, 3, 3}
-	c := []int{1, 2, 2}
-	if !EqualInt(selectInt(a, c), b) {
-		t.Fail()
-	}
-}
-
-func TestAbs(t *testing.T) {
-	a := []float64{-1.0, 0, 1.0}
-	b := []float64{1.0, 0, 1.0}
-	abs(a)
-	if !floats.Equal(a, b) {
-		t.Fail()
-	}
+func TestNeg(t *testing.T) {
+	a := []float64{0.0, 1.0, 2.0}
+	b := []float64{0.0, -1.0, -2.0}
+	Neg(a)
+	assert.Equal(t, b, a)
 }
 
 func TestMulConst(t *testing.T) {
 	a := []float64{0.0, 1.0, 2.0}
 	b := []float64{0.0, 2.0, 4.0}
 	MulConst(2.0, a)
-	if !floats.Equal(a, b) {
-		t.Fail()
-	}
+	assert.Equal(t, b, a)
 }
 
 func TestDivConst(t *testing.T) {
 	a := []float64{0.0, 1.0, 2.0}
 	b := []float64{0.0, 0.5, 1.0}
 	DivConst(2.0, a)
-	if !floats.Equal(a, b) {
-		t.Fail()
-	}
+	assert.Equal(t, b, a)
+}
+
+func TestArgMin(t *testing.T) {
+	a := []float64{1, 3, 0, 1, 7, 8, 7, 0, 3, 0, 0}
+	assert.Equal(t, 2, ArgMin(a))
 }

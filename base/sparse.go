@@ -1,7 +1,6 @@
 package base
 
 import (
-	"gonum.org/v1/gonum/stat"
 	"sort"
 )
 
@@ -48,12 +47,14 @@ func (set *SparseIdSet) ToSparseId(denseId int) int {
 	return set.SparseIds[denseId]
 }
 
+// SparseVector handles the sparse vector.
 type SparseVector struct {
 	Indices []int
 	Values  []float64
 	Sorted  bool
 }
 
+// MakeSparseVector makes a SparseVector.
 func MakeSparseVector() SparseVector {
 	return SparseVector{
 		Indices: make([]int, 0),
@@ -61,6 +62,7 @@ func MakeSparseVector() SparseVector {
 	}
 }
 
+// NewSparseVector creates a SparseVector.
 func NewSparseVector() *SparseVector {
 	return &SparseVector{
 		Indices: make([]int, 0),
@@ -68,6 +70,7 @@ func NewSparseVector() *SparseVector {
 	}
 }
 
+// MakeDenseSparseMatrix makes an array of SparseVectors.
 func MakeDenseSparseMatrix(row int) []SparseVector {
 	mat := make([]SparseVector, row)
 	for i := range mat {
@@ -76,39 +79,37 @@ func MakeDenseSparseMatrix(row int) []SparseVector {
 	return mat
 }
 
-func Means(a []SparseVector) []float64 {
-	m := make([]float64, len(a))
-	for i := range a {
-		m[i] = stat.Mean(a[i].Values, nil)
-	}
-	return m
-}
-
+// Add a new item.
 func (vec *SparseVector) Add(index int, value float64) {
 	vec.Indices = append(vec.Indices, index)
 	vec.Values = append(vec.Values, value)
 	vec.Sorted = false
 }
 
+// Len returns the number of items.
 func (vec *SparseVector) Len() int {
 	return len(vec.Values)
 }
 
+// Less compares indices of two items.
 func (vec *SparseVector) Less(i, j int) bool {
 	return vec.Indices[i] < vec.Indices[j]
 }
 
+// Swap two items.
 func (vec *SparseVector) Swap(i, j int) {
 	vec.Indices[i], vec.Indices[j] = vec.Indices[j], vec.Indices[i]
 	vec.Values[i], vec.Values[j] = vec.Values[j], vec.Values[i]
 }
 
+// ForEach iterates items in the vector.
 func (vec *SparseVector) ForEach(f func(i, index int, value float64)) {
 	for i := range vec.Indices {
 		f(i, vec.Indices[i], vec.Values[i])
 	}
 }
 
+// ForIntersection iterates items in the intersection of two vectors.
 func (vec *SparseVector) ForIntersection(other *SparseVector, f func(index int, a, b float64)) {
 	// Sort indices of the left vector
 	if !vec.Sorted {
@@ -149,10 +150,14 @@ func MakeAdjacentVector(k int) AdjacentVector {
 	}
 }
 
-// Put puts a new neighbor to the adjacent vector.
-func (vec *AdjacentVector) Put(i, j int, similarity float64) {
+// Add a new neighbor to the adjacent vector.
+func (vec *AdjacentVector) Add(i int, similarity float64) {
+	// Deprecate zero items
+	if similarity == 0 {
+		return
+	}
 	// Find minimum
-	minIndex := Argmin(vec.Similarities)
+	minIndex := ArgMin(vec.Similarities)
 	// Replace minimum
 	vec.Similarities[minIndex] = similarity
 	vec.Peers[minIndex] = i

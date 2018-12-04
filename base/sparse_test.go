@@ -67,5 +67,18 @@ func TestSparseVector_ForIntersection(t *testing.T) {
 }
 
 func TestAdjacentVector(t *testing.T) {
-
+	// Test a adjacent vector
+	a := MakeAdjacentVector(3)
+	a.Add(10, 1)
+	a.Add(20, 2)
+	a.Add(30, 0)
+	vec := a.ToSparseVector()
+	assert.Equal(t, []int{10, 20}, vec.Indices)
+	assert.Equal(t, []float64{1, 2}, vec.Values)
+	// Test a full adjacent vector
+	a.Add(40, 4)
+	a.Add(50, 5)
+	vec = a.ToSparseVector()
+	assert.Equal(t, []int{50, 20, 40}, vec.Indices)
+	assert.Equal(t, []float64{5, 2, 4}, vec.Values)
 }
