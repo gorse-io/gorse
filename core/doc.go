@@ -1,6 +1,2 @@
-/*
-
-Package core implements datasets, estimators and evaluators for recommender system.
-
-*/
+// The datasets, splitters and evaluators for gorse.
 package core

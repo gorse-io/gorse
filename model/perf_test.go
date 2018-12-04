@@ -1,12 +1,14 @@
-package core
+package model
 
 import (
+	. "github.com/zhenghaoz/gorse/base"
+	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/stat"
 	"runtime"
 	"testing"
 )
 
-const estimatorEpsilon float64 = 0.008
+const performanceEpsilon float64 = 0.008
 
 func Evaluate(t *testing.T, algo Model, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {
@@ -16,15 +18,17 @@ func Evaluate(t *testing.T, algo Model, dataSet DataSet,
 	}, runtime.NumCPU())
 	// Check RMSE
 	rmse := stat.Mean(results[0].Tests, nil)
-	if rmse > expectRMSE+estimatorEpsilon {
-		t.Fatalf("RMSE(%.3f) > %.3f+%.3f", rmse, expectRMSE, estimatorEpsilon)
+	if rmse > expectRMSE+performanceEpsilon {
+		t.Fatalf("RMSE(%.3f) > %.3f+%.3f", rmse, expectRMSE, performanceEpsilon)
 	}
 	// Check MAE
 	mae := stat.Mean(results[1].Tests, nil)
-	if mae > expectMAE+estimatorEpsilon {
-		t.Fatalf("MAE(%.3f) > %.3f+%.3f", mae, expectMAE, estimatorEpsilon)
+	if mae > expectMAE+performanceEpsilon {
+		t.Fatalf("MAE(%.3f) > %.3f+%.3f", mae, expectMAE, performanceEpsilon)
 	}
 }
+
+// Surprise Benchmark: https://github.com/NicolasHug/Surprise#benchmarks
 
 func TestRandom(t *testing.T) {
 	Evaluate(t, NewRandom(nil), LoadDataFromBuiltIn("ml-100k"), 1.514, 1.215)
@@ -69,3 +73,5 @@ func TestKNNBaseLine(t *testing.T) {
 func TestCoClustering(t *testing.T) {
 	Evaluate(t, NewCoClustering(nil), LoadDataFromBuiltIn("ml-100k"), 0.963, 0.753)
 }
+
+// LibRec Benchmarks: https://www.librec.net/release/v1.3/example.html

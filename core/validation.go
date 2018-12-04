@@ -104,3 +104,7 @@ func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 	dfs(0, options)
 	return results
 }
+
+func RandomSearcHCV() {
+	// TODO:
+}

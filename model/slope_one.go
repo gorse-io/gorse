@@ -34,12 +34,12 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	innerUserId := so.UserIdSet.ToSparseId(userId)
 	innerItemId := so.ItemIdSet.ToSparseId(itemId)
 	prediction := 0.0
-	if innerUserId != NewId {
+	if innerUserId != NotId {
 		prediction = so.UserMeans[innerUserId]
 	} else {
 		prediction = so.GlobalMean
 	}
-	if innerItemId != NewId {
+	if innerItemId != NotId {
 		sum, count := 0.0, 0.0
 		so.UserRatings[innerUserId].ForEach(func(i, index int, value float64) {
 			sum += so.Dev[innerItemId][index]
@@ -59,7 +59,7 @@ func (so *SlopeOne) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 	so.GlobalMean = trainSet.GlobalMean
 	so.UserRatings = trainSet.UserRatings
 	so.UserMeans = Means(so.UserRatings)
-	so.Dev = Zeros(trainSet.ItemCount(), trainSet.ItemCount())
+	so.Dev = MakeMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	itemRatings := trainSet.ItemRatings
 	Parallel(len(itemRatings), nJobs, func(begin, end int) {
 		for i := begin; i < end; i++ {

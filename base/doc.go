@@ -1,2 +1,2 @@
-// The base data structures for gorse.
+// The base data structures and operations for gorse.
 package base

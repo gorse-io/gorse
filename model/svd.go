@@ -73,15 +73,15 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	innerItemId := svd.ItemIdSet.ToDenseId(itemId)
 	ret := svd.GlobalBias
 	// + b_u
-	if innerUserId != NewId {
+	if innerUserId != NotId {
 		ret += svd.UserBias[innerUserId]
 	}
 	// + b_i
-	if innerItemId != NewId {
+	if innerItemId != NotId {
 		ret += svd.ItemBias[innerItemId]
 	}
 	// + q_i^Tp_u
-	if innerItemId != NewId && innerUserId != NewId {
+	if innerItemId != NotId && innerUserId != NotId {
 		userFactor := svd.UserFactor[innerUserId]
 		itemFactor := svd.ItemFactor[innerItemId]
 		ret += floats.Dot(userFactor, itemFactor)
@@ -213,7 +213,7 @@ func (nmf *NMF) SetParams(params Params) {
 func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	innerUserId := nmf.UserIdSet.ToDenseId(userId)
 	innerItemId := nmf.ItemIdSet.ToDenseId(itemId)
-	if innerItemId != NewId && innerUserId != NewId {
+	if innerItemId != NotId && innerUserId != NotId {
 		return floats.Dot(nmf.UserFactor[innerUserId], nmf.ItemFactor[innerItemId])
 	}
 	return 0
@@ -226,17 +226,17 @@ func (nmf *NMF) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 	nmf.ItemFactor = nmf.rng.MakeUniformMatrix(trainSet.ItemCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	// Create intermediate matrix buffer
 	buffer := make([]float64, nmf.nFactors)
-	userUp := Zeros(trainSet.UserCount(), nmf.nFactors)
-	userDown := Zeros(trainSet.UserCount(), nmf.nFactors)
-	itemUp := Zeros(trainSet.ItemCount(), nmf.nFactors)
-	itemDown := Zeros(trainSet.ItemCount(), nmf.nFactors)
+	userUp := MakeMatrix(trainSet.UserCount(), nmf.nFactors)
+	userDown := MakeMatrix(trainSet.UserCount(), nmf.nFactors)
+	itemUp := MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
+	itemDown := MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nmf.nEpochs; epoch++ {
 		// Reset intermediate matrices
-		ResetZeroMatrix(userUp)
-		ResetZeroMatrix(userDown)
-		ResetZeroMatrix(itemUp)
-		ResetZeroMatrix(itemDown)
+		ResetMatrix(userUp)
+		ResetMatrix(userDown)
+		ResetMatrix(itemUp)
+		ResetMatrix(itemDown)
 		// Calculate intermediate matrices
 		for i := 0; i < trainSet.Length(); i++ {
 			userId, itemId, rating := trainSet.Index(i)
@@ -353,15 +353,15 @@ func (svd *SVDpp) internalPredict(userId int, itemId int) (float64, []float64) {
 	innerItemId := svd.ItemIdSet.ToDenseId(itemId)
 	ret := svd.GlobalBias
 	// + b_u
-	if innerUserId != NewId {
+	if innerUserId != NotId {
 		ret += svd.UserBias[innerUserId]
 	}
 	// + b_i
-	if innerItemId != NewId {
+	if innerItemId != NotId {
 		ret += svd.ItemBias[innerItemId]
 	}
 	// + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
-	if innerItemId != NewId && innerUserId != NewId {
+	if innerItemId != NotId && innerUserId != NotId {
 		userFactor := svd.UserFactor[innerUserId]
 		itemFactor := svd.ItemFactor[innerItemId]
 		emImpFactor := svd.ensembleImplFactors(innerUserId)
@@ -437,7 +437,7 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 			MulConst(svd.lr, a)
 			floats.Sub(svd.ItemFactor[innerItemId], a)
 			// Update implicit latent factor
-			nRating := svd.UserRatings[innerUserId].Length()
+			nRating := svd.UserRatings[innerUserId].Len()
 			var wg sync.WaitGroup
 			wg.Add(svd.rtOptions.NJobs)
 			for j := 0; j < svd.rtOptions.NJobs; j++ {
@@ -450,7 +450,7 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
 						implFactor := svd.ImplFactor[svd.UserRatings[innerUserId].Indices[i]]
 						copy(a, itemFactor)
 						MulConst(diff, a)
-						DivConst(math.Sqrt(float64(svd.UserRatings[innerUserId].Length())), a)
+						DivConst(math.Sqrt(float64(svd.UserRatings[innerUserId].Len())), a)
 						copy(b, implFactor)
 						MulConst(svd.reg, b)
 						floats.Add(a, b)

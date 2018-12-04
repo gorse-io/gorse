@@ -107,7 +107,7 @@ func NewRawDataSet(users, items []int, ratings []float64) *RawDataSet {
 	}
 }
 
-// Length returns the number of ratings in the data set.
+// Len returns the number of ratings in the data set.
 func (dataSet *RawDataSet) Length() int {
 	return len(dataSet.Ratings)
 }
@@ -296,11 +296,11 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 }
 
 func (trainSet *TrainSet) UserCount() int {
-	return trainSet.UserIdSet.Length()
+	return trainSet.UserIdSet.Len()
 }
 
 func (trainSet *TrainSet) ItemCount() int {
-	return trainSet.ItemIdSet.Length()
+	return trainSet.ItemIdSet.Len()
 }
 
 // Range gets the range of ratings. Return minimum and maximum.

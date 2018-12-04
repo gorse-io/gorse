@@ -125,10 +125,10 @@ func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
 	innerUserId := baseLine.UserIdSet.ToDenseId(userId)
 	innerItemId := baseLine.ItemIdSet.ToDenseId(itemId)
 	ret := baseLine.GlobalBias
-	if innerUserId != NewId {
+	if innerUserId != NotId {
 		ret += baseLine.UserBias[innerUserId]
 	}
-	if innerItemId != NewId {
+	if innerItemId != NotId {
 		ret += baseLine.ItemBias[innerItemId]
 	}
 	return ret

@@ -81,20 +81,20 @@ func NewNDCG(n int) Evaluator {
 			userId := testSet.UserIdSet.ToSparseId(innerUserIdTest)
 			// Find top-n items in test set
 			relSet := make(map[int]float64)
-			relIndex := make([]int, irs.Length())
-			relRating := make([]float64, irs.Length())
+			relIndex := make([]int, irs.Len())
+			relRating := make([]float64, irs.Len())
 			irs.ForEach(func(i, index int, value float64) {
 				relIndex[i] = i
 				relRating[i] = -value
 			})
 			floats.Argsort(relRating, relIndex)
-			for i := 0; i < n && i < irs.Length(); i++ {
+			for i := 0; i < n && i < irs.Len(); i++ {
 				index := relIndex[i]
 				relSet[irs.Indices[index]] = irs.Values[index]
 			}
 			// Find top-n items in predictions
-			topIndex := make([]int, irs.Length())
-			topRating := make([]float64, irs.Length())
+			topIndex := make([]int, irs.Len())
+			topRating := make([]float64, irs.Len())
 			irs.ForEach(func(i, index int, value float64) {
 				itemId := testSet.ItemIdSet.ToSparseId(index)
 				topIndex[i] = i
@@ -103,12 +103,12 @@ func NewNDCG(n int) Evaluator {
 			floats.Argsort(topRating, topIndex)
 			// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
 			idcg := 0.0
-			for i := 0; i < n && i < irs.Length(); i++ {
+			for i := 0; i < n && i < irs.Len(); i++ {
 				idcg += 1.0 / math.Log2(float64(i)+2.0)
 			}
 			// DCG = \sum^{N}_{i=1} \frac {2^{rel_i}-1} {\log_2(i+1)}
 			dcg := 0.0
-			for i := 0; i < n && i < irs.Length(); i++ {
+			for i := 0; i < n && i < irs.Len(); i++ {
 				index := topIndex[i]
 				if _, exist := relSet[irs.Indices[index]]; exist {
 					dcg += 1.0 / math.Log2(float64(i)+2.0)

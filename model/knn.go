@@ -88,7 +88,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	} else {
 		leftId, rightId = innerItemId, innerUserId
 	}
-	if leftId == NewId || rightId == NewId {
+	if leftId == NotId || rightId == NotId {
 		return knn.GlobalMean
 	}
 	// Find user (item) interacted with item (user)
