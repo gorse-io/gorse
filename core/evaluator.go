@@ -37,22 +37,22 @@ func NewAUCEvaluator(fullSet DataSet) Evaluator {
 		test := NewTrainSet(testSet)
 		sum, count := 0.0, 0.0
 		// Find all userIds
-		for innerUserIdTest, irs := range test.UserRatings() {
-			userId := test.outerUserIds[innerUserIdTest]
+		for innerUserIdTest, irs := range test.UserRatings {
+			userId := test.UserIdSet.ToSparseId(innerUserIdTest)
 			// Find all <userId, j>s in full data set
-			innerUserIdFull := full.ConvertUserId(userId)
+			innerUserIdFull := full.UserIdSet.ToDenseId(userId)
 			fullRatedItem := make(map[int]float64)
-			for _, jr := range full.UserRatings()[innerUserIdFull] {
-				itemId := full.outerItemIds[jr.Id]
-				fullRatedItem[itemId] = jr.Rating
-			}
+			full.UserRatings[innerUserIdFull].ForEach(func(i, index int, value float64) {
+				itemId := full.ItemIdSet.ToSparseId(index)
+				fullRatedItem[itemId] = value
+			})
 			// Find all <userId, i>s in test data set
 			indicatorSum, ratedCount := 0.0, 0.0
-			for _, ir := range irs {
-				iItemId := test.outerItemIds[ir.Id]
+			irs.ForEach(func(i, index int, value float64) {
+				iItemId := test.ItemIdSet.ToSparseId(index)
 				// Find all <userId, j>s not in full data set
-				for j := 0; j < full.ItemCount; j++ {
-					jItemId := full.outerItemIds[j]
+				for j := 0; j < full.ItemCount(); j++ {
+					jItemId := full.ItemIdSet.ToSparseId(j)
 					if _, exist := fullRatedItem[jItemId]; !exist {
 						// I(\hat{x}_{ui} - \hat{x}_{uj})
 						if estimator.Predict(userId, iItemId) > estimator.Predict(userId, jItemId) {
@@ -61,7 +61,7 @@ func NewAUCEvaluator(fullSet DataSet) Evaluator {
 						ratedCount++
 					}
 				}
-			}
+			})
 			// += \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
 			sum += indicatorSum / ratedCount
 			count++
@@ -77,49 +77,47 @@ func NewNDCG(n int) Evaluator {
 		testSet := NewTrainSet(data)
 		sum := 0.0
 		// For all users
-		for innerUserIdTest, irs := range testSet.UserRatings() {
-			userId := testSet.outerUserIds[innerUserIdTest]
+		for innerUserIdTest, irs := range testSet.UserRatings {
+			userId := testSet.UserIdSet.ToSparseId(innerUserIdTest)
 			// Find top-n items in test set
 			relSet := make(map[int]float64)
-			relIndex := make([]int, len(irs))
-			relRating := make([]float64, len(irs))
-			for i, ir := range irs {
+			relIndex := make([]int, irs.Length())
+			relRating := make([]float64, irs.Length())
+			irs.ForEach(func(i, index int, value float64) {
 				relIndex[i] = i
-				relRating[i] = -ir.Rating
-			}
+				relRating[i] = -value
+			})
 			floats.Argsort(relRating, relIndex)
-			for i := 0; i < n && i < len(irs); i++ {
+			for i := 0; i < n && i < irs.Length(); i++ {
 				index := relIndex[i]
-				ir := irs[index]
-				relSet[ir.Id] = ir.Rating
+				relSet[irs.Indices[index]] = irs.Values[index]
 			}
 			// Find top-n items in predictions
-			topIndex := make([]int, len(irs))
-			topRating := make([]float64, len(irs))
-			for i, ir := range irs {
-				itemId := testSet.outerItemIds[ir.Id]
+			topIndex := make([]int, irs.Length())
+			topRating := make([]float64, irs.Length())
+			irs.ForEach(func(i, index int, value float64) {
+				itemId := testSet.ItemIdSet.ToSparseId(index)
 				topIndex[i] = i
 				topRating[i] = -model.Predict(userId, itemId)
-			}
+			})
 			floats.Argsort(topRating, topIndex)
 			// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
 			idcg := 0.0
-			for i := 0; i < n && i < len(irs); i++ {
+			for i := 0; i < n && i < irs.Length(); i++ {
 				idcg += 1.0 / math.Log2(float64(i)+2.0)
 			}
 			// DCG = \sum^{N}_{i=1} \frac {2^{rel_i}-1} {\log_2(i+1)}
 			dcg := 0.0
-			for i := 0; i < n && i < len(irs); i++ {
+			for i := 0; i < n && i < irs.Length(); i++ {
 				index := topIndex[i]
-				ir := irs[index]
-				if _, exist := relSet[ir.Id]; exist {
+				if _, exist := relSet[irs.Indices[index]]; exist {
 					dcg += 1.0 / math.Log2(float64(i)+2.0)
 				}
 			}
 			// NDCG = DCG / IDCG
 			sum += dcg / idcg
 		}
-		return sum / float64(testSet.UserCount)
+		return sum / float64(testSet.UserCount())
 	}
 }
 

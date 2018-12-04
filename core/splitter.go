@@ -59,28 +59,28 @@ func NewUserLOOSplitter(repeat int) Splitter {
 		trainSet := NewTrainSet(dataSet)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
-				make([]int, 0, trainSet.Length()-trainSet.UserCount),
-				make([]int, 0, trainSet.Length()-trainSet.UserCount),
-				make([]float64, 0, trainSet.Length()-trainSet.UserCount)
+				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
+				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
+				make([]float64, 0, trainSet.Length()-trainSet.UserCount())
 			testUsers, testItems, testRatings :=
-				make([]int, 0, trainSet.UserCount),
-				make([]int, 0, trainSet.UserCount),
-				make([]float64, 0, trainSet.UserCount)
-			for innerUserId, irs := range trainSet.UserRatings() {
-				userId := trainSet.outerUserIds[innerUserId]
-				out := rand.Intn(len(irs))
-				for index, ir := range irs {
-					itemId := trainSet.outerItemIds[ir.Id]
-					if index == out {
+				make([]int, 0, trainSet.UserCount()),
+				make([]int, 0, trainSet.UserCount()),
+				make([]float64, 0, trainSet.UserCount())
+			for innerUserId, irs := range trainSet.UserRatings {
+				userId := trainSet.UserIdSet.ToSparseId(innerUserId)
+				out := rand.Intn(irs.Length())
+				irs.ForEach(func(i, index int, value float64) {
+					itemId := trainSet.ItemIdSet.ToSparseId(index)
+					if i == out {
 						testUsers = append(testUsers, userId)
 						testItems = append(testItems, itemId)
-						testRatings = append(testRatings, ir.Rating)
+						testRatings = append(testRatings, value)
 					} else {
 						trainUsers = append(trainUsers, userId)
 						trainItems = append(trainItems, itemId)
-						trainRatings = append(trainRatings, ir.Rating)
+						trainRatings = append(trainRatings, value)
 					}
-				}
+				})
 			}
 			trainFolds[i] = NewTrainSet(NewRawDataSet(trainUsers, trainItems, trainRatings))
 			testFolds[i] = NewRawDataSet(testUsers, testItems, testRatings)
@@ -98,40 +98,40 @@ func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
 		testFolds := make([]DataSet, repeat)
 		rand.Seed(seed)
 		trainSet := NewTrainSet(set)
-		testSize := int(float64(trainSet.UserCount) * testRatio)
+		testSize := int(float64(trainSet.UserCount()) * testRatio)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
-				make([]int, 0, trainSet.Length()-trainSet.UserCount),
-				make([]int, 0, trainSet.Length()-trainSet.UserCount),
-				make([]float64, 0, trainSet.Length()-trainSet.UserCount)
+				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
+				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
+				make([]float64, 0, trainSet.Length()-trainSet.UserCount())
 			testUsers, testItems, testRatings :=
-				make([]int, 0, trainSet.UserCount),
-				make([]int, 0, trainSet.UserCount),
-				make([]float64, 0, trainSet.UserCount)
-			userPerm := rand.Perm(trainSet.UserCount)
+				make([]int, 0, trainSet.UserCount()),
+				make([]int, 0, trainSet.UserCount()),
+				make([]float64, 0, trainSet.UserCount())
+			userPerm := rand.Perm(trainSet.UserCount())
 			userTest := userPerm[:testSize]
 			userTrain := userPerm[testSize:]
-			userRatings := trainSet.UserRatings()
+			userRatings := trainSet.UserRatings
 			// Add all train user's ratings to train set
 			for _, userId := range userTrain {
-				for _, ir := range userRatings[userId] {
+				userRatings[userId].ForEach(func(i, index int, value float64) {
 					trainUsers = append(trainUsers, userId)
-					trainItems = append(trainItems, ir.Id)
-					trainRatings = append(trainRatings, ir.Rating)
-				}
+					trainItems = append(trainItems, index)
+					trainRatings = append(trainRatings, value)
+				})
 			}
 			// Add test user's ratings to train set and test set
 			for _, userId := range userTest {
-				ratingPerm := rand.Perm(len(userRatings[userId]))
+				ratingPerm := rand.Perm(userRatings[userId].Length())
 				for i, index := range ratingPerm {
 					if i < n {
 						trainUsers = append(trainUsers, userId)
-						trainItems = append(trainItems, userRatings[userId][index].Id)
-						trainRatings = append(trainRatings, userRatings[userId][index].Rating)
+						trainItems = append(trainItems, userRatings[userId].Indices[index])
+						trainRatings = append(trainRatings, userRatings[userId].Values[index])
 					} else {
 						testUsers = append(testUsers, userId)
-						testItems = append(testItems, userRatings[userId][index].Id)
-						testRatings = append(testRatings, userRatings[userId][index].Rating)
+						testItems = append(testItems, userRatings[userId].Indices[index])
+						testRatings = append(testRatings, userRatings[userId].Values[index])
 					}
 				}
 			}

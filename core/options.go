@@ -7,8 +7,10 @@ type RuntimeOptions struct {
 }
 
 // NewRuntimeOptions creates a RuntimeOptions from RuntimeOptionSetters.
-func NewRuntimeOptions(setters ...RuntimeOptionSetter) *RuntimeOptions {
+func NewRuntimeOptions(setters []RuntimeOptionSetter) *RuntimeOptions {
 	options := new(RuntimeOptions)
+	options.NJobs = 1
+	options.Verbose = true
 	for _, setter := range setters {
 		setter(options)
 	}

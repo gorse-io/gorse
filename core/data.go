@@ -77,19 +77,6 @@ func init() {
 	tempDir = gorseDir + "/_userCluster"
 }
 
-type SparseIdSet struct {
-	DenseIds  map[int]int
-	SparseIds []int
-}
-
-func (set *SparseIdSet) ToDenseId(id int) int {
-	return 0
-}
-
-func (set *SparseIdSet) ToSparseId(id int) int {
-	return 0
-}
-
 /* Data Set */
 
 type DataSet interface {
@@ -271,17 +258,11 @@ func Predict(dataSet DataSet, estimator Model) []float64 {
 // Train data set.
 type TrainSet struct {
 	DataSet
-	GlobalMean   float64
-	UserCount    int
-	ItemCount    int
-	InnerUserIds map[int]int // userId -> innerUserId
-	InnerItemIds map[int]int // itemId -> innerItemId
-	outerUserIds []int
-	outerItemIds []int
-	userRatings  [][]IdRating
-	itemRatings  [][]IdRating
-	UserIdSet    SparseIdSet // Users' ID set
-	ItemIdSet    SparseIdSet // Items' ID set
+	GlobalMean  float64
+	UserRatings []SparseVector
+	ItemRatings []SparseVector
+	UserIdSet   SparseIdSet // Users' ID set
+	ItemIdSet   SparseIdSet // Items' ID set
 }
 
 // <userId, rating> or <itemId, rating>
@@ -298,27 +279,30 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 	set := TrainSet{}
 	set.DataSet = rawSet
 	set.GlobalMean = rawSet.Mean()
-	// Create userId -> innerUserId map
-	set.InnerUserIds = make(map[int]int)
-	set.outerUserIds = make([]int, 0)
+	// Create IdSet
+	set.UserIdSet = MakeSparseIdSet()
+	set.ItemIdSet = MakeSparseIdSet()
 	rawSet.ForEach(func(userId, itemId int, rating float64) {
-		if _, exist := set.InnerUserIds[userId]; !exist {
-			set.outerUserIds = append(set.outerUserIds, userId)
-			set.InnerUserIds[userId] = set.UserCount
-			set.UserCount++
-		}
+		set.UserIdSet.Add(userId)
+		set.ItemIdSet.Add(itemId)
 	})
-	// Create itemId -> innerItemId map
-	set.InnerItemIds = make(map[int]int)
-	set.outerItemIds = make([]int, 0)
+	set.UserRatings = MakeDenseSparseMatrix(set.UserCount())
+	set.ItemRatings = MakeDenseSparseMatrix(set.ItemCount())
 	rawSet.ForEach(func(userId, itemId int, rating float64) {
-		if _, exist := set.InnerItemIds[itemId]; !exist {
-			set.outerItemIds = append(set.outerItemIds, itemId)
-			set.InnerItemIds[itemId] = set.ItemCount
-			set.ItemCount++
-		}
+		userDenseId := set.UserIdSet.ToDenseId(userId)
+		itemDenseId := set.ItemIdSet.ToDenseId(itemId)
+		set.UserRatings[userDenseId].Add(itemDenseId, rating)
+		set.ItemRatings[itemDenseId].Add(userDenseId, rating)
 	})
 	return set
+}
+
+func (trainSet *TrainSet) UserCount() int {
+	return trainSet.UserIdSet.Length()
+}
+
+func (trainSet *TrainSet) ItemCount() int {
+	return trainSet.ItemIdSet.Length()
 }
 
 // Range gets the range of ratings. Return minimum and maximum.
@@ -326,62 +310,14 @@ func (trainSet *TrainSet) Range() (float64, float64) {
 	return trainSet.Min(), trainSet.Max()
 }
 
-// ConvertUserId converts user ID to inner user ID.
-func (trainSet *TrainSet) ConvertUserId(userId int) int {
-	if innerUserId, exist := trainSet.InnerUserIds[userId]; exist {
-		return innerUserId
-	}
-	return NewId
-}
-
-// ConvertItemId converts item ID to inner item ID.
-func (trainSet *TrainSet) ConvertItemId(itemId int) int {
-	if innerItemId, exist := trainSet.InnerItemIds[itemId]; exist {
-		return innerItemId
-	}
-	return NewId
-}
-
-// UserRatings: an array of <itemId, rating> for each user.
-func (trainSet *TrainSet) UserRatings() [][]IdRating {
-	if trainSet.userRatings == nil {
-		trainSet.userRatings = make([][]IdRating, trainSet.UserCount)
-		for innerUserId := range trainSet.userRatings {
-			trainSet.userRatings[innerUserId] = make([]IdRating, 0)
-		}
-		trainSet.ForEach(func(userId, itemId int, rating float64) {
-			innerUserId := trainSet.ConvertUserId(userId)
-			innerItemId := trainSet.ConvertItemId(itemId)
-			trainSet.userRatings[innerUserId] = append(trainSet.userRatings[innerUserId], IdRating{innerItemId, rating})
-		})
-	}
-	return trainSet.userRatings
-}
-
-// ItemRatings: an array of <userId, Rating> for each item.
-func (trainSet *TrainSet) ItemRatings() [][]IdRating {
-	if trainSet.itemRatings == nil {
-		trainSet.itemRatings = make([][]IdRating, trainSet.ItemCount)
-		for innerItemId := range trainSet.itemRatings {
-			trainSet.itemRatings[innerItemId] = make([]IdRating, 0)
-		}
-		trainSet.ForEach(func(userId, itemId int, rating float64) {
-			innerUserId := trainSet.ConvertUserId(userId)
-			innerItemId := trainSet.ConvertItemId(itemId)
-			trainSet.itemRatings[innerItemId] = append(trainSet.itemRatings[innerItemId], IdRating{innerUserId, rating})
-		})
-	}
-	return trainSet.itemRatings
-}
-
 func (trainSet *TrainSet) Stat() map[string]float64 {
 	ret := make(map[string]float64)
-	//
-	sum := 0
-	for _, irs := range trainSet.UserRatings() {
-		sum += len(irs)
-	}
-	ret["n_rating_per_user"] = float64(sum) / float64(trainSet.UserCount)
+	////
+	//sum := 0
+	//for _, irs := range trainSet.UserRatings() {
+	//	sum += len(irs)
+	//}
+	//ret["n_rating_per_user"] = float64(sum) / float64(trainSet.UserCount())
 	return ret
 }
 
@@ -571,15 +507,10 @@ func unzip(src string, dst string) ([]string, error) {
 /* Utils */
 
 // Get the mean of ratings for each user (item).
-func means(a [][]IdRating) []float64 {
+func means(a []SparseVector) []float64 {
 	m := make([]float64, len(a))
 	for i := range a {
-		sum, count := 0.0, 0.0
-		for _, ir := range a[i] {
-			sum += ir.Rating
-			count++
-		}
-		m[i] = sum / count
+		m[i] = stat.Mean(a[i].Values, nil)
 	}
 	return m
 }

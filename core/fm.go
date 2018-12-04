@@ -33,16 +33,16 @@ func (fm *FM) Fit(set TrainSet) {
 	initMean := fm.Params.GetFloat64("initMean", 0)
 	initStdDev := fm.Params.GetFloat64("initStdDev", 0.1)
 	// Initialize parameters
-	fm.UserFactor = fm.rng.MakeNormalMatrix(set.UserCount, nFactors, initMean, initStdDev)
-	fm.ItemFactor = fm.rng.MakeNormalMatrix(set.ItemCount, nFactors, initMean, initStdDev)
+	fm.UserFactor = fm.rng.MakeNormalMatrix(set.UserCount(), nFactors, initMean, initStdDev)
+	fm.ItemFactor = fm.rng.MakeNormalMatrix(set.ItemCount(), nFactors, initMean, initStdDev)
 	a := make([]float64, nFactors)
 	b := make([]float64, nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nEpochs; epoch++ {
 		for i := 0; i < set.Length(); i++ {
 			userId, itemId, rating := set.Index(i)
-			innerUserId := set.ConvertUserId(userId)
-			innerItemId := set.ConvertItemId(itemId)
+			innerUserId := set.UserIdSet.ToDenseId(userId)
+			innerItemId := set.ItemIdSet.ToDenseId(itemId)
 			//userBias := svd.UserBias[innerUserId]
 			//itemBias := svd.ItemBias[innerItemId]
 			userFactor := fm.UserFactor[innerUserId]

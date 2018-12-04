@@ -13,7 +13,7 @@ import (
 type SlopeOne struct {
 	Base
 	GlobalMean  float64
-	UserRatings [][]IdRating
+	UserRatings []SparseVector
 	UserMeans   []float64
 	Dev         [][]float64 // The average differences between the LeftRatings of i and those of j
 }
@@ -39,10 +39,10 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	}
 	if innerItemId != NewId {
 		sum, count := 0.0, 0.0
-		for _, ir := range so.UserRatings[innerUserId] {
-			sum += so.Dev[innerItemId][ir.Id]
+		so.UserRatings[innerUserId].ForEach(func(i, index int, value float64) {
+			sum += so.Dev[innerItemId][index]
 			count++
-		}
+		})
 		if count > 0 {
 			prediction += sum / count
 		}
@@ -51,30 +51,23 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 }
 
 // Fit a SlopeOne model.
-func (so *SlopeOne) Fit(trainSet TrainSet) {
-	so.Init(trainSet)
+func (so *SlopeOne) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
+	so.Init(trainSet, setters)
 	nJobs := runtime.NumCPU()
 	so.GlobalMean = trainSet.GlobalMean
-	so.UserRatings = trainSet.UserRatings()
+	so.UserRatings = trainSet.UserRatings
 	so.UserMeans = means(so.UserRatings)
-	so.Dev = newZeroMatrix(trainSet.ItemCount, trainSet.ItemCount)
-	itemRatings := trainSet.ItemRatings()
-	sorts(itemRatings)
+	so.Dev = zeros(trainSet.ItemCount(), trainSet.ItemCount())
+	itemRatings := trainSet.ItemRatings
 	parallel(len(itemRatings), nJobs, func(begin, end int) {
 		for i := begin; i < end; i++ {
 			for j := 0; j < i; j++ {
-				count, sum, ptr := 0.0, 0.0, 0
+				count, sum := 0.0, 0.0
 				// Find common user's ratings
-				for k := 0; k < len(itemRatings[i]) && ptr < len(itemRatings[j]); k++ {
-					ur := itemRatings[i][k]
-					for ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id < ur.Id {
-						ptr++
-					}
-					if ptr < len(itemRatings[j]) && itemRatings[j][ptr].Id == ur.Id {
-						count++
-						sum += ur.Rating - itemRatings[j][ptr].Rating
-					}
-				}
+				itemRatings[i].ForIntersection(&itemRatings[j], func(index int, a float64, b float64) {
+					sum += a - b
+					count++
+				})
 				if count > 0 {
 					so.Dev[i][j] = sum / count
 					so.Dev[j][i] = -so.Dev[i][j]

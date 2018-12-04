@@ -37,7 +37,7 @@ func NewTestEstimator(users, items []int, ratings []float64) *TestEstimator {
 	test := new(TestEstimator)
 	test.MaxUserId = max(users)
 	test.MaxItemId = max(items)
-	test.Matrix = newZeroMatrix(test.MaxUserId+1, test.MaxItemId+1)
+	test.Matrix = zeros(test.MaxUserId+1, test.MaxItemId+1)
 	for i := range ratings {
 		userId := users[i]
 		itemId := items[i]

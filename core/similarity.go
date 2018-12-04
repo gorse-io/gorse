@@ -1,75 +1,48 @@
 package core
 
 import (
+	"gonum.org/v1/gonum/stat"
 	"math"
 )
 
 // Similarity computes the similarity between two lists of rating history.
-type Similarity func(SortedIdRatings, SortedIdRatings) float64
+type Similarity func(a, b *SparseVector) float64
 
 // Cosine computes the cosine similarity between a pair of users (or items).
-func Cosine(a SortedIdRatings, b SortedIdRatings) float64 {
-	m, n, l, ptr := .0, .0, .0, 0
-	for _, ir := range a.data {
-		for ptr < len(b.data) && b.data[ptr].Id < ir.Id {
-			ptr++
-		}
-		if ptr < len(b.data) && b.data[ptr].Id == ir.Id {
-			jr := b.data[ptr]
-			m += ir.Rating * ir.Rating
-			n += jr.Rating * jr.Rating
-			l += ir.Rating * jr.Rating
-		}
-	}
+func Cosine(a, b *SparseVector) float64 {
+	m, n, l := .0, .0, .0
+	a.ForIntersection(b, func(index int, a, b float64) {
+		m += a * a
+		n += b * b
+		l += a * b
+	})
 	return l / (math.Sqrt(m) * math.Sqrt(n))
 }
 
 // MSD computes the Mean Squared Difference similarity between a pair of users (or items).
-func MSD(a SortedIdRatings, b SortedIdRatings) float64 {
-	count, sum, ptr := 0.0, 0.0, 0
-	for _, ir := range a.data {
-		for ptr < len(b.data) && b.data[ptr].Id < ir.Id {
-			ptr++
-		}
-		if ptr < len(b.data) && b.data[ptr].Id == ir.Id {
-			jr := b.data[ptr]
-			sum += (ir.Rating - jr.Rating) * (ir.Rating - jr.Rating)
-			count += 1
-		}
-	}
+func MSD(a, b *SparseVector) float64 {
+	count, sum := 0.0, 0.0
+	a.ForIntersection(b, func(index int, a, b float64) {
+		sum += (a - b) * (a - b)
+		count += 1
+	})
 	return 1.0 / (sum/count + 1)
 }
 
 // Pearson computes the Pearson correlation coefficient between a pair of users (or items).
-func Pearson(a SortedIdRatings, b SortedIdRatings) float64 {
+func Pearson(a, b *SparseVector) float64 {
 	// Mean of a
-	count, sum := .0, .0
-	for _, ir := range a.data {
-		sum += ir.Rating
-		count++
-	}
-	meanA := sum / count
+	meanA := stat.Mean(a.Values, nil)
 	// Mean of b
-	count, sum = .0, .0
-	for _, ir := range b.data {
-		sum += ir.Rating
-		count++
-	}
-	meanB := sum / count
+	meanB := stat.Mean(b.Values, nil)
 	// Mean-centered cosine
-	m, n, l, ptr := .0, .0, .0, 0
-	for _, ir := range a.data {
-		for ptr < len(b.data) && b.data[ptr].Id < ir.Id {
-			ptr++
-		}
-		if ptr < len(b.data) && b.data[ptr].Id == ir.Id {
-			jr := b.data[ptr]
-			ratingA := ir.Rating - meanA
-			ratingB := jr.Rating - meanB
-			m += ratingA * ratingA
-			n += ratingB * ratingB
-			l += ratingA * ratingB
-		}
-	}
+	m, n, l := .0, .0, .0
+	a.ForIntersection(b, func(index int, a, b float64) {
+		ratingA := a - meanA
+		ratingB := b - meanB
+		m += ratingA * ratingA
+		n += ratingB * ratingB
+		l += ratingA * ratingB
+	})
 	return l / (math.Sqrt(m) * math.Sqrt(n))
 }

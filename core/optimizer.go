@@ -1,7 +1,6 @@
 package core
 
 import (
-	"math"
 	"math/rand"
 )
 
@@ -23,8 +22,8 @@ func SGDOptimizer(model OptModel, trainSet TrainSet, nEpochs int) {
 		perm := rand.Perm(trainSet.Length())
 		for _, i := range perm {
 			userId, itemId, rating := trainSet.Index(i)
-			innerUserId := trainSet.ConvertUserId(userId)
-			innerItemId := trainSet.ConvertItemId(itemId)
+			innerUserId := trainSet.UserIdSet.ToDenseId(userId)
+			innerItemId := trainSet.ItemIdSet.ToDenseId(itemId)
 			// Compute error
 			diff := rating - model.Predict(userId, itemId)
 			// Point-wise update
@@ -34,37 +33,37 @@ func SGDOptimizer(model OptModel, trainSet TrainSet, nEpochs int) {
 }
 
 // BPROptimizer optimizes a factor model by LearnBPR algorithm.
-func BPROptimizer(model OptModel, trainSet TrainSet, nEpochs int) {
-	positiveSet := make([]map[int]bool, trainSet.UserCount)
-	pos := 0
-	for u, b := range trainSet.UserRatings() {
-		positiveSet[u] = make(map[int]bool)
-		for _, d := range b {
-			positiveSet[u][d.Id] = true
-			pos++
-		}
-	}
-	for epoch := 0; epoch < nEpochs; epoch++ {
-		for i := 0; i < trainSet.Length(); i++ {
-			// Select a positive
-			index := rand.Intn(trainSet.Length())
-			userId, posId, _ := trainSet.Index(index)
-			innerUserId := trainSet.ConvertUserId(userId)
-			innerPosId := trainSet.ConvertItemId(posId)
-			// Select a negative
-			negId := -1
-			for {
-				temp := rand.Intn(trainSet.ItemCount)
-				if _, exist := positiveSet[innerUserId][temp]; !exist {
-					negId = temp
-					break
-				}
-			}
-			outerNegId := trainSet.outerItemIds[negId]
-			diff := model.Predict(userId, posId) - model.Predict(userId, outerNegId)
-			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
-			// Pairwise update
-			model.PairUpdate(grad, innerUserId, innerPosId, negId)
-		}
-	}
-}
+//func BPROptimizer(model OptModel, trainSet TrainSet, nEpochs int) {
+//	positiveSet := make([]map[int]bool, trainSet.UserCount())
+//	pos := 0
+//	for u, b := range trainSet.UserRatings() {
+//		positiveSet[u] = make(map[int]bool)
+//		for _, d := range b {
+//			positiveSet[u][d.Id] = true
+//			pos++
+//		}
+//	}
+//	for epoch := 0; epoch < nEpochs; epoch++ {
+//		for i := 0; i < trainSet.Length(); i++ {
+//			// Select a positive
+//			index := rand.Intn(trainSet.Length())
+//			userId, posId, _ := trainSet.Index(index)
+//			innerUserId := trainSet.UserIdSet.ToDenseId(userId)
+//			innerPosId := trainSet.ItemIdSet.ToDenseId(posId)
+//			// Select a negative
+//			negId := -1
+//			for {
+//				temp := rand.Intn(trainSet.ItemCount())
+//				if _, exist := positiveSet[innerUserId][temp]; !exist {
+//					negId = temp
+//					break
+//				}
+//			}
+//			outerNegId := trainSet.ItemIdSet.ToSparseId(negId)
+//			diff := model.Predict(userId, posId) - model.Predict(userId, outerNegId)
+//			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
+//			// Pairwise update
+//			model.PairUpdate(grad, innerUserId, innerPosId, negId)
+//		}
+//	}
+//}

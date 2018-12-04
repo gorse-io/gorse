@@ -7,7 +7,15 @@ type ParamName string
 const Lr ParamName = "lr"
 const Reg ParamName = "reg"
 const NEpochs ParamName = "n_epochs"
+const NFactors ParamName = "n_factors"
 const RandomState ParamName = "random_state"
+const UseBias ParamName = "use_bias"
+const InitMean ParamName = "init_mean"
+const InitStdDev ParamName = "init_std_dev"
+const InitLow ParamName = "init_low"
+const InitHigh ParamName = "init_high"
+const NUserClusters ParamName = "n_user_clusters"
+const NItemClusters ParamName = "n_item_clusters"
 
 // Params for an algorithm. Given by:
 //  map[string]interface{}{

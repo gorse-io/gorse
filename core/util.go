@@ -104,10 +104,18 @@ func newNanMatrix(row, col int) [][]float64 {
 	return ret
 }
 
-func newZeroMatrix(row, col int) [][]float64 {
+func zeros(row, col int) [][]float64 {
 	ret := make([][]float64, row)
 	for i := range ret {
 		ret[i] = make([]float64, col)
+	}
+	return ret
+}
+
+func zerosInt(row, col int) [][]int {
+	ret := make([][]int, row)
+	for i := range ret {
+		ret[i] = make([]int, col)
 	}
 	return ret
 }
