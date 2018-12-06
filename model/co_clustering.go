@@ -4,7 +4,6 @@ import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/stat"
 	"math"
 )
 
@@ -36,6 +35,7 @@ func NewCoClustering(params Params) *CoClustering {
 }
 
 func (coc *CoClustering) SetParams(params Params) {
+	coc.SetParams(params)
 	// Setup parameters
 	coc.nUserClusters = coc.Params.GetInt(NUserClusters, 3)
 	coc.nItemClusters = coc.Params.GetInt(NItemClusters, 3)
@@ -67,15 +67,14 @@ func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-// Fit a co-clustering model.
-func (coc *CoClustering) Fit(trainSet TrainSet) {
-	coc.Base.Fit(trainSet)
+func (coc *CoClustering) Fit(trainSet TrainSet, options ...RuntimeOption) {
+	coc.Init(trainSet, options)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean
 	userRatings := trainSet.UserRatings
 	itemRatings := trainSet.ItemRatings
-	coc.UserMeans = Means(userRatings)
-	coc.ItemMeans = Means(itemRatings)
+	coc.UserMeans = SparseVectorsMean(userRatings)
+	coc.ItemMeans = SparseVectorsMean(itemRatings)
 	coc.UserClusters = coc.rng.MakeUniformVectorInt(trainSet.UserCount(), 0, coc.nUserClusters)
 	coc.ItemClusters = coc.rng.MakeUniformVectorInt(trainSet.ItemCount(), 0, coc.nItemClusters)
 	coc.UserClusterMeans = make([]float64, coc.nUserClusters)
@@ -163,11 +162,11 @@ func (coc *CoClustering) Fit(trainSet TrainSet) {
 	}
 }
 
-func clusterMean(dst []float64, clusters []int, idRatings []SparseVector) {
+func clusterMean(dst []float64, clusters []int, ratings []SparseVector) {
 	ResetVector(dst)
 	count := make([]float64, len(dst))
 	for id, cluster := range clusters {
-		idRatings[id].ForEach(func(i, index int, value float64) {
+		ratings[id].ForEach(func(i, index int, value float64) {
 			dst[cluster] += value
 			count[cluster]++
 		})
@@ -186,16 +185,6 @@ func coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRating
 		})
 	}
 	for i := range dst {
-		for j := range dst[i] {
-			dst[i][j] /= count[i][j]
-		}
+		floats.Div(dst[i], count[i])
 	}
-}
-
-func Means(a []SparseVector) []float64 {
-	m := make([]float64, len(a))
-	for i := range a {
-		m[i] = stat.Mean(a[i].Values, nil)
-	}
-	return m
 }

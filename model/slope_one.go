@@ -3,15 +3,9 @@ package model
 import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
-	"runtime"
 )
 
-// SlopeOne, a collaborative filtering algorithm[1].
-//
-// [1] Lemire, Daniel, and Anna Maclachlan. "Slope one predictors
-// for online rating-based collaborative filtering." Proceedings
-// of the 2005 SIAM International Conference on Data Mining.
-// Society for Industrial and Applied Mathematics, 2005.
+// SlopeOne, a collaborative filtering algorithm[4].
 type SlopeOne struct {
 	Base
 	GlobalMean  float64
@@ -24,15 +18,14 @@ type SlopeOne struct {
 //	 nJobs		- The number of goroutines to compute deviation. Default is the number of CPUs.
 func NewSlopOne(params Params) *SlopeOne {
 	so := new(SlopeOne)
-	so.Params = params
+	so.SetParams(params)
 	return so
 }
 
-// Predict by a SlopOne model.
 func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	// Convert to inner Id
-	innerUserId := so.UserIdSet.ToSparseId(userId)
-	innerItemId := so.ItemIdSet.ToSparseId(itemId)
+	innerUserId := so.UserIdSet.ToDenseId(userId)
+	innerItemId := so.ItemIdSet.ToDenseId(itemId)
 	prediction := 0.0
 	if innerUserId != NotId {
 		prediction = so.UserMeans[innerUserId]
@@ -52,16 +45,14 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-// Fit a SlopeOne model.
-func (so *SlopeOne) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
+func (so *SlopeOne) Fit(trainSet TrainSet, setters ...RuntimeOption) {
 	so.Init(trainSet, setters)
-	nJobs := runtime.NumCPU()
 	so.GlobalMean = trainSet.GlobalMean
 	so.UserRatings = trainSet.UserRatings
-	so.UserMeans = Means(so.UserRatings)
+	so.UserMeans = SparseVectorsMean(so.UserRatings)
 	so.Dev = MakeMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	itemRatings := trainSet.ItemRatings
-	Parallel(len(itemRatings), nJobs, func(begin, end int) {
+	Parallel(len(itemRatings), so.rtOptions.NJobs, func(begin, end int) {
 		for i := begin; i < end; i++ {
 			for j := 0; j < i; j++ {
 				count, sum := 0.0, 0.0

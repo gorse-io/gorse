@@ -7,15 +7,17 @@ import . "github.com/zhenghaoz/gorse/base"
 
 // Base structure of all estimators.
 type Base struct {
-	Params    Params          // Hyper-parameters
-	UserIdSet SparseIdSet     // Users' ID set
-	ItemIdSet SparseIdSet     // Items' ID set
-	rng       RandomGenerator // Random generator
-	randState int             // Random seed
-	rtOptions *RuntimeOptions // Runtime options
+	Params          Params          // Hyper-parameters
+	UserIdSet       SparseIdSet     // Users' ID set
+	ItemIdSet       SparseIdSet     // Items' ID set
+	rng             RandomGenerator // Random generator
+	randState       int             // Random seed
+	rtOptions       *RuntimeOptions // Runtime options
+	getParamsCalled bool
 }
 
 func (base *Base) SetParams(params Params) {
+	base.getParamsCalled = true
 	base.Params = params
 	base.randState = base.Params.GetInt(RandomState, 0)
 }
@@ -28,19 +30,23 @@ func (base *Base) Predict(userId, itemId int) float64 {
 	panic("Predict() not implemented")
 }
 
-func (base *Base) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
+func (base *Base) Fit(trainSet TrainSet, options ...RuntimeOption) {
 	panic("Fit() not implemented")
 }
 
 // Init the base model.
-func (base *Base) Init(trainSet TrainSet, setters []RuntimeOptionSetter) {
+func (base *Base) Init(trainSet TrainSet, options []RuntimeOption) {
+	// Check Base.GetParams() called
+	if base.getParamsCalled == false {
+		panic("Base.GetParams() not called")
+	}
 	// Setup ID set
 	base.UserIdSet = trainSet.UserIdSet
 	base.ItemIdSet = trainSet.ItemIdSet
 	// Setup random state
 	base.rng = NewRandomGenerator(base.randState)
 	// Setup runtime options
-	base.rtOptions = NewRuntimeOptions(setters)
+	base.rtOptions = NewRuntimeOptions(options)
 }
 
 /* Random */
@@ -77,8 +83,8 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
-	random.Init(trainSet, setters)
+func (random *Random) Fit(trainSet TrainSet, options ...RuntimeOption) {
+	random.Init(trainSet, options)
 	random.Mean = trainSet.Mean()
 	random.StdDev = trainSet.StdDev()
 	random.Low, random.High = trainSet.Range()
@@ -114,6 +120,7 @@ func NewBaseLine(params Params) *BaseLine {
 }
 
 func (baseLine *BaseLine) SetParams(params Params) {
+	baseLine.Base.SetParams(params)
 	// Setup parameters
 	baseLine.reg = baseLine.Params.GetFloat64(Reg, 0.02)
 	baseLine.lr = baseLine.Params.GetFloat64(Lr, 0.005)
@@ -121,41 +128,42 @@ func (baseLine *BaseLine) SetParams(params Params) {
 }
 
 func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
-	// Convert to inner Id
-	innerUserId := baseLine.UserIdSet.ToDenseId(userId)
-	innerItemId := baseLine.ItemIdSet.ToDenseId(itemId)
+	denseUserId := baseLine.UserIdSet.ToDenseId(userId)
+	denseItemId := baseLine.ItemIdSet.ToDenseId(itemId)
+	return baseLine.predict(denseUserId, denseItemId)
+}
+
+func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 	ret := baseLine.GlobalBias
-	if innerUserId != NotId {
-		ret += baseLine.UserBias[innerUserId]
+	if denseUserId != NotId {
+		ret += baseLine.UserBias[denseUserId]
 	}
-	if innerItemId != NotId {
-		ret += baseLine.ItemBias[innerItemId]
+	if denseItemId != NotId {
+		ret += baseLine.ItemBias[denseItemId]
 	}
 	return ret
 }
 
-func (baseLine *BaseLine) Fit(trainSet TrainSet, setters ...RuntimeOptionSetter) {
-	baseLine.Init(trainSet, setters)
+func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...RuntimeOption) {
+	baseLine.Init(trainSet, options)
 	// Initialize parameters
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
 	baseLine.ItemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < baseLine.nEpochs; epoch++ {
 		for i := 0; i < trainSet.Length(); i++ {
-			userId, itemId, rating := trainSet.Index(i)
-			innerUserId := trainSet.UserIdSet.ToDenseId(userId)
-			innerItemId := trainSet.ItemIdSet.ToDenseId(itemId)
-			userBias := baseLine.UserBias[innerUserId]
-			itemBias := baseLine.ItemBias[innerItemId]
+			denseUserId, denseItemId, rating := trainSet.GetDense(i)
+			userBias := baseLine.UserBias[denseUserId]
+			itemBias := baseLine.ItemBias[denseItemId]
 			// Compute gradient
-			diff := baseLine.Predict(userId, itemId) - rating
+			diff := baseLine.predict(denseUserId, denseItemId) - rating
 			gradGlobalBias := diff
 			gradUserBias := diff + baseLine.reg*userBias
 			gradItemBias := diff + baseLine.reg*itemBias
 			// Update parameters
 			baseLine.GlobalBias -= baseLine.lr * gradGlobalBias
-			baseLine.UserBias[innerUserId] -= baseLine.lr * gradUserBias
-			baseLine.ItemBias[innerItemId] -= baseLine.lr * gradItemBias
+			baseLine.UserBias[denseUserId] -= baseLine.lr * gradUserBias
+			baseLine.ItemBias[denseItemId] -= baseLine.lr * gradItemBias
 		}
 	}
 }
