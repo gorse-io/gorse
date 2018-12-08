@@ -11,23 +11,23 @@ type Evaluator func(Model, DataSet) float64
 // RMSE is root mean square error.
 func RMSE(estimator Model, testSet DataSet) float64 {
 	sum := 0.0
-	for j := 0; j < testSet.Length(); j++ {
-		userId, itemId, rating := testSet.Index(j)
+	for j := 0; j < testSet.Len(); j++ {
+		userId, itemId, rating := testSet.Get(j)
 		prediction := estimator.Predict(userId, itemId)
 		sum += (prediction - rating) * (prediction - rating)
 	}
-	return math.Sqrt(sum / float64(testSet.Length()))
+	return math.Sqrt(sum / float64(testSet.Len()))
 }
 
 // MAE is mean absolute error.
 func MAE(estimator Model, testSet DataSet) float64 {
 	sum := 0.0
-	for j := 0; j < testSet.Length(); j++ {
-		userId, itemId, rating := testSet.Index(j)
+	for j := 0; j < testSet.Len(); j++ {
+		userId, itemId, rating := testSet.Get(j)
 		prediction := estimator.Predict(userId, itemId)
 		sum += math.Abs(prediction - rating)
 	}
-	return sum / float64(testSet.Length())
+	return sum / float64(testSet.Len())
 }
 
 // NewAUCEvaluator creates a AUC evaluator.
@@ -40,9 +40,9 @@ func NewAUCEvaluator(fullSet DataSet) Evaluator {
 		for innerUserIdTest, irs := range test.UserRatings {
 			userId := test.UserIdSet.ToSparseId(innerUserIdTest)
 			// Find all <userId, j>s in full data set
-			innerUserIdFull := full.UserIdSet.ToDenseId(userId)
+			denseUserIdFull := full.UserIdSet.ToDenseId(userId)
 			fullRatedItem := make(map[int]float64)
-			full.UserRatings[innerUserIdFull].ForEach(func(i, index int, value float64) {
+			full.UserRatings[denseUserIdFull].ForEach(func(i, index int, value float64) {
 				itemId := full.ItemIdSet.ToSparseId(index)
 				fullRatedItem[itemId] = value
 			})

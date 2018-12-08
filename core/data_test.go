@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func MD5Sum(fileName string) string {
+func md5Sum(fileName string) string {
 	// Open file
 	f, err := os.Open(fileName)
 	if err != nil {
@@ -28,7 +28,7 @@ func TestDownloadFromUrl(t *testing.T) {
 	// Download
 	fileName, _ := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
 	// Checksum
-	if MD5Sum(fileName) != "0e33842e24a9c977be4e0107933c0723" {
+	if md5Sum(fileName) != "0e33842e24a9c977be4e0107933c0723" {
 		t.Fatal("MD5 sum doesn't match")
 	}
 }
@@ -45,9 +45,4 @@ func TestUnzip(t *testing.T) {
 	if len(fileNames) != 24 {
 		t.Fatal("Number of file doesn't match")
 	}
-}
-
-func TestA(t *testing.T) {
-	data := NewTrainSet(LoadDataFromBuiltIn("ml-100k"))
-	data.PlotHistogram()
 }

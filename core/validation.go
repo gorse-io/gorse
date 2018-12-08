@@ -18,10 +18,11 @@ type CrossValidateResult struct {
 }
 
 // CrossValidation evaluates a model by k-fold cross validation.
-func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitter Splitter, seed int64,
-	params Params, nJobs int) []CrossValidateResult {
+func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator,
+	splitter Splitter, options ...CVOption) []CrossValidateResult {
+	cvOptions := NewCVOptions(options)
 	// Split data set
-	trainFolds, testFolds := splitter(dataSet, seed)
+	trainFolds, testFolds := splitter(dataSet, cvOptions.Seed)
 	length := len(trainFolds)
 	// Create return structures
 	ret := make([]CrossValidateResult, len(metrics))
@@ -29,7 +30,8 @@ func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitt
 		ret[i].Tests = make([]float64, length)
 	}
 	// Cross validation
-	Parallel(length, nJobs, func(begin, end int) {
+	params := estimator.GetParams()
+	Parallel(length, cvOptions.NJobs, func(begin, end int) {
 		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Model)
 		Copy(cp, estimator)
 		for i := begin; i < end; i++ {
@@ -48,8 +50,8 @@ func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator, splitt
 
 /* Model Selection */
 
-// GridSearchResult contains the return of grid search.
-type GridSearchResult struct {
+// ModelSelectionResult contains the return of grid search.
+type ModelSelectionResult struct {
 	BestScore  float64
 	BestParams Params
 	BestIndex  int
@@ -59,52 +61,54 @@ type GridSearchResult struct {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
-	evaluators []Evaluator, cv int, seed int64, nJobs int) []GridSearchResult {
+	evaluators []Evaluator, options ...CVOption) []ModelSelectionResult {
 	// Retrieve parameter names and length
-	params := make([]ParamName, 0, len(paramGrid))
+	paramNames := make([]ParamName, 0, len(paramGrid))
 	count := 1
-	for param, values := range paramGrid {
-		params = append(params, param)
+	for paramName, values := range paramGrid {
+		paramNames = append(paramNames, paramName)
 		count *= len(values)
 	}
 	// Create GridSearch result
-	results := make([]GridSearchResult, len(evaluators))
+	results := make([]ModelSelectionResult, len(evaluators))
 	for i := range results {
-		results[i] = GridSearchResult{}
+		results[i] = ModelSelectionResult{}
 		results[i].BestScore = math.Inf(1)
 		results[i].CVResults = make([]CrossValidateResult, 0, count)
 		results[i].AllParams = make([]Params, 0, count)
 	}
 	// Construct DFS procedure
-	var dfs func(deep int, options Params)
-	dfs = func(deep int, options Params) {
-		if deep == len(params) {
+	var dfs func(deep int, params Params)
+	dfs = func(deep int, params Params) {
+		if deep == len(paramNames) {
 			// Cross validate
-			cvResults := CrossValidate(estimator, dataSet, evaluators, NewKFoldSplitter(5), seed, options, nJobs)
+			cvResults := CrossValidate(estimator, dataSet, evaluators, NewKFoldSplitter(5), options...)
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
-				results[i].AllParams = append(results[i].AllParams, options.Copy())
+				results[i].AllParams = append(results[i].AllParams, params.Copy())
 				score := stat.Mean(cvResults[i].Tests, nil)
 				if score < results[i].BestScore {
 					results[i].BestScore = score
-					results[i].BestParams = options.Copy()
+					results[i].BestParams = params.Copy()
 					results[i].BestIndex = len(results[i].AllParams) - 1
 				}
 			}
 		} else {
-			param := params[deep]
-			values := paramGrid[param]
+			paramName := paramNames[deep]
+			values := paramGrid[paramName]
 			for _, val := range values {
-				options[param] = val
-				dfs(deep+1, options)
+				params[paramName] = val
+				dfs(deep+1, params)
 			}
 		}
 	}
-	options := make(map[ParamName]interface{})
-	dfs(0, options)
+	params := make(map[ParamName]interface{})
+	dfs(0, params)
 	return results
 }
 
-func RandomSearcHCV() {
+func RandomSearcHCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
+	evaluators []Evaluator, options ...CVOption) []ModelSelectionResult {
 	// TODO:
+	panic("Not implemented")
 }

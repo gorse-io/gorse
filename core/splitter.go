@@ -12,19 +12,19 @@ func NewKFoldSplitter(k int) Splitter {
 		trainFolds := make([]TrainSet, k)
 		testFolds := make([]DataSet, k)
 		rand.Seed(seed)
-		perm := rand.Perm(dataSet.Length())
-		foldSize := dataSet.Length() / k
+		perm := rand.Perm(dataSet.Len())
+		foldSize := dataSet.Len() / k
 		begin, end := 0, 0
 		for i := 0; i < k; i++ {
 			end += foldSize
-			if i < dataSet.Length()%k {
+			if i < dataSet.Len()%k {
 				end++
 			}
 			// Test Data
 			testIndex := perm[begin:end]
 			testFolds[i] = dataSet.SubSet(testIndex)
 			// Train Data
-			trainIndex := Concatenate(perm[0:begin], perm[end:dataSet.Length()])
+			trainIndex := Concatenate(perm[0:begin], perm[end:dataSet.Len()])
 			trainFolds[i] = NewTrainSet(dataSet.SubSet(trainIndex))
 			begin = end
 		}
@@ -32,14 +32,15 @@ func NewKFoldSplitter(k int) Splitter {
 	}
 }
 
+// NewRatioSplitter creates a ratio splitter.
 func NewRatioSplitter(repeat int, testRatio float64) Splitter {
 	return func(set DataSet, seed int64) ([]TrainSet, []DataSet) {
 		trainFolds := make([]TrainSet, repeat)
 		testFolds := make([]DataSet, repeat)
-		testSize := int(float64(set.Length()) * testRatio)
+		testSize := int(float64(set.Len()) * testRatio)
 		rand.Seed(seed)
 		for i := 0; i < repeat; i++ {
-			perm := rand.Perm(set.Length())
+			perm := rand.Perm(set.Len())
 			// Test Data
 			testIndex := perm[:testSize]
 			testFolds[i] = set.SubSet(testIndex)
@@ -60,9 +61,9 @@ func NewUserLOOSplitter(repeat int) Splitter {
 		trainSet := NewTrainSet(dataSet)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
-				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
-				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
-				make([]float64, 0, trainSet.Length()-trainSet.UserCount())
+				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
+				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
+				make([]float64, 0, trainSet.Len()-trainSet.UserCount())
 			testUsers, testItems, testRatings :=
 				make([]int, 0, trainSet.UserCount()),
 				make([]int, 0, trainSet.UserCount()),
@@ -102,9 +103,9 @@ func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
 		testSize := int(float64(trainSet.UserCount()) * testRatio)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
-				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
-				make([]int, 0, trainSet.Length()-trainSet.UserCount()),
-				make([]float64, 0, trainSet.Length()-trainSet.UserCount())
+				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
+				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
+				make([]float64, 0, trainSet.Len()-trainSet.UserCount())
 			testUsers, testItems, testRatings :=
 				make([]int, 0, trainSet.UserCount()),
 				make([]int, 0, trainSet.UserCount()),
