@@ -1,6 +1,8 @@
 package base
 
 import (
+	"container/heap"
+	"gonum.org/v1/gonum/stat"
 	"sort"
 )
 
@@ -79,6 +81,14 @@ func MakeDenseSparseMatrix(row int) []SparseVector {
 	return mat
 }
 
+func SparseVectorsMean(a []SparseVector) []float64 {
+	m := make([]float64, len(a))
+	for i := range a {
+		m[i] = stat.Mean(a[i].Values, nil)
+	}
+	return m
+}
+
 // Add a new item.
 func (vec *SparseVector) Add(index int, value float64) {
 	vec.Indices = append(vec.Indices, index)
@@ -109,18 +119,20 @@ func (vec *SparseVector) ForEach(f func(i, index int, value float64)) {
 	}
 }
 
-// ForIntersection iterates items in the intersection of two vectors.
-func (vec *SparseVector) ForIntersection(other *SparseVector, f func(index int, a, b float64)) {
-	// Sort indices of the left vector
+// SortIndex sorts items by indices.
+func (vec *SparseVector) SortIndex() {
 	if !vec.Sorted {
 		sort.Sort(vec)
 		vec.Sorted = true
 	}
+}
+
+// ForIntersection iterates items in the intersection of two vectors.
+func (vec *SparseVector) ForIntersection(other *SparseVector, f func(index int, a, b float64)) {
+	// Sort indices of the left vector
+	vec.SortIndex()
 	// Sort indices of the right vector
-	if !other.Sorted {
-		sort.Sort(other)
-		other.Sorted = true
-	}
+	other.SortIndex()
 	// Iterate
 	i, j := 0, 0
 	for i < vec.Len() && j < other.Len() {
@@ -136,40 +148,70 @@ func (vec *SparseVector) ForIntersection(other *SparseVector, f func(index int, 
 	}
 }
 
-// AdjacentVector is designed for neighbor-based models to store K nearest neighborhoods.
-type AdjacentVector struct {
+// KNNHeap is designed for neighbor-based models to store K nearest neighborhoods.
+type KNNHeap struct {
+	SparseVector
 	Similarities []float64
-	Peers        []int
+	K            int
 }
 
-// MakeAdjacentVector makes a AdjacentVector with k size.
-func MakeAdjacentVector(k int) AdjacentVector {
-	return AdjacentVector{
-		Similarities: make([]float64, k),
-		Peers:        make([]int, k),
+// MakeKNNHeap makes a KNNHeap with k size.
+func MakeKNNHeap(k int) KNNHeap {
+	return KNNHeap{
+		SparseVector: SparseVector{},
+		Similarities: make([]float64, 0),
+		K:            k,
 	}
 }
 
+func (vec *KNNHeap) Less(i, j int) bool {
+	return vec.Similarities[i] < vec.Similarities[j]
+}
+
+func (vec *KNNHeap) Swap(i, j int) {
+	vec.SparseVector.Swap(i, j)
+	vec.Similarities[i], vec.Similarities[j] = vec.Similarities[j], vec.Similarities[i]
+}
+
+type KNNHeapItem struct {
+	Index      int
+	Value      float64
+	Similarity float64
+}
+
+func (vec *KNNHeap) Push(x interface{}) {
+	item := x.(KNNHeapItem)
+	vec.Indices = append(vec.Indices, item.Index)
+	vec.Values = append(vec.Values, item.Value)
+	vec.Similarities = append(vec.Similarities, item.Similarity)
+}
+
+func (vec *KNNHeap) Pop() interface{} {
+	// Extract the minimum
+	n := vec.Len()
+	item := KNNHeapItem{
+		Index:      vec.Indices[n-1],
+		Value:      vec.Values[n-1],
+		Similarity: vec.Similarities[n-1],
+	}
+	// Remove last element
+	vec.Indices = vec.Indices[0 : n-1]
+	vec.Values = vec.Values[0 : n-1]
+	vec.Similarities = vec.Similarities[0 : n-1]
+	// We dont' expect return
+	return item
+}
+
 // Add a new neighbor to the adjacent vector.
-func (vec *AdjacentVector) Add(i int, similarity float64) {
+func (vec *KNNHeap) Add(index int, value float64, similarity float64) {
 	// Deprecate zero items
 	if similarity == 0 {
 		return
 	}
-	// Find minimum
-	minIndex := ArgMin(vec.Similarities)
-	// Replace minimum
-	vec.Similarities[minIndex] = similarity
-	vec.Peers[minIndex] = i
-}
-
-// ToSparseVector returns all non-zero items.
-func (vec *AdjacentVector) ToSparseVector() *SparseVector {
-	neighbors := NewSparseVector()
-	for i := range vec.Peers {
-		if vec.Similarities[i] > 0 {
-			neighbors.Add(vec.Peers[i], vec.Similarities[i])
-		}
+	// Insert item
+	heap.Push(vec, KNNHeapItem{index, value, similarity})
+	// Remove minimum
+	if vec.Len() > vec.K {
+		heap.Pop(vec)
 	}
-	return neighbors
 }

@@ -117,11 +117,11 @@ func (knn *KNN) Fit(trainSet TrainSet, options ...RuntimeOption) {
 		knn.StdDev = make([]float64, len(knn.LeftRatings))
 		for i := range knn.LeftMean {
 			sum, count := 0.0, 0.0
-			knn.LeftRatings[i].ForEach(func(i, index int, value float64) {
+			knn.LeftRatings[i].ForEach(func(_, index int, value float64) {
 				sum += (value - knn.LeftMean[i]) * (value - knn.LeftMean[i])
 				count++
 			})
-			knn.StdDev[i] = math.Sqrt(sum/count) + 1e-5
+			knn.StdDev[i] = math.Sqrt(sum / count)
 		}
 	}
 	if knn.knnType == Baseline {
@@ -134,6 +134,10 @@ func (knn *KNN) Fit(trainSet TrainSet, options ...RuntimeOption) {
 		}
 	}
 	// Pairwise similarity
+	for i := range knn.LeftRatings {
+		// Call SortIndex() to make sure simMetric() reentrant
+		knn.LeftRatings[i].SortIndex()
+	}
 	knn.SimMatrix = MakeMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
 	Parallel(len(knn.LeftRatings), knn.rtOptions.NJobs, func(begin, end int) {
 		for iId := begin; iId < end; iId++ {

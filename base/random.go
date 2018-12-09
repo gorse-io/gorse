@@ -8,7 +8,7 @@ type RandomGenerator struct {
 }
 
 // NewRandomGenerator creates a RandomGenerator.
-func NewRandomGenerator(seed int) RandomGenerator {
+func NewRandomGenerator(seed int64) RandomGenerator {
 	return RandomGenerator{rand.New(rand.NewSource(int64(seed)))}
 }
 

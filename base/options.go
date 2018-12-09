@@ -1,15 +1,19 @@
 package base
 
-// RuntimeOptions defined options used in run time.
-type RuntimeOptions struct {
-	Verbose bool // Verbose switch
-	NJobs   int  // Number of jobs
+import "runtime"
+
+// FitOptions defined options used in fitting.
+type FitOptions struct {
+	Verbose  bool // Verbose switch
+	Diagnose bool
+	NJobs    int // Number of jobs
 }
 
-// NewRuntimeOptions creates a RuntimeOptions from RuntimeOptionSetters.
-func NewRuntimeOptions(setters []RuntimeOptionSetter) *RuntimeOptions {
-	options := new(RuntimeOptions)
-	options.NJobs = 1
+// NewCVOptions creates a FitOptions from FitOption.
+func NewFitOptions(setters []RuntimeOption) *FitOptions {
+	options := new(FitOptions)
+	options.NJobs = runtime.NumCPU()
+	options.Diagnose = true
 	options.Verbose = true
 	for _, setter := range setters {
 		setter(options)
@@ -17,19 +21,38 @@ func NewRuntimeOptions(setters []RuntimeOptionSetter) *RuntimeOptions {
 	return options
 }
 
-// RuntimeOptionSetter changes options.
-type RuntimeOptionSetter func(options *RuntimeOptions)
+// RuntimeOption changes options.
+type RuntimeOption func(options *FitOptions)
 
 // WithVerbose sets the verbose switch
-func WithVerbose(verbose bool) RuntimeOptionSetter {
-	return func(options *RuntimeOptions) {
+func WithVerbose(verbose bool) RuntimeOption {
+	return func(options *FitOptions) {
 		options.Verbose = verbose
 	}
 }
 
 // WithNJobs sets the number of jobs.
-func WithNJobs(nJobs int) RuntimeOptionSetter {
-	return func(options *RuntimeOptions) {
+func WithNJobs(nJobs int) RuntimeOption {
+	return func(options *FitOptions) {
 		options.NJobs = nJobs
 	}
+}
+
+type CVOptions struct {
+	FitOptions
+	Seed int64
+}
+
+type CVOption func(options *CVOptions)
+
+// NewCVOptions creates a FitOptions from FitOption.
+func NewCVOptions(setters []CVOption) *CVOptions {
+	options := new(CVOptions)
+	options.NJobs = 1
+	options.Diagnose = true
+	options.Verbose = true
+	for _, setter := range setters {
+		setter(options)
+	}
+	return options
 }

@@ -4,6 +4,10 @@ import (
 	"testing"
 )
 
+func TestCrossValidate(t *testing.T) {
+
+}
+
 func TestGridSearchCV(t *testing.T) {
 	//// Grid search
 	//paramGrid := ParameterGrid{
@@ -22,4 +26,8 @@ func TestGridSearchCV(t *testing.T) {
 	//} else if bestParams.GetFloat64("lr", -1) != 0.005 {
 	//	t.Fail()
 	//}
+}
+
+func TestRandomSearchCV(t *testing.T) {
+
 }

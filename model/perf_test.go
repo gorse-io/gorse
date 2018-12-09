@@ -4,18 +4,15 @@ import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/stat"
-	"runtime"
 	"testing"
 )
 
-const performanceEpsilon float64 = 0.008
+const performanceEpsilon float64 = 0.006
 
 func EvaluateKFold(t *testing.T, algo Model, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {
 	// Cross validation
-	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, NewKFoldSplitter(5), 0, Params{
-		"randState": 0,
-	}, runtime.NumCPU())
+	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, NewKFoldSplitter(5))
 	// Check RMSE
 	rmse := stat.Mean(results[0].Tests, nil)
 	if rmse > expectRMSE+performanceEpsilon {
@@ -31,9 +28,7 @@ func EvaluateKFold(t *testing.T, algo Model, dataSet DataSet,
 func EvaluateRatio(t *testing.T, algo Model, dataSet DataSet,
 	expectRMSE float64, expectMAE float64) {
 	// Cross validation
-	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, NewRatioSplitter(1, 0.2), 0, Params{
-		"randState": 0,
-	}, runtime.NumCPU())
+	results := CrossValidate(algo, dataSet, []Evaluator{RMSE, MAE}, NewRatioSplitter(1, 0.2))
 	// Check RMSE
 	rmse := stat.Mean(results[0].Tests, nil)
 	if rmse > expectRMSE+performanceEpsilon {
@@ -61,9 +56,7 @@ func TestSVD(t *testing.T) {
 }
 
 func TestSVDPP(t *testing.T) {
-	EvaluateRatio(t, NewSVDpp(Params{
-		NEpochs: 1,
-	}), LoadDataFromBuiltIn("ml-100k"), 0.92, 0.722)
+	EvaluateRatio(t, NewSVDpp(nil), LoadDataFromBuiltIn("ml-100k"), 0.92, 0.722)
 }
 
 func TestNMF(t *testing.T) {

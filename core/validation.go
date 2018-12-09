@@ -107,8 +107,16 @@ func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 	return results
 }
 
-func RandomSearcHCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
-	evaluators []Evaluator, options ...CVOption) []ModelSelectionResult {
-	// TODO:
-	panic("Not implemented")
+func RandomSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
+	evaluators []Evaluator, trial int, options ...CVOption) []ModelSelectionResult {
+	cvOptions := NewCVOptions(options)
+	rng := NewRandomGenerator(cvOptions.Seed)
+	//
+	for i := 0; i < trial; i++ {
+		params := Params{}
+		for paramName, values := range paramGrid {
+			value := values[rng.Intn(len(values))]
+			params[paramName] = value
+		}
+	}
 }

@@ -4,7 +4,6 @@ import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/floats"
-	"log"
 	"math"
 	"sync"
 )
@@ -100,7 +99,7 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...RuntimeOption) {
 	b := make([]float64, svd.nFactors)
 	// Optimize
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
-		perm := svd.rng.Perm(trainSet.Length())
+		perm := svd.rng.Perm(trainSet.Len())
 		for _, i := range perm {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
 			// Compute error
@@ -220,54 +219,54 @@ func (nmf *NMF) Fit(trainSet TrainSet, options ...RuntimeOption) {
 	nmf.ItemFactor = nmf.rng.MakeUniformMatrix(trainSet.ItemCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	// Create intermediate matrix buffer
 	buffer := make([]float64, nmf.nFactors)
-	userUp := MakeMatrix(trainSet.UserCount(), nmf.nFactors)
-	userDown := MakeMatrix(trainSet.UserCount(), nmf.nFactors)
-	itemUp := MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
-	itemDown := MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
+	userNum := MakeMatrix(trainSet.UserCount(), nmf.nFactors)
+	userDen := MakeMatrix(trainSet.UserCount(), nmf.nFactors)
+	itemNum := MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
+	itemDen := MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nmf.nEpochs; epoch++ {
 		// Reset intermediate matrices
-		ResetMatrix(userUp)
-		ResetMatrix(userDown)
-		ResetMatrix(itemUp)
-		ResetMatrix(itemDown)
+		ResetMatrix(userNum)
+		ResetMatrix(userDen)
+		ResetMatrix(itemNum)
+		ResetMatrix(itemDen)
 		// Calculate intermediate matrices
-		for i := 0; i < trainSet.Length(); i++ {
+		for i := 0; i < trainSet.Len(); i++ {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
 			prediction := nmf.predict(denseUserId, denseItemId)
-			// Update userUp
+			// Update \sum_{i\in{I_u}} q_{if}⋅r_{ui}
 			copy(buffer, nmf.ItemFactor[denseItemId])
 			MulConst(rating, buffer)
-			floats.Add(userUp[denseUserId], buffer)
-			// Update userDown
+			floats.Add(userNum[denseUserId], buffer)
+			// Update \sum_{i\in{I_u}} q_{if}⋅\hat{r}_{ui} + \lambda|I_u|p_{uf}
 			copy(buffer, nmf.ItemFactor[denseItemId])
 			MulConst(prediction, buffer)
-			floats.Add(userDown[denseUserId], buffer)
+			floats.Add(userDen[denseUserId], buffer)
 			copy(buffer, nmf.UserFactor[denseUserId])
 			MulConst(nmf.reg, buffer)
-			floats.Add(userDown[denseUserId], buffer)
-			// Update itemUp
+			floats.Add(userDen[denseUserId], buffer)
+			// Update \sum_{u\in{U_i}}p_{uf}⋅r_{ui}
 			copy(buffer, nmf.UserFactor[denseUserId])
 			MulConst(rating, buffer)
-			floats.Add(itemUp[denseItemId], buffer)
-			// Update itemDown
+			floats.Add(itemNum[denseItemId], buffer)
+			// Update \sum_{u\in{U_i}}p_{uf}⋅\hat{r}_{ui} + \lambda|U_i|q_{if}
 			copy(buffer, nmf.UserFactor[denseUserId])
 			MulConst(prediction, buffer)
-			floats.Add(itemDown[denseItemId], buffer)
+			floats.Add(itemDen[denseItemId], buffer)
 			copy(buffer, nmf.ItemFactor[denseItemId])
 			MulConst(nmf.reg, buffer)
-			floats.Add(itemDown[denseItemId], buffer)
+			floats.Add(itemDen[denseItemId], buffer)
 		}
 		// Update user factors
 		for u := range nmf.UserFactor {
-			copy(buffer, userUp[u])
-			floats.Div(buffer, userDown[u])
+			copy(buffer, userNum[u])
+			floats.Div(buffer, userDen[u])
 			floats.Mul(nmf.UserFactor[u], buffer)
 		}
 		// Update item factors
 		for i := range nmf.ItemFactor {
-			copy(buffer, itemUp[i])
-			floats.Div(buffer, itemDown[i])
+			copy(buffer, itemNum[i])
+			floats.Div(buffer, itemDen[i])
 			floats.Mul(nmf.ItemFactor[i], buffer)
 		}
 	}
@@ -321,7 +320,6 @@ func (svd *SVDpp) SetParams(params Params) {
 	// Setup parameters
 	svd.nFactors = svd.Params.GetInt(NFactors, 20)
 	svd.nEpochs = svd.Params.GetInt(NEpochs, 20)
-	log.Print(svd.nEpochs)
 	svd.lr = svd.Params.GetFloat64(Lr, 0.007)
 	svd.reg = svd.Params.GetFloat64(Reg, 0.02)
 	svd.initMean = svd.Params.GetFloat64(InitMean, 0)
@@ -384,9 +382,11 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOption) {
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
+	c := MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
+	d := MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
-		perm := svd.rng.Perm(trainSet.Length())
+		perm := svd.rng.Perm(trainSet.Len())
 		for _, i := range perm {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
 			userBias := svd.UserBias[denseUserId]
@@ -396,6 +396,30 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOption) {
 			// Compute error
 			pred, emImpFactor := svd.predict(denseUserId, denseItemId)
 			diff := pred - rating
+			// Update implicit latent factor
+			nRating := svd.UserRatings[denseUserId].Len()
+			var wg sync.WaitGroup
+			wg.Add(svd.rtOptions.NJobs)
+			for j := 0; j < svd.rtOptions.NJobs; j++ {
+				go func(jobId int) {
+					low := nRating * jobId / svd.rtOptions.NJobs
+					high := nRating * (jobId + 1) / svd.rtOptions.NJobs
+					a := c[jobId]
+					b := d[jobId]
+					for i := low; i < high; i++ {
+						implFactor := svd.ImplFactor[svd.UserRatings[denseUserId].Indices[i]]
+						copy(a, itemFactor)
+						MulConst(diff, a)
+						DivConst(math.Sqrt(float64(svd.UserRatings[denseUserId].Len())), a)
+						copy(b, implFactor)
+						MulConst(svd.reg, b)
+						floats.Add(a, b)
+						MulConst(svd.lr, a)
+						floats.Sub(svd.ImplFactor[svd.UserRatings[denseUserId].Indices[i]], a)
+					}
+					wg.Done()
+				}(j)
+			}
 			// Update global Bias
 			gradGlobalBias := diff
 			svd.GlobalBias -= svd.lr * gradGlobalBias
@@ -424,30 +448,7 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOption) {
 			floats.Add(a, b)
 			MulConst(svd.lr, a)
 			floats.Sub(svd.ItemFactor[denseItemId], a)
-			// Update implicit latent factor
-			nRating := svd.UserRatings[denseUserId].Len()
-			var wg sync.WaitGroup
-			wg.Add(svd.rtOptions.NJobs)
-			for j := 0; j < svd.rtOptions.NJobs; j++ {
-				go func(jobId int) {
-					low := nRating * jobId / svd.rtOptions.NJobs
-					high := nRating * (jobId + 1) / svd.rtOptions.NJobs
-					a := make([]float64, svd.nFactors)
-					b := make([]float64, svd.nFactors)
-					for i := low; i < high; i++ {
-						implFactor := svd.ImplFactor[svd.UserRatings[denseUserId].Indices[i]]
-						copy(a, itemFactor)
-						MulConst(diff, a)
-						DivConst(math.Sqrt(float64(svd.UserRatings[denseUserId].Len())), a)
-						copy(b, implFactor)
-						MulConst(svd.reg, b)
-						floats.Add(a, b)
-						MulConst(svd.lr, a)
-						floats.Sub(svd.ImplFactor[svd.UserRatings[denseUserId].Indices[i]], a)
-					}
-					wg.Done()
-				}(j)
-			}
+			// Wait all updates completed
 			wg.Wait()
 		}
 	}

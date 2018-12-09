@@ -23,6 +23,16 @@ func Concatenate(arrays ...[]int) []int {
 	return ret
 }
 
+func Max(a []int) int {
+	maximum := 0
+	for _, m := range a {
+		if m > maximum {
+			maximum = m
+		}
+	}
+	return maximum
+}
+
 // Neg
 func Neg(dst []float64) {
 	for i := 0; i < len(dst); i++ {

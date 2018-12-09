@@ -64,6 +64,7 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 var (
 	downloadDir string
 	dataSetDir  string
+	tempDir     string
 )
 
 func init() {
@@ -71,6 +72,7 @@ func init() {
 	gorseDir := usr.HomeDir + "/.gorse"
 	downloadDir = gorseDir + "/download"
 	dataSetDir = gorseDir + "/datasets"
+	tempDir = gorseDir + "/temp"
 }
 
 /* Dataset */

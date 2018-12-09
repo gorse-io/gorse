@@ -66,19 +66,36 @@ func TestSparseVector_ForIntersection(t *testing.T) {
 	assert.Equal(t, []float64{0, 1}, intersectB)
 }
 
-func TestAdjacentVector(t *testing.T) {
+func TestKNNHeap(t *testing.T) {
 	// Test a adjacent vector
-	a := MakeAdjacentVector(3)
-	a.Add(10, 1)
-	a.Add(20, 2)
-	a.Add(30, 0)
-	vec := a.ToSparseVector()
-	assert.Equal(t, []int{10, 20}, vec.Indices)
-	assert.Equal(t, []float64{1, 2}, vec.Values)
+	a := MakeKNNHeap(3)
+	a.Add(10, 0, 1)
+	a.Add(20, 0, 8)
+	a.Add(30, 0, 0)
+	assert.Equal(t, sliceToMapInt([]int{10, 20}), sliceToMapInt(a.Indices))
+	assert.Equal(t, sliceToMap([]float64{1, 8}), sliceToMap(a.Similarities))
 	// Test a full adjacent vector
-	a.Add(40, 4)
-	a.Add(50, 5)
-	vec = a.ToSparseVector()
-	assert.Equal(t, []int{50, 20, 40}, vec.Indices)
-	assert.Equal(t, []float64{5, 2, 4}, vec.Values)
+	a.Add(40, 0, 2)
+	a.Add(50, 0, 5)
+	a.Add(12, 0, 10)
+	a.Add(67, 0, 7)
+	a.Add(32, 0, 9)
+	assert.Equal(t, sliceToMapInt([]int{12, 32, 20}), sliceToMapInt(a.Indices))
+	assert.Equal(t, sliceToMap([]float64{8, 9, 10}), sliceToMap(a.Similarities))
+}
+
+func sliceToMapInt(a []int) map[int]bool {
+	set := make(map[int]bool)
+	for _, i := range a {
+		set[i] = true
+	}
+	return set
+}
+
+func sliceToMap(a []float64) map[float64]bool {
+	set := make(map[float64]bool)
+	for _, i := range a {
+		set[i] = true
+	}
+	return set
 }

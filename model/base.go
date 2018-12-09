@@ -12,7 +12,7 @@ type Base struct {
 	ItemIdSet       SparseIdSet     // Items' ID set
 	rng             RandomGenerator // Random generator
 	randState       int             // Random seed
-	rtOptions       *RuntimeOptions // Runtime options
+	rtOptions       *FitOptions     // Runtime options
 	getParamsCalled bool
 }
 
@@ -46,7 +46,7 @@ func (base *Base) Init(trainSet TrainSet, options []RuntimeOption) {
 	// Setup random state
 	base.rng = NewRandomGenerator(base.randState)
 	// Setup runtime options
-	base.rtOptions = NewRuntimeOptions(options)
+	base.rtOptions = NewFitOptions(options)
 }
 
 /* Random */
@@ -87,7 +87,7 @@ func (random *Random) Fit(trainSet TrainSet, options ...RuntimeOption) {
 	random.Init(trainSet, options)
 	random.Mean = trainSet.Mean()
 	random.StdDev = trainSet.StdDev()
-	random.Low, random.High = trainSet.Range()
+	random.Low, random.High = trainSet.Min(), trainSet.Max()
 }
 
 /* Baseline */
@@ -151,7 +151,7 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...RuntimeOption) {
 	baseLine.ItemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < baseLine.nEpochs; epoch++ {
-		for i := 0; i < trainSet.Length(); i++ {
+		for i := 0; i < trainSet.Len(); i++ {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
 			userBias := baseLine.UserBias[denseUserId]
 			itemBias := baseLine.ItemBias[denseItemId]

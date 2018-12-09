@@ -35,7 +35,7 @@ func NewCoClustering(params Params) *CoClustering {
 }
 
 func (coc *CoClustering) SetParams(params Params) {
-	coc.SetParams(params)
+	coc.Base.SetParams(params)
 	// Setup parameters
 	coc.nUserClusters = coc.Params.GetInt(NUserClusters, 3)
 	coc.nItemClusters = coc.Params.GetInt(NItemClusters, 3)
@@ -83,7 +83,7 @@ func (coc *CoClustering) Fit(trainSet TrainSet, options ...RuntimeOption) {
 	// A^{tmp1}_{ij} = A_{ij} - A^R_i - A^C_j
 	tmp1 := NewNanMatrix(trainSet.UserCount(), trainSet.ItemCount())
 	for i := range tmp1 {
-		userRatings[i].ForEach(func(i, index int, value float64) {
+		userRatings[i].ForEach(func(_, index int, value float64) {
 			tmp1[i][index] = value - coc.UserMeans[i] - coc.ItemMeans[index]
 		})
 	}
@@ -97,7 +97,7 @@ func (coc *CoClustering) Fit(trainSet TrainSet, options ...RuntimeOption) {
 		tmp2 := MakeMatrix(trainSet.UserCount(), coc.nItemClusters)
 		count2 := MakeMatrix(trainSet.UserCount(), coc.nItemClusters)
 		for i := range tmp2 {
-			userRatings[i].ForEach(func(i, index int, value float64) {
+			userRatings[i].ForEach(func(_, index int, value float64) {
 				itemClass := coc.ItemClusters[index]
 				tmp2[i][itemClass] += tmp1[i][index]
 				count2[i][itemClass]++
@@ -130,7 +130,7 @@ func (coc *CoClustering) Fit(trainSet TrainSet, options ...RuntimeOption) {
 		tmp3 := MakeMatrix(coc.nUserClusters, trainSet.ItemCount())
 		count3 := MakeMatrix(coc.nUserClusters, trainSet.ItemCount())
 		for j := range coc.ItemClusters {
-			itemRatings[j].ForEach(func(i, index int, value float64) {
+			itemRatings[j].ForEach(func(_, index int, value float64) {
 				userClass := coc.UserClusters[index]
 				tmp3[userClass][j] += tmp1[index][j]
 				count3[userClass][j]++
@@ -166,7 +166,7 @@ func clusterMean(dst []float64, clusters []int, ratings []SparseVector) {
 	ResetVector(dst)
 	count := make([]float64, len(dst))
 	for id, cluster := range clusters {
-		ratings[id].ForEach(func(i, index int, value float64) {
+		ratings[id].ForEach(func(_, index int, value float64) {
 			dst[cluster] += value
 			count[cluster]++
 		})
@@ -178,7 +178,7 @@ func coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRating
 	ResetMatrix(dst)
 	count := MakeMatrix(len(dst), len(dst[0]))
 	for userId, userCluster := range userClusters {
-		userRatings[userId].ForEach(func(i, index int, value float64) {
+		userRatings[userId].ForEach(func(_, index int, value float64) {
 			itemCluster := itemClusters[index]
 			count[userCluster][itemCluster]++
 			dst[userCluster][itemCluster] += value

@@ -18,6 +18,10 @@ const (
 	NUserClusters ParamName = "n_user_clusters"
 	NItemClusters ParamName = "n_item_clusters"
 	KNNType       ParamName = "knn_type"
+	UserBased     ParamName = "user_based"
+	KNNSimilarity ParamName = "knn_similarity"
+	K             ParamName = "k"
+	MinK          ParamName = "min_k"
 )
 
 // KNN types
@@ -84,4 +88,15 @@ func (parameters Params) GetSim(name ParamName, _default Similarity) Similarity 
 		return val.(Similarity)
 	}
 	return _default
+}
+
+func (parameters Params) Join(params Params) Params {
+	newParams := make(Params)
+	for k, v := range parameters {
+		newParams[k] = v
+	}
+	for k, v := range params {
+		newParams[k] = v
+	}
+	return newParams
 }
