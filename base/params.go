@@ -22,7 +22,7 @@ const (
 	KNNSimilarity ParamName = "knn_similarity"
 	K             ParamName = "k"
 	MinK          ParamName = "min_k"
-	Loss          ParamName = "loss"
+	Target        ParamName = "loss"
 )
 
 // KNN types
@@ -33,7 +33,7 @@ const (
 	Baseline = "baseline"
 )
 
-// Loss types
+// Target types
 const (
 	Regression = "regression"
 	BPR        = "bpr"

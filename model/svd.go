@@ -4,6 +4,7 @@ import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/mat"
 	"math"
 	"sync"
 )
@@ -34,7 +35,7 @@ type SVD struct {
 	initMean   float64
 	initStdDev float64
 	batchSize  int
-	loss       string
+	target     string
 }
 
 // NewSVD creates a SVD model. Params:
@@ -61,7 +62,7 @@ func (svd *SVD) SetParams(params Params) {
 	svd.reg = svd.Params.GetFloat64(Reg, 0.02)
 	svd.initMean = svd.Params.GetFloat64(InitMean, 0)
 	svd.initStdDev = svd.Params.GetFloat64(InitStdDev, 0.1)
-	svd.loss = svd.Params.GetString(Loss, Regression)
+	svd.target = svd.Params.GetString(Target, Regression)
 }
 
 func (svd *SVD) Predict(userId int, itemId int) float64 {
@@ -97,13 +98,13 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...FitOption) {
 	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	svd.ItemFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	// Select fit function
-	switch svd.loss {
+	switch svd.target {
 	case Regression:
 		svd.fitRegression(trainSet)
 	case BPR:
 		svd.fitBPR(trainSet)
 	default:
-		panic("Unknown loss")
+		panic("Unknown target")
 	}
 }
 
@@ -189,17 +190,20 @@ func (svd *SVD) fitBPR(trainSet TrainSet) {
 			positiveItemFactor := svd.ItemFactor[densePosId]
 			negativeItemFactor := svd.ItemFactor[denseNegId]
 			// Update positive item latent factor: +w_u
+			// TODO: Add regularization
 			copy(a, userFactor)
 			MulConst(grad, a)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[densePosId], a)
 			// Update negative item latent factor: -w_u
+			// TODO: Add regularization
 			copy(a, userFactor)
 			Neg(a)
 			MulConst(grad, a)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[denseNegId], a)
 			// Update user latent factor: h_i-h_j
+			// TODO: Add regularization
 			copy(a, positiveItemFactor)
 			floats.Sub(a, negativeItemFactor)
 			MulConst(grad, a)
@@ -502,6 +506,15 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...FitOption) {
 
 type WRMF struct {
 	Base
+	// Model parameters
+	UserFactor mat.Matrix // p_u
+	ItemFactor mat.Matrix // q_i
+	// Hyper parameters
+	nFactors   int
+	nEpochs    int
+	reg        float64
+	initMean   float64
+	initStdDev float64
 }
 
 func NewWRMF(params Params) *WRMF {
@@ -511,35 +524,19 @@ func NewWRMF(params Params) *WRMF {
 }
 
 func (mf *WRMF) SetParams(params Params) {
-
+	mf.Base.SetParams(params)
+	mf.nFactors = mf.Params.GetInt(NFactors, 15)
+	mf.nEpochs = mf.Params.GetInt(NEpochs, 50)
+	mf.initMean = mf.Params.GetFloat64(InitMean, 0)
+	mf.initStdDev = mf.Params.GetFloat64(InitStdDev, 1)
+	mf.reg = mf.Params.GetFloat64(Reg, 0.06)
 }
 
 func (mf *WRMF) Predict(userId, itemId int) float64 {
-
+	denseUserId := mf.UserIdSet.ToDenseId(userId)
+	denseItemId := mf.ItemIdSet.ToDenseId(itemId)
 }
 
 func (mf *WRMF) Fit(set TrainSet, options ...FitOption) {
-
-}
-
-type MMMF struct {
-	Base
-}
-
-func NewMMMF(params Params) *MMMF {
-	mf := new(MMMF)
-	mf.SetParams(params)
-	return mf
-}
-
-func (mf *MMMF) SetParams(params Params) {
-
-}
-
-func (mf *MMMF) Predict(userId, itemId int) float64 {
-
-}
-
-func (mf *MMMF) Fit(set TrainSet, options ...FitOption) {
-
+	mf.Init(set, options)
 }
