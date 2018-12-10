@@ -21,7 +21,7 @@ func Parallel(nTask int, nJob int, worker func(begin, end int)) {
 	wg.Wait()
 }
 
-func parallelMean(nTask int, nJob int, worker func(begin, end int) float64) float64 {
+func ParallelMean(nTask int, nJob int, worker func(begin, end int) (sum float64)) float64 {
 	var wg sync.WaitGroup
 	wg.Add(nJob)
 	results := make([]float64, nJob)
@@ -30,8 +30,9 @@ func parallelMean(nTask int, nJob int, worker func(begin, end int) float64) floa
 		go func(jobId int) {
 			begin := nTask * jobId / nJob
 			end := nTask * (jobId + 1) / nJob
-			results = append(results, worker(begin, end))
-			weights = append(weights, float64(end-begin)/float64(nTask))
+			size := end - begin
+			results = append(results, worker(begin, end)/float64(size))
+			weights = append(weights, float64(size)/float64(nTask))
 			wg.Done()
 		}(j)
 	}
