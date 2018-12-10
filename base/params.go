@@ -22,6 +22,7 @@ const (
 	KNNSimilarity ParamName = "knn_similarity"
 	K             ParamName = "k"
 	MinK          ParamName = "min_k"
+	Loss          ParamName = "loss"
 )
 
 // KNN types
@@ -30,6 +31,12 @@ const (
 	Centered = "centered"
 	ZScore   = "z_score"
 	Baseline = "baseline"
+)
+
+// Loss types
+const (
+	Regression = "regression"
+	BPR        = "bpr"
 )
 
 // Params for an algorithm. Given by:

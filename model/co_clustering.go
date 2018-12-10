@@ -67,7 +67,7 @@ func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-func (coc *CoClustering) Fit(trainSet TrainSet, options ...RuntimeOption) {
+func (coc *CoClustering) Fit(trainSet TrainSet, options ...FitOption) {
 	coc.Init(trainSet, options)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean

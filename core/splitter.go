@@ -9,10 +9,13 @@ type Splitter func(set DataSet, seed int64) ([]TrainSet, []DataSet)
 // NewKFoldSplitter creates a k-fold splitter.
 func NewKFoldSplitter(k int) Splitter {
 	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
+		// Create folds
 		trainFolds := make([]TrainSet, k)
 		testFolds := make([]DataSet, k)
+		// Generate permutation
 		rand.Seed(seed)
 		perm := rand.Perm(dataSet.Len())
+		// Split folds
 		foldSize := dataSet.Len() / k
 		begin, end := 0, 0
 		for i := 0; i < k; i++ {

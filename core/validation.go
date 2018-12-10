@@ -111,12 +111,34 @@ func RandomSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 	evaluators []Evaluator, trial int, options ...CVOption) []ModelSelectionResult {
 	cvOptions := NewCVOptions(options)
 	rng := NewRandomGenerator(cvOptions.Seed)
+	// Create results
+	results := make([]ModelSelectionResult, len(evaluators))
+	for i := range results {
+		results[i] = ModelSelectionResult{}
+		results[i].BestScore = math.Inf(1)
+		results[i].CVResults = make([]CrossValidateResult, 0, trial)
+		results[i].AllParams = make([]Params, 0, trial)
+	}
 	//
 	for i := 0; i < trial; i++ {
+		// Make parameters
 		params := Params{}
 		for paramName, values := range paramGrid {
 			value := values[rng.Intn(len(values))]
 			params[paramName] = value
 		}
+		// Cross validate
+		cvResults := CrossValidate(estimator, dataSet, evaluators, NewKFoldSplitter(5), options...)
+		for i := range cvResults {
+			results[i].CVResults = append(results[i].CVResults, cvResults[i])
+			results[i].AllParams = append(results[i].AllParams, params.Copy())
+			score := stat.Mean(cvResults[i].Tests, nil)
+			if score < results[i].BestScore {
+				results[i].BestScore = score
+				results[i].BestParams = params.Copy()
+				results[i].BestIndex = len(results[i].AllParams) - 1
+			}
+		}
 	}
+	return results
 }

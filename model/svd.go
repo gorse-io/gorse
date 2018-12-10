@@ -34,6 +34,7 @@ type SVD struct {
 	initMean   float64
 	initStdDev float64
 	batchSize  int
+	loss       string
 }
 
 // NewSVD creates a SVD model. Params:
@@ -60,6 +61,7 @@ func (svd *SVD) SetParams(params Params) {
 	svd.reg = svd.Params.GetFloat64(Reg, 0.02)
 	svd.initMean = svd.Params.GetFloat64(InitMean, 0)
 	svd.initStdDev = svd.Params.GetFloat64(InitStdDev, 0.1)
+	svd.loss = svd.Params.GetString(Loss, Regression)
 }
 
 func (svd *SVD) Predict(userId int, itemId int) float64 {
@@ -87,13 +89,25 @@ func (svd *SVD) predict(denseUserId int, denseItemId int) float64 {
 	return ret
 }
 
-func (svd *SVD) Fit(trainSet TrainSet, options ...RuntimeOption) {
+func (svd *SVD) Fit(trainSet TrainSet, options ...FitOption) {
 	svd.Init(trainSet, options)
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount())
 	svd.ItemBias = make([]float64, trainSet.ItemCount())
 	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	svd.ItemFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
+	// Select fit function
+	switch svd.loss {
+	case Regression:
+		svd.fitRegression(trainSet)
+	case BPR:
+		svd.fitBPR(trainSet)
+	default:
+		panic("Unknown loss")
+	}
+}
+
+func (svd *SVD) fitRegression(trainSet TrainSet) {
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
@@ -139,29 +153,61 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...RuntimeOption) {
 	}
 }
 
-// PairUpdate updates model parameters by pair.
-//func (svd *SVD) PairUpdate(upGrad float64, innerUserId, positiveItemId, negativeItemId int) {
-//	userFactor := svd.UserFactor[innerUserId]
-//	positiveItemFactor := svd.ItemFactor[positiveItemId]
-//	negativeItemFactor := svd.ItemFactor[negativeItemId]
-//	// Update positive item latent factor: +w_u
-//	copy(svd.a, userFactor)
-//	MulConst(upGrad, svd.a)
-//	MulConst(svd.lr, svd.a)
-//	floats.Add(svd.ItemFactor[positiveItemId], svd.a)
-//	// Update negative item latent factor: -w_u
-//	copy(svd.a, userFactor)
-//	Neg(svd.a)
-//	MulConst(upGrad, svd.a)
-//	MulConst(svd.lr, svd.a)
-//	floats.Add(svd.ItemFactor[negativeItemId], svd.a)
-//	// Update user latent factor: h_i-h_j
-//	copy(svd.a, positiveItemFactor)
-//	floats.Sub(svd.a, negativeItemFactor)
-//	MulConst(upGrad, svd.a)
-//	MulConst(svd.lr, svd.a)
-//	floats.Add(svd.UserFactor[innerUserId], svd.a)
-//}
+func (svd *SVD) fitBPR(trainSet TrainSet) {
+	// Create the set of positive feedback
+	positiveSet := make([]map[int]bool, trainSet.UserCount())
+	for denseUserId, userRating := range trainSet.UserRatings {
+		positiveSet[denseUserId] = make(map[int]bool)
+		userRating.ForEach(func(i, index int, value float64) {
+			positiveSet[denseUserId][index] = true
+		})
+	}
+	// Create buffers
+	a := make([]float64, svd.nFactors)
+	b := make([]float64, svd.nFactors)
+	// Training
+	for epoch := 0; epoch < svd.nEpochs; epoch++ {
+		// Generate permutation
+		perm := svd.rng.Perm(trainSet.Len())
+		// Training epoch
+		for _, i := range perm {
+			// Select a positive sample
+			denseUserId, densePosId, _ := trainSet.GetDense(i)
+			// Select a negative sample
+			denseNegId := -1
+			for {
+				temp := svd.rng.Intn(trainSet.ItemCount())
+				if _, exist := positiveSet[denseUserId][temp]; !exist {
+					denseNegId = temp
+					break
+				}
+			}
+			diff := svd.predict(denseUserId, densePosId) - svd.predict(denseUserId, denseNegId)
+			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
+			// Pairwise update
+			userFactor := svd.UserFactor[denseUserId]
+			positiveItemFactor := svd.ItemFactor[densePosId]
+			negativeItemFactor := svd.ItemFactor[denseNegId]
+			// Update positive item latent factor: +w_u
+			copy(a, userFactor)
+			MulConst(grad, a)
+			MulConst(svd.lr, a)
+			floats.Add(svd.ItemFactor[densePosId], a)
+			// Update negative item latent factor: -w_u
+			copy(a, userFactor)
+			Neg(a)
+			MulConst(grad, a)
+			MulConst(svd.lr, a)
+			floats.Add(svd.ItemFactor[denseNegId], a)
+			// Update user latent factor: h_i-h_j
+			copy(a, positiveItemFactor)
+			floats.Sub(a, negativeItemFactor)
+			MulConst(grad, a)
+			MulConst(svd.lr, a)
+			floats.Add(svd.UserFactor[denseUserId], a)
+		}
+	}
+}
 
 /* NMF */
 
@@ -212,7 +258,7 @@ func (nmf *NMF) predict(denseUserId int, denseItemId int) float64 {
 	return 0
 }
 
-func (nmf *NMF) Fit(trainSet TrainSet, options ...RuntimeOption) {
+func (nmf *NMF) Fit(trainSet TrainSet, options ...FitOption) {
 	nmf.Init(trainSet, options)
 	// Initialize parameters
 	nmf.UserFactor = nmf.rng.MakeUniformMatrix(trainSet.UserCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
@@ -369,7 +415,7 @@ func (svd *SVDpp) summarizeImplFactors(denseUserId int) []float64 {
 	return sumImpFactor
 }
 
-func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOption) {
+func (svd *SVDpp) Fit(trainSet TrainSet, setters ...FitOption) {
 	svd.Init(trainSet, setters)
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount())
@@ -452,4 +498,48 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...RuntimeOption) {
 			wg.Wait()
 		}
 	}
+}
+
+type WRMF struct {
+	Base
+}
+
+func NewWRMF(params Params) *WRMF {
+	mf := new(WRMF)
+	mf.SetParams(params)
+	return mf
+}
+
+func (mf *WRMF) SetParams(params Params) {
+
+}
+
+func (mf *WRMF) Predict(userId, itemId int) float64 {
+
+}
+
+func (mf *WRMF) Fit(set TrainSet, options ...FitOption) {
+
+}
+
+type MMMF struct {
+	Base
+}
+
+func NewMMMF(params Params) *MMMF {
+	mf := new(MMMF)
+	mf.SetParams(params)
+	return mf
+}
+
+func (mf *MMMF) SetParams(params Params) {
+
+}
+
+func (mf *MMMF) Predict(userId, itemId int) float64 {
+
+}
+
+func (mf *MMMF) Fit(set TrainSet, options ...FitOption) {
+
 }

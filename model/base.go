@@ -30,12 +30,12 @@ func (base *Base) Predict(userId, itemId int) float64 {
 	panic("Predict() not implemented")
 }
 
-func (base *Base) Fit(trainSet TrainSet, options ...RuntimeOption) {
+func (base *Base) Fit(trainSet TrainSet, options ...FitOption) {
 	panic("Fit() not implemented")
 }
 
 // Init the base model.
-func (base *Base) Init(trainSet TrainSet, options []RuntimeOption) {
+func (base *Base) Init(trainSet TrainSet, options []FitOption) {
 	// Check Base.GetParams() called
 	if base.getParamsCalled == false {
 		panic("Base.GetParams() not called")
@@ -83,7 +83,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet TrainSet, options ...RuntimeOption) {
+func (random *Random) Fit(trainSet TrainSet, options ...FitOption) {
 	random.Init(trainSet, options)
 	random.Mean = trainSet.Mean()
 	random.StdDev = trainSet.StdDev()
@@ -144,7 +144,7 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 	return ret
 }
 
-func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...RuntimeOption) {
+func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...FitOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
@@ -166,4 +166,31 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...RuntimeOption) {
 			baseLine.ItemBias[denseItemId] -= baseLine.lr * gradItemBias
 		}
 	}
+}
+
+type ItemPop struct {
+	Base
+	Pop []float64
+}
+
+// NewItemPop creates an ItemPop model.
+func NewItemPop(params Params) *ItemPop {
+	pop := new(ItemPop)
+	pop.SetParams(params)
+	return pop
+}
+
+func (pop *ItemPop) Fit(set TrainSet, options ...FitOption) {
+	pop.Init(set, options)
+	// Get items' popularity
+	pop.Pop = make([]float64, set.ItemCount())
+	for i := range set.ItemRatings {
+		pop.Pop[i] = float64(set.ItemRatings[i].Len())
+	}
+}
+
+func (pop *ItemPop) Predict(userId, itemId int) float64 {
+	// Return items' popularity
+	denseItemId := pop.ItemIdSet.ToDenseId(itemId)
+	return pop.Pop[denseItemId]
 }

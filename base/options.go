@@ -10,7 +10,7 @@ type FitOptions struct {
 }
 
 // NewCVOptions creates a FitOptions from FitOption.
-func NewFitOptions(setters []RuntimeOption) *FitOptions {
+func NewFitOptions(setters []FitOption) *FitOptions {
 	options := new(FitOptions)
 	options.NJobs = runtime.NumCPU()
 	options.Diagnose = true
@@ -21,18 +21,18 @@ func NewFitOptions(setters []RuntimeOption) *FitOptions {
 	return options
 }
 
-// RuntimeOption changes options.
-type RuntimeOption func(options *FitOptions)
+// FitOption changes options.
+type FitOption func(options *FitOptions)
 
 // WithVerbose sets the verbose switch
-func WithVerbose(verbose bool) RuntimeOption {
+func WithVerbose(verbose bool) FitOption {
 	return func(options *FitOptions) {
 		options.Verbose = verbose
 	}
 }
 
 // WithNJobs sets the number of jobs.
-func WithNJobs(nJobs int) RuntimeOption {
+func WithNJobs(nJobs int) FitOption {
 	return func(options *FitOptions) {
 		options.NJobs = nJobs
 	}

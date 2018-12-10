@@ -120,16 +120,3 @@ func NewNDCG(n int) Evaluator {
 		return sum / float64(testSet.UserCount())
 	}
 }
-
-func NewHR() Evaluator {
-	return func(model Model, dataSet DataSet) float64 {
-		return 0
-	}
-}
-
-// NewRecall creates a Recall evaluator.
-func NewRecall(n int) Evaluator {
-	return func(model Model, data DataSet) float64 {
-		return 0
-	}
-}

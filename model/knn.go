@@ -21,6 +21,7 @@ type KNN struct {
 	simMetric    Similarity
 	k            int
 	minK         int
+	loss         string
 }
 
 // NewKNN creates a KNN model. Params:
@@ -44,6 +45,7 @@ func (knn *KNN) SetParams(params Params) {
 	knn.userBased = knn.Params.GetBool(UserBased, true)
 	knn.k = knn.Params.GetInt(K, 40)
 	knn.minK = knn.Params.GetInt(MinK, 1)
+	knn.loss = knn.Params.GetString(Loss, Regression)
 }
 
 func (knn *KNN) Predict(userId, itemId int) float64 {
@@ -96,8 +98,18 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 }
 
 // Fit a KNN model.
-func (knn *KNN) Fit(trainSet TrainSet, options ...RuntimeOption) {
+func (knn *KNN) Fit(trainSet TrainSet, options ...FitOption) {
 	knn.Init(trainSet, options)
+	// Select fit function
+	switch knn.loss {
+	case Regression:
+		knn.fitRegression(trainSet)
+	case BPR:
+		knn.fitBPR(trainSet)
+	}
+}
+
+func (knn *KNN) fitRegression(trainSet TrainSet) {
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean
 	// Retrieve user (item) iRatings
@@ -152,4 +164,8 @@ func (knn *KNN) Fit(trainSet TrainSet, options ...RuntimeOption) {
 			}
 		}
 	})
+}
+
+func (knn *KNN) fitBPR(trainSet TrainSet) {
+	panic("fitBPR() not implemented")
 }

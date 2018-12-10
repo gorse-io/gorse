@@ -44,7 +44,7 @@ func (tester *EvaluatorTesterModel) SetParams(params Params) {
 	panic("EvaluatorTesterModel.SetParams() should never be called.")
 }
 
-func (tester *EvaluatorTesterModel) Fit(set TrainSet, options ...RuntimeOption) {
+func (tester *EvaluatorTesterModel) Fit(set TrainSet, options ...FitOption) {
 	panic("EvaluatorTesterModel.Fit() should never be called.")
 }
 
@@ -76,4 +76,8 @@ func TestAUC(t *testing.T) {
 	if c(a, b) != 1.0 {
 		t.Fail()
 	}
+}
+
+func TestNewNDCG(t *testing.T) {
+
 }
