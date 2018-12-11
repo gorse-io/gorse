@@ -190,23 +190,29 @@ func (svd *SVD) fitBPR(trainSet TrainSet) {
 			positiveItemFactor := svd.ItemFactor[densePosId]
 			negativeItemFactor := svd.ItemFactor[denseNegId]
 			// Update positive item latent factor: +w_u
-			// TODO: Add regularization
 			copy(a, userFactor)
 			MulConst(grad, a)
+			copy(b, positiveItemFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[densePosId], a)
 			// Update negative item latent factor: -w_u
-			// TODO: Add regularization
 			copy(a, userFactor)
 			Neg(a)
 			MulConst(grad, a)
+			copy(b, negativeItemFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[denseNegId], a)
 			// Update user latent factor: h_i-h_j
-			// TODO: Add regularization
 			copy(a, positiveItemFactor)
 			floats.Sub(a, negativeItemFactor)
 			MulConst(grad, a)
+			copy(b, userFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.UserFactor[denseUserId], a)
 		}
@@ -537,6 +543,9 @@ func (mf *WRMF) SetParams(params Params) {
 func (mf *WRMF) Predict(userId, itemId int) float64 {
 	denseUserId := mf.UserIdSet.ToDenseId(userId)
 	denseItemId := mf.ItemIdSet.ToDenseId(itemId)
+	if denseUserId == NotId || denseItemId == NotId {
+		return 0
+	}
 	return mat.Dot(mf.UserFactor.RowView(denseUserId),
 		mf.ItemFactor.RowView(denseItemId))
 }
@@ -549,5 +558,10 @@ func (mf *WRMF) Fit(set TrainSet, options ...FitOption) {
 	mf.ItemFactor = mat.NewDense(set.ItemCount(), mf.nFactors,
 		mf.rng.MakeNormalVector(set.ItemCount()*mf.nFactors, mf.initMean, mf.initStdDev))
 	mf.Weights = mat.NewDense(set.UserCount(), set.ItemCount(), nil)
-	//
+	// Fill weight matrix
+	set.ForEachDense(func(denseUserId, denseItemId int, rating float64) {
+		mf.Weights.Set(denseUserId, denseItemId, math.Log(1.0+math.Pow(10, mf.alpha)*rating))
+	})
+	// Recompute all user factors: x_u = (Y^T C^u Y + \lambda I)^{-1} Y^T C^u p(u)
+	// Recompute all item factors: y_i = (X^T C^i X + \lambda I)^{-1} X^T C^i p(u)
 }
