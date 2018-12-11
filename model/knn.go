@@ -3,7 +3,6 @@ package model
 import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
-	"gonum.org/v1/gonum/floats"
 	"math"
 )
 
@@ -65,6 +64,8 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 		return knn.predictRegression(denseUserId, denseItemId)
 	case BPR:
 		return knn.predictBPR(denseUserId, denseItemId)
+	default:
+		panic("Unknown target")
 	}
 }
 

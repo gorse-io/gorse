@@ -122,17 +122,25 @@ func NewNDCG(n int) Evaluator {
 }
 
 func NewPrecision(n int) Evaluator {
-
+	return func(model Model, set DataSet) float64 {
+		return 0
+	}
 }
 
 func NewRecall(n int) Evaluator {
-
+	return func(model Model, set DataSet) float64 {
+		return 0
+	}
 }
 
 func NewMAP() Evaluator {
-
+	return func(model Model, set DataSet) float64 {
+		return 0
+	}
 }
 
 func NewMRR() Evaluator {
-
+	return func(model Model, set DataSet) float64 {
+		return 0
+	}
 }

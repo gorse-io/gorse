@@ -65,6 +65,14 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 	return _default
 }
 
+// Get a integer parameter.
+func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
+	if val, exist := parameters[name]; exist {
+		return val.(int64)
+	}
+	return _default
+}
+
 // Get a bool parameter.
 func (parameters Params) GetBool(name ParamName, _default bool) bool {
 	if val, exist := parameters[name]; exist {

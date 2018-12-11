@@ -190,23 +190,29 @@ func (svd *SVD) fitBPR(trainSet TrainSet) {
 			positiveItemFactor := svd.ItemFactor[densePosId]
 			negativeItemFactor := svd.ItemFactor[denseNegId]
 			// Update positive item latent factor: +w_u
-			// TODO: Add regularization
 			copy(a, userFactor)
 			MulConst(grad, a)
+			copy(b, positiveItemFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[densePosId], a)
 			// Update negative item latent factor: -w_u
-			// TODO: Add regularization
 			copy(a, userFactor)
 			Neg(a)
 			MulConst(grad, a)
+			copy(b, negativeItemFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[denseNegId], a)
 			// Update user latent factor: h_i-h_j
-			// TODO: Add regularization
 			copy(a, positiveItemFactor)
 			floats.Sub(a, negativeItemFactor)
 			MulConst(grad, a)
+			copy(b, userFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.UserFactor[denseUserId], a)
 		}
@@ -533,8 +539,9 @@ func (mf *WRMF) SetParams(params Params) {
 }
 
 func (mf *WRMF) Predict(userId, itemId int) float64 {
-	denseUserId := mf.UserIdSet.ToDenseId(userId)
-	denseItemId := mf.ItemIdSet.ToDenseId(itemId)
+	//denseUserId := mf.UserIdSet.ToDenseId(userId)
+	//denseItemId := mf.ItemIdSet.ToDenseId(itemId)
+	return 0
 }
 
 func (mf *WRMF) Fit(set TrainSet, options ...FitOption) {
