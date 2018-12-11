@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
+	"github.com/zhenghaoz/gorse/model"
 	"gonum.org/v1/gonum/stat"
 	"os"
 	"runtime"
@@ -30,7 +32,7 @@ func benchmark(dataSet string) {
 		//{"k-NN Z-Score", "#NewKNNWithZScore", core.NewKNNWithZScore(nil)},
 		//{"Co-Clustering[5]", "#CoClustering", core.NewCoClustering(nil)},
 		//{"BaseLine", "#BaseLine", core.NewBaseLine(nil)},
-		{"Random", "#Random", core.NewRandom(nil)},
+		{"Random", "#Random", model.NewRandom(nil)},
 	}
 	set := core.LoadDataFromBuiltIn(dataSet)
 	var start time.Time
@@ -39,7 +41,7 @@ func benchmark(dataSet string) {
 	for _, model := range models {
 		start = time.Now()
 		out := core.CrossValidate(model.estimator, set, []core.Evaluator{core.RMSE, core.MAE},
-			core.NewKFoldSplitter(5), 0, core.Parameters{
+			core.NewKFoldSplitter(5), 0, base.Params{
 				"randState": 0,
 			}, runtime.NumCPU())
 		tm := time.Since(start)

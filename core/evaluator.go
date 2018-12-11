@@ -120,3 +120,19 @@ func NewNDCG(n int) Evaluator {
 		return sum / float64(testSet.UserCount())
 	}
 }
+
+func NewPrecision(n int) Evaluator {
+
+}
+
+func NewRecall(n int) Evaluator {
+
+}
+
+func NewMAP() Evaluator {
+
+}
+
+func NewMRR() Evaluator {
+
+}
