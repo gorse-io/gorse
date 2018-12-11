@@ -23,6 +23,7 @@ const (
 	K             ParamName = "k"
 	MinK          ParamName = "min_k"
 	Target        ParamName = "loss"
+	Shrinkage     ParamName = "shrinkage"
 )
 
 // KNN types

@@ -27,6 +27,7 @@ type KNN struct {
 	lr           float64
 	reg          float64
 	nEpochs      int
+	shrinkage    int
 }
 
 // NewKNN creates a KNN model. Params:
@@ -54,6 +55,7 @@ func (knn *KNN) SetParams(params Params) {
 	knn.lr = knn.Params.GetFloat64(Lr, 0.005)
 	knn.reg = knn.Params.GetFloat64(Reg, 0.02)
 	knn.nEpochs = knn.Params.GetInt(NEpochs, 20)
+	knn.shrinkage = knn.Params.GetInt(Shrinkage, 100)
 }
 
 func (knn *KNN) Predict(userId, itemId int) float64 {

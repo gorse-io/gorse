@@ -507,14 +507,16 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...FitOption) {
 type WRMF struct {
 	Base
 	// Model parameters
-	UserFactor mat.Matrix // p_u
-	ItemFactor mat.Matrix // q_i
+	UserFactor *mat.Dense // p_u
+	ItemFactor *mat.Dense // q_i
+	Weights    *mat.Dense // c_{ui}
 	// Hyper parameters
 	nFactors   int
 	nEpochs    int
 	reg        float64
 	initMean   float64
 	initStdDev float64
+	alpha      float64
 }
 
 func NewWRMF(params Params) *WRMF {
@@ -535,8 +537,17 @@ func (mf *WRMF) SetParams(params Params) {
 func (mf *WRMF) Predict(userId, itemId int) float64 {
 	denseUserId := mf.UserIdSet.ToDenseId(userId)
 	denseItemId := mf.ItemIdSet.ToDenseId(itemId)
+	return mat.Dot(mf.UserFactor.RowView(denseUserId),
+		mf.ItemFactor.RowView(denseItemId))
 }
 
 func (mf *WRMF) Fit(set TrainSet, options ...FitOption) {
 	mf.Init(set, options)
+	// Initialize
+	mf.UserFactor = mat.NewDense(set.UserCount(), mf.nFactors,
+		mf.rng.MakeNormalVector(set.UserCount()*mf.nFactors, mf.initMean, mf.initStdDev))
+	mf.ItemFactor = mat.NewDense(set.ItemCount(), mf.nFactors,
+		mf.rng.MakeNormalVector(set.ItemCount()*mf.nFactors, mf.initMean, mf.initStdDev))
+	mf.Weights = mat.NewDense(set.UserCount(), set.ItemCount(), nil)
+	//
 }
