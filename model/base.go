@@ -11,7 +11,7 @@ type Base struct {
 	UserIdSet       SparseIdSet     // Users' ID set
 	ItemIdSet       SparseIdSet     // Items' ID set
 	rng             RandomGenerator // Random generator
-	randState       int             // Random seed
+	randState       int64             // Random seed
 	rtOptions       *FitOptions     // Runtime options
 	getParamsCalled bool
 }
@@ -19,7 +19,7 @@ type Base struct {
 func (base *Base) SetParams(params Params) {
 	base.getParamsCalled = true
 	base.Params = params
-	base.randState = base.Params.GetInt(RandomState, 0)
+	base.randState = int64(base.Params.GetInt(RandomState, 0))
 }
 
 func (base *Base) GetParams() Params {

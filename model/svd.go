@@ -165,7 +165,7 @@ func (svd *SVD) fitBPR(trainSet TrainSet) {
 	}
 	// Create buffers
 	a := make([]float64, svd.nFactors)
-	b := make([]float64, svd.nFactors)
+	//b := make([]float64, svd.nFactors)
 	// Training
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		// Generate permutation
@@ -533,8 +533,9 @@ func (mf *WRMF) SetParams(params Params) {
 }
 
 func (mf *WRMF) Predict(userId, itemId int) float64 {
-	denseUserId := mf.UserIdSet.ToDenseId(userId)
-	denseItemId := mf.ItemIdSet.ToDenseId(itemId)
+	//denseUserId := mf.UserIdSet.ToDenseId(userId)
+	//denseItemId := mf.ItemIdSet.ToDenseId(itemId)
+	return 0
 }
 
 func (mf *WRMF) Fit(set TrainSet, options ...FitOption) {
