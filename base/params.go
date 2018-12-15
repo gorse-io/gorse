@@ -24,6 +24,7 @@ const (
 	MinK          ParamName = "min_k"
 	Target        ParamName = "loss"
 	Shrinkage     ParamName = "shrinkage"
+	Alpha         ParamName = "alpha"
 )
 
 // KNN types
@@ -62,6 +63,14 @@ func (parameters Params) Copy() Params {
 func (parameters Params) GetInt(name ParamName, _default int) int {
 	if val, exist := parameters[name]; exist {
 		return val.(int)
+	}
+	return _default
+}
+
+// Get a integer parameter.
+func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
+	if val, exist := parameters[name]; exist {
+		return val.(int64)
 	}
 	return _default
 }
