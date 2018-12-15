@@ -67,7 +67,7 @@ func (coc *CoClustering) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-func (coc *CoClustering) Fit(trainSet TrainSet, options ...FitOption) {
+func (coc *CoClustering) Fit(trainSet QuerySet, options ...FitOption) {
 	coc.Init(trainSet, options)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean
@@ -81,7 +81,7 @@ func (coc *CoClustering) Fit(trainSet TrainSet, options ...FitOption) {
 	coc.ItemClusterMeans = make([]float64, coc.nItemClusters)
 	coc.CoClusterMeans = MakeMatrix(coc.nUserClusters, coc.nItemClusters)
 	// A^{tmp1}_{ij} = A_{ij} - A^R_i - A^C_j
-	tmp1 := NewNanMatrix(trainSet.UserCount(), trainSet.ItemCount())
+	tmp1 := MakeMatrix(trainSet.UserCount(), trainSet.ItemCount())
 	for i := range tmp1 {
 		userRatings[i].ForEach(func(_, index int, value float64) {
 			tmp1[i][index] = value - coc.UserMeans[i] - coc.ItemMeans[index]
@@ -163,7 +163,7 @@ func (coc *CoClustering) Fit(trainSet TrainSet, options ...FitOption) {
 }
 
 func clusterMean(dst []float64, clusters []int, ratings []SparseVector) {
-	ResetVector(dst)
+	FillZeroVector(dst)
 	count := make([]float64, len(dst))
 	for id, cluster := range clusters {
 		ratings[id].ForEach(func(_, index int, value float64) {
@@ -175,7 +175,7 @@ func clusterMean(dst []float64, clusters []int, ratings []SparseVector) {
 }
 
 func coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []SparseVector) {
-	ResetMatrix(dst)
+	FillZeroMatrix(dst)
 	count := MakeMatrix(len(dst), len(dst[0]))
 	for userId, userCluster := range userClusters {
 		userRatings[userId].ForEach(func(_, index int, value float64) {

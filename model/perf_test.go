@@ -15,7 +15,7 @@ func EvaluateRegression(t *testing.T, algo Model, dataSet DataSet, splitter Spli
 	results := CrossValidate(algo, dataSet, evaluators, splitter)
 	// Check accuracy
 	for i := range evalNames {
-		accuracy := stat.Mean(results[i].Tests, nil)
+		accuracy := stat.Mean(results[i].TestScore, nil)
 		if accuracy > expectations[i]+perfEpsilon {
 			t.Fatalf("%s: %.3f > %.3f+%.3f", evalNames[i], accuracy, expectations[i], perfEpsilon)
 		} else {
@@ -30,7 +30,7 @@ func EvaluateRank(t *testing.T, algo Model, dataSet DataSet, splitter Splitter, 
 	results := CrossValidate(algo, dataSet, evaluators, splitter)
 	// Check accuracy
 	for i := range evalNames {
-		accuracy := stat.Mean(results[i].Tests, nil)
+		accuracy := stat.Mean(results[i].TestScore, nil)
 		if accuracy < expectations[i]-perfEpsilon {
 			t.Fatalf("%s: %.3f < %.3f-%.3f", evalNames[i], accuracy, expectations[i], perfEpsilon)
 		} else {
@@ -100,29 +100,39 @@ func TestCoClustering(t *testing.T) {
 
 func TestItemPop(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
-	EvaluateRank(t, NewItemPop(nil), data, NewUserLOOSplitter(5),
-		[]string{"AUC"}, []Evaluator{NewAUCEvaluator(data)}, []float64{0.857})
+	EvaluateRank(t, NewItemPop(nil), data, NewKFoldSplitter(5),
+		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "NDCG@10", "MRR"},
+		[]Evaluator{NewPrecision(5), NewPrecision(10), NewRecall(5), NewRecall(10), NewNDCG(10), NewMRR(0)},
+		[]float64{0.211, 0.190, 0.070, 0.116, 0.477, 0.417})
 }
 
-func TestSVD_BPR(t *testing.T) {
+func TestItemPop2(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
-	EvaluateRank(t, NewSVD(Params{
-		Target:   BPR,
-		NFactors: 10,
-		Reg:      0.01,
-		Lr:       0.05,
-		NEpochs:  30,
-	}), data, NewUserLOOSplitter(5),
-		[]string{"AUC"}, []Evaluator{NewAUCEvaluator(data)}, []float64{0.933})
+	EvaluateRank(t, NewItemPop(nil), data, NewKFoldSplitter(5),
+		[]string{"NDCG@10"},
+		[]Evaluator{NewNDCG(10)},
+		[]float64{0.477})
 }
 
-func TestWRMF(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-100k")
-	EvaluateRank(t, NewWRMF(Params{
-		NFactors: 20,
-		Reg:      0.015,
-		Alpha:    1.0,
-		NEpochs:  10,
-	}), data, NewUserLOOSplitter(1),
-		[]string{"AUC"}, []Evaluator{NewAUCEvaluator(data)}, []float64{0.928})
-}
+//func TestSVD_BPR(t *testing.T) {
+//	data := LoadDataFromBuiltIn("ml-100k")
+//	EvaluateRank(t, NewSVD(Params{
+//		Target:   BPR,
+//		NFactors: 10,
+//		Reg:      0.01,
+//		Lr:       0.05,
+//		NEpochs:  30,
+//	}), data, NewUserLOOSplitter(5),
+//		[]string{"AUC"}, []Evaluator{NewAUCEvaluator(data)}, []float64{0.933})
+//}
+//
+//func TestWRMF(t *testing.T) {
+//	data := LoadDataFromBuiltIn("ml-100k")
+//	EvaluateRank(t, NewWRMF(Params{
+//		NFactors: 20,
+//		Reg:      0.015,
+//		Alpha:    1.0,
+//		NEpochs:  10,
+//	}), data, NewRatioSplitter(1, 0.2),
+//		[]string{"AUC"}, []Evaluator{NewNDCG(10)}, []float64{0.928})
+//}

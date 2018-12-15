@@ -30,12 +30,12 @@ func (base *Base) Predict(userId, itemId int) float64 {
 	panic("Predict() not implemented")
 }
 
-func (base *Base) Fit(trainSet TrainSet, options ...FitOption) {
+func (base *Base) Fit(trainSet QuerySet, options ...FitOption) {
 	panic("Fit() not implemented")
 }
 
 // Init the base model.
-func (base *Base) Init(trainSet TrainSet, options []FitOption) {
+func (base *Base) Init(trainSet QuerySet, options []FitOption) {
 	// Check Base.GetParams() called
 	if base.getParamsCalled == false {
 		panic("Base.GetParams() not called")
@@ -83,7 +83,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet TrainSet, options ...FitOption) {
+func (random *Random) Fit(trainSet QuerySet, options ...FitOption) {
 	random.Init(trainSet, options)
 	random.Mean = trainSet.Mean()
 	random.StdDev = trainSet.StdDev()
@@ -144,7 +144,7 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 	return ret
 }
 
-func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...FitOption) {
+func (baseLine *BaseLine) Fit(trainSet QuerySet, options ...FitOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
@@ -168,6 +168,7 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...FitOption) {
 	}
 }
 
+// ItemPop recommends items by their popularity.
 type ItemPop struct {
 	Base
 	Pop []float64
@@ -180,7 +181,7 @@ func NewItemPop(params Params) *ItemPop {
 	return pop
 }
 
-func (pop *ItemPop) Fit(set TrainSet, options ...FitOption) {
+func (pop *ItemPop) Fit(set QuerySet, options ...FitOption) {
 	pop.Init(set, options)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())

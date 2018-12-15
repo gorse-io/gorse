@@ -17,7 +17,7 @@ type KNN struct {
 	LeftMean     []float64 // Centered KNN: user (item) Mean
 	StdDev       []float64 // KNN with Z Score: user (item) standard deviation
 	Bias         []float64 // KNN Baseline: Bias
-	knnType      string
+	knnType      ParamString
 	userBased    bool
 	simMetric    Similarity
 	k            int
@@ -99,7 +99,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 }
 
 // Fit a KNN model.
-func (knn *KNN) Fit(trainSet TrainSet, options ...FitOption) {
+func (knn *KNN) Fit(trainSet QuerySet, options ...FitOption) {
 	knn.Init(trainSet, options)
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean
