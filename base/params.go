@@ -70,7 +70,14 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 // Get a integer parameter.
 func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 	if val, exist := parameters[name]; exist {
-		return val.(int64)
+		switch val.(type) {
+		case int64:
+			return val.(int64)
+		case int:
+			return int64(val.(int))
+		default:
+			panic("Expect int64")
+		}
 	}
 	return _default
 }
@@ -107,13 +114,9 @@ func (parameters Params) GetSim(name ParamName, _default Similarity) Similarity 
 	return _default
 }
 
-func (parameters Params) Join(params Params) Params {
-	newParams := make(Params)
-	for k, v := range parameters {
-		newParams[k] = v
-	}
+// Merge current group of parameters with another group of parameters.
+func (parameters Params) Merge(params Params) {
 	for k, v := range params {
-		newParams[k] = v
+		parameters[k] = v
 	}
-	return newParams
 }
