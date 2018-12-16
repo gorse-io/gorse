@@ -118,7 +118,7 @@ func (svd *SVD) fitRegression(trainSet QuerySet) {
 		perm := svd.rng.Perm(trainSet.Len())
 		for _, i := range perm {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
-			// Compute error
+			// Compute error: e_{ui} = r - \hat r
 			upGrad := rating - svd.predict(denseUserId, denseItemId)
 			if svd.useBias {
 				userBias := svd.UserBias[denseUserId]
@@ -450,7 +450,7 @@ func (svd *SVDpp) Fit(trainSet QuerySet, setters ...FitOption) {
 			itemBias := svd.ItemBias[denseItemId]
 			userFactor := svd.UserFactor[denseUserId]
 			itemFactor := svd.ItemFactor[denseItemId]
-			// Compute error
+			// Compute error: e_{ui} = \hat r - r
 			pred, emImpFactor := svd.predict(denseUserId, denseItemId)
 			diff := pred - rating
 			// Update implicit latent factor
@@ -480,12 +480,12 @@ func (svd *SVDpp) Fit(trainSet QuerySet, setters ...FitOption) {
 			// Update global Bias
 			gradGlobalBias := diff
 			svd.GlobalBias -= svd.lr * gradGlobalBias
-			// Update user Bias
+			// Update user Bias: b_u <- b_u - \gamma (e_{ui} + \lambda b_u)
 			gradUserBias := diff + svd.reg*userBias
-			svd.UserBias[denseUserId] -= svd.lr * gradUserBias
-			// Update item Bias
+			svd.UserBias[denseUserId] -= svd.lr * (gradUserBias + svd.reg*svd.UserBias[denseUserId])
+			// Update item Bias: p_i <- p_i - \gamma (e_{ui} + \lambda b_i)
 			gradItemBias := diff + svd.reg*itemBias
-			svd.ItemBias[denseItemId] -= svd.lr * gradItemBias
+			svd.ItemBias[denseItemId] -= svd.lr * (gradItemBias + svd.reg*svd.ItemBias[denseItemId])
 			// Update user latent factor
 			copy(a, itemFactor)
 			MulConst(diff, a)
