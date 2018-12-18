@@ -33,6 +33,7 @@ go get -t -v -u github.com/zhenghaoz/gorse
 
 - [Guibing Guo's librec](https://github.com/guoguibing/librec)
 - [Nicolas Hug's Surprise](https://github.com/NicolasHug/Surprise)
+- [Ashley McNamara's gophers](https://github.com/ashleymcnamara/gophers)
 
 ## References
 
