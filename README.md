@@ -33,6 +33,7 @@ go get -t -v -u github.com/zhenghaoz/gorse
 
 - [Guibing Guo's librec](https://github.com/guoguibing/librec)
 - [Nicolas Hug's Surprise](https://github.com/NicolasHug/Surprise)
+- [Ashley McNamara's gophers](https://github.com/ashleymcnamara/gophers)
 
 ## References
 
@@ -45,3 +46,5 @@ go get -t -v -u github.com/zhenghaoz/gorse
 4. Lemire, Daniel, and Anna Maclachlan. "Slope one predictors for online rating-based collaborative filtering." Proceedings of the 2005 SIAM International Conference on Data Mining. Society for Industrial and Applied Mathematics, 2005.
 
 5. George, Thomas, and Srujana Merugu. "A scalable collaborative filtering framework based on co-clustering." Data Mining, Fifth IEEE international conference on. IEEE, 2005.
+
+6. Guo, Guibing, Jie Zhang, and Neil Yorke-Smith. "A Novel Bayesian Similarity Measure for Recommender Systems." IJCAI. 2013.
