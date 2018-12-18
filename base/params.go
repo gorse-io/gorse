@@ -19,9 +19,9 @@ const (
 	InitHigh      ParamName = "init_high"
 	NUserClusters ParamName = "n_user_clusters"
 	NItemClusters ParamName = "n_item_clusters"
-	KNNType       ParamName = "knn_type"
+	Type          ParamName = "knn_type"
 	UserBased     ParamName = "user_based"
-	KNNSimilarity ParamName = "knn_similarity"
+	Similarity    ParamName = "knn_similarity"
 	K             ParamName = "k"
 	MinK          ParamName = "min_k"
 	Target        ParamName = "loss"
@@ -34,7 +34,7 @@ const (
 // ParamString is the string type of hyper-parameter values.
 type ParamString string
 
-// Predefined values for hyper-parameter KNNType.
+// Predefined values for hyper-parameter Type.
 const (
 	Basic    ParamString = "basic"
 	Centered ParamString = "centered"
@@ -46,6 +46,13 @@ const (
 const (
 	Regression ParamString = "regression"
 	BPR        ParamString = "bpr"
+)
+
+// Predefined values for hyper-parameter Similarity.
+const (
+	Pearson ParamString = "pearson"
+	Cosine  ParamString = "cosine"
+	MSD     ParamString = "msd"
 )
 
 // Params for an algorithm. Given by:
@@ -114,14 +121,6 @@ func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 func (parameters Params) GetString(name ParamName, _default ParamString) ParamString {
 	if val, exist := parameters[name]; exist {
 		return val.(ParamString)
-	}
-	return _default
-}
-
-// Get a similarity function from parameters.
-func (parameters Params) GetSim(name ParamName, _default Similarity) Similarity {
-	if val, exist := parameters[name]; exist {
-		return val.(func(a, b *SparseVector) float64)
 	}
 	return _default
 }

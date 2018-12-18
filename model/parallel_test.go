@@ -25,5 +25,6 @@ func ModelParallelTest(t *testing.T, models ...core.Model) {
 }
 
 func TestModelParallel(t *testing.T) {
-	ModelParallelTest(t, NewBaseLine(nil))
+	ModelParallelTest(t,
+		NewSlopOne(nil))
 }

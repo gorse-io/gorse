@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/floats"
@@ -105,7 +106,7 @@ func (svd *SVD) Fit(trainSet DataSet, options ...FitOption) {
 	case BPR:
 		svd.fitBPR(trainSet)
 	default:
-		panic("Unknown target")
+		panic(fmt.Sprintf("Unknown target: %v", svd.target))
 	}
 }
 

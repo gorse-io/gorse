@@ -147,6 +147,7 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 func (baseLine *BaseLine) Fit(trainSet DataSet, options ...FitOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
+	baseLine.GlobalBias = 0
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
 	baseLine.ItemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent

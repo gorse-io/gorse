@@ -17,7 +17,7 @@ func main() {
 	models := []core.Model{
 		//// KNN
 		//model.NewKNN(base.Params{
-		//	base.KNNType:   base.Baseline,
+		//	base.Type:   base.Baseline,
 		//	base.UserBased: false,
 		//	base.K:         80,
 		//	base.Shrinkage: 10,

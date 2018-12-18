@@ -32,5 +32,11 @@ func ModelDumpTest(t *testing.T, models ...core.Model) {
 }
 
 func TestModelDump(t *testing.T) {
-	ModelDumpTest(t, NewBaseLine(nil))
+	ModelDumpTest(t,
+		NewBaseLine(nil),
+		NewSVD(nil),
+		NewNMF(nil),
+		NewSlopOne(nil),
+		NewCoClustering(nil),
+		NewKNN(nil))
 }

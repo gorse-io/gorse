@@ -78,17 +78,17 @@ func TestKNN(t *testing.T) {
 }
 
 func TestKNNWithMean(t *testing.T) {
-	EvaluateRegression(t, NewKNN(Params{KNNType: Centered}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+	EvaluateRegression(t, NewKNN(Params{Type: Centered}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.951, 0.749})
 }
 
 func TestNewKNNZScore(t *testing.T) {
-	EvaluateRegression(t, NewKNN(Params{KNNType: ZScore}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+	EvaluateRegression(t, NewKNN(Params{Type: ZScore}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.951, 0.746})
 }
 
 func TestKNNBaseLine(t *testing.T) {
-	EvaluateRegression(t, NewKNN(Params{KNNType: Baseline}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+	EvaluateRegression(t, NewKNN(Params{Type: Baseline}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.931, 0.733})
 }
 
@@ -101,11 +101,11 @@ func TestCoClustering(t *testing.T) {
 
 func TestKNN_LibRec(t *testing.T) {
 	EvaluateRegression(t, NewKNN(Params{
-		KNNType:       Centered,
-		KNNSimilarity: MSD,
-		UserBased:     true,
-		Shrinkage:     25,
-		K:             60,
+		Type:       Centered,
+		Similarity: MSD,
+		UserBased:  true,
+		Shrinkage:  25,
+		K:          60,
 	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.944, 0.737})
 }

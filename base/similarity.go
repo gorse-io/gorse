@@ -5,11 +5,11 @@ import (
 	"math"
 )
 
-// Similarity computes the similarity between a pair of vectors.
-type Similarity func(a, b *SparseVector) float64
+// FuncSimilarity computes the similarity between a pair of vectors.
+type FuncSimilarity func(a, b *SparseVector) float64
 
 // Cosine computes the cosine similarity between a pair of vectors.
-func Cosine(a, b *SparseVector) float64 {
+func CosineSimilarity(a, b *SparseVector) float64 {
 	m, n, l := .0, .0, .0
 	a.ForIntersection(b, func(index int, a, b float64) {
 		m += a * a
@@ -20,7 +20,7 @@ func Cosine(a, b *SparseVector) float64 {
 }
 
 // MSD computes the Mean Squared Difference similarity between a pair of vectors.
-func MSD(a, b *SparseVector) float64 {
+func MSDSimilarity(a, b *SparseVector) float64 {
 	count, sum := 0.0, 0.0
 	a.ForIntersection(b, func(index int, a, b float64) {
 		sum += (a - b) * (a - b)
@@ -30,7 +30,7 @@ func MSD(a, b *SparseVector) float64 {
 }
 
 // Pearson computes the Pearson correlation coefficient between a pair of vectors.
-func Pearson(a, b *SparseVector) float64 {
+func PearsonSimilarity(a, b *SparseVector) float64 {
 	// Mean of a
 	meanA := stat.Mean(a.Values, nil)
 	// Mean of b
