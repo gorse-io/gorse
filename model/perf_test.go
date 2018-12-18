@@ -4,12 +4,13 @@ import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/stat"
+	"math"
 	"testing"
 )
 
 const perfEpsilon float64 = 0.006
 
-func EvaluateRegression(t *testing.T, algo Model, dataSet DataSet, splitter Splitter, evalNames []string,
+func EvaluateRegression(t *testing.T, algo Model, dataSet Table, splitter Splitter, evalNames []string,
 	evaluators []Evaluator, expectations []float64) {
 	// Cross validation
 	results := CrossValidate(algo, dataSet, evaluators, splitter)
@@ -24,7 +25,7 @@ func EvaluateRegression(t *testing.T, algo Model, dataSet DataSet, splitter Spli
 	}
 }
 
-func EvaluateRank(t *testing.T, algo Model, dataSet DataSet, splitter Splitter, evalNames []string,
+func EvaluateRank(t *testing.T, algo Model, dataSet Table, splitter Splitter, evalNames []string,
 	evaluators []Evaluator, expectations []float64) {
 	// Cross validation
 	results := CrossValidate(algo, dataSet, evaluators, splitter)
@@ -56,7 +57,7 @@ func TestSVD(t *testing.T) {
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.934, 0.737})
 }
 
-func TestSVDPP(t *testing.T) {
+func TestSVDpp(t *testing.T) {
 	EvaluateRegression(t, NewSVDpp(nil), LoadDataFromBuiltIn("ml-100k"), NewRatioSplitter(1, 0.2),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.92, 0.722})
 }
@@ -98,41 +99,88 @@ func TestCoClustering(t *testing.T) {
 
 // LibRec Benchmarks: https://www.librec.net/release/v1.3/example.html
 
+func TestKNN_LibRec(t *testing.T) {
+	EvaluateRegression(t, NewKNN(Params{
+		KNNType:       Centered,
+		KNNSimilarity: MSD,
+		UserBased:     true,
+		Shrinkage:     25,
+		K:             60,
+	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.944, 0.737})
+}
+
+func TestSlopeOne_LibRec(t *testing.T) {
+	EvaluateRegression(t, NewSlopOne(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.940, 0.739})
+}
+
+func TestSVD_LibRec(t *testing.T) {
+	EvaluateRegression(t, NewSVD(Params{
+		Lr:       0.007,
+		NEpochs:  100,
+		NFactors: 80,
+		Reg:      0.1,
+	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.911, 0.718})
+}
+
+func TestSVDpp_LibRec(t *testing.T) {
+	// factors=20, reg=0.1, learn.rate=0.01, max.iter=100
+	EvaluateRegression(t, NewSVDpp(Params{
+		Lr:         0.01,
+		NEpochs:    100,
+		NFactors:   20,
+		Reg:        0.1,
+		InitMean:   0,
+		InitStdDev: 0.001,
+	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.911, 0.718})
+}
+
 func TestItemPop(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	EvaluateRank(t, NewItemPop(nil), data, NewKFoldSplitter(5),
-		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "NDCG@10", "MRR"},
-		[]Evaluator{NewPrecision(5), NewPrecision(10), NewRecall(5), NewRecall(10), NewNDCG(10), NewMRR(0)},
-		[]float64{0.211, 0.190, 0.070, 0.116, 0.477, 0.417})
+		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "MAP", "NDCG", "MRR"},
+		[]Evaluator{
+			NewPrecision(5),
+			NewPrecision(10),
+			NewRecall(5),
+			NewRecall(10),
+			NewMAP(math.MaxInt32),
+			NewNDCG(math.MaxInt32),
+			NewMRR(math.MaxInt32),
+		},
+		[]float64{0.211, 0.190, 0.070, 0.116, 0.135, 0.477, 0.417})
 }
 
 func TestItemPop2(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	EvaluateRank(t, NewItemPop(nil), data, NewKFoldSplitter(5),
-		[]string{"NDCG@10"},
-		[]Evaluator{NewNDCG(10)},
-		[]float64{0.477})
+		[]string{"AUC"},
+		[]Evaluator{NewAUCEvaluator()},
+		[]float64{0.857})
 }
 
-//func TestSVD_BPR(t *testing.T) {
-//	data := LoadDataFromBuiltIn("ml-100k")
-//	EvaluateRank(t, NewSVD(Params{
-//		Target:   BPR,
-//		NFactors: 10,
-//		Reg:      0.01,
-//		Lr:       0.05,
-//		NEpochs:  30,
-//	}), data, NewUserLOOSplitter(5),
-//		[]string{"AUC"}, []Evaluator{NewAUCEvaluator(data)}, []float64{0.933})
-//}
-//
-//func TestWRMF(t *testing.T) {
-//	data := LoadDataFromBuiltIn("ml-100k")
-//	EvaluateRank(t, NewWRMF(Params{
-//		NFactors: 20,
-//		Reg:      0.015,
-//		Alpha:    1.0,
-//		NEpochs:  10,
-//	}), data, NewRatioSplitter(1, 0.2),
-//		[]string{"AUC"}, []Evaluator{NewNDCG(10)}, []float64{0.928})
-//}
+func TestSVD_BPR(t *testing.T) {
+	data := LoadDataFromBuiltIn("ml-100k")
+	EvaluateRank(t, NewSVD(Params{
+		Target:   BPR,
+		NFactors: 10,
+		Reg:      0.01,
+		Lr:       0.05,
+		NEpochs:  30,
+	}), data, NewKFoldSplitter(5),
+		[]string{"Prec@5", "Prec@10"}, []Evaluator{NewPrecision(5), NewPrecision(10)}, []float64{-0.378, 0.321})
+}
+
+func TestWRMF(t *testing.T) {
+	data := LoadDataFromBuiltIn("ml-100k")
+	EvaluateRank(t, NewWRMF(Params{
+		NFactors: 20,
+		Reg:      0.015,
+		Alpha:    1.0,
+		NEpochs:  10,
+	}), data, NewKFoldSplitter(5),
+		[]string{"Prec@5"}, []Evaluator{NewPrecision(5)}, []float64{0.424})
+}

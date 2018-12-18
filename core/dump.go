@@ -20,6 +20,12 @@ func Load(fileName string, object interface{}) error {
 			return err
 		}
 	}
+	// Restore parameters
+	switch object.(type) {
+	case Model:
+		model := object.(Model)
+		model.SetParams(model.GetParams())
+	}
 	return nil
 }
 

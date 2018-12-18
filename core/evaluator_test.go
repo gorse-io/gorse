@@ -44,13 +44,13 @@ func (tester *EvaluatorTesterModel) SetParams(params Params) {
 	panic("EvaluatorTesterModel.SetParams() should never be called.")
 }
 
-func (tester *EvaluatorTesterModel) Fit(set TrainSet, options ...FitOption) {
+func (tester *EvaluatorTesterModel) Fit(set DataSet, options ...FitOption) {
 	panic("EvaluatorTesterModel.Fit() should never be called.")
 }
 
 func TestRMSE(t *testing.T) {
 	a := NewEvaluatorTesterModel(nil, nil, nil)
-	b := NewRawDataSet([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0})
+	b := NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0})
 	if math.Abs(RMSE(a, b)-1.63299) > 0.00001 {
 		t.Fail()
 	}
@@ -58,7 +58,7 @@ func TestRMSE(t *testing.T) {
 
 func TestMAE(t *testing.T) {
 	a := NewEvaluatorTesterModel(nil, nil, nil)
-	b := NewRawDataSet([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0})
+	b := NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0})
 	if math.Abs(MAE(a, b)-1.33333) > 0.00001 {
 		t.Fail()
 	}
@@ -71,7 +71,7 @@ func TestAUC(t *testing.T) {
 	a := NewEvaluatorTesterModel([]int{0, 0, 0, 1, 1, 1, 2, 2, 2},
 		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
 		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
-	b := NewRawDataSet([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0})
+	b := NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0})
 	c := NewAUCEvaluator(b)
 	if c(a, b) != 1.0 {
 		t.Fail()

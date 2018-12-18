@@ -5,207 +5,18 @@ import (
 	"bufio"
 	"fmt"
 	. "github.com/zhenghaoz/gorse/base"
-	"gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/stat"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
 )
 
-/* Built-in */
-
-// Built-in data set
-type _BuiltInDataSet struct {
-	url    string
-	path   string
-	sep    string
-	loader func(string, string, bool) DataSet
-}
-
-var builtInDataSets = map[string]_BuiltInDataSet{
-	"ml-100k": {
-		url:    "https://cdn.sine-x.com/datasets/movielens/ml-100k.zip",
-		path:   "ml-100k/u.data",
-		sep:    "\t",
-		loader: LoadDataFromCSV,
-	},
-	"ml-1m": {
-		url:    "https://cdn.sine-x.com/datasets/movielens/ml-1m.zip",
-		path:   "ml-1m/ratings.dat",
-		sep:    "::",
-		loader: LoadDataFromCSV,
-	},
-	"ml-10m": {
-		url:    "https://cdn.sine-x.com/datasets/movielens/ml-10m.zip",
-		path:   "ml-10M100K/ratings.dat",
-		sep:    "::",
-		loader: LoadDataFromCSV,
-	},
-	"ml-20m": {
-		url:    "https://cdn.sine-x.com/datasets/movielens/ml-20m.zip",
-		path:   "ml-20m/ratings.csv",
-		sep:    ",",
-		loader: LoadDataFromCSV,
-	},
-	"netflix": {
-		url:    "https://cdn.sine-x.com/datasets/netflix/netflix-prize-data.zip",
-		path:   "netflix/training_set.txt",
-		loader: LoadDataFromNetflixStyle,
-	},
-}
-
-// The data directories
-var (
-	downloadDir string
-	dataSetDir  string
-	tempDir     string
-)
-
-func init() {
-	usr, _ := user.Current()
-	gorseDir := usr.HomeDir + "/.gorse"
-	downloadDir = gorseDir + "/download"
-	dataSetDir = gorseDir + "/datasets"
-	tempDir = gorseDir + "/temp"
-}
-
-/* Dataset */
-
-// RawDataSet is an array of (userId, itemId, rating).
-type RawDataSet struct {
-	Ratings []float64
-	Users   []int
-	Items   []int
-}
-
-// NewRawDataSet creates a new raw data set.
-func NewRawDataSet(users, items []int, ratings []float64) *RawDataSet {
-	return &RawDataSet{
-		Users:   users,
-		Items:   items,
-		Ratings: ratings,
-	}
-}
-
-func (dataSet *RawDataSet) Len() int {
-	return len(dataSet.Ratings)
-}
-
-func (dataSet *RawDataSet) Get(i int) (int, int, float64) {
-	return dataSet.Users[i], dataSet.Items[i], dataSet.Ratings[i]
-}
-
-func (dataSet *RawDataSet) ForEach(f func(userId, itemId int, rating float64)) {
-	for i := 0; i < dataSet.Len(); i++ {
-		f(dataSet.Users[i], dataSet.Items[i], dataSet.Ratings[i])
-	}
-}
-
-func (dataSet *RawDataSet) Mean() float64 {
-	return stat.Mean(dataSet.Ratings, nil)
-}
-
-func (dataSet *RawDataSet) StdDev() float64 {
-	return stat.StdDev(dataSet.Ratings, nil)
-}
-
-func (dataSet *RawDataSet) Min() float64 {
-	return floats.Min(dataSet.Ratings)
-}
-
-func (dataSet *RawDataSet) Max() float64 {
-	return floats.Max(dataSet.Ratings)
-}
-
-// Subset returns a subset of the data set.
-func (dataSet *RawDataSet) SubSet(indices []int) DataSet {
-	return NewVirtualDataSet(dataSet, indices)
-}
-
-// VirtualDataSet is a virtual subset of RawDataSet.
-type VirtualDataSet struct {
-	data  *RawDataSet
-	index []int
-}
-
-// NewVirtualDataSet creates a new virtual data set.
-func NewVirtualDataSet(dataSet *RawDataSet, index []int) *VirtualDataSet {
-	return &VirtualDataSet{
-		data:  dataSet,
-		index: index,
-	}
-}
-
-func (dataSet *VirtualDataSet) Len() int {
-	return len(dataSet.index)
-}
-
-func (dataSet *VirtualDataSet) Get(i int) (int, int, float64) {
-	indexInData := dataSet.index[i]
-	return dataSet.data.Get(indexInData)
-}
-
-func (dataSet *VirtualDataSet) ForEach(f func(userId, itemId int, rating float64)) {
-	for i := 0; i < dataSet.Len(); i++ {
-		userId, itemId, rating := dataSet.Get(i)
-		f(userId, itemId, rating)
-	}
-}
-
-func (dataSet *VirtualDataSet) Mean() float64 {
-	mean := 0.0
-	dataSet.ForEach(func(userId, itemId int, rating float64) {
-		mean += rating
-	})
-	return mean / float64(dataSet.Len())
-}
-
-func (dataSet *VirtualDataSet) StdDev() float64 {
-	mean := dataSet.Mean()
-	sum := 0.0
-	dataSet.ForEach(func(userId, itemId int, rating float64) {
-		sum += (rating - mean) * (rating - mean)
-	})
-	return math.Sqrt(mean / float64(dataSet.Len()))
-}
-
-func (dataSet *VirtualDataSet) Min() float64 {
-	_, _, min := dataSet.Get(0)
-	dataSet.ForEach(func(userId, itemId int, rating float64) {
-		if rating < min {
-			rating = min
-		}
-	})
-	return min
-}
-
-func (dataSet *VirtualDataSet) Max() float64 {
-	_, _, max := dataSet.Get(0)
-	dataSet.ForEach(func(userId, itemId int, rating float64) {
-		if rating > max {
-			max = rating
-		}
-	})
-	return max
-}
-
-func (dataSet *VirtualDataSet) SubSet(indices []int) DataSet {
-	rawIndices := make([]int, len(indices))
-	for i, index := range indices {
-		rawIndices[i] = dataSet.index[index]
-	}
-	return NewVirtualDataSet(dataSet.data, rawIndices)
-}
-
 // Train data set.
-type TrainSet struct {
-	DataSet
+type DataSet struct {
+	Table
 	GlobalMean   float64
 	DenseUserIds []int
 	DenseItemIds []int
@@ -215,17 +26,17 @@ type TrainSet struct {
 	ItemIdSet    SparseIdSet // Items' ID set
 }
 
-// NewTrainSet creates a train set from a raw data set.
-func NewTrainSet(rawSet DataSet) TrainSet {
-	set := TrainSet{}
-	set.DataSet = rawSet
-	set.GlobalMean = rawSet.Mean()
+// NewDataSet creates a train set from a raw data set.
+func NewDataSet(table Table) DataSet {
+	set := DataSet{}
+	set.Table = table
+	set.GlobalMean = table.Mean()
 	set.DenseItemIds = make([]int, 0)
 	set.DenseUserIds = make([]int, 0)
 	// Create IdSet
 	set.UserIdSet = MakeSparseIdSet()
 	set.ItemIdSet = MakeSparseIdSet()
-	rawSet.ForEach(func(userId, itemId int, rating float64) {
+	table.ForEach(func(userId, itemId int, rating float64) {
 		set.UserIdSet.Add(userId)
 		set.ItemIdSet.Add(itemId)
 		set.DenseUserIds = append(set.DenseUserIds, set.UserIdSet.ToDenseId(userId))
@@ -234,7 +45,7 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 	// Create user-based and item-based ratings
 	set.UserRatings = MakeDenseSparseMatrix(set.UserCount())
 	set.ItemRatings = MakeDenseSparseMatrix(set.ItemCount())
-	rawSet.ForEach(func(userId, itemId int, rating float64) {
+	table.ForEach(func(userId, itemId int, rating float64) {
 		userDenseId := set.UserIdSet.ToDenseId(userId)
 		itemDenseId := set.ItemIdSet.ToDenseId(itemId)
 		set.UserRatings[userDenseId].Add(itemDenseId, rating)
@@ -243,16 +54,23 @@ func NewTrainSet(rawSet DataSet) TrainSet {
 	return set
 }
 
-func (trainSet *TrainSet) GetDense(i int) (int, int, float64) {
+func (trainSet *DataSet) GetDense(i int) (int, int, float64) {
 	_, _, rating := trainSet.Get(i)
 	return trainSet.DenseUserIds[i], trainSet.DenseItemIds[i], rating
 }
 
-func (trainSet *TrainSet) UserCount() int {
+func (trainSet *DataSet) ForEachDense(f func(denseUserId, denseItemId int, rating float64)) {
+	for i := 0; i < trainSet.Len(); i++ {
+		denseUserId, denseItemId, rating := trainSet.GetDense(i)
+		f(denseUserId, denseItemId, rating)
+	}
+}
+
+func (trainSet *DataSet) UserCount() int {
 	return trainSet.UserIdSet.Len()
 }
 
-func (trainSet *TrainSet) ItemCount() int {
+func (trainSet *DataSet) ItemCount() int {
 	return trainSet.ItemIdSet.Len()
 }
 
@@ -264,7 +82,7 @@ func (trainSet *TrainSet) ItemCount() int {
 //   ml-10m		- MovieLens 10M
 //   ml-20m		- MovieLens 20M
 //   netflix    - Netflix Prize
-func LoadDataFromBuiltIn(dataSetName string) DataSet {
+func LoadDataFromBuiltIn(dataSetName string) Table {
 	// Extract data set information
 	dataSet, exist := builtInDataSets[dataSetName]
 	if !exist {
@@ -321,7 +139,7 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) DataSet {
 		items = append(items, item)
 		ratings = append(ratings, rating)
 	}
-	return NewRawDataSet(users, items, ratings)
+	return NewDataSet(NewDataTable(users, items, ratings))
 }
 
 // LoadDataFromNetflixStyle load data from a Netflix-style file. The CSV file should be:
@@ -362,10 +180,10 @@ func LoadDataFromNetflixStyle(fileName string, _ string, _ bool) DataSet {
 			ratings = append(ratings, float64(rating))
 		}
 	}
-	return NewRawDataSet(users, items, ratings)
+	return NewDataSet(NewDataTable(users, items, ratings))
 }
 
-func LoadDataFromSQL() DataSet {
+func LoadDataFromSQL() Table {
 	// TODO: Load data from SQL server.
 	return nil
 }

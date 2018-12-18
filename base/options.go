@@ -48,7 +48,7 @@ type CVOption func(options *CVOptions)
 // NewCVOptions creates a FitOptions from FitOption.
 func NewCVOptions(setters []CVOption) *CVOptions {
 	options := new(CVOptions)
-	options.NJobs = 1
+	options.NJobs = runtime.NumCPU()
 	options.Diagnose = true
 	options.Verbose = true
 	for _, setter := range setters {

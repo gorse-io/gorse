@@ -38,5 +38,5 @@ func TestDivConst(t *testing.T) {
 
 func TestArgMin(t *testing.T) {
 	a := []float64{1, 3, 0, 1, 7, 8, 7, 0, 3, 0, 0}
-	assert.Equal(t, 2, ArgMin(a))
+	assert.Equal(t, 2, Argmin(a))
 }

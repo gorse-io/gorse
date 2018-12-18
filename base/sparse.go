@@ -12,7 +12,7 @@ type SparseIdSet struct {
 	SparseIds []int
 }
 
-// NotId represents the ID not existed in the data set.
+// NotId represents an ID not existed in the data set.
 const NotId = -1
 
 // MakeSparseIdSet makes a SparseIdSet.

@@ -4,12 +4,12 @@ go:
  -  master
 
 before_install:
-  - go get -v ./core
+  - go get -v ./...
 
 install: true
 
 script:
-  - go test -v ./core -coverprofile=coverage.txt -covermode=atomic
+  - go test -v ./... -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)

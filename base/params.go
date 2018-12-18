@@ -1,9 +1,11 @@
 package base
 
-// ParamName is a string.
+/* ParamName */
+
+// ParamName is the type of hyper-parameter names.
 type ParamName string
 
-// Predefined parameter names
+// Predefined hyper-parameter names
 const (
 	Lr            ParamName = "lr"
 	Reg           ParamName = "reg"
@@ -27,18 +29,23 @@ const (
 	Alpha         ParamName = "alpha"
 )
 
-// KNN types
+/* ParamString */
+
+// ParamString is the string type of hyper-parameter values.
+type ParamString string
+
+// Predefined values for hyper-parameter KNNType.
 const (
-	Basic    = "basic"
-	Centered = "centered"
-	ZScore   = "z_score"
-	Baseline = "baseline"
+	Basic    ParamString = "basic"
+	Centered ParamString = "centered"
+	ZScore   ParamString = "z_score"
+	Baseline ParamString = "baseline"
 )
 
-// Target types
+// Predefined values for hyper-parameter Target.
 const (
-	Regression = "regression"
-	BPR        = "bpr"
+	Regression ParamString = "regression"
+	BPR        ParamString = "bpr"
 )
 
 // Params for an algorithm. Given by:
@@ -93,15 +100,20 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 // Get a float parameter.
 func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 	if val, exist := parameters[name]; exist {
-		return val.(float64)
+		switch val.(type) {
+		case float64:
+			return val.(float64)
+		case int:
+			return float64(val.(int))
+		}
 	}
 	return _default
 }
 
 // Get a string parameter
-func (parameters Params) GetString(name ParamName, _default string) string {
+func (parameters Params) GetString(name ParamName, _default ParamString) ParamString {
 	if val, exist := parameters[name]; exist {
-		return val.(string)
+		return val.(ParamString)
 	}
 	return _default
 }
@@ -109,7 +121,7 @@ func (parameters Params) GetString(name ParamName, _default string) string {
 // Get a similarity function from parameters.
 func (parameters Params) GetSim(name ParamName, _default Similarity) Similarity {
 	if val, exist := parameters[name]; exist {
-		return val.(Similarity)
+		return val.(func(a, b *SparseVector) float64)
 	}
 	return _default
 }

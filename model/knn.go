@@ -99,7 +99,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 }
 
 // Fit a KNN model.
-func (knn *KNN) Fit(trainSet QuerySet, options ...FitOption) {
+func (knn *KNN) Fit(trainSet DataSet, options ...FitOption) {
 	knn.Init(trainSet, options)
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean
@@ -148,8 +148,13 @@ func (knn *KNN) Fit(trainSet QuerySet, options ...FitOption) {
 			for jId, jRatings := range knn.LeftRatings {
 				if iId != jId {
 					ret := knn.simMetric(&iRatings, &jRatings)
+					// Get the number of common
+					common := 0.0
+					iRatings.ForIntersection(&jRatings, func(index int, a, b float64) {
+						common += 1
+					})
 					if !math.IsNaN(ret) {
-						knn.SimMatrix[iId][jId] = ret
+						knn.SimMatrix[iId][jId] = (common - 1) / (common - 1 + float64(knn.shrinkage)) * ret
 					}
 				}
 			}
