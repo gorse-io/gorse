@@ -42,6 +42,12 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		path:   "netflix/training_set.txt",
 		loader: LoadDataFromNetflixStyle,
 	},
+	"filmtrust": {
+		url:    "https://cdn.sine-x.com/datasets/filmtrust/filmtrust.zip",
+		path:   "filmtrust/ratings.txt",
+		sep:    " ",
+		loader: LoadDataFromCSV,
+	},
 }
 
 // The data directories

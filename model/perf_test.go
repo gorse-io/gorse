@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const perfEpsilon float64 = 0.006
+const perfEpsilon float64 = 0.005
 
 func EvaluateRegression(t *testing.T, algo Model, dataSet Table, splitter Splitter, evalNames []string,
 	evaluators []Evaluator, expectations []float64) {
@@ -123,6 +123,11 @@ func TestSVD_LibRec(t *testing.T) {
 		Reg:      0.1,
 	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.911, 0.718})
+}
+
+func TestNMF_LibRec(t *testing.T) {
+	EvaluateRegression(t, NewNMF(nil), LoadDataFromBuiltIn("filmtrust"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.859, 0.643})
 }
 
 func TestSVDpp_LibRec(t *testing.T) {

@@ -5,7 +5,6 @@ import (
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
-	"gopkg.in/cheggaaa/pb.v1"
 	"log"
 	"math"
 	"sync"
@@ -114,11 +113,6 @@ func (svd *SVD) fitRegression(trainSet DataSet) {
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
-	// Create progress bar
-	var bar *pb.ProgressBar
-	if svd.rtOptions.Verbose {
-		bar = pb.StartNew(svd.nEpochs)
-	}
 	// Optimize
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		perm := svd.rng.Perm(trainSet.Len())
@@ -157,10 +151,6 @@ func (svd *SVD) fitRegression(trainSet DataSet) {
 			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[denseItemId], a)
-		}
-		// Update progress bar
-		if svd.rtOptions.Verbose {
-			bar.Increment()
 		}
 	}
 }
