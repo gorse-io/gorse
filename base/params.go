@@ -1,9 +1,11 @@
 package base
 
-// ParamName is a string.
+/* ParamName */
+
+// ParamName is the type of hyper-parameter names.
 type ParamName string
 
-// Predefined parameter names
+// Predefined hyper-parameter names
 const (
 	Lr            ParamName = "lr"
 	Reg           ParamName = "reg"
@@ -17,26 +19,40 @@ const (
 	InitHigh      ParamName = "init_high"
 	NUserClusters ParamName = "n_user_clusters"
 	NItemClusters ParamName = "n_item_clusters"
-	KNNType       ParamName = "knn_type"
+	Type          ParamName = "knn_type"
 	UserBased     ParamName = "user_based"
-	KNNSimilarity ParamName = "knn_similarity"
+	Similarity    ParamName = "knn_similarity"
 	K             ParamName = "k"
 	MinK          ParamName = "min_k"
 	Target        ParamName = "loss"
+	Shrinkage     ParamName = "shrinkage"
+	Alpha         ParamName = "alpha"
 )
 
-// KNN types
+/* ParamString */
+
+// ParamString is the string type of hyper-parameter values.
+type ParamString string
+
+// Predefined values for hyper-parameter Type.
 const (
-	Basic    = "basic"
-	Centered = "centered"
-	ZScore   = "z_score"
-	Baseline = "baseline"
+	Basic    ParamString = "basic"
+	Centered ParamString = "centered"
+	ZScore   ParamString = "z_score"
+	Baseline ParamString = "baseline"
 )
 
-// Target types
+// Predefined values for hyper-parameter Target.
 const (
-	Regression = "regression"
-	BPR        = "bpr"
+	Regression ParamString = "regression"
+	BPR        ParamString = "bpr"
+)
+
+// Predefined values for hyper-parameter Similarity.
+const (
+	Pearson ParamString = "pearson"
+	Cosine  ParamString = "cosine"
+	MSD     ParamString = "msd"
 )
 
 // Params for an algorithm. Given by:
@@ -65,6 +81,21 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 	return _default
 }
 
+// Get a integer parameter.
+func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
+	if val, exist := parameters[name]; exist {
+		switch val.(type) {
+		case int64:
+			return val.(int64)
+		case int:
+			return int64(val.(int))
+		default:
+			panic("Expect int64")
+		}
+	}
+	return _default
+}
+
 // Get a bool parameter.
 func (parameters Params) GetBool(name ParamName, _default bool) bool {
 	if val, exist := parameters[name]; exist {
@@ -76,34 +107,27 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 // Get a float parameter.
 func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 	if val, exist := parameters[name]; exist {
-		return val.(float64)
+		switch val.(type) {
+		case float64:
+			return val.(float64)
+		case int:
+			return float64(val.(int))
+		}
 	}
 	return _default
 }
 
 // Get a string parameter
-func (parameters Params) GetString(name ParamName, _default string) string {
+func (parameters Params) GetString(name ParamName, _default ParamString) ParamString {
 	if val, exist := parameters[name]; exist {
-		return val.(string)
+		return val.(ParamString)
 	}
 	return _default
 }
 
-// Get a similarity function from parameters.
-func (parameters Params) GetSim(name ParamName, _default Similarity) Similarity {
-	if val, exist := parameters[name]; exist {
-		return val.(Similarity)
-	}
-	return _default
-}
-
-func (parameters Params) Join(params Params) Params {
-	newParams := make(Params)
-	for k, v := range parameters {
-		newParams[k] = v
-	}
+// Merge current group of parameters with another group of parameters.
+func (parameters Params) Merge(params Params) {
 	for k, v := range params {
-		newParams[k] = v
+		parameters[k] = v
 	}
-	return newParams
 }

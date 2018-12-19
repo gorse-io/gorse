@@ -4,13 +4,13 @@ import "math/rand"
 import . "github.com/zhenghaoz/gorse/base"
 
 // Splitter split data to train set and test set.
-type Splitter func(set DataSet, seed int64) ([]TrainSet, []DataSet)
+type Splitter func(set Table, seed int64) ([]DataSet, []DataSet)
 
 // NewKFoldSplitter creates a k-fold splitter.
 func NewKFoldSplitter(k int) Splitter {
-	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
+	return func(dataSet Table, seed int64) ([]DataSet, []DataSet) {
 		// Create folds
-		trainFolds := make([]TrainSet, k)
+		trainFolds := make([]DataSet, k)
 		testFolds := make([]DataSet, k)
 		// Generate permutation
 		rand.Seed(seed)
@@ -25,10 +25,10 @@ func NewKFoldSplitter(k int) Splitter {
 			}
 			// Test Data
 			testIndex := perm[begin:end]
-			testFolds[i] = dataSet.SubSet(testIndex)
+			testFolds[i] = NewDataSet(dataSet.SubSet(testIndex))
 			// Train Data
 			trainIndex := Concatenate(perm[0:begin], perm[end:dataSet.Len()])
-			trainFolds[i] = NewTrainSet(dataSet.SubSet(trainIndex))
+			trainFolds[i] = NewDataSet(dataSet.SubSet(trainIndex))
 			begin = end
 		}
 		return trainFolds, testFolds
@@ -37,8 +37,8 @@ func NewKFoldSplitter(k int) Splitter {
 
 // NewRatioSplitter creates a ratio splitter.
 func NewRatioSplitter(repeat int, testRatio float64) Splitter {
-	return func(set DataSet, seed int64) ([]TrainSet, []DataSet) {
-		trainFolds := make([]TrainSet, repeat)
+	return func(set Table, seed int64) ([]DataSet, []DataSet) {
+		trainFolds := make([]DataSet, repeat)
 		testFolds := make([]DataSet, repeat)
 		testSize := int(float64(set.Len()) * testRatio)
 		rand.Seed(seed)
@@ -46,10 +46,10 @@ func NewRatioSplitter(repeat int, testRatio float64) Splitter {
 			perm := rand.Perm(set.Len())
 			// Test Data
 			testIndex := perm[:testSize]
-			testFolds[i] = set.SubSet(testIndex)
+			testFolds[i] = NewDataSet(set.SubSet(testIndex))
 			// Train Data
 			trainIndex := perm[testSize:]
-			trainFolds[i] = NewTrainSet(set.SubSet(trainIndex))
+			trainFolds[i] = NewDataSet(set.SubSet(trainIndex))
 		}
 		return trainFolds, testFolds
 	}
@@ -57,11 +57,11 @@ func NewRatioSplitter(repeat int, testRatio float64) Splitter {
 
 // NewUserLOOSplitter creates a per-user leave-one-out data splitter.
 func NewUserLOOSplitter(repeat int) Splitter {
-	return func(dataSet DataSet, seed int64) ([]TrainSet, []DataSet) {
-		trainFolds := make([]TrainSet, repeat)
+	return func(dataSet Table, seed int64) ([]DataSet, []DataSet) {
+		trainFolds := make([]DataSet, repeat)
 		testFolds := make([]DataSet, repeat)
 		rand.Seed(seed)
-		trainSet := NewTrainSet(dataSet)
+		trainSet := NewDataSet(dataSet)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
 				make([]int, 0, trainSet.Len()-trainSet.UserCount()),
@@ -87,8 +87,8 @@ func NewUserLOOSplitter(repeat int) Splitter {
 					}
 				})
 			}
-			trainFolds[i] = NewTrainSet(NewRawDataSet(trainUsers, trainItems, trainRatings))
-			testFolds[i] = NewRawDataSet(testUsers, testItems, testRatings)
+			trainFolds[i] = NewDataSet(NewDataTable(trainUsers, trainItems, trainRatings))
+			testFolds[i] = NewDataSet(NewDataTable(testUsers, testItems, testRatings))
 		}
 		return trainFolds, testFolds
 	}
@@ -98,11 +98,11 @@ func NewUserLOOSplitter(repeat int) Splitter {
 // add all ratings of train users and n ratings of test users to the training
 // set. The rest ratings of test set are added to the test set.
 func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
-	return func(set DataSet, seed int64) ([]TrainSet, []DataSet) {
-		trainFolds := make([]TrainSet, repeat)
+	return func(set Table, seed int64) ([]DataSet, []DataSet) {
+		trainFolds := make([]DataSet, repeat)
 		testFolds := make([]DataSet, repeat)
 		rand.Seed(seed)
-		trainSet := NewTrainSet(set)
+		trainSet := NewDataSet(set)
 		testSize := int(float64(trainSet.UserCount()) * testRatio)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
@@ -140,8 +140,8 @@ func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
 					}
 				}
 			}
-			trainFolds[i] = NewTrainSet(NewRawDataSet(trainUsers, trainItems, trainRatings))
-			testFolds[i] = NewRawDataSet(testUsers, testItems, testRatings)
+			trainFolds[i] = NewDataSet(NewDataTable(trainUsers, trainItems, trainRatings))
+			testFolds[i] = NewDataSet(NewDataTable(testUsers, testItems, testRatings))
 		}
 		return trainFolds, testFolds
 	}

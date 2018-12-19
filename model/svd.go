@@ -1,10 +1,12 @@
 package model
 
 import (
+	"fmt"
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
+	"log"
 	"math"
 	"sync"
 )
@@ -35,7 +37,7 @@ type SVD struct {
 	initMean   float64
 	initStdDev float64
 	batchSize  int
-	target     string
+	target     ParamString
 }
 
 // NewSVD creates a SVD model. Params:
@@ -90,7 +92,7 @@ func (svd *SVD) predict(denseUserId int, denseItemId int) float64 {
 	return ret
 }
 
-func (svd *SVD) Fit(trainSet TrainSet, options ...FitOption) {
+func (svd *SVD) Fit(trainSet DataSet, options ...FitOption) {
 	svd.Init(trainSet, options)
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount())
@@ -104,20 +106,22 @@ func (svd *SVD) Fit(trainSet TrainSet, options ...FitOption) {
 	case BPR:
 		svd.fitBPR(trainSet)
 	default:
-		panic("Unknown target")
+		panic(fmt.Sprintf("Unknown target: %v", svd.target))
 	}
 }
 
-func (svd *SVD) fitRegression(trainSet TrainSet) {
+func (svd *SVD) fitRegression(trainSet DataSet) {
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
+	userFactor := make([]float64, svd.nFactors)
+	itemFactor := make([]float64, svd.nFactors)
 	// Optimize
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		perm := svd.rng.Perm(trainSet.Len())
 		for _, i := range perm {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
-			// Compute error
+			// Compute error: e_{ui} = r - \hat r
 			upGrad := rating - svd.predict(denseUserId, denseItemId)
 			if svd.useBias {
 				userBias := svd.UserBias[denseUserId]
@@ -125,15 +129,15 @@ func (svd *SVD) fitRegression(trainSet TrainSet) {
 				// Update global Bias
 				gradGlobalBias := upGrad
 				svd.GlobalBias += svd.lr * gradGlobalBias
-				// Update user Bias
-				gradUserBias := upGrad + svd.reg*userBias
+				// Update user Bias: b_u <- b_u + \gamma (e_{ui} - \lambda b_u)
+				gradUserBias := upGrad - svd.reg*userBias
 				svd.UserBias[denseUserId] += svd.lr * gradUserBias
-				// Update item Bias
-				gradItemBias := upGrad + svd.reg*itemBias
+				// Update item Bias: p_i <- p_i + \gamma (e_{ui} - \lambda b_i)
+				gradItemBias := upGrad - svd.reg*itemBias
 				svd.ItemBias[denseItemId] += svd.lr * gradItemBias
 			}
-			userFactor := svd.UserFactor[denseUserId]
-			itemFactor := svd.ItemFactor[denseItemId]
+			copy(userFactor, svd.UserFactor[denseUserId])
+			copy(itemFactor, svd.ItemFactor[denseItemId])
 			// Update user latent factor
 			copy(a, itemFactor)
 			MulConst(upGrad, a)
@@ -154,26 +158,28 @@ func (svd *SVD) fitRegression(trainSet TrainSet) {
 	}
 }
 
-func (svd *SVD) fitBPR(trainSet TrainSet) {
+func (svd *SVD) fitBPR(trainSet DataSet) {
 	// Create the set of positive feedback
-	positiveSet := make([]map[int]bool, trainSet.UserCount())
+	positiveSet := make([]map[int]float64, trainSet.UserCount())
 	for denseUserId, userRating := range trainSet.UserRatings {
-		positiveSet[denseUserId] = make(map[int]bool)
+		positiveSet[denseUserId] = make(map[int]float64)
 		userRating.ForEach(func(i, index int, value float64) {
-			positiveSet[denseUserId][index] = true
+			positiveSet[denseUserId][index] = value
 		})
 	}
 	// Create buffers
 	a := make([]float64, svd.nFactors)
-	//b := make([]float64, svd.nFactors)
+	b := make([]float64, svd.nFactors)
+	userFactor := make([]float64, svd.nFactors)
+	positiveItemFactor := make([]float64, svd.nFactors)
+	negativeItemFactor := make([]float64, svd.nFactors)
 	// Training
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
-		// Generate permutation
-		perm := svd.rng.Perm(trainSet.Len())
 		// Training epoch
-		for _, i := range perm {
-			// Select a positive sample
-			denseUserId, densePosId, _ := trainSet.GetDense(i)
+		for i := 0; i < trainSet.Len(); i++ {
+			// Select a user
+			denseUserId := svd.rng.Intn(trainSet.UserCount())
+			densePosId := trainSet.UserRatings[denseUserId].Indices[svd.rng.Intn(trainSet.UserRatings[denseUserId].Len())]
 			// Select a negative sample
 			denseNegId := -1
 			for {
@@ -186,27 +192,33 @@ func (svd *SVD) fitBPR(trainSet TrainSet) {
 			diff := svd.predict(denseUserId, densePosId) - svd.predict(denseUserId, denseNegId)
 			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
 			// Pairwise update
-			userFactor := svd.UserFactor[denseUserId]
-			positiveItemFactor := svd.ItemFactor[densePosId]
-			negativeItemFactor := svd.ItemFactor[denseNegId]
+			copy(userFactor, svd.UserFactor[denseUserId])
+			copy(positiveItemFactor, svd.ItemFactor[densePosId])
+			copy(negativeItemFactor, svd.ItemFactor[denseNegId])
 			// Update positive item latent factor: +w_u
-			// TODO: Add regularization
 			copy(a, userFactor)
 			MulConst(grad, a)
+			copy(b, positiveItemFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[densePosId], a)
 			// Update negative item latent factor: -w_u
-			// TODO: Add regularization
 			copy(a, userFactor)
 			Neg(a)
 			MulConst(grad, a)
+			copy(b, negativeItemFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.ItemFactor[denseNegId], a)
 			// Update user latent factor: h_i-h_j
-			// TODO: Add regularization
 			copy(a, positiveItemFactor)
 			floats.Sub(a, negativeItemFactor)
 			MulConst(grad, a)
+			copy(b, userFactor)
+			MulConst(svd.reg, b)
+			floats.Sub(a, b)
 			MulConst(svd.lr, a)
 			floats.Add(svd.UserFactor[denseUserId], a)
 		}
@@ -218,6 +230,7 @@ func (svd *SVD) fitBPR(trainSet TrainSet) {
 // NMF: Non-negative Matrix Factorization[3].
 type NMF struct {
 	Base
+	GlobalMean float64
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
 	nFactors   int
@@ -259,12 +272,13 @@ func (nmf *NMF) predict(denseUserId int, denseItemId int) float64 {
 	if denseItemId != NotId && denseUserId != NotId {
 		return floats.Dot(nmf.UserFactor[denseUserId], nmf.ItemFactor[denseItemId])
 	}
-	return 0
+	return nmf.GlobalMean
 }
 
-func (nmf *NMF) Fit(trainSet TrainSet, options ...FitOption) {
+func (nmf *NMF) Fit(trainSet DataSet, options ...FitOption) {
 	nmf.Init(trainSet, options)
 	// Initialize parameters
+	nmf.GlobalMean = trainSet.GlobalMean
 	nmf.UserFactor = nmf.rng.MakeUniformMatrix(trainSet.UserCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	nmf.ItemFactor = nmf.rng.MakeUniformMatrix(trainSet.ItemCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	// Create intermediate matrix buffer
@@ -276,10 +290,10 @@ func (nmf *NMF) Fit(trainSet TrainSet, options ...FitOption) {
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nmf.nEpochs; epoch++ {
 		// Reset intermediate matrices
-		ResetMatrix(userNum)
-		ResetMatrix(userDen)
-		ResetMatrix(itemNum)
-		ResetMatrix(itemDen)
+		FillZeroMatrix(userNum)
+		FillZeroMatrix(userDen)
+		FillZeroMatrix(itemNum)
+		FillZeroMatrix(itemDen)
 		// Calculate intermediate matrices
 		for i := 0; i < trainSet.Len(); i++ {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
@@ -379,11 +393,11 @@ func (svd *SVDpp) SetParams(params Params) {
 func (svd *SVDpp) Predict(userId int, itemId int) float64 {
 	denseUserId := svd.UserIdSet.ToDenseId(userId)
 	denseItemId := svd.ItemIdSet.ToDenseId(itemId)
-	ret, _ := svd.predict(denseUserId, denseItemId)
+	ret := svd.predict(denseUserId, denseItemId, nil)
 	return ret
 }
 
-func (svd *SVDpp) predict(denseUserId int, denseItemId int) (float64, []float64) {
+func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumFactor []float64) float64 {
 	ret := svd.GlobalBias
 	// + b_u
 	if denseUserId != NotId {
@@ -397,29 +411,29 @@ func (svd *SVDpp) predict(denseUserId int, denseItemId int) (float64, []float64)
 	if denseItemId != NotId && denseUserId != NotId {
 		userFactor := svd.UserFactor[denseUserId]
 		itemFactor := svd.ItemFactor[denseItemId]
-		sumImpFactor := svd.summarizeImplFactors(denseUserId)
+		if len(sumFactor) == 0 {
+			sumFactor = svd.getSumFactors(denseUserId)
+		}
 		temp := make([]float64, len(itemFactor))
 		floats.Add(temp, userFactor)
-		floats.Add(temp, sumImpFactor)
+		floats.Add(temp, sumFactor)
 		ret += floats.Dot(temp, itemFactor)
-		return ret, sumImpFactor
 	}
-	return ret, []float64{}
+	return ret
 }
 
-func (svd *SVDpp) summarizeImplFactors(denseUserId int) []float64 {
-	sumImpFactor := make([]float64, svd.nFactors)
+func (svd *SVDpp) getSumFactors(denseUserId int) []float64 {
+	sumFactor := make([]float64, svd.nFactors)
 	// User history exists
-	count := 0
 	svd.UserRatings[denseUserId].ForEach(func(i, index int, value float64) {
-		floats.Add(sumImpFactor, svd.ImplFactor[index])
-		count++
+		floats.Add(sumFactor, svd.ImplFactor[index])
 	})
-	DivConst(math.Sqrt(float64(count)), sumImpFactor)
-	return sumImpFactor
+	scale := math.Pow(float64(svd.UserRatings[denseUserId].Len()), -0.5)
+	MulConst(scale, sumFactor)
+	return sumFactor
 }
 
-func (svd *SVDpp) Fit(trainSet TrainSet, setters ...FitOption) {
+func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 	svd.Init(trainSet, setters)
 	// Initialize parameters
 	svd.UserBias = make([]float64, trainSet.UserCount())
@@ -432,73 +446,84 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...FitOption) {
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
+	step := make([]float64, svd.nFactors)
 	c := MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
 	d := MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
-		perm := svd.rng.Perm(trainSet.Len())
-		for _, i := range perm {
-			denseUserId, denseItemId, rating := trainSet.GetDense(i)
-			userBias := svd.UserBias[denseUserId]
-			itemBias := svd.ItemBias[denseItemId]
-			userFactor := svd.UserFactor[denseUserId]
-			itemFactor := svd.ItemFactor[denseItemId]
-			// Compute error
-			pred, emImpFactor := svd.predict(denseUserId, denseItemId)
-			diff := pred - rating
+		for denseUserId := 0; denseUserId < trainSet.UserCount(); denseUserId++ {
+			FillZeroVector(step)
+			size := svd.UserRatings[denseUserId].Len()
+			scale := math.Pow(float64(size), -0.5)
+			sumFactor := svd.getSumFactors(denseUserId)
+			trainSet.UserRatings[denseUserId].ForEach(func(i, denseItemId int, rating float64) {
+				userBias := svd.UserBias[denseUserId]
+				itemBias := svd.ItemBias[denseItemId]
+				userFactor := svd.UserFactor[denseUserId]
+				itemFactor := svd.ItemFactor[denseItemId]
+				// Compute error: e_{ui} = r - \hat r
+				pred := svd.predict(denseUserId, denseItemId, sumFactor)
+				diff := rating - pred
+				// Update global Bias
+				gradGlobalBias := diff
+				svd.GlobalBias += svd.lr * gradGlobalBias
+				// Update user Bias: b_u <- b_u + \gamma (e_{ui} - \lambda b_u)
+				gradUserBias := diff - svd.reg*userBias
+				svd.UserBias[denseUserId] += svd.lr * gradUserBias
+				// Update item Bias: p_i <- p_i + \gamma (e_{ui} - \lambda b_i)
+				gradItemBias := diff - svd.reg*itemBias
+				svd.ItemBias[denseItemId] += svd.lr * gradItemBias
+				// Update user latent factor
+				copy(a, itemFactor)
+				MulConst(diff, a)
+				copy(b, userFactor)
+				MulConst(svd.reg, b)
+				floats.Sub(a, b)
+				MulConst(svd.lr, a)
+				floats.Add(svd.UserFactor[denseUserId], a)
+				// Update item latent factor
+				copy(a, userFactor)
+				floats.Add(a, sumFactor)
+				MulConst(diff, a)
+				copy(b, itemFactor)
+				MulConst(svd.reg, b)
+				floats.Sub(a, b)
+				MulConst(svd.lr, a)
+				floats.Add(svd.ItemFactor[denseItemId], a)
+				// Update implicit latent factor: e_{ui}q_j|I_u|^{-1/2}
+				copy(a, itemFactor)
+				MulConst(scale, a)
+				MulConst(diff, a)
+				floats.Add(step, a)
+			})
 			// Update implicit latent factor
-			nRating := svd.UserRatings[denseUserId].Len()
 			var wg sync.WaitGroup
 			wg.Add(svd.rtOptions.NJobs)
 			for j := 0; j < svd.rtOptions.NJobs; j++ {
 				go func(jobId int) {
-					low := nRating * jobId / svd.rtOptions.NJobs
-					high := nRating * (jobId + 1) / svd.rtOptions.NJobs
+					low := size * jobId / svd.rtOptions.NJobs
+					high := size * (jobId + 1) / svd.rtOptions.NJobs
 					a := c[jobId]
 					b := d[jobId]
 					for i := low; i < high; i++ {
-						implFactor := svd.ImplFactor[svd.UserRatings[denseUserId].Indices[i]]
-						copy(a, itemFactor)
-						MulConst(diff, a)
-						DivConst(math.Sqrt(float64(svd.UserRatings[denseUserId].Len())), a)
+						denseItemId := svd.UserRatings[denseUserId].Indices[i]
+						implFactor := svd.ImplFactor[denseItemId]
+						// a <- e_{ui}q_j|I_u|^{-1/2}
+						copy(a, step)
+						DivConst(float64(size), step)
+						// + \lambda y_k
 						copy(b, implFactor)
 						MulConst(svd.reg, b)
-						floats.Add(a, b)
+						//MulConst(float64(size), b)
+						floats.Sub(a, b)
+						// \mu (e_{ui}q_j|I_u|^{-1/2} + \lambda y_k)
 						MulConst(svd.lr, a)
-						floats.Sub(svd.ImplFactor[svd.UserRatings[denseUserId].Indices[i]], a)
+						floats.Add(svd.ImplFactor[denseItemId], a)
 					}
 					wg.Done()
 				}(j)
 			}
-			// Update global Bias
-			gradGlobalBias := diff
-			svd.GlobalBias -= svd.lr * gradGlobalBias
-			// Update user Bias
-			gradUserBias := diff + svd.reg*userBias
-			svd.UserBias[denseUserId] -= svd.lr * gradUserBias
-			// Update item Bias
-			gradItemBias := diff + svd.reg*itemBias
-			svd.ItemBias[denseItemId] -= svd.lr * gradItemBias
-			// Update user latent factor
-			copy(a, itemFactor)
-			MulConst(diff, a)
-			copy(b, userFactor)
-			MulConst(svd.reg, b)
-			floats.Add(a, b)
-			MulConst(svd.lr, a)
-			floats.Sub(svd.UserFactor[denseUserId], a)
-			// Update item latent factor
-			copy(a, userFactor)
-			if len(emImpFactor) > 0 {
-				floats.Add(a, emImpFactor)
-			}
-			MulConst(diff, a)
-			copy(b, itemFactor)
-			MulConst(svd.reg, b)
-			floats.Add(a, b)
-			MulConst(svd.lr, a)
-			floats.Sub(svd.ItemFactor[denseItemId], a)
-			// Wait all updates completed
+			//Wait all updates completed
 			wg.Wait()
 		}
 	}
@@ -507,14 +532,15 @@ func (svd *SVDpp) Fit(trainSet TrainSet, setters ...FitOption) {
 type WRMF struct {
 	Base
 	// Model parameters
-	UserFactor mat.Matrix // p_u
-	ItemFactor mat.Matrix // q_i
+	UserFactor *mat.Dense // p_u
+	ItemFactor *mat.Dense // q_i
 	// Hyper parameters
 	nFactors   int
 	nEpochs    int
 	reg        float64
 	initMean   float64
 	initStdDev float64
+	alpha      float64
 }
 
 func NewWRMF(params Params) *WRMF {
@@ -528,16 +554,91 @@ func (mf *WRMF) SetParams(params Params) {
 	mf.nFactors = mf.Params.GetInt(NFactors, 15)
 	mf.nEpochs = mf.Params.GetInt(NEpochs, 50)
 	mf.initMean = mf.Params.GetFloat64(InitMean, 0)
-	mf.initStdDev = mf.Params.GetFloat64(InitStdDev, 1)
+	mf.initStdDev = mf.Params.GetFloat64(InitStdDev, 0.1)
 	mf.reg = mf.Params.GetFloat64(Reg, 0.06)
 }
 
 func (mf *WRMF) Predict(userId, itemId int) float64 {
-	//denseUserId := mf.UserIdSet.ToDenseId(userId)
-	//denseItemId := mf.ItemIdSet.ToDenseId(itemId)
-	return 0
+	denseUserId := mf.UserIdSet.ToDenseId(userId)
+	denseItemId := mf.ItemIdSet.ToDenseId(itemId)
+	if denseUserId == NotId || denseItemId == NotId {
+		return 0
+	}
+	return mat.Dot(mf.UserFactor.RowView(denseUserId),
+		mf.ItemFactor.RowView(denseItemId))
 }
 
-func (mf *WRMF) Fit(set TrainSet, options ...FitOption) {
+func (mf *WRMF) Fit(set DataSet, options ...FitOption) {
 	mf.Init(set, options)
+	// Initialize
+	mf.UserFactor = mat.NewDense(set.UserCount(), mf.nFactors,
+		mf.rng.MakeNormalVector(set.UserCount()*mf.nFactors, mf.initMean, mf.initStdDev))
+	mf.ItemFactor = mat.NewDense(set.ItemCount(), mf.nFactors,
+		mf.rng.MakeNormalVector(set.ItemCount()*mf.nFactors, mf.initMean, mf.initStdDev))
+	// Create temporary matrix
+	temp1 := mat.NewDense(mf.nFactors, mf.nFactors, nil)
+	temp2 := mat.NewVecDense(mf.nFactors, nil)
+	a := mat.NewDense(mf.nFactors, mf.nFactors, nil)
+	c := mat.NewDense(mf.nFactors, mf.nFactors, nil)
+	p := mat.NewDense(set.UserCount(), set.ItemCount(), nil)
+	// Create regularization matrix
+	regs := make([]float64, mf.nFactors)
+	for i := range regs {
+		regs[i] = mf.reg
+	}
+	regI := mat.NewDiagonal(mf.nFactors, regs)
+	for ep := 0; ep < mf.nEpochs; ep++ {
+		// Recompute all user factors: x_u = (Y^T C^u Y + \lambda reg)^{-1} Y^T C^u p(u)
+		// Y^T Y
+		c.Mul(mf.ItemFactor.T(), mf.ItemFactor)
+		// X Y^T
+		p.Mul(mf.UserFactor, mf.ItemFactor.T())
+		for u := 0; u < set.UserCount(); u++ {
+			a.Copy(c)
+			b := mat.NewVecDense(mf.nFactors, nil)
+			set.UserRatings[u].ForEach(func(_, index int, value float64) {
+				// Y^T (C^u-I) Y
+				weight := value
+				temp1.Outer(weight, mf.ItemFactor.RowView(index), mf.ItemFactor.RowView(index))
+				a.Add(a, temp1)
+				temp2.ScaleVec((weight+1)*p.At(u, index), mf.ItemFactor.RowView(index))
+				b.AddVec(b, temp2)
+			})
+			a.Add(a, regI)
+			if err := temp1.Inverse(a); err != nil {
+				log.Println(err)
+				panic("A")
+			}
+			temp2.MulVec(temp1, b)
+			mf.UserFactor.SetRow(u, temp2.RawVector().Data)
+		}
+		// Recompute all item factors: y_i = (X^T C^i X + \lambda reg)^{-1} X^T C^i p(i)
+		// X^T X
+		c.Mul(mf.UserFactor.T(), mf.UserFactor)
+		// X Y^T
+		p.Mul(mf.UserFactor, mf.ItemFactor.T())
+		for i := 0; i < set.ItemCount(); i++ {
+			a.Copy(c)
+			b := mat.NewVecDense(mf.nFactors, nil)
+			set.ItemRatings[i].ForEach(func(_, index int, value float64) {
+				// X^T (C^i-I) X
+				weight := value
+				temp1.Outer(weight, mf.UserFactor.RowView(index), mf.UserFactor.RowView(index))
+				a.Add(a, temp1)
+				temp2.ScaleVec((weight+1)*p.At(index, i), mf.UserFactor.RowView(index))
+				b.AddVec(b, temp2)
+			})
+			a.Add(a, regI)
+			if err := temp1.Inverse(a); err != nil {
+				log.Println(err)
+				panic("B")
+			}
+			temp2.MulVec(temp1, b)
+			mf.ItemFactor.SetRow(i, temp2.RawVector().Data)
+		}
+	}
 }
+
+//func (mf *WRMF) weight(value float64) float64 {
+//	return mf.alpha * value
+//}

@@ -14,12 +14,12 @@ type Model interface {
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId int) float64
 	// Fit a model with a train set and parameters.
-	Fit(trainSet TrainSet, setters ...FitOption)
+	Fit(trainSet DataSet, setters ...FitOption)
 }
 
-/* Data Set */
+/* Table */
 
-type DataSet interface {
+type Table interface {
 	// Len returns the length of dataset.
 	Len() int
 	// Get the i-th entry in dataset.
@@ -35,5 +35,5 @@ type DataSet interface {
 	// ForEach iterates entries in dataset.
 	ForEach(f func(userId, itemId int, rating float64))
 	// Subset returns a subset of dataset.
-	SubSet(indices []int) DataSet
+	SubSet(indices []int) Table
 }

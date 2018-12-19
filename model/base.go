@@ -11,7 +11,7 @@ type Base struct {
 	UserIdSet       SparseIdSet     // Users' ID set
 	ItemIdSet       SparseIdSet     // Items' ID set
 	rng             RandomGenerator // Random generator
-	randState       int64             // Random seed
+	randState       int64           // Random seed
 	rtOptions       *FitOptions     // Runtime options
 	getParamsCalled bool
 }
@@ -19,7 +19,7 @@ type Base struct {
 func (base *Base) SetParams(params Params) {
 	base.getParamsCalled = true
 	base.Params = params
-	base.randState = int64(base.Params.GetInt(RandomState, 0))
+	base.randState = base.Params.GetInt64(RandomState, 0)
 }
 
 func (base *Base) GetParams() Params {
@@ -30,12 +30,12 @@ func (base *Base) Predict(userId, itemId int) float64 {
 	panic("Predict() not implemented")
 }
 
-func (base *Base) Fit(trainSet TrainSet, options ...FitOption) {
+func (base *Base) Fit(trainSet DataSet, options ...FitOption) {
 	panic("Fit() not implemented")
 }
 
 // Init the base model.
-func (base *Base) Init(trainSet TrainSet, options []FitOption) {
+func (base *Base) Init(trainSet DataSet, options []FitOption) {
 	// Check Base.GetParams() called
 	if base.getParamsCalled == false {
 		panic("Base.GetParams() not called")
@@ -83,7 +83,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet TrainSet, options ...FitOption) {
+func (random *Random) Fit(trainSet DataSet, options ...FitOption) {
 	random.Init(trainSet, options)
 	random.Mean = trainSet.Mean()
 	random.StdDev = trainSet.StdDev()
@@ -144,9 +144,10 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 	return ret
 }
 
-func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...FitOption) {
+func (baseLine *BaseLine) Fit(trainSet DataSet, options ...FitOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
+	baseLine.GlobalBias = 0
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
 	baseLine.ItemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
@@ -168,6 +169,7 @@ func (baseLine *BaseLine) Fit(trainSet TrainSet, options ...FitOption) {
 	}
 }
 
+// ItemPop recommends items by their popularity.
 type ItemPop struct {
 	Base
 	Pop []float64
@@ -180,7 +182,7 @@ func NewItemPop(params Params) *ItemPop {
 	return pop
 }
 
-func (pop *ItemPop) Fit(set TrainSet, options ...FitOption) {
+func (pop *ItemPop) Fit(set DataSet, options ...FitOption) {
 	pop.Init(set, options)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())
@@ -192,5 +194,8 @@ func (pop *ItemPop) Fit(set TrainSet, options ...FitOption) {
 func (pop *ItemPop) Predict(userId, itemId int) float64 {
 	// Return items' popularity
 	denseItemId := pop.ItemIdSet.ToDenseId(itemId)
+	if denseItemId == NotId {
+		return 0
+	}
 	return pop.Pop[denseItemId]
 }

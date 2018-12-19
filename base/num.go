@@ -1,9 +1,5 @@
 package base
 
-import (
-	"math"
-)
-
 // Concatenate arrays of integers.
 func Concatenate(arrays ...[]int) []int {
 	// Sum lengths
@@ -23,6 +19,7 @@ func Concatenate(arrays ...[]int) []int {
 	return ret
 }
 
+// Max finds the maximum in a vector.
 func Max(a []int) int {
 	maximum := 0
 	for _, m := range a {
@@ -33,7 +30,7 @@ func Max(a []int) int {
 	return maximum
 }
 
-// Neg
+// Neg gets the negative of a vector.
 func Neg(dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] = -dst[i]
@@ -54,8 +51,8 @@ func DivConst(c float64, dst []float64) {
 	}
 }
 
-// ArgMin finds the index of the minimum in a vector.
-func ArgMin(a []float64) int {
+// Argmin finds the index of the minimum in a vector.
+func Argmin(a []float64) int {
 	minIndex := 0
 	for index, value := range a {
 		if value < a[minIndex] {
@@ -63,18 +60,6 @@ func ArgMin(a []float64) int {
 		}
 	}
 	return minIndex
-}
-
-// TODO: Remove this function latter.
-func NewNanMatrix(row, col int) [][]float64 {
-	ret := make([][]float64, row)
-	for i := range ret {
-		ret[i] = make([]float64, col)
-		for j := range ret[i] {
-			ret[i][j] = math.NaN()
-		}
-	}
-	return ret
 }
 
 // MakeMatrix makes a matrix.
@@ -86,15 +71,15 @@ func MakeMatrix(row, col int) [][]float64 {
 	return ret
 }
 
-// ResetVector resets a vector to all zeros.
-func ResetVector(a []float64) {
+// FillZeroVector fills a vector with zeros.
+func FillZeroVector(a []float64) {
 	for i := range a {
 		a[i] = 0
 	}
 }
 
-// ResetMatrix resets a matrix to all zeros.
-func ResetMatrix(m [][]float64) {
+// FillZeroMatrix fills a matrix with zeros.
+func FillZeroMatrix(m [][]float64) {
 	for i := range m {
 		for j := range m[i] {
 			m[i][j] = 0

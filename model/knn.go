@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
 	"math"
@@ -17,21 +18,18 @@ type KNN struct {
 	LeftMean     []float64 // Centered KNN: user (item) Mean
 	StdDev       []float64 // KNN with Z Score: user (item) standard deviation
 	Bias         []float64 // KNN Baseline: Bias
-	knnType      string
+	_type        ParamString
 	userBased    bool
-	simMetric    Similarity
+	similarity   FuncSimilarity
 	k            int
 	minK         int
-	target       string
-	lr           float64
-	reg          float64
-	nEpochs      int
+	shrinkage    int
 }
 
 // NewKNN creates a KNN model. Params:
-//   KNNType        - The type of KNN ('Basic', 'Centered', 'ZScore', 'Baseline').
+//   Type        - The type of KNN ('Basic', 'Centered', 'ZScore', 'Baseline').
 //                    Default is 'basic'.
-//   KNNSimilarity  - The similarity function. Default is MSD.
+//   Similarity  - The similarity function. Default is MSD.
 //   UserBased      - User based or item based? Default is true.
 //   K              - The maximum k neighborhoods to predict the rating. Default is 40.
 //   MinK           - The minimum k neighborhoods to predict the rating. Default is 1.
@@ -44,31 +42,27 @@ func NewKNN(params Params) *KNN {
 func (knn *KNN) SetParams(params Params) {
 	knn.Base.SetParams(params)
 	// Setup parameters
-	knn.knnType = knn.Params.GetString(KNNType, Basic)
-	knn.simMetric = knn.Params.GetSim(KNNSimilarity, MSD)
+	knn._type = knn.Params.GetString(Type, Basic)
 	knn.userBased = knn.Params.GetBool(UserBased, true)
 	knn.k = knn.Params.GetInt(K, 40)
 	knn.minK = knn.Params.GetInt(MinK, 1)
-	knn.target = knn.Params.GetString(Target, Regression)
-	knn.lr = knn.Params.GetFloat64(Lr, 0.005)
-	knn.reg = knn.Params.GetFloat64(Reg, 0.02)
-	knn.nEpochs = knn.Params.GetInt(NEpochs, 20)
+	knn.shrinkage = knn.Params.GetInt(Shrinkage, 100)
+	// Setup similarity function
+	switch name := knn.Params.GetString(Similarity, MSD); name {
+	case MSD:
+		knn.similarity = MSDSimilarity
+	case Cosine:
+		knn.similarity = CosineSimilarity
+	case Pearson:
+		knn.similarity = PearsonSimilarity
+	default:
+		panic(fmt.Sprintf("Unknown similarity function: %v", name))
+	}
 }
 
 func (knn *KNN) Predict(userId, itemId int) float64 {
 	denseUserId := knn.UserIdSet.ToDenseId(userId)
 	denseItemId := knn.ItemIdSet.ToDenseId(itemId)
-	// Select predict function
-	switch knn.target {
-	case Regression:
-		return knn.predictRegression(denseUserId, denseItemId)
-	case BPR:
-		return knn.predictBPR(denseUserId, denseItemId)
-	}
-	return 0
-}
-
-func (knn *KNN) predictRegression(denseUserId, denseItemId int) float64 {
 	// Set user based or item based
 	var leftId, rightId int
 	if knn.userBased {
@@ -88,56 +82,38 @@ func (knn *KNN) predictRegression(denseUserId, denseItemId int) float64 {
 	if neighbors.Len() < knn.minK {
 		return knn.GlobalMean
 	}
-	// Predict the rating by weighted GlobalMean
+	// Predict
 	weightSum := 0.0
 	weightRating := 0.0
 	neighbors.SparseVector.ForEach(func(i, index int, value float64) {
+		//fmt.Println(index, knn.SimMatrix[leftId][index])
 		weightSum += knn.SimMatrix[leftId][index]
 		rating := value
-		if knn.knnType == Centered {
+		if knn._type == Centered {
 			rating -= knn.LeftMean[index]
-		} else if knn.knnType == ZScore {
+		} else if knn._type == ZScore {
 			rating = (rating - knn.LeftMean[index]) / knn.StdDev[index]
-		} else if knn.knnType == Baseline {
+		} else if knn._type == Baseline {
 			rating -= knn.Bias[index]
 		}
 		weightRating += knn.SimMatrix[leftId][index] * rating
 	})
+	//panic("Exit")
 	prediction := weightRating / weightSum
-	if knn.knnType == Centered {
+	if knn._type == Centered {
 		prediction += knn.LeftMean[leftId]
-	} else if knn.knnType == ZScore {
+	} else if knn._type == ZScore {
 		prediction *= knn.StdDev[leftId]
 		prediction += knn.LeftMean[leftId]
-	} else if knn.knnType == Baseline {
+	} else if knn._type == Baseline {
 		prediction += knn.Bias[leftId]
 	}
 	return prediction
 }
 
-func (knn *KNN) predictBPR(denseUserId, denseItemId int) float64 {
-	prediction := 0.0
-	knn.UserRatings[denseUserId].ForEach(func(i, index int, value float64) {
-		if index != denseItemId {
-			prediction += knn.SimMatrix[denseItemId][index]
-		}
-	})
-	return prediction
-}
-
 // Fit a KNN model.
-func (knn *KNN) Fit(trainSet TrainSet, options ...FitOption) {
+func (knn *KNN) Fit(trainSet DataSet, options ...FitOption) {
 	knn.Init(trainSet, options)
-	// Select fit function
-	switch knn.target {
-	case Regression:
-		knn.fitRegression(trainSet)
-	case BPR:
-		knn.fitBPR(trainSet)
-	}
-}
-
-func (knn *KNN) fitRegression(trainSet TrainSet) {
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean
 	// Retrieve user (item) iRatings
@@ -149,11 +125,11 @@ func (knn *KNN) fitRegression(trainSet TrainSet) {
 		knn.RightRatings = trainSet.UserRatings
 	}
 	// Retrieve user (item) Mean
-	if knn.knnType == Centered || knn.knnType == ZScore {
+	if knn._type == Centered || knn._type == ZScore {
 		knn.LeftMean = SparseVectorsMean(knn.LeftRatings)
 	}
 	// Retrieve user (item) standard deviation
-	if knn.knnType == ZScore {
+	if knn._type == ZScore {
 		knn.StdDev = make([]float64, len(knn.LeftRatings))
 		for i := range knn.LeftMean {
 			sum, count := 0.0, 0.0
@@ -164,7 +140,7 @@ func (knn *KNN) fitRegression(trainSet TrainSet) {
 			knn.StdDev[i] = math.Sqrt(sum / count)
 		}
 	}
-	if knn.knnType == Baseline {
+	if knn._type == Baseline {
 		baseLine := NewBaseLine(knn.Params)
 		baseLine.Fit(trainSet)
 		if knn.userBased {
@@ -175,7 +151,7 @@ func (knn *KNN) fitRegression(trainSet TrainSet) {
 	}
 	// Pairwise similarity
 	for i := range knn.LeftRatings {
-		// Call SortIndex() to make sure simMetric() reentrant
+		// Call SortIndex() to make sure similarity() reentrant
 		knn.LeftRatings[i].SortIndex()
 	}
 	knn.SimMatrix = MakeMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
@@ -184,61 +160,17 @@ func (knn *KNN) fitRegression(trainSet TrainSet) {
 			iRatings := knn.LeftRatings[iId]
 			for jId, jRatings := range knn.LeftRatings {
 				if iId != jId {
-					ret := knn.simMetric(&iRatings, &jRatings)
+					ret := knn.similarity(&iRatings, &jRatings)
+					// Get the number of common
+					common := 0.0
+					iRatings.ForIntersection(&jRatings, func(index int, a, b float64) {
+						common += 1
+					})
 					if !math.IsNaN(ret) {
-						knn.SimMatrix[iId][jId] = ret
+						knn.SimMatrix[iId][jId] = (common - 1) / (common - 1 + float64(knn.shrinkage)) * ret
 					}
 				}
 			}
 		}
 	})
-}
-
-func (knn *KNN) fitBPR(trainSet TrainSet) {
-	knn.UserRatings = trainSet.UserRatings
-	// Create the set of positive feedback
-	positiveSet := make([]map[int]bool, trainSet.UserCount())
-	for denseUserId, userRating := range trainSet.UserRatings {
-		positiveSet[denseUserId] = make(map[int]bool)
-		userRating.ForEach(func(i, index int, value float64) {
-			positiveSet[denseUserId][index] = true
-		})
-	}
-	// Training
-	for epoch := 0; epoch < knn.nEpochs; epoch++ {
-		// Generate permutation
-		perm := knn.rng.Perm(trainSet.Len())
-		// Training epoch
-		for _, i := range perm {
-			// Select a positive sample
-			denseUserId, densePosId, _ := trainSet.GetDense(i)
-			// Select a negative sample
-			denseNegId := -1
-			for {
-				temp := knn.rng.Intn(trainSet.ItemCount())
-				if _, exist := positiveSet[denseUserId][temp]; !exist {
-					denseNegId = temp
-					break
-				}
-			}
-			diff := knn.predictBPR(denseUserId, densePosId) - knn.predictBPR(denseUserId, denseNegId)
-			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
-			// Update positive weights
-			knn.UserRatings[denseUserId].ForEach(func(i, index int, value float64) {
-				if index != densePosId {
-					// TODO: Add regularization
-					knn.SimMatrix[index][densePosId] += knn.lr * grad
-					knn.SimMatrix[densePosId][index] += knn.lr * grad
-				}
-			})
-			// Update negative weights
-			knn.UserRatings[denseUserId].ForEach(func(i, index int, value float64) {
-				if index != denseNegId {
-					// TODO: Add regularization
-					knn.SimMatrix[index][denseNegId] -= knn.lr * grad
-					knn.SimMatrix[denseNegId][index] -= knn.lr * grad
-				}
-			})
-		}
-	}
 }

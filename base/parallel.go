@@ -7,6 +7,7 @@ import (
 
 /* Parallel Computing */
 
+// Parallel runs tasks in parallel.
 func Parallel(nTask int, nJob int, worker func(begin, end int)) {
 	var wg sync.WaitGroup
 	wg.Add(nJob)
@@ -21,6 +22,7 @@ func Parallel(nTask int, nJob int, worker func(begin, end int)) {
 	wg.Wait()
 }
 
+// ParallelMean runs tasks in parallel and returns the mean of return values.
 func ParallelMean(nTask int, nJob int, worker func(begin, end int) (sum float64)) float64 {
 	var wg sync.WaitGroup
 	wg.Add(nJob)

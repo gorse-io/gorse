@@ -1,8 +1,10 @@
 package core
 
 import (
+	"fmt"
 	. "github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/stat"
+	"gopkg.in/cheggaaa/pb.v1"
 	"math"
 	"reflect"
 )
@@ -14,11 +16,26 @@ type ParameterGrid map[ParamName][]interface{}
 
 // CrossValidateResult contains the result of cross validate
 type CrossValidateResult struct {
-	Tests []float64
+	TestScore []float64
+	TestTime  []float64
+	FitTime   []float64
+}
+
+func (sv CrossValidateResult) Summary() string {
+	mean := stat.Mean(sv.TestScore, nil)
+	interval := 0.0
+	for _, score := range sv.TestScore {
+		temp := math.Abs(score - mean)
+		if temp > interval {
+			interval = temp
+		}
+	}
+	text := fmt.Sprintf("%.5f(±%.5f)", mean, interval)
+	return text
 }
 
 // CrossValidation evaluates a model by k-fold cross validation.
-func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator,
+func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
 	splitter Splitter, options ...CVOption) []CrossValidateResult {
 	cvOptions := NewCVOptions(options)
 	// Split data set
@@ -27,7 +44,7 @@ func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator,
 	// Create return structures
 	ret := make([]CrossValidateResult, len(metrics))
 	for i := 0; i < len(ret); i++ {
-		ret[i].Tests = make([]float64, length)
+		ret[i].TestScore = make([]float64, length)
 	}
 	// Cross validation
 	params := estimator.GetParams()
@@ -41,7 +58,7 @@ func CrossValidate(estimator Model, dataSet DataSet, metrics []Evaluator,
 			cp.Fit(trainFold)
 			// Evaluate on test set
 			for j := 0; j < len(ret); j++ {
-				ret[j].Tests[i] = metrics[j](cp, testFold)
+				ret[j].TestScore[i] = metrics[j](cp, trainFold, NewDataSet(testFold))
 			}
 		}
 	})
@@ -59,9 +76,14 @@ type ModelSelectionResult struct {
 	AllParams  []Params
 }
 
+func (cv ModelSelectionResult) Summary() {
+	fmt.Printf("The best score is: %.5f\n", cv.BestScore)
+	fmt.Printf("The best params is: %v\n", cv.BestParams)
+}
+
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
-	evaluators []Evaluator, options ...CVOption) []ModelSelectionResult {
+func GridSearchCV(estimator Model, dataSet Table,
+	evaluators []Evaluator, splitter Splitter, paramGrid ParameterGrid, options ...CVOption) []ModelSelectionResult {
 	// Retrieve parameter names and length
 	paramNames := make([]ParamName, 0, len(paramGrid))
 	count := 1
@@ -77,21 +99,26 @@ func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 		results[i].CVResults = make([]CrossValidateResult, 0, count)
 		results[i].AllParams = make([]Params, 0, count)
 	}
+	// Progress bar
+	bar := pb.StartNew(count)
 	// Construct DFS procedure
 	var dfs func(deep int, params Params)
 	dfs = func(deep int, params Params) {
 		if deep == len(paramNames) {
 			// Cross validate
-			cvResults := CrossValidate(estimator, dataSet, evaluators, NewKFoldSplitter(5), options...)
+			estimator.SetParams(params)
+			cvResults := CrossValidate(estimator, dataSet, evaluators, splitter, options...)
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
 				results[i].AllParams = append(results[i].AllParams, params.Copy())
-				score := stat.Mean(cvResults[i].Tests, nil)
+				score := stat.Mean(cvResults[i].TestScore, nil)
 				if score < results[i].BestScore {
 					results[i].BestScore = score
 					results[i].BestParams = params.Copy()
 					results[i].BestIndex = len(results[i].AllParams) - 1
 				}
+				// Progress bar
+				bar.Increment()
 			}
 		} else {
 			paramName := paramNames[deep]
@@ -104,10 +131,11 @@ func GridSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 	}
 	params := make(map[ParamName]interface{})
 	dfs(0, params)
+	bar.FinishPrint("Completed!")
 	return results
 }
 
-func RandomSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
+func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
 	evaluators []Evaluator, trial int, options ...CVOption) []ModelSelectionResult {
 	cvOptions := NewCVOptions(options)
 	rng := NewRandomGenerator(cvOptions.Seed)
@@ -132,7 +160,7 @@ func RandomSearchCV(estimator Model, dataSet DataSet, paramGrid ParameterGrid,
 		for i := range cvResults {
 			results[i].CVResults = append(results[i].CVResults, cvResults[i])
 			results[i].AllParams = append(results[i].AllParams, params.Copy())
-			score := stat.Mean(cvResults[i].Tests, nil)
+			score := stat.Mean(cvResults[i].TestScore, nil)
 			if score < results[i].BestScore {
 				results[i].BestScore = score
 				results[i].BestParams = params.Copy()
