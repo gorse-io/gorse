@@ -73,7 +73,7 @@ func TestSlopeOne(t *testing.T) {
 }
 
 func TestKNN(t *testing.T) {
-	EvaluateRegression(t, NewKNN(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+	EvaluateRegression(t, NewKNN(Params{Type: Basic}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.98, 0.774})
 }
 
@@ -99,15 +99,26 @@ func TestCoClustering(t *testing.T) {
 
 // LibRec Benchmarks: https://www.librec.net/release/v1.3/example.html
 
-func TestKNN_LibRec(t *testing.T) {
+func TestKNN_UserBased_LibRec(t *testing.T) {
 	EvaluateRegression(t, NewKNN(Params{
 		Type:       Centered,
-		Similarity: MSD,
+		Similarity: Pearson,
 		UserBased:  true,
 		Shrinkage:  25,
 		K:          60,
 	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.944, 0.737})
+}
+
+func TestKNN_ItemBased_LibRec(t *testing.T) {
+	EvaluateRegression(t, NewKNN(Params{
+		Type:       Centered,
+		Similarity: Pearson,
+		UserBased:  false,
+		Shrinkage:  2500,
+		K:          40,
+	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.924, 0.723})
 }
 
 func TestSlopeOne_LibRec(t *testing.T) {

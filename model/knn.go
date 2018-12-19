@@ -82,10 +82,11 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	if neighbors.Len() < knn.minK {
 		return knn.GlobalMean
 	}
-	// Predict the rating by weighted GlobalMean
+	// Predict
 	weightSum := 0.0
 	weightRating := 0.0
 	neighbors.SparseVector.ForEach(func(i, index int, value float64) {
+		//fmt.Println(index, knn.SimMatrix[leftId][index])
 		weightSum += knn.SimMatrix[leftId][index]
 		rating := value
 		if knn._type == Centered {
@@ -97,6 +98,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 		}
 		weightRating += knn.SimMatrix[leftId][index] * rating
 	})
+	//panic("Exit")
 	prediction := weightRating / weightSum
 	if knn._type == Centered {
 		prediction += knn.LeftMean[leftId]

@@ -29,7 +29,7 @@ func MSDSimilarity(a, b *SparseVector) float64 {
 	return 1.0 / (sum/count + 1)
 }
 
-// Pearson computes the Pearson correlation coefficient between a pair of vectors.
+// Pearson computes the absolute Pearson correlation coefficient between a pair of vectors.
 func PearsonSimilarity(a, b *SparseVector) float64 {
 	// Mean of a
 	meanA := stat.Mean(a.Values, nil)
@@ -44,5 +44,5 @@ func PearsonSimilarity(a, b *SparseVector) float64 {
 		n += ratingB * ratingB
 		l += ratingA * ratingB
 	})
-	return l / (math.Sqrt(m) * math.Sqrt(n))
+	return math.Abs(l) / (math.Sqrt(m) * math.Sqrt(n))
 }
