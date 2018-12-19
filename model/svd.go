@@ -229,6 +229,7 @@ func (svd *SVD) fitBPR(trainSet DataSet) {
 // NMF: Non-negative Matrix Factorization[3].
 type NMF struct {
 	Base
+	GlobalMean float64
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
 	nFactors   int
@@ -270,12 +271,13 @@ func (nmf *NMF) predict(denseUserId int, denseItemId int) float64 {
 	if denseItemId != NotId && denseUserId != NotId {
 		return floats.Dot(nmf.UserFactor[denseUserId], nmf.ItemFactor[denseItemId])
 	}
-	return 0
+	return nmf.GlobalMean
 }
 
 func (nmf *NMF) Fit(trainSet DataSet, options ...FitOption) {
 	nmf.Init(trainSet, options)
 	// Initialize parameters
+	nmf.GlobalMean = trainSet.GlobalMean
 	nmf.UserFactor = nmf.rng.MakeUniformMatrix(trainSet.UserCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	nmf.ItemFactor = nmf.rng.MakeUniformMatrix(trainSet.ItemCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	// Create intermediate matrix buffer

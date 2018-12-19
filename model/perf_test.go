@@ -137,7 +137,12 @@ func TestSVD_LibRec(t *testing.T) {
 }
 
 func TestNMF_LibRec(t *testing.T) {
-	EvaluateRegression(t, NewNMF(nil), LoadDataFromBuiltIn("filmtrust"), NewKFoldSplitter(5),
+	EvaluateRegression(t, NewNMF(Params{
+		NFactors: 10,
+		NEpochs:  100,
+		InitLow:  0,
+		InitHigh: 0.01,
+	}), LoadDataFromBuiltIn("filmtrust"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.859, 0.643})
 }
 
