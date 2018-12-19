@@ -30,7 +30,7 @@ func MAE(estimator Model, _ DataSet, testSet DataSet) float64 {
 }
 
 // NewAUCEvaluator creates a AUC evaluator.
-func NewAUCEvaluator() Evaluator {
+func NewAUCEvaluator(n int) Evaluator {
 	return func(estimator Model, trainSet DataSet, testSet DataSet) float64 {
 		sum, count := 0.0, 0.0
 		// Find all userIds

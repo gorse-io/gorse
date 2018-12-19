@@ -396,7 +396,7 @@ func (svd *SVDpp) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumImpFactor []float64) float64 {
+func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumFactor []float64) float64 {
 	ret := svd.GlobalBias
 	// + b_u
 	if denseUserId != NotId {
@@ -410,29 +410,26 @@ func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumImpFactor []float
 	if denseItemId != NotId && denseUserId != NotId {
 		userFactor := svd.UserFactor[denseUserId]
 		itemFactor := svd.ItemFactor[denseItemId]
-		if len(sumImpFactor) == 0 {
-			sumImpFactor = svd.summarizeImplFactors(denseUserId)
+		if len(sumFactor) == 0 {
+			sumFactor = svd.getSumFactors(denseUserId)
 		}
 		temp := make([]float64, len(itemFactor))
 		floats.Add(temp, userFactor)
-		floats.Add(temp, sumImpFactor)
+		floats.Add(temp, sumFactor)
 		ret += floats.Dot(temp, itemFactor)
-		return ret
 	}
 	return ret
 }
 
-func (svd *SVDpp) summarizeImplFactors(denseUserId int) []float64 {
-	sumImpFactor := make([]float64, svd.nFactors)
+func (svd *SVDpp) getSumFactors(denseUserId int) []float64 {
+	sumFactor := make([]float64, svd.nFactors)
 	// User history exists
-	count := 0
 	svd.UserRatings[denseUserId].ForEach(func(i, index int, value float64) {
-		floats.Add(sumImpFactor, svd.ImplFactor[index])
-		count++
+		floats.Add(sumFactor, svd.ImplFactor[index])
 	})
-	scale := math.Pow(float64(count), -0.5)
-	MulConst(scale, sumImpFactor)
-	return sumImpFactor
+	scale := math.Pow(float64(svd.UserRatings[denseUserId].Len()), -0.5)
+	MulConst(scale, sumFactor)
+	return sumFactor
 }
 
 func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
@@ -457,7 +454,7 @@ func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 			FillZeroVector(step)
 			size := svd.UserRatings[denseUserId].Len()
 			scale := math.Pow(float64(size), -0.5)
-			sumFactor := svd.summarizeImplFactors(denseUserId)
+			sumFactor := svd.getSumFactors(denseUserId)
 			trainSet.UserRatings[denseUserId].ForEach(func(i, denseItemId int, rating float64) {
 				userBias := svd.UserBias[denseUserId]
 				itemBias := svd.ItemBias[denseItemId]
@@ -492,18 +489,10 @@ func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 				floats.Sub(a, b)
 				MulConst(svd.lr, a)
 				floats.Add(svd.ItemFactor[denseItemId], a)
-				// Update sum of implicit latent factor
-				copy(a, itemFactor)
-				MulConst(diff, a)
-				copy(b, sumFactor)
-				MulConst(svd.reg, b)
-				floats.Sub(a, b)
-				MulConst(svd.lr, a)
-				floats.Add(sumFactor, a)
 				// Update implicit latent factor: e_{ui}q_j|I_u|^{-1/2}
 				copy(a, itemFactor)
-				MulConst(diff, a)
 				MulConst(scale, a)
+				MulConst(diff, a)
 				floats.Add(step, a)
 			})
 			// Update implicit latent factor
@@ -520,10 +509,11 @@ func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 						implFactor := svd.ImplFactor[denseItemId]
 						// a <- e_{ui}q_j|I_u|^{-1/2}
 						copy(a, step)
+						DivConst(float64(size), step)
 						// + \lambda y_k
 						copy(b, implFactor)
 						MulConst(svd.reg, b)
-						MulConst(float64(size), b)
+						//MulConst(float64(size), b)
 						floats.Sub(a, b)
 						// \mu (e_{ui}q_j|I_u|^{-1/2} + \lambda y_k)
 						MulConst(svd.lr, a)

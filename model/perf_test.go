@@ -58,7 +58,9 @@ func TestSVD(t *testing.T) {
 }
 
 func TestSVDpp(t *testing.T) {
-	EvaluateRegression(t, NewSVDpp(nil), LoadDataFromBuiltIn("ml-100k"), NewRatioSplitter(1, 0.2),
+	EvaluateRegression(t, NewSVDpp(Params{
+		NEpochs: 100,
+	}), LoadDataFromBuiltIn("ml-100k"), NewRatioSplitter(1, 0.2),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.92, 0.722})
 }
 
@@ -191,8 +193,20 @@ func TestSVD_BPR(t *testing.T) {
 		Reg:      0.01,
 		Lr:       0.05,
 		NEpochs:  30,
-	}), data, NewKFoldSplitter(5),
-		[]string{"Prec@5", "Prec@10"}, []Evaluator{NewPrecision(5), NewPrecision(10)}, []float64{-0.378, 0.321})
+	}),
+		data, NewKFoldSplitter(5),
+		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "AUC", "MAP", "NDCG", "MRR"},
+		[]Evaluator{
+			NewPrecision(5),
+			NewPrecision(10),
+			NewRecall(5),
+			NewRecall(10),
+			NewAUCEvaluator(math.MaxInt32),
+			NewMAP(math.MaxInt32),
+			NewNDCG(math.MaxInt32),
+			NewMRR(math.MaxInt32),
+		},
+		[]float64{0.378, 0.321, 0.129, 0.209, 0.933, 0.260, 0.601, 0.622})
 }
 
 func TestWRMF(t *testing.T) {
@@ -203,5 +217,16 @@ func TestWRMF(t *testing.T) {
 		Alpha:    1.0,
 		NEpochs:  10,
 	}), data, NewKFoldSplitter(5),
-		[]string{"Prec@5"}, []Evaluator{NewPrecision(5)}, []float64{0.424})
+		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "AUC", "MAP", "NDCG", "MRR"},
+		[]Evaluator{
+			NewPrecision(5),
+			NewPrecision(10),
+			NewRecall(5),
+			NewRecall(10),
+			NewAUCEvaluator(math.MaxInt32),
+			NewMAP(math.MaxInt32),
+			NewNDCG(math.MaxInt32),
+			NewMRR(math.MaxInt32),
+		},
+		[]float64{0.424, 0.358, 0.149, 0.236, 0.928, 0.294, 0.631, 0.675})
 }
