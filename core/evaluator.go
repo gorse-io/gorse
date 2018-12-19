@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/zhenghaoz/gorse/base"
 	"math"
 )
 
@@ -29,47 +30,47 @@ func MAE(estimator Model, _ DataSet, testSet DataSet) float64 {
 	return sum / float64(testSet.Len())
 }
 
-// NewAUCEvaluator creates a AUC evaluator.
-func NewAUCEvaluator(n int) Evaluator {
-	return func(estimator Model, trainSet DataSet, testSet DataSet) float64 {
-		sum, count := 0.0, 0.0
-		// Find all userIds
-		for denseUserIdInTest, userRating := range testSet.UserRatings {
-			userId := testSet.UserIdSet.ToSparseId(denseUserIdInTest)
-			// Find all <userId, j>s in training data set and test data set.
-			denseUserIdInTrain := trainSet.UserIdSet.ToDenseId(userId)
-			positiveSet := make(map[int]float64)
+// AUC evaluator.
+func AUC(estimator Model, trainSet DataSet, testSet DataSet) float64 {
+	sum, count := 0.0, 0.0
+	// Find all userIds
+	for denseUserIdInTest, userRating := range testSet.UserRatings {
+		userId := testSet.UserIdSet.ToSparseId(denseUserIdInTest)
+		// Find all <userId, j>s in training data set and test data set.
+		denseUserIdInTrain := trainSet.UserIdSet.ToDenseId(userId)
+		positiveSet := make(map[int]float64)
+		if denseUserIdInTrain != base.NotId {
 			trainSet.UserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
 				itemId := trainSet.ItemIdSet.ToSparseId(index)
 				positiveSet[itemId] = value
 			})
-			testSet.UserRatings[denseUserIdInTest].ForEach(func(i, index int, value float64) {
-				itemId := testSet.ItemIdSet.ToSparseId(index)
-				positiveSet[itemId] = value
-			})
-			// Find all <userId, i>s in test data set
-			indicatorSum, ratedCount := 0.0, 0.0
-			userRating.ForEach(func(i, index int, value float64) {
-				iItemId := testSet.ItemIdSet.ToSparseId(index)
-				// Find all <userId, j>s not in full data set
-				for j := 0; j < testSet.ItemCount(); j++ {
-					jItemId := testSet.ItemIdSet.ToSparseId(j)
-					if _, exist := positiveSet[jItemId]; !exist {
-						// I(\hat{x}_{ui} - \hat{x}_{uj})
-						if estimator.Predict(userId, iItemId) > estimator.Predict(userId, jItemId) {
-							indicatorSum++
-						}
-						ratedCount++
-					}
-				}
-			})
-			// += \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
-			sum += indicatorSum / ratedCount
-			count++
 		}
-		// \frac{1}{|U|} \sum_u \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
-		return sum / count
+		testSet.UserRatings[denseUserIdInTest].ForEach(func(i, index int, value float64) {
+			itemId := testSet.ItemIdSet.ToSparseId(index)
+			positiveSet[itemId] = value
+		})
+		// Find all <userId, i>s in test data set
+		correctCount, pairCount := 0.0, 0.0
+		userRating.ForEach(func(i, index int, value float64) {
+			posItemId := testSet.ItemIdSet.ToSparseId(index)
+			// Find all <userId, j>s not in full data set
+			for j := 0; j < testSet.ItemCount(); j++ {
+				negItemId := testSet.ItemIdSet.ToSparseId(j)
+				if _, exist := positiveSet[negItemId]; !exist {
+					// I(\hat{x}_{ui} - \hat{x}_{uj})
+					if estimator.Predict(userId, posItemId) > estimator.Predict(userId, negItemId) {
+						correctCount++
+					}
+					pairCount++
+				}
+			}
+		})
+		// += \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
+		sum += correctCount / pairCount
+		count++
 	}
+	// \frac{1}{|U|} \sum_u \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
+	return sum / count
 }
 
 // NewNDCG creates a Normalized Discounted Cumulative Gain evaluator.

@@ -114,6 +114,8 @@ func (svd *SVD) fitRegression(trainSet DataSet) {
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
+	userFactor := make([]float64, svd.nFactors)
+	itemFactor := make([]float64, svd.nFactors)
 	// Optimize
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		perm := svd.rng.Perm(trainSet.Len())
@@ -134,8 +136,8 @@ func (svd *SVD) fitRegression(trainSet DataSet) {
 				gradItemBias := upGrad - svd.reg*itemBias
 				svd.ItemBias[denseItemId] += svd.lr * gradItemBias
 			}
-			userFactor := svd.UserFactor[denseUserId]
-			itemFactor := svd.ItemFactor[denseItemId]
+			copy(userFactor, svd.UserFactor[denseUserId])
+			copy(itemFactor, svd.ItemFactor[denseItemId])
 			// Update user latent factor
 			copy(a, itemFactor)
 			MulConst(upGrad, a)
@@ -158,27 +160,26 @@ func (svd *SVD) fitRegression(trainSet DataSet) {
 
 func (svd *SVD) fitBPR(trainSet DataSet) {
 	// Create the set of positive feedback
-	positiveSet := make([]map[int]bool, trainSet.UserCount())
+	positiveSet := make([]map[int]float64, trainSet.UserCount())
 	for denseUserId, userRating := range trainSet.UserRatings {
-		positiveSet[denseUserId] = make(map[int]bool)
+		positiveSet[denseUserId] = make(map[int]float64)
 		userRating.ForEach(func(i, index int, value float64) {
-			positiveSet[denseUserId][index] = true
+			positiveSet[denseUserId][index] = value
 		})
 	}
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
+	userFactor := make([]float64, svd.nFactors)
+	positiveItemFactor := make([]float64, svd.nFactors)
+	negativeItemFactor := make([]float64, svd.nFactors)
 	// Training
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
-		// Generate permutation
-		perm := svd.rng.Perm(trainSet.Len())
 		// Training epoch
-		for _, i := range perm {
-			// Select a positive sample
-			denseUserId, densePosId, _ := trainSet.GetDense(i)
-			//// Select a user
-			//denseUserId := svd.rng.Intn(trainSet.UserCount())
-			//densePosId := trainSet.UserRatings[denseUserId].Indices[svd.rng.Intn(trainSet.UserRatings[denseUserId].Len())]
+		for i := 0; i < trainSet.Len(); i++ {
+			// Select a user
+			denseUserId := svd.rng.Intn(trainSet.UserCount())
+			densePosId := trainSet.UserRatings[denseUserId].Indices[svd.rng.Intn(trainSet.UserRatings[denseUserId].Len())]
 			// Select a negative sample
 			denseNegId := -1
 			for {
@@ -191,9 +192,9 @@ func (svd *SVD) fitBPR(trainSet DataSet) {
 			diff := svd.predict(denseUserId, densePosId) - svd.predict(denseUserId, denseNegId)
 			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
 			// Pairwise update
-			userFactor := svd.UserFactor[denseUserId]
-			positiveItemFactor := svd.ItemFactor[densePosId]
-			negativeItemFactor := svd.ItemFactor[denseNegId]
+			copy(userFactor, svd.UserFactor[denseUserId])
+			copy(positiveItemFactor, svd.ItemFactor[densePosId])
+			copy(negativeItemFactor, svd.ItemFactor[denseNegId])
 			// Update positive item latent factor: +w_u
 			copy(a, userFactor)
 			MulConst(grad, a)

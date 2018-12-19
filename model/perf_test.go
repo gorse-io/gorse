@@ -8,7 +8,10 @@ import (
 	"testing"
 )
 
-const perfEpsilon float64 = 0.005
+const (
+	ratingEpsilon  = 0.005
+	rankingEpsilon = 0.008
+)
 
 func EvaluateRegression(t *testing.T, algo Model, dataSet Table, splitter Splitter, evalNames []string,
 	evaluators []Evaluator, expectations []float64) {
@@ -17,8 +20,8 @@ func EvaluateRegression(t *testing.T, algo Model, dataSet Table, splitter Splitt
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
-		if accuracy > expectations[i]+perfEpsilon {
-			t.Fatalf("%s: %.3f > %.3f+%.3f", evalNames[i], accuracy, expectations[i], perfEpsilon)
+		if accuracy > expectations[i]+ratingEpsilon {
+			t.Fatalf("%s: %.3f > %.3f+%.3f", evalNames[i], accuracy, expectations[i], ratingEpsilon)
 		} else {
 			t.Logf("%s: %.3f = %.3f%+.3f", evalNames[i], accuracy, expectations[i], accuracy-expectations[i])
 		}
@@ -32,8 +35,8 @@ func EvaluateRank(t *testing.T, algo Model, dataSet Table, splitter Splitter, ev
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
-		if accuracy < expectations[i]-perfEpsilon {
-			t.Fatalf("%s: %.3f < %.3f-%.3f", evalNames[i], accuracy, expectations[i], perfEpsilon)
+		if accuracy < expectations[i]-rankingEpsilon {
+			t.Fatalf("%s: %.3f < %.3f-%.3f", evalNames[i], accuracy, expectations[i], ratingEpsilon)
 		} else {
 			t.Logf("%s: %.3f = %.3f%+.3f", evalNames[i], accuracy, expectations[i], accuracy-expectations[i])
 		}
@@ -177,36 +180,28 @@ func TestItemPop(t *testing.T) {
 		[]float64{0.211, 0.190, 0.070, 0.116, 0.135, 0.477, 0.417})
 }
 
-func TestItemPop2(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-100k")
-	EvaluateRank(t, NewItemPop(nil), data, NewKFoldSplitter(5),
-		[]string{"AUC"},
-		[]Evaluator{NewAUCEvaluator()},
-		[]float64{0.857})
-}
-
 func TestSVD_BPR(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	EvaluateRank(t, NewSVD(Params{
-		Target:   BPR,
-		NFactors: 10,
-		Reg:      0.01,
-		Lr:       0.05,
-		NEpochs:  30,
+		Target:     BPR,
+		NFactors:   10,
+		Reg:        0.01,
+		Lr:         0.05,
+		NEpochs:    100,
+		InitMean:   0,
+		InitStdDev: 0.001,
 	}),
 		data, NewKFoldSplitter(5),
-		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "AUC", "MAP", "NDCG", "MRR"},
+		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "MAP", "NDCG"},
 		[]Evaluator{
 			NewPrecision(5),
 			NewPrecision(10),
 			NewRecall(5),
 			NewRecall(10),
-			NewAUCEvaluator(math.MaxInt32),
 			NewMAP(math.MaxInt32),
 			NewNDCG(math.MaxInt32),
-			NewMRR(math.MaxInt32),
 		},
-		[]float64{0.378, 0.321, 0.129, 0.209, 0.933, 0.260, 0.601, 0.622})
+		[]float64{0.378, 0.321, 0.129, 0.209, 0.260, 0.601})
 }
 
 func TestWRMF(t *testing.T) {
@@ -223,10 +218,9 @@ func TestWRMF(t *testing.T) {
 			NewPrecision(10),
 			NewRecall(5),
 			NewRecall(10),
-			NewAUCEvaluator(math.MaxInt32),
 			NewMAP(math.MaxInt32),
 			NewNDCG(math.MaxInt32),
 			NewMRR(math.MaxInt32),
 		},
-		[]float64{0.424, 0.358, 0.149, 0.236, 0.928, 0.294, 0.631, 0.675})
+		[]float64{0.424, 0.358, 0.149, 0.236, 0.294, 0.631, 0.675})
 }
