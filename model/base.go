@@ -186,8 +186,8 @@ func (pop *ItemPop) Fit(set DataSet, options ...FitOption) {
 	pop.Init(set, options)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())
-	for i := range set.ItemRatings {
-		pop.Pop[i] = float64(set.ItemRatings[i].Len())
+	for i := range set.DenseItemRatings {
+		pop.Pop[i] = float64(set.DenseItemRatings[i].Len())
 	}
 }
 

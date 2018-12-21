@@ -6,7 +6,7 @@ import (
 
 func GetRelevantSet(test DataSet, denseUserId int) map[int]float64 {
 	set := make(map[int]float64)
-	test.UserRatings[denseUserId].ForEach(func(i, index int, value float64) {
+	test.DenseUserRatings[denseUserId].ForEach(func(i, index int, value float64) {
 		itemId := test.ItemIdSet.ToSparseId(index)
 		set[itemId] = value
 	})
@@ -18,7 +18,7 @@ func Top(test DataSet, denseUserId int, n int, train DataSet, model Model) []int
 	// Find ratings in training set
 	trainSet := make(map[int]float64)
 	userId := test.UserIdSet.ToSparseId(denseUserId)
-	train.UserRatings[train.UserIdSet.ToDenseId(userId)].ForEach(func(i, index int, value float64) {
+	train.DenseUserRatings[train.UserIdSet.ToDenseId(userId)].ForEach(func(i, index int, value float64) {
 		itemId := train.ItemIdSet.ToSparseId(index)
 		trainSet[itemId] = value
 	})

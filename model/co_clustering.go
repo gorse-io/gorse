@@ -71,8 +71,8 @@ func (coc *CoClustering) Fit(trainSet DataSet, options ...FitOption) {
 	coc.Init(trainSet, options)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean
-	userRatings := trainSet.UserRatings
-	itemRatings := trainSet.ItemRatings
+	userRatings := trainSet.DenseUserRatings
+	itemRatings := trainSet.DenseItemRatings
 	coc.UserMeans = SparseVectorsMean(userRatings)
 	coc.ItemMeans = SparseVectorsMean(itemRatings)
 	coc.UserClusters = coc.rng.MakeUniformVectorInt(trainSet.UserCount(), 0, coc.nUserClusters)

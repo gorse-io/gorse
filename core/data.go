@@ -17,13 +17,13 @@ import (
 // Train data set.
 type DataSet struct {
 	Table
-	GlobalMean   float64
-	DenseUserIds []int
-	DenseItemIds []int
-	UserRatings  []SparseVector
-	ItemRatings  []SparseVector
-	UserIdSet    SparseIdSet // Users' ID set
-	ItemIdSet    SparseIdSet // Items' ID set
+	GlobalMean       float64
+	DenseUserIds     []int
+	DenseItemIds     []int
+	DenseUserRatings []SparseVector
+	DenseItemRatings []SparseVector
+	UserIdSet        SparseIdSet // Users' ID set
+	ItemIdSet        SparseIdSet // Items' ID set
 }
 
 // NewDataSet creates a train set from a raw data set.
@@ -43,13 +43,13 @@ func NewDataSet(table Table) DataSet {
 		set.DenseItemIds = append(set.DenseItemIds, set.ItemIdSet.ToDenseId(itemId))
 	})
 	// Create user-based and item-based ratings
-	set.UserRatings = MakeDenseSparseMatrix(set.UserCount())
-	set.ItemRatings = MakeDenseSparseMatrix(set.ItemCount())
+	set.DenseUserRatings = MakeDenseSparseMatrix(set.UserCount())
+	set.DenseItemRatings = MakeDenseSparseMatrix(set.ItemCount())
 	table.ForEach(func(userId, itemId int, rating float64) {
 		userDenseId := set.UserIdSet.ToDenseId(userId)
 		itemDenseId := set.ItemIdSet.ToDenseId(itemId)
-		set.UserRatings[userDenseId].Add(itemDenseId, rating)
-		set.ItemRatings[itemDenseId].Add(userDenseId, rating)
+		set.DenseUserRatings[userDenseId].Add(itemDenseId, rating)
+		set.DenseItemRatings[itemDenseId].Add(userDenseId, rating)
 	})
 	return set
 }

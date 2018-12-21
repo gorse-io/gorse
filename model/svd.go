@@ -161,7 +161,7 @@ func (svd *SVD) fitRegression(trainSet DataSet) {
 func (svd *SVD) fitBPR(trainSet DataSet) {
 	// Create the set of positive feedback
 	positiveSet := make([]map[int]float64, trainSet.UserCount())
-	for denseUserId, userRating := range trainSet.UserRatings {
+	for denseUserId, userRating := range trainSet.DenseUserRatings {
 		positiveSet[denseUserId] = make(map[int]float64)
 		userRating.ForEach(func(i, index int, value float64) {
 			positiveSet[denseUserId][index] = value
@@ -179,7 +179,7 @@ func (svd *SVD) fitBPR(trainSet DataSet) {
 		for i := 0; i < trainSet.Len(); i++ {
 			// Select a user
 			denseUserId := svd.rng.Intn(trainSet.UserCount())
-			densePosId := trainSet.UserRatings[denseUserId].Indices[svd.rng.Intn(trainSet.UserRatings[denseUserId].Len())]
+			densePosId := trainSet.DenseUserRatings[denseUserId].Indices[svd.rng.Intn(trainSet.DenseUserRatings[denseUserId].Len())]
 			// Select a negative sample
 			denseNegId := -1
 			for {
@@ -345,7 +345,7 @@ func (nmf *NMF) Fit(trainSet DataSet, options ...FitOption) {
 //
 // Where the y_j terms are a new set of item factors that capture implicit
 // interactionRatings. Here, an implicit rating describes the fact that a user u
-// UserRatings an item j, regardless of the rating value. If user u is unknown,
+// DenseUserRatings an item j, regardless of the rating value. If user u is unknown,
 // then the Bias b_u and the factors p_u are assumed to be zero. The same
 // applies for item i with b_i, q_i and y_i.
 type SVDpp struct {
@@ -442,11 +442,13 @@ func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 	svd.ItemFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	svd.ImplFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	// Build user rating set
-	svd.UserRatings = trainSet.UserRatings
+	svd.UserRatings = trainSet.DenseUserRatings
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
 	step := make([]float64, svd.nFactors)
+	userFactor := make([]float64, svd.nFactors)
+	itemFactor := make([]float64, svd.nFactors)
 	c := MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
 	d := MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
 	// Stochastic Gradient Descent
@@ -456,11 +458,11 @@ func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 			size := svd.UserRatings[denseUserId].Len()
 			scale := math.Pow(float64(size), -0.5)
 			sumFactor := svd.getSumFactors(denseUserId)
-			trainSet.UserRatings[denseUserId].ForEach(func(i, denseItemId int, rating float64) {
+			trainSet.DenseUserRatings[denseUserId].ForEach(func(i, denseItemId int, rating float64) {
 				userBias := svd.UserBias[denseUserId]
 				itemBias := svd.ItemBias[denseItemId]
-				userFactor := svd.UserFactor[denseUserId]
-				itemFactor := svd.ItemFactor[denseItemId]
+				copy(userFactor, svd.UserFactor[denseUserId])
+				copy(itemFactor, svd.ItemFactor[denseItemId])
 				// Compute error: e_{ui} = r - \hat r
 				pred := svd.predict(denseUserId, denseItemId, sumFactor)
 				diff := rating - pred
@@ -529,6 +531,7 @@ func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 	}
 }
 
+// WRMF[7] model for implicit feedback.
 type WRMF struct {
 	Base
 	// Model parameters
@@ -543,6 +546,12 @@ type WRMF struct {
 	alpha      float64
 }
 
+// NewWRMF creates a WRMF model. Parameters:
+//   NFactors   - The number of latent factors. Default is 10.
+//   NEpochs    - The number of training epochs. Default is 50.
+//   InitMean   - The mean of initial latent factors. Default is 0.
+//   InitStdDev - The standard deviation of initial latent factors. Default is 0.1.
+//   Reg        - The strength of regularization.
 func NewWRMF(params Params) *WRMF {
 	mf := new(WRMF)
 	mf.SetParams(params)
@@ -596,18 +605,18 @@ func (mf *WRMF) Fit(set DataSet, options ...FitOption) {
 		for u := 0; u < set.UserCount(); u++ {
 			a.Copy(c)
 			b := mat.NewVecDense(mf.nFactors, nil)
-			set.UserRatings[u].ForEach(func(_, index int, value float64) {
+			set.DenseUserRatings[u].ForEach(func(_, index int, value float64) {
 				// Y^T (C^u-I) Y
 				weight := value
 				temp1.Outer(weight, mf.ItemFactor.RowView(index), mf.ItemFactor.RowView(index))
 				a.Add(a, temp1)
-				temp2.ScaleVec((weight+1)*p.At(u, index), mf.ItemFactor.RowView(index))
+				// Y^T C^u p(u)
+				temp2.ScaleVec(weight+1, mf.ItemFactor.RowView(index))
 				b.AddVec(b, temp2)
 			})
 			a.Add(a, regI)
 			if err := temp1.Inverse(a); err != nil {
 				log.Println(err)
-				panic("A")
 			}
 			temp2.MulVec(temp1, b)
 			mf.UserFactor.SetRow(u, temp2.RawVector().Data)
@@ -620,18 +629,18 @@ func (mf *WRMF) Fit(set DataSet, options ...FitOption) {
 		for i := 0; i < set.ItemCount(); i++ {
 			a.Copy(c)
 			b := mat.NewVecDense(mf.nFactors, nil)
-			set.ItemRatings[i].ForEach(func(_, index int, value float64) {
+			set.DenseItemRatings[i].ForEach(func(_, index int, value float64) {
 				// X^T (C^i-I) X
 				weight := value
 				temp1.Outer(weight, mf.UserFactor.RowView(index), mf.UserFactor.RowView(index))
 				a.Add(a, temp1)
-				temp2.ScaleVec((weight+1)*p.At(index, i), mf.UserFactor.RowView(index))
+				// X^T C^i p(i)
+				temp2.ScaleVec(weight+1, mf.UserFactor.RowView(index))
 				b.AddVec(b, temp2)
 			})
 			a.Add(a, regI)
 			if err := temp1.Inverse(a); err != nil {
 				log.Println(err)
-				panic("B")
 			}
 			temp2.MulVec(temp1, b)
 			mf.ItemFactor.SetRow(i, temp2.RawVector().Data)
@@ -639,6 +648,6 @@ func (mf *WRMF) Fit(set DataSet, options ...FitOption) {
 	}
 }
 
-//func (mf *WRMF) weight(value float64) float64 {
-//	return mf.alpha * value
-//}
+func (mf *WRMF) weight(value float64) float64 {
+	return mf.alpha * value
+}

@@ -48,10 +48,10 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 func (so *SlopeOne) Fit(trainSet DataSet, setters ...FitOption) {
 	so.Init(trainSet, setters)
 	so.GlobalMean = trainSet.GlobalMean
-	so.UserRatings = trainSet.UserRatings
+	so.UserRatings = trainSet.DenseUserRatings
 	so.UserMeans = SparseVectorsMean(so.UserRatings)
 	so.Dev = MakeMatrix(trainSet.ItemCount(), trainSet.ItemCount())
-	itemRatings := trainSet.ItemRatings
+	itemRatings := trainSet.DenseItemRatings
 	Parallel(len(itemRatings), so.rtOptions.NJobs, func(begin, end int) {
 		for i := begin; i < end; i++ {
 			for j := 0; j < i; j++ {

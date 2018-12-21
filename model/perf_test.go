@@ -60,13 +60,6 @@ func TestSVD(t *testing.T) {
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.934, 0.737})
 }
 
-func TestSVDpp(t *testing.T) {
-	EvaluateRegression(t, NewSVDpp(Params{
-		NEpochs: 100,
-	}), LoadDataFromBuiltIn("ml-100k"), NewRatioSplitter(1, 0.2),
-		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.92, 0.722})
-}
-
 func TestNMF(t *testing.T) {
 	EvaluateRegression(t, NewNMF(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.963, 0.758})
@@ -212,7 +205,7 @@ func TestWRMF(t *testing.T) {
 		Alpha:    1.0,
 		NEpochs:  10,
 	}), data, NewKFoldSplitter(5),
-		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "AUC", "MAP", "NDCG", "MRR"},
+		[]string{"Prec@5", "Prec@10", "Recall@5", "Recall@10", "MAP", "NDCG"},
 		[]Evaluator{
 			NewPrecision(5),
 			NewPrecision(10),
@@ -222,5 +215,5 @@ func TestWRMF(t *testing.T) {
 			NewNDCG(math.MaxInt32),
 			NewMRR(math.MaxInt32),
 		},
-		[]float64{0.424, 0.358, 0.149, 0.236, 0.294, 0.631, 0.675})
+		[]float64{0.416, 0.353, 0.142, 0.227, 0.287, 0.624})
 }

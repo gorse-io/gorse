@@ -34,18 +34,18 @@ func MAE(estimator Model, _ DataSet, testSet DataSet) float64 {
 func AUC(estimator Model, trainSet DataSet, testSet DataSet) float64 {
 	sum, count := 0.0, 0.0
 	// Find all userIds
-	for denseUserIdInTest, userRating := range testSet.UserRatings {
+	for denseUserIdInTest, userRating := range testSet.DenseUserRatings {
 		userId := testSet.UserIdSet.ToSparseId(denseUserIdInTest)
 		// Find all <userId, j>s in training data set and test data set.
 		denseUserIdInTrain := trainSet.UserIdSet.ToDenseId(userId)
 		positiveSet := make(map[int]float64)
 		if denseUserIdInTrain != base.NotId {
-			trainSet.UserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
+			trainSet.DenseUserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
 				itemId := trainSet.ItemIdSet.ToSparseId(index)
 				positiveSet[itemId] = value
 			})
 		}
-		testSet.UserRatings[denseUserIdInTest].ForEach(func(i, index int, value float64) {
+		testSet.DenseUserRatings[denseUserIdInTest].ForEach(func(i, index int, value float64) {
 			itemId := testSet.ItemIdSet.ToSparseId(index)
 			positiveSet[itemId] = value
 		})

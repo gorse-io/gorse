@@ -71,7 +71,7 @@ func NewUserLOOSplitter(repeat int) Splitter {
 				make([]int, 0, trainSet.UserCount()),
 				make([]int, 0, trainSet.UserCount()),
 				make([]float64, 0, trainSet.UserCount())
-			for innerUserId, irs := range trainSet.UserRatings {
+			for innerUserId, irs := range trainSet.DenseUserRatings {
 				userId := trainSet.UserIdSet.ToSparseId(innerUserId)
 				out := rand.Intn(irs.Len())
 				irs.ForEach(func(i, index int, value float64) {
@@ -116,7 +116,7 @@ func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
 			userPerm := rand.Perm(trainSet.UserCount())
 			userTest := userPerm[:testSize]
 			userTrain := userPerm[testSize:]
-			userRatings := trainSet.UserRatings
+			userRatings := trainSet.DenseUserRatings
 			// Add all train user's ratings to train set
 			for _, userId := range userTrain {
 				userRatings[userId].ForEach(func(i, index int, value float64) {

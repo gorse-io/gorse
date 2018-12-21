@@ -118,11 +118,11 @@ func (knn *KNN) Fit(trainSet DataSet, options ...FitOption) {
 	knn.GlobalMean = trainSet.GlobalMean
 	// Retrieve user (item) iRatings
 	if knn.userBased {
-		knn.LeftRatings = trainSet.UserRatings
-		knn.RightRatings = trainSet.ItemRatings
+		knn.LeftRatings = trainSet.DenseUserRatings
+		knn.RightRatings = trainSet.DenseItemRatings
 	} else {
-		knn.LeftRatings = trainSet.ItemRatings
-		knn.RightRatings = trainSet.UserRatings
+		knn.LeftRatings = trainSet.DenseItemRatings
+		knn.RightRatings = trainSet.DenseUserRatings
 	}
 	// Retrieve user (item) Mean
 	if knn._type == Centered || knn._type == ZScore {
