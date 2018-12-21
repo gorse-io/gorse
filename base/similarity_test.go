@@ -17,7 +17,7 @@ func TestCosine(t *testing.T) {
 	b.Add(0, 0)
 	b.Add(1, 1)
 	b.Add(2, 2)
-	sim := Cosine(a, b)
+	sim := CosineSimilarity(a, b)
 	assert.False(t, math.Abs(sim-0.978) > simTestEpsilon)
 }
 
@@ -30,7 +30,7 @@ func TestMSD(t *testing.T) {
 	b.Add(0, 0)
 	b.Add(1, 1)
 	b.Add(2, 2)
-	sim := MSD(a, b)
+	sim := MSDSimilarity(a, b)
 	assert.False(t, math.Abs(sim-0.1) > simTestEpsilon)
 }
 
@@ -43,6 +43,6 @@ func TestPearson(t *testing.T) {
 	b.Add(0, 0)
 	b.Add(1, 1)
 	b.Add(2, 2)
-	sim := Pearson(a, b)
+	sim := PearsonSimilarity(a, b)
 	assert.False(t, math.Abs(sim) > simTestEpsilon)
 }

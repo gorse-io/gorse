@@ -27,7 +27,7 @@ type SVD struct {
 	ItemFactor [][]float64 // q_i
 	UserBias   []float64   // b_u
 	ItemBias   []float64   // b_i
-	GlobalBias float64     // mu
+	GlobalMean float64     // mu
 	// Hyper parameters
 	useBias    bool
 	nFactors   int
@@ -74,7 +74,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 }
 
 func (svd *SVD) predict(denseUserId int, denseItemId int) float64 {
-	ret := svd.GlobalBias
+	ret := svd.GlobalMean
 	// + b_u
 	if denseUserId != NotId {
 		ret += svd.UserBias[denseUserId]
@@ -95,6 +95,7 @@ func (svd *SVD) predict(denseUserId int, denseItemId int) float64 {
 func (svd *SVD) Fit(trainSet DataSet, options ...FitOption) {
 	svd.Init(trainSet, options)
 	// Initialize parameters
+	svd.GlobalMean = 0
 	svd.UserBias = make([]float64, trainSet.UserCount())
 	svd.ItemBias = make([]float64, trainSet.ItemCount())
 	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
@@ -111,6 +112,7 @@ func (svd *SVD) Fit(trainSet DataSet, options ...FitOption) {
 }
 
 func (svd *SVD) fitRegression(trainSet DataSet) {
+	svd.GlobalMean = trainSet.GlobalMean
 	// Create buffers
 	a := make([]float64, svd.nFactors)
 	b := make([]float64, svd.nFactors)
@@ -126,9 +128,6 @@ func (svd *SVD) fitRegression(trainSet DataSet) {
 			if svd.useBias {
 				userBias := svd.UserBias[denseUserId]
 				itemBias := svd.ItemBias[denseItemId]
-				// Update global Bias
-				gradGlobalBias := upGrad
-				svd.GlobalBias += svd.lr * gradGlobalBias
 				// Update user Bias: b_u <- b_u + \gamma (e_{ui} - \lambda b_u)
 				gradUserBias := upGrad - svd.reg*userBias
 				svd.UserBias[denseUserId] += svd.lr * gradUserBias
@@ -356,7 +355,7 @@ type SVDpp struct {
 	ImplFactor  [][]float64    // y_i
 	UserBias    []float64      // b_u
 	ItemBias    []float64      // b_i
-	GlobalBias  float64        // mu
+	GlobalMean  float64        // mu
 	nFactors    int
 	nEpochs     int
 	reg         float64
@@ -398,7 +397,7 @@ func (svd *SVDpp) Predict(userId int, itemId int) float64 {
 }
 
 func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumFactor []float64) float64 {
-	ret := svd.GlobalBias
+	ret := svd.GlobalMean
 	// + b_u
 	if denseUserId != NotId {
 		ret += svd.UserBias[denseUserId]
@@ -436,6 +435,7 @@ func (svd *SVDpp) getSumFactors(denseUserId int) []float64 {
 func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 	svd.Init(trainSet, setters)
 	// Initialize parameters
+	svd.GlobalMean = trainSet.GlobalMean
 	svd.UserBias = make([]float64, trainSet.UserCount())
 	svd.ItemBias = make([]float64, trainSet.ItemCount())
 	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
@@ -466,9 +466,6 @@ func (svd *SVDpp) Fit(trainSet DataSet, setters ...FitOption) {
 				// Compute error: e_{ui} = r - \hat r
 				pred := svd.predict(denseUserId, denseItemId, sumFactor)
 				diff := rating - pred
-				// Update global Bias
-				gradGlobalBias := diff
-				svd.GlobalBias += svd.lr * gradGlobalBias
 				// Update user Bias: b_u <- b_u + \gamma (e_{ui} - \lambda b_u)
 				gradUserBias := diff - svd.reg*userBias
 				svd.UserBias[denseUserId] += svd.lr * gradUserBias
@@ -617,6 +614,7 @@ func (mf *WRMF) Fit(set DataSet, options ...FitOption) {
 			a.Add(a, regI)
 			if err := temp1.Inverse(a); err != nil {
 				log.Println(err)
+				panic("A")
 			}
 			temp2.MulVec(temp1, b)
 			mf.UserFactor.SetRow(u, temp2.RawVector().Data)
@@ -641,6 +639,7 @@ func (mf *WRMF) Fit(set DataSet, options ...FitOption) {
 			a.Add(a, regI)
 			if err := temp1.Inverse(a); err != nil {
 				log.Println(err)
+				panic("B")
 			}
 			temp2.MulVec(temp1, b)
 			mf.ItemFactor.SetRow(i, temp2.RawVector().Data)
