@@ -45,11 +45,6 @@ func EvaluateRank(t *testing.T, algo Model, dataSet Table, splitter Splitter, ev
 
 // Surprise Benchmark: https://github.com/NicolasHug/Surprise#benchmarks
 
-func TestRandom(t *testing.T) {
-	EvaluateRegression(t, NewRandom(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
-		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{1.514, 1.215})
-}
-
 func TestBaseLine(t *testing.T) {
 	EvaluateRegression(t, NewBaseLine(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.944, 0.748})

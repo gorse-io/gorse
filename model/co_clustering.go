@@ -3,7 +3,6 @@ package model
 import (
 	. "github.com/zhenghaoz/gorse/base"
 	. "github.com/zhenghaoz/gorse/core"
-	"gonum.org/v1/gonum/floats"
 	"math"
 )
 
@@ -43,23 +42,26 @@ func (coc *CoClustering) SetParams(params Params) {
 }
 
 func (coc *CoClustering) Predict(userId, itemId int) float64 {
-	// Convert to inner Id
-	innerUserId := coc.UserIdSet.ToDenseId(userId)
-	innerItemId := coc.ItemIdSet.ToDenseId(itemId)
+	denseUserId := coc.UserIdSet.ToDenseId(userId)
+	denseItemId := coc.ItemIdSet.ToDenseId(itemId)
+	return coc.predict(denseUserId, denseItemId)
+}
+
+func (coc *CoClustering) predict(denseUserId, denseItemId int) float64 {
 	prediction := 0.0
-	if innerUserId != NotId && innerItemId != NotId {
+	if denseUserId != NotId && denseItemId != NotId {
 		// old user - old item
-		userCluster := coc.UserClusters[innerUserId]
-		itemCluster := coc.ItemClusters[innerItemId]
-		prediction = coc.UserMeans[innerUserId] + coc.ItemMeans[innerItemId] -
+		userCluster := coc.UserClusters[denseUserId]
+		itemCluster := coc.ItemClusters[denseItemId]
+		prediction = coc.UserMeans[denseUserId] + coc.ItemMeans[denseItemId] -
 			coc.UserClusterMeans[userCluster] - coc.ItemClusterMeans[itemCluster] +
 			coc.CoClusterMeans[userCluster][itemCluster]
-	} else if innerUserId != NotId {
+	} else if denseUserId != NotId {
 		// old user - new item
-		prediction = coc.UserMeans[innerUserId]
-	} else if innerItemId != NotId {
+		prediction = coc.UserMeans[denseUserId]
+	} else if denseItemId != NotId {
 		// new user - old item
-		prediction = coc.ItemMeans[innerItemId]
+		prediction = coc.ItemMeans[denseItemId]
 	} else {
 		// new user - new item
 		prediction = coc.GlobalMean
@@ -90,79 +92,54 @@ func (coc *CoClustering) Fit(trainSet DataSet, options ...FitOption) {
 	// Clustering
 	for ep := 0; ep < coc.nEpochs; ep++ {
 		// Compute averages A^{COC}, A^{RC}, A^{CC}, A^R, A^C
-		clusterMean(coc.UserClusterMeans, coc.UserClusters, userRatings)
-		clusterMean(coc.ItemClusterMeans, coc.ItemClusters, itemRatings)
-		coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, userRatings)
-		// A^{tmp2}_{ih} = \frac {\sum_{j'|y(j')=h}A^{tmp1}_{ij'}} {\sum_{j'|y(j')=h}W_{ij'}} + A^{CC}_h
-		tmp2 := MakeMatrix(trainSet.UserCount(), coc.nItemClusters)
-		count2 := MakeMatrix(trainSet.UserCount(), coc.nItemClusters)
-		for i := range tmp2 {
-			userRatings[i].ForEach(func(_, index int, value float64) {
-				itemClass := coc.ItemClusters[index]
-				tmp2[i][itemClass] += tmp1[i][index]
-				count2[i][itemClass]++
-			})
-			for h := range tmp2[i] {
-				tmp2[i][h] /= count2[i][h]
-				tmp2[i][h] += coc.ItemClusterMeans[h]
-			}
-		}
+		coc.clusterMean(coc.UserClusterMeans, coc.UserClusters, userRatings)
+		coc.clusterMean(coc.ItemClusterMeans, coc.ItemClusters, itemRatings)
+		coc.coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, userRatings)
 		// Update row (user) cluster assignments
-		for i := range coc.UserClusters {
-			bestCluster, leastCost := coc.UserClusters[i], math.Inf(1)
+		for denseUserId := 0; denseUserId < trainSet.UserCount(); denseUserId++ {
+			bestCluster, leastCost := -1, math.Inf(1)
 			for g := 0; g < coc.nUserClusters; g++ {
-				// \sum^l_{h=1} A^{tmp2}_{ig} - A^{COC}_{gh} + A^{RC}_g
 				cost := 0.0
-				for h := 0; h < coc.nItemClusters; h++ {
-					if !math.IsNaN(tmp2[i][h]) {
-						temp := tmp2[i][h] - coc.CoClusterMeans[g][h] + coc.UserClusterMeans[g]
-						cost += temp * temp
-					}
-				}
+				userRatings[denseUserId].ForEach(func(_, denseItemId int, value float64) {
+					itemCluster := coc.ItemClusters[denseItemId]
+					prediction := coc.UserMeans[denseUserId] + coc.ItemMeans[denseItemId] -
+						coc.UserClusterMeans[g] -
+						coc.ItemClusterMeans[itemCluster] +
+						coc.CoClusterMeans[g][itemCluster]
+					temp := prediction - value
+					cost += temp * temp
+				})
 				if cost < leastCost {
 					bestCluster = g
 					leastCost = cost
 				}
 			}
-			coc.UserClusters[i] = bestCluster
-		}
-		// A^{tmp3}_{gj} = \frac {\sum_{i'|p(i')=g}A^{tmp1}_{i'j}} {\sum_{i'|p(i')=g}W_{i'j}} + A^{RC}_g
-		tmp3 := MakeMatrix(coc.nUserClusters, trainSet.ItemCount())
-		count3 := MakeMatrix(coc.nUserClusters, trainSet.ItemCount())
-		for j := range coc.ItemClusters {
-			itemRatings[j].ForEach(func(_, index int, value float64) {
-				userClass := coc.UserClusters[index]
-				tmp3[userClass][j] += tmp1[index][j]
-				count3[userClass][j]++
-			})
-			for g := range tmp3 {
-				tmp3[g][j] /= count3[g][j]
-				tmp3[g][j] += coc.UserClusterMeans[g]
-			}
+			coc.UserClusters[denseUserId] = bestCluster
 		}
 		// Update column (item) cluster assignments
-		for j := range coc.ItemClusters {
-			bestCluster, leastCost := coc.ItemClusters[j], math.Inf(1)
+		for denseItemId := 0; denseItemId < trainSet.ItemCount(); denseItemId++ {
+			bestCluster, leastCost := -1, math.Inf(1)
 			for h := 0; h < coc.nItemClusters; h++ {
-				// \sum^k_{h=1} A^{tmp3}_{gj} - A^{COC}_{gh} + A^{CC}_h
 				cost := 0.0
-				for g := 0; g < coc.nUserClusters; g++ {
-					if !math.IsNaN(tmp3[g][j]) {
-						temp := tmp3[g][j] - coc.CoClusterMeans[g][h] + coc.ItemClusterMeans[h]
-						cost += temp * temp
-					}
-				}
+				itemRatings[denseItemId].ForEach(func(_, denseUserId int, value float64) {
+					userCluster := coc.UserClusters[denseUserId]
+					prediction := coc.UserMeans[denseUserId] + coc.ItemMeans[denseItemId] -
+						coc.UserClusterMeans[userCluster] - coc.ItemClusterMeans[h] +
+						coc.CoClusterMeans[userCluster][h]
+					temp := prediction - value
+					cost += temp * temp
+				})
 				if cost < leastCost {
 					bestCluster = h
 					leastCost = cost
 				}
 			}
-			coc.ItemClusters[j] = bestCluster
+			coc.ItemClusters[denseItemId] = bestCluster
 		}
 	}
 }
 
-func clusterMean(dst []float64, clusters []int, ratings []SparseVector) {
+func (coc *CoClustering) clusterMean(dst []float64, clusters []int, ratings []SparseVector) {
 	FillZeroVector(dst)
 	count := make([]float64, len(dst))
 	for id, cluster := range clusters {
@@ -171,20 +148,32 @@ func clusterMean(dst []float64, clusters []int, ratings []SparseVector) {
 			count[cluster]++
 		})
 	}
-	floats.Div(dst, count)
+	for i := range dst {
+		if count[i] > 0 {
+			dst[i] /= count[i]
+		} else {
+			dst[i] = coc.GlobalMean
+		}
+	}
 }
 
-func coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []SparseVector) {
+func (coc *CoClustering) coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []SparseVector) {
 	FillZeroMatrix(dst)
-	count := MakeMatrix(len(dst), len(dst[0]))
-	for userId, userCluster := range userClusters {
-		userRatings[userId].ForEach(func(_, index int, value float64) {
-			itemCluster := itemClusters[index]
+	count := MakeMatrix(coc.nUserClusters, coc.nItemClusters)
+	for denseUserId, userCluster := range userClusters {
+		userRatings[denseUserId].ForEach(func(_, denseItemId int, value float64) {
+			itemCluster := itemClusters[denseItemId]
 			count[userCluster][itemCluster]++
 			dst[userCluster][itemCluster] += value
 		})
 	}
 	for i := range dst {
-		floats.Div(dst[i], count[i])
+		for j := range dst[i] {
+			if count[i][j] > 0 {
+				dst[i][j] /= count[i][j]
+			} else {
+				dst[i][j] = coc.GlobalMean
+			}
+		}
 	}
 }
