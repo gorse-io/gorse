@@ -1,4 +1,4 @@
-/**
+/*
 
 Package model provides models for item rating and ranking.
 

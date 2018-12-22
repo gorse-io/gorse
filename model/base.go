@@ -147,7 +147,7 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 func (baseLine *BaseLine) Fit(trainSet DataSet, options ...FitOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
-	baseLine.GlobalBias = 0
+	baseLine.GlobalBias = trainSet.GlobalMean
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
 	baseLine.ItemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
@@ -158,11 +158,9 @@ func (baseLine *BaseLine) Fit(trainSet DataSet, options ...FitOption) {
 			itemBias := baseLine.ItemBias[denseItemId]
 			// Compute gradient
 			diff := baseLine.predict(denseUserId, denseItemId) - rating
-			gradGlobalBias := diff
 			gradUserBias := diff + baseLine.reg*userBias
 			gradItemBias := diff + baseLine.reg*itemBias
 			// Update parameters
-			baseLine.GlobalBias -= baseLine.lr * gradGlobalBias
 			baseLine.UserBias[denseUserId] -= baseLine.lr * gradUserBias
 			baseLine.ItemBias[denseItemId] -= baseLine.lr * gradItemBias
 		}

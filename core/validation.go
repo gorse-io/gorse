@@ -21,17 +21,16 @@ type CrossValidateResult struct {
 	FitTime   []float64
 }
 
-func (sv CrossValidateResult) Summary() string {
+func (sv CrossValidateResult) MeanMarginScore() (float64, float64) {
 	mean := stat.Mean(sv.TestScore, nil)
-	interval := 0.0
+	margin := 0.0
 	for _, score := range sv.TestScore {
 		temp := math.Abs(score - mean)
-		if temp > interval {
-			interval = temp
+		if temp > margin {
+			margin = temp
 		}
 	}
-	text := fmt.Sprintf("%.5f(±%.5f)", mean, interval)
-	return text
+	return mean, margin
 }
 
 // CrossValidation evaluates a model by k-fold cross validation.

@@ -9,12 +9,21 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"time"
 )
 
 func main() {
 	fmt.Println("Benchmarks on MovieLens 1M")
 	// Models for benchmarks
 	models := []core.Model{
+		// SlopOne
+		model.NewSlopOne(nil),
+		// CoClustering
+		model.NewCoClustering(base.Params{
+			base.NUserClusters: 5,
+			base.NItemClusters: 5,
+			base.NEpochs:       30,
+		}),
 		// KNN
 		model.NewKNN(base.Params{
 			base.Type:       base.Baseline,
@@ -30,14 +39,6 @@ func main() {
 			base.NFactors: 80,
 			base.Reg:      0.1,
 		}),
-		// SlopOne
-		model.NewSlopOne(nil),
-		// CoClustering
-		model.NewCoClustering(base.Params{
-			base.NUserClusters: 5,
-			base.NItemClusters: 5,
-			base.NEpochs:       30,
-		}),
 		//SVD++
 		model.NewSVDpp(base.Params{
 			base.NFactors: 10,
@@ -51,16 +52,23 @@ func main() {
 	// Cross Validation
 	lines := make([][]string, 0)
 	for _, m := range models {
-		cv := core.CrossValidate(m, data, []core.Evaluator{core.RMSE}, core.NewKFoldSplitter(5))
+		start := time.Now()
+		cv := core.CrossValidate(m, data, []core.Evaluator{core.RMSE, core.MAE}, core.NewKFoldSplitter(5))
+		tm := time.Since(start)
+		meanRMSE, marginRMSE := cv[0].MeanMarginScore()
+		meanMAE, marginMAE := cv[1].MeanMarginScore()
 		lines = append(lines, []string{
 			fmt.Sprint(reflect.TypeOf(m)),
-			cv[0].Summary(),
+			fmt.Sprintf("%.5f(±%.5f)", meanRMSE, marginRMSE),
+			fmt.Sprintf("%.5f(±%.5f)", meanMAE, marginMAE),
+			fmt.Sprintf("%d:%02d:%02d", int(tm.Hours()), int(tm.Minutes())%60, int(tm.Seconds())%60),
 		})
-		log.Println(fmt.Sprint(reflect.TypeOf(m)), ":", cv[0].Summary())
+		log.Printf("%s: RMSE = %.5f(±%.5f), MAE = %.5f(±%.5f)",
+			reflect.TypeOf(m), meanRMSE, marginRMSE, meanMAE, marginMAE)
 	}
 	// Print table
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Model", "RMSE"})
+	table.SetHeader([]string{"Model", "RMSE", "MAE", "Time"})
 	for _, v := range lines {
 		table.Append(v)
 	}
