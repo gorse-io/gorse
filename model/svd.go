@@ -592,7 +592,7 @@ func (mf *WRMF) Fit(set DataSet, options ...FitOption) {
 	for i := range regs {
 		regs[i] = mf.reg
 	}
-	regI := mat.NewDiagonal(mf.nFactors, regs)
+	regI := mat.NewDiagDense(mf.nFactors, regs)
 	for ep := 0; ep < mf.nEpochs; ep++ {
 		// Recompute all user factors: x_u = (Y^T C^u Y + \lambda reg)^{-1} Y^T C^u p(u)
 		// Y^T Y
