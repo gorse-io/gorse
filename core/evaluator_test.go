@@ -15,8 +15,16 @@ type EvaluatorTesterModel struct {
 
 func NewEvaluatorTesterModel(users, items []int, ratings []float64) *EvaluatorTesterModel {
 	test := new(EvaluatorTesterModel)
-	test.MaxUserId = Max(users)
-	test.MaxItemId = Max(items)
+	if len(users) == 0 {
+		test.MaxUserId = -1
+	} else {
+		test.MaxUserId = Max(users)
+	}
+	if len(items) == 0 {
+		test.MaxItemId = -1
+	} else {
+		test.MaxItemId = Max(items)
+	}
 	test.Matrix = MakeMatrix(test.MaxUserId+1, test.MaxItemId+1)
 	for i := range ratings {
 		userId := users[i]

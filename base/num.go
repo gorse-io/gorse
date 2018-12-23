@@ -1,5 +1,7 @@
 package base
 
+import "log"
+
 // Concatenate arrays of integers.
 func Concatenate(arrays ...[]int) []int {
 	// Sum lengths
@@ -19,8 +21,11 @@ func Concatenate(arrays ...[]int) []int {
 	return ret
 }
 
-// Max finds the maximum in a vector.
+// Max finds the maximum in a vector. Return 0 if the slice is empty.
 func Max(a []int) int {
+	if len(a) == 0 {
+		log.Panicf("Can't get the maximum from empty vector")
+	}
 	maximum := a[0]
 	for _, m := range a {
 		if m > maximum {
@@ -30,8 +35,11 @@ func Max(a []int) int {
 	return maximum
 }
 
-// Min finds the minimum in a vector
+// Min finds the minimum in a vector. Return 0 if the slice is empty.
 func Min(a []int) int {
+	if len(a) == 0 {
+		log.Panicf("Can't get the minimum from empty vector")
+	}
 	minimum := a[0]
 	for _, m := range a {
 		if m < minimum {
