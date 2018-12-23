@@ -3,6 +3,7 @@ package core
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
 	"os"
@@ -44,5 +45,38 @@ func TestUnzip(t *testing.T) {
 	}
 	if len(fileNames) != 24 {
 		t.Fatal("Number of file doesn't match")
+	}
+}
+
+func TestLoadDataFromBuiltIn(t *testing.T) {
+	data := LoadDataFromBuiltIn("ml-100k")
+	assert.Equal(t, 100000, data.Len())
+}
+
+func TestLoadDataFromCSV_Explicit(t *testing.T) {
+	data := LoadDataFromCSV("../example/data/implicit.csv", ",", true)
+	assert.Equal(t, 5, data.Len())
+	for i := 0; i < data.Len(); i++ {
+		userId, itemId, value := data.Get(i)
+		denseUserId, denseItemId, _ := data.GetDense(i)
+		assert.Equal(t, i, userId)
+		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, 3*i, int(value))
+		assert.Equal(t, i, denseUserId)
+		assert.Equal(t, i, denseItemId)
+	}
+}
+
+func TestLoadDataFromNetflixStyle(t *testing.T) {
+	data := LoadDataFromNetflixStyle("../example/data/netflix.txt", ",", true)
+	assert.Equal(t, 5, data.Len())
+	for i := 0; i < data.Len(); i++ {
+		userId, itemId, value := data.Get(i)
+		denseUserId, denseItemId, _ := data.GetDense(i)
+		assert.Equal(t, 2*i, userId)
+		assert.Equal(t, i, itemId)
+		assert.Equal(t, 3*i, int(value))
+		assert.Equal(t, i, denseUserId)
+		assert.Equal(t, i, denseItemId)
 	}
 }

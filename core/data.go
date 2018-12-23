@@ -54,16 +54,10 @@ func NewDataSet(table Table) DataSet {
 	return set
 }
 
+// GetDense get the i-th record by <denseUserId, denseItemId, rating>.
 func (trainSet *DataSet) GetDense(i int) (int, int, float64) {
 	_, _, rating := trainSet.Get(i)
 	return trainSet.DenseUserIds[i], trainSet.DenseItemIds[i], rating
-}
-
-func (trainSet *DataSet) ForEachDense(f func(denseUserId, denseItemId int, rating float64)) {
-	for i := 0; i < trainSet.Len(); i++ {
-		denseUserId, denseItemId, rating := trainSet.GetDense(i)
-		f(denseUserId, denseItemId, rating)
-	}
 }
 
 func (trainSet *DataSet) UserCount() int {
@@ -82,7 +76,7 @@ func (trainSet *DataSet) ItemCount() int {
 //   ml-10m		- MovieLens 10M
 //   ml-20m		- MovieLens 20M
 //   netflix    - Netflix Prize
-func LoadDataFromBuiltIn(dataSetName string) Table {
+func LoadDataFromBuiltIn(dataSetName string) DataSet {
 	// Extract data set information
 	dataSet, exist := builtInDataSets[dataSetName]
 	if !exist {
