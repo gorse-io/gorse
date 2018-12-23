@@ -1,5 +1,10 @@
 package base
 
+import (
+	"log"
+	"reflect"
+)
+
 /* ParamName */
 
 // ParamName is the type of hyper-parameter names.
@@ -76,7 +81,12 @@ func (parameters Params) Copy() Params {
 // Get a integer parameter.
 func (parameters Params) GetInt(name ParamName, _default int) int {
 	if val, exist := parameters[name]; exist {
-		return val.(int)
+		switch val.(type) {
+		case int:
+			return val.(int)
+		default:
+			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+		}
 	}
 	return _default
 }
@@ -90,7 +100,7 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 		case int:
 			return int64(val.(int))
 		default:
-			panic("Expect int64")
+			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default
@@ -99,7 +109,12 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 // Get a bool parameter.
 func (parameters Params) GetBool(name ParamName, _default bool) bool {
 	if val, exist := parameters[name]; exist {
-		return val.(bool)
+		switch val.(type) {
+		case bool:
+			return val.(bool)
+		default:
+			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+		}
 	}
 	return _default
 }
@@ -112,6 +127,8 @@ func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 			return val.(float64)
 		case int:
 			return float64(val.(int))
+		default:
+			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default
@@ -120,7 +137,12 @@ func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 // Get a string parameter
 func (parameters Params) GetString(name ParamName, _default ParamString) ParamString {
 	if val, exist := parameters[name]; exist {
-		return val.(ParamString)
+		switch val.(type) {
+		case ParamString:
+			return val.(ParamString)
+		default:
+			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+		}
 	}
 	return _default
 }

@@ -21,13 +21,24 @@ func Concatenate(arrays ...[]int) []int {
 
 // Max finds the maximum in a vector.
 func Max(a []int) int {
-	maximum := 0
+	maximum := a[0]
 	for _, m := range a {
 		if m > maximum {
 			maximum = m
 		}
 	}
 	return maximum
+}
+
+// Min finds the minimum in a vector
+func Min(a []int) int {
+	minimum := a[0]
+	for _, m := range a {
+		if m < minimum {
+			minimum = m
+		}
+	}
+	return minimum
 }
 
 // Neg gets the negative of a vector.

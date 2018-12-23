@@ -10,16 +10,23 @@ import (
 
 const randomEpsilon = 0.1
 
-func TestRandomGenerator_MakeNormalVector(t *testing.T) {
+func TestRandomGenerator_MakeUniformVectorInt(t *testing.T) {
 	rng := NewRandomGenerator(0)
-	vec := rng.MakeNormalVector(1000, 1, 2)
+	vec := rng.MakeUniformVectorInt(1000, 10, 100)
+	assert.False(t, Min(vec) < 10)
+	assert.False(t, Max(vec) > 100)
+}
+
+func TestRandomGenerator_MakeNormalMatrix(t *testing.T) {
+	rng := NewRandomGenerator(0)
+	vec := rng.MakeNormalMatrix(1, 1000, 1, 2)[0]
 	assert.False(t, math.Abs(stat.Mean(vec, nil)-1) > randomEpsilon)
 	assert.False(t, math.Abs(stat.StdDev(vec, nil)-2) > randomEpsilon)
 }
 
-func TestRandomGenerator_MakeUniformVector(t *testing.T) {
+func TestRandomGenerator_MakeUniformMatrix(t *testing.T) {
 	rng := NewRandomGenerator(0)
-	vec := rng.MakeUniformVector(100, 1, 2)
+	vec := rng.MakeUniformMatrix(1, 1000, 1, 2)[0]
 	assert.False(t, floats.Min(vec) < 1)
 	assert.False(t, floats.Max(vec) > 2)
 }
