@@ -57,7 +57,7 @@ func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
 			cp.Fit(trainFold)
 			// Evaluate on test set
 			for j := 0; j < len(ret); j++ {
-				ret[j].TestScore[i] = metrics[j](cp, trainFold, NewDataSet(testFold))
+				ret[j].TestScore[i] = metrics[j](cp, testFold, WithTrainSet(trainFold))
 			}
 		}
 	})

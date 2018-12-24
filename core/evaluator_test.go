@@ -58,6 +58,10 @@ func (tester *EvaluatorTesterModel) Fit(set DataSet, options ...FitOption) {
 }
 
 func TestRMSE(t *testing.T) {
+	// The mocked test dataset:
+	// -2.0 NaN NaN
+	//  NaN 0.0 NaN
+	//  NaN NaN 2.0
 	a := NewEvaluatorTesterModel(nil, nil, nil)
 	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0}))
 	if math.Abs(RMSE(a, b, b)-1.63299) > 0.00001 {
@@ -66,6 +70,10 @@ func TestRMSE(t *testing.T) {
 }
 
 func TestMAE(t *testing.T) {
+	// The mocked test dataset:
+	// -2.0 NaN NaN
+	//  NaN 0.0 NaN
+	//  NaN NaN 2.0
 	a := NewEvaluatorTesterModel(nil, nil, nil)
 	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0}))
 	if math.Abs(MAE(a, b, b)-1.33333) > 0.00001 {
@@ -74,6 +82,7 @@ func TestMAE(t *testing.T) {
 }
 
 func TestAUC(t *testing.T) {
+	// The mocked test dataset:
 	// 1.0 0.0 0.0
 	// 0.0 0.5 0.0
 	// 0.0 0.0 1.0
@@ -82,4 +91,24 @@ func TestAUC(t *testing.T) {
 		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
 	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0}))
 	assert.Equal(t, 1.0, AUC(a, b, b))
+}
+
+func TestNDCG(t *testing.T) {
+
+}
+
+func TestPrecision(t *testing.T) {
+
+}
+
+func TestRecall(t *testing.T) {
+
+}
+
+func TestMAP(t *testing.T) {
+
+}
+
+func TestMRR(t *testing.T) {
+
 }
