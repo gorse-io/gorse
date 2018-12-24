@@ -9,7 +9,7 @@
 
 `gorse` is a recommender system engine implemented by the go programming language. It provides
 
-- **Algorithm**: Predict ratings based on collaborate filtering. Including matrix factorization and neighborhood-based method.
+- **Model**: Predict ratings based on collaborate filtering. Including matrix factorization and neighborhood-based method.
 - **Data**: Load data from the built-in dataset or file. Split data to train set and test set.
 - **Evaluator**: Evaluate models by cross-validation using RMSE or MAE.
 
@@ -21,10 +21,45 @@ go get -t -v -u github.com/zhenghaoz/gorse
 
 ## Usage
 
+Examples and tutorials could be found in [wiki](https://github.com/zhenghaoz/gorse/wiki). Let's get started with a simple example:
 
-## Document
+```go
+package main
 
+import (
+	"fmt"
+	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/core"
+	"github.com/zhenghaoz/gorse/model"
+)
 
+func main() {
+	// Load dataset
+	data := core.LoadDataFromBuiltIn("ml-100k")
+	// Split dataset
+	train, test := core.Split(data, 0.2)
+	// Create model
+	svd := model.NewSVD(base.Params{
+		base.Lr:       0.007,
+		base.NEpochs:  100,
+		base.NFactors: 80,
+		base.Reg:      0.1,
+	})
+	// Fit model
+	svd.Fit(train)
+	// Evaluate model
+	fmt.Printf("RMSE = %.5f\n", core.RMSE(svd, test))
+	// Predict a rating
+	fmt.Printf("Predict(4,8) = %.5f\n", svd.Predict(4, 8))
+}
+```
+
+The output would be:
+
+```
+RMSE = 0.91305
+Predict(4,8) = 4.72873
+```
 
 ## Benchmarks
 
