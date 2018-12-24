@@ -19,13 +19,9 @@
 go get -t -v -u github.com/zhenghaoz/gorse
 ```
 
-## Document
-
-Visit [wiki](https://github.com/zhenghaoz/gorse/wiki) please.
-
 ## Usage
 
-Let's get started with a simple example:
+Examples and tutorials could be found in [wiki](https://github.com/zhenghaoz/gorse/wiki). Let's get started with a simple example:
 
 ```go
 package main
