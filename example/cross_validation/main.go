@@ -9,11 +9,13 @@ import (
 func main() {
 	data := core.LoadDataFromBuiltIn("ml-100k")
 	cv := core.GridSearchCV(model.NewSVDpp(nil), data, []core.Evaluator{core.RMSE},
-		core.NewRatioSplitter(1, 0.2), core.ParameterGrid{
-			base.NEpochs:  {100},
-			base.Reg:      {0.1},
-			base.Lr:       {0.007},
-			base.NFactors: {80},
+		core.NewKFoldSplitter(5), core.ParameterGrid{
+			base.NEpochs:    {100},
+			base.Reg:        {0.05, 0.07},
+			base.Lr:         {0.005},
+			base.NFactors:   {50},
+			base.InitMean:   {0},
+			base.InitStdDev: {0.001},
 		})
 	cv[0].Summary()
 }

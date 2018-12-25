@@ -71,7 +71,7 @@ Predict(4,8) = 4.72873
 | CoClustering | 0.90701 | 0.71212 | 0:00:11 |
 | KNN          | 0.86462 | 0.67663 | 0:02:05 |
 | SVD          | 0.84252 | 0.66189 | 0:02:37 |
-| SVD++        | 0.84201 | 0.66161 | 0:04:43 |
+| SVD++        | **0.84201** | **0.66161** | 0:04:43 |
 
 |  Model  |   PREC@10    |     RECALL@10     |      MAP@10       |      NDCG@10      |      MRR@10       |  Time   |
 |---------|-------------------|-------------------|-------------------|-------------------|-------------------|---------|
@@ -102,3 +102,5 @@ See detail in [wiki](https://github.com/zhenghaoz/gorse/wiki/Benchmark).
 6. Guo, Guibing, Jie Zhang, and Neil Yorke-Smith. "A Novel Bayesian Similarity Measure for Recommender Systems." IJCAI. 2013.
 
 7. Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." Data Mining, 2008. ICDM'08. Eighth IEEE International Conference on. Ieee, 2008.
+
+8. Massa, Paolo, and Paolo Avesani. "Trust-aware recommender systems." Proceedings of the 2007 ACM conference on Recommender systems. ACM, 2007.
