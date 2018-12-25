@@ -29,22 +29,26 @@ func main() {
 			base.Type:       base.Baseline,
 			base.UserBased:  false,
 			base.Similarity: base.Pearson,
-			base.K:          80,
-			base.Shrinkage:  10,
+			base.K:          20,
+			base.Shrinkage:  50,
 		}),
 		// SVD
 		model.NewSVD(base.Params{
-			base.Lr:       0.001,
-			base.NEpochs:  100,
-			base.NFactors: 80,
-			base.Reg:      0.1,
+			base.NEpochs:    100,
+			base.Reg:        0.05,
+			base.Lr:         0.005,
+			base.NFactors:   80,
+			base.InitMean:   0,
+			base.InitStdDev: 0.001,
 		}),
 		//SVD++
 		model.NewSVDpp(base.Params{
-			base.NFactors: 10,
-			base.Reg:      0.05,
-			base.Lr:       0.005,
-			base.NEpochs:  80,
+			base.NFactors:   80,
+			base.Reg:        0.05,
+			base.Lr:         0.005,
+			base.NEpochs:    100,
+			base.InitMean:   0,
+			base.InitStdDev: 0.001,
 		}),
 	}
 	// Load data
