@@ -115,7 +115,7 @@ func (dataSet *VirtualTable) Min() float64 {
 	_, _, min := dataSet.Get(0)
 	dataSet.ForEach(func(userId, itemId int, rating float64) {
 		if rating < min {
-			rating = min
+			min = rating
 		}
 	})
 	return min

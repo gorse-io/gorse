@@ -2,7 +2,7 @@ package core
 
 import (
 	"fmt"
-	. "github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/stat"
 	"gopkg.in/cheggaaa/pb.v1"
 	"math"
@@ -10,7 +10,7 @@ import (
 )
 
 // ParameterGrid contains candidate for grid search.
-type ParameterGrid map[ParamName][]interface{}
+type ParameterGrid map[base.ParamName][]interface{}
 
 /* Cross Validation */
 
@@ -35,8 +35,8 @@ func (sv CrossValidateResult) MeanMarginScore() (float64, float64) {
 
 // CrossValidation evaluates a model by k-fold cross validation.
 func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
-	splitter Splitter, options ...CVOption) []CrossValidateResult {
-	cvOptions := NewCVOptions(options)
+	splitter Splitter, options ...base.CVOption) []CrossValidateResult {
+	cvOptions := base.NewCVOptions(options)
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, cvOptions.Seed)
 	length := len(trainFolds)
@@ -47,7 +47,7 @@ func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
 	}
 	// Cross validation
 	params := estimator.GetParams()
-	Parallel(length, cvOptions.NJobs, func(begin, end int) {
+	base.Parallel(length, cvOptions.NJobs, func(begin, end int) {
 		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Model)
 		Copy(cp, estimator)
 		for i := begin; i < end; i++ {
@@ -69,10 +69,10 @@ func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
 // ModelSelectionResult contains the return of grid search.
 type ModelSelectionResult struct {
 	BestScore  float64
-	BestParams Params
+	BestParams base.Params
 	BestIndex  int
 	CVResults  []CrossValidateResult
-	AllParams  []Params
+	AllParams  []base.Params
 }
 
 func (cv ModelSelectionResult) Summary() {
@@ -82,9 +82,9 @@ func (cv ModelSelectionResult) Summary() {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator Model, dataSet Table,
-	evaluators []Evaluator, splitter Splitter, paramGrid ParameterGrid, options ...CVOption) []ModelSelectionResult {
+	evaluators []Evaluator, splitter Splitter, paramGrid ParameterGrid, options ...base.CVOption) []ModelSelectionResult {
 	// Retrieve parameter names and length
-	paramNames := make([]ParamName, 0, len(paramGrid))
+	paramNames := make([]base.ParamName, 0, len(paramGrid))
 	count := 1
 	for paramName, values := range paramGrid {
 		paramNames = append(paramNames, paramName)
@@ -96,13 +96,13 @@ func GridSearchCV(estimator Model, dataSet Table,
 		results[i] = ModelSelectionResult{}
 		results[i].BestScore = math.Inf(1)
 		results[i].CVResults = make([]CrossValidateResult, 0, count)
-		results[i].AllParams = make([]Params, 0, count)
+		results[i].AllParams = make([]base.Params, 0, count)
 	}
 	// Progress bar
 	bar := pb.StartNew(count)
 	// Construct DFS procedure
-	var dfs func(deep int, params Params)
-	dfs = func(deep int, params Params) {
+	var dfs func(deep int, params base.Params)
+	dfs = func(deep int, params base.Params) {
 		if deep == len(paramNames) {
 			// Cross validate
 			estimator.SetParams(params)
@@ -128,28 +128,28 @@ func GridSearchCV(estimator Model, dataSet Table,
 			}
 		}
 	}
-	params := make(map[ParamName]interface{})
+	params := make(map[base.ParamName]interface{})
 	dfs(0, params)
 	bar.FinishPrint("Completed!")
 	return results
 }
 
 func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
-	evaluators []Evaluator, trial int, options ...CVOption) []ModelSelectionResult {
-	cvOptions := NewCVOptions(options)
-	rng := NewRandomGenerator(cvOptions.Seed)
+	evaluators []Evaluator, trial int, options ...base.CVOption) []ModelSelectionResult {
+	cvOptions := base.NewCVOptions(options)
+	rng := base.NewRandomGenerator(cvOptions.Seed)
 	// Create results
 	results := make([]ModelSelectionResult, len(evaluators))
 	for i := range results {
 		results[i] = ModelSelectionResult{}
 		results[i].BestScore = math.Inf(1)
 		results[i].CVResults = make([]CrossValidateResult, 0, trial)
-		results[i].AllParams = make([]Params, 0, trial)
+		results[i].AllParams = make([]base.Params, 0, trial)
 	}
 	//
 	for i := 0; i < trial; i++ {
 		// Make parameters
-		params := Params{}
+		params := base.Params{}
 		for paramName, values := range paramGrid {
 			value := values[rng.Intn(len(values))]
 			params[paramName] = value

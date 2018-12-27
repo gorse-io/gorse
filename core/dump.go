@@ -57,8 +57,6 @@ func Copy(dst, src interface{}) error {
 		return err
 	}
 	decoder := gob.NewDecoder(buffer)
-	if err := decoder.Decode(dst); err != nil {
-		return err
-	}
-	return nil
+	err := decoder.Decode(dst)
+	return err
 }

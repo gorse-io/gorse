@@ -4,14 +4,18 @@ import (
 	"fmt"
 	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
+	"log"
 	"os"
 	"runtime/pprof"
 )
 
 func main() {
 	f, err := os.Create("cpuperf")
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err = pprof.StartCPUProfile(f); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer pprof.StopCPUProfile()
 
@@ -22,10 +26,13 @@ func main() {
 
 	// Save memory profile
 	f, err = os.Create("memprof")
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err = pprof.WriteHeapProfile(f); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	if err = f.Close(); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }

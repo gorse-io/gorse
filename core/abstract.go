@@ -1,6 +1,6 @@
 package core
 
-import . "github.com/zhenghaoz/gorse/base"
+import "github.com/zhenghaoz/gorse/base"
 
 /* Model */
 
@@ -8,13 +8,13 @@ import . "github.com/zhenghaoz/gorse/base"
 // package should implement it.
 type Model interface {
 	// Set parameters.
-	SetParams(params Params)
+	SetParams(params base.Params)
 	// Get parameters.
-	GetParams() Params
+	GetParams() base.Params
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId int) float64
 	// Fit a model with a train set and parameters.
-	Fit(trainSet DataSet, setters ...FitOption)
+	Fit(trainSet DataSet, setters ...base.FitOption)
 }
 
 /* Table */
