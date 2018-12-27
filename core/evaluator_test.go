@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const evalEpsilon = 0.00001
+
 type EvaluatorTesterModel struct {
 	MaxUserId int
 	MaxItemId int
@@ -64,7 +66,7 @@ func TestRMSE(t *testing.T) {
 	//  NaN NaN 2.0
 	a := NewEvaluatorTesterModel(nil, nil, nil)
 	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0}))
-	if math.Abs(RMSE(a, b, b)-1.63299) > 0.00001 {
+	if math.Abs(RMSE(a, b)-1.63299) > evalEpsilon {
 		t.Fail()
 	}
 }
@@ -76,7 +78,7 @@ func TestMAE(t *testing.T) {
 	//  NaN NaN 2.0
 	a := NewEvaluatorTesterModel(nil, nil, nil)
 	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{-2.0, 0, 2.0}))
-	if math.Abs(MAE(a, b, b)-1.33333) > 0.00001 {
+	if math.Abs(MAE(a, b)-1.33333) > evalEpsilon {
 		t.Fail()
 	}
 }
@@ -90,7 +92,7 @@ func TestAUC(t *testing.T) {
 		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
 		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
 	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0}))
-	assert.Equal(t, 1.0, AUC(a, b, b))
+	assert.Equal(t, 1.0, AUC(a, b))
 }
 
 func TestNDCG(t *testing.T) {
@@ -110,5 +112,17 @@ func TestMAP(t *testing.T) {
 }
 
 func TestMRR(t *testing.T) {
-
+	a := NewEvaluatorTesterModel(
+		[]int{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		[]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		[]float64{10, 9, 8, 7, 6, 5, 4, 3, 2, 1})
+	b := NewDataSet(NewDataTable(
+		[]int{1, 1, 0, 0, 0},
+		[]int{0, 2, 4, 6, 8},
+		[]float64{1, 1, 1, 1, 1}))
+	//if math.Abs(MAE(a, b)-1.33333) > evalEpsilon {
+	//	//	t.Fail()
+	//	//}
+	mrr := NewMRR(10)
+	t.Log(mrr(a, b))
 }

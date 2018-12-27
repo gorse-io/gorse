@@ -9,6 +9,7 @@ type _BuiltInDataSet struct {
 	url    string
 	path   string
 	sep    string
+	header bool
 	loader func(string, string, bool) DataSet
 }
 
@@ -17,24 +18,28 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		url:    "https://cdn.sine-x.com/datasets/movielens/ml-100k.zip",
 		path:   "ml-100k/u.data",
 		sep:    "\t",
+		header: false,
 		loader: LoadDataFromCSV,
 	},
 	"ml-1m": {
 		url:    "https://cdn.sine-x.com/datasets/movielens/ml-1m.zip",
 		path:   "ml-1m/ratings.dat",
 		sep:    "::",
+		header: false,
 		loader: LoadDataFromCSV,
 	},
 	"ml-10m": {
 		url:    "https://cdn.sine-x.com/datasets/movielens/ml-10m.zip",
 		path:   "ml-10M100K/ratings.dat",
 		sep:    "::",
+		header: false,
 		loader: LoadDataFromCSV,
 	},
 	"ml-20m": {
 		url:    "https://cdn.sine-x.com/datasets/movielens/ml-20m.zip",
 		path:   "ml-20m/ratings.csv",
 		sep:    ",",
+		header: false,
 		loader: LoadDataFromCSV,
 	},
 	"netflix": {
@@ -46,6 +51,14 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		url:    "https://cdn.sine-x.com/datasets/filmtrust/filmtrust.zip",
 		path:   "filmtrust/ratings.txt",
 		sep:    " ",
+		header: false,
+		loader: LoadDataFromCSV,
+	},
+	"epinions": {
+		url:    "https://cdn.sine-x.com/datasets/epinions/epinions.zip",
+		path:   "epinions/ratings_data.txt",
+		sep:    " ",
+		header: true,
 		loader: LoadDataFromCSV,
 	},
 }

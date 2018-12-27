@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/floats"
 	"math/rand"
 )
@@ -19,10 +20,13 @@ func Top(test DataSet, denseUserId int, n int, train DataSet, model Model) []int
 	// Find ratings in training set
 	trainSet := make(map[int]float64)
 	userId := test.UserIdSet.ToSparseId(denseUserId)
-	train.DenseUserRatings[train.UserIdSet.ToDenseId(userId)].ForEach(func(i, index int, value float64) {
-		itemId := train.ItemIdSet.ToSparseId(index)
-		trainSet[itemId] = value
-	})
+	denseUserIdInTrain := train.UserIdSet.ToDenseId(userId)
+	if denseUserIdInTrain != base.NotId {
+		train.DenseUserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
+			itemId := train.ItemIdSet.ToSparseId(index)
+			trainSet[itemId] = value
+		})
+	}
 	// Get top-n list
 	list := make([]int, 0)
 	ids := make([]int, 0)

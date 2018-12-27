@@ -89,7 +89,7 @@ func LoadDataFromBuiltIn(dataSetName string) DataSet {
 			panic(err)
 		}
 	}
-	return dataSet.loader(dataFileName, dataSet.sep, false)
+	return dataSet.loader(dataFileName, dataSet.sep, dataSet.header)
 }
 
 // LoadDataFromCSV loads data from a CSV file. The CSV file should be:
@@ -126,6 +126,10 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) DataSet {
 			continue
 		}
 		fields := strings.Split(line, sep)
+		// Ignore empty line
+		if len(fields) < 2 {
+			continue
+		}
 		user, _ := strconv.Atoi(fields[0])
 		item, _ := strconv.Atoi(fields[1])
 		rating, _ := strconv.ParseFloat(fields[2], 32)

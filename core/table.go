@@ -43,7 +43,12 @@ func (dataSet *DataTable) Mean() float64 {
 }
 
 func (dataSet *DataTable) StdDev() float64 {
-	return stat.StdDev(dataSet.Ratings, nil)
+	mean := dataSet.Mean()
+	sum := 0.0
+	dataSet.ForEach(func(userId, itemId int, rating float64) {
+		sum += (rating - mean) * (rating - mean)
+	})
+	return math.Sqrt(sum / float64(dataSet.Len()))
 }
 
 func (dataSet *DataTable) Min() float64 {
@@ -103,7 +108,7 @@ func (dataSet *VirtualTable) StdDev() float64 {
 	dataSet.ForEach(func(userId, itemId int, rating float64) {
 		sum += (rating - mean) * (rating - mean)
 	})
-	return math.Sqrt(mean / float64(dataSet.Len()))
+	return math.Sqrt(sum / float64(dataSet.Len()))
 }
 
 func (dataSet *VirtualTable) Min() float64 {

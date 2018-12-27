@@ -10,7 +10,7 @@ type EvaluatorOptions struct {
 	nJobs    int
 }
 
-func NewEvaluatorOptions(option []EvaluatorOption) *EvaluatorOptions {
+func NewEvaluatorOptions(isRanking bool, option []EvaluatorOption) *EvaluatorOptions {
 	options := new(EvaluatorOptions)
 	for _, opt := range option {
 		opt(options)
@@ -59,7 +59,7 @@ func MAE(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
 
 // AUC evaluator.
 func AUC(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
-	options := NewEvaluatorOptions(option)
+	options := NewEvaluatorOptions(true, option)
 	sum, count := 0.0, 0.0
 	// Find all userIds
 	for denseUserIdInTest, userRating := range testSet.DenseUserRatings {
@@ -104,7 +104,7 @@ func AUC(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
 // NewNDCG creates a Normalized Discounted Cumulative Gain evaluator.
 func NewNDCG(n int) Evaluator {
 	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(option)
+		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
 		for u := 0; u < testSet.UserCount(); u++ {
@@ -138,7 +138,7 @@ func NewNDCG(n int) Evaluator {
 //                    {|{retrieved documents}|}
 func NewPrecision(n int) Evaluator {
 	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(option)
+		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
 		for u := 0; u < testSet.UserCount(); u++ {
@@ -164,7 +164,7 @@ func NewPrecision(n int) Evaluator {
 //                 {|{relevant documents}|}
 func NewRecall(n int) Evaluator {
 	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(option)
+		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
 		for u := 0; u < testSet.UserCount(); u++ {
@@ -189,7 +189,7 @@ func NewRecall(n int) Evaluator {
 // mAP: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
 func NewMAP(n int) Evaluator {
 	return func(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(option)
+		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
 		for u := 0; u < testSet.UserCount(); u++ {
@@ -225,7 +225,7 @@ func NewMAP(n int) Evaluator {
 //   MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
 func NewMRR(n int) Evaluator {
 	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(option)
+		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
 		for u := 0; u < testSet.UserCount(); u++ {
