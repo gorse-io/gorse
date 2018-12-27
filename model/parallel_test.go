@@ -16,10 +16,10 @@ func ModelParallelTest(t *testing.T, models ...core.Model) {
 		t.Log("Checking", reflect.TypeOf(model))
 		// Fit model
 		model.Fit(trains[0], base.WithNJobs(1))
-		rmse := core.RMSE(model, trains[0], tests[0])
+		rmse := core.RMSE(model, tests[0], core.WithTrainSet(trains[0]))
 		// Refit model
 		model.Fit(trains[0], base.WithNJobs(3))
-		rmse2 := core.RMSE(model, trains[0], tests[0])
+		rmse2 := core.RMSE(model, tests[0], core.WithTrainSet(trains[0]))
 		assert.Equal(t, rmse, rmse2)
 	}
 }

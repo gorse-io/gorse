@@ -16,7 +16,7 @@ func ModelDumpTest(t *testing.T, models ...core.Model) {
 		t.Log("Checking", reflect.TypeOf(model))
 		// Fit model
 		model.Fit(trains[0])
-		rmse := core.RMSE(model, trains[0], tests[0])
+		rmse := core.RMSE(model, tests[0], core.WithTrainSet(trains[0]))
 		// Save model
 		if err := core.Save(filepath.Join(core.TempDir, "/model.m"), model); err != nil {
 			t.Fatal(err)
@@ -26,7 +26,7 @@ func ModelDumpTest(t *testing.T, models ...core.Model) {
 		if err := core.Load(filepath.Join(core.TempDir, "/model.m"), cp); err != nil {
 			t.Fatal(err)
 		}
-		rmse2 := core.RMSE(cp, trains[0], tests[0])
+		rmse2 := core.RMSE(cp, tests[0], core.WithTrainSet(trains[0]))
 		assert.Equal(t, rmse, rmse2)
 	}
 }
