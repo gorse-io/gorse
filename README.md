@@ -9,14 +9,17 @@
 
 `gorse` is a recommender system engine implemented by the go programming language. It provides
 
-- **Model**: Predict ratings based on collaborate filtering. Including matrix factorization and neighborhood-based method.
-- **Data**: Load data from the built-in dataset or file. Split data to train set and test set.
-- **Evaluator**: Evaluate models by cross-validation using RMSE or MAE.
+- **Data**: Load data from built-in datasets or custom files.
+- **Splitter**: Split dataset by [k-fold](https://godoc.org/github.com/zhenghaoz/gorse/core#NewKFoldSplitter), [ratio](https://godoc.org/github.com/zhenghaoz/gorse/core#NewRatioSplitter) or [leave-one-out](https://godoc.org/github.com/zhenghaoz/gorse/core#NewUserLOOSplitter).
+- **Model**: [Recommendation models](https://godoc.org/github.com/zhenghaoz/gorse/model) based on collaborate filtering including matrix factorization, neighborhood-based method, Slope One and Co-Clustering.
+- **Evaluator**: Implemented [RMSE](https://godoc.org/github.com/zhenghaoz/gorse/core#RMSE) and [MAE](https://godoc.org/github.com/zhenghaoz/gorse/core#MAE) for rating task. For ranking task, there are [Precision](https://godoc.org/github.com/zhenghaoz/gorse/core#NewPrecision), [Recall](https://godoc.org/github.com/zhenghaoz/gorse/core#NewRecall), [NDCG](https://godoc.org/github.com/zhenghaoz/gorse/core#NewNDCG), [MAP](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMAP), [MRR](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMRR) and [AUC](https://godoc.org/github.com/zhenghaoz/gorse/core#AUC).
+- **Parameter Search**: Find best hyper-parameters using [grid search](https://godoc.org/github.com/zhenghaoz/gorse/core#GridSearchCV) or [random search](https://godoc.org/github.com/zhenghaoz/gorse/core#RandomSearchCV).
+- **Persistence**: Save a [model](https://godoc.org/github.com/zhenghaoz/gorse/core#Save) or [load](https://godoc.org/github.com/zhenghaoz/gorse/core#Load) a model.
 
 ## Installation
 
 ```bash
-go get -t -v -u github.com/zhenghaoz/gorse
+go get github.com/zhenghaoz/gorse
 ```
 
 ## Usage
@@ -61,9 +64,13 @@ RMSE = 0.91305
 Predict(4,8) = 4.72873
 ```
 
+More examples could be found in the [example](https://github.com/zhenghaoz/gorse/tree/master/example) folder.
+
 ## Benchmarks
 
+All models are tested by 5-fold cross validation on a PC with Intel(R) Core(TM) i5-4590 CPU (3.30GHz) and 16.0GB RAM. All scores are the best scores achieved by `gorse` yet.
 
+- Rating Prediction on MovieLens 1M ([source](https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_rating_ml_1m/main.go))
 
 |    Model     |       RMSE        |        MAE        |  Time   |
 |--------------|-------------------|-------------------|---------|
@@ -73,11 +80,13 @@ Predict(4,8) = 4.72873
 | SVD          | 0.84252 | 0.66189 | 0:02:37 |
 | SVD++        | **0.84201** | **0.66161** | 0:04:43 |
 
+- Item Ranking on MovieLens 100K ([source](https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_ranking/main.go))
+
 |  Model  |   PREC@10    |     RECALL@10     |      MAP@10       |      NDCG@10      |      MRR@10       |  Time   |
 |---------|-------------------|-------------------|-------------------|-------------------|-------------------|---------|
 | ItemPop | 0.19081 | 0.11584 | 0.05364 | 0.21785 | 0.40991 | 0:00:03 |
 | SVD-BPR     | 0.32083 | 0.20906 | 0.11848 | 0.37643 | 0.59818 | 0:00:13 |
-| WRMF    | 0.34727 | 0.23665 | 0.14550 | 0.41614 | 0.65439 | 0:00:14 |
+| WRMF    | **0.34727** | **0.23665** | **0.14550** | **0.41614** | **0.65439** | 0:00:14 |
 
 See detail in [wiki](https://github.com/zhenghaoz/gorse/wiki/Benchmark).
 
