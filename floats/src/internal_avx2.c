@@ -1,5 +1,7 @@
 #include <immintrin.h>
 
+#include "internal.h"
+
 void _MulConstTo(double *a, double c, double *dst, int len) {
     int loop = len / 4;
     int rest = len % 4;
@@ -15,7 +17,7 @@ void _MulConstTo(double *a, double c, double *dst, int len) {
     }
     // Rest part
     for (int i = 0; i < rest; i++) {
-        *dst = (*dst) * c;
+        *dst = (*a) * c;
         // Increase pinter
         a ++;
         dst ++;
@@ -38,9 +40,42 @@ void _MulConstAddTo(double *a, double c, double *dst, int len) {
     }
     // Rest part
     for (int i = 0; i < rest; i++) {
-        *dst = (*a) * (*b);
+        *dst = (*a) * c;
         // Increase pinter
         a ++;
         dst ++;
     }
+}
+
+double _Dot(double *a, double *b, int len) {
+    int loop = len / 4;
+    int rest = len % 4;
+    double ret = 0;
+    // Vector part
+    __m256d vecSum;
+    if (loop > 0) {
+        __m256d vec1 = _mm256_load_pd(a);
+        __m256d vec2 = _mm256_load_pd(b);
+        vecSum = _mm256_add_pd(vec1, vec2);
+        a += 4;
+        b += 4;
+    }
+    for (int i = 1; i < loop; i++) {
+        __m256d vec1 = _mm256_load_pd(a);
+        __m256d vec2 = _mm256_load_pd(b);
+        vecSum = _mm256_fmadd_pd(vec1, vec2, vecSum);
+        a += 4;
+        b += 4;
+    }
+    __m256d temp = _mm256_hadd_pd(vecSum, vecSum);
+    __m256d dotproduct = _mm256_hadd_pd(temp, temp);
+    ret = _mm256_cvtsd_f64(dotproduct);
+    // Rest part
+    for (int i = 0; i < rest; i++) {
+        ret += (*a) * (*b);
+        // Increase pinter
+        a ++;
+        b ++;
+    }
+    return ret;
 }
