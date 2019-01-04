@@ -49,7 +49,7 @@ func (set *SparseIdSet) ToSparseId(denseId int) int {
 	return set.SparseIds[denseId]
 }
 
-// SparseVector handles the sparse vector.
+// SparseVector handles the sparse vec.
 type SparseVector struct {
 	Indices []int
 	Values  []float64
@@ -112,7 +112,7 @@ func (vec *SparseVector) Swap(i, j int) {
 	vec.Values[i], vec.Values[j] = vec.Values[j], vec.Values[i]
 }
 
-// ForEach iterates items in the vector.
+// ForEach iterates items in the vec.
 func (vec *SparseVector) ForEach(f func(i, index int, value float64)) {
 	for i := range vec.Indices {
 		f(i, vec.Indices[i], vec.Values[i])
@@ -129,9 +129,9 @@ func (vec *SparseVector) SortIndex() {
 
 // ForIntersection iterates items in the intersection of two vectors.
 func (vec *SparseVector) ForIntersection(other *SparseVector, f func(index int, a, b float64)) {
-	// Sort indices of the left vector
+	// Sort indices of the left vec
 	vec.SortIndex()
-	// Sort indices of the right vector
+	// Sort indices of the right vec
 	other.SortIndex()
 	// Iterate
 	i, j := 0, 0
@@ -202,7 +202,7 @@ func (vec *KNNHeap) Pop() interface{} {
 	return item
 }
 
-// Add a new neighbor to the adjacent vector.
+// Add a new neighbor to the adjacent vec.
 func (vec *KNNHeap) Add(index int, value float64, similarity float64) {
 	// Deprecate zero items
 	if similarity == 0 {

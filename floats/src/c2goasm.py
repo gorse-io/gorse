@@ -1,11 +1,15 @@
 import re
+import os
 
 if __name__ == '__main__':
+    os.system("clang -mavx2 -mfma -S -O3 internal_avx2.c")
     f = open('internal_avx2.s', 'r')
     outs = []
     for line in f:
         line = line.replace('#', '//')
-        if line[0:3] == '.LB':
+        if line[0] == '_':
+            outs.append(line)
+        elif line[0:3] == '.LB':
             # Label
             outs.append(re.sub(r'\.(\w+)', r'\1', line))
         elif line[0:2] == '//':
@@ -28,5 +32,5 @@ if __name__ == '__main__':
                 # Transform retq
                 line = re.sub(r'retq', r'ret', line)
                 outs.append(line.upper())
-    with open('out.s', 'w') as f:
+    with open('internal_avx2_p9.s', 'w') as f:
         f.writelines(outs)

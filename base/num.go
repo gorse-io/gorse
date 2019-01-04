@@ -1,6 +1,9 @@
 package base
 
-import "log"
+import (
+	"github.com/zhenghaoz/gorse/floats"
+	"log"
+)
 
 // Concatenate arrays of integers.
 func Concatenate(arrays ...[]int) []int {
@@ -21,10 +24,10 @@ func Concatenate(arrays ...[]int) []int {
 	return ret
 }
 
-// Max finds the maximum in a vector. Return 0 if the slice is empty.
+// Max finds the maximum in a vec. Return 0 if the slice is empty.
 func Max(a []int) int {
 	if len(a) == 0 {
-		log.Panicf("Can't get the maximum from empty vector")
+		log.Panicf("Can't get the maximum from empty vec")
 	}
 	maximum := a[0]
 	for _, m := range a {
@@ -35,10 +38,10 @@ func Max(a []int) int {
 	return maximum
 }
 
-// Min finds the minimum in a vector. Return 0 if the slice is empty.
+// Min finds the minimum in a vec. Return 0 if the slice is empty.
 func Min(a []int) int {
 	if len(a) == 0 {
-		log.Panicf("Can't get the minimum from empty vector")
+		log.Panicf("Can't get the minimum from empty vec")
 	}
 	minimum := a[0]
 	for _, m := range a {
@@ -49,28 +52,21 @@ func Min(a []int) int {
 	return minimum
 }
 
-// Neg gets the negative of a vector.
+// Neg gets the negative of a vec.
 func Neg(dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] = -dst[i]
 	}
 }
 
-// MulConst multiples a vector with a scalar.
-func MulConst(c float64, dst []float64) {
-	for i := 0; i < len(dst); i++ {
-		dst[i] *= c
-	}
-}
-
-// MulConst divides a vector by a scalar.
+// MulConst divides a vec by a scalar.
 func DivConst(c float64, dst []float64) {
 	for i := 0; i < len(dst); i++ {
 		dst[i] /= c
 	}
 }
 
-// Argmin finds the index of the minimum in a vector.
+// Argmin finds the index of the minimum in a vec.
 func Argmin(a []float64) int {
 	minIndex := 0
 	for index, value := range a {
@@ -90,7 +86,7 @@ func MakeMatrix(row, col int) [][]float64 {
 	return ret
 }
 
-// FillZeroVector fills a vector with zeros.
+// FillZeroVector fills a vec with zeros.
 func FillZeroVector(a []float64) {
 	for i := range a {
 		a[i] = 0
@@ -104,4 +100,8 @@ func FillZeroMatrix(m [][]float64) {
 			m[i][j] = 0
 		}
 	}
+}
+
+func MulConst(c float64, dst []float64) {
+	floats.MulConst(c, dst)
 }

@@ -67,14 +67,14 @@ func TestSparseVector_ForIntersection(t *testing.T) {
 }
 
 func TestKNNHeap(t *testing.T) {
-	// Test a adjacent vector
+	// Test a adjacent vec
 	a := MakeKNNHeap(3)
 	a.Add(10, 0, 1)
 	a.Add(20, 0, 8)
 	a.Add(30, 0, 0)
 	assert.Equal(t, sliceToMapInt([]int{10, 20}), sliceToMapInt(a.Indices))
 	assert.Equal(t, sliceToMap([]float64{1, 8}), sliceToMap(a.Similarities))
-	// Test a full adjacent vector
+	// Test a full adjacent vec
 	a.Add(40, 0, 2)
 	a.Add(50, 0, 5)
 	a.Add(12, 0, 10)

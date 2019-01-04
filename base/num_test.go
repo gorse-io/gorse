@@ -22,13 +22,6 @@ func TestNeg(t *testing.T) {
 	assert.Equal(t, b, a)
 }
 
-func TestMulConst(t *testing.T) {
-	a := []float64{0.0, 1.0, 2.0}
-	b := []float64{0.0, 2.0, 4.0}
-	MulConst(2.0, a)
-	assert.Equal(t, b, a)
-}
-
 func TestDivConst(t *testing.T) {
 	a := []float64{0.0, 1.0, 2.0}
 	b := []float64{0.0, 0.5, 1.0}

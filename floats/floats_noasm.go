@@ -10,9 +10,9 @@ func MulConstTo(a []float64, c float64, dst []float64) {
 	}
 }
 
-func MulConstAddTo(a []float64, b float64, dst []float64) {
+func MulConstAddTo(a []float64, c float64, dst []float64) {
 	for i := 0; i < len(a); i++ {
-		dst[i] += a[i] * c[i]
+		dst[i] += a[i] * c
 	}
 }
 
