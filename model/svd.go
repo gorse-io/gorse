@@ -194,6 +194,7 @@ func (svd *SVD) fitBPR(trainSet core.DataSet) {
 			floats.MulConstAddTo(temp, svd.lr, svd.ItemFactor[denseNegId])
 			// Update user latent factor: h_i-h_j
 			floats.SubTo(positiveItemFactor, negativeItemFactor, temp)
+			floats.MulConst(temp, grad)
 			floats.MulConstAddTo(userFactor, -svd.reg, temp)
 			floats.MulConstAddTo(temp, svd.lr, svd.UserFactor[denseUserId])
 		}
