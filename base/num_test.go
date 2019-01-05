@@ -22,13 +22,6 @@ func TestNeg(t *testing.T) {
 	assert.Equal(t, b, a)
 }
 
-func TestDivConst(t *testing.T) {
-	a := []float64{0.0, 1.0, 2.0}
-	b := []float64{0.0, 0.5, 1.0}
-	DivConst(2.0, a)
-	assert.Equal(t, b, a)
-}
-
 func TestArgMin(t *testing.T) {
 	a := []float64{1, 3, 0, 1, 7, 8, 7, 0, 3, 0, 0}
 	assert.Equal(t, 2, Argmin(a))

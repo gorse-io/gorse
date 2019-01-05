@@ -1,7 +1,5 @@
 #include <immintrin.h>
 
-#include "internal.h"
-
 void _MulConstTo(double *a, double c, double *dst, int len) {
     int loop = len / 4;
     int rest = len % 4;
@@ -50,7 +48,6 @@ void _MulConstAddTo(double *a, double c, double *dst, int len) {
 double _Dot(double *a, double *b, int len) {
     int loop = len / 4;
     int rest = len % 4;
-    double ret = 0;
     // Vector part
     __m256d vecSum;
     if (loop > 0) {
@@ -70,7 +67,7 @@ double _Dot(double *a, double *b, int len) {
     __m256d temp = _mm256_hadd_pd(vecSum, vecSum);
     __m128d high = _mm256_extractf128_pd(temp, 1);
     __m128d dp = _mm_add_pd(high, _mm256_castpd256_pd128(temp));
-    double res = _mm_cvtsd_f64(dp);
+    double ret = _mm_cvtsd_f64(dp);
     // Rest part
     for (int i = 0; i < rest; i++) {
         ret += (*a) * (*b);
@@ -78,5 +75,24 @@ double _Dot(double *a, double *b, int len) {
         a ++;
         b ++;
     }
-    return res;
+    return ret;
+}
+
+void _AddTo(double *a, double *b, double *dst, int len) {
+    int loop = len / 4;
+    int rest = len % 4;
+    // Vector part
+    for (int i = 0; i < loop; i++) {
+        __m256d vec1 = _mm256_load_pd(a);
+        __m256d vec2 = _mm256_load_pd(b);
+        __m256d sum = _mm256_add_pd(vec1, vec2);
+        _mm256_storeu_pd(dst, sum);
+        a += 4;
+        b += 4;
+        dst += 4;
+    }
+    // Rest part
+    for (int i = 0; i < rest; i++) {
+        dst[i] = a[i] + b[i];
+    }
 }

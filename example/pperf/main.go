@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
 	"log"
@@ -20,7 +21,14 @@ func main() {
 	defer pprof.StopCPUProfile()
 
 	data := core.LoadDataFromBuiltIn("ml-100k")
-	svd := model.NewSVD(nil)
+	svd := model.NewSVDpp(base.Params{
+		base.NEpochs:    100,
+		base.Reg:        0.1,
+		base.Lr:         0.01,
+		base.NFactors:   50,
+		base.InitMean:   0,
+		base.InitStdDev: 0.001,
+	})
 	out := core.CrossValidate(svd, data, []core.Evaluator{core.RMSE, core.MAE}, core.NewKFoldSplitter(5))
 	fmt.Println(out)
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
-	"gonum.org/v1/gonum/floats"
+	"github.com/zhenghaoz/gorse/floats"
 	"gonum.org/v1/gonum/mat"
 	"log"
 	"math"
@@ -114,8 +114,7 @@ func (svd *SVD) Fit(trainSet core.DataSet, options ...base.FitOption) {
 func (svd *SVD) fitRegression(trainSet core.DataSet) {
 	svd.GlobalMean = trainSet.GlobalMean
 	// Create buffers
-	a := make([]float64, svd.nFactors)
-	b := make([]float64, svd.nFactors)
+	temp := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
 	itemFactor := make([]float64, svd.nFactors)
 	// Optimize
@@ -138,21 +137,13 @@ func (svd *SVD) fitRegression(trainSet core.DataSet) {
 			copy(userFactor, svd.UserFactor[denseUserId])
 			copy(itemFactor, svd.ItemFactor[denseItemId])
 			// Update user latent factor
-			copy(a, itemFactor)
-			base.MulConst(upGrad, a)
-			copy(b, userFactor)
-			base.MulConst(svd.reg, b)
-			floats.Sub(a, b)
-			base.MulConst(svd.lr, a)
-			floats.Add(svd.UserFactor[denseUserId], a)
+			floats.MulConstTo(itemFactor, upGrad, temp)
+			floats.MulConstAddTo(userFactor, -svd.reg, temp)
+			floats.MulConstAddTo(temp, svd.lr, svd.UserFactor[denseUserId])
 			// Update item latent factor
-			copy(a, userFactor)
-			base.MulConst(upGrad, a)
-			copy(b, itemFactor)
-			base.MulConst(svd.reg, b)
-			floats.Sub(a, b)
-			base.MulConst(svd.lr, a)
-			floats.Add(svd.ItemFactor[denseItemId], a)
+			floats.MulConstTo(userFactor, upGrad, temp)
+			floats.MulConstAddTo(itemFactor, -svd.reg, temp)
+			floats.MulConstAddTo(temp, svd.lr, svd.ItemFactor[denseItemId])
 		}
 	}
 }
@@ -167,8 +158,7 @@ func (svd *SVD) fitBPR(trainSet core.DataSet) {
 		})
 	}
 	// Create buffers
-	a := make([]float64, svd.nFactors)
-	b := make([]float64, svd.nFactors)
+	temp := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
 	positiveItemFactor := make([]float64, svd.nFactors)
 	negativeItemFactor := make([]float64, svd.nFactors)
@@ -195,31 +185,17 @@ func (svd *SVD) fitBPR(trainSet core.DataSet) {
 			copy(positiveItemFactor, svd.ItemFactor[densePosId])
 			copy(negativeItemFactor, svd.ItemFactor[denseNegId])
 			// Update positive item latent factor: +w_u
-			copy(a, userFactor)
-			base.MulConst(grad, a)
-			copy(b, positiveItemFactor)
-			base.MulConst(svd.reg, b)
-			floats.Sub(a, b)
-			base.MulConst(svd.lr, a)
-			floats.Add(svd.ItemFactor[densePosId], a)
+			floats.MulConstTo(userFactor, grad, temp)
+			floats.MulConstAddTo(positiveItemFactor, -svd.reg, temp)
+			floats.MulConstAddTo(temp, svd.lr, svd.ItemFactor[densePosId])
 			// Update negative item latent factor: -w_u
-			copy(a, userFactor)
-			base.Neg(a)
-			base.MulConst(grad, a)
-			copy(b, negativeItemFactor)
-			base.MulConst(svd.reg, b)
-			floats.Sub(a, b)
-			base.MulConst(svd.lr, a)
-			floats.Add(svd.ItemFactor[denseNegId], a)
+			floats.MulConstTo(userFactor, -grad, temp)
+			floats.MulConstAddTo(negativeItemFactor, -svd.reg, temp)
+			floats.MulConstAddTo(temp, svd.lr, svd.ItemFactor[denseNegId])
 			// Update user latent factor: h_i-h_j
-			copy(a, positiveItemFactor)
-			floats.Sub(a, negativeItemFactor)
-			base.MulConst(grad, a)
-			copy(b, userFactor)
-			base.MulConst(svd.reg, b)
-			floats.Sub(a, b)
-			base.MulConst(svd.lr, a)
-			floats.Add(svd.UserFactor[denseUserId], a)
+			floats.SubTo(positiveItemFactor, negativeItemFactor, temp)
+			floats.MulConstAddTo(userFactor, -svd.reg, temp)
+			floats.MulConstAddTo(temp, svd.lr, svd.UserFactor[denseUserId])
 		}
 	}
 }
@@ -298,27 +274,15 @@ func (nmf *NMF) Fit(trainSet core.DataSet, options ...base.FitOption) {
 			denseUserId, denseItemId, rating := trainSet.GetDense(i)
 			prediction := nmf.predict(denseUserId, denseItemId)
 			// Update \sum_{i\in{I_u}} q_{if}⋅r_{ui}
-			copy(buffer, nmf.ItemFactor[denseItemId])
-			base.MulConst(rating, buffer)
-			floats.Add(userNum[denseUserId], buffer)
+			floats.MulConstAddTo(nmf.ItemFactor[denseItemId], rating, userNum[denseUserId])
 			// Update \sum_{i\in{I_u}} q_{if}⋅\hat{r}_{ui} + \lambda|I_u|p_{uf}
-			copy(buffer, nmf.ItemFactor[denseItemId])
-			base.MulConst(prediction, buffer)
-			floats.Add(userDen[denseUserId], buffer)
-			copy(buffer, nmf.UserFactor[denseUserId])
-			base.MulConst(nmf.reg, buffer)
-			floats.Add(userDen[denseUserId], buffer)
+			floats.MulConstAddTo(nmf.ItemFactor[denseItemId], prediction, userDen[denseUserId])
+			floats.MulConstAddTo(nmf.UserFactor[denseUserId], nmf.reg, userDen[denseUserId])
 			// Update \sum_{u\in{U_i}}p_{uf}⋅r_{ui}
-			copy(buffer, nmf.UserFactor[denseUserId])
-			base.MulConst(rating, buffer)
-			floats.Add(itemNum[denseItemId], buffer)
+			floats.MulConstAddTo(nmf.UserFactor[denseUserId], rating, itemNum[denseItemId])
 			// Update \sum_{u\in{U_i}}p_{uf}⋅\hat{r}_{ui} + \lambda|U_i|q_{if}
-			copy(buffer, nmf.UserFactor[denseUserId])
-			base.MulConst(prediction, buffer)
-			floats.Add(itemDen[denseItemId], buffer)
-			copy(buffer, nmf.ItemFactor[denseItemId])
-			base.MulConst(nmf.reg, buffer)
-			floats.Add(itemDen[denseItemId], buffer)
+			floats.MulConstAddTo(nmf.UserFactor[denseUserId], prediction, itemDen[denseItemId])
+			floats.MulConstAddTo(nmf.ItemFactor[denseItemId], nmf.reg, itemDen[denseItemId])
 		}
 		// Update user factors
 		for u := range nmf.UserFactor {
@@ -414,8 +378,7 @@ func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumFactor []float64)
 			sumFactor = svd.getSumFactors(denseUserId)
 		}
 		temp := make([]float64, len(itemFactor))
-		floats.Add(temp, userFactor)
-		floats.Add(temp, sumFactor)
+		floats.AddTo(userFactor, sumFactor, temp)
 		ret += floats.Dot(temp, itemFactor)
 	}
 	return ret
@@ -428,7 +391,7 @@ func (svd *SVDpp) getSumFactors(denseUserId int) []float64 {
 		floats.Add(sumFactor, svd.ImplFactor[index])
 	})
 	scale := math.Pow(float64(svd.UserRatings[denseUserId].Len()), -0.5)
-	base.MulConst(scale, sumFactor)
+	floats.MulConst(sumFactor, scale)
 	return sumFactor
 }
 
@@ -445,12 +408,10 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 	svd.UserRatings = trainSet.DenseUserRatings
 	// Create buffers
 	a := make([]float64, svd.nFactors)
-	b := make([]float64, svd.nFactors)
 	step := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
 	itemFactor := make([]float64, svd.nFactors)
 	c := base.MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
-	d := base.MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		for denseUserId := 0; denseUserId < trainSet.UserCount(); denseUserId++ {
@@ -473,27 +434,16 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 				gradItemBias := diff - svd.reg*itemBias
 				svd.ItemBias[denseItemId] += svd.lr * gradItemBias
 				// Update user latent factor
-				copy(a, itemFactor)
-				base.MulConst(diff, a)
-				copy(b, userFactor)
-				base.MulConst(svd.reg, b)
-				floats.Sub(a, b)
-				base.MulConst(svd.lr, a)
-				floats.Add(svd.UserFactor[denseUserId], a)
+				floats.MulConstTo(itemFactor, diff, a)
+				floats.MulConstAddTo(userFactor, -svd.reg, a)
+				floats.MulConstAddTo(a, svd.lr, svd.UserFactor[denseUserId])
 				// Update item latent factor
-				copy(a, userFactor)
-				floats.Add(a, sumFactor)
-				base.MulConst(diff, a)
-				copy(b, itemFactor)
-				base.MulConst(svd.reg, b)
-				floats.Sub(a, b)
-				base.MulConst(svd.lr, a)
-				floats.Add(svd.ItemFactor[denseItemId], a)
+				floats.AddTo(userFactor, sumFactor, a)
+				floats.MulConst(a, diff)
+				floats.MulConstAddTo(itemFactor, -svd.reg, a)
+				floats.MulConstAddTo(a, svd.lr, svd.ItemFactor[denseItemId])
 				// Update implicit latent factor: e_{ui}q_j|I_u|^{-1/2}
-				copy(a, itemFactor)
-				base.MulConst(scale, a)
-				base.MulConst(diff, a)
-				floats.Add(step, a)
+				floats.MulConstAddTo(itemFactor, scale*diff, step)
 			})
 			// Update implicit latent factor
 			var wg sync.WaitGroup
@@ -503,21 +453,15 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 					low := size * jobId / svd.rtOptions.NJobs
 					high := size * (jobId + 1) / svd.rtOptions.NJobs
 					a := c[jobId]
-					b := d[jobId]
 					for i := low; i < high; i++ {
 						denseItemId := svd.UserRatings[denseUserId].Indices[i]
 						implFactor := svd.ImplFactor[denseItemId]
 						// a <- e_{ui}q_j|I_u|^{-1/2}
-						copy(a, step)
-						base.DivConst(float64(size), step)
+						floats.MulConstTo(step, 1/float64(size), a)
 						// + \lambda y_k
-						copy(b, implFactor)
-						base.MulConst(svd.reg, b)
-						//MulConst(float64(size), b)
-						floats.Sub(a, b)
+						floats.MulConstAddTo(implFactor, -svd.reg, a)
 						// \mu (e_{ui}q_j|I_u|^{-1/2} + \lambda y_k)
-						base.MulConst(svd.lr, a)
-						floats.Add(svd.ImplFactor[denseItemId], a)
+						floats.MulConstAddTo(a, svd.lr, svd.ImplFactor[denseItemId])
 					}
 					wg.Done()
 				}(j)

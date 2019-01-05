@@ -1,7 +1,6 @@
 package base
 
 import (
-	"github.com/zhenghaoz/gorse/floats"
 	"log"
 )
 
@@ -59,13 +58,6 @@ func Neg(dst []float64) {
 	}
 }
 
-// MulConst divides a vec by a scalar.
-func DivConst(c float64, dst []float64) {
-	for i := 0; i < len(dst); i++ {
-		dst[i] /= c
-	}
-}
-
 // Argmin finds the index of the minimum in a vec.
 func Argmin(a []float64) int {
 	minIndex := 0
@@ -100,8 +92,4 @@ func FillZeroMatrix(m [][]float64) {
 			m[i][j] = 0
 		}
 	}
-}
-
-func MulConst(c float64, dst []float64) {
-	floats.MulConst(c, dst)
 }

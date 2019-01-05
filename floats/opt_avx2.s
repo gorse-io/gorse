@@ -326,36 +326,149 @@ LBB1_23:
 	VZEROUPPER
 	RET
 
-TEXT    ·_Dot+0(SB),$0-64
+TEXT    ·_Dot+0(SB),$0-64                                  // @_Dot
     MOVQ    a+0(FP), CX
     MOVQ    b+24(FP), DX
     MOVQ    len+48(FP), R8
 // %bb.0:
+	MOVL	R8, R10
+	SARL	$31, R10
+	SHRL	$30, R10
+	ADDL	R8, R10
+	MOVL	R10, AX
+	ANDL	$-4, AX
+	MOVL	R8, R9
+	SUBL	AX, R9
 	CMPL	R8, $4
-	JL	LBB2_4
-// %bb.1:
+	JL	LBB2_1
+// %bb.11:
 	VMOVAPD	(CX), Y0
 	VMULPD	(DX), Y0, Y0
+	ADDQ	$32, CX
+	ADDQ	$32, DX
 	CMPL	R8, $8
-	JL	LBB2_4
-// %bb.2:
-	MOVL	R8, R9
-	SARL	$31, R9
-	SHRL	$30, R9
-	ADDL	R8, R9
-	SARL	$2, R9
-	MOVL	$1, R8
-	MOVL	$32, AX
-LBB2_3:                                // =>This Inner Loop Header: Depth=1
-	VMOVAPD	(CX,AX), Y1
-	VFMADD231PD	(DX,AX), Y1, Y0 // YMM0 = (YMM1 * MEM) + YMM0
-	ADDL	$1, R8
-	ADDQ	$32, AX
-	CMPL	R8, R9
-	JL	LBB2_3
-LBB2_4:
+	JL	LBB2_2
+// %bb.12:
+	SARL	$2, R10
+	MOVL	$1, AX
+LBB2_13:                               // =>This Inner Loop Header: Depth=1
+	VMOVAPD	(CX), Y1
+	VFMADD231PD	(DX), Y1, Y0 // YMM0 = (YMM1 * MEM) + YMM0
+	ADDQ	$32, CX
+	ADDQ	$32, DX
+	ADDL	$1, AX
+	CMPL	AX, R10
+	JL	LBB2_13
+	JMP	LBB2_2
+LBB2_1:
+LBB2_2:
 	VHADDPD	Y0, Y0, Y0
 	VEXTRACTF128	$1, Y0, X1
 	VADDPD	X0, X1, X0
+	TESTL	R9, R9
+	JLE	LBB2_10
+// %bb.3:
+	LEAL	-1(R9), AX
+	MOVL	R9, R8
+	ANDL	$3, R8
+	CMPL	AX, $3
+	JB	LBB2_7
+// %bb.4:
+	MOVL	R9, R10
+	SUBL	R8, R10
+	XORL	AX, AX
+	XORL	R11, R11
+LBB2_5:                                // =>This Inner Loop Header: Depth=1
+	VMOVSD	(CX)(AX*8), X1    // XMM1 = MEM[0],ZERO
+	VMULSD	(DX)(AX*8), X1, X1
+	VMOVSD	8(CX)(AX*8), X2   // XMM2 = MEM[0],ZERO
+	VADDSD	X1, X0, X0
+	VMULSD	8(DX)(AX*8), X2, X1
+	VADDSD	X1, X0, X0
+	VMOVSD	16(CX)(AX*8), X1  // XMM1 = MEM[0],ZERO
+	VMULSD	16(DX)(AX*8), X1, X1
+	VADDSD	X1, X0, X0
+	VMOVSD	24(CX)(AX*8), X1  // XMM1 = MEM[0],ZERO
+	VMULSD	24(DX)(AX*8), X1, X1
+	VADDSD	X1, X0, X0
+	ADDQ	$-32, R11
+	ADDQ	$4, AX
+	CMPL	R10, AX
+	JNE	LBB2_5
+// %bb.6:
+	SUBQ	R11, DX
+	SUBQ	R11, CX
+LBB2_7:
+	TESTL	R8, R8
+	JE	LBB2_10
+// %bb.8:
+	ANDL	$3, R9
+	XORL	AX, AX
+LBB2_9:                                // =>This Inner Loop Header: Depth=1
+	VMOVSD	(CX)(AX*8), X1    // XMM1 = MEM[0],ZERO
+	VMULSD	(DX)(AX*8), X1, X1
+	VADDSD	X1, X0, X0
+	ADDQ	$1, AX
+	CMPL	R9, AX
+	JNE	LBB2_9
+LBB2_10:
+	VZEROUPPER
+	MOVQ    X0, ret+56(FP)
+	RET
+
+TEXT    ·_AddTo+0(SB),$0-80
+    MOVQ    a+0(FP), CX
+    MOVQ    b+24(FP), DX
+    MOVQ    dst+48(FP), R8
+    MOVQ    len+72(FP), R9
+// %bb.0:
+	PUSHQ	SI
+	MOVL	R9, AX
+	SARL	$31, AX
+	SHRL	$30, AX
+	ADDL	R9, AX
+	MOVL	AX, SI
+	ANDL	$-4, SI
+	MOVL	R9, R10
+	SUBL	SI, R10
+	CMPL	R9, $4
+	JL	LBB3_1
+// %bb.7:
+	SARL	$2, AX
+	LEAL	-1(AX), SI
+	LEAQ	4(SI*4), R11
+	SHLQ	$2, SI
+	LEAQ	(DX)(SI*8), R9
+	ADDQ	$32, R9
+	XORL	SI, SI
+LBB3_8:                                // =>This Inner Loop Header: Depth=1
+	VMOVAPD	(CX)(SI*1), Y0
+	VADDPD	(DX)(SI*1), Y0, Y0
+	VMOVUPD	Y0, (R8)(SI*1)
+	ADDQ	$32, SI
+	ADDL	$-1, AX
+	JNE	LBB3_8
+// %bb.2:
+	LEAQ	(CX)(R11*8), CX
+	LEAQ	(R8)(R11*8), R8
+	TESTL	R10, R10
+	JG	LBB3_4
+	JMP	LBB3_6
+LBB3_1:
+	MOVQ	DX, R9
+	TESTL	R10, R10
+	JLE	LBB3_6
+LBB3_4:
+	MOVL	R10, AX
+	XORL	DX, DX
+LBB3_5:                                // =>This Inner Loop Header: Depth=1
+	VMOVSD	(CX)(DX*8), X0    // XMM0 = MEM[0],ZERO
+	VADDSD	(R9)(DX*8), X0, X0
+	VMOVSD	X0, (R8)(DX*8)
+	ADDQ	$1, DX
+	CMPQ	AX, DX
+	JNE	LBB3_5
+LBB3_6:
+	POPQ	SI
 	VZEROUPPER
 	RET
