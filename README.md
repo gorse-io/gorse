@@ -5,7 +5,7 @@
 [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
 [![codebeat badge](https://codebeat.co/badges/beb25c18-e35f-4783-b3ad-b518dc4ea78a)](https://codebeat.co/projects/github-com-zhenghaoz-gorse-master)
-[![](https://img.shields.io/badge/stability-experimental-orange.svg)](#)
+[![](https://img.shields.io/badge/acceleration-AVX2,%20FMA3-blue.svg)](#)
 
 `gorse` is a recommender system engine implemented by the go programming language. It provides
 
@@ -14,7 +14,7 @@
 - **Model**: [Recommendation models](https://godoc.org/github.com/zhenghaoz/gorse/model) based on collaborate filtering including matrix factorization, neighborhood-based method, Slope One and Co-Clustering.
 - **Evaluator**: Implemented [RMSE](https://godoc.org/github.com/zhenghaoz/gorse/core#RMSE) and [MAE](https://godoc.org/github.com/zhenghaoz/gorse/core#MAE) for rating task. For ranking task, there are [Precision](https://godoc.org/github.com/zhenghaoz/gorse/core#NewPrecision), [Recall](https://godoc.org/github.com/zhenghaoz/gorse/core#NewRecall), [NDCG](https://godoc.org/github.com/zhenghaoz/gorse/core#NewNDCG), [MAP](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMAP), [MRR](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMRR) and [AUC](https://godoc.org/github.com/zhenghaoz/gorse/core#AUC).
 - **Parameter Search**: Find best hyper-parameters using [grid search](https://godoc.org/github.com/zhenghaoz/gorse/core#GridSearchCV) or [random search](https://godoc.org/github.com/zhenghaoz/gorse/core#RandomSearchCV).
-- **Persistence**: Save a [model](https://godoc.org/github.com/zhenghaoz/gorse/core#Save) or [load](https://godoc.org/github.com/zhenghaoz/gorse/core#Load) a model.
+- **Persistence**: [Save](https://godoc.org/github.com/zhenghaoz/gorse/core#Save) a model or [load](https://godoc.org/github.com/zhenghaoz/gorse/core#Load) a model.
 
 ## Installation
 
