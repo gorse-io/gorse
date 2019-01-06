@@ -1,10 +1,12 @@
 //+build avx2
 
-TEXT    ·_MulConstTo+0(SB),$0-64
+#include "textflag.h"
+
+TEXT    ·_MulConstTo(SB), NOSPLIT, $0
     MOVQ    a+0(FP), CX
     MOVQ    c+24(FP), X1
     MOVQ    dst+32(FP), R8
-    MOVQ    len+56(FP), R9
+    MOVQ    len+8(FP), R9
 // %bb.0:
     PUSHQ	SI
     PUSHQ	DI
@@ -156,11 +158,11 @@ LBB0_23:
     VZEROUPPER
     RET
 
-TEXT    ·_MulConstAddTo+0(SB),$0-64
+TEXT    ·_MulConstAddTo(SB), NOSPLIT, $0
     MOVQ    a+0(FP), CX
     MOVQ    c+24(FP), X1
     MOVQ    dst+32(FP), R8
-    MOVQ    len+56(FP), R9
+    MOVQ    len+8(FP), R9
 // %bb.0:
 	PUSHQ	SI
 	PUSHQ	DI
@@ -216,7 +218,7 @@ LBB1_4:
 	NEGL	R9
 	XORL	SI, SI
 LBB1_6:                                // =>This Inner Loop Header: Depth=1
-	VMOVAPD	(AX)(SI*1), Y2
+	VMOVUPD	(AX)(SI*1), Y2
 	VFMADD213PD	(DX)(SI*1), Y0, Y2 // YMM2 = (YMM0 * YMM2) + MEM
 	VMOVUPD	Y2, (DX)(SI*1)
 	ADDQ	$32, SI
@@ -326,10 +328,10 @@ LBB1_23:
 	VZEROUPPER
 	RET
 
-TEXT    ·_Dot+0(SB),$0-64                                  // @_Dot
+TEXT    ·_Dot(SB), NOSPLIT, $0                                  // @_Dot
     MOVQ    a+0(FP), CX
     MOVQ    b+24(FP), DX
-    MOVQ    len+48(FP), R8
+    MOVQ    len+8(FP), R8
 // %bb.0:
 	MOVL	R8, R10
 	SARL	$31, R10
@@ -342,7 +344,7 @@ TEXT    ·_Dot+0(SB),$0-64                                  // @_Dot
 	CMPL	R8, $4
 	JL	LBB2_1
 // %bb.11:
-	VMOVAPD	(CX), Y0
+	VMOVUPD	(CX), Y0
 	VMULPD	(DX), Y0, Y0
 	ADDQ	$32, CX
 	ADDQ	$32, DX
@@ -352,7 +354,7 @@ TEXT    ·_Dot+0(SB),$0-64                                  // @_Dot
 	SARL	$2, R10
 	MOVL	$1, AX
 LBB2_13:                               // =>This Inner Loop Header: Depth=1
-	VMOVAPD	(CX), Y1
+	VMOVUPD	(CX), Y1
 	VFMADD231PD	(DX), Y1, Y0 // YMM0 = (YMM1 * MEM) + YMM0
 	ADDQ	$32, CX
 	ADDQ	$32, DX
@@ -413,14 +415,14 @@ LBB2_9:                                // =>This Inner Loop Header: Depth=1
 	JNE	LBB2_9
 LBB2_10:
 	VZEROUPPER
-	MOVQ    X0, ret+56(FP)
+	MOVQ    X0, ret+48(FP)
 	RET
 
-TEXT    ·_AddTo+0(SB),$0-80
+TEXT    ·_AddTo(SB), NOSPLIT, $0
     MOVQ    a+0(FP), CX
     MOVQ    b+24(FP), DX
     MOVQ    dst+48(FP), R8
-    MOVQ    len+72(FP), R9
+    MOVQ    len+8(FP), R9
 // %bb.0:
 	PUSHQ	SI
 	MOVL	R9, AX
