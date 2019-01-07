@@ -34,22 +34,22 @@ func md5Sum(fileName string) string {
 // 	}
 // }
 
-func TestUnzip(t *testing.T) {
-	// Download
-	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
-	if err != nil {
-		t.Fatal("download file failed ", err)
-	}
-	// Extract files
-	fileNames, err := unzip(zipName, dataSetDir)
-	// Check
-	if err != nil {
-		t.Fatal("unzip file failed ", err)
-	}
-	if len(fileNames) != 24 {
-		t.Fatal("Number of file doesn't match")
-	}
-}
+// func TestUnzip(t *testing.T) {
+// 	// Download
+// 	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
+// 	if err != nil {
+// 		t.Fatal("download file failed ", err)
+// 	}
+// 	// Extract files
+// 	fileNames, err := unzip(zipName, dataSetDir)
+// 	// Check
+// 	if err != nil {
+// 		t.Fatal("unzip file failed ", err)
+// 	}
+// 	if len(fileNames) != 24 {
+// 		t.Fatal("Number of file doesn't match")
+// 	}
+// }
 
 func TestLoadDataFromBuiltIn(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
