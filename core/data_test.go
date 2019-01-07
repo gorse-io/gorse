@@ -25,14 +25,14 @@ func md5Sum(fileName string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func TestDownloadFromUrl(t *testing.T) {
-	// Download
-	fileName, _ := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
-	// Checksum
-	if md5Sum(fileName) != "0e33842e24a9c977be4e0107933c0723" {
-		t.Fatal("MD5 sum doesn't match")
-	}
-}
+// func TestDownloadFromUrl(t *testing.T) {
+// 	// Download
+// 	fileName, _ := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
+// 	// Checksum
+// 	if md5Sum(fileName) != "0e33842e24a9c977be4e0107933c0723" {
+// 		t.Fatal("MD5 sum doesn't match")
+// 	}
+// }
 
 func TestUnzip(t *testing.T) {
 	// Download
