@@ -27,7 +27,10 @@ func md5Sum(fileName string) string {
 
 func TestDownloadFromUrl(t *testing.T) {
 	// Download
-	fileName, _ := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
+	fileName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Checksum
 	if md5Sum(fileName) != "0e33842e24a9c977be4e0107933c0723" {
 		t.Fatal("MD5 sum doesn't match")
