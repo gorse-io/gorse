@@ -8,7 +8,7 @@ import (
 
 func TestSparseIdSet(t *testing.T) {
 	// Create a ID set
-	set := MakeSparseIdSet()
+	set := NewSparseIdSet()
 	assert.Equal(t, set.Len(), 0)
 	// Add IDs
 	set.Add(1)
@@ -68,7 +68,7 @@ func TestSparseVector_ForIntersection(t *testing.T) {
 
 func TestKNNHeap(t *testing.T) {
 	// Test a adjacent vec
-	a := MakeKNNHeap(3)
+	a := NewKNNHeap(3)
 	a.Add(10, 0, 1)
 	a.Add(20, 0, 8)
 	a.Add(30, 0, 0)

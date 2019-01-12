@@ -9,8 +9,8 @@ env:
 matrix:
   include:
     - script:
-      - go test -v ./... -coverprofile=coverage.txt -covermode=atomic
+      - travis_retry go test -v ./... -coverprofile=coverage.txt -covermode=atomic
       after_success:
       - bash <(curl -s https://codecov.io/bash)
     - script:
-      - go test -v -tags='avx2' ./... -coverprofile=coverage.txt -covermode=atomic
+      - travis_retry go test -v -tags='avx2' ./... -coverprofile=coverage.txt -covermode=atomic

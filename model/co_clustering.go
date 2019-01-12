@@ -77,13 +77,13 @@ func (coc *CoClustering) Fit(trainSet core.DataSet, options ...base.FitOption) {
 	itemRatings := trainSet.DenseItemRatings
 	coc.UserMeans = base.SparseVectorsMean(userRatings)
 	coc.ItemMeans = base.SparseVectorsMean(itemRatings)
-	coc.UserClusters = coc.rng.MakeUniformVectorInt(trainSet.UserCount(), 0, coc.nUserClusters)
-	coc.ItemClusters = coc.rng.MakeUniformVectorInt(trainSet.ItemCount(), 0, coc.nItemClusters)
+	coc.UserClusters = coc.rng.NewUniformVectorInt(trainSet.UserCount(), 0, coc.nUserClusters)
+	coc.ItemClusters = coc.rng.NewUniformVectorInt(trainSet.ItemCount(), 0, coc.nItemClusters)
 	coc.UserClusterMeans = make([]float64, coc.nUserClusters)
 	coc.ItemClusterMeans = make([]float64, coc.nItemClusters)
-	coc.CoClusterMeans = base.MakeMatrix(coc.nUserClusters, coc.nItemClusters)
+	coc.CoClusterMeans = base.NewMatrix(coc.nUserClusters, coc.nItemClusters)
 	// A^{tmp1}_{ij} = A_{ij} - A^R_i - A^C_j
-	tmp1 := base.MakeMatrix(trainSet.UserCount(), trainSet.ItemCount())
+	tmp1 := base.NewMatrix(trainSet.UserCount(), trainSet.ItemCount())
 	for i := range tmp1 {
 		userRatings[i].ForEach(func(_, index int, value float64) {
 			tmp1[i][index] = value - coc.UserMeans[i] - coc.ItemMeans[index]
@@ -139,7 +139,7 @@ func (coc *CoClustering) Fit(trainSet core.DataSet, options ...base.FitOption) {
 	}
 }
 
-func (coc *CoClustering) clusterMean(dst []float64, clusters []int, ratings []base.SparseVector) {
+func (coc *CoClustering) clusterMean(dst []float64, clusters []int, ratings []*base.SparseVector) {
 	base.FillZeroVector(dst)
 	count := make([]float64, len(dst))
 	for id, cluster := range clusters {
@@ -157,9 +157,9 @@ func (coc *CoClustering) clusterMean(dst []float64, clusters []int, ratings []ba
 	}
 }
 
-func (coc *CoClustering) coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []base.SparseVector) {
+func (coc *CoClustering) coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []*base.SparseVector) {
 	base.FillZeroMatrix(dst)
-	count := base.MakeMatrix(coc.nUserClusters, coc.nItemClusters)
+	count := base.NewMatrix(coc.nUserClusters, coc.nItemClusters)
 	for denseUserId, userCluster := range userClusters {
 		userRatings[denseUserId].ForEach(func(_, denseItemId int, value float64) {
 			itemCluster := itemClusters[denseItemId]

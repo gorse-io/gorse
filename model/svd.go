@@ -98,8 +98,8 @@ func (svd *SVD) Fit(trainSet core.DataSet, options ...base.FitOption) {
 	svd.GlobalMean = 0
 	svd.UserBias = make([]float64, trainSet.UserCount())
 	svd.ItemBias = make([]float64, trainSet.ItemCount())
-	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
-	svd.ItemFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.UserFactor = svd.rng.NewNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.ItemFactor = svd.rng.NewNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	// Select fit function
 	switch svd.target {
 	case base.Regression:
@@ -255,14 +255,14 @@ func (nmf *NMF) Fit(trainSet core.DataSet, options ...base.FitOption) {
 	nmf.Init(trainSet, options)
 	// Initialize parameters
 	nmf.GlobalMean = trainSet.GlobalMean
-	nmf.UserFactor = nmf.rng.MakeUniformMatrix(trainSet.UserCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
-	nmf.ItemFactor = nmf.rng.MakeUniformMatrix(trainSet.ItemCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
+	nmf.UserFactor = nmf.rng.NewUniformMatrix(trainSet.UserCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
+	nmf.ItemFactor = nmf.rng.NewUniformMatrix(trainSet.ItemCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
 	// Create intermediate matrix buffer
 	buffer := make([]float64, nmf.nFactors)
-	userNum := base.MakeMatrix(trainSet.UserCount(), nmf.nFactors)
-	userDen := base.MakeMatrix(trainSet.UserCount(), nmf.nFactors)
-	itemNum := base.MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
-	itemDen := base.MakeMatrix(trainSet.ItemCount(), nmf.nFactors)
+	userNum := base.NewMatrix(trainSet.UserCount(), nmf.nFactors)
+	userDen := base.NewMatrix(trainSet.UserCount(), nmf.nFactors)
+	itemNum := base.NewMatrix(trainSet.ItemCount(), nmf.nFactors)
+	itemDen := base.NewMatrix(trainSet.ItemCount(), nmf.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nmf.nEpochs; epoch++ {
 		// Reset intermediate matrices
@@ -314,13 +314,13 @@ func (nmf *NMF) Fit(trainSet core.DataSet, options ...base.FitOption) {
 // applies for item i with b_i, q_i and y_i.
 type SVDpp struct {
 	BaseModel
-	UserRatings []base.SparseVector // I_u
-	UserFactor  [][]float64         // p_u
-	ItemFactor  [][]float64         // q_i
-	ImplFactor  [][]float64         // y_i
-	UserBias    []float64           // b_u
-	ItemBias    []float64           // b_i
-	GlobalMean  float64             // mu
+	UserRatings []*base.SparseVector // I_u
+	UserFactor  [][]float64          // p_u
+	ItemFactor  [][]float64          // q_i
+	ImplFactor  [][]float64          // y_i
+	UserBias    []float64            // b_u
+	ItemBias    []float64            // b_i
+	GlobalMean  float64              // mu
 	nFactors    int
 	nEpochs     int
 	reg         float64
@@ -402,9 +402,9 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 	svd.GlobalMean = trainSet.GlobalMean
 	svd.UserBias = make([]float64, trainSet.UserCount())
 	svd.ItemBias = make([]float64, trainSet.ItemCount())
-	svd.UserFactor = svd.rng.MakeNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
-	svd.ItemFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
-	svd.ImplFactor = svd.rng.MakeNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.UserFactor = svd.rng.NewNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.ItemFactor = svd.rng.NewNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
+	svd.ImplFactor = svd.rng.NewNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	// Build user rating set
 	svd.UserRatings = trainSet.DenseUserRatings
 	// Create buffers
@@ -412,7 +412,7 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 	step := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
 	itemFactor := make([]float64, svd.nFactors)
-	c := base.MakeMatrix(svd.rtOptions.NJobs, svd.nFactors)
+	c := base.NewMatrix(svd.rtOptions.NJobs, svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		for denseUserId := 0; denseUserId < trainSet.UserCount(); denseUserId++ {
@@ -523,9 +523,9 @@ func (mf *WRMF) Fit(set core.DataSet, options ...base.FitOption) {
 	mf.Init(set, options)
 	// Initialize
 	mf.UserFactor = mat.NewDense(set.UserCount(), mf.nFactors,
-		mf.rng.MakeNormalVector(set.UserCount()*mf.nFactors, mf.initMean, mf.initStdDev))
+		mf.rng.NewNormalVector(set.UserCount()*mf.nFactors, mf.initMean, mf.initStdDev))
 	mf.ItemFactor = mat.NewDense(set.ItemCount(), mf.nFactors,
-		mf.rng.MakeNormalVector(set.ItemCount()*mf.nFactors, mf.initMean, mf.initStdDev))
+		mf.rng.NewNormalVector(set.ItemCount()*mf.nFactors, mf.initMean, mf.initStdDev))
 	// Create temporary matrix
 	temp1 := mat.NewDense(mf.nFactors, mf.nFactors, nil)
 	temp2 := mat.NewVecDense(mf.nFactors, nil)

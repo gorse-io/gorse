@@ -2,18 +2,16 @@ package base
 
 import "runtime"
 
-// FitOptions defined options used in fitting.
+// FitOptions defines options used when model fitting.
 type FitOptions struct {
-	Verbose  bool // Verbose switch
-	Diagnose bool
-	NJobs    int // Number of jobs
+	Verbose bool // Verbose switch
+	NJobs   int  // Number of jobs
 }
 
-// NewCVOptions creates a FitOptions from FitOption.
+// NewCVOptions creates a (FitOptions) object from (FitOption)s.
 func NewFitOptions(setters []FitOption) *FitOptions {
 	options := new(FitOptions)
 	options.NJobs = runtime.NumCPU()
-	options.Diagnose = true
 	options.Verbose = true
 	for _, setter := range setters {
 		setter(options)
@@ -21,7 +19,7 @@ func NewFitOptions(setters []FitOption) *FitOptions {
 	return options
 }
 
-// FitOption changes options.
+// FitOption is used to change (FitOptions).
 type FitOption func(options *FitOptions)
 
 // WithVerbose sets the verbose switch
@@ -38,18 +36,19 @@ func WithNJobs(nJobs int) FitOption {
 	}
 }
 
+// CVOptions defines options used when cross validation.
 type CVOptions struct {
-	FitOptions
-	Seed int64
+	FitOptions       // Options for model fitting
+	Seed       int64 // Random seed
 }
 
+// CVOption is used to change (CVOptions).
 type CVOption func(options *CVOptions)
 
-// NewCVOptions creates a FitOptions from FitOption.
+// NewCVOptions creates a (FitOptions) object from (FitOption)s.
 func NewCVOptions(setters []CVOption) *CVOptions {
 	options := new(CVOptions)
 	options.NJobs = runtime.NumCPU()
-	options.Diagnose = true
 	options.Verbose = true
 	for _, setter := range setters {
 		setter(options)
