@@ -9,7 +9,7 @@ import (
 type SlopeOne struct {
 	BaseModel
 	GlobalMean  float64
-	UserRatings []base.SparseVector
+	UserRatings []*base.SparseVector
 	UserMeans   []float64
 	Dev         [][]float64 // The average differences between the LeftRatings of i and those of j
 }
@@ -50,14 +50,14 @@ func (so *SlopeOne) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 	so.GlobalMean = trainSet.GlobalMean
 	so.UserRatings = trainSet.DenseUserRatings
 	so.UserMeans = base.SparseVectorsMean(so.UserRatings)
-	so.Dev = base.MakeMatrix(trainSet.ItemCount(), trainSet.ItemCount())
+	so.Dev = base.NewMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	itemRatings := trainSet.DenseItemRatings
 	base.Parallel(len(itemRatings), so.rtOptions.NJobs, func(begin, end int) {
 		for i := begin; i < end; i++ {
 			for j := 0; j < i; j++ {
 				count, sum := 0.0, 0.0
 				// Find common user's ratings
-				itemRatings[i].ForIntersection(&itemRatings[j], func(index int, a float64, b float64) {
+				itemRatings[i].ForIntersection(itemRatings[j], func(index int, a float64, b float64) {
 					sum += a - b
 					count++
 				})

@@ -27,7 +27,7 @@ func NewEvaluatorTesterModel(users, items []int, ratings []float64) *EvaluatorTe
 	} else {
 		test.MaxItemId = Max(items)
 	}
-	test.Matrix = MakeMatrix(test.MaxUserId+1, test.MaxItemId+1)
+	test.Matrix = NewMatrix(test.MaxUserId+1, test.MaxItemId+1)
 	for i := range ratings {
 		userId := users[i]
 		itemId := items[i]

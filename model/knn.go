@@ -12,9 +12,9 @@ type KNN struct {
 	BaseModel
 	GlobalMean   float64
 	SimMatrix    [][]float64
-	LeftRatings  []base.SparseVector
-	RightRatings []base.SparseVector
-	UserRatings  []base.SparseVector
+	LeftRatings  []*base.SparseVector
+	RightRatings []*base.SparseVector
+	UserRatings  []*base.SparseVector
 	LeftMean     []float64 // Centered KNN: user (item) Mean
 	StdDev       []float64 // KNN with Z Score: user (item) standard deviation
 	Bias         []float64 // KNN Baseline: Bias
@@ -74,7 +74,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 		return knn.GlobalMean
 	}
 	// Find user (item) interacted with item (user)
-	neighbors := base.MakeKNNHeap(knn.k)
+	neighbors := base.NewKNNHeap(knn.k)
 	knn.RightRatings[rightId].ForEach(func(i, index int, value float64) {
 		neighbors.Add(index, value, knn.SimMatrix[leftId][index])
 	})
@@ -154,16 +154,16 @@ func (knn *KNN) Fit(trainSet core.DataSet, options ...base.FitOption) {
 		// Call SortIndex() to make sure similarity() reentrant
 		knn.LeftRatings[i].SortIndex()
 	}
-	knn.SimMatrix = base.MakeMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
+	knn.SimMatrix = base.NewMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
 	base.Parallel(len(knn.LeftRatings), knn.rtOptions.NJobs, func(begin, end int) {
 		for iId := begin; iId < end; iId++ {
 			iRatings := knn.LeftRatings[iId]
 			for jId, jRatings := range knn.LeftRatings {
 				if iId != jId {
-					ret := knn.similarity(&iRatings, &jRatings)
+					ret := knn.similarity(iRatings, jRatings)
 					// Get the number of common
 					common := 0.0
-					iRatings.ForIntersection(&jRatings, func(index int, a, b float64) {
+					iRatings.ForIntersection(jRatings, func(index int, a, b float64) {
 						common += 1
 					})
 					if !math.IsNaN(ret) {

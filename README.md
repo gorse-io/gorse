@@ -1,25 +1,31 @@
 # gorse: Go Recommender System Engine
 
-[![Build Status](https://travis-ci.org/zhenghaoz/gorse.svg?branch=master)](https://travis-ci.org/zhenghaoz/gorse)
-[![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse)
-[![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse)
-[![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
-[![codebeat badge](https://codebeat.co/badges/beb25c18-e35f-4783-b3ad-b518dc4ea78a)](https://codebeat.co/projects/github-com-zhenghaoz-gorse-master)
-[![](https://img.shields.io/badge/stability-experimental-orange.svg)](#)
+| Build | Build (AVX2) | Coverage | Document | Report |
+|---|---|---|---|---| 
+| [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/1)](https://travis-ci.org/zhenghaoz/gorse) | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/2)](https://travis-ci.org/zhenghaoz/gorse) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse) |
 
-`gorse` is a recommender system engine implemented by the go programming language. It provides
+`gorse` is a recommender system engine implemented by the Go programming language. It is a package provides components to build a recommender system:
 
 - **Data**: Load data from built-in datasets or custom files.
 - **Splitter**: Split dataset by [k-fold](https://godoc.org/github.com/zhenghaoz/gorse/core#NewKFoldSplitter), [ratio](https://godoc.org/github.com/zhenghaoz/gorse/core#NewRatioSplitter) or [leave-one-out](https://godoc.org/github.com/zhenghaoz/gorse/core#NewUserLOOSplitter).
 - **Model**: [Recommendation models](https://godoc.org/github.com/zhenghaoz/gorse/model) based on collaborate filtering including matrix factorization, neighborhood-based method, Slope One and Co-Clustering.
 - **Evaluator**: Implemented [RMSE](https://godoc.org/github.com/zhenghaoz/gorse/core#RMSE) and [MAE](https://godoc.org/github.com/zhenghaoz/gorse/core#MAE) for rating task. For ranking task, there are [Precision](https://godoc.org/github.com/zhenghaoz/gorse/core#NewPrecision), [Recall](https://godoc.org/github.com/zhenghaoz/gorse/core#NewRecall), [NDCG](https://godoc.org/github.com/zhenghaoz/gorse/core#NewNDCG), [MAP](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMAP), [MRR](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMRR) and [AUC](https://godoc.org/github.com/zhenghaoz/gorse/core#AUC).
 - **Parameter Search**: Find best hyper-parameters using [grid search](https://godoc.org/github.com/zhenghaoz/gorse/core#GridSearchCV) or [random search](https://godoc.org/github.com/zhenghaoz/gorse/core#RandomSearchCV).
-- **Persistence**: Save a [model](https://godoc.org/github.com/zhenghaoz/gorse/core#Save) or [load](https://godoc.org/github.com/zhenghaoz/gorse/core#Load) a model.
+- **Persistence**: [Save](https://godoc.org/github.com/zhenghaoz/gorse/core#Save) a model or [load](https://godoc.org/github.com/zhenghaoz/gorse/core#Load) a model.
+- **SIMD** (Optional): Vectors are computed by AVX2 instructions which are 4 times faster than single instructions in theory.
 
 ## Installation
 
 ```bash
 go get github.com/zhenghaoz/gorse
+```
+
+## Build
+
+If the CPU supports AVX2 and FMA3 instructions, use the `avx2` build tag to enable AVX2 support. For example:
+
+```bash
+go build -tags='avx2' example/benchmark_rating_ml_1m/main.go
 ```
 
 ## Usage
@@ -72,13 +78,13 @@ All models are tested by 5-fold cross validation on a PC with Intel(R) Core(TM) 
 
 - Rating Prediction on MovieLens 1M ([source](https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_rating_ml_1m/main.go))
 
-|    Model     |       RMSE        |        MAE        |  Time   |
-|--------------|-------------------|-------------------|---------|
-| SlopeOne     | 0.90691 | 0.71541 | 0:00:35 |
-| CoClustering | 0.90701 | 0.71212 | 0:00:11 |
-| KNN          | 0.86462 | 0.67663 | 0:02:05 |
-| SVD          | 0.84252 | 0.66189 | 0:02:37 |
-| SVD++        | **0.84201** | **0.66161** | 0:04:43 |
+|        Model        |       RMSE        |        MAE        |  Time   | (AVX2) |
+|---------------------|-------------------|-------------------|---------|---|
+| SlopeOne     | 0.90683 | 0.71541 | 0:00:26 | |
+| CoClustering | 0.90701 | 0.71212 | 0:00:08 | |
+| KNN          | 0.86462 | 0.67663 | 0:02:07 | |
+| SVD          | 0.84252 | 0.66189 | 0:02:21 | 0:01:48 |
+| SVD++        | **0.84194** | **0.66156** | 0:03:39 | 0:02:47 |
 
 - Item Ranking on MovieLens 100K ([source](https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_ranking/main.go))
 

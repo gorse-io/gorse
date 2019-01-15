@@ -12,26 +12,26 @@ type ParamName string
 
 // Predefined hyper-parameter names
 const (
-	Lr            ParamName = "lr"
-	Reg           ParamName = "reg"
-	NEpochs       ParamName = "n_epochs"
-	NFactors      ParamName = "n_factors"
-	RandomState   ParamName = "random_state"
-	UseBias       ParamName = "use_bias"
-	InitMean      ParamName = "init_mean"
-	InitStdDev    ParamName = "init_std_dev"
-	InitLow       ParamName = "init_low"
-	InitHigh      ParamName = "init_high"
-	NUserClusters ParamName = "n_user_clusters"
-	NItemClusters ParamName = "n_item_clusters"
-	Type          ParamName = "knn_type"
-	UserBased     ParamName = "user_based"
-	Similarity    ParamName = "knn_similarity"
-	K             ParamName = "k"
-	MinK          ParamName = "min_k"
-	Target        ParamName = "loss"
-	Shrinkage     ParamName = "shrinkage"
-	Alpha         ParamName = "alpha"
+	Lr            ParamName = "Lr"            // learning rate
+	Reg           ParamName = "Reg"           // regularization strength
+	NEpochs       ParamName = "NEpochs"       // number of epochs
+	NFactors      ParamName = "NFactors"      // number of factors
+	RandomState   ParamName = "RandomState"   // random state (seed)
+	UseBias       ParamName = "UseBias"       // use bias
+	InitMean      ParamName = "InitMean"      // mean of gaussian initial parameter
+	InitStdDev    ParamName = "InitStdDev"    // standard deviation of gaussian initial parameter
+	InitLow       ParamName = "InitLow"       // lower bound of uniform initial parameter
+	InitHigh      ParamName = "InitHigh"      // upper bound of uniform initial parameter
+	NUserClusters ParamName = "NUserClusters" // number of user cluster
+	NItemClusters ParamName = "NItemClusters" // number of item cluster
+	Type          ParamName = "Type"          // type for KNN
+	UserBased     ParamName = "UserBased"     // user based if true. otherwise item based.
+	Similarity    ParamName = "Similarity"    // similarity metrics
+	K             ParamName = "K"             // number of neighbors
+	MinK          ParamName = "MinK"          // least number of neighbors
+	Target        ParamName = "Target"        // target for optimization (Regression/BPR)
+	Shrinkage     ParamName = "Shrinkage"     // shrinkage strength of similarity
+	Alpha         ParamName = "Alpha"         // alpha value, depend on context
 )
 
 /* ParamString */
@@ -41,35 +41,37 @@ type ParamString string
 
 // Predefined values for hyper-parameter Type.
 const (
-	Basic    ParamString = "basic"
-	Centered ParamString = "centered"
-	ZScore   ParamString = "z_score"
-	Baseline ParamString = "baseline"
+	Basic    ParamString = "basic"    // Basic KNN
+	Centered ParamString = "Centered" // KNN with centered ratings
+	ZScore   ParamString = "ZScore"   // KNN with standardized ratings
+	Baseline ParamString = "Baseline" // KNN with baseline ratings
 )
 
 // Predefined values for hyper-parameter Target.
 const (
-	Regression ParamString = "regression"
-	BPR        ParamString = "bpr"
+	Regression ParamString = "Regression" // Fit model (MF) with regression objective function.
+	BPR        ParamString = "BPR"        // Fit model (MF) with bayesian personal ranking objective function.
 )
 
 // Predefined values for hyper-parameter Similarity.
 const (
-	Pearson ParamString = "pearson"
-	Cosine  ParamString = "cosine"
-	MSD     ParamString = "msd"
+	Pearson ParamString = "Pearson" // Pearson similarity
+	Cosine  ParamString = "Cosine"  // Cosine similarity
+	MSD     ParamString = "MSD"     // MSD similarity
 )
 
-// Params for an algorithm. Given by:
-//  map[string]interface{}{
-//     "<parameter name 1>": <parameter value 1>,
-//     "<parameter name 2>": <parameter value 2>,
-//     ...
-//     "<parameter name n>": <parameter value n>,
-//  }
+// Params stores hyper-parameters for an model. It is a map between strings
+// (names) and interface{}s (values). For example, hyper-parameters for SVD
+// is given by:
+//  base.Params{
+//		base.Lr:       0.007,
+//		base.NEpochs:  100,
+//		base.NFactors: 80,
+//		base.Reg:      0.1,
+//	}
 type Params map[ParamName]interface{}
 
-// Copy parameters.
+// Copy hyper-parameters.
 func (parameters Params) Copy() Params {
 	newParams := make(Params)
 	for k, v := range parameters {
@@ -78,7 +80,7 @@ func (parameters Params) Copy() Params {
 	return newParams
 }
 
-// Get a integer parameter.
+// GetInt gets a integer parameter by name. Returns _default if not exists or type doesn't match.
 func (parameters Params) GetInt(name ParamName, _default int) int {
 	if val, exist := parameters[name]; exist {
 		switch val.(type) {
@@ -91,7 +93,8 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 	return _default
 }
 
-// Get a integer parameter.
+// GetInt64 gets a int64 parameter by name. Returns _default if not exists or type doesn't match. The
+// type will be converted if given int.
 func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 	if val, exist := parameters[name]; exist {
 		switch val.(type) {
@@ -106,7 +109,7 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 	return _default
 }
 
-// Get a bool parameter.
+// GetBool gets a bool parameter by name. Returns _default if not exists or type doesn't match.
 func (parameters Params) GetBool(name ParamName, _default bool) bool {
 	if val, exist := parameters[name]; exist {
 		switch val.(type) {
@@ -119,7 +122,8 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 	return _default
 }
 
-// Get a float parameter.
+// GetFloat64 gets a float parameter by name. Returns _default if not exists or type doesn't match. The
+// type will be converted if given int.
 func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 	if val, exist := parameters[name]; exist {
 		switch val.(type) {
@@ -134,7 +138,7 @@ func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 	return _default
 }
 
-// Get a string parameter
+// GetString gets a string parameter. Returns _default if not exists or type doesn't match.
 func (parameters Params) GetString(name ParamName, _default ParamString) ParamString {
 	if val, exist := parameters[name]; exist {
 		switch val.(type) {
@@ -147,7 +151,7 @@ func (parameters Params) GetString(name ParamName, _default ParamString) ParamSt
 	return _default
 }
 
-// Merge current group of parameters with another group of parameters.
+// Merge another group of hyper-parameters to current group of hyper-parameters.
 func (parameters Params) Merge(params Params) {
 	for k, v := range params {
 		parameters[k] = v

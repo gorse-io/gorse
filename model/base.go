@@ -8,8 +8,8 @@ import "github.com/zhenghaoz/gorse/base"
 // BaseModel structure of all estimators.
 type BaseModel struct {
 	Params          base.Params          // Hyper-parameters
-	UserIdSet       base.SparseIdSet     // Users' ID set
-	ItemIdSet       base.SparseIdSet     // Items' ID set
+	UserIdSet       *base.SparseIdSet    // Users' ID set
+	ItemIdSet       *base.SparseIdSet    // Items' ID set
 	rng             base.RandomGenerator // Random generator
 	randState       int64                // Random seed
 	rtOptions       *base.FitOptions     // Runtime options
