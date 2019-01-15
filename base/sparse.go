@@ -40,6 +40,10 @@ func (set *SparseIdSet) Add(sparseId int) {
 
 // ToDenseId converts a sparse ID to a dense ID.
 func (set *SparseIdSet) ToDenseId(sparseId int) int {
+	// Return NotId if set is null
+	if set == nil {
+		return NotId
+	}
 	if denseId, exist := set.DenseIds[sparseId]; exist {
 		return denseId
 	}

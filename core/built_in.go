@@ -2,8 +2,6 @@ package core
 
 import "os/user"
 
-/* Built-in */
-
 // Built-in data set
 type _BuiltInDataSet struct {
 	url    string
@@ -14,6 +12,7 @@ type _BuiltInDataSet struct {
 }
 
 var builtInDataSets = map[string]_BuiltInDataSet{
+	// MovieLens: https://grouplens.org/datasets/movielens/
 	"ml-100k": {
 		url:    "https://cdn.sine-x.com/datasets/movielens/ml-100k.zip",
 		path:   "ml-100k/u.data",
@@ -42,6 +41,7 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		header: false,
 		loader: LoadDataFromCSV,
 	},
+	// Netflix:
 	"netflix": {
 		url:    "https://cdn.sine-x.com/datasets/netflix/netflix-prize-data.zip",
 		path:   "netflix/training_set.txt",
