@@ -24,7 +24,7 @@ import (
 // all relevant items. The subset of the set of items consisting of all
 // those items which are rated in u is S(u).
 type SlopeOne struct {
-	BaseModel
+	Base
 	GlobalMean  float64              // Mean of ratings in training set
 	UserRatings []*base.SparseVector // Ratings by each user
 	UserMeans   []float64            // Mean of each user's ratings
@@ -64,7 +64,7 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 }
 
 // Fit the SlopeOne model.
-func (so *SlopeOne) Fit(trainSet core.DataSet, setters ...base.FitOption) {
+func (so *SlopeOne) Fit(trainSet *core.DataSet, setters ...base.FitOption) {
 	// Initialize
 	so.Init(trainSet, setters)
 	so.GlobalMean = trainSet.GlobalMean
@@ -73,7 +73,7 @@ func (so *SlopeOne) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 	so.Dev = base.NewMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	// Compute deviations
 	itemRatings := trainSet.DenseItemRatings
-	base.Parallel(len(itemRatings), so.rtOptions.NJobs, func(begin, end int) {
+	base.Parallel(len(itemRatings), so.fitOptions.NJobs, func(begin, end int) {
 		for i := begin; i < end; i++ {
 			for j := 0; j < i; j++ {
 				count, sum := 0.0, 0.0

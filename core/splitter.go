@@ -3,15 +3,15 @@ package core
 import "math/rand"
 import "github.com/zhenghaoz/gorse/base"
 
-// Splitter split data to train set and test set.
-type Splitter func(set Table, seed int64) ([]DataSet, []DataSet)
+// Splitter split Data to train set and test set.
+type Splitter func(set Table, seed int64) ([]*DataSet, []*DataSet)
 
 // NewKFoldSplitter creates a k-fold splitter.
 func NewKFoldSplitter(k int) Splitter {
-	return func(dataSet Table, seed int64) ([]DataSet, []DataSet) {
+	return func(dataSet Table, seed int64) ([]*DataSet, []*DataSet) {
 		// Create folds
-		trainFolds := make([]DataSet, k)
-		testFolds := make([]DataSet, k)
+		trainFolds := make([]*DataSet, k)
+		testFolds := make([]*DataSet, k)
 		// Generate permutation
 		rand.Seed(seed)
 		perm := rand.Perm(dataSet.Len())
@@ -37,9 +37,9 @@ func NewKFoldSplitter(k int) Splitter {
 
 // NewRatioSplitter creates a ratio splitter.
 func NewRatioSplitter(repeat int, testRatio float64) Splitter {
-	return func(set Table, seed int64) ([]DataSet, []DataSet) {
-		trainFolds := make([]DataSet, repeat)
-		testFolds := make([]DataSet, repeat)
+	return func(set Table, seed int64) ([]*DataSet, []*DataSet) {
+		trainFolds := make([]*DataSet, repeat)
+		testFolds := make([]*DataSet, repeat)
 		testSize := int(float64(set.Len()) * testRatio)
 		rand.Seed(seed)
 		for i := 0; i < repeat; i++ {
@@ -55,11 +55,11 @@ func NewRatioSplitter(repeat int, testRatio float64) Splitter {
 	}
 }
 
-// NewUserLOOSplitter creates a per-user leave-one-out data splitter.
+// NewUserLOOSplitter creates a per-user leave-one-out Data splitter.
 func NewUserLOOSplitter(repeat int) Splitter {
-	return func(dataSet Table, seed int64) ([]DataSet, []DataSet) {
-		trainFolds := make([]DataSet, repeat)
-		testFolds := make([]DataSet, repeat)
+	return func(dataSet Table, seed int64) ([]*DataSet, []*DataSet) {
+		trainFolds := make([]*DataSet, repeat)
+		testFolds := make([]*DataSet, repeat)
 		rand.Seed(seed)
 		trainSet := NewDataSet(dataSet)
 		for i := 0; i < repeat; i++ {
@@ -98,9 +98,9 @@ func NewUserLOOSplitter(repeat int) Splitter {
 // add all ratings of train users and n ratings of test users to the training
 // set. The rest ratings of test set are added to the test set.
 func NewUserKeepNSplitter(repeat int, n int, testRatio float64) Splitter {
-	return func(set Table, seed int64) ([]DataSet, []DataSet) {
-		trainFolds := make([]DataSet, repeat)
-		testFolds := make([]DataSet, repeat)
+	return func(set Table, seed int64) ([]*DataSet, []*DataSet) {
+		trainFolds := make([]*DataSet, repeat)
+		testFolds := make([]*DataSet, repeat)
 		rand.Seed(seed)
 		trainSet := NewDataSet(set)
 		testSize := int(float64(trainSet.UserCount()) * testRatio)

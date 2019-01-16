@@ -8,8 +8,14 @@ import (
 )
 
 // KNN for collaborate filtering.
+//   Type        - The type of KNN ('Basic', 'Centered', 'ZScore', 'Baseline').
+//                    Default is 'basic'.
+//   Similarity  - The similarity function. Default is MSD.
+//   UserBased      - User based or item based? Default is true.
+//   K              - The maximum k neighborhoods to predict the rating. Default is 40.
+//   MinK           - The minimum k neighborhoods to predict the rating. Default is 1.
 type KNN struct {
-	BaseModel
+	Base
 	GlobalMean   float64
 	SimMatrix    [][]float64
 	LeftRatings  []*base.SparseVector
@@ -18,29 +24,25 @@ type KNN struct {
 	LeftMean     []float64 // Centered KNN: user (item) Mean
 	StdDev       []float64 // KNN with Z Score: user (item) standard deviation
 	Bias         []float64 // KNN Baseline: Bias
-	_type        base.ParamString
-	userBased    bool
-	similarity   base.FuncSimilarity
-	k            int
-	minK         int
-	shrinkage    int
+	// Hyper-parameters
+	_type      base.ParamString
+	userBased  bool
+	similarity base.FuncSimilarity
+	k          int
+	minK       int
+	shrinkage  int
 }
 
-// NewKNN creates a KNN model. Params:
-//   Type        - The type of KNN ('Basic', 'Centered', 'ZScore', 'Baseline').
-//                    Default is 'basic'.
-//   Similarity  - The similarity function. Default is MSD.
-//   UserBased      - User based or item based? Default is true.
-//   K              - The maximum k neighborhoods to predict the rating. Default is 40.
-//   MinK           - The minimum k neighborhoods to predict the rating. Default is 1.
+// NewKNN creates a KNN model.
 func NewKNN(params base.Params) *KNN {
 	knn := new(KNN)
 	knn.SetParams(params)
 	return knn
 }
 
+// SetParams sets hyper-parameters for the KNN model.
 func (knn *KNN) SetParams(params base.Params) {
-	knn.BaseModel.SetParams(params)
+	knn.Base.SetParams(params)
 	// Setup parameters
 	knn._type = knn.Params.GetString(base.Type, base.Basic)
 	knn.userBased = knn.Params.GetBool(base.UserBased, true)
@@ -60,7 +62,9 @@ func (knn *KNN) SetParams(params base.Params) {
 	}
 }
 
+// Predict by the KNN model.
 func (knn *KNN) Predict(userId, itemId int) float64 {
+	// Convert sparse IDs to dense IDs
 	denseUserId := knn.UserIdSet.ToDenseId(userId)
 	denseItemId := knn.ItemIdSet.ToDenseId(itemId)
 	// Set user based or item based
@@ -70,6 +74,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	} else {
 		leftId, rightId = denseItemId, denseUserId
 	}
+	// Return global mean for new users and new items
 	if leftId == base.NotId || rightId == base.NotId {
 		return knn.GlobalMean
 	}
@@ -78,7 +83,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	knn.RightRatings[rightId].ForEach(func(i, index int, value float64) {
 		neighbors.Add(index, value, knn.SimMatrix[leftId][index])
 	})
-	// Set global GlobalMean for a user (item) with the number of neighborhoods less than min k
+	// Return global mean for a user (item) with the number of neighborhoods less than min k
 	if neighbors.Len() < knn.minK {
 		return knn.GlobalMean
 	}
@@ -86,7 +91,6 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	weightSum := 0.0
 	weightRating := 0.0
 	neighbors.SparseVector.ForEach(func(i, index int, value float64) {
-		//fmt.Println(index, knn.SimMatrix[leftId][index])
 		weightSum += knn.SimMatrix[leftId][index]
 		rating := value
 		if knn._type == base.Centered {
@@ -98,7 +102,6 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 		}
 		weightRating += knn.SimMatrix[leftId][index] * rating
 	})
-	//panic("Exit")
 	prediction := weightRating / weightSum
 	if knn._type == base.Centered {
 		prediction += knn.LeftMean[leftId]
@@ -111,8 +114,8 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	return prediction
 }
 
-// Fit a KNN model.
-func (knn *KNN) Fit(trainSet core.DataSet, options ...base.FitOption) {
+// Fit the KNN model.
+func (knn *KNN) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	knn.Init(trainSet, options)
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean
@@ -155,7 +158,7 @@ func (knn *KNN) Fit(trainSet core.DataSet, options ...base.FitOption) {
 		knn.LeftRatings[i].SortIndex()
 	}
 	knn.SimMatrix = base.NewMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
-	base.Parallel(len(knn.LeftRatings), knn.rtOptions.NJobs, func(begin, end int) {
+	base.Parallel(len(knn.LeftRatings), knn.fitOptions.NJobs, func(begin, end int) {
 		for iId := begin; iId < end; iId++ {
 			iRatings := knn.LeftRatings[iId]
 			for jId, jRatings := range knn.LeftRatings {

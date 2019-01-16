@@ -6,7 +6,7 @@ import (
 )
 
 type EvaluatorOptions struct {
-	trainSet DataSet
+	trainSet *DataSet
 	nJobs    int
 }
 
@@ -20,7 +20,7 @@ func NewEvaluatorOptions(isRanking bool, option []EvaluatorOption) *EvaluatorOpt
 
 type EvaluatorOption func(*EvaluatorOptions)
 
-func WithTrainSet(trainSet DataSet) EvaluatorOption {
+func WithTrainSet(trainSet *DataSet) EvaluatorOption {
 	return func(options *EvaluatorOptions) {
 		options.trainSet = trainSet
 	}
@@ -33,10 +33,10 @@ func WithJobs(n int) EvaluatorOption {
 }
 
 // Evaluator evaluates the performance of a estimator on the test set.
-type Evaluator func(estimator Model, testSet DataSet, option ...EvaluatorOption) float64
+type Evaluator func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64
 
 // RMSE is root mean square error.
-func RMSE(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
+func RMSE(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 	sum := 0.0
 	for j := 0; j < testSet.Len(); j++ {
 		userId, itemId, rating := testSet.Get(j)
@@ -47,7 +47,7 @@ func RMSE(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
 }
 
 // MAE is mean absolute error.
-func MAE(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
+func MAE(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 	sum := 0.0
 	for j := 0; j < testSet.Len(); j++ {
 		userId, itemId, rating := testSet.Get(j)
@@ -58,13 +58,13 @@ func MAE(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
 }
 
 // AUC evaluator.
-func AUC(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
+func AUC(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 	options := NewEvaluatorOptions(true, option)
 	sum, count := 0.0, 0.0
 	// Find all userIds
 	for denseUserIdInTest, userRating := range testSet.DenseUserRatings {
 		userId := testSet.UserIdSet.ToSparseId(denseUserIdInTest)
-		// Find all <userId, j>s in training data set and test data set.
+		// Find all <userId, j>s in training Data set and test Data set.
 		denseUserIdInTrain := options.trainSet.UserIdSet.ToDenseId(userId)
 		positiveSet := make(map[int]float64)
 		if denseUserIdInTrain != base.NotId {
@@ -77,11 +77,11 @@ func AUC(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
 			itemId := testSet.ItemIdSet.ToSparseId(index)
 			positiveSet[itemId] = value
 		})
-		// Find all <userId, i>s in test data set
+		// Find all <userId, i>s in test Data set
 		correctCount, pairCount := 0.0, 0.0
 		userRating.ForEach(func(i, index int, value float64) {
 			posItemId := testSet.ItemIdSet.ToSparseId(index)
-			// Find all <userId, j>s not in full data set
+			// Find all <userId, j>s not in full Data set
 			for j := 0; j < testSet.ItemCount(); j++ {
 				negItemId := testSet.ItemIdSet.ToSparseId(j)
 				if _, exist := positiveSet[negItemId]; !exist {
@@ -103,7 +103,7 @@ func AUC(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
 
 // NewNDCG creates a Normalized Discounted Cumulative Gain evaluator.
 func NewNDCG(n int) Evaluator {
-	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
+	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
@@ -137,7 +137,7 @@ func NewNDCG(n int) Evaluator {
 //   Precision = \frac{|relevant documents| \cap |retrieved documents|}
 //                    {|{retrieved documents}|}
 func NewPrecision(n int) Evaluator {
-	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
+	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
@@ -163,7 +163,7 @@ func NewPrecision(n int) Evaluator {
 //   Recall = \frac{|relevant documents| \cap |retrieved documents|}
 //                 {|{relevant documents}|}
 func NewRecall(n int) Evaluator {
-	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
+	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
@@ -188,7 +188,7 @@ func NewRecall(n int) Evaluator {
 // NewMAP creates a mean average precision evaluator.
 // mAP: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
 func NewMAP(n int) Evaluator {
-	return func(estimator Model, testSet DataSet, option ...EvaluatorOption) float64 {
+	return func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
@@ -224,7 +224,7 @@ func NewMAP(n int) Evaluator {
 //
 //   MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
 func NewMRR(n int) Evaluator {
-	return func(model Model, testSet DataSet, option ...EvaluatorOption) float64 {
+	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users

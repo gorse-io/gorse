@@ -20,8 +20,16 @@ import (
 //
 // If user u is unknown, then the Bias b_u and the factors p_u are
 // assumed to be zero. The same applies for item i with b_i and q_i.
+//   UseBias    - Add useBias in SVD model. Default is true.
+//	 Reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 Lr 		- The learning rate of SGD. Default is 0.005.
+//	 nFactors	- The number of latent factors. Default is 100.
+//	 NEpochs	- The number of iteration of the SGD procedure. Default is 20.
+//	 InitMean	- The mean of initial random latent factors. Default is 0.
+//	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
 type SVD struct {
-	BaseModel
+	Base
 	// Model parameters
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
@@ -40,23 +48,16 @@ type SVD struct {
 	target     base.ParamString
 }
 
-// NewSVD creates a SVD model. Params:
-//   UseBias    - Add useBias in SVD model. Default is true.
-//	 Reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.02.
-//	 Lr 		- The learning rate of SGD. Default is 0.005.
-//	 nFactors	- The number of latent factors. Default is 100.
-//	 NEpochs	- The number of iteration of the SGD procedure. Default is 20.
-//	 InitMean	- The mean of initial random latent factors. Default is 0.
-//	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+// NewSVD creates a SVD model.
 func NewSVD(params base.Params) *SVD {
 	svd := new(SVD)
 	svd.SetParams(params)
 	return svd
 }
 
+// SetParams sets hyper-parameters of the SVD model.
 func (svd *SVD) SetParams(params base.Params) {
-	svd.BaseModel.SetParams(params)
+	svd.Base.SetParams(params)
 	svd.useBias = svd.Params.GetBool(base.UseBias, true)
 	svd.nFactors = svd.Params.GetInt(base.NFactors, 100)
 	svd.nEpochs = svd.Params.GetInt(base.NEpochs, 20)
@@ -67,7 +68,9 @@ func (svd *SVD) SetParams(params base.Params) {
 	svd.target = svd.Params.GetString(base.Target, base.Regression)
 }
 
+// Predict by the SVD model.
 func (svd *SVD) Predict(userId int, itemId int) float64 {
+	// Convert sparse IDs to dense IDs
 	denseUserId := svd.UserIdSet.ToDenseId(userId)
 	denseItemId := svd.ItemIdSet.ToDenseId(itemId)
 	return svd.predict(denseUserId, denseItemId)
@@ -92,7 +95,8 @@ func (svd *SVD) predict(denseUserId int, denseItemId int) float64 {
 	return ret
 }
 
-func (svd *SVD) Fit(trainSet core.DataSet, options ...base.FitOption) {
+// Fit the SVD model.
+func (svd *SVD) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	svd.Init(trainSet, options)
 	// Initialize parameters
 	svd.GlobalMean = 0
@@ -111,7 +115,7 @@ func (svd *SVD) Fit(trainSet core.DataSet, options ...base.FitOption) {
 	}
 }
 
-func (svd *SVD) fitRegression(trainSet core.DataSet) {
+func (svd *SVD) fitRegression(trainSet *core.DataSet) {
 	svd.GlobalMean = trainSet.GlobalMean
 	// Create buffers
 	temp := make([]float64, svd.nFactors)
@@ -148,7 +152,7 @@ func (svd *SVD) fitRegression(trainSet core.DataSet) {
 	}
 }
 
-func (svd *SVD) fitBPR(trainSet core.DataSet) {
+func (svd *SVD) fitBPR(trainSet *core.DataSet) {
 	// Create the set of positive feedback
 	positiveSet := make([]map[int]float64, trainSet.UserCount())
 	for denseUserId, userRating := range trainSet.DenseUserRatings {
@@ -203,9 +207,15 @@ func (svd *SVD) fitBPR(trainSet core.DataSet) {
 
 /* NMF */
 
-// NMF: Non-negative Matrix Factorization[3].
+// NMF [3].
+//	 Reg      - The regularization parameter of the cost function that is
+//              optimized. Default is 0.06.
+//	 NFactors - The number of latent factors. Default is 15.
+//	 NEpochs  - The number of iteration of the SGD procedure. Default is 50.
+//	 InitLow  - The lower bound of initial random latent factor. Default is 0.
+//	 InitHigh - The upper bound of initial random latent factor. Default is 1.
 type NMF struct {
-	BaseModel
+	Base
 	GlobalMean float64
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
@@ -216,21 +226,16 @@ type NMF struct {
 	reg        float64
 }
 
-// NewNMF creates a NMF model. Params:
-//	 Reg      - The regularization parameter of the cost function that is
-//              optimized. Default is 0.06.
-//	 NFactors - The number of latent factors. Default is 15.
-//	 NEpochs  - The number of iteration of the SGD procedure. Default is 50.
-//	 InitLow  - The lower bound of initial random latent factor. Default is 0.
-//	 InitHigh - The upper bound of initial random latent factor. Default is 1.
+// NewNMF creates a NMF model.
 func NewNMF(params base.Params) *NMF {
 	nmf := new(NMF)
 	nmf.SetParams(params)
 	return nmf
 }
 
+// SetParams sets hyper-parameters of the NMF model.
 func (nmf *NMF) SetParams(params base.Params) {
-	nmf.BaseModel.SetParams(params)
+	nmf.Base.SetParams(params)
 	nmf.nFactors = nmf.Params.GetInt(base.NFactors, 15)
 	nmf.nEpochs = nmf.Params.GetInt(base.NEpochs, 50)
 	nmf.initLow = nmf.Params.GetFloat64(base.InitLow, 0)
@@ -238,6 +243,7 @@ func (nmf *NMF) SetParams(params base.Params) {
 	nmf.reg = nmf.Params.GetFloat64(base.Reg, 0.06)
 }
 
+// Predict by the NMF model.
 func (nmf *NMF) Predict(userId int, itemId int) float64 {
 	denseUserId := nmf.UserIdSet.ToDenseId(userId)
 	denseItemId := nmf.ItemIdSet.ToDenseId(itemId)
@@ -251,7 +257,8 @@ func (nmf *NMF) predict(denseUserId int, denseItemId int) float64 {
 	return nmf.GlobalMean
 }
 
-func (nmf *NMF) Fit(trainSet core.DataSet, options ...base.FitOption) {
+// Fit the NMF model.
+func (nmf *NMF) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	nmf.Init(trainSet, options)
 	// Initialize parameters
 	nmf.GlobalMean = trainSet.GlobalMean
@@ -312,8 +319,15 @@ func (nmf *NMF) Fit(trainSet core.DataSet, options ...base.FitOption) {
 // DenseUserRatings an item j, regardless of the rating value. If user u is unknown,
 // then the Bias b_u and the factors p_u are assumed to be zero. The same
 // applies for item i with b_i, q_i and y_i.
+//	 Reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.02.
+//	 Lr 		- The learning rate of SGD. Default is 0.007.
+//	 NFactors	- The number of latent factors. Default is 20.
+//	 NEpochs	- The number of iteration of the SGD procedure. Default is 20.
+//	 InitMean	- The mean of initial random latent factors. Default is 0.
+//	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
 type SVDpp struct {
-	BaseModel
+	Base
 	UserRatings []*base.SparseVector // I_u
 	UserFactor  [][]float64          // p_u
 	ItemFactor  [][]float64          // q_i
@@ -329,22 +343,16 @@ type SVDpp struct {
 	initStdDev  float64
 }
 
-// NewSVDpp creates a SVD++ model. Params:
-//	 Reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.02.
-//	 Lr 		- The learning rate of SGD. Default is 0.007.
-//	 NFactors	- The number of latent factors. Default is 20.
-//	 NEpochs	- The number of iteration of the SGD procedure. Default is 20.
-//	 InitMean	- The mean of initial random latent factors. Default is 0.
-//	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+// NewSVDpp creates a SVD++ model.
 func NewSVDpp(params base.Params) *SVDpp {
 	svd := new(SVDpp)
 	svd.SetParams(params)
 	return svd
 }
 
+// SetParams sets hyper-parameters of the SVD++ model.
 func (svd *SVDpp) SetParams(params base.Params) {
-	svd.BaseModel.SetParams(params)
+	svd.Base.SetParams(params)
 	// Setup parameters
 	svd.nFactors = svd.Params.GetInt(base.NFactors, 20)
 	svd.nEpochs = svd.Params.GetInt(base.NEpochs, 20)
@@ -354,6 +362,7 @@ func (svd *SVDpp) SetParams(params base.Params) {
 	svd.initStdDev = svd.Params.GetFloat64(base.InitStdDev, 0.1)
 }
 
+// Predict by the SVD++ model.
 func (svd *SVDpp) Predict(userId int, itemId int) float64 {
 	denseUserId := svd.UserIdSet.ToDenseId(userId)
 	denseItemId := svd.ItemIdSet.ToDenseId(itemId)
@@ -396,7 +405,8 @@ func (svd *SVDpp) getSumFactors(denseUserId int) []float64 {
 	return sumFactor
 }
 
-func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
+// Fit the SVD++ model.
+func (svd *SVDpp) Fit(trainSet *core.DataSet, setters ...base.FitOption) {
 	svd.Init(trainSet, setters)
 	// Initialize parameters
 	svd.GlobalMean = trainSet.GlobalMean
@@ -412,7 +422,7 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 	step := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
 	itemFactor := make([]float64, svd.nFactors)
-	c := base.NewMatrix(svd.rtOptions.NJobs, svd.nFactors)
+	c := base.NewMatrix(svd.fitOptions.NJobs, svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		for denseUserId := 0; denseUserId < trainSet.UserCount(); denseUserId++ {
@@ -448,11 +458,11 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 			})
 			// Update implicit latent factor
 			var wg sync.WaitGroup
-			wg.Add(svd.rtOptions.NJobs)
-			for j := 0; j < svd.rtOptions.NJobs; j++ {
+			wg.Add(svd.fitOptions.NJobs)
+			for j := 0; j < svd.fitOptions.NJobs; j++ {
 				go func(jobId int) {
-					low := size * jobId / svd.rtOptions.NJobs
-					high := size * (jobId + 1) / svd.rtOptions.NJobs
+					low := size * jobId / svd.fitOptions.NJobs
+					high := size * (jobId + 1) / svd.fitOptions.NJobs
 					a := c[jobId]
 					for i := low; i < high; i++ {
 						denseItemId := svd.UserRatings[denseUserId].Indices[i]
@@ -474,8 +484,13 @@ func (svd *SVDpp) Fit(trainSet core.DataSet, setters ...base.FitOption) {
 }
 
 // WRMF[7] model for implicit feedback.
+//   NFactors   - The number of latent factors. Default is 10.
+//   NEpochs    - The number of training epochs. Default is 50.
+//   InitMean   - The mean of initial latent factors. Default is 0.
+//   InitStdDev - The standard deviation of initial latent factors. Default is 0.1.
+//   Reg        - The strength of regularization.
 type WRMF struct {
-	BaseModel
+	Base
 	// Model parameters
 	UserFactor *mat.Dense // p_u
 	ItemFactor *mat.Dense // q_i
@@ -488,20 +503,16 @@ type WRMF struct {
 	alpha      float64
 }
 
-// NewWRMF creates a WRMF model. Parameters:
-//   NFactors   - The number of latent factors. Default is 10.
-//   NEpochs    - The number of training epochs. Default is 50.
-//   InitMean   - The mean of initial latent factors. Default is 0.
-//   InitStdDev - The standard deviation of initial latent factors. Default is 0.1.
-//   Reg        - The strength of regularization.
+// NewWRMF creates a WRMF model.
 func NewWRMF(params base.Params) *WRMF {
 	mf := new(WRMF)
 	mf.SetParams(params)
 	return mf
 }
 
+// SetParams sets hyper-parameters for the WRMF model.
 func (mf *WRMF) SetParams(params base.Params) {
-	mf.BaseModel.SetParams(params)
+	mf.Base.SetParams(params)
 	mf.nFactors = mf.Params.GetInt(base.NFactors, 15)
 	mf.nEpochs = mf.Params.GetInt(base.NEpochs, 50)
 	mf.initMean = mf.Params.GetFloat64(base.InitMean, 0)
@@ -509,6 +520,7 @@ func (mf *WRMF) SetParams(params base.Params) {
 	mf.reg = mf.Params.GetFloat64(base.Reg, 0.06)
 }
 
+// Predict by the WRMF model.
 func (mf *WRMF) Predict(userId, itemId int) float64 {
 	denseUserId := mf.UserIdSet.ToDenseId(userId)
 	denseItemId := mf.ItemIdSet.ToDenseId(itemId)
@@ -519,7 +531,8 @@ func (mf *WRMF) Predict(userId, itemId int) float64 {
 		mf.ItemFactor.RowView(denseItemId))
 }
 
-func (mf *WRMF) Fit(set core.DataSet, options ...base.FitOption) {
+// Fit the WRMF model.
+func (mf *WRMF) Fit(set *core.DataSet, options ...base.FitOption) {
 	mf.Init(set, options)
 	// Initialize
 	mf.UserFactor = mat.NewDense(set.UserCount(), mf.nFactors,

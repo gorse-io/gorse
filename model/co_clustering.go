@@ -25,7 +25,7 @@ import (
 //  NItemClusters - The number of item clusters. Default is 3.
 //  RandomState   - The random seed. Default is 0.
 type CoClustering struct {
-	BaseModel
+	Base
 	GlobalMean       float64     // A^{global}
 	UserMeans        []float64   // A^{R}
 	ItemMeans        []float64   // A^{R}
@@ -49,7 +49,7 @@ func NewCoClustering(params base.Params) *CoClustering {
 
 // SetParams sets hyper-parameters for the CoClustering model.
 func (coc *CoClustering) SetParams(params base.Params) {
-	coc.BaseModel.SetParams(params)
+	coc.Base.SetParams(params)
 	// Setup hyper-parameters
 	coc.nUserClusters = coc.Params.GetInt(base.NUserClusters, 3)
 	coc.nItemClusters = coc.Params.GetInt(base.NItemClusters, 3)
@@ -87,7 +87,7 @@ func (coc *CoClustering) predict(denseUserId, denseItemId int) float64 {
 }
 
 // Fit the CoClustering model.
-func (coc *CoClustering) Fit(trainSet core.DataSet, options ...base.FitOption) {
+func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	coc.Init(trainSet, options)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean

@@ -6,7 +6,7 @@ import (
 	"math/rand"
 )
 
-func GetRelevantSet(test DataSet, denseUserId int) map[int]float64 {
+func GetRelevantSet(test *DataSet, denseUserId int) map[int]float64 {
 	set := make(map[int]float64)
 	test.DenseUserRatings[denseUserId].ForEach(func(i, index int, value float64) {
 		itemId := test.ItemIdSet.ToSparseId(index)
@@ -16,7 +16,7 @@ func GetRelevantSet(test DataSet, denseUserId int) map[int]float64 {
 }
 
 // Top gets the ranking
-func Top(test DataSet, denseUserId int, n int, train DataSet, model Model) []int {
+func Top(test *DataSet, denseUserId int, n int, train *DataSet, model Model) []int {
 	// Find ratings in training set
 	trainSet := make(map[int]float64)
 	userId := test.UserIdSet.ToSparseId(denseUserId)
@@ -48,7 +48,7 @@ func Top(test DataSet, denseUserId int, n int, train DataSet, model Model) []int
 	return list
 }
 
-func Split(data DataSet, testRatio float64) (train, test DataSet) {
+func Split(data DataSet, testRatio float64) (train, test *DataSet) {
 	testSize := int(float64(data.Len()) * testRatio)
 	perm := rand.Perm(data.Len())
 	// Test Data

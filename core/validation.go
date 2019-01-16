@@ -37,7 +37,7 @@ func (sv CrossValidateResult) MeanMarginScore() (float64, float64) {
 func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
 	splitter Splitter, options ...base.CVOption) []CrossValidateResult {
 	cvOptions := base.NewCVOptions(options)
-	// Split data set
+	// Split Data set
 	trainFolds, testFolds := splitter(dataSet, cvOptions.Seed)
 	length := len(trainFolds)
 	// Create return structures
@@ -134,6 +134,7 @@ func GridSearchCV(estimator Model, dataSet Table,
 	return results
 }
 
+// RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
 	evaluators []Evaluator, trial int, options ...base.CVOption) []ModelSelectionResult {
 	cvOptions := base.NewCVOptions(options)

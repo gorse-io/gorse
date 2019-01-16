@@ -2,13 +2,13 @@ package core
 
 import "os/user"
 
-// Built-in data set
+// Built-in Data set
 type _BuiltInDataSet struct {
 	url    string
 	path   string
 	sep    string
 	header bool
-	loader func(string, string, bool) DataSet
+	loader func(string, string, bool) *DataSet
 }
 
 var builtInDataSets = map[string]_BuiltInDataSet{
@@ -43,9 +43,9 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 	},
 	// Netflix:
 	"netflix": {
-		url:    "https://cdn.sine-x.com/datasets/netflix/netflix-prize-data.zip",
+		url:    "https://cdn.sine-x.com/datasets/netflix/netflix-prize-Data.zip",
 		path:   "netflix/training_set.txt",
-		loader: LoadDataFromNetflixStyle,
+		loader: LoadDataFromNetflix,
 	},
 	"filmtrust": {
 		url:    "https://cdn.sine-x.com/datasets/filmtrust/filmtrust.zip",
@@ -63,7 +63,7 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 	},
 }
 
-// The data directories
+// The Data directories
 var (
 	downloadDir string
 	dataSetDir  string

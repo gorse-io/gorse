@@ -60,7 +60,7 @@ func TestLoadDataFromBuiltIn(t *testing.T) {
 }
 
 func TestLoadDataFromCSV_Explicit(t *testing.T) {
-	data := LoadDataFromCSV("../example/data/implicit.csv", ",", true)
+	data := LoadDataFromCSV("../example/Data/implicit.csv", ",", true)
 	assert.Equal(t, 5, data.Len())
 	for i := 0; i < data.Len(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -74,7 +74,7 @@ func TestLoadDataFromCSV_Explicit(t *testing.T) {
 }
 
 func TestLoadDataFromNetflixStyle(t *testing.T) {
-	data := LoadDataFromNetflixStyle("../example/data/netflix.txt", ",", true)
+	data := LoadDataFromNetflix("../example/Data/netflix.txt", ",", true)
 	assert.Equal(t, 5, data.Len())
 	for i := 0; i < data.Len(); i++ {
 		userId, itemId, value := data.Get(i)

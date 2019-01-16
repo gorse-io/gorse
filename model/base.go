@@ -3,42 +3,48 @@ package model
 import "github.com/zhenghaoz/gorse/core"
 import "github.com/zhenghaoz/gorse/base"
 
-/* Base Model */
+/* Base */
 
-// BaseModel structure of all estimators.
-type BaseModel struct {
-	Params          base.Params          // Hyper-parameters
-	UserIdSet       *base.SparseIdSet    // Users' ID set
-	ItemIdSet       *base.SparseIdSet    // Items' ID set
-	rng             base.RandomGenerator // Random generator
-	randState       int64                // Random seed
-	rtOptions       *base.FitOptions     // Runtime options
-	getParamsCalled bool
+// Base model must be included by every recommendation model. Hyper-parameters,
+// ID sets, random generator and fitting options are managed the Base model.
+type Base struct {
+	Params     base.Params          // Hyper-parameters
+	UserIdSet  *base.SparseIdSet    // Users' ID set
+	ItemIdSet  *base.SparseIdSet    // Items' ID set
+	rng        base.RandomGenerator // Random generator
+	randState  int64                // Random seed
+	fitOptions *base.FitOptions     // Fit options
+	// Tracker
+	isSetParamsCalled bool // Check whether SetParams called
 }
 
-func (model *BaseModel) SetParams(params base.Params) {
-	model.getParamsCalled = true
+// SetParams sets hyper-parameters for the Base model.
+func (model *Base) SetParams(params base.Params) {
+	model.isSetParamsCalled = true
 	model.Params = params
 	model.randState = model.Params.GetInt64(base.RandomState, 0)
 }
 
-func (model *BaseModel) GetParams() base.Params {
+// GetParams returns all hyper-parameters.
+func (model *Base) GetParams() base.Params {
 	return model.Params
 }
 
-func (model *BaseModel) Predict(userId, itemId int) float64 {
+// Predict has not been implemented.
+func (model *Base) Predict(userId, itemId int) float64 {
 	panic("Predict() not implemented")
 }
 
-func (model *BaseModel) Fit(trainSet core.DataSet, options ...base.FitOption) {
+// Fit has not been implemented,
+func (model *Base) Fit(trainSet core.DataSet, options ...base.FitOption) {
 	panic("Fit() not implemented")
 }
 
-// Init the base model.
-func (model *BaseModel) Init(trainSet core.DataSet, options []base.FitOption) {
-	// Check BaseModel.GetParams() called
-	if model.getParamsCalled == false {
-		panic("BaseModel.GetParams() not called")
+// Init the Base model. The method must be called at the beginning of Fit.
+func (model *Base) Init(trainSet *core.DataSet, options []base.FitOption) {
+	// Check Base.GetParams() called
+	if model.isSetParamsCalled == false {
+		panic("Base.GetParams() not called")
 	}
 	// Setup ID set
 	model.UserIdSet = trainSet.UserIdSet
@@ -46,18 +52,16 @@ func (model *BaseModel) Init(trainSet core.DataSet, options []base.FitOption) {
 	// Setup random state
 	model.rng = base.NewRandomGenerator(model.randState)
 	// Setup runtime options
-	model.rtOptions = base.NewFitOptions(options)
+	model.fitOptions = base.NewFitOptions(options)
 }
 
-/* Random */
-
-// Random predicts a random rating based on the distribution of
-// the training set, which is assumed to be normal. The prediction
-// \hat{r}_{ui} is generated from a normal distribution N(\hat{μ},\hat{σ}^2)
-// where \hat{μ} and \hat{σ}^2 are estimated from the training data
-// using Maximum Likelihood Estimation
+// Random model predicts a random rating based on the distribution of ratings
+// in the training set, which is assumed to be normal. The predicted \hat{r}_{ui}
+// is generated from a normal distribution N(\hat{μ},\hat{σ}^2) where \hat{μ}
+// and \hat{σ}^2 are estimated from the training data using Maximum Likelihood
+// Estimation.
 type Random struct {
-	BaseModel
+	Base
 	// Parameters
 	Mean   float64 // mu
 	StdDev float64 // sigma
@@ -72,6 +76,7 @@ func NewRandom(params base.Params) *Random {
 	return random
 }
 
+// Predict by the Random model.
 func (random *Random) Predict(userId int, itemId int) float64 {
 	ret := random.rng.NormFloat64()*random.StdDev + random.Mean
 	// Crop prediction
@@ -83,50 +88,51 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 	return ret
 }
 
-func (random *Random) Fit(trainSet core.DataSet, options ...base.FitOption) {
+// Fit the Random model.
+func (random *Random) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	random.Init(trainSet, options)
 	random.Mean = trainSet.Mean()
 	random.StdDev = trainSet.StdDev()
 	random.Low, random.High = trainSet.Min(), trainSet.Max()
 }
 
-/* Baseline */
-
-// BaseLine predicts the baseline estimate for given user and item.
-//
-//                   \hat{r}_{ui} = b_{ui} = μ + b_u + b_i
-//
+// BaseLine predicts the rating for given user and item by
+//  \hat{r}_{ui} = b_{ui} = μ + b_u + b_i
 // If user u is unknown, then the Bias b_u is assumed to be zero. The same
-// applies for item i with b_i.
+// applies for item i with b_i. Hyper-parameters:
+//  Reg         - The regularization parameter of the cost function that is
+//              optimized. Default is 0.02.
+//  Lr          - The learning rate of SGD. Default is 0.005.
+//  NEpochs     - The number of iteration of the SGD procedure. Default is 20.
+//  RandomState - The random seed. Default is 0.
 type BaseLine struct {
-	BaseModel
+	Base
 	UserBias   []float64 // b_u
 	ItemBias   []float64 // b_i
 	GlobalBias float64   // mu
-	reg        float64
-	lr         float64
-	nEpochs    int
+	// Hyper-parameters
+	reg     float64
+	lr      float64
+	nEpochs int
 }
 
-// NewBaseLine creates a baseline model. Parameters:
-//	 Reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.02.
-//	 Lr 		- The learning rate of SGD. Default is 0.005.
-//	 NEpochs	- The number of iteration of the SGD procedure. Default is 20.
+// NewBaseLine creates a baseline model.
 func NewBaseLine(params base.Params) *BaseLine {
 	baseLine := new(BaseLine)
 	baseLine.SetParams(params)
 	return baseLine
 }
 
+// SetParams sets hyper-parameters for the BaseLine model.
 func (baseLine *BaseLine) SetParams(params base.Params) {
-	baseLine.BaseModel.SetParams(params)
+	baseLine.Base.SetParams(params)
 	// Setup parameters
 	baseLine.reg = baseLine.Params.GetFloat64(base.Reg, 0.02)
 	baseLine.lr = baseLine.Params.GetFloat64(base.Lr, 0.005)
 	baseLine.nEpochs = baseLine.Params.GetInt(base.NEpochs, 20)
 }
 
+// Predict by the BaseLine model.
 func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
 	denseUserId := baseLine.UserIdSet.ToDenseId(userId)
 	denseItemId := baseLine.ItemIdSet.ToDenseId(itemId)
@@ -144,7 +150,8 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 	return ret
 }
 
-func (baseLine *BaseLine) Fit(trainSet core.DataSet, options ...base.FitOption) {
+// Fit the BaseLine model.
+func (baseLine *BaseLine) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
 	baseLine.GlobalBias = trainSet.GlobalMean
@@ -167,9 +174,10 @@ func (baseLine *BaseLine) Fit(trainSet core.DataSet, options ...base.FitOption) 
 	}
 }
 
-// ItemPop recommends items by their popularity.
+// ItemPop recommends items by their popularity. The popularity of a item is
+// defined as the occurrence frequency of the item in the training data set.
 type ItemPop struct {
-	BaseModel
+	Base
 	Pop []float64
 }
 
@@ -180,7 +188,8 @@ func NewItemPop(params base.Params) *ItemPop {
 	return pop
 }
 
-func (pop *ItemPop) Fit(set core.DataSet, options ...base.FitOption) {
+// Fit the ItemPop model.
+func (pop *ItemPop) Fit(set *core.DataSet, options ...base.FitOption) {
 	pop.Init(set, options)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())
@@ -189,6 +198,7 @@ func (pop *ItemPop) Fit(set core.DataSet, options ...base.FitOption) {
 	}
 }
 
+// Predict by the ItemPop model.
 func (pop *ItemPop) Predict(userId, itemId int) float64 {
 	// Return items' popularity
 	denseItemId := pop.ItemIdSet.ToDenseId(itemId)
