@@ -6,7 +6,7 @@ import (
 	"math"
 )
 
-// CoClustering[5] is a novel collaborative filtering approach based on weighted
+// CoClustering [5] is a novel collaborative filtering approach based on weighted
 // co-clustering algorithm that involves simultaneous clustering of users and
 // items.
 //

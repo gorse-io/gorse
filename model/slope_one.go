@@ -5,7 +5,7 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 )
 
-// SlopeOne[4] predicts ratings by the form f(x) = x + b, which precompute
+// SlopeOne [4] predicts ratings by the form f(x) = x + b, which precompute
 // the average difference between the ratings of one item and another for
 // users who rated both.
 //
