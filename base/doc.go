@@ -4,19 +4,19 @@ Package base provides base data structures and functions for gorse.
 
 The base data structures and functions include:
 
-* Parallel Scheduler
+| Parallel Scheduler
 
-* Hyper-parameters Management
+| Hyper-parameters Management
 
-* Random Generator
+| Random Generator
 
-* Similarity Metrics
+| Similarity Metrics
 
-* Sparse Data Structures
+| Sparse Data Structures
 
-* Numeric Computing
+| Numeric Computing
 
-* Options Management
+| Options Management
 
 */
 package base

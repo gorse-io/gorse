@@ -1,4 +1,4 @@
-/**
+/*
 
 Package floats provides functions for numeric computation.
 
