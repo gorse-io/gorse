@@ -48,7 +48,7 @@ func Top(test *DataSet, denseUserId int, n int, train *DataSet, model Model) []i
 	return list
 }
 
-func Split(data DataSet, testRatio float64) (train, test *DataSet) {
+func Split(data *DataSet, testRatio float64) (train, test *DataSet) {
 	testSize := int(float64(data.Len()) * testRatio)
 	perm := rand.Perm(data.Len())
 	// Test Data
