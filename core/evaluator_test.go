@@ -55,7 +55,7 @@ func (tester *EvaluatorTesterModel) SetParams(params Params) {
 	panic("EvaluatorTesterModel.SetParams() should never be called.")
 }
 
-func (tester *EvaluatorTesterModel) Fit(set DataSet, options ...FitOption) {
+func (tester *EvaluatorTesterModel) Fit(set *DataSet, options ...FitOption) {
 	panic("EvaluatorTesterModel.Fit() should never be called.")
 }
 

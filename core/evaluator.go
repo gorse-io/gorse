@@ -65,13 +65,15 @@ func AUC(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 	for denseUserIdInTest, userRating := range testSet.DenseUserRatings {
 		userId := testSet.UserIdSet.ToSparseId(denseUserIdInTest)
 		// Find all <userId, j>s in training Data set and test Data set.
-		denseUserIdInTrain := options.trainSet.UserIdSet.ToDenseId(userId)
 		positiveSet := make(map[int]float64)
-		if denseUserIdInTrain != base.NotId {
-			options.trainSet.DenseUserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
-				itemId := options.trainSet.ItemIdSet.ToSparseId(index)
-				positiveSet[itemId] = value
-			})
+		if options.trainSet != nil {
+			denseUserIdInTrain := options.trainSet.UserIdSet.ToDenseId(userId)
+			if denseUserIdInTrain != base.NotId {
+				options.trainSet.DenseUserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
+					itemId := options.trainSet.ItemIdSet.ToSparseId(index)
+					positiveSet[itemId] = value
+				})
+			}
 		}
 		testSet.DenseUserRatings[denseUserIdInTest].ForEach(func(i, index int, value float64) {
 			itemId := testSet.ItemIdSet.ToSparseId(index)
