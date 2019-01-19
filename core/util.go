@@ -3,7 +3,6 @@ package core
 import (
 	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/floats"
-	"math/rand"
 )
 
 func GetRelevantSet(test *DataSet, denseUserId int) map[int]float64 {
@@ -46,16 +45,4 @@ func Top(test *DataSet, denseUserId int, n int, train *DataSet, model Model) []i
 		list = append(list, ids[index])
 	}
 	return list
-}
-
-func Split(data *DataSet, testRatio float64) (train, test *DataSet) {
-	testSize := int(float64(data.Len()) * testRatio)
-	perm := rand.Perm(data.Len())
-	// Test Data
-	testIndex := perm[:testSize]
-	test = NewDataSet(data.SubSet(testIndex))
-	// Train Data
-	trainIndex := perm[testSize:]
-	train = NewDataSet(data.SubSet(trainIndex))
-	return
 }

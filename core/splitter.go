@@ -3,6 +3,19 @@ package core
 import "math/rand"
 import "github.com/zhenghaoz/gorse/base"
 
+// Split dataset to a training set and a test set with ratio.
+func Split(data *DataSet, testRatio float64) (train, test *DataSet) {
+	testSize := int(float64(data.Len()) * testRatio)
+	perm := rand.Perm(data.Len())
+	// Test Data
+	testIndex := perm[:testSize]
+	test = NewDataSet(data.SubSet(testIndex))
+	// Train Data
+	trainIndex := perm[testSize:]
+	train = NewDataSet(data.SubSet(trainIndex))
+	return
+}
+
 // Splitter split Data to train set and test set.
 type Splitter func(set Table, seed int64) ([]*DataSet, []*DataSet)
 

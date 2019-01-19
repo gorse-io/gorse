@@ -37,7 +37,7 @@ func (sv CrossValidateResult) MeanMarginScore() (float64, float64) {
 func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
 	splitter Splitter, options ...base.CVOption) []CrossValidateResult {
 	cvOptions := base.NewCVOptions(options)
-	// Split Data set
+	// Split data set
 	trainFolds, testFolds := splitter(dataSet, cvOptions.Seed)
 	length := len(trainFolds)
 	// Create return structures

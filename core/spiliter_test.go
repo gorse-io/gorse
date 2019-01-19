@@ -6,6 +6,13 @@ import (
 	"testing"
 )
 
+func TestSplit(t *testing.T) {
+	data := LoadDataFromBuiltIn("ml-100k")
+	train, test := Split(data, 0.2)
+	assert.Equal(t, 80000, train.Len())
+	assert.Equal(t, 20000, test.Len())
+}
+
 func TestKFoldSplitter(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	kfold := NewKFoldSplitter(5)
