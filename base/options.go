@@ -8,7 +8,7 @@ type FitOptions struct {
 	NJobs   int  // Number of jobs
 }
 
-// NewCVOptions creates a (FitOptions) object from (FitOption)s.
+// NewFitOptions creates a (FitOptions) object from (FitOption)s.
 func NewFitOptions(setters []FitOption) *FitOptions {
 	options := new(FitOptions)
 	options.NJobs = runtime.NumCPU()

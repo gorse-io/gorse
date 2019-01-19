@@ -22,7 +22,7 @@ func main() {
 
 	data := core.LoadDataFromBuiltIn("ml-100k")
 	svd := model.NewSVD(base.Params{
-		base.Target:     base.BPR,
+		base.Optimizer:  base.BPR,
 		base.NFactors:   10,
 		base.Reg:        0.01,
 		base.Lr:         0.05,

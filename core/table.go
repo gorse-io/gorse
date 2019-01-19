@@ -66,7 +66,7 @@ func (dataTable *DataTable) Max() float64 {
 	return floats.Max(dataTable.Ratings)
 }
 
-// Subset returns a subset of the DataTable.
+// SubSet returns a subset of the DataTable.
 func (dataTable *DataTable) SubSet(indices []int) Table {
 	return NewVirtualTable(dataTable, indices)
 }

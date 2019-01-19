@@ -171,7 +171,7 @@ func TestItemPop(t *testing.T) {
 func TestSVD_BPR(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	EvaluateRank(t, NewSVD(Params{
-		Target:     BPR,
+		Optimizer:  BPR,
 		NFactors:   10,
 		Reg:        0.01,
 		Lr:         0.05,

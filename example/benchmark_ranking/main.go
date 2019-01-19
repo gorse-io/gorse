@@ -18,7 +18,7 @@ func main() {
 	models := []core.Model{
 		model.NewItemPop(nil),
 		model.NewSVD(base.Params{
-			base.Target:     base.BPR,
+			base.Optimizer:  base.BPR,
 			base.NFactors:   10,
 			base.Reg:        0.01,
 			base.Lr:         0.05,

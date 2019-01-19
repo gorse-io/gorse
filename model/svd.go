@@ -16,10 +16,11 @@ import (
 // SVD algorithm, as popularized by Simon Funk during the
 // Netflix Prize. The prediction \hat{r}_{ui} is set as:
 //
-//               \hat{r}_{ui} = μ + b_u + b_i + q_i^Tp_u
+//   \hat{r}_{ui} = μ + b_u + b_i + q_i^Tp_u
 //
 // If user u is unknown, then the Bias b_u and the factors p_u are
 // assumed to be zero. The same applies for item i with b_i and q_i.
+// Hyper-parameters:
 //   UseBias    - Add useBias in SVD model. Default is true.
 //	 Reg 		- The regularization parameter of the cost function that is
 // 				  optimized. Default is 0.02.
@@ -44,7 +45,6 @@ type SVD struct {
 	reg        float64
 	initMean   float64
 	initStdDev float64
-	batchSize  int
 	target     base.ParamString
 }
 
@@ -58,6 +58,7 @@ func NewSVD(params base.Params) *SVD {
 // SetParams sets hyper-parameters of the SVD model.
 func (svd *SVD) SetParams(params base.Params) {
 	svd.Base.SetParams(params)
+	// Setup hyper-parameters
 	svd.useBias = svd.Params.GetBool(base.UseBias, true)
 	svd.nFactors = svd.Params.GetInt(base.NFactors, 100)
 	svd.nEpochs = svd.Params.GetInt(base.NEpochs, 20)
@@ -65,7 +66,7 @@ func (svd *SVD) SetParams(params base.Params) {
 	svd.reg = svd.Params.GetFloat64(base.Reg, 0.02)
 	svd.initMean = svd.Params.GetFloat64(base.InitMean, 0)
 	svd.initStdDev = svd.Params.GetFloat64(base.InitStdDev, 0.1)
-	svd.target = svd.Params.GetString(base.Target, base.Regression)
+	svd.target = svd.Params.GetString(base.Optimizer, base.SGD)
 }
 
 // Predict by the SVD model.
@@ -106,8 +107,8 @@ func (svd *SVD) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	svd.ItemFactor = svd.rng.NewNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	// Select fit function
 	switch svd.target {
-	case base.Regression:
-		svd.fitRegression(trainSet)
+	case base.SGD:
+		svd.fitSGD(trainSet)
 	case base.BPR:
 		svd.fitBPR(trainSet)
 	default:
@@ -115,7 +116,7 @@ func (svd *SVD) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	}
 }
 
-func (svd *SVD) fitRegression(trainSet *core.DataSet) {
+func (svd *SVD) fitSGD(trainSet *core.DataSet) {
 	svd.GlobalMean = trainSet.GlobalMean
 	// Create buffers
 	temp := make([]float64, svd.nFactors)
@@ -207,7 +208,10 @@ func (svd *SVD) fitBPR(trainSet *core.DataSet) {
 
 /* NMF */
 
-// NMF [3].
+// NMF [3] is the Matrix Factorization process with non-negative latent factors.
+// During the MF process, the non-negativity, which ensures good representativeness
+// of the learnt model, is critically important.
+// Hyper-parameters:
 //	 Reg      - The regularization parameter of the cost function that is
 //              optimized. Default is 0.06.
 //	 NFactors - The number of latent factors. Default is 15.
@@ -216,14 +220,15 @@ func (svd *SVD) fitBPR(trainSet *core.DataSet) {
 //	 InitHigh - The upper bound of initial random latent factor. Default is 1.
 type NMF struct {
 	Base
-	GlobalMean float64
+	GlobalMean float64     // the global mean of ratings
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
-	nFactors   int
-	nEpochs    int
-	initLow    float64
-	initHigh   float64
-	reg        float64
+	// Hyper-parameters
+	nFactors int
+	nEpochs  int
+	initLow  float64
+	initHigh float64
+	reg      float64
 }
 
 // NewNMF creates a NMF model.
@@ -236,6 +241,7 @@ func NewNMF(params base.Params) *NMF {
 // SetParams sets hyper-parameters of the NMF model.
 func (nmf *NMF) SetParams(params base.Params) {
 	nmf.Base.SetParams(params)
+	// Setup hyper-parameters
 	nmf.nFactors = nmf.Params.GetInt(base.NFactors, 15)
 	nmf.nEpochs = nmf.Params.GetInt(base.NEpochs, 50)
 	nmf.initLow = nmf.Params.GetFloat64(base.InitLow, 0)
@@ -307,25 +313,23 @@ func (nmf *NMF) Fit(trainSet *core.DataSet, options ...base.FitOption) {
 	}
 }
 
-/* SVD++ */
-
-// SVD++ algorithm, an extension of SVD taking into account implicit
-// interactionRatings. The prediction \hat{r}_{ui} is set as:
+// SVDpp (SVD++) [10] is an extension of SVD taking into account implicit interactions.
+// The predicted \hat{r}_{ui} is:
 //
 // 	\hat{r}_{ui} = \mu + b_u + b_i + q_i^T\left(p_u + |I_u|^{-\frac{1}{2}} \sum_{j \in I_u}y_j\right)
 //
-// Where the y_j terms are a new set of item factors that capture implicit
-// interactionRatings. Here, an implicit rating describes the fact that a user u
-// DenseUserRatings an item j, regardless of the rating value. If user u is unknown,
-// then the Bias b_u and the factors p_u are assumed to be zero. The same
-// applies for item i with b_i, q_i and y_i.
-//	 Reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.02.
-//	 Lr 		- The learning rate of SGD. Default is 0.007.
-//	 NFactors	- The number of latent factors. Default is 20.
-//	 NEpochs	- The number of iteration of the SGD procedure. Default is 20.
-//	 InitMean	- The mean of initial random latent factors. Default is 0.
-//	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.1.
+// Where the y_j terms are a new set of item factors that capture implicit interactions.
+// Here, an implicit rating describes the fact that a user u rated an item j, regardless
+// of the rating value. If user u is unknown, then the bias b_u and the factors p_u are
+// assumed to be zero. The same applies for item i with b_i, q_i and y_i.
+// Hyper-parameters:
+//	 Reg        - The regularization parameter of the cost function that is
+//                optimized. Default is 0.02.
+//	 Lr         - The learning rate of SGD. Default is 0.007.
+//	 NFactors   - The number of latent factors. Default is 20.
+//	 NEpochs    - The number of iteration of the SGD procedure. Default is 20.
+//	 InitMean   - The mean of initial random latent factors. Default is 0.
+//	 InitStdDev - The standard deviation of initial random latent factors. Default is 0.1.
 type SVDpp struct {
 	Base
 	UserRatings []*base.SparseVector // I_u
@@ -335,12 +339,13 @@ type SVDpp struct {
 	UserBias    []float64            // b_u
 	ItemBias    []float64            // b_i
 	GlobalMean  float64              // mu
-	nFactors    int
-	nEpochs     int
-	reg         float64
-	lr          float64
-	initMean    float64
-	initStdDev  float64
+	// Hyper-parameters
+	nFactors   int
+	nEpochs    int
+	reg        float64
+	lr         float64
+	initMean   float64
+	initStdDev float64
 }
 
 // NewSVDpp creates a SVD++ model.
@@ -385,7 +390,7 @@ func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumFactor []float64)
 		userFactor := svd.UserFactor[denseUserId]
 		itemFactor := svd.ItemFactor[denseItemId]
 		if len(sumFactor) == 0 {
-			sumFactor = svd.getSumFactors(denseUserId)
+			sumFactor = svd.sumOverImplicitFactors(denseUserId)
 		}
 		temp := make([]float64, len(itemFactor))
 		floats.AddTo(userFactor, sumFactor, temp)
@@ -394,7 +399,7 @@ func (svd *SVDpp) predict(denseUserId int, denseItemId int, sumFactor []float64)
 	return ret
 }
 
-func (svd *SVDpp) getSumFactors(denseUserId int) []float64 {
+func (svd *SVDpp) sumOverImplicitFactors(denseUserId int) []float64 {
 	sumFactor := make([]float64, svd.nFactors)
 	// User history exists
 	svd.UserRatings[denseUserId].ForEach(func(i, index int, value float64) {
@@ -429,7 +434,7 @@ func (svd *SVDpp) Fit(trainSet *core.DataSet, setters ...base.FitOption) {
 			base.FillZeroVector(step)
 			size := svd.UserRatings[denseUserId].Len()
 			scale := math.Pow(float64(size), -0.5)
-			sumFactor := svd.getSumFactors(denseUserId)
+			sumFactor := svd.sumOverImplicitFactors(denseUserId)
 			trainSet.DenseUserRatings[denseUserId].ForEach(func(i, denseItemId int, rating float64) {
 				userBias := svd.UserBias[denseUserId]
 				itemBias := svd.ItemBias[denseItemId]
@@ -483,7 +488,13 @@ func (svd *SVDpp) Fit(trainSet *core.DataSet, setters ...base.FitOption) {
 	}
 }
 
-// WRMF[7] model for implicit feedback.
+// WRMF [7] is the Weighted Regularized Matrix Factorization, which exploits
+// unique properties of implicit feedback datasets. It treats the data as
+// indication of positive and negative preference associated with vastly
+// varying confidence levels. This leads to a factor model which is especially
+// tailored for implicit feedback recommenders. Authors also proposed a
+// scalable optimization procedure, which scales linearly with the data size.
+// Hyper-parameters:
 //   NFactors   - The number of latent factors. Default is 10.
 //   NEpochs    - The number of training epochs. Default is 50.
 //   InitMean   - The mean of initial latent factors. Default is 0.

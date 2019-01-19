@@ -29,7 +29,7 @@ const (
 	Similarity    ParamName = "Similarity"    // similarity metrics
 	K             ParamName = "K"             // number of neighbors
 	MinK          ParamName = "MinK"          // least number of neighbors
-	Target        ParamName = "Target"        // target for optimization (Regression/BPR)
+	Optimizer     ParamName = "Optimizer"     // optimizer for optimization (SGD/ALS/BPR)
 	Shrinkage     ParamName = "Shrinkage"     // shrinkage strength of similarity
 	Alpha         ParamName = "Alpha"         // alpha value, depend on context
 )
@@ -47,10 +47,10 @@ const (
 	Baseline ParamString = "Baseline" // KNN with baseline ratings
 )
 
-// Predefined values for hyper-parameter Target.
+// Predefined values for hyper-parameter Optimizer.
 const (
-	Regression ParamString = "Regression" // Fit model (MF) with regression objective function.
-	BPR        ParamString = "BPR"        // Fit model (MF) with bayesian personal ranking objective function.
+	SGD ParamString = "SGD" // Fit model (MF) with stochastic gradient descent.
+	BPR ParamString = "BPR" // Fit model (MF) with bayesian personal ranking.
 )
 
 // Predefined values for hyper-parameter Similarity.

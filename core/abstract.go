@@ -2,8 +2,6 @@ package core
 
 import "github.com/zhenghaoz/gorse/base"
 
-/* Model */
-
 // Model is the interface for all models. Any model in this
 // package should implement it.
 type Model interface {
@@ -17,8 +15,7 @@ type Model interface {
 	Fit(trainSet *DataSet, setters ...base.FitOption)
 }
 
-/* Table */
-
+// Table is the interface for all kinds of data table.
 type Table interface {
 	// Len returns the length of dataset.
 	Len() int
