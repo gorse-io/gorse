@@ -421,7 +421,7 @@ LBB2_10:
     MOVQ    X0, ret+48(FP)
     RET
 
-func _AddTo(a, b, dst []float64)
+// func _AddTo(a, b, dst []float64)
 TEXT    ·_AddTo(SB), NOSPLIT, $0
     MOVQ    a+0(FP), CX
     MOVQ    b+24(FP), DX
