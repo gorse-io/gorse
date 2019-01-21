@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base"
 	"io"
 	"log"
 	"os"
@@ -85,4 +86,21 @@ func TestLoadDataFromNetflixStyle(t *testing.T) {
 		assert.Equal(t, i, denseUserId)
 		assert.Equal(t, i, denseItemId)
 	}
+}
+
+func TestDataSet_GetUserRatingsSet(t *testing.T) {
+	data := DataSet{
+		ItemIdSet: &base.SparseIdSet{
+			DenseIds:  map[int]int{0: 0, 2: 1, 4: 2, 6: 3},
+			SparseIds: []int{0, 2, 4, 6},
+		},
+		DenseUserRatings: []*base.SparseVector{
+			{
+				Indices: []int{1, 2},
+				Values:  []float64{10.0, 20.0},
+			},
+		},
+	}
+	set := data.GetUserRatingsSet(0)
+	assert.Equal(t, map[int]float64{2: 10, 4: 20}, set)
 }

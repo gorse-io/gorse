@@ -35,32 +35,52 @@ func WithJobs(n int) EvaluatorOption {
 // Evaluator evaluates the performance of a estimator on the test set.
 type Evaluator func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64
 
+type RankEvaluator func(targetSet map[int]float64, rankList []int) float64
+
 // RMSE is root mean square error.
 func RMSE(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-	sum := 0.0
+	groundTruth := make([]float64, testSet.Len())
+	predictions := make([]float64, testSet.Len())
 	for j := 0; j < testSet.Len(); j++ {
 		userId, itemId, rating := testSet.Get(j)
-		prediction := estimator.Predict(userId, itemId)
-		sum += (prediction - rating) * (prediction - rating)
+		groundTruth[j] = rating
+		predictions[j] = estimator.Predict(userId, itemId)
 	}
-	return math.Sqrt(sum / float64(testSet.Len()))
+	return rootMeanSquareError(groundTruth, predictions)
+}
+
+func rootMeanSquareError(groundTruth []float64, prediction []float64) float64 {
+	sum := 0.0
+	for j := 0; j < len(groundTruth); j++ {
+		sum += (prediction[j] - groundTruth[j]) * (prediction[j] - groundTruth[j])
+	}
+	return math.Sqrt(sum / float64(len(groundTruth)))
 }
 
 // MAE is mean absolute error.
 func MAE(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-	sum := 0.0
+	groundTruth := make([]float64, testSet.Len())
+	predictions := make([]float64, testSet.Len())
 	for j := 0; j < testSet.Len(); j++ {
 		userId, itemId, rating := testSet.Get(j)
-		prediction := estimator.Predict(userId, itemId)
-		sum += math.Abs(prediction - rating)
+		groundTruth[j] = rating
+		predictions[j] = estimator.Predict(userId, itemId)
 	}
-	return sum / float64(testSet.Len())
+	return meanAbsoluteError(groundTruth, predictions)
+}
+
+func meanAbsoluteError(groundTruth []float64, prediction []float64) float64 {
+	sum := 0.0
+	for j := 0; j < len(groundTruth); j++ {
+		sum += math.Abs(prediction[j] - groundTruth[j])
+	}
+	return sum / float64(len(groundTruth))
 }
 
 // AUC evaluator.
 func AUC(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 	options := NewEvaluatorOptions(true, option)
-	sum, count := 0.0, 0.0
+	sum := 0.0
 	// Find all userIds
 	for denseUserIdInTest, userRating := range testSet.DenseUserRatings {
 		userId := testSet.UserIdSet.ToSparseId(denseUserIdInTest)
@@ -97,121 +117,84 @@ func AUC(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		})
 		// += \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
 		sum += correctCount / pairCount
-		count++
 	}
 	// \frac{1}{|U|} \sum_u \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
-	return sum / count
+	return sum / float64(testSet.UserCount())
 }
 
 // NewNDCG creates a Normalized Discounted Cumulative Gain evaluator.
 func NewNDCG(n int) Evaluator {
-	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(true, option)
-		sum := 0.0
-		// For all users
-		for u := 0; u < testSet.UserCount(); u++ {
-			// Find top-n items in test set
-			targetSet := GetRelevantSet(testSet, u)
-			// Find top-n items in predictions
-			rankList := Top(testSet, u, n, options.trainSet, model)
-			// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
-			idcg := 0.0
-			for i := 0; i < len(targetSet); i++ {
-				if i < n {
-					idcg += 1.0 / math.Log2(float64(i)+2.0)
-				}
-			}
-			// DCG = \sum^{N}_{i=1} \frac {2^{rel_i}-1} {\log_2(i+1)}
-			dcg := 0.0
-			for i, itemId := range rankList {
-				if _, exist := targetSet[itemId]; exist {
-					dcg += 1.0 / math.Log2(float64(i)+2.0)
-				}
-			}
-			// NDCG = DCG / IDCG
-			sum += dcg / idcg
+	return newRankEvaluator(nDCG, n)
+}
+
+func nDCG(targetSet map[int]float64, rankList []int) float64 {
+	// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
+	idcg := 0.0
+	for i := 0; i < len(targetSet); i++ {
+		if i < len(rankList) {
+			idcg += 1.0 / math.Log2(float64(i)+2.0)
 		}
-		return sum / float64(testSet.UserCount())
 	}
+	// DCG = \sum^{N}_{i=1} \frac {2^{rel_i}-1} {\log_2(i+1)}
+	dcg := 0.0
+	for i, itemId := range rankList {
+		if _, exist := targetSet[itemId]; exist {
+			dcg += 1.0 / math.Log2(float64(i)+2.0)
+		}
+	}
+	return dcg / idcg
 }
 
 // NewPrecision creates a Precision@N evaluator.
 //   Precision = \frac{|relevant documents| \cap |retrieved documents|}
 //                    {|{retrieved documents}|}
 func NewPrecision(n int) Evaluator {
-	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(true, option)
-		sum := 0.0
-		// For all users
-		for u := 0; u < testSet.UserCount(); u++ {
-			// Find top-n items in test set
-			targetSet := GetRelevantSet(testSet, u)
-			// Find top-n items in predictions
-			rankList := Top(testSet, u, n, options.trainSet, model)
-			// Precision
-			hit := 0
-			for _, itemId := range rankList {
-				if _, exist := targetSet[itemId]; exist {
-					hit++
-				}
-			}
-			sum += float64(hit) / float64(len(rankList))
+	return newRankEvaluator(precision, n)
+}
+
+func precision(targetSet map[int]float64, rankList []int) float64 {
+	hit := 0
+	for _, itemId := range rankList {
+		if _, exist := targetSet[itemId]; exist {
+			hit++
 		}
-		return sum / float64(testSet.UserCount())
 	}
+	return float64(hit) / float64(len(rankList))
 }
 
 // NewRecall creates a Recall@N evaluator.
 //   Recall = \frac{|relevant documents| \cap |retrieved documents|}
 //                 {|{relevant documents}|}
 func NewRecall(n int) Evaluator {
-	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(true, option)
-		sum := 0.0
-		// For all users
-		for u := 0; u < testSet.UserCount(); u++ {
-			// Find top-n items in test set
-			targetSet := GetRelevantSet(testSet, u)
-			// Find top-n items in predictions
-			rankList := Top(testSet, u, n, options.trainSet, model)
-			// Precision
-			hit := 0
-			for _, itemId := range rankList {
-				if _, exist := targetSet[itemId]; exist {
-					hit++
-				}
-			}
-			sum += float64(hit) / float64(len(targetSet))
+	return newRankEvaluator(recall, n)
+}
+
+func recall(targetSet map[int]float64, rankList []int) float64 {
+	hit := 0
+	for _, itemId := range rankList {
+		if _, exist := targetSet[itemId]; exist {
+			hit++
 		}
-		return sum / float64(testSet.UserCount())
 	}
+	return float64(hit) / float64(len(targetSet))
 }
 
 // NewMAP creates a mean average precision evaluator.
 // mAP: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
 func NewMAP(n int) Evaluator {
-	return func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(true, option)
-		sum := 0.0
-		// For all users
-		for u := 0; u < testSet.UserCount(); u++ {
-			// Find top-n items in test set
-			targetSet := GetRelevantSet(testSet, u)
-			// Find top-n items in predictions
-			rankList := Top(testSet, u, n, options.trainSet, estimator)
-			// MAP
-			sumPrecision := 0.0
-			hit := 0
-			for i, itemId := range rankList {
-				if _, exist := targetSet[itemId]; exist {
-					hit++
-					sumPrecision += float64(hit) / float64(i+1)
-				}
-			}
-			sum += float64(sumPrecision) / float64(len(targetSet))
+	return newRankEvaluator(averagePrecision, n)
+}
+
+func averagePrecision(targetSet map[int]float64, rankList []int) float64 {
+	sumPrecision := 0.0
+	hit := 0
+	for i, itemId := range rankList {
+		if _, exist := targetSet[itemId]; exist {
+			hit++
+			sumPrecision += float64(hit) / float64(i+1)
 		}
-		return sum / float64(testSet.UserCount())
 	}
+	return float64(sumPrecision) / float64(len(targetSet))
 }
 
 // NewMRR creates a mean reciprocal rank evaluator.
@@ -226,22 +209,30 @@ func NewMAP(n int) Evaluator {
 //
 //   MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
 func NewMRR(n int) Evaluator {
-	return func(model Model, testSet *DataSet, option ...EvaluatorOption) float64 {
+	return newRankEvaluator(reciprocalRank, n)
+}
+
+func reciprocalRank(targetSet map[int]float64, rankList []int) float64 {
+	for i, itemId := range rankList {
+		if _, exist := targetSet[itemId]; exist {
+			return 1 / float64(i+1)
+		}
+	}
+	return 0
+}
+
+func newRankEvaluator(eval RankEvaluator, n int) Evaluator {
+	return func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
 		for u := 0; u < testSet.UserCount(); u++ {
 			// Find top-n items in test set
-			targetSet := GetRelevantSet(testSet, u)
+			targetSet := testSet.GetUserRatingsSet(u)
 			// Find top-n items in predictions
-			rankList := Top(testSet, u, n, options.trainSet, model)
+			rankList := Top(testSet, u, n, options.trainSet.GetUserRatingsSet(u), estimator)
 			// MRR
-			for i, itemId := range rankList {
-				if _, exist := targetSet[itemId]; exist {
-					sum += 1 / float64(i+1)
-					break
-				}
-			}
+			sum += eval(targetSet, rankList)
 		}
 		return sum / float64(testSet.UserCount())
 	}

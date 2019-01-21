@@ -55,19 +55,30 @@ func NewDataSet(table Table) *DataSet {
 }
 
 // GetDense get the i-th record by <denseUserId, denseItemId, rating>.
-func (trainSet *DataSet) GetDense(i int) (int, int, float64) {
-	_, _, rating := trainSet.Get(i)
-	return trainSet.DenseUserIds[i], trainSet.DenseItemIds[i], rating
+func (dataSet *DataSet) GetDense(i int) (int, int, float64) {
+	_, _, rating := dataSet.Get(i)
+	return dataSet.DenseUserIds[i], dataSet.DenseItemIds[i], rating
 }
 
 // UserCount returns the number of users.
-func (trainSet *DataSet) UserCount() int {
-	return trainSet.UserIdSet.Len()
+func (dataSet *DataSet) UserCount() int {
+	return dataSet.UserIdSet.Len()
 }
 
 // ItemCount returns the number of items.
-func (trainSet *DataSet) ItemCount() int {
-	return trainSet.ItemIdSet.Len()
+func (dataSet *DataSet) ItemCount() int {
+	return dataSet.ItemIdSet.Len()
+}
+
+// GetUserRatingsSet gets a user's ratings by the dense user ID. The returned object
+// is a map between item sparse IDs and given ratings.
+func (dataSet *DataSet) GetUserRatingsSet(denseUserId int) map[int]float64 {
+	set := make(map[int]float64)
+	dataSet.DenseUserRatings[denseUserId].ForEach(func(i, index int, value float64) {
+		itemId := dataSet.ItemIdSet.ToSparseId(index)
+		set[itemId] = value
+	})
+	return set
 }
 
 /* Loader */
