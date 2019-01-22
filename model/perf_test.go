@@ -75,7 +75,7 @@ func TestKNNWithMean(t *testing.T) {
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.951, 0.749})
 }
 
-func TestNewKNNZScore(t *testing.T) {
+func TestKNNZScore(t *testing.T) {
 	EvaluateRegression(t, NewKNN(Params{Type: ZScore}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []Evaluator{RMSE, MAE}, []float64{0.951, 0.746})
 }

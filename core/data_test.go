@@ -94,6 +94,10 @@ func TestDataSet_GetUserRatingsSet(t *testing.T) {
 			DenseIds:  map[int]int{0: 0, 2: 1, 4: 2, 6: 3},
 			SparseIds: []int{0, 2, 4, 6},
 		},
+		UserIdSet: &base.SparseIdSet{
+			DenseIds:  map[int]int{2: 0},
+			SparseIds: []int{2},
+		},
 		DenseUserRatings: []*base.SparseVector{
 			{
 				Indices: []int{1, 2},
@@ -101,6 +105,6 @@ func TestDataSet_GetUserRatingsSet(t *testing.T) {
 			},
 		},
 	}
-	set := data.GetUserRatingsSet(0)
+	set := data.GetUserRatingsSet(2)
 	assert.Equal(t, map[int]float64{2: 10, 4: 20}, set)
 }

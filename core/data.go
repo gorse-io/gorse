@@ -70,9 +70,10 @@ func (dataSet *DataSet) ItemCount() int {
 	return dataSet.ItemIdSet.Len()
 }
 
-// GetUserRatingsSet gets a user's ratings by the dense user ID. The returned object
+// GetUserRatingsSet gets a user's ratings by the sparse user ID. The returned object
 // is a map between item sparse IDs and given ratings.
-func (dataSet *DataSet) GetUserRatingsSet(denseUserId int) map[int]float64 {
+func (dataSet *DataSet) GetUserRatingsSet(userId int) map[int]float64 {
+	denseUserId := dataSet.UserIdSet.ToDenseId(userId)
 	set := make(map[int]float64)
 	dataSet.DenseUserRatings[denseUserId].ForEach(func(i, index int, value float64) {
 		itemId := dataSet.ItemIdSet.ToSparseId(index)

@@ -226,11 +226,12 @@ func newRankEvaluator(eval RankEvaluator, n int) Evaluator {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0
 		// For all users
-		for u := 0; u < testSet.UserCount(); u++ {
+		for denseUserId := 0; denseUserId < testSet.UserCount(); denseUserId++ {
+			userId := testSet.UserIdSet.ToSparseId(denseUserId)
 			// Find top-n items in test set
-			targetSet := testSet.GetUserRatingsSet(u)
+			targetSet := testSet.GetUserRatingsSet(userId)
 			// Find top-n items in predictions
-			rankList := Top(testSet, u, n, options.trainSet.GetUserRatingsSet(u), estimator)
+			rankList := Top(testSet, denseUserId, n, options.trainSet.GetUserRatingsSet(userId), estimator)
 			// MRR
 			sum += eval(targetSet, rankList)
 		}
