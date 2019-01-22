@@ -37,8 +37,8 @@ func ParallelMean(nTask int, nJob int, worker func(begin, end int) (sum float64)
 			begin := nTask * jobId / nJob
 			end := nTask * (jobId + 1) / nJob
 			size := end - begin
-			results = append(results, worker(begin, end)/float64(size))
-			weights = append(weights, float64(size)/float64(nTask))
+			results[jobId] = worker(begin, end) / float64(size)
+			weights[jobId] = float64(size) / float64(nTask)
 			wg.Done()
 		}(j)
 	}

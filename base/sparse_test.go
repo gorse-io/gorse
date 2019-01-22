@@ -2,6 +2,7 @@ package base
 
 import (
 	"github.com/stretchr/testify/assert"
+	"math"
 	"sort"
 	"testing"
 )
@@ -31,15 +32,20 @@ func TestSparseVector(t *testing.T) {
 	vec := NewSparseVector()
 	// Add new items
 	vec.Add(2, 1)
-	vec.Add(0, 0)
+	vec.Add(1, 0)
 	vec.Add(8, 3)
 	vec.Add(4, 2)
-	assert.Equal(t, []int{2, 0, 8, 4}, vec.Indices)
+	assert.Equal(t, []int{2, 1, 8, 4}, vec.Indices)
 	assert.Equal(t, []float64{1, 0, 3, 2}, vec.Values)
 	// Sort indices
 	sort.Sort(vec)
-	assert.Equal(t, []int{0, 2, 4, 8}, vec.Indices)
+	assert.Equal(t, []int{1, 2, 4, 8}, vec.Indices)
 	assert.Equal(t, []float64{0, 1, 2, 3}, vec.Values)
+	// Iterates
+	vec.ForEach(func(i, index int, value float64) {
+		assert.Equal(t, float64(i), value)
+		assert.Equal(t, math.Pow(2, value), float64(index))
+	})
 }
 
 func TestSparseVector_ForIntersection(t *testing.T) {
@@ -98,4 +104,24 @@ func sliceToMap(a []float64) map[float64]bool {
 		set[i] = true
 	}
 	return set
+}
+
+func TestNewDenseSparseMatrix(t *testing.T) {
+	a := NewDenseSparseMatrix(3)
+	assert.Equal(t, 3, len(a))
+}
+
+func TestSparseVectorsMean(t *testing.T) {
+	a := []*SparseVector{
+		{
+			Indices: []int{2, 4, 6, 7, 9},
+			Values:  []float64{1, 2, 3, 4, 5},
+		},
+		{
+			Indices: []int{2, 4, 6, 7, 9},
+			Values:  []float64{3, 4, 5, 6, 7},
+		},
+	}
+	b := SparseVectorsMean(a)
+	assert.Equal(t, []float64{3, 5}, b)
 }

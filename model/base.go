@@ -55,47 +55,6 @@ func (model *Base) Init(trainSet *core.DataSet, options []core.FitOption) {
 	model.fitOptions = core.NewFitOptions(options)
 }
 
-// Random model predicts a random rating based on the distribution of ratings
-// in the training set, which is assumed to be normal. The predicted \hat{r}_{ui}
-// is generated from a normal distribution N(\hat{μ},\hat{σ}^2) where \hat{μ}
-// and \hat{σ}^2 are estimated from the training data using Maximum Likelihood
-// Estimation.
-type Random struct {
-	Base
-	// Parameters
-	Mean   float64 // mu
-	StdDev float64 // sigma
-	Low    float64 // The lower bound of rating scores
-	High   float64 // The upper bound of rating scores
-}
-
-// NewRandom creates a random model.
-func NewRandom(params base.Params) *Random {
-	random := new(Random)
-	random.SetParams(params)
-	return random
-}
-
-// Predict by the Random model.
-func (random *Random) Predict(userId int, itemId int) float64 {
-	ret := random.rng.NormFloat64()*random.StdDev + random.Mean
-	// Crop prediction
-	if ret < random.Low {
-		ret = random.Low
-	} else if ret > random.High {
-		ret = random.High
-	}
-	return ret
-}
-
-// Fit the Random model.
-func (random *Random) Fit(trainSet *core.DataSet, options ...core.FitOption) {
-	random.Init(trainSet, options)
-	random.Mean = trainSet.Mean()
-	random.StdDev = trainSet.StdDev()
-	random.Low, random.High = trainSet.Min(), trainSet.Max()
-}
-
 // BaseLine predicts the rating for given user and item by
 //  \hat{r}_{ui} = b_{ui} = μ + b_u + b_i
 // If user u is unknown, then the Bias b_u is assumed to be zero. The same
