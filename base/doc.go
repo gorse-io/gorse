@@ -16,7 +16,5 @@ The base data structures and functions include:
 
 => Numeric Computing
 
-=> Options Management
-
 */
 package base

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/stat"
 	"gopkg.in/cheggaaa/pb.v1"
@@ -21,7 +20,8 @@ type CrossValidateResult struct {
 	FitTime   []float64
 }
 
-func (sv CrossValidateResult) MeanMarginScore() (float64, float64) {
+// MeanAndMargin returns the mean and the margin of cross validation scores.
+func (sv CrossValidateResult) MeanAndMargin() (float64, float64) {
 	mean := stat.Mean(sv.TestScore, nil)
 	margin := 0.0
 	for _, score := range sv.TestScore {
@@ -33,10 +33,10 @@ func (sv CrossValidateResult) MeanMarginScore() (float64, float64) {
 	return mean, margin
 }
 
-// CrossValidation evaluates a model by k-fold cross validation.
+// CrossValidate evaluates a model by k-fold cross validation.
 func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
-	splitter Splitter, options ...base.CVOption) []CrossValidateResult {
-	cvOptions := base.NewCVOptions(options)
+	splitter Splitter, options ...CVOption) []CrossValidateResult {
+	cvOptions := NewCVOptions(options)
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, cvOptions.Seed)
 	length := len(trainFolds)
@@ -75,14 +75,9 @@ type ModelSelectionResult struct {
 	AllParams  []base.Params
 }
 
-func (cv ModelSelectionResult) Summary() {
-	fmt.Printf("The best score is: %.5f\n", cv.BestScore)
-	fmt.Printf("The best params is: %v\n", cv.BestParams)
-}
-
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator Model, dataSet Table,
-	evaluators []Evaluator, splitter Splitter, paramGrid ParameterGrid, options ...base.CVOption) []ModelSelectionResult {
+	evaluators []Evaluator, splitter Splitter, paramGrid ParameterGrid, options ...CVOption) []ModelSelectionResult {
 	// Retrieve parameter names and length
 	paramNames := make([]base.ParamName, 0, len(paramGrid))
 	count := 1
@@ -136,8 +131,8 @@ func GridSearchCV(estimator Model, dataSet Table,
 
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
-	evaluators []Evaluator, trial int, options ...base.CVOption) []ModelSelectionResult {
-	cvOptions := base.NewCVOptions(options)
+	evaluators []Evaluator, trial int, options ...CVOption) []ModelSelectionResult {
+	cvOptions := NewCVOptions(options)
 	rng := base.NewRandomGenerator(cvOptions.Seed)
 	// Create results
 	results := make([]ModelSelectionResult, len(evaluators))

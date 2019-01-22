@@ -97,7 +97,7 @@ func (svd *SVD) predict(denseUserId int, denseItemId int) float64 {
 }
 
 // Fit the SVD model.
-func (svd *SVD) Fit(trainSet *core.DataSet, options ...base.FitOption) {
+func (svd *SVD) Fit(trainSet *core.DataSet, options ...core.FitOption) {
 	svd.Init(trainSet, options)
 	// Initialize parameters
 	svd.GlobalMean = 0
@@ -264,7 +264,7 @@ func (nmf *NMF) predict(denseUserId int, denseItemId int) float64 {
 }
 
 // Fit the NMF model.
-func (nmf *NMF) Fit(trainSet *core.DataSet, options ...base.FitOption) {
+func (nmf *NMF) Fit(trainSet *core.DataSet, options ...core.FitOption) {
 	nmf.Init(trainSet, options)
 	// Initialize parameters
 	nmf.GlobalMean = trainSet.GlobalMean
@@ -411,7 +411,7 @@ func (svd *SVDpp) sumOverImplicitFactors(denseUserId int) []float64 {
 }
 
 // Fit the SVD++ model.
-func (svd *SVDpp) Fit(trainSet *core.DataSet, setters ...base.FitOption) {
+func (svd *SVDpp) Fit(trainSet *core.DataSet, setters ...core.FitOption) {
 	svd.Init(trainSet, setters)
 	// Initialize parameters
 	svd.GlobalMean = trainSet.GlobalMean
@@ -543,7 +543,7 @@ func (mf *WRMF) Predict(userId, itemId int) float64 {
 }
 
 // Fit the WRMF model.
-func (mf *WRMF) Fit(set *core.DataSet, options ...base.FitOption) {
+func (mf *WRMF) Fit(set *core.DataSet, options ...core.FitOption) {
 	mf.Init(set, options)
 	// Initialize
 	mf.UserFactor = mat.NewDense(set.UserCount(), mf.nFactors,

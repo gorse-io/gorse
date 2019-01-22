@@ -49,7 +49,7 @@ func main() {
 		tm := time.Since(start)
 		line := []string{fmt.Sprint(reflect.TypeOf(m))}
 		for i := range cv {
-			mean, margin := cv[i].MeanMarginScore()
+			mean, margin := cv[i].MeanAndMargin()
 			line = append(line, fmt.Sprintf("%.5f(±%.5f)", mean, margin))
 		}
 		line = append(line, fmt.Sprintf("%d:%02d:%02d", int(tm.Hours()), int(tm.Minutes())%60, int(tm.Seconds())%60))

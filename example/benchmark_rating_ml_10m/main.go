@@ -59,8 +59,8 @@ func main() {
 		start := time.Now()
 		cv := core.CrossValidate(m, data, []core.Evaluator{core.RMSE, core.MAE}, core.NewKFoldSplitter(5))
 		tm := time.Since(start)
-		meanRMSE, marginRMSE := cv[0].MeanMarginScore()
-		meanMAE, marginMAE := cv[1].MeanMarginScore()
+		meanRMSE, marginRMSE := cv[0].MeanAndMargin()
+		meanMAE, marginMAE := cv[1].MeanAndMargin()
 		lines = append(lines, []string{
 			fmt.Sprint(reflect.TypeOf(m)),
 			fmt.Sprintf("%.5f(±%.5f)", meanRMSE, marginRMSE),

@@ -5,37 +5,8 @@ import (
 	"math"
 )
 
-type EvaluatorOptions struct {
-	trainSet *DataSet
-	nJobs    int
-}
-
-func NewEvaluatorOptions(isRanking bool, option []EvaluatorOption) *EvaluatorOptions {
-	options := new(EvaluatorOptions)
-	for _, opt := range option {
-		opt(options)
-	}
-	return options
-}
-
-type EvaluatorOption func(*EvaluatorOptions)
-
-func WithTrainSet(trainSet *DataSet) EvaluatorOption {
-	return func(options *EvaluatorOptions) {
-		options.trainSet = trainSet
-	}
-}
-
-func WithJobs(n int) EvaluatorOption {
-	return func(options *EvaluatorOptions) {
-		options.nJobs = n
-	}
-}
-
 // Evaluator evaluates the performance of a estimator on the test set.
 type Evaluator func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64
-
-type RankEvaluator func(targetSet map[int]float64, rankList []int) float64
 
 // RMSE is root mean square error.
 func RMSE(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
@@ -221,7 +192,9 @@ func reciprocalRank(targetSet map[int]float64, rankList []int) float64 {
 	return 0
 }
 
-func newRankEvaluator(eval RankEvaluator, n int) Evaluator {
+type rankEvaluator func(targetSet map[int]float64, rankList []int) float64
+
+func newRankEvaluator(eval rankEvaluator, n int) Evaluator {
 	return func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
 		options := NewEvaluatorOptions(true, option)
 		sum := 0.0

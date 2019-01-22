@@ -1,6 +1,10 @@
-package base
+package core
 
-import "runtime"
+import (
+	"runtime"
+)
+
+/* Options for Model.Fit()  */
 
 // FitOptions defines options used when model fitting.
 type FitOptions struct {
@@ -36,6 +40,8 @@ func WithNJobs(nJobs int) FitOption {
 	}
 }
 
+/* Options for CrossValidate() */
+
 // CVOptions defines options used when cross validation.
 type CVOptions struct {
 	FitOptions       // Options for model fitting
@@ -54,4 +60,38 @@ func NewCVOptions(setters []CVOption) *CVOptions {
 		setter(options)
 	}
 	return options
+}
+
+/* Options for Evaluator */
+
+// EvaluatorOptions defines options used by evaluator.
+type EvaluatorOptions struct {
+	trainSet *DataSet
+	nJobs    int
+}
+
+// EvaluatorOption is used to change EvaluatorOptions.
+type EvaluatorOption func(*EvaluatorOptions)
+
+// NewEvaluatorOptions create a EvaluatorOptions from EvaluatorOption.
+func NewEvaluatorOptions(isRanking bool, option []EvaluatorOption) *EvaluatorOptions {
+	options := new(EvaluatorOptions)
+	for _, opt := range option {
+		opt(options)
+	}
+	return options
+}
+
+// WithTrainSet passes the training set to the evaluator.
+func WithTrainSet(trainSet *DataSet) EvaluatorOption {
+	return func(options *EvaluatorOptions) {
+		options.trainSet = trainSet
+	}
+}
+
+// WithJobs sets the number of jobs.
+func WithJobs(n int) EvaluatorOption {
+	return func(options *EvaluatorOptions) {
+		options.nJobs = n
+	}
 }

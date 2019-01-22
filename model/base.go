@@ -13,7 +13,7 @@ type Base struct {
 	ItemIdSet  *base.SparseIdSet    // Items' ID set
 	rng        base.RandomGenerator // Random generator
 	randState  int64                // Random seed
-	fitOptions *base.FitOptions     // Fit options
+	fitOptions *core.FitOptions     // Fit options
 	// Tracker
 	isSetParamsCalled bool // Check whether SetParams called
 }
@@ -36,12 +36,12 @@ func (model *Base) Predict(userId, itemId int) float64 {
 }
 
 // Fit has not been implemented,
-func (model *Base) Fit(trainSet core.DataSet, options ...base.FitOption) {
+func (model *Base) Fit(trainSet core.DataSet, options ...core.FitOption) {
 	panic("Fit() not implemented")
 }
 
 // Init the Base model. The method must be called at the beginning of Fit.
-func (model *Base) Init(trainSet *core.DataSet, options []base.FitOption) {
+func (model *Base) Init(trainSet *core.DataSet, options []core.FitOption) {
 	// Check Base.GetParams() called
 	if model.isSetParamsCalled == false {
 		panic("Base.GetParams() not called")
@@ -52,7 +52,7 @@ func (model *Base) Init(trainSet *core.DataSet, options []base.FitOption) {
 	// Setup random state
 	model.rng = base.NewRandomGenerator(model.randState)
 	// Setup runtime options
-	model.fitOptions = base.NewFitOptions(options)
+	model.fitOptions = core.NewFitOptions(options)
 }
 
 // Random model predicts a random rating based on the distribution of ratings
@@ -89,7 +89,7 @@ func (random *Random) Predict(userId int, itemId int) float64 {
 }
 
 // Fit the Random model.
-func (random *Random) Fit(trainSet *core.DataSet, options ...base.FitOption) {
+func (random *Random) Fit(trainSet *core.DataSet, options ...core.FitOption) {
 	random.Init(trainSet, options)
 	random.Mean = trainSet.Mean()
 	random.StdDev = trainSet.StdDev()
@@ -151,7 +151,7 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 }
 
 // Fit the BaseLine model.
-func (baseLine *BaseLine) Fit(trainSet *core.DataSet, options ...base.FitOption) {
+func (baseLine *BaseLine) Fit(trainSet *core.DataSet, options ...core.FitOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
 	baseLine.GlobalBias = trainSet.GlobalMean
@@ -189,7 +189,7 @@ func NewItemPop(params base.Params) *ItemPop {
 }
 
 // Fit the ItemPop model.
-func (pop *ItemPop) Fit(set *core.DataSet, options ...base.FitOption) {
+func (pop *ItemPop) Fit(set *core.DataSet, options ...core.FitOption) {
 	pop.Init(set, options)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())
