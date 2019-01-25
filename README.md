@@ -1,3 +1,5 @@
+<img width=160 src="https://img.sine-x.com/gorse.png"/>
+
 # gorse: Go Recommender System Engine
 
 | Build | Build (AVX2) | Coverage | Document | Report |
@@ -100,7 +102,7 @@ See detail in [wiki](https://github.com/zhenghaoz/gorse/wiki/Benchmark).
 
 - [Guibing Guo's librec](https://github.com/guoguibing/librec)
 - [Nicolas Hug's Surprise](https://github.com/NicolasHug/Surprise)
-- [Ashley McNamara's gophers](https://github.com/ashleymcnamara/gophers)
+- [Golang Samples's gopher-vector](https://github.com/golang-samples/gopher-vector)
 
 ## References
 
