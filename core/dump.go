@@ -3,12 +3,13 @@ package core
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"os"
 	"path/filepath"
 )
 
 // Load a object from file.
-func Load(fileName string, object interface{}) error {
+func Load(fileName string, src interface{}) error {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return err
@@ -16,21 +17,23 @@ func Load(fileName string, object interface{}) error {
 	defer file.Close()
 	if err == nil {
 		decoder := gob.NewDecoder(file)
-		if err = decoder.Decode(object); err != nil {
+		if err = decoder.Decode(src); err != nil {
 			return err
 		}
 	}
 	// Restore parameters
-	switch object.(type) {
+	switch src.(type) {
 	case Model:
-		model := object.(Model)
+		model := src.(Model)
 		model.SetParams(model.GetParams())
+	default:
+		return errors.New("the file is not a model dump")
 	}
 	return nil
 }
 
 // Save a object to file.
-func Save(fileName string, object interface{}) error {
+func Save(fileName string, dst interface{}) error {
 	// Create all directories
 	if err := os.MkdirAll(filepath.Dir(fileName), os.ModePerm); err != nil {
 		return err
@@ -42,7 +45,7 @@ func Save(fileName string, object interface{}) error {
 	defer file.Close()
 	if err == nil {
 		encoder := gob.NewEncoder(file)
-		if err = encoder.Encode(object); err != nil {
+		if err = encoder.Encode(dst); err != nil {
 			return err
 		}
 	}

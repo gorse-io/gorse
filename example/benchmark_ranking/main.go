@@ -45,7 +45,7 @@ func main() {
 			core.NewMAP(10),
 			core.NewNDCG(10),
 			core.NewMRR(10),
-		}, core.NewKFoldSplitter(5))
+		}, core.NewKFoldSplitter(5), 0)
 		tm := time.Since(start)
 		line := []string{fmt.Sprint(reflect.TypeOf(m))}
 		for i := range cv {

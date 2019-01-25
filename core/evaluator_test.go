@@ -61,7 +61,7 @@ func (tester *EvaluatorTesterModel) SetParams(params base.Params) {
 	panic("EvaluatorTesterModel.SetParams() should never be called.")
 }
 
-func (tester *EvaluatorTesterModel) Fit(set *DataSet, options ...FitOption) {
+func (tester *EvaluatorTesterModel) Fit(set *DataSet, options ...RuntimeOption) {
 	panic("EvaluatorTesterModel.Fit() should never be called.")
 }
 
@@ -74,7 +74,7 @@ func TestAUC(t *testing.T) {
 		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
 		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
 	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0}))
-	assert.Equal(t, 1.0, AUC(a, b))
+	assert.Equal(t, 1.0, AUC(a, b, nil))
 }
 
 func TestRMSE(t *testing.T) {

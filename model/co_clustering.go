@@ -87,7 +87,7 @@ func (coc *CoClustering) predict(denseUserId, denseItemId int) float64 {
 }
 
 // Fit the CoClustering model.
-func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.FitOption) {
+func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.RuntimeOption) {
 	coc.Init(trainSet, options)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean

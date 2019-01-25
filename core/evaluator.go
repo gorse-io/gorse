@@ -6,10 +6,10 @@ import (
 )
 
 // Evaluator evaluates the performance of a estimator on the test set.
-type Evaluator func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64
+type Evaluator func(estimator Model, testSet *DataSet, excludeSet *DataSet) float64
 
 // RMSE is root mean square error.
-func RMSE(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
+func RMSE(estimator Model, testSet *DataSet, excludeSet *DataSet) float64 {
 	groundTruth := make([]float64, testSet.Len())
 	predictions := make([]float64, testSet.Len())
 	for j := 0; j < testSet.Len(); j++ {
@@ -29,7 +29,7 @@ func rootMeanSquareError(groundTruth []float64, prediction []float64) float64 {
 }
 
 // MAE is mean absolute error.
-func MAE(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
+func MAE(estimator Model, testSet *DataSet, excludeSet *DataSet) float64 {
 	groundTruth := make([]float64, testSet.Len())
 	predictions := make([]float64, testSet.Len())
 	for j := 0; j < testSet.Len(); j++ {
@@ -49,19 +49,18 @@ func meanAbsoluteError(groundTruth []float64, prediction []float64) float64 {
 }
 
 // AUC evaluator.
-func AUC(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-	options := NewEvaluatorOptions(true, option)
+func AUC(estimator Model, testSet *DataSet, excludeSet *DataSet) float64 {
 	sum := 0.0
 	// Find all userIds
 	for denseUserIdInTest, userRating := range testSet.DenseUserRatings {
 		userId := testSet.UserIdSet.ToSparseId(denseUserIdInTest)
 		// Find all <userId, j>s in training Data set and test Data set.
 		positiveSet := make(map[int]float64)
-		if options.trainSet != nil {
-			denseUserIdInTrain := options.trainSet.UserIdSet.ToDenseId(userId)
+		if excludeSet != nil {
+			denseUserIdInTrain := excludeSet.UserIdSet.ToDenseId(userId)
 			if denseUserIdInTrain != base.NotId {
-				options.trainSet.DenseUserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
-					itemId := options.trainSet.ItemIdSet.ToSparseId(index)
+				excludeSet.DenseUserRatings[denseUserIdInTrain].ForEach(func(i, index int, value float64) {
+					itemId := excludeSet.ItemIdSet.ToSparseId(index)
 					positiveSet[itemId] = value
 				})
 			}
@@ -195,8 +194,7 @@ func reciprocalRank(targetSet map[int]float64, rankList []int) float64 {
 type rankEvaluator func(targetSet map[int]float64, rankList []int) float64
 
 func newRankEvaluator(eval rankEvaluator, n int) Evaluator {
-	return func(estimator Model, testSet *DataSet, option ...EvaluatorOption) float64 {
-		options := NewEvaluatorOptions(true, option)
+	return func(estimator Model, testSet *DataSet, excludeSet *DataSet) float64 {
 		sum := 0.0
 		// For all users
 		for denseUserId := 0; denseUserId < testSet.UserCount(); denseUserId++ {
@@ -204,7 +202,7 @@ func newRankEvaluator(eval rankEvaluator, n int) Evaluator {
 			// Find top-n items in test set
 			targetSet := testSet.GetUserRatingsSet(userId)
 			// Find top-n items in predictions
-			rankList := Top(testSet, denseUserId, n, options.trainSet.GetUserRatingsSet(userId), estimator)
+			rankList := Top(testSet, denseUserId, n, excludeSet.GetUserRatingsSet(userId), estimator)
 			// MRR
 			sum += eval(targetSet, rankList)
 		}

@@ -22,7 +22,7 @@ func main() {
 	// Fit model
 	svd.Fit(train)
 	// Evaluate model
-	fmt.Printf("RMSE = %.5f\n", core.RMSE(svd, test))
+	fmt.Printf("RMSE = %.5f\n", core.RMSE(svd, test, nil))
 	// Predict a rating
 	fmt.Printf("Predict(4,8) = %.5f\n", svd.Predict(4, 8))
 }

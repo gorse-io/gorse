@@ -21,10 +21,14 @@ type Splitter func(set Table, seed int64) ([]*DataSet, []*DataSet)
 
 // NewKFoldSplitter creates a k-fold splitter.
 func NewKFoldSplitter(k int) Splitter {
-	return func(dataSet Table, seed int64) ([]*DataSet, []*DataSet) {
+	return func(dataSet Table, seed int64) (trainFolds, testFolds []*DataSet) {
 		// Create folds
-		trainFolds := make([]*DataSet, k)
-		testFolds := make([]*DataSet, k)
+		trainFolds = make([]*DataSet, k)
+		testFolds = make([]*DataSet, k)
+		// Check nil
+		if dataSet == nil {
+			return
+		}
 		// Generate permutation
 		rand.Seed(seed)
 		perm := rand.Perm(dataSet.Len())
@@ -50,9 +54,9 @@ func NewKFoldSplitter(k int) Splitter {
 
 // NewRatioSplitter creates a ratio splitter.
 func NewRatioSplitter(repeat int, testRatio float64) Splitter {
-	return func(set Table, seed int64) ([]*DataSet, []*DataSet) {
-		trainFolds := make([]*DataSet, repeat)
-		testFolds := make([]*DataSet, repeat)
+	return func(set Table, seed int64) (trainFolds, testFolds []*DataSet) {
+		trainFolds = make([]*DataSet, repeat)
+		testFolds = make([]*DataSet, repeat)
 		testSize := int(float64(set.Len()) * testRatio)
 		rand.Seed(seed)
 		for i := 0; i < repeat; i++ {

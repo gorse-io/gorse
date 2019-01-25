@@ -16,7 +16,7 @@ const (
 func EvaluateRegression(t *testing.T, algo Model, dataSet Table, splitter Splitter, evalNames []string,
 	evaluators []Evaluator, expectations []float64) {
 	// Cross validation
-	results := CrossValidate(algo, dataSet, evaluators, splitter)
+	results := CrossValidate(algo, dataSet, evaluators, splitter, 0)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
@@ -31,7 +31,7 @@ func EvaluateRegression(t *testing.T, algo Model, dataSet Table, splitter Splitt
 func EvaluateRank(t *testing.T, algo Model, dataSet Table, splitter Splitter, evalNames []string,
 	evaluators []Evaluator, expectations []float64) {
 	// Cross validation
-	results := CrossValidate(algo, dataSet, evaluators, splitter)
+	results := CrossValidate(algo, dataSet, evaluators, splitter, 0)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)

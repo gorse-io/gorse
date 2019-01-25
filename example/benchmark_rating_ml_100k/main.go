@@ -57,7 +57,7 @@ func main() {
 	lines := make([][]string, 0)
 	for _, m := range models {
 		start := time.Now()
-		cv := core.CrossValidate(m, data, []core.Evaluator{core.RMSE, core.MAE}, core.NewKFoldSplitter(5))
+		cv := core.CrossValidate(m, data, []core.Evaluator{core.RMSE, core.MAE}, core.NewKFoldSplitter(5), 0)
 		tm := time.Since(start)
 		meanRMSE, marginRMSE := cv[0].MeanAndMargin()
 		meanMAE, marginMAE := cv[1].MeanAndMargin()

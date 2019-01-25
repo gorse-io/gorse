@@ -13,7 +13,7 @@ type Base struct {
 	ItemIdSet  *base.SparseIdSet    // Items' ID set
 	rng        base.RandomGenerator // Random generator
 	randState  int64                // Random seed
-	fitOptions *core.FitOptions     // Fit options
+	fitOptions *core.RuntimeOptions // Fit options
 	// Tracker
 	isSetParamsCalled bool // Check whether SetParams called
 }
@@ -36,12 +36,12 @@ func (model *Base) Predict(userId, itemId int) float64 {
 }
 
 // Fit has not been implemented,
-func (model *Base) Fit(trainSet core.DataSet, options ...core.FitOption) {
+func (model *Base) Fit(trainSet core.DataSet, options ...core.RuntimeOption) {
 	panic("Fit() not implemented")
 }
 
 // Init the Base model. The method must be called at the beginning of Fit.
-func (model *Base) Init(trainSet *core.DataSet, options []core.FitOption) {
+func (model *Base) Init(trainSet *core.DataSet, options []core.RuntimeOption) {
 	// Check Base.GetParams() called
 	if model.isSetParamsCalled == false {
 		panic("Base.GetParams() not called")
@@ -52,7 +52,7 @@ func (model *Base) Init(trainSet *core.DataSet, options []core.FitOption) {
 	// Setup random state
 	model.rng = base.NewRandomGenerator(model.randState)
 	// Setup runtime options
-	model.fitOptions = core.NewFitOptions(options)
+	model.fitOptions = core.NewRuntimeOptions(options)
 }
 
 // BaseLine predicts the rating for given user and item by
@@ -110,7 +110,7 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 }
 
 // Fit the BaseLine model.
-func (baseLine *BaseLine) Fit(trainSet *core.DataSet, options ...core.FitOption) {
+func (baseLine *BaseLine) Fit(trainSet *core.DataSet, options ...core.RuntimeOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
 	baseLine.GlobalBias = trainSet.GlobalMean
@@ -148,7 +148,7 @@ func NewItemPop(params base.Params) *ItemPop {
 }
 
 // Fit the ItemPop model.
-func (pop *ItemPop) Fit(set *core.DataSet, options ...core.FitOption) {
+func (pop *ItemPop) Fit(set *core.DataSet, options ...core.RuntimeOption) {
 	pop.Init(set, options)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())

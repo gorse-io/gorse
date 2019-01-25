@@ -26,6 +26,9 @@ func NewDataTable(users, items []int, ratings []float64) *DataTable {
 
 // Len returns the length of the DataTable.
 func (dataTable *DataTable) Len() int {
+	if dataTable == nil {
+		return 0
+	}
 	return len(dataTable.Ratings)
 }
 
@@ -87,6 +90,9 @@ func NewVirtualTable(dataSet *DataTable, index []int) *VirtualTable {
 
 // Len returns the length of VirtualTable.
 func (vTable *VirtualTable) Len() int {
+	if vTable == nil {
+		return 0
+	}
 	return len(vTable.Index)
 }
 

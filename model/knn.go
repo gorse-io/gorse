@@ -115,7 +115,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 }
 
 // Fit the KNN model.
-func (knn *KNN) Fit(trainSet *core.DataSet, options ...core.FitOption) {
+func (knn *KNN) Fit(trainSet *core.DataSet, options ...core.RuntimeOption) {
 	knn.Init(trainSet, options)
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean
