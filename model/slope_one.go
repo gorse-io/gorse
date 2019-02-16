@@ -73,6 +73,10 @@ func (so *SlopeOne) Fit(trainSet *core.DataSet, setters ...core.RuntimeOption) {
 	so.Dev = base.NewMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	// Compute deviations
 	itemRatings := trainSet.DenseItemRatings
+	for i := range itemRatings {
+		// Call SortIndex() to make sure similarity() reentrant
+		itemRatings[i].SortIndex()
+	}
 	base.ParallelFor(0, len(itemRatings), func(i int) {
 		for j := 0; j < i; j++ {
 			count, sum := 0.0, 0.0

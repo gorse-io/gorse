@@ -34,7 +34,7 @@ func main() {
 		}),
 	}
 	// Load data
-	data := core.LoadDataFromBuiltIn("ml-100k")
+	data := core.LoadDataFromBuiltIn("ml-1m")
 	// Cross Validation
 	lines := make([][]string, 0)
 	for _, m := range models {
