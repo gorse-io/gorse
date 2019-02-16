@@ -107,7 +107,7 @@ func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.RuntimeOpti
 		coc.clusterMean(coc.ItemClusterMeans, coc.ItemClusters, itemRatings)
 		coc.coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, userRatings)
 		// Update row (user) cluster assignments
-		for denseUserId := 0; denseUserId < trainSet.UserCount(); denseUserId++ {
+		base.ParallelFor(0, trainSet.UserCount(), func(denseUserId int) {
 			bestCluster, leastCost := -1, math.Inf(1)
 			for g := 0; g < coc.nUserClusters; g++ {
 				cost := 0.0
@@ -126,9 +126,9 @@ func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.RuntimeOpti
 				}
 			}
 			coc.UserClusters[denseUserId] = bestCluster
-		}
+		})
 		// Update column (item) cluster assignments
-		for denseItemId := 0; denseItemId < trainSet.ItemCount(); denseItemId++ {
+		base.ParallelFor(0, trainSet.ItemCount(), func(denseItemId int) {
 			bestCluster, leastCost := -1, math.Inf(1)
 			for h := 0; h < coc.nItemClusters; h++ {
 				cost := 0.0
@@ -146,7 +146,7 @@ func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.RuntimeOpti
 				}
 			}
 			coc.ItemClusters[denseItemId] = bestCluster
-		}
+		})
 	}
 }
 

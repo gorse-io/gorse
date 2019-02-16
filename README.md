@@ -59,7 +59,9 @@ func main() {
 	// Fit model
 	svd.Fit(train)
 	// Evaluate model
-	fmt.Printf("RMSE = %.5f\n", core.RMSE(svd, test))
+	scores := core.EvaluateRating(svd, test, core.RMSE, core.MAE)
+	fmt.Printf("RMSE = %.5f\n", scores[0])
+	fmt.Printf("RMSE = %.5f\n", scores[1])
 	// Predict a rating
 	fmt.Printf("Predict(4,8) = %.5f\n", svd.Predict(4, 8))
 }

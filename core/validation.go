@@ -34,33 +34,35 @@ func (sv CrossValidateResult) MeanAndMargin() (float64, float64) {
 }
 
 // CrossValidate evaluates a model by k-fold cross validation.
-func CrossValidate(estimator Model, dataSet Table, metrics []Evaluator,
-	splitter Splitter, seed int64, options ...RuntimeOption) []CrossValidateResult {
-	cvOptions := NewRuntimeOptions(options)
+func CrossValidate(model Model, dataSet Table, splitter Splitter, seed int64,
+	evaluators ...CVEvaluator) []CrossValidateResult {
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, seed)
 	length := len(trainFolds)
-	// Create return structures
-	ret := make([]CrossValidateResult, len(metrics))
-	for i := 0; i < len(ret); i++ {
-		ret[i].TestScore = make([]float64, length)
-	}
 	// Cross validation
-	params := estimator.GetParams()
-	base.Parallel(length, cvOptions.NJobs, func(begin, end int) {
-		cp := reflect.New(reflect.TypeOf(estimator).Elem()).Interface().(Model)
-		Copy(cp, estimator)
-		for i := begin; i < end; i++ {
-			trainFold := trainFolds[i]
-			testFold := testFolds[i]
-			cp.SetParams(params)
-			cp.Fit(trainFold)
-			// Evaluate on test set
-			for j := 0; j < len(ret); j++ {
-				ret[j].TestScore[i] = metrics[j](cp, testFold, trainFold)
-			}
+	scores := make([][]float64, length)
+	params := model.GetParams()
+	base.ParallelFor(0, length, func(i int) {
+		cp := reflect.New(reflect.TypeOf(model).Elem()).Interface().(Model)
+		Copy(cp, model)
+		trainFold := trainFolds[i]
+		testFold := testFolds[i]
+		cp.SetParams(params)
+		cp.Fit(trainFold)
+		// Evaluate on test set
+		scores[i] = make([]float64, 0)
+		for _, evaluator := range evaluators {
+			scores[i] = append(scores[i], evaluator(cp, testFold, trainFold)...)
 		}
 	})
+	// Create return structures
+	ret := make([]CrossValidateResult, len(scores[0]))
+	for i := 0; i < len(ret); i++ {
+		ret[i].TestScore = make([]float64, length)
+		for j := range ret[i].TestScore {
+			ret[i].TestScore[j] = scores[j][i]
+		}
+	}
 	return ret
 }
 
@@ -77,7 +79,7 @@ type ModelSelectionResult struct {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
-	evaluators []Evaluator, splitter Splitter, seed int64, options ...RuntimeOption) []ModelSelectionResult {
+	splitter Splitter, seed int64, evaluators ...CVEvaluator) []ModelSelectionResult {
 	// Retrieve parameter names and length
 	paramNames := make([]base.ParamName, 0, len(paramGrid))
 	count := 1
@@ -102,7 +104,7 @@ func GridSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
 			// Cross validate
 			estimator.GetParams().Merge(params)
 			estimator.SetParams(estimator.GetParams())
-			cvResults := CrossValidate(estimator, dataSet, evaluators, splitter, seed, options...)
+			cvResults := CrossValidate(estimator, dataSet, splitter, seed, evaluators...)
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
 				results[i].AllParams = append(results[i].AllParams, params.Copy())
@@ -131,8 +133,8 @@ func GridSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid, evaluators []Evaluator,
-	splitter Splitter, trial int, seed int64, options ...RuntimeOption) []ModelSelectionResult {
+func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
+	splitter Splitter, trial int, seed int64, evaluators ...CVEvaluator) []ModelSelectionResult {
 	rng := base.NewRandomGenerator(seed)
 	// Create results
 	results := make([]ModelSelectionResult, len(evaluators))
@@ -152,7 +154,7 @@ func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid, eva
 		// Cross validate
 		estimator.GetParams().Merge(params)
 		estimator.SetParams(estimator.GetParams())
-		cvResults := CrossValidate(estimator, dataSet, evaluators, splitter, seed, options...)
+		cvResults := CrossValidate(estimator, dataSet, splitter, seed, evaluators...)
 		for j := range cvResults {
 			results[j].CVResults[i] = cvResults[j]
 			results[j].AllParams[i] = params.Copy()

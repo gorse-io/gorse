@@ -30,13 +30,8 @@ func main() {
 		base.InitMean:   0,
 		base.InitStdDev: 0.001,
 	})
-	out := core.CrossValidate(svd, data, []core.Evaluator{
-		core.NewPrecision(10),
-		core.NewRecall(10),
-		core.NewMAP(10),
-		core.NewNDCG(10),
-		core.NewMRR(10),
-	}, core.NewKFoldSplitter(5), 0)
+	out := core.CrossValidate(svd, data, core.NewKFoldSplitter(5), 0,
+		core.NewRankEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
 	fmt.Println(out)
 
 	// Save memory profile

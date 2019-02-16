@@ -16,8 +16,7 @@ func main() {
 		base.NFactors:   {50},
 		base.InitMean:   {0},
 		base.InitStdDev: {0.001},
-	}, []core.Evaluator{core.RMSE},
-		core.NewKFoldSplitter(5), 0)
+	}, core.NewKFoldSplitter(5), 0, core.NewRatingEvaluator(core.RMSE))
 	fmt.Printf("The best score is: %.5f\n", cv[0].BestScore)
 	fmt.Printf("The best params is: %v\n", cv[0].BestParams)
 }
