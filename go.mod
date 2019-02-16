@@ -10,6 +10,8 @@ require (
 	github.com/mattn/go-runewidth v0.0.3 // indirect
 	github.com/olekukonko/tablewriter v0.0.1
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/spf13/cobra v0.0.3
+	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.2.2
 	golang.org/x/sys v0.0.0-20190109145017-48ac38b7c8cb
 	gonum.org/v1/gonum v0.0.0-20181221232945-d801be0689e7
