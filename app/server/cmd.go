@@ -1,8 +1,9 @@
-package main
+package server
 
 import (
 	"database/sql"
 	"fmt"
+	"github.com/spf13/cobra"
 	"log"
 )
 
@@ -32,4 +33,12 @@ func serve() {
 
 	// Start front-end service
 	startFront()
+}
+
+var CmdServer = &cobra.Command{
+	Use:   "server",
+	Short: "Start a recommender sever",
+	Run: func(cmd *cobra.Command, args []string) {
+		serve()
+	},
 }
