@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/app/test"
 	"log"
 )
 
@@ -17,16 +17,8 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-var cmdTest = &cobra.Command{
-	Use:   "test",
-	Short: "Test a model with cross validation",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Hugo Static Site Generator v0.9 -- HEAD")
-	},
-}
-
 func main() {
-	rootCmd.AddCommand(cmdTest)
+	rootCmd.AddCommand(test.CmdTest)
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
