@@ -67,13 +67,14 @@ type RankMetric func(targetSet map[int]float64, rankList []int) float64
 // EvaluateRank evaluates a model in top-n tasks.
 func EvaluateRank(estimator Model, testSet *DataSet, excludeSet *DataSet, n int, metrics ...RankMetric) []float64 {
 	sum := make([]float64, len(metrics))
+	items := Items(testSet, excludeSet)
 	// For all users
 	for denseUserId := 0; denseUserId < testSet.UserCount(); denseUserId++ {
 		userId := testSet.UserIdSet.ToSparseId(denseUserId)
 		// Find top-n items in test set
 		targetSet := testSet.GetUserRatingsSet(userId)
 		// Find top-n items in predictions
-		rankList := Top(testSet, denseUserId, n, excludeSet.GetUserRatingsSet(userId), estimator)
+		rankList := Top(items, userId, n, excludeSet.GetUserRatingsSet(userId), estimator)
 		// MRR
 		for i, metric := range metrics {
 			sum[i] += metric(targetSet, rankList)
