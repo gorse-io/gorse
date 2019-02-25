@@ -27,15 +27,13 @@ func Top(items map[int]bool, userId int, n int, exclude map[int]float64, model M
 }
 
 // Items gets all items from the test set and the training set.
-func Items(test *DataSet, train *DataSet) map[int]bool {
+func Items(dataSet ...*DataSet) map[int]bool {
 	items := make(map[int]bool)
-	for i := 0; i < test.ItemCount(); i++ {
-		itemId := test.ItemIdSet.ToSparseId(i)
-		items[itemId] = true
-	}
-	for i := 0; i < train.ItemCount(); i++ {
-		itemId := train.ItemIdSet.ToSparseId(i)
-		items[itemId] = true
+	for _, data := range dataSet {
+		for i := 0; i < data.ItemCount(); i++ {
+			itemId := data.ItemIdSet.ToSparseId(i)
+			items[itemId] = true
+		}
 	}
 	return items
 }
