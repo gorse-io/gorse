@@ -1,6 +1,7 @@
 module github.com/zhenghaoz/gorse
 
 require (
+	github.com/BurntSushi/toml v0.3.1
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful v2.8.1+incompatible
 	github.com/fatih/color v1.7.0 // indirect

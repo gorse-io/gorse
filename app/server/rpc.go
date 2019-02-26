@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func startFront() {
+func serveRPC() {
 	// Create a web service
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
