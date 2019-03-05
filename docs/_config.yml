@@ -30,6 +30,7 @@ remote_theme: "mmistakes/minimal-mistakes@4.15.2"
 minimal_mistakes_skin: "contrast"
 plugins:
   - jekyll-feed
+  - jekyll-include-cache
 
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list
