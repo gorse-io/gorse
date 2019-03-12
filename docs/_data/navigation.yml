@@ -1,0 +1,7 @@
+main:
+  - title: "Document"
+    url: https://github.com/zhenghaoz/gorse/wiki
+  - title: "Source"
+    url: https://github.com/zhenghaoz/gorse
+  - title: "Feedback"
+    url: "https://github.com/zhenghaoz/gorse/issues"

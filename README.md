@@ -106,6 +106,7 @@ See detail in [wiki](https://github.com/zhenghaoz/gorse/wiki/Benchmark).
 
 ## Acknowledge
 
+- [CISL@Fudan](http://cscw.fudan.edu.cn/)
 - [Guibing Guo's librec](https://github.com/guoguibing/librec)
 - [Nicolas Hug's Surprise](https://github.com/NicolasHug/Surprise)
 - [Golang Samples's gopher-vector](https://github.com/golang-samples/gopher-vector)
