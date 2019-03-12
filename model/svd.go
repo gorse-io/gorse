@@ -45,7 +45,7 @@ type SVD struct {
 	reg        float64
 	initMean   float64
 	initStdDev float64
-	target     base.ParamString
+	target     string
 }
 
 // NewSVD creates a SVD model.

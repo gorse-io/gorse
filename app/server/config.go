@@ -1,13 +1,18 @@
 package server
 
 import (
+	"github.com/BurntSushi/toml"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/core"
+	"github.com/zhenghaoz/gorse/model"
+	"log"
 )
 
 type TomlConfig struct {
-	Server   ServeConfig    `toml:"server"`
-	Database DatabaseConfig `toml:"database"`
-	Params   ParamsConfig   `toml:"params"`
+	Server    ServeConfig     `toml:"server"`
+	Database  DatabaseConfig  `toml:"database"`
+	Params    ParamsConfig    `toml:"params"`
+	Recommend RecommendConfig `toml:"recommend"`
 }
 
 type ServeConfig struct {
@@ -21,7 +26,7 @@ type DatabaseConfig struct {
 }
 
 type RecommendConfig struct {
-	Base            string  `toml:"base"`
+	Model           string  `toml:"model"`
 	CacheSize       int     `toml:"cache_size"`
 	NewUser         string  `toml:"new_user"`
 	UpdateThreshold int     `toml:"update_threshold"`
@@ -52,27 +57,89 @@ type ParamsConfig struct {
 	Alpha         float64 `toml:"alpha"`           // alpha value, depend on context
 }
 
-func (config *ParamsConfig) ToParams() base.Params {
+func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
 	params := base.Params{}
-	params[base.Lr] = config.Lr
-	params[base.Reg] = config.Reg
-	params[base.NEpochs] = config.NEpochs
-	params[base.NFactors] = config.NFactors
-	params[base.RandomState] = config.RandomState
-	params[base.UseBias] = config.UseBias
-	params[base.InitMean] = config.InitMean
-	params[base.InitStdDev] = config.InitStdDev
-	params[base.InitLow] = config.InitLow
-	params[base.InitHigh] = config.InitHigh
-	params[base.NUserClusters] = config.NUserClusters
-	params[base.NItemClusters] = config.NItemClusters
-	params[base.Type] = config.Type
-	params[base.UserBased] = config.UserBased
-	params[base.Similarity] = config.Similarity
-	params[base.K] = config.K
-	params[base.MinK] = config.MinK
-	params[base.Optimizer] = config.Optimizer
-	params[base.Shrinkage] = config.Shrinkage
-	params[base.Alpha] = config.Alpha
+	if metaData.IsDefined("params", "lr") {
+		params[base.Lr] = config.Lr
+	}
+	if metaData.IsDefined("params", "reg") {
+		params[base.Reg] = config.Reg
+	}
+	if metaData.IsDefined("params", "n_epochs") {
+		params[base.NEpochs] = config.NEpochs
+	}
+	if metaData.IsDefined("params", "n_factors") {
+		params[base.NFactors] = config.NFactors
+	}
+	if metaData.IsDefined("params", "random_state") {
+		params[base.RandomState] = config.RandomState
+	}
+	if metaData.IsDefined("params", "use_bias") {
+		params[base.UseBias] = config.UseBias
+	}
+	if metaData.IsDefined("params", "init_mean") {
+		params[base.InitMean] = config.InitMean
+	}
+	if metaData.IsDefined("params", "init_std") {
+		params[base.InitStdDev] = config.InitStdDev
+	}
+	if metaData.IsDefined("params", "init_low") {
+		params[base.InitLow] = config.InitLow
+	}
+	if metaData.IsDefined("params", "init_high") {
+		params[base.InitHigh] = config.InitHigh
+	}
+	if metaData.IsDefined("params", "n_user_clusters") {
+		params[base.NUserClusters] = config.NUserClusters
+	}
+	if metaData.IsDefined("params", "n_item_clusters") {
+		params[base.NItemClusters] = config.NItemClusters
+	}
+	if metaData.IsDefined("params", "type") {
+		params[base.Type] = config.Type
+	}
+	if metaData.IsDefined("params", "user_based") {
+		params[base.UserBased] = config.UserBased
+	}
+	if metaData.IsDefined("params", "similarity") {
+		params[base.Similarity] = config.Similarity
+	}
+	if metaData.IsDefined("params", "k") {
+		params[base.K] = config.K
+	}
+	if metaData.IsDefined("params", "min_k") {
+		params[base.MinK] = config.MinK
+	}
+	if metaData.IsDefined("params", "optimizer") {
+		params[base.Optimizer] = config.Optimizer
+	}
+	if metaData.IsDefined("params", "shrinkage") {
+		params[base.Shrinkage] = config.Shrinkage
+	}
+	if metaData.IsDefined("params", "alpha") {
+		params[base.Alpha] = config.Alpha
+	}
 	return params
+}
+
+func CreateModelFromName(name string, params base.Params) core.Model {
+	switch name {
+	case "svd":
+		return model.NewSVD(params)
+	case "knn":
+		return model.NewKNN(params)
+	case "slope_one":
+		return model.NewSlopOne(params)
+	case "co_clustering":
+		return model.NewCoClustering(params)
+	case "nmf":
+		return model.NewNMF(params)
+	case "wrmf":
+		return model.NewWRMF(params)
+	case "svd++":
+		return model.NewSVDpp(params)
+	default:
+		log.Fatalf("Unkown model %v\n", name)
+	}
+	panic("CreateModelFromName error")
 }
