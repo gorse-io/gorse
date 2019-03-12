@@ -7,7 +7,7 @@ driver = "mysql"
 access = "gorse:password@/gorse"
 
 [recommend]
-base = "svd"
+model = "svd"
 cache_size = 100
 new_user = "item_pop"
 update_threshold = 1

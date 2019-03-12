@@ -1,16 +1,20 @@
 package server
 
 import (
+	"bytes"
 	"database/sql"
+	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/zhenghaoz/gorse/core"
+	"io"
 	"log"
 )
 
 func modelKeeper(config TomlConfig, metaData toml.MetaData) {
 	// Connect to database
-	log.Println("Connect to database")
+	log.Printf("Connect to database (%s)\n", config.Database.Driver)
 	db, err := sql.Open(config.Database.Driver, config.Database.Access)
 	if err != nil {
 		log.Fatal(err)
@@ -29,23 +33,24 @@ func modelKeeper(config TomlConfig, metaData toml.MetaData) {
 	// Training model
 	log.Printf("Training model\n")
 	model.Fit(dataSet)
-	// Prepare SQL
-	statement, err := db.Prepare("INSERT INTO recommends VALUES(?, ?, ?)")
-	if err != nil {
-		log.Fatal(err)
-	}
 	// Generate list
 	log.Println("Generate list")
+	buf := bytes.NewBuffer(nil)
 	items := core.Items(dataSet)
 	for denseUserId := 0; denseUserId < dataSet.UserCount(); denseUserId++ {
 		userId := dataSet.UserIdSet.ToSparseId(denseUserId)
 		exclude := dataSet.GetUserRatingsSet(userId)
 		recommendItems := core.Top(items, userId, config.Recommend.CacheSize, exclude, model)
 		for i, itemId := range recommendItems {
-			_, err = statement.Exec(userId, itemId, i)
-			if err != nil {
-				log.Fatal(err)
-			}
+			buf.WriteString(fmt.Sprintf("%d\t%d\t%d\n", userId, itemId, i))
 		}
+	}
+	// Save list
+	mysql.RegisterReaderHandler("data", func() io.Reader {
+		return bytes.NewReader(buf.Bytes())
+	})
+	_, err = db.Exec("LOAD DATA LOCAL INFILE 'Reader::data' INTO TABLE recommends")
+	if err != nil {
+		log.Fatal(err)
 	}
 }
