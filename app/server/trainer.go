@@ -12,6 +12,10 @@ import (
 	"log"
 )
 
+func deamon() {
+
+}
+
 func modelKeeper(config TomlConfig, metaData toml.MetaData) {
 	// Connect to database
 	log.Printf("Connect to database (%s)\n", config.Database.Driver)
