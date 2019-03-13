@@ -5,23 +5,22 @@
 layout: splash
 header:
   overlay_color: "#555"
-  overlay_filter: "0.5"
+  overlay_filter: "0.0"
+  overlay_image: https://img.sine-x.com/home.png
   actions:
     - label: "Download"
       url: "https://github.com/zhenghaoz/gorse"
 excerpt: "A Transparent Recommender System Engine over SQL Database based on Collaborative Filtering written in Go."
 
 feature_row:
-  - image_path: assets/images/unsplash-gallery-image-1-th.jpg
-    alt: "placeholder image 1"
-    title: "Collaborative Filtering"
+  - image_path: https://img.sine-x.com/feature-crowd.png
+    title: "Collaborative filtering"
     excerpt: "**Collaborative filtering** models are used to generate recommendation. Models includes matrix factorization, k nearest neighbor, slope one and co-clustering."
-  - image_path: /assets/images/unsplash-gallery-image-2-th.jpg
-    alt: "placeholder image 2"
-    title: "SQL Database"
+  - image_path: https://img.sine-x.com/feature-database.png
+    title: "Over SQL Database"
     excerpt: "Use **SQL Database** as storage. Data are loaded and fed to the model automatically. Recommendations are generated and cached in database."
-  - image_path: /assets/images/unsplash-gallery-image-3-th.jpg
-    title: "Written in Go"
-    excerpt: "The engine is **written in Go**, cooperates with multithreading and SIMD. It means high performance and easy to deploy with a standalone binary."
+  - image_path: https://img.sine-x.com/feature-package.png
+    title: "Out of the box"
+    excerpt: "It's easy to deploy with a standalone binary. Provides CLI tools and RPC interfaces. Recommender system could be built without coding."
 ---
 {% include feature_row %}

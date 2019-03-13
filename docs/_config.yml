@@ -27,7 +27,7 @@ github_username:  jekyll
 # Build settings
 markdown: kramdown
 remote_theme: "mmistakes/minimal-mistakes@4.15.2"
-minimal_mistakes_skin: "contrast"
+minimal_mistakes_skin: "air"
 plugins:
   - jekyll-feed
   - jekyll-include-cache
