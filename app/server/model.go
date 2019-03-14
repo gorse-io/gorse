@@ -10,13 +10,50 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	"io"
 	"log"
+	"time"
 )
 
-func deamon() {
-
+func ModelDaemon(config TomlConfig) {
+	log.Println("This is ModelDaemon")
+	// Connect to database
+	log.Printf("Connect to database (%s)\n", config.Database.Driver)
+	db, err := sql.Open(config.Database.Driver, config.Database.Access)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Query SQL
+	rows, err := db.Query("SELECT COUNT(*) FROM ratings")
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Retrieve result
+	if rows.Next() {
+		var count int64
+		err = rows.Scan(&count)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println(count)
+	}
+	// Query SQL
+	rows, err = db.Query("SELECT value FROM status WHERE name = 'last_count'")
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Retrieve result
+	if rows.Next() {
+		var count int64
+		err = rows.Scan(&count)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println(count)
+	}
+	time.Sleep(time.Second)
+	log.Println("This is ModelDaemon")
 }
 
-func modelKeeper(config TomlConfig, metaData toml.MetaData) {
+func UpdateModel(config TomlConfig, metaData toml.MetaData) {
 	// Connect to database
 	log.Printf("Connect to database (%s)\n", config.Database.Driver)
 	db, err := sql.Open(config.Database.Driver, config.Database.Access)

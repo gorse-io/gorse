@@ -43,12 +43,12 @@ var CmdServer = &cobra.Command{
 		// Load configure file
 		configFile, _ := cmd.PersistentFlags().GetString("config")
 		var conf TomlConfig
-		metaData, err := toml.DecodeFile(configFile, &conf)
+		_, err := toml.DecodeFile(configFile, &conf)
 		if err != nil {
 			// handle error
 			log.Println(err)
 		}
-		modelKeeper(conf, metaData)
+		ModelDaemon(conf)
 	},
 }
 

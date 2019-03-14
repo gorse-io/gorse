@@ -31,6 +31,7 @@ type RecommendConfig struct {
 	NewUser         string  `toml:"new_user"`
 	UpdateThreshold int     `toml:"update_threshold"`
 	ExploreProp     float64 `toml:"explore_prop"`
+	CheckPeriod     int     `toml:"check_period"`
 }
 
 type ParamsConfig struct {
