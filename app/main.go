@@ -2,10 +2,10 @@ package main
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/app/dump"
-	"github.com/zhenghaoz/gorse/app/initalizer"
-	"github.com/zhenghaoz/gorse/app/server"
-	"github.com/zhenghaoz/gorse/app/test"
+	"github.com/zhenghaoz/gorse/app/cv"
+	"github.com/zhenghaoz/gorse/app/data"
+	"github.com/zhenghaoz/gorse/app/init_tool"
+	"github.com/zhenghaoz/gorse/app/serve"
 	"log"
 )
 
@@ -21,10 +21,10 @@ var rootCmd = &cobra.Command{
 }
 
 func main() {
-	rootCmd.AddCommand(test.CmdTest)
-	rootCmd.AddCommand(initalizer.CmdInit)
-	rootCmd.AddCommand(dump.CmdDump)
-	rootCmd.AddCommand(server.CmdServer)
+	rootCmd.AddCommand(cv.CmdTest)
+	rootCmd.AddCommand(init_tool.CmdInit)
+	rootCmd.AddCommand(data.CmdDump)
+	rootCmd.AddCommand(serve.CmdServer)
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}

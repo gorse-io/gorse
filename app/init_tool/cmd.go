@@ -1,4 +1,4 @@
-package initalizer
+package init_tool
 
 import (
 	"database/sql"

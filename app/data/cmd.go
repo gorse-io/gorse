@@ -1,4 +1,4 @@
-package dump
+package data
 
 import (
 	"database/sql"

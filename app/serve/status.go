@@ -1,7 +1,6 @@
-package server
+package serve
 
 type Status struct {
-
 }
 
 // CurrentRatings gets the number of ratings at current.

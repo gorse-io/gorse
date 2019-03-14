@@ -1,4 +1,4 @@
-package test
+package cv
 
 import (
 	"fmt"
