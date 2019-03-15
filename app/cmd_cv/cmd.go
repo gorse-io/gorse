@@ -1,4 +1,4 @@
-package cv
+package cmd_cv
 
 import (
 	"fmt"

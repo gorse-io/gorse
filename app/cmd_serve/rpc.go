@@ -1,4 +1,4 @@
-package serve
+package cmd_serve
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package serve
+package cmd_serve
 
 import (
 	"bytes"
@@ -60,8 +60,8 @@ func UpdateModel(config TomlConfig, metaData toml.MetaData) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Load data from database
-	log.Println("Load data from database")
+	// Load cmd_data from database
+	log.Println("Load cmd_data from database")
 	dataSet, err := core.LoadDataFromSQL(db,
 		"ratings", "user_id", "item_id", "rating")
 	if err != nil {
@@ -87,10 +87,10 @@ func UpdateModel(config TomlConfig, metaData toml.MetaData) {
 		}
 	}
 	// Save list
-	mysql.RegisterReaderHandler("data", func() io.Reader {
+	mysql.RegisterReaderHandler("cmd_data", func() io.Reader {
 		return bytes.NewReader(buf.Bytes())
 	})
-	_, err = db.Exec("LOAD DATA LOCAL INFILE 'Reader::data' INTO TABLE recommends")
+	_, err = db.Exec("LOAD DATA LOCAL INFILE 'Reader::cmd_data' INTO TABLE recommends")
 	if err != nil {
 		log.Fatal(err)
 	}

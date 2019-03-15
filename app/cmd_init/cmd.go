@@ -1,4 +1,4 @@
-package init_tool
+package cmd_init
 
 import (
 	"database/sql"
