@@ -53,5 +53,9 @@ var CmdServer = &cobra.Command{
 }
 
 func init() {
-	CmdServer.PersistentFlags().StringP("config", "c", "config.toml", "Configure File")
+	CmdServer.PersistentFlags().BoolP("init", "i", false, "Initialize empty database")
+	CmdServer.PersistentFlags().String("import-users", "", "import users from CSV file")
+	CmdServer.PersistentFlags().String("import-items", "", "import items from CSV file")
+	CmdServer.PersistentFlags().String("import-ratings", "", "import ratings from CSV file")
+	CmdServer.PersistentFlags().StringP("config", "c", "config.toml", "Configure file")
 }

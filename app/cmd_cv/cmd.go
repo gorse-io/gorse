@@ -1,6 +1,7 @@
 package cmd_cv
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -8,7 +9,6 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
 	"log"
-	"os"
 	"strings"
 )
 
@@ -93,6 +93,7 @@ var CmdTest = &cobra.Command{
 			}
 		}
 		log.Printf("Load hyper-parameters %v\n", params)
+		model.SetParams(params)
 		// Load splitter
 		k, _ := cmd.PersistentFlags().GetInt("split-fold")
 		log.Printf("Use %d-fold splitter\n", k)
@@ -134,7 +135,8 @@ var CmdTest = &cobra.Command{
 		for i := 1; i <= k; i++ {
 			header[i] = fmt.Sprintf("Fold %d", i)
 		}
-		table := tablewriter.NewWriter(os.Stdout)
+		buf := bytes.NewBuffer(nil)
+		table := tablewriter.NewWriter(buf)
 		table.SetHeader(header)
 		for i, v := range out {
 			row := make([]string, k+2)
@@ -147,6 +149,7 @@ var CmdTest = &cobra.Command{
 			table.Append(row)
 		}
 		table.Render()
+		log.Printf("Complete cross validation:\n%v", buf.String())
 	},
 }
 
@@ -174,13 +177,13 @@ type EvalFlag struct {
 }
 
 var EvalFlags = []EvalFlag{
-	{Rank: false, Print: "RMSE", Name: "eval-rmse", Help: "evaluate the model by RMSE"},
-	{Rank: false, Print: "MAE", Name: "eval-mae", Help: "evaluate the model by MAE"},
-	{Rank: true, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
-	{Rank: true, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
-	{Rank: true, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
-	{Rank: true, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
-	{Rank: true, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
+	{Rank: false, RatingMetric: core.RMSE, Print: "RMSE", Name: "eval-rmse", Help: "evaluate the model by RMSE"},
+	{Rank: false, RatingMetric: core.MAE, Print: "MAE", Name: "eval-mae", Help: "evaluate the model by MAE"},
+	{Rank: true, RankMetric: core.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
+	{Rank: true, RankMetric: core.Recall, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
+	{Rank: true, RankMetric: core.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
+	{Rank: true, RankMetric: core.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
+	{Rank: true, RankMetric: core.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
 }
 
 /* Flags for hyper-parameters */
@@ -217,7 +220,7 @@ var ParamFlags = []ParamFlag{
 	{STRING, base.Similarity, "set-similarity", "set similarity metrics"},
 	{STRING, base.K, "set-k", "set number of neighbors"},
 	{STRING, base.MinK, "set-mink", "set least number of neighbors"},
-	{STRING, base.Optimizer, "set-optimizer", "set optimizer for optimization (SGD/ALS/BPR)"},
+	{STRING, base.Optimizer, "set-optimizer", "set optimizer for optimization (sgd/bpr)"},
 	{INT, base.Shrinkage, "set-shrinkage", "set shrinkage strength of similarity"},
 	{FLOAT64, base.Alpha, "set-alpha", "set alpha value, depend on context"},
 }

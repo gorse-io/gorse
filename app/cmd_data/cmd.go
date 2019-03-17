@@ -36,8 +36,10 @@ var CmdData = &cobra.Command{
 }
 
 func init() {
-	CmdData.PersistentFlags().String("driver", "mysql", "Database driver")
-	CmdData.PersistentFlags().String("import-csv", "", "import cmd_data from CSV file")
+	CmdData.PersistentFlags().String("driver", "mysql", "database driver")
+	CmdData.PersistentFlags().String("import-ratings", "", "import ratings from CSV file")
+	CmdData.PersistentFlags().String("import-items", "", "import items from CSV file")
+	CmdData.PersistentFlags().String("import-users", "", "import users from CSV file")
 	//CmdData.PersistentFlags().String("csv-sep", "\t", "import CSV file with separator")
 	//CmdData.PersistentFlags().Bool("csv-header", false, "import CSV file with header")
 }

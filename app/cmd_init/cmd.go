@@ -20,29 +20,7 @@ var CmdInit = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		// Create ratings table
-		query := "CREATE TABLE ratings (" +
-			"user_id int NOT NULL, " +
-			"item_id int NOT NULL, " +
-			"rating int NOT NULL, " +
-			"UNIQUE KEY unique_index (user_id,item_id)" +
-			") ENGINE=InnoDB DEFAULT CHARSET=latin1"
-		_, err = db.Exec(query)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Create recommends table
-		query = "CREATE TABLE recommends (" +
-			"user_id int NOT NULL, " +
-			"item_id int NOT NULL, " +
-			"rating double NOT NULL, " +
-			"era int NOT NULL, " +
-			"UNIQUE KEY unique_index (user_id,item_id)" +
-			") ENGINE=InnoDB DEFAULT CHARSET=latin1"
-		_, err = db.Exec(query)
-		if err != nil {
-			log.Fatal(err)
-		}
+
 		fmt.Println("Database was initialized successfully.")
 	},
 }
