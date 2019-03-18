@@ -13,28 +13,54 @@ type Database struct {
 	connection *sql.DB
 }
 
+func NewDatabaseConnection(databaseDriver, dataSource string) (db Database, err error) {
+	db.connection, err = sql.Open(databaseDriver, dataSource)
+	return
+}
+
+func (db *Database) Close() error {
+	return db.connection.Close()
+}
+
+// Initialize the SQL database for gorse. Three tables will be created:
+// 1. ratings: all ratings given by users to items;
+// 2. items: all items will be recommended to users;
+// 3. recommends: recommended items for each user.
 func (db *Database) Init() error {
 	// Create ratings table
-	query := "CREATE TABLE ratings (" +
-		"user_id int NOT NULL, " +
-		"item_id int NOT NULL, " +
-		"rating int NOT NULL, " +
-		"UNIQUE KEY unique_index (user_id,item_id)" +
-		") ENGINE=InnoDB DEFAULT CHARSET=latin1"
-	_, err := db.connection.Exec(query)
+	_, err := db.connection.Exec(`CREATE TABLE ratings (
+			user_id int NOT NULL,
+			item_id int NOT NULL,
+			rating int NOT NULL,
+			UNIQUE KEY unique_index (user_id,item_id)
+		)`)
 	if err != nil {
 		return err
 	}
 	// Create recommends table
-	query = "CREATE TABLE recommends (" +
-		"user_id int NOT NULL, " +
-		"item_id int NOT NULL, " +
-		"rating double NOT NULL, " +
-		"era int NOT NULL, " +
-		"UNIQUE KEY unique_index (user_id,item_id)" +
-		") ENGINE=InnoDB DEFAULT CHARSET=latin1"
-	_, err = db.connection.Exec(query)
+	_, err = db.connection.Exec(`CREATE TABLE recommends (
+			user_id int NOT NULL,
+			item_id int NOT NULL,
+			ranking double NOT NULL,
+			UNIQUE KEY unique_index (user_id,item_id)
+		)`)
+	if err != nil {
+		return err
+	}
+	// Create items table
+	_, err = db.connection.Exec(`CREATE TABLE items (
+			item_id int NOT NULL,
+			UNIQUE KEY unique_index item_id
+		)`)
 	return err
+}
+
+func (db *Database) LoadItemsFromCSV(fileName string, sep string, header bool) error {
+	return nil
+}
+
+func (db *Database) LoadRatingsFromCSV(fileName string, sep string, header bool) error {
+	return nil
 }
 
 func (db *Database) GetMeta(name string) (count int, err error) {
@@ -66,7 +92,6 @@ func (db *Database) CurrentRatings() (count int, err error) {
 	}
 	// Retrieve result
 	if rows.Next() {
-		var count int
 		err = rows.Scan(&count)
 		if err != nil {
 			return

@@ -47,8 +47,8 @@ func init() {
 }
 
 var CmdTest = &cobra.Command{
-	Use:   "test [model]",
-	Short: "Test a model with cross validation",
+	Use:   "cv [model]",
+	Short: "Test a model by cross validation",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		modelName := args[0]

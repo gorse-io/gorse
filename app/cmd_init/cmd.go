@@ -1,9 +1,8 @@
 package cmd_init
 
 import (
-	"database/sql"
-	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/app/engine"
 	"log"
 )
 
@@ -16,12 +15,14 @@ var CmdInit = &cobra.Command{
 		dataSource := args[0]
 		databaseDriver, _ := cmd.PersistentFlags().GetString("driver")
 		// Connect database
-		db, err := sql.Open(databaseDriver, dataSource)
+		db, err := engine.NewDatabaseConnection(databaseDriver, dataSource)
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		fmt.Println("Database was initialized successfully.")
+		if err = db.Init(); err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Database was initialized successfully.")
 	},
 }
 
