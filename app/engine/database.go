@@ -9,6 +9,11 @@ import (
 	"io"
 )
 
+const (
+	Version = "version"
+	Commit  = "commit"
+)
+
 type Database struct {
 	connection *sql.DB
 }
@@ -28,7 +33,8 @@ func (db *Database) Close() error {
 // 3. recommends: recommended items for each user.
 func (db *Database) Init() error {
 	// Create ratings table
-	_, err := db.connection.Exec(`CREATE TABLE ratings (
+	_, err := db.connection.Exec(
+		`CREATE TABLE ratings (
 			user_id int NOT NULL,
 			item_id int NOT NULL,
 			rating int NOT NULL,
@@ -38,7 +44,8 @@ func (db *Database) Init() error {
 		return err
 	}
 	// Create recommends table
-	_, err = db.connection.Exec(`CREATE TABLE recommends (
+	_, err = db.connection.Exec(
+		`CREATE TABLE recommends (
 			user_id int NOT NULL,
 			item_id int NOT NULL,
 			ranking double NOT NULL,
@@ -48,9 +55,10 @@ func (db *Database) Init() error {
 		return err
 	}
 	// Create items table
-	_, err = db.connection.Exec(`CREATE TABLE items (
+	_, err = db.connection.Exec(
+		`CREATE TABLE items (
 			item_id int NOT NULL,
-			UNIQUE KEY unique_index item_id
+			UNIQUE KEY unique_index (item_id)
 		)`)
 	return err
 }
@@ -63,9 +71,10 @@ func (db *Database) LoadRatingsFromCSV(fileName string, sep string, header bool)
 	return nil
 }
 
+// GetMeta gets meta data from database.
 func (db *Database) GetMeta(name string) (count int, err error) {
 	// Query SQL
-	rows, err := db.connection.Query("SELECT value FROM status WHERE name = '?'", name)
+	rows, err := db.connection.Query("SELECT value FROM status WHERE name = ?", name)
 	if err != nil {
 		return
 	}
@@ -80,12 +89,23 @@ func (db *Database) GetMeta(name string) (count int, err error) {
 	panic("Get meta data failed")
 }
 
+// SetMeta writes meta data into database.
 func (db *Database) SetMeta(name string, val int) error {
-	panic("Not implemented")
+	// Prepare SQL
+	statement, err := db.connection.Prepare("INSERT INTO status VALUES(?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)")
+	if err != nil {
+		return err
+	}
+	// Execute SQL
+	_, err = statement.Exec(name, val)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-// CurrentRatings gets the number of ratings at current.
-func (db *Database) CurrentRatings() (count int, err error) {
+// RatingCount gets the number of ratings at current.
+func (db *Database) RatingCount() (count int, err error) {
 	rows, err := db.connection.Query("SELECT COUNT(*) FROM ratings")
 	if err != nil {
 		return
@@ -101,15 +121,6 @@ func (db *Database) CurrentRatings() (count int, err error) {
 	panic("SELECT COUNT(*) FROM ratings failed")
 }
 
-// LastRatings gets the number of ratings at the time of last update.
-func (db *Database) LastRatings() (count int, err error) {
-	return db.GetMeta("last_count")
-}
-
-func (db *Database) Version() (version int, err error) {
-	return db.GetMeta("version")
-}
-
 func (db *Database) LoadData() (*core.DataSet, error) {
 	return core.LoadDataFromSQL(db.connection, "ratings", "user_id", "item_id", "rating")
 }
@@ -117,7 +128,7 @@ func (db *Database) LoadData() (*core.DataSet, error) {
 // GetRecommends gets the top list for a user from the database.
 func (db *Database) GetRecommends(userId int) ([]int, error) {
 	// Query SQL
-	rows, err := db.connection.Query("SELECT item_id FROM recommends WHERE user_id=? ORDER BY rating DESC;", userId)
+	rows, err := db.connection.Query("SELECT item_id FROM recommends WHERE user_id=? ORDER BY rating DESC", userId)
 	if err != nil {
 		return nil, err
 	}
@@ -134,12 +145,43 @@ func (db *Database) GetRecommends(userId int) ([]int, error) {
 	return res, nil
 }
 
-func (db *Database) GetRandom() ([]int, error) {
-	panic("Not implemented")
+func (db *Database) GetRandom(n int) ([]int, error) {
+	// Query SQL
+	rows, err := db.connection.Query("SELECT item_id FROM items ORDER BY RAND() LIMIT ?", n)
+	if err != nil {
+		return nil, err
+	}
+	// Retrieve result
+	res := make([]int, 0)
+	for rows.Next() {
+		var itemId int
+		err = rows.Scan(&itemId)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, itemId)
+	}
+	return res, nil
 }
 
-func (db *Database) GetPopular() ([]int, error) {
-	panic("Not implemented")
+func (db *Database) GetPopular(n int) ([]int, error) {
+	// Query SQL
+	rows, err := db.connection.Query(
+		"SELECT item_id, COUNT(*) AS count FROM ratings GROUP BY item_id ORDER BY count DESC LIMIT 10", n)
+	if err != nil {
+		return nil, err
+	}
+	// Retrieve result
+	res := make([]int, 0)
+	for rows.Next() {
+		var itemId int
+		err = rows.Scan(&itemId)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, itemId)
+	}
+	return res, nil
 }
 
 func (db *Database) GetList() ([]int, error) {
