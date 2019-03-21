@@ -1,8 +1,8 @@
 package engine
 
 import (
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 	"testing"
 )
 
@@ -39,6 +39,14 @@ func TestDatabase_Init(t *testing.T) {
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
 	}
+}
+
+func TestDatabase_LoadItemsFromCSV(t *testing.T) {
+
+}
+
+func TestDatabase_LoadRatingsFromCSV(t *testing.T) {
+
 }
 
 func TestDatabase_GetMeta(t *testing.T) {
@@ -145,9 +153,111 @@ func TestDatabase_GetRecommends(t *testing.T) {
 }
 
 func TestDatabase_GetRandom(t *testing.T) {
-
+	// Create mock database
+	connection, mock, err := sqlmock.New()
+	db := Database{connection: connection}
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+	// Create expect query
+	expectRows := sqlmock.NewRows([]string{"item_id"})
+	expectRows.AddRow(1)
+	expectRows.AddRow(2)
+	expectRows.AddRow(3)
+	mock.ExpectQuery(`SELECT item_id FROM items ORDER BY RAND\(\) LIMIT ?`).
+		WithArgs(3).
+		WillReturnRows(expectRows)
+	// Count ratings
+	recommendations, err := db.GetRandom(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, []int{1, 2, 3}, recommendations)
+	_ = recommendations
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
 }
 
 func TestDatabase_GetPopular(t *testing.T) {
+	// Create mock database
+	connection, mock, err := sqlmock.New()
+	db := Database{connection: connection}
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+	// Create expect query
+	expectRows := sqlmock.NewRows([]string{"item_id", "count"})
+	expectRows.AddRow(1, 10)
+	expectRows.AddRow(2, 9)
+	expectRows.AddRow(3, 8)
+	mock.ExpectQuery(`SELECT item_id, COUNT\(\*\) AS count FROM ratings
+		GROUP BY item_id
+		ORDER BY count DESC LIMIT ?`).
+		WithArgs(3).
+		WillReturnRows(expectRows)
+	// Count ratings
+	recommendations, scores, err := db.GetPopular(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, []int{1, 2, 3}, recommendations)
+	assert.Equal(t, []int{10, 9, 8}, scores)
+	_ = recommendations
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
+}
 
+func TestDatabase_UpdateRecommends(t *testing.T) {
+	// Create mock database
+	connection, mock, err := sqlmock.New()
+	db := Database{connection: connection}
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+	// Create expect query
+	mock.ExpectBegin()
+	mock.ExpectExec("DELETE recommends WHERE user_id = ?").
+		WithArgs(0).
+		WillReturnResult(sqlmock.NewResult(0, 9))
+	mock.ExpectExec(`LOAD DATA LOCAL INFILE 'Reader::update_recommends' INTO TABLE recommends`).
+		WillReturnResult(sqlmock.NewResult(0, 9))
+	mock.ExpectCommit()
+	// Update recommendations
+	if err := db.UpdateRecommends(0, []int{1, 2, 3}); err != nil {
+		t.Fatal(err)
+	}
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestDatabase_PutRating(t *testing.T) {
+	// Create mock database
+	connection, mock, err := sqlmock.New()
+	db := Database{connection: connection}
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+	// Create expect query
+	mock.ExpectPrepare(`INSERT INTO ratings VALUES`).
+		ExpectExec().
+		WithArgs(0, 1, float64(2)).
+		WillReturnResult(sqlmock.NewResult(0, 9))
+	// Update recommendations
+	if err := db.PutRating(0, 1, 2); err != nil {
+		t.Fatal(err)
+	}
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
 }

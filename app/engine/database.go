@@ -86,7 +86,7 @@ func (db *Database) GetMeta(name string) (count int, err error) {
 		}
 		return
 	}
-	panic("Get meta data failed")
+	return 0, fmt.Errorf("meta data not exist")
 }
 
 // SetMeta writes meta data into database.
@@ -164,28 +164,29 @@ func (db *Database) GetRandom(n int) ([]int, error) {
 	return res, nil
 }
 
-func (db *Database) GetPopular(n int) ([]int, error) {
+func (db *Database) GetPopular(n int) ([]int, []int, error) {
 	// Query SQL
 	rows, err := db.connection.Query(
-		"SELECT item_id, COUNT(*) AS count FROM ratings GROUP BY item_id ORDER BY count DESC LIMIT 10", n)
+		`SELECT item_id, COUNT(*) AS count FROM ratings 
+		GROUP BY item_id 
+		ORDER BY count DESC LIMIT ?`, n)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// Retrieve result
 	res := make([]int, 0)
+	counts := make([]int, 0)
 	for rows.Next() {
 		var itemId int
-		err = rows.Scan(&itemId)
+		var count int
+		err = rows.Scan(&itemId, &count)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		res = append(res, itemId)
+		counts = append(counts, count)
 	}
-	return res, nil
-}
-
-func (db *Database) GetList() ([]int, error) {
-	panic("Not implemented")
+	return res, counts, nil
 }
 
 // UpdateRecommends puts a top list into the database.
@@ -197,14 +198,29 @@ func (db *Database) UpdateRecommends(userId int, items []int) error {
 	mysql.RegisterReaderHandler("update_recommends", func() io.Reader {
 		return bytes.NewReader(buf.Bytes())
 	})
-	_, err := db.connection.Exec("LOAD DATA LOCAL INFILE 'Reader::update_recommends' INTO TABLE recommends")
-	return err
+	// Begin a transaction
+	tx, err := db.connection.Begin()
+	if err != nil {
+		return err
+	}
+	// Remove old recommendations
+	_, err = tx.Exec("DELETE recommends WHERE user_id = ?", userId)
+	if err != nil {
+		return err
+	}
+	// Update new recommendations
+	_, err = tx.Exec("LOAD DATA LOCAL INFILE 'Reader::update_recommends' INTO TABLE recommends")
+	if err != nil {
+		return err
+	}
+	// Commit a transaction
+	return tx.Commit()
 }
 
 // PutRating puts a rating into the database.
 func (db *Database) PutRating(userId, itemId int, rating float64) error {
 	// Prepare SQL
-	statement, err := db.connection.Prepare("INSERT INTO ratings VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE rating=VALUES(rating)")
+	statement, err := db.connection.Prepare("INSERT INTO ratings VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE rating = VALUES( rating )")
 	if err != nil {
 		return err
 	}

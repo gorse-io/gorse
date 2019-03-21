@@ -27,5 +27,5 @@ var CmdInit = &cobra.Command{
 }
 
 func init() {
-	CmdInit.PersistentFlags().String("driver", "mysql", "Database driver")
+	CmdInit.PersistentFlags().String("driver", "mysql", "database driver")
 }

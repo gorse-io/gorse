@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/app/engine"
 	"log"
 )
 
@@ -34,6 +35,7 @@ func serve(conf TomlConfig) {
 	//
 	//// Start front-end service
 	//serveRPC()
+
 }
 
 var CmdServer = &cobra.Command{
@@ -54,8 +56,49 @@ var CmdServer = &cobra.Command{
 
 func init() {
 	CmdServer.PersistentFlags().BoolP("init", "i", false, "Initialize empty database")
-	CmdServer.PersistentFlags().String("import-users", "", "import users from CSV file")
-	CmdServer.PersistentFlags().String("import-items", "", "import items from CSV file")
-	CmdServer.PersistentFlags().String("import-ratings", "", "import ratings from CSV file")
 	CmdServer.PersistentFlags().StringP("config", "c", "config.toml", "Configure file")
+	CmdServer.PersistentFlags().String("import-ratings-csv", "", "import ratings from CSV file")
+	CmdServer.PersistentFlags().String("ratings-csv-sep", "\t", "import ratings from CSV file with separator")
+	CmdServer.PersistentFlags().Bool("ratings-csv-header", false, "import ratings from CSV file with header")
+	CmdServer.PersistentFlags().String("import-items-csv", "", "import items from CSV file")
+	CmdServer.PersistentFlags().String("items-csv-sep", "\t", "import items from CSV file with separator")
+	CmdServer.PersistentFlags().Bool("items-csv-header", false, "import items from CSV file with header")
+}
+
+func InitDB(cmd *cobra.Command, db *engine.Database) {
+	val, err := cmd.PersistentFlags().GetBool("init")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if val {
+		if err := db.Init(); err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Database was initialized successfully.")
+	}
+}
+
+func ImportData(cmd *cobra.Command, db *engine.Database) {
+	// Import ratings
+	if cmd.PersistentFlags().Changed("import-ratings") {
+		name, _ := cmd.PersistentFlags().GetString("import-ratings-csv")
+		sep, _ := cmd.PersistentFlags().GetString("ratings-csv-sep")
+		header, _ := cmd.PersistentFlags().GetBool("ratings-csv-header")
+		log.Printf("Import ratings from %s\n", name)
+		if err := db.LoadRatingsFromCSV(name, sep, header); err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Ratings are imported successfully!")
+	}
+	// Import items
+	if cmd.PersistentFlags().Changed("import-items") {
+		name, _ := cmd.PersistentFlags().GetString("import-items-csv")
+		sep, _ := cmd.PersistentFlags().GetString("items-csv-sep")
+		header, _ := cmd.PersistentFlags().GetBool("items-csv-header")
+		log.Printf("Import items from %s\n", name)
+		if err := db.LoadItemsFromCSV(name, sep, header); err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Items are imported successfully!")
+	}
 }

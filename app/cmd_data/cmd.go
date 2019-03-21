@@ -18,20 +18,22 @@ var CmdData = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		sep, _ := cmd.PersistentFlags().GetString("csv-sep")
-		header, _ := cmd.PersistentFlags().GetBool("csv-header")
-		// Load ratings
+		// Import ratings
 		if cmd.PersistentFlags().Changed("import-ratings") {
-			name, _ := cmd.PersistentFlags().GetString("import-ratings")
+			name, _ := cmd.PersistentFlags().GetString("import-ratings-csv")
+			sep, _ := cmd.PersistentFlags().GetString("ratings-csv-sep")
+			header, _ := cmd.PersistentFlags().GetBool("ratings-csv-header")
 			log.Printf("Import ratings from %s\n", name)
 			if err = db.LoadRatingsFromCSV(name, sep, header); err != nil {
 				log.Fatal(err)
 			}
 			log.Println("Ratings are imported successfully!")
 		}
-		// Load items
+		// Import items
 		if cmd.PersistentFlags().Changed("import-items") {
-			name, _ := cmd.PersistentFlags().GetString("import-items")
+			name, _ := cmd.PersistentFlags().GetString("import-items-csv")
+			sep, _ := cmd.PersistentFlags().GetString("items-csv-sep")
+			header, _ := cmd.PersistentFlags().GetBool("items-csv-header")
 			log.Printf("Import items from %s\n", name)
 			if err = db.LoadItemsFromCSV(name, sep, header); err != nil {
 				log.Fatal(err)
@@ -43,8 +45,10 @@ var CmdData = &cobra.Command{
 
 func init() {
 	CmdData.PersistentFlags().String("driver", "mysql", "database driver")
-	CmdData.PersistentFlags().String("import-ratings", "", "import ratings from CSV file")
-	CmdData.PersistentFlags().String("import-items", "", "import items from CSV file")
-	CmdData.PersistentFlags().String("csv-sep", "\t", "import CSV file with separator")
-	CmdData.PersistentFlags().Bool("csv-header", false, "import CSV file with header")
+	CmdData.PersistentFlags().String("import-ratings-csv", "", "import ratings from CSV file")
+	CmdData.PersistentFlags().String("ratings-csv-sep", "\t", "import ratings from CSV file with separator")
+	CmdData.PersistentFlags().Bool("ratings-csv-header", false, "import ratings from CSV file with header")
+	CmdData.PersistentFlags().String("import-items-csv", "", "import items from CSV file")
+	CmdData.PersistentFlags().String("items-csv-sep", "\t", "import items from CSV file with separator")
+	CmdData.PersistentFlags().Bool("items-csv-header", false, "import items from CSV file with header")
 }
