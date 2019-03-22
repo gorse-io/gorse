@@ -3,10 +3,10 @@ package core
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 	"io"
 	"log"
 	"os"

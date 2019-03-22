@@ -74,7 +74,7 @@ func EvaluateRank(estimator Model, testSet *DataSet, excludeSet *DataSet, n int,
 		// Find top-n items in test set
 		targetSet := testSet.GetUserRatingsSet(userId)
 		// Find top-n items in predictions
-		rankList := Top(items, userId, n, excludeSet.GetUserRatingsSet(userId), estimator)
+		rankList, _ := Top(items, userId, n, excludeSet.GetUserRatingsSet(userId), estimator)
 		// MRR
 		for i, metric := range metrics {
 			sum[i] += metric(targetSet, rankList)

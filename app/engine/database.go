@@ -1,28 +1,36 @@
 package engine
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"github.com/zhenghaoz/gorse/core"
 	"io"
+	"log"
+	"os"
+	"strings"
 )
 
+// Meta data keys
 const (
-	Version = "version"
-	Commit  = "commit"
+	Version   = "version"
+	LastCount = "last_count"
 )
 
+// Database manages connections and operations on the SQL database.
 type Database struct {
 	connection *sql.DB
 }
 
+// NewDatabaseConnection creates a new connection to the database.
 func NewDatabaseConnection(databaseDriver, dataSource string) (db Database, err error) {
 	db.connection, err = sql.Open(databaseDriver, dataSource)
 	return
 }
 
+// Close the connection to the database.
 func (db *Database) Close() error {
 	return db.connection.Close()
 }
@@ -35,9 +43,9 @@ func (db *Database) Init() error {
 	// Create ratings table
 	_, err := db.connection.Exec(
 		`CREATE TABLE ratings (
-			user_id int NOT NULL,
-			item_id int NOT NULL,
-			rating int NOT NULL,
+			user_id INT NOT NULL,
+			item_id INT NOT NULL,
+			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index (user_id,item_id)
 		)`)
 	if err != nil {
@@ -46,9 +54,9 @@ func (db *Database) Init() error {
 	// Create recommends table
 	_, err = db.connection.Exec(
 		`CREATE TABLE recommends (
-			user_id int NOT NULL,
-			item_id int NOT NULL,
-			ranking double NOT NULL,
+			user_id INT NOT NULL,
+			item_id INT NOT NULL,
+			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index (user_id,item_id)
 		)`)
 	if err != nil {
@@ -57,18 +65,68 @@ func (db *Database) Init() error {
 	// Create items table
 	_, err = db.connection.Exec(
 		`CREATE TABLE items (
-			item_id int NOT NULL,
+			item_id INT NOT NULL,
 			UNIQUE KEY unique_index (item_id)
+		)`)
+	// Create status table
+	_, err = db.connection.Exec(`CREATE TABLE status (
+			name CHAR(16) NOT NULL,
+			value INT NULL,
+			UNIQUE KEY unique_index (name)
 		)`)
 	return err
 }
 
+// LoadItemsFromCSV loads items from CSV file.
 func (db *Database) LoadItemsFromCSV(fileName string, sep string, header bool) error {
-	return nil
+	// Read first line
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	if !scanner.Scan() {
+		return fmt.Errorf("empty file")
+	}
+	firstLine := scanner.Text()
+	// Generate columns
+	fields := strings.Split(firstLine, sep)
+	columns := []string{"item_id"}
+	for i := 1; i < len(fields); i++ {
+		columns = append(columns, "@dummy")
+	}
+	query := fmt.Sprintf("LOAD DATA INFILE '?' INTO TABLE items FIELDS TERMINATED BY '%s' (%s)",
+		sep, strings.Join(columns, ","))
+	// Import CSV
+	_, err = db.connection.Exec(query, fileName)
+	return err
 }
 
+// LoadRatingsFromCSV loads ratings from CSV file.
 func (db *Database) LoadRatingsFromCSV(fileName string, sep string, header bool) error {
-	return nil
+	// Read first line
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	if !scanner.Scan() {
+		return fmt.Errorf("empty file")
+	}
+	firstLine := scanner.Text()
+	// Generate columns
+	fields := strings.Split(firstLine, sep)
+	columns := []string{"user_id", "item_id", "rating"}
+	for i := 3; i < len(fields); i++ {
+		columns = append(columns, "@dummy")
+	}
+	query := fmt.Sprintf("LOAD DATA INFILE '?' INTO TABLE ratings FIELDS TERMINATED BY '%s' (%s)",
+		sep, strings.Join(columns, ","))
+	// Import CSV
+	_, err = db.connection.Exec(query, fileName)
+	return err
 }
 
 // GetMeta gets meta data from database.
@@ -145,6 +203,7 @@ func (db *Database) GetRecommends(userId int) ([]int, error) {
 	return res, nil
 }
 
+// GetRandom get random items from database.
 func (db *Database) GetRandom(n int) ([]int, error) {
 	// Query SQL
 	rows, err := db.connection.Query("SELECT item_id FROM items ORDER BY RAND() LIMIT ?", n)
@@ -164,7 +223,8 @@ func (db *Database) GetRandom(n int) ([]int, error) {
 	return res, nil
 }
 
-func (db *Database) GetPopular(n int) ([]int, []int, error) {
+// GetPopular gets most popular items from database.
+func (db *Database) GetPopular(n int) ([]int, []float64, error) {
 	// Query SQL
 	rows, err := db.connection.Query(
 		`SELECT item_id, COUNT(*) AS count FROM ratings 
@@ -175,7 +235,7 @@ func (db *Database) GetPopular(n int) ([]int, []int, error) {
 	}
 	// Retrieve result
 	res := make([]int, 0)
-	counts := make([]int, 0)
+	counts := make([]float64, 0)
 	for rows.Next() {
 		var itemId int
 		var count int
@@ -184,16 +244,16 @@ func (db *Database) GetPopular(n int) ([]int, []int, error) {
 			return nil, nil, err
 		}
 		res = append(res, itemId)
-		counts = append(counts, count)
+		counts = append(counts, float64(count))
 	}
 	return res, counts, nil
 }
 
 // UpdateRecommends puts a top list into the database.
-func (db *Database) UpdateRecommends(userId int, items []int) error {
+func (db *Database) UpdateRecommends(userId int, items []int, ratings []float64) error {
 	buf := bytes.NewBuffer(nil)
 	for i, itemId := range items {
-		buf.WriteString(fmt.Sprintf("%d\t%d\t%d\n", userId, itemId, i))
+		buf.WriteString(fmt.Sprintf("%d\t%d\t%f\n", userId, itemId, ratings[i]))
 	}
 	mysql.RegisterReaderHandler("update_recommends", func() io.Reader {
 		return bytes.NewReader(buf.Bytes())
@@ -204,7 +264,7 @@ func (db *Database) UpdateRecommends(userId int, items []int) error {
 		return err
 	}
 	// Remove old recommendations
-	_, err = tx.Exec("DELETE recommends WHERE user_id = ?", userId)
+	_, err = tx.Exec("DELETE FROM recommends WHERE user_id = ?", userId)
 	if err != nil {
 		return err
 	}

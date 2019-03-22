@@ -1,97 +1,64 @@
 package cmd_serve
 
 import (
-	"bytes"
-	"database/sql"
-	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/zhenghaoz/gorse/app/engine"
 	"github.com/zhenghaoz/gorse/core"
-	"io"
 	"log"
 	"time"
 )
 
-func ModelDaemon(config TomlConfig) {
-	log.Println("This is ModelDaemon")
-	// Connect to database
-	log.Printf("Connect to database (%s)\n", config.Database.Driver)
-	db, err := sql.Open(config.Database.Driver, config.Database.Access)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Query SQL
-	rows, err := db.Query("SELECT COUNT(*) FROM ratings")
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Retrieve result
-	if rows.Next() {
-		var count int64
-		err = rows.Scan(&count)
+func ModelDaemon(config TomlConfig, metaData toml.MetaData) {
+	log.Println("start model daemon")
+	for {
+		// Count ratings
+		count, err := db.RatingCount()
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Println(count)
-	}
-	// Query SQL
-	rows, err = db.Query("SELECT value FROM status WHERE name = 'last_count'")
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Retrieve result
-	if rows.Next() {
-		var count int64
-		err = rows.Scan(&count)
+		log.Printf("current number of ratings: %v\n", count)
+		// Get commit ratings
+		lastCount, err := db.GetMeta(engine.LastCount)
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Println(count)
+		log.Printf("last number of ratings: %v\n", lastCount)
+		// Compare
+		if count-lastCount > config.Recommend.UpdateThreshold {
+			log.Printf("current count (%v) - last count (%v) > threshold (%v), start to update recommends\n",
+				count, lastCount, config.Recommend.UpdateThreshold)
+			UpdateModel(config, metaData)
+		}
+		// Sleep
+		time.Sleep(time.Duration(config.Recommend.CheckPeriod) * time.Minute)
 	}
-	time.Sleep(time.Second)
-	log.Println("This is ModelDaemon")
 }
 
 func UpdateModel(config TomlConfig, metaData toml.MetaData) {
-	// Connect to database
-	log.Printf("Connect to database (%s)\n", config.Database.Driver)
-	db, err := sql.Open(config.Database.Driver, config.Database.Access)
-	if err != nil {
-		log.Fatal(err)
-	}
 	// Load cmd_data from database
-	log.Println("Load cmd_data from database")
-	dataSet, err := core.LoadDataFromSQL(db,
-		"ratings", "user_id", "item_id", "rating")
+	log.Println("load data from database")
+	dataSet, err := db.LoadData()
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Create model
 	params := config.Params.ToParams(metaData)
-	log.Printf("Create model %v with params = %v\n", config.Recommend.Model, params)
+	log.Printf("create model %v with params = %v\n", config.Recommend.Model, params)
 	model := CreateModelFromName(config.Recommend.Model, params)
 	// Training model
-	log.Printf("Training model\n")
+	log.Println("training model")
 	model.Fit(dataSet)
 	// Generate list
-	log.Println("Generate list")
-	buf := bytes.NewBuffer(nil)
+	log.Println("generate list")
 	items := core.Items(dataSet)
 	for denseUserId := 0; denseUserId < dataSet.UserCount(); denseUserId++ {
 		userId := dataSet.UserIdSet.ToSparseId(denseUserId)
 		exclude := dataSet.GetUserRatingsSet(userId)
-		recommendItems := core.Top(items, userId, config.Recommend.CacheSize, exclude, model)
-		for i, itemId := range recommendItems {
-			buf.WriteString(fmt.Sprintf("%d\t%d\t%d\n", userId, itemId, i))
+		recommendItems, ratings := core.Top(items, userId, config.Recommend.CacheSize, exclude, model)
+		if err = db.UpdateRecommends(userId, recommendItems, ratings); err != nil {
+			log.Fatal(err)
 		}
 	}
-	// Save list
-	mysql.RegisterReaderHandler("cmd_data", func() io.Reader {
-		return bytes.NewReader(buf.Bytes())
-	})
-	_, err = db.Exec("LOAD DATA LOCAL INFILE 'Reader::cmd_data' INTO TABLE recommends")
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Println("recommends update-to-date")
 }

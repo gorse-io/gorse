@@ -5,25 +5,27 @@ import (
 )
 
 // Top gets the ranking
-func Top(items map[int]bool, userId int, n int, exclude map[int]float64, model Model) []int {
+func Top(items map[int]bool, userId int, n int, exclude map[int]float64, model Model) ([]int, []float64) {
 	// Get top-n list
 	list := make([]int, 0)
+	ratings := make([]float64, 0)
 	ids := make([]int, 0)
 	indices := make([]int, 0)
-	ratings := make([]float64, 0)
+	negRatings := make([]float64, 0)
 	for itemId := range items {
 		if _, exist := exclude[itemId]; !exist {
 			indices = append(indices, len(indices))
 			ids = append(ids, itemId)
-			ratings = append(ratings, -model.Predict(userId, itemId))
+			negRatings = append(negRatings, -model.Predict(userId, itemId))
 		}
 	}
-	floats.Argsort(ratings, indices)
+	floats.Argsort(negRatings, indices)
 	for i := 0; i < n && i < len(indices); i++ {
 		index := indices[i]
 		list = append(list, ids[index])
+		ratings = append(ratings, -negRatings[index])
 	}
-	return list
+	return list, ratings
 }
 
 // Items gets all items from the test set and the training set.

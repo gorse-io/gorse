@@ -16,21 +16,26 @@ func TestDatabase_Init(t *testing.T) {
 	defer db.Close()
 	// Create expect query
 	mock.ExpectExec(`CREATE TABLE ratings \(
-			user_id int NOT NULL,
-			item_id int NOT NULL,
-			rating int NOT NULL,
+			user_id INT NOT NULL,
+			item_id INT NOT NULL,
+			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index \(user_id,item_id\)
-		\)`).WillReturnResult(sqlmock.NewResult(0, 9))
+		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`CREATE TABLE recommends \(
-			user_id int NOT NULL,
-			item_id int NOT NULL,
-			ranking double NOT NULL,
+			user_id INT NOT NULL,
+			item_id INT NOT NULL,
+			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index \(user_id,item_id\)
-		\)`).WillReturnResult(sqlmock.NewResult(0, 9))
+		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`CREATE TABLE items \(
-			item_id int NOT NULL,
+			item_id INT NOT NULL,
 			UNIQUE KEY unique_index \(item_id\)
-		\)`).WillReturnResult(sqlmock.NewResult(0, 9))
+		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`CREATE TABLE status \(
+			name CHAR\(16\) NOT NULL,
+			value INT NULL,
+			UNIQUE KEY unique_index \(name\)
+		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
 	// Initialize database
 	if err = db.Init(); err != nil {
 		t.Fatal(err)
@@ -42,11 +47,49 @@ func TestDatabase_Init(t *testing.T) {
 }
 
 func TestDatabase_LoadItemsFromCSV(t *testing.T) {
-
+	// Create mock database
+	connection, mock, err := sqlmock.New()
+	db := Database{connection: connection}
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+	// Create expect query
+	mock.ExpectExec(`LOAD DATA INFILE '\?' INTO TABLE items FIELDS TERMINATED BY ',' \(item_id,@dummy\)`).
+		WithArgs("../../example/data/import_items.csv").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	// Get meta data
+	err = db.LoadItemsFromCSV("../../example/data/import_items.csv", ",", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
 }
 
 func TestDatabase_LoadRatingsFromCSV(t *testing.T) {
-
+	// Create mock database
+	connection, mock, err := sqlmock.New()
+	db := Database{connection: connection}
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+	// Create expect query
+	mock.ExpectExec(`LOAD DATA INFILE '\?' INTO TABLE ratings FIELDS TERMINATED BY ',' \(user_id,item_id,rating,@dummy\)`).
+		WithArgs("../../example/data/import_ratings.csv").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	// Get meta data
+	err = db.LoadRatingsFromCSV("../../example/data/import_ratings.csv", ",", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
 }
 
 func TestDatabase_GetMeta(t *testing.T) {
@@ -205,7 +248,7 @@ func TestDatabase_GetPopular(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, []int{1, 2, 3}, recommendations)
-	assert.Equal(t, []int{10, 9, 8}, scores)
+	assert.Equal(t, []float64{10, 9, 8}, scores)
 	_ = recommendations
 	// we make sure that all expectations were met
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -223,14 +266,14 @@ func TestDatabase_UpdateRecommends(t *testing.T) {
 	defer db.Close()
 	// Create expect query
 	mock.ExpectBegin()
-	mock.ExpectExec("DELETE recommends WHERE user_id = ?").
+	mock.ExpectExec("DELETE FROM recommends WHERE user_id = ?").
 		WithArgs(0).
 		WillReturnResult(sqlmock.NewResult(0, 9))
 	mock.ExpectExec(`LOAD DATA LOCAL INFILE 'Reader::update_recommends' INTO TABLE recommends`).
 		WillReturnResult(sqlmock.NewResult(0, 9))
 	mock.ExpectCommit()
 	// Update recommendations
-	if err := db.UpdateRecommends(0, []int{1, 2, 3}); err != nil {
+	if err := db.UpdateRecommends(0, []int{1, 2, 3}, []float64{1, 2, 3}); err != nil {
 		t.Fatal(err)
 	}
 	// we make sure that all expectations were met

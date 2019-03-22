@@ -14,6 +14,6 @@ func TestTop(t *testing.T) {
 		[]float64{1, 9, 2, 8, 3, 7, 4, 6, 5}))
 	exclude := map[int]float64{7: 0, 8: 0}
 	items := Items(testSet)
-	top := Top(items, 0, 5, exclude, model)
+	top, _ := Top(items, 0, 5, exclude, model)
 	assert.Equal(t, []int{1, 3, 5, 6, 4}, top)
 }
