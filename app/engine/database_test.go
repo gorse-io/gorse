@@ -180,10 +180,10 @@ func TestDatabase_GetRecommends(t *testing.T) {
 	expectRows.AddRow(2)
 	expectRows.AddRow(3)
 	mock.ExpectQuery(`SELECT item_id FROM recommends WHERE user_id=\? ORDER BY rating DESC`).
-		WithArgs(0).
+		WithArgs(0, 3).
 		WillReturnRows(expectRows)
 	// Count ratings
-	recommendations, err := db.GetRecommends(0)
+	recommendations, err := db.GetRecommends(0, 3)
 	if err != nil {
 		t.Fatal(err)
 	}

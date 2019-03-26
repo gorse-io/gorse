@@ -184,9 +184,10 @@ func (db *Database) LoadData() (*core.DataSet, error) {
 }
 
 // GetRecommends gets the top list for a user from the database.
-func (db *Database) GetRecommends(userId int) ([]int, error) {
+func (db *Database) GetRecommends(userId int, n int) ([]int, error) {
 	// Query SQL
-	rows, err := db.connection.Query("SELECT item_id FROM recommends WHERE user_id=? ORDER BY rating DESC", userId)
+	rows, err := db.connection.Query(
+		"SELECT item_id FROM recommends WHERE user_id=? ORDER BY rating DESC LIMIT ?", userId, n)
 	if err != nil {
 		return nil, err
 	}
@@ -289,5 +290,9 @@ func (db *Database) PutRating(userId, itemId int, rating float64) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (db *Database) PutItems(items []int) error {
 	return nil
 }

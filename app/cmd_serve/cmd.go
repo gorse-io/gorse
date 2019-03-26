@@ -26,6 +26,7 @@ var CmdServer = &cobra.Command{
 		}
 		// Start model daemon
 		go ModelDaemon(conf, metaData)
+		//go ModelDaemon(conf, metaData)
 		Server(conf.Server)
 	},
 }

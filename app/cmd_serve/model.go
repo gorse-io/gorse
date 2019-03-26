@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// ModelDaemon is watching database and calls UpdateModel when necessary.
 func ModelDaemon(config TomlConfig, metaData toml.MetaData) {
 	log.Println("start model daemon")
 	for {
@@ -35,6 +36,7 @@ func ModelDaemon(config TomlConfig, metaData toml.MetaData) {
 	}
 }
 
+// UpdateModel trains a new model and updates cached recommendations.
 func UpdateModel(config TomlConfig, metaData toml.MetaData) {
 	// Load cmd_data from database
 	log.Println("load data from database")
