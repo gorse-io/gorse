@@ -19,7 +19,7 @@
 ## Installation
 
 ```bash
-go get github.com/zhenghaoz/gorse
+go get github.com/zhenghaoz/gorse/...
 ```
 
 ## Build
