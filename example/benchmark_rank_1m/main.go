@@ -34,18 +34,13 @@ func main() {
 		}),
 	}
 	// Load data
-	data := core.LoadDataFromBuiltIn("ml-100k")
+	data := core.LoadDataFromBuiltIn("ml-1m")
 	// Cross Validation
 	lines := make([][]string, 0)
 	for _, m := range models {
 		start := time.Now()
-		cv := core.CrossValidate(m, data, []core.Evaluator{
-			core.NewPrecision(10),
-			core.NewRecall(10),
-			core.NewMAP(10),
-			core.NewNDCG(10),
-			core.NewMRR(10),
-		}, core.NewKFoldSplitter(5), 0)
+		cv := core.CrossValidate(m, data, core.NewKFoldSplitter(5), 0,
+			core.NewRankEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
 		tm := time.Since(start)
 		line := []string{fmt.Sprint(reflect.TypeOf(m))}
 		for i := range cv {

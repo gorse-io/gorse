@@ -24,6 +24,19 @@ func Parallel(nTask int, nJob int, worker func(begin, end int)) {
 	wg.Wait()
 }
 
+// ParallelFor runs for loop in parallel.
+func ParallelFor(begin, end int, worker func(i int)) {
+	var wg sync.WaitGroup
+	wg.Add(end - begin)
+	for j := begin; j < end; j++ {
+		go func(i int) {
+			worker(i)
+			wg.Done()
+		}(j)
+	}
+	wg.Wait()
+}
+
 // ParallelMean schedules and runs tasks in parallel, then returns the mean of returned values.
 // nJob is the number of executors. worker is the executed function which passed a range of task
 // IDs (begin, end) and returns a double value.

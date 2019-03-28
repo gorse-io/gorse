@@ -59,7 +59,9 @@ func main() {
 	// Fit model
 	svd.Fit(train)
 	// Evaluate model
-	fmt.Printf("RMSE = %.5f\n", core.RMSE(svd, test, nil))
+	scores := core.EvaluateRating(svd, test, core.RMSE, core.MAE)
+	fmt.Printf("RMSE = %.5f\n", scores[0])
+	fmt.Printf("RMSE = %.5f\n", scores[1])
 	// Predict a rating
 	fmt.Printf("Predict(4,8) = %.5f\n", svd.Predict(4, 8))
 }
@@ -97,6 +99,10 @@ All models are tested by 5-fold cross validation on a PC with Intel(R) Core(TM) 
 | WRMF    | **0.34727** | **0.23665** | **0.14550** | **0.41614** | **0.65439** | 0:00:14 |
 
 See detail in [wiki](https://github.com/zhenghaoz/gorse/wiki/Benchmark).
+
+## Contributors
+
+[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/0)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/0)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/1)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/1)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/2)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/2)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/3)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/3)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/4)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/4)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/5)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/5)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/6)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/6)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/7)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/7)
 
 ## Acknowledge
 

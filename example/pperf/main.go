@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	f, err := os.Create("cpuperf")
+	f, err := os.Create("cpu_perf")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func main() {
 	}
 	defer pprof.StopCPUProfile()
 
-	data := core.LoadDataFromBuiltIn("ml-100k")
+	data := core.LoadDataFromBuiltIn("ml-1m")
 	svd := model.NewSVD(base.Params{
 		base.Optimizer:  base.BPR,
 		base.NFactors:   10,
@@ -30,17 +30,12 @@ func main() {
 		base.InitMean:   0,
 		base.InitStdDev: 0.001,
 	})
-	out := core.CrossValidate(svd, data, []core.Evaluator{
-		core.NewPrecision(10),
-		core.NewRecall(10),
-		core.NewMAP(10),
-		core.NewNDCG(10),
-		core.NewMRR(10),
-	}, core.NewKFoldSplitter(5), 0)
+	out := core.CrossValidate(svd, data, core.NewKFoldSplitter(5), 0,
+		core.NewRankEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
 	fmt.Println(out)
 
 	// Save memory profile
-	f, err = os.Create("memprof")
+	f, err = os.Create("mem_prof")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-item_id,user_id,rating
+use_id,item_id,rating
 0,0,0
 1,2,3
 2,4,6

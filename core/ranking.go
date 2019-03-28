@@ -5,25 +5,37 @@ import (
 )
 
 // Top gets the ranking
-func Top(test *DataSet, denseUserId int, n int, exclude map[int]float64, model Model) []int {
-	userId := test.UserIdSet.ToSparseId(denseUserId)
+func Top(items map[int]bool, userId int, n int, exclude map[int]float64, model Model) ([]int, []float64) {
 	// Get top-n list
 	list := make([]int, 0)
+	ratings := make([]float64, 0)
 	ids := make([]int, 0)
 	indices := make([]int, 0)
-	ratings := make([]float64, 0)
-	for i := 0; i < test.ItemCount(); i++ {
-		itemId := test.ItemIdSet.ToSparseId(i)
+	negRatings := make([]float64, 0)
+	for itemId := range items {
 		if _, exist := exclude[itemId]; !exist {
-			indices = append(indices, i)
+			indices = append(indices, len(indices))
 			ids = append(ids, itemId)
-			ratings = append(ratings, -model.Predict(userId, itemId))
+			negRatings = append(negRatings, -model.Predict(userId, itemId))
 		}
 	}
-	floats.Argsort(ratings, indices)
+	floats.Argsort(negRatings, indices)
 	for i := 0; i < n && i < len(indices); i++ {
 		index := indices[i]
 		list = append(list, ids[index])
+		ratings = append(ratings, -negRatings[index])
 	}
-	return list
+	return list, ratings
+}
+
+// Items gets all items from the test set and the training set.
+func Items(dataSet ...*DataSet) map[int]bool {
+	items := make(map[int]bool)
+	for _, data := range dataSet {
+		for i := 0; i < data.ItemCount(); i++ {
+			itemId := data.ItemIdSet.ToSparseId(i)
+			items[itemId] = true
+		}
+	}
+	return items
 }

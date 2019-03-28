@@ -73,19 +73,21 @@ func (so *SlopeOne) Fit(trainSet *core.DataSet, setters ...core.RuntimeOption) {
 	so.Dev = base.NewMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	// Compute deviations
 	itemRatings := trainSet.DenseItemRatings
-	base.Parallel(len(itemRatings), so.fitOptions.NJobs, func(begin, end int) {
-		for i := begin; i < end; i++ {
-			for j := 0; j < i; j++ {
-				count, sum := 0.0, 0.0
-				// Find common user's ratings
-				itemRatings[i].ForIntersection(itemRatings[j], func(index int, a float64, b float64) {
-					sum += a - b
-					count++
-				})
-				if count > 0 {
-					so.Dev[i][j] = sum / count
-					so.Dev[j][i] = -so.Dev[i][j]
-				}
+	for i := range itemRatings {
+		// Call SortIndex() to make sure similarity() reentrant
+		itemRatings[i].SortIndex()
+	}
+	base.ParallelFor(0, len(itemRatings), func(i int) {
+		for j := 0; j < i; j++ {
+			count, sum := 0.0, 0.0
+			// Find common user's ratings
+			itemRatings[i].ForIntersection(itemRatings[j], func(index int, a float64, b float64) {
+				sum += a - b
+				count++
+			})
+			if count > 0 {
+				so.Dev[i][j] = sum / count
+				so.Dev[j][i] = -so.Dev[i][j]
 			}
 		}
 	})

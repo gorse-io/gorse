@@ -80,7 +80,7 @@ func TestAUC(t *testing.T) {
 func TestRMSE(t *testing.T) {
 	a := []float64{0, 0, 0}
 	b := []float64{-2.0, 0, 2.0}
-	if math.Abs(rootMeanSquareError(a, b)-1.63299) > evalEpsilon {
+	if math.Abs(RMSE(a, b)-1.63299) > evalEpsilon {
 		t.Fail()
 	}
 }
@@ -88,7 +88,7 @@ func TestRMSE(t *testing.T) {
 func TestMAE(t *testing.T) {
 	a := []float64{0, 0, 0}
 	b := []float64{-2.0, 0, 2.0}
-	if math.Abs(meanAbsoluteError(a, b)-1.33333) > evalEpsilon {
+	if math.Abs(MAE(a, b)-1.33333) > evalEpsilon {
 		t.Fail()
 	}
 }
@@ -96,29 +96,29 @@ func TestMAE(t *testing.T) {
 func TestNDCG(t *testing.T) {
 	targetSet := map[int]float64{1: 0, 3: 0, 5: 0, 7: 0}
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, nDCG(targetSet, rankList), 0.6766372989, evalEpsilon)
+	EqualEpsilon(t, NDCG(targetSet, rankList), 0.6766372989, evalEpsilon)
 }
 
 func TestPrecision(t *testing.T) {
 	targetSet := map[int]float64{1: 0, 3: 0, 5: 0, 7: 0}
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, precision(targetSet, rankList), 0.4, evalEpsilon)
+	EqualEpsilon(t, Precision(targetSet, rankList), 0.4, evalEpsilon)
 }
 
 func TestRecall(t *testing.T) {
 	targetSet := map[int]float64{1: 0, 3: 0, 15: 0, 17: 0, 19: 0}
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, recall(targetSet, rankList), 0.4, evalEpsilon)
+	EqualEpsilon(t, Recall(targetSet, rankList), 0.4, evalEpsilon)
 }
 
 func TestAP(t *testing.T) {
 	targetSet := map[int]float64{1: 0, 3: 0, 7: 0, 9: 0}
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, averagePrecision(targetSet, rankList), 0.44375, evalEpsilon)
+	EqualEpsilon(t, MAP(targetSet, rankList), 0.44375, evalEpsilon)
 }
 
 func TestRR(t *testing.T) {
 	targetSet := map[int]float64{3: 0}
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, reciprocalRank(targetSet, rankList), 0.25, evalEpsilon)
+	EqualEpsilon(t, MRR(targetSet, rankList), 0.25, evalEpsilon)
 }

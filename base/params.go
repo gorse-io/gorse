@@ -36,28 +36,25 @@ const (
 
 /* ParamString */
 
-// ParamString is the string type of hyper-parameter values.
-type ParamString string
-
 // Predefined values for hyper-parameter Type.
 const (
-	Basic    ParamString = "basic"    // Basic KNN
-	Centered ParamString = "Centered" // KNN with centered ratings
-	ZScore   ParamString = "ZScore"   // KNN with standardized ratings
-	Baseline ParamString = "Baseline" // KNN with baseline ratings
+	Basic    string = "basic"    // Basic KNN
+	Centered string = "Centered" // KNN with centered ratings
+	ZScore   string = "ZScore"   // KNN with standardized ratings
+	Baseline string = "Baseline" // KNN with baseline ratings
 )
 
 // Predefined values for hyper-parameter Optimizer.
 const (
-	SGD ParamString = "SGD" // Fit model (MF) with stochastic gradient descent.
-	BPR ParamString = "BPR" // Fit model (MF) with bayesian personal ranking.
+	SGD string = "sgd" // Fit model (MF) with stochastic gradient descent.
+	BPR string = "bpr" // Fit model (MF) with bayesian personal ranking.
 )
 
 // Predefined values for hyper-parameter Similarity.
 const (
-	Pearson ParamString = "Pearson" // Pearson similarity
-	Cosine  ParamString = "Cosine"  // Cosine similarity
-	MSD     ParamString = "MSD"     // MSD similarity
+	Pearson string = "Pearson" // Pearson similarity
+	Cosine  string = "Cosine"  // Cosine similarity
+	MSD     string = "MSD"     // MSD similarity
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -139,13 +136,13 @@ func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 }
 
 // GetString gets a string parameter. Returns _default if not exists or type doesn't match.
-func (parameters Params) GetString(name ParamName, _default ParamString) ParamString {
+func (parameters Params) GetString(name ParamName, _default string) string {
 	if val, exist := parameters[name]; exist {
 		switch val.(type) {
-		case ParamString:
-			return val.(ParamString)
+		case string:
+			return val.(string)
 		default:
-			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			log.Printf("Expect %v to be string, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default

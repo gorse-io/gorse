@@ -25,7 +25,7 @@ type KNN struct {
 	StdDev       []float64 // KNN with Z Score: user (item) standard deviation
 	Bias         []float64 // KNN Baseline: Bias
 	// Hyper-parameters
-	_type      base.ParamString
+	_type      string
 	userBased  bool
 	similarity base.FuncSimilarity
 	k          int

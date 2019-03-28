@@ -1,0 +1,24 @@
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[database]
+driver = "mysql"
+access = "gorse:password@/gorse"
+
+[recommend]
+model = "svd"
+cache_size = 100
+cold_user_model = "item_pop"
+update_threshold = 10
+check_period = 1
+explore_prop = 0.1
+
+[params]
+optimizer = "bpr"
+n_factors = 10
+reg = 0.01
+lr = 0.05
+n_epochs = 100
+init_mean = 0.0
+init_std = 0.001
