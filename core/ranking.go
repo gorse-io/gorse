@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/floats"
 )
 
@@ -38,4 +39,20 @@ func Items(dataSet ...*DataSet) map[int]bool {
 		}
 	}
 	return items
+}
+
+// Neighbors finds N nearest neighbors of a item. It returns a unordered slice of items (sparse ID) and
+// corresponding similarities.
+func Neighbors(dataSet *DataSet, itemId int, n int, similarity base.FuncSimilarity) ([]int, []float64) {
+	// Convert sparse ID to dense ID
+	denseItemId := dataSet.ItemIdSet.ToDenseId(itemId)
+	// Find nearest neighbors
+	neighbors := base.NewKNNHeap(n)
+	for otherDenseItemId, ratings := range dataSet.DenseItemRatings {
+		if otherDenseItemId != denseItemId {
+			otherId := dataSet.ItemIdSet.ToSparseId(otherDenseItemId)
+			neighbors.Add(otherId, 0, similarity(ratings, dataSet.DenseItemRatings[denseItemId]))
+		}
+	}
+	return neighbors.Indices, neighbors.Similarities
 }
