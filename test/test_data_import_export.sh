@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
-echo '=== RUN   Test Data Import/Export'
+
+# Parse arguments
+if test $# -ne 3; then
+    echo '--- FAIL  Usage:' $0 '[user] [pass] [database]'
+    exit 1
+fi
 
 LOCATION=$(dirname "$0")
+USER=$1
+PASS=$2
+DATABASE=$3
+
+echo '=== RUN   Test Data Import/Export'
 
 # Build executable
 go build -o ${LOCATION}/main ${LOCATION}/../app/main.go
