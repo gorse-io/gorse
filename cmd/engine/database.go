@@ -40,41 +40,46 @@ func (db *Database) Close() error {
 // 2. items: all items will be recommended to users;
 // 3. recommends: recommended items for each user.
 func (db *Database) Init() error {
-	// Create ratings table
-	_, err := db.connection.Exec(
+	queries := []string{
+		// create table for ratings
 		`CREATE TABLE ratings (
 			user_id INT NOT NULL,
 			item_id INT NOT NULL,
 			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index (user_id,item_id)
-		)`)
-	if err != nil {
-		return err
-	}
-	// Create recommends table
-	_, err = db.connection.Exec(
+		)`,
+		// create table for items
+		`CREATE TABLE items (
+			item_id INT NOT NULL UNIQUE
+		)`,
+		// create table for status
+		`CREATE TABLE status (
+			name CHAR(16) NOT NULL UNIQUE,
+			value INT NOT NULL
+		)`,
+		// create table for recommends
 		`CREATE TABLE recommends (
 			user_id INT NOT NULL,
 			item_id INT NOT NULL,
 			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index (user_id,item_id)
-		)`)
-	if err != nil {
-		return err
-	}
-	// Create items table
-	_, err = db.connection.Exec(
-		`CREATE TABLE items (
+		)`,
+		// create table for neighbors
+		`CREATE TABLE neighbors (
+			user_id INT NOT NULL,
 			item_id INT NOT NULL,
-			UNIQUE KEY unique_index (item_id)
-		)`)
-	// Create status table
-	_, err = db.connection.Exec(`CREATE TABLE status (
-			name CHAR(16) NOT NULL,
-			value INT NULL,
-			UNIQUE KEY unique_index (name)
-		)`)
-	return err
+			similarity FLOAT NOT NULL,
+			UNIQUE KEY unique_index (user_id,item_id)
+		)`,
+	}
+	// Create tables
+	for _, query := range queries {
+		_, err := db.connection.Exec(query)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // LoadItemsFromCSV loads items from CSV file.
@@ -96,10 +101,11 @@ func (db *Database) LoadItemsFromCSV(fileName string, sep string, header bool) e
 	for i := 1; i < len(fields); i++ {
 		columns = append(columns, "@dummy")
 	}
-	query := fmt.Sprintf("LOAD DATA INFILE '?' INTO TABLE items FIELDS TERMINATED BY '%s' (%s)",
-		sep, strings.Join(columns, ","))
+	mysql.RegisterLocalFile(fileName)
+	query := fmt.Sprintf("LOAD DATA LOCAL INFILE '%s' INTO TABLE items FIELDS TERMINATED BY '%s' (%s)",
+		fileName, sep, strings.Join(columns, ","))
 	// Import CSV
-	_, err = db.connection.Exec(query, fileName)
+	_, err = db.connection.Exec(query)
 	return err
 }
 
@@ -122,10 +128,16 @@ func (db *Database) LoadRatingsFromCSV(fileName string, sep string, header bool)
 	for i := 3; i < len(fields); i++ {
 		columns = append(columns, "@dummy")
 	}
-	query := fmt.Sprintf("LOAD DATA INFILE '?' INTO TABLE ratings FIELDS TERMINATED BY '%s' (%s)",
-		sep, strings.Join(columns, ","))
+	mysql.RegisterLocalFile(fileName)
+	query := fmt.Sprintf("LOAD DATA LOCAL INFILE '%s' INTO TABLE ratings FIELDS TERMINATED BY '%s' (%s)",
+		fileName, sep, strings.Join(columns, ","))
 	// Import CSV
-	_, err = db.connection.Exec(query, fileName)
+	_, err = db.connection.Exec(query)
+	if err != nil {
+		return err
+	}
+	// Add items
+	_, err = db.connection.Exec("INSERT INTO items SELECT DISTINCT item_id FROM ratings")
 	return err
 }
 
@@ -250,8 +262,8 @@ func (db *Database) GetPopular(n int) ([]int, []float64, error) {
 	return res, counts, nil
 }
 
-// UpdateRecommends puts a top list into the database.
-func (db *Database) UpdateRecommends(userId int, items []int, ratings []float64) error {
+// PutRecommends puts a top list into the database. It removes old recommendations as well.
+func (db *Database) PutRecommends(userId int, items []int, ratings []float64) error {
 	buf := bytes.NewBuffer(nil)
 	for i, itemId := range items {
 		buf.WriteString(fmt.Sprintf("%d\t%d\t%f\n", userId, itemId, ratings[i]))
@@ -293,6 +305,65 @@ func (db *Database) PutRating(userId, itemId int, rating float64) error {
 	return nil
 }
 
+// PutItems put items into database.
 func (db *Database) PutItems(items []int) error {
-	return nil
+	buf := bytes.NewBuffer(nil)
+	for _, itemId := range items {
+		buf.WriteString(fmt.Sprintf("%d\n", itemId))
+	}
+	mysql.RegisterReaderHandler("put_items", func() io.Reader {
+		return bytes.NewReader(buf.Bytes())
+	})
+	// Update new recommendations
+	_, err := db.connection.Exec("LOAD DATA LOCAL INFILE 'Reader::put_items' INTO TABLE items")
+	return err
+}
+
+// PutNeighbors put neighbors of a item into database. It removes old neighbors as well.
+func (db *Database) PutNeighbors(itemId int, neighbors []int, similarity []float64) error {
+	buf := bytes.NewBuffer(nil)
+	for i, neighborId := range neighbors {
+		buf.WriteString(fmt.Sprintf("%d\t%d\t%f\n", itemId, neighborId, similarity[i]))
+	}
+	mysql.RegisterReaderHandler("update_neighbors", func() io.Reader {
+		return bytes.NewReader(buf.Bytes())
+	})
+	// Begin a transaction
+	tx, err := db.connection.Begin()
+	if err != nil {
+		return err
+	}
+	// Remove old recommendations
+	_, err = tx.Exec("DELETE FROM neighbors WHERE item_id = ?", itemId)
+	if err != nil {
+		return err
+	}
+	// Update new recommendations
+	_, err = tx.Exec("LOAD DATA LOCAL INFILE 'Reader::update_neighbors' INTO TABLE neighbors")
+	if err != nil {
+		return err
+	}
+	// Commit a transaction
+	return tx.Commit()
+}
+
+// GetNeighbors gets neighbors of a item from database.
+func (db *Database) GetNeighbors(itemId, n int) ([]int, error) {
+	// Query SQL
+	rows, err := db.connection.Query(
+		"SELECT neighbor_id FROM neighbors WHERE item_id=? ORDER BY similarity DESC LIMIT ?", itemId, n)
+	if err != nil {
+		return nil, err
+	}
+	// Retrieve result
+	res := make([]int, 0)
+	for rows.Next() {
+		var itemId int
+		err = rows.Scan(&itemId)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, itemId)
+	}
+	return res, nil
 }

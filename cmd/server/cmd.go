@@ -1,10 +1,10 @@
-package cmd_serve
+package serve
 
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/app/engine"
+	"github.com/zhenghaoz/gorse/cmd/engine"
 	"log"
 )
 

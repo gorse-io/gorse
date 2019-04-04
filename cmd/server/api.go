@@ -1,4 +1,4 @@
-package cmd_serve
+package serve
 
 import (
 	"fmt"
@@ -27,6 +27,11 @@ func Server(config ServeConfig) {
 	ws.Route(ws.GET("/random").To(GetRandom).
 		Doc("get random items").
 		Param(ws.FormParameter("number", "the number of random items").DataType("int")))
+	// Neighbors
+	ws.Route(ws.GET("/neighbors/{item-id}").To(GetNeighbors).
+		Doc("get neighbors of a item").
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
+		Param(ws.FormParameter("number", "the number of neighbors").DataType("int")))
 	// Add items
 	ws.Route(ws.PUT("/items").To(PutItems)).
 		Doc("put items")
@@ -73,6 +78,30 @@ func GetRandom(request *restful.Request, response *restful.Response) {
 	}
 	// Get random items
 	items, err := db.GetRandom(number)
+	if err != nil {
+		Failed(response, err)
+		return
+	}
+	// Send result
+	Json(response, QueryResponse{Items: items})
+}
+
+// GetNeighbors gets neighbors of a item from database.
+func GetNeighbors(request *restful.Request, response *restful.Response) {
+	// Get item id
+	paramUserId := request.PathParameter("item-id")
+	itemId, err := strconv.Atoi(paramUserId)
+	if err != nil {
+		Failed(response, err)
+	}
+	// Get the number
+	paramNumber := request.QueryParameter("number")
+	number, err := strconv.Atoi(paramNumber)
+	if err != nil {
+		Failed(response, err)
+	}
+	// Get recommended items
+	items, err := db.GetNeighbors(itemId, number)
 	if err != nil {
 		Failed(response, err)
 		return

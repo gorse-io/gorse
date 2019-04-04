@@ -1,4 +1,4 @@
-package cmd_serve
+package serve
 
 import (
 	"github.com/BurntSushi/toml"

@@ -1,9 +1,9 @@
-package cmd_serve
+package serve
 
 import (
 	"github.com/BurntSushi/toml"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/zhenghaoz/gorse/app/engine"
+	"github.com/zhenghaoz/gorse/cmd/engine"
 	"github.com/zhenghaoz/gorse/core"
 	"log"
 	"time"
@@ -58,7 +58,7 @@ func UpdateModel(config TomlConfig, metaData toml.MetaData) {
 		userId := dataSet.UserIdSet.ToSparseId(denseUserId)
 		exclude := dataSet.GetUserRatingsSet(userId)
 		recommendItems, ratings := core.Top(items, userId, config.Recommend.CacheSize, exclude, model)
-		if err = db.UpdateRecommends(userId, recommendItems, ratings); err != nil {
+		if err = db.PutRecommends(userId, recommendItems, ratings); err != nil {
 			log.Fatal(err)
 		}
 	}

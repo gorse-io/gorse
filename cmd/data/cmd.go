@@ -1,8 +1,8 @@
-package cmd_data
+package data
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/app/engine"
+	"github.com/zhenghaoz/gorse/cmd/engine"
 	"log"
 )
 
@@ -19,7 +19,7 @@ var CmdData = &cobra.Command{
 			log.Fatal(err)
 		}
 		// Import ratings
-		if cmd.PersistentFlags().Changed("import-ratings") {
+		if cmd.PersistentFlags().Changed("import-ratings-csv") {
 			name, _ := cmd.PersistentFlags().GetString("import-ratings-csv")
 			sep, _ := cmd.PersistentFlags().GetString("ratings-csv-sep")
 			header, _ := cmd.PersistentFlags().GetBool("ratings-csv-header")
@@ -30,7 +30,7 @@ var CmdData = &cobra.Command{
 			log.Println("Ratings are imported successfully!")
 		}
 		// Import items
-		if cmd.PersistentFlags().Changed("import-items") {
+		if cmd.PersistentFlags().Changed("import-items-csv") {
 			name, _ := cmd.PersistentFlags().GetString("import-items-csv")
 			sep, _ := cmd.PersistentFlags().GetString("items-csv-sep")
 			header, _ := cmd.PersistentFlags().GetBool("items-csv-header")

@@ -1,7 +1,6 @@
-package cmd_cv
+package cv
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -9,6 +8,7 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
 	"log"
+	"os"
 	"strings"
 )
 
@@ -135,8 +135,7 @@ var CmdTest = &cobra.Command{
 		for i := 1; i <= k; i++ {
 			header[i] = fmt.Sprintf("Fold %d", i)
 		}
-		buf := bytes.NewBuffer(nil)
-		table := tablewriter.NewWriter(buf)
+		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader(header)
 		for i, v := range out {
 			row := make([]string, k+2)
@@ -149,7 +148,7 @@ var CmdTest = &cobra.Command{
 			table.Append(row)
 		}
 		table.Render()
-		log.Printf("Complete cross validation:\n%v", buf.String())
+		log.Printf("Complete cross validation:\n")
 	},
 }
 

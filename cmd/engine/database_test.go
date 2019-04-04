@@ -273,7 +273,7 @@ func TestDatabase_UpdateRecommends(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 9))
 	mock.ExpectCommit()
 	// Update recommendations
-	if err := db.UpdateRecommends(0, []int{1, 2, 3}, []float64{1, 2, 3}); err != nil {
+	if err := db.PutRecommends(0, []int{1, 2, 3}, []float64{1, 2, 3}); err != nil {
 		t.Fatal(err)
 	}
 	// we make sure that all expectations were met
