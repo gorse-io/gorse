@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set -e
+
 echo '=== RUN   Test Cross Validation'
 
 # Configuration
@@ -31,8 +33,8 @@ if [[ $(echo "${RESULT[1]}-0.71508<${EPSILON}" | bc) != 1 ]]; then
     exit 1
 fi
 
-# Print success
-echo '--- PASS  Test Cross Validation'
-
 # Remove executable
 rm ${LOCATION}/main
+
+# Print success
+echo '--- PASS  Test Cross Validation'

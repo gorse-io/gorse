@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # Parse arguments
 if test $# -ne 3; then
@@ -11,7 +12,7 @@ USER=$1
 PASS=$2
 DATABASE=$3
 
-go test -v ${LOCATION}/..
+#go test -v ${LOCATION}/../...
 
 bash ${LOCATION}/test_cross_validation.sh
 bash ${LOCATION}/test_initialization.sh ${USER} ${PASS} ${DATABASE}
