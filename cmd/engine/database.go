@@ -176,8 +176,8 @@ func (db *Database) SetMeta(name string, val int) error {
 	return nil
 }
 
-// RatingCount gets the number of ratings at current.
-func (db *Database) RatingCount() (count int, err error) {
+// CountRatings gets the current number of ratings.
+func (db *Database) CountRatings() (count int, err error) {
 	rows, err := db.connection.Query("SELECT COUNT(*) FROM ratings")
 	if err != nil {
 		return
@@ -191,6 +191,23 @@ func (db *Database) RatingCount() (count int, err error) {
 		return
 	}
 	panic("SELECT COUNT(*) FROM ratings failed")
+}
+
+// CountItems gets the current number of items.
+func (db *Database) CountItems() (count int, err error) {
+	rows, err := db.connection.Query("SELECT COUNT(*) FROM items")
+	if err != nil {
+		return
+	}
+	// Retrieve result
+	if rows.Next() {
+		err = rows.Scan(&count)
+		if err != nil {
+			return
+		}
+		return
+	}
+	panic("SELECT COUNT(*) FROM items failed")
 }
 
 func (db *Database) LoadData() (*core.DataSet, error) {

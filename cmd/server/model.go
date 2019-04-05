@@ -14,7 +14,7 @@ func Watcher(config TomlConfig, metaData toml.MetaData) {
 	log.Println("start model daemon")
 	for {
 		// Count ratings
-		count, err := db.RatingCount()
+		count, err := db.CountRatings()
 		if err != nil {
 			log.Fatal(err)
 		}

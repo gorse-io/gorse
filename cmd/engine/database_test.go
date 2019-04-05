@@ -173,7 +173,7 @@ func TestDatabase_RatingCount(t *testing.T) {
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM ratings`).
 		WillReturnRows(expectRows)
 	// Count ratings
-	count, err := db.RatingCount()
+	count, err := db.CountRatings()
 	if err != nil {
 		t.Fatal(err)
 	}

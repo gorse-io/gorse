@@ -157,8 +157,9 @@ func GetRecommends(request *restful.Request, response *restful.Response) {
 
 // ExecResponse capsules result of execution.
 type ExecResponse struct {
-	Failed    bool // `false` for success
-	LastCount int  // last number of ratings
+	Failed      bool // `false` for success
+	BeforeCount int  // the number of elements before execution
+	AfterCount  int  // the number of elements after execution
 }
 
 // PutItems puts items
@@ -167,13 +168,24 @@ func PutItems(request *restful.Request, response *restful.Response) {
 	items := new([]int)
 	if err := request.ReadEntity(items); err != nil {
 		Failed(response, err)
+		return
 	}
-	err := db.PutItems(*items)
+	beforeCount, err := db.CountItems()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	Json(response, ExecResponse{})
+	err = db.PutItems(*items)
+	if err != nil {
+		Failed(response, err)
+		return
+	}
+	afterCount, err := db.CountItems()
+	if err != nil {
+		Failed(response, err)
+		return
+	}
+	Json(response, ExecResponse{BeforeCount: beforeCount, AfterCount: afterCount})
 }
 
 // PutRatings puts new ratings into database.
@@ -184,12 +196,22 @@ func PutRatings(request *restful.Request, response *restful.Response) {
 		Failed(response, err)
 		return
 	}
-	err := db.PutRatings(*ratings)
+	beforeCount, err := db.CountRatings()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	Json(response, ExecResponse{})
+	err = db.PutRatings(*ratings)
+	if err != nil {
+		Failed(response, err)
+		return
+	}
+	afterCount, err := db.CountRatings()
+	if err != nil {
+		Failed(response, err)
+		return
+	}
+	Json(response, ExecResponse{BeforeCount: beforeCount, AfterCount: afterCount})
 }
 
 // ErrorResponse capsules the error message.
