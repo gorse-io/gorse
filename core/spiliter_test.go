@@ -2,7 +2,6 @@ package core
 
 import (
 	"github.com/stretchr/testify/assert"
-	"math"
 	"testing"
 )
 
@@ -38,18 +37,4 @@ func TestUserLOOSplitter(t *testing.T) {
 	for _, ratings := range tests[0].DenseUserRatings {
 		assert.Equal(t, 1, ratings.Len())
 	}
-}
-
-func TestUserKeepNSplitter(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-100k")
-	keep := NewUserKeepNSplitter(1, 3, 0.2)
-	trains, _ := keep(data, 0)
-	nCount := 0
-	for _, ratings := range trains[0].DenseUserRatings {
-		if ratings.Len() == 3 {
-			nCount++
-		}
-	}
-	assert.True(t,
-		math.Abs(float64(data.UserCount())*0.2-float64(nCount)) < 1)
 }
