@@ -1,4 +1,4 @@
-package init
+package initdb
 
 import (
 	"github.com/spf13/cobra"

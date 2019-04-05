@@ -42,34 +42,36 @@ func (db *Database) Close() error {
 func (db *Database) Init() error {
 	queries := []string{
 		// create table for ratings
-		`CREATE TABLE ratings (
+		`CREATE TABLE IF NOT EXISTS ratings (
 			user_id INT NOT NULL,
 			item_id INT NOT NULL,
 			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index (user_id,item_id)
 		)`,
 		// create table for items
-		`CREATE TABLE items (
+		`CREATE TABLE IF NOT EXISTS items (
 			item_id INT NOT NULL UNIQUE
 		)`,
 		// create table for status
-		`CREATE TABLE status (
+		`CREATE TABLE IF NOT EXISTS status (
 			name CHAR(16) NOT NULL UNIQUE,
 			value INT NOT NULL
 		)`,
+		// insert initial values
+		`INSERT IGNORE INTO status VALUES ('last_count', 0);`,
 		// create table for recommends
-		`CREATE TABLE recommends (
+		`CREATE TABLE IF NOT EXISTS recommends (
 			user_id INT NOT NULL,
 			item_id INT NOT NULL,
 			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index (user_id,item_id)
 		)`,
 		// create table for neighbors
-		`CREATE TABLE neighbors (
-			user_id INT NOT NULL,
+		`CREATE TABLE IF NOT EXISTS neighbors (
 			item_id INT NOT NULL,
+			neighbor_id INT NOT NULL,
 			similarity FLOAT NOT NULL,
-			UNIQUE KEY unique_index (user_id,item_id)
+			UNIQUE KEY unique_index (item_id,neighbor_id)
 		)`,
 	}
 	// Create tables
@@ -137,7 +139,7 @@ func (db *Database) LoadRatingsFromCSV(fileName string, sep string, header bool)
 		return err
 	}
 	// Add items
-	_, err = db.connection.Exec("INSERT INTO items SELECT DISTINCT item_id FROM ratings")
+	_, err = db.connection.Exec("INSERT IGNORE INTO items SELECT DISTINCT item_id FROM ratings")
 	return err
 }
 
@@ -290,19 +292,29 @@ func (db *Database) PutRecommends(userId int, items []int, ratings []float64) er
 	return tx.Commit()
 }
 
-// PutRating puts a rating into the database.
-func (db *Database) PutRating(userId, itemId int, rating float64) error {
-	// Prepare SQL
-	statement, err := db.connection.Prepare("INSERT INTO ratings VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE rating = VALUES( rating )")
-	if err != nil {
-		return err
+// RatingTuple is the tuple of a rating record.
+type RatingTuple struct {
+	UserId int     // the identifier of the user
+	ItemId int     // the identifier of the item
+	Rating float64 // the rating
+}
+
+// PutRatings puts ratings into the database.
+func (db *Database) PutRatings(ratings []RatingTuple) error {
+	buf := bytes.NewBuffer(nil)
+	for _, rating := range ratings {
+		buf.WriteString(fmt.Sprintf("%d\t%d\t%f\n", rating.UserId, rating.ItemId, rating.Rating))
 	}
-	// Execute SQL
-	_, err = statement.Exec(userId, itemId, rating)
+	mysql.RegisterReaderHandler("put_ratings", func() io.Reader {
+		return bytes.NewReader(buf.Bytes())
+	})
+	_, err := db.connection.Exec("LOAD DATA LOCAL INFILE 'Reader::put_ratings' INTO TABLE ratings")
 	if err != nil {
-		return err
+		return nil
 	}
-	return nil
+	// Add items
+	_, err = db.connection.Exec("INSERT IGNORE INTO items SELECT DISTINCT item_id FROM ratings")
+	return err
 }
 
 // PutItems put items into database.
@@ -314,7 +326,6 @@ func (db *Database) PutItems(items []int) error {
 	mysql.RegisterReaderHandler("put_items", func() io.Reader {
 		return bytes.NewReader(buf.Bytes())
 	})
-	// Update new recommendations
 	_, err := db.connection.Exec("LOAD DATA LOCAL INFILE 'Reader::put_items' INTO TABLE items")
 	return err
 }

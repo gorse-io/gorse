@@ -12,8 +12,6 @@ USER=$1
 PASS=$2
 DATABASE=$3
 
-#go test -v ${LOCATION}/../...
-
 bash ${LOCATION}/test_cross_validation.sh
 bash ${LOCATION}/test_initialization.sh ${USER} ${PASS} ${DATABASE}
 bash ${LOCATION}/test_data_import_export.sh ${USER} ${PASS} ${DATABASE}

@@ -3,19 +3,20 @@ package serve
 import (
 	"fmt"
 	"github.com/emicklei/go-restful"
+	"github.com/zhenghaoz/gorse/cmd/engine"
 	"log"
 	"net/http"
 	"strconv"
 )
 
 // Server receives requests from clients and sent responses back.
-func Server(config ServeConfig) {
+func Server(config ServerConfig) {
 	// Create a web service
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	// Get the recommendation list
 	ws.Route(ws.GET("/recommends/{user-id}").
-		To(GetRecommendations).
+		To(GetRecommends).
 		Doc("get the top list for a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
 		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")))
@@ -56,7 +57,12 @@ func GetPopular(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		Failed(response, err)
+		if len(paramNumber) == 0 {
+			number = 10
+		} else {
+			Failed(response, err)
+			return
+		}
 	}
 	// Get the popular list
 	items, _, err := db.GetPopular(number)
@@ -74,7 +80,12 @@ func GetRandom(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		Failed(response, err)
+		if len(paramNumber) == 0 {
+			number = 10
+		} else {
+			Failed(response, err)
+			return
+		}
 	}
 	// Get random items
 	items, err := db.GetRandom(number)
@@ -98,7 +109,12 @@ func GetNeighbors(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		Failed(response, err)
+		if len(paramNumber) == 0 {
+			number = 10
+		} else {
+			Failed(response, err)
+			return
+		}
 	}
 	// Get recommended items
 	items, err := db.GetNeighbors(itemId, number)
@@ -110,8 +126,8 @@ func GetNeighbors(request *restful.Request, response *restful.Response) {
 	Json(response, QueryResponse{Items: items})
 }
 
-// GetRecommendations gets cached recommended items from database.
-func GetRecommendations(request *restful.Request, response *restful.Response) {
+// GetRecommends gets cached recommended items from database.
+func GetRecommends(request *restful.Request, response *restful.Response) {
 	// Get user id
 	paramUserId := request.PathParameter("user-id")
 	userId, err := strconv.Atoi(paramUserId)
@@ -122,7 +138,12 @@ func GetRecommendations(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		Failed(response, err)
+		if len(paramNumber) == 0 {
+			number = 10
+		} else {
+			Failed(response, err)
+			return
+		}
 	}
 	// Get recommended items
 	items, err := db.GetRecommends(userId, number)
@@ -136,7 +157,8 @@ func GetRecommendations(request *restful.Request, response *restful.Response) {
 
 // ExecResponse capsules result of execution.
 type ExecResponse struct {
-	Failed bool // `false` for success
+	Failed    bool // `false` for success
+	LastCount int  // last number of ratings
 }
 
 // PutItems puts items
@@ -154,26 +176,18 @@ func PutItems(request *restful.Request, response *restful.Response) {
 	Json(response, ExecResponse{})
 }
 
-// RatingTuple is the tuple of a rating record.
-type RatingTuple struct {
-	UserId int     // the identifier of the user
-	ItemId int     // the identifier of the item
-	Rating float64 // the rating
-}
-
 // PutRatings puts new ratings into database.
 func PutRatings(request *restful.Request, response *restful.Response) {
 	// Add ratings
-	ratings := new([]RatingTuple)
+	ratings := new([]engine.RatingTuple)
 	if err := request.ReadEntity(ratings); err != nil {
 		Failed(response, err)
+		return
 	}
-	for _, v := range *ratings {
-		err := db.PutRating(v.UserId, v.ItemId, v.Rating)
-		if err != nil {
-			Failed(response, err)
-			return
-		}
+	err := db.PutRatings(*ratings)
+	if err != nil {
+		Failed(response, err)
+		return
 	}
 	Json(response, ExecResponse{})
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/zhenghaoz/gorse/cmd/cv"
 	"github.com/zhenghaoz/gorse/cmd/data"
 	"github.com/zhenghaoz/gorse/cmd/engine"
-	"github.com/zhenghaoz/gorse/cmd/init"
+	"github.com/zhenghaoz/gorse/cmd/initdb"
 	"github.com/zhenghaoz/gorse/cmd/server"
 	"log"
 )
@@ -32,7 +32,7 @@ var VersionCmd = &cobra.Command{
 
 func main() {
 	rootCmd.AddCommand(cv.CmdTest)
-	rootCmd.AddCommand(init.CmdInit)
+	rootCmd.AddCommand(initdb.CmdInit)
 	rootCmd.AddCommand(data.CmdData)
 	rootCmd.AddCommand(serve.CmdServer)
 	rootCmd.AddCommand(VersionCmd)

@@ -25,8 +25,7 @@ var CmdServer = &cobra.Command{
 			log.Fatal(err)
 		}
 		// Start model daemon
-		go ModelDaemon(conf, metaData)
-		//go ModelDaemon(conf, metaData)
+		go Watcher(conf, metaData)
 		Server(conf.Server)
 	},
 }

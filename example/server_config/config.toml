@@ -9,10 +9,10 @@ access = "gorse:password@/gorse"
 [recommend]
 model = "svd"
 cache_size = 100
-cold_user_model = "item_pop"
 update_threshold = 10
 check_period = 1
-explore_prop = 0.1
+similarity = "pearson"
+list_size = 10
 
 [params]
 optimizer = "bpr"
