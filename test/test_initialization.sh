@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+echo '=== RUN   Test Initialization'
+
 # Parse arguments
 if test $# -ne 3; then
     echo '--- FAIL  Usage:' $0 '[user] [pass] [database]'
@@ -13,32 +15,27 @@ PASS=$2
 DATABASE=$3
 TABLES=("items" "neighbors" "ratings" "recommends" "status")
 
-echo '=== RUN   Test Initialization'
-
 # Build executable
-go build -o ${LOCATION}/main ${LOCATION}/../app/main.go
+go build -o ${LOCATION}/gorse ${LOCATION}/../cmd/gorse.go
 
 # Initialize database
-${LOCATION}/main init ${USER}:${PASS}@/${DATABASE}
+${LOCATION}/gorse init ${USER}:${PASS}@/${DATABASE}
 
 # Check tables
 declare RESULT=($(mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; show tables;" | grep -P '^[a-z]+' -o))
 
-for ((i=1; i<=${#TABLES[@]}; i++))
+for ((i=0; i<${#TABLES[@]}; i++))
 do
 	if [[ ${RESULT[$i]} != ${TABLES[$i]} ]]; then
         echo "--- FAIL  require table: ${TABLES[$i]}"
         exit 1
+    else
+       echo $(date +'%Y/%m/%d %H:%M:%S') found table ${RESULT[$i]}
     fi
 done
 
-# Drop all tables
-for table in "${TABLES[@]}"
-do
-    mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; DROP TABLE ${table};"
-done
-
-# Remove executable
-rm ${LOCATION}/main
+# Clear
+bash ${LOCATION}/clean_file.sh
+bash ${LOCATION}/clean_database.sh ${USER} ${PASS} ${DATABASE}
 
 echo '--- PASS  Test Initialization'

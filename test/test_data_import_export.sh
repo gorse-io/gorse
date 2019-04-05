@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo '=== RUN   Test Data Import/Export'
+echo '=== RUN   Test Import Ratings'
 
 # Parse arguments
 if test $# -ne 3; then
@@ -16,7 +16,7 @@ DATABASE=$3
 TABLES=("items" "neighbors" "ratings" "recommends" "status")
 
 # Build executable
-go build -o ${LOCATION}/main ${LOCATION}/../app/main.go
+go build -o ${LOCATION}/gorse ${LOCATION}/../cmd/gorse.go
 
 # Download ml0-100k
 wget https://cdn.sine-x.com/datasets/movielens/ml-100k.zip -P ${LOCATION}
@@ -25,10 +25,10 @@ wget https://cdn.sine-x.com/datasets/movielens/ml-100k.zip -P ${LOCATION}
 unzip ${LOCATION}/ml-100k.zip -d ${LOCATION}
 
 # Initialize database
-${LOCATION}/main init ${USER}:${PASS}@/${DATABASE}
+${LOCATION}/gorse init ${USER}:${PASS}@/${DATABASE}
 
 # Import ratings to database
-${LOCATION}/main data ${USER}:${PASS}@/${DATABASE} --import-ratings-csv ${LOCATION}/ml-100k/u.data
+${LOCATION}/gorse data ${USER}:${PASS}@/${DATABASE} --import-ratings-csv ${LOCATION}/ml-100k/u.data
 
 # Check tables
 NUM_RATING=$(mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; select count(*) from ratings;" | grep -P '\d+' -o)
@@ -37,18 +37,24 @@ NUM_ITEM=$(mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; select count(*) from 
 if [[ ${NUM_RATING} != 100000 ]]; then
     echo "--- FAIL  the number of ratings (${NUM_RATING}) doesn't match"
     exit 1
+else
+    echo $(date +'%Y/%m/%d %H:%M:%S') found ${NUM_RATING} ratings in database
 fi
 
 if [[ ${NUM_ITEM} != 1682 ]]; then
     echo "--- FAIL  the number of items (${NUM_ITEM}) doesn't match"
     exit 1
+else
+    echo $(date +'%Y/%m/%d %H:%M:%S') found ${NUM_ITEM} items in database
 fi
 
 # Clear items
 mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; delete from items;"
 
+echo '=== RUN   Test Import Items'
+
 # Import items
-${LOCATION}/main data ${USER}:${PASS}@/${DATABASE} --import-items-csv ${LOCATION}/ml-100k/u.item
+${LOCATION}/gorse data ${USER}:${PASS}@/${DATABASE} --import-items-csv ${LOCATION}/ml-100k/u.item
 
 # Check tables
 NUM_ITEM=$(mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; select count(*) from items;" | grep -P '\d+' -o)
@@ -56,17 +62,12 @@ NUM_ITEM=$(mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; select count(*) from 
 if [[ ${NUM_ITEM} != 1682 ]]; then
     echo "--- FAIL  the number of items (${NUM_ITEM}) doesn't match"
     exit 1
+else
+    echo $(date +'%Y/%m/%d %H:%M:%S') found ${NUM_ITEM} items in database
 fi
 
-# Drop all tables
-for table in "${TABLES[@]}"
-do
-    mysql -u ${USER} -p${PASS} -e "use ${DATABASE}; DROP TABLE ${table};"
-done
-
-# Remove files
-rm -rf ${LOCATION}/ml-100k
-rm ${LOCATION}/ml-100k.zip
-rm ${LOCATION}/main
+# Clear
+bash ${LOCATION}/clean_file.sh
+bash ${LOCATION}/clean_database.sh ${USER} ${PASS} ${DATABASE}
 
 echo '--- PASS  Test Data Import/Export'
