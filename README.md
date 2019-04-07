@@ -8,19 +8,9 @@
 
 `gorse` is a a transparent recommender system engine over SQL database based on collaborative filtering written in Go.
 
-- **Data**: Load data from built-in datasets or custom files.
-- **Splitter**: Split dataset by [k-fold](https://godoc.org/github.com/zhenghaoz/gorse/core#NewKFoldSplitter), [ratio](https://godoc.org/github.com/zhenghaoz/gorse/core#NewRatioSplitter) or [leave-one-out](https://godoc.org/github.com/zhenghaoz/gorse/core#NewUserLOOSplitter).
-- **Model**: [Recommendation models](https://godoc.org/github.com/zhenghaoz/gorse/model) based on collaborate filtering including matrix factorization, neighborhood-based method, Slope One and Co-Clustering.
-- **Evaluator**: Implemented [RMSE](https://godoc.org/github.com/zhenghaoz/gorse/core#RMSE) and [MAE](https://godoc.org/github.com/zhenghaoz/gorse/core#MAE) for rating task. For ranking task, there are [Precision](https://godoc.org/github.com/zhenghaoz/gorse/core#NewPrecision), [Recall](https://godoc.org/github.com/zhenghaoz/gorse/core#NewRecall), [NDCG](https://godoc.org/github.com/zhenghaoz/gorse/core#NewNDCG), [MAP](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMAP), [MRR](https://godoc.org/github.com/zhenghaoz/gorse/core#NewMRR)and [AUC](https://godoc.org/github.com/zhenghaoz/gorse/core#AUC).
-- **Parameter Search**: Find best hyper-parameters using [grid search](https://godoc.org/github.com/zhenghaoz/gorse/core#GridSearchCV) or [random search](https://godoc.org/github.com/zhenghaoz/gorse/core#RandomSearchCV).
-- **Persistence**: [Save](https://godoc.org/github.com/zhenghaoz/gorse/core#Save) a model or [load](https://godoc.org/github.com/zhenghaoz/gorse/core#Load) a model.
-- **SIMD** (Optional): Vectors are computed by AVX2 instructions which are 4 times faster than single instructions in theory.
-
 ## Build
 
-`gorse` could be built by
-
-```go
+```bash
 go build github.com/zhenghaoz/gorse/cmd/gorse.go
 ```
 
@@ -30,7 +20,7 @@ If the CPU of your device supports AVX2 and FMA3 instructions, use the `avx2` bu
 go build -tags='avx2' github.com/zhenghaoz/gorse/cmd/gorse.go
 ```
 
-## Setup
+## Usage
 
 It's easy to setup a recomendation service with `gorse`. 
 
@@ -58,7 +48,7 @@ It imports ratings and items from CSV files. `u.data` is the CSV file of ratings
 ./gorse server -c config.toml
 ```
 
-It loads configurations from `config.toml` and starts a recommendation server.
+Load configurations from `config.toml` and start a recommendation server. It may take a while to generate all recommendations.
 
 ```toml
 # This section declares settings for the server.
@@ -96,7 +86,7 @@ init_std = 0.001        # the standard deviation of initial latent factors initi
 curl 127.0.0.1:8080/recommends/1?number=5
 ```
 
-
+Request 5 recommended items for the 1-th user. See [more APIs](https://github.com/zhenghaoz/gorse/wiki/RESTful-APIs) in wiki.
 
 ```json
 {
@@ -104,8 +94,6 @@ curl 127.0.0.1:8080/recommends/1?number=5
   "Items": [284, 448, 763, 276, 313]
 }
 ```
-
-
 
 ## Document
 
