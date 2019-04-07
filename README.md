@@ -58,32 +58,36 @@ It imports ratings and items from CSV files. `u.data` is the CSV file of ratings
 ./gorse server -c config.toml
 ```
 
-It loads configuration from `config.toml` and starts a recommendation server.
+It loads configurations from `config.toml` and starts a recommendation server.
 
 ```toml
+# This section declares settings for the server.
 [server]
-host = "127.0.0.1"
-port = 8080
+host = "127.0.0.1"      # server host
+port = 8080             # server port
 
+# This section declares setting for the database.
 [database]
-driver = "mysql"
-access = "gorse:password@/gorse"
+driver = "mysql"        # database driver
+access = "gorse:password@/gorse"# database access
 
+# This section declares settings for recommendation.
 [recommend]
-model = "svd"
-cache_size = 100
-update_threshold = 10
-check_period = 1
-similarity = "pearson"
+model = "svd"           # recommendation model
+cache_size = 100        # the number of cached recommendations
+update_threshold = 10   # update model when more than 10 ratings are added
+check_period = 1        # check for update every one minute
+similarity = "pearson"  # similarity metric for neighbors
 
+# This section declares hyperparameters for the recommendation model.
 [params]
-optimizer = "bpr"
-n_factors = 10
-reg = 0.01
-lr = 0.05
-n_epochs = 100
-init_mean = 0.0
-init_std = 0.001
+optimizer = "bpr"       # the optimizer to oprimize matrix factorization model
+n_factors = 10          # the number of latent factors
+reg = 0.01              # regularization strength
+lr = 0.05               # learning rate
+n_epochs = 100          # the number of learning epochs
+init_mean = 0.0         # the mean of initial latent factors initilaized by Gaussian distribution
+init_std = 0.001        # the standard deviation of initial latent factors initilaized by Gaussian distribution
 ```
 
 - **Step 4**: Send requests.
@@ -96,14 +100,8 @@ curl 127.0.0.1:8080/recommends/1?number=5
 
 ```json
 {
- "Failed": false,
- "Items": [
-  284,
-  448,
-  763,
-  276,
-  313
- ]
+  "Failed": false,
+  "Items": [284, 448, 763, 276, 313]
 }
 ```
 
