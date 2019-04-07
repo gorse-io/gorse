@@ -1,8 +1,8 @@
-package cmd_init
+package initdb
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/app/engine"
+	"github.com/zhenghaoz/gorse/cmd/engine"
 	"log"
 )
 

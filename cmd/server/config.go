@@ -1,4 +1,4 @@
-package cmd_serve
+package serve
 
 import (
 	"github.com/BurntSushi/toml"
@@ -9,13 +9,13 @@ import (
 )
 
 type TomlConfig struct {
-	Server    ServeConfig     `toml:"server"`
+	Server    ServerConfig    `toml:"server"`
 	Database  DatabaseConfig  `toml:"database"`
 	Params    ParamsConfig    `toml:"params"`
 	Recommend RecommendConfig `toml:"recommend"`
 }
 
-type ServeConfig struct {
+type ServerConfig struct {
 	Host string `toml:"host"`
 	Port int    `toml:"port"`
 }
@@ -26,12 +26,12 @@ type DatabaseConfig struct {
 }
 
 type RecommendConfig struct {
-	Model           string  `toml:"model"`
-	CacheSize       int     `toml:"cache_size"`
-	NewUser         string  `toml:"new_user"`
-	UpdateThreshold int     `toml:"update_threshold"`
-	ExploreProp     float64 `toml:"explore_prop"`
-	CheckPeriod     int     `toml:"check_period"`
+	Model           string `toml:"model"`
+	CacheSize       int    `toml:"cache_size"`
+	UpdateThreshold int    `toml:"update_threshold"`
+	CheckPeriod     int    `toml:"check_period"`
+	Similarity      string `toml:"similarity"`
+	ListSize        int    `toml:"list_size"`
 }
 
 type ParamsConfig struct {
@@ -140,7 +140,21 @@ func CreateModelFromName(name string, params base.Params) core.Model {
 	case "svd++":
 		return model.NewSVDpp(params)
 	default:
-		log.Fatalf("Unkown model %v\n", name)
+		log.Fatalf("unkown model %v\n", name)
 	}
 	panic("CreateModelFromName error")
+}
+
+func CreateSimilarityFromName(name string) base.FuncSimilarity {
+	switch name {
+	case "pearson":
+		return base.PearsonSimilarity
+	case "cosine":
+		return base.CosineSimilarity
+	case "msd":
+		return base.MSDSimilarity
+	default:
+		log.Fatalf("unkown similarity %v\n", name)
+	}
+	panic("CreateSimilarityFromName error")
 }

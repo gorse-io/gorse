@@ -15,27 +15,43 @@ func TestDatabase_Init(t *testing.T) {
 	}
 	defer db.Close()
 	// Create expect query
-	mock.ExpectExec(`CREATE TABLE ratings \(
+	expectQueries := []string{
+		// create table for ratings
+		`CREATE TABLE IF NOT EXISTS ratings \(
 			user_id INT NOT NULL,
 			item_id INT NOT NULL,
 			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index \(user_id,item_id\)
-		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE TABLE recommends \(
+		\)`,
+		// create table for items
+		`CREATE TABLE IF NOT EXISTS items \(
+			item_id INT NOT NULL UNIQUE
+		\)`,
+		// create table for status
+		`CREATE TABLE IF NOT EXISTS status \(
+			name CHAR\(16\) NOT NULL UNIQUE,
+			value INT NOT NULL
+		\)`,
+		// insert initial values
+		`INSERT IGNORE INTO status VALUES \('last_count', 0\);`,
+		// create table for recommends
+		`CREATE TABLE IF NOT EXISTS recommends \(
 			user_id INT NOT NULL,
 			item_id INT NOT NULL,
 			rating FLOAT NOT NULL,
 			UNIQUE KEY unique_index \(user_id,item_id\)
-		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE TABLE items \(
+		\)`,
+		// create table for neighbors
+		`CREATE TABLE IF NOT EXISTS neighbors \(
 			item_id INT NOT NULL,
-			UNIQUE KEY unique_index \(item_id\)
-		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(`CREATE TABLE status \(
-			name CHAR\(16\) NOT NULL,
-			value INT NULL,
-			UNIQUE KEY unique_index \(name\)
-		\)`).WillReturnResult(sqlmock.NewResult(0, 0))
+			neighbor_id INT NOT NULL,
+			similarity FLOAT NOT NULL,
+			UNIQUE KEY unique_index \(item_id,neighbor_id\)
+		\)`,
+	}
+	for _, expectQuery := range expectQueries {
+		mock.ExpectExec(expectQuery).WillReturnResult(sqlmock.NewResult(0, 0))
+	}
 	// Initialize database
 	if err = db.Init(); err != nil {
 		t.Fatal(err)
@@ -55,8 +71,8 @@ func TestDatabase_LoadItemsFromCSV(t *testing.T) {
 	}
 	defer db.Close()
 	// Create expect query
-	mock.ExpectExec(`LOAD DATA INFILE '\?' INTO TABLE items FIELDS TERMINATED BY ',' \(item_id,@dummy\)`).
-		WithArgs("../../example/data/import_items.csv").
+	mock.ExpectExec(`LOAD DATA LOCAL INFILE '../../example/data/import_items.csv' 
+		INTO TABLE items FIELDS TERMINATED BY ',' \(item_id,@dummy\)`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	// Get meta data
 	err = db.LoadItemsFromCSV("../../example/data/import_items.csv", ",", false)
@@ -78,8 +94,10 @@ func TestDatabase_LoadRatingsFromCSV(t *testing.T) {
 	}
 	defer db.Close()
 	// Create expect query
-	mock.ExpectExec(`LOAD DATA INFILE '\?' INTO TABLE ratings FIELDS TERMINATED BY ',' \(user_id,item_id,rating,@dummy\)`).
-		WithArgs("../../example/data/import_ratings.csv").
+	mock.ExpectExec(`LOAD DATA LOCAL INFILE '../../example/data/import_ratings.csv' 
+		INTO TABLE ratings FIELDS TERMINATED BY ',' \(user_id,item_id,rating,@dummy\)`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(`INSERT IGNORE INTO items SELECT DISTINCT item_id FROM ratings`).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	// Get meta data
 	err = db.LoadRatingsFromCSV("../../example/data/import_ratings.csv", ",", false)
@@ -155,7 +173,7 @@ func TestDatabase_RatingCount(t *testing.T) {
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM ratings`).
 		WillReturnRows(expectRows)
 	// Count ratings
-	count, err := db.RatingCount()
+	count, err := db.CountRatings()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,30 +291,7 @@ func TestDatabase_UpdateRecommends(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 9))
 	mock.ExpectCommit()
 	// Update recommendations
-	if err := db.UpdateRecommends(0, []int{1, 2, 3}, []float64{1, 2, 3}); err != nil {
-		t.Fatal(err)
-	}
-	// we make sure that all expectations were met
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("there were unfulfilled expectations: %s", err)
-	}
-}
-
-func TestDatabase_PutRating(t *testing.T) {
-	// Create mock database
-	connection, mock, err := sqlmock.New()
-	db := Database{connection: connection}
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
-	// Create expect query
-	mock.ExpectPrepare(`INSERT INTO ratings VALUES`).
-		ExpectExec().
-		WithArgs(0, 1, float64(2)).
-		WillReturnResult(sqlmock.NewResult(0, 9))
-	// Update recommendations
-	if err := db.PutRating(0, 1, 2); err != nil {
+	if err := db.PutRecommends(0, []int{1, 2, 3}, []float64{1, 2, 3}); err != nil {
 		t.Fatal(err)
 	}
 	// we make sure that all expectations were met

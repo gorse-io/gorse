@@ -1,2 +1,0 @@
-tabulate
-scikit-surprise

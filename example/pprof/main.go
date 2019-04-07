@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
@@ -11,7 +10,7 @@ import (
 )
 
 func main() {
-	f, err := os.Create("cpu_perf")
+	f, err := os.Create("cpu_prof")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,9 +29,8 @@ func main() {
 		base.InitMean:   0,
 		base.InitStdDev: 0.001,
 	})
-	out := core.CrossValidate(svd, data, core.NewKFoldSplitter(5), 0,
+	core.CrossValidate(svd, data, core.NewKFoldSplitter(5), 0,
 		core.NewRankEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
-	fmt.Println(out)
 
 	// Save memory profile
 	f, err = os.Create("mem_prof")

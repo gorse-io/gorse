@@ -1,0 +1,27 @@
+# This section declares settings for the server.
+[server]
+host = "127.0.0.1"      # server host
+port = 8080             # server port
+
+# This section declares setting for the database.
+[database]
+driver = "mysql"        # database driver
+access = "gorse:password@/gorse"# database access
+
+# This section declares settings for recommendation.
+[recommend]
+model = "svd"           # recommendation model
+cache_size = 100        # the number of cached recommendations
+update_threshold = 10   # update model when more than 10 ratings are added
+check_period = 1        # check for update every one minute
+similarity = "pearson"  # similarity metric for neighbors
+
+# This section declares hyperparameters for the recommendation model.
+[params]
+optimizer = "bpr"       # the optimizer to oprimize matrix factorization model
+n_factors = 10          # the number of latent factors
+reg = 0.01              # regularization strength
+lr = 0.05               # learning rate
+n_epochs = 100          # the number of learning epochs
+init_mean = 0.0         # the mean of initial latent factors initilaized by Gaussian distribution
+init_std = 0.001        # the standard deviation of initial latent factors initilaized by Gaussian distribution
