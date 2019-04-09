@@ -17,6 +17,6 @@ require (
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.2.2
 	golang.org/x/sys v0.0.0-20190109145017-48ac38b7c8cb // indirect
-	gonum.org/v1/gonum v0.0.0-20181221232945-d801be0689e7
+	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
 	gopkg.in/cheggaaa/pb.v1 v1.0.27
 )
