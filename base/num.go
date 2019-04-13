@@ -60,6 +60,15 @@ func NewMatrix(row, col int) [][]float64 {
 	return ret
 }
 
+// NewMatrixInt creates a matrix of integers.
+func NewMatrixInt(row, col int) [][]int {
+	ret := make([][]int, row)
+	for i := range ret {
+		ret[i] = make([]int, col)
+	}
+	return ret
+}
+
 // FillZeroVector fills a vector with zeros.
 func FillZeroVector(vec []float64) {
 	for i := range vec {

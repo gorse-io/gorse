@@ -23,6 +23,14 @@ func TestNewMatrix(t *testing.T) {
 	assert.Equal(t, 4, len(a[0]))
 }
 
+func TestNewMatrixInt(t *testing.T) {
+	a := NewMatrixInt(3, 4)
+	assert.Equal(t, 3, len(a))
+	assert.Equal(t, 4, len(a[0]))
+	assert.Equal(t, 4, len(a[0]))
+	assert.Equal(t, 4, len(a[0]))
+}
+
 func TestFillZeroMatrix(t *testing.T) {
 	a := [][]float64{{1, 2, 3, 4}, {5, 6, 7, 8}}
 	FillZeroMatrix(a)
