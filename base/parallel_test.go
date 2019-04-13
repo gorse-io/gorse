@@ -25,3 +25,11 @@ func TestParallelMean(t *testing.T) {
 	})
 	assert.Equal(t, 3.5, mean)
 }
+
+func TestParallelFor(t *testing.T) {
+	a := make([]int, 5)
+	ParallelFor(0, 5, func(i int) {
+		a[i] = i
+	})
+	assert.Equal(t, []int{0, 1, 2, 3, 4}, a)
+}
