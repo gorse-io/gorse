@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-func TestSparseIdSet(t *testing.T) {
-	// Create a ID set
-	set := NewSparseIdSet()
+func TestIndexer(t *testing.T) {
+	// Create a indexer
+	set := NewIndexer()
 	assert.Equal(t, set.Len(), 0)
 	// Add IDs
 	set.Add(1)
@@ -17,15 +17,71 @@ func TestSparseIdSet(t *testing.T) {
 	set.Add(4)
 	set.Add(8)
 	assert.Equal(t, 4, set.Len())
-	assert.Equal(t, 0, set.ToDenseId(1))
-	assert.Equal(t, 1, set.ToDenseId(2))
-	assert.Equal(t, 2, set.ToDenseId(4))
-	assert.Equal(t, 3, set.ToDenseId(8))
-	assert.Equal(t, NotId, set.ToDenseId(1000))
-	assert.Equal(t, 1, set.ToSparseId(0))
-	assert.Equal(t, 2, set.ToSparseId(1))
-	assert.Equal(t, 4, set.ToSparseId(2))
-	assert.Equal(t, 8, set.ToSparseId(3))
+	assert.Equal(t, 0, set.ToIndex(1))
+	assert.Equal(t, 1, set.ToIndex(2))
+	assert.Equal(t, 2, set.ToIndex(4))
+	assert.Equal(t, 3, set.ToIndex(8))
+	assert.Equal(t, NotId, set.ToIndex(1000))
+	assert.Equal(t, 1, set.ToID(0))
+	assert.Equal(t, 2, set.ToID(1))
+	assert.Equal(t, 4, set.ToID(2))
+	assert.Equal(t, 8, set.ToID(3))
+}
+
+func TestNewMarginalSubSet(t *testing.T) {
+	// Create a subset
+	id := []int{2, 4, 6, 8, 10}
+	indices := []int{0, 1, 2, 3, 4}
+	values := []float64{1, 1, 1, 1, 1}
+	subset := []int{4, 2, 0}
+	set := NewMarginalSubSet(id, indices, values, subset)
+	assert.Equal(t, []int{0, 2, 4}, set.SubSet)
+	// Check Count()
+	assert.Equal(t, 3, set.Count())
+	// Check Contain()
+	assert.True(t, !set.Contain(0))
+	assert.True(t, set.Contain(2))
+	assert.True(t, !set.Contain(4))
+	assert.True(t, set.Contain(6))
+	assert.True(t, !set.Contain(8))
+	assert.True(t, set.Contain(10))
+	assert.True(t, !set.Contain(12))
+	// Check ForEach()
+	subID := make([]int, set.Len())
+	subIndices := make([]int, set.Len())
+	subValues := make([]float64, set.Len())
+	set.ForEach(func(i, id int, value float64) {
+		subID[i] = id
+		subValues[i] = value
+	})
+	assert.Equal(t, []int{2, 6, 10}, subID)
+	assert.Equal(t, []float64{1, 1, 1}, subValues)
+	// Check ForEachIndex()
+	set.ForEachIndex(func(i, index int, value float64) {
+		subIndices[i] = index
+		subValues[i] = value
+	})
+	assert.Equal(t, []int{0, 2, 4}, subIndices)
+	assert.Equal(t, []float64{1, 1, 1}, subValues)
+}
+
+func TestMarginalSubSet_ForIntersection(t *testing.T) {
+	// Create two subsets
+	id := []int{2, 4, 6, 8, 10}
+	indices := []int{0, 1, 2, 3, 4}
+	a := NewMarginalSubSet(id, indices, []float64{1, 1, 1, 1, 1}, []int{0, 1, 2, 3})
+	b := NewMarginalSubSet(id, indices, []float64{2, 2, 2, 2, 2}, []int{1, 2, 3, 4})
+	intersectIDs := make([]int, 0)
+	intersectA := make([]float64, 0)
+	intersectB := make([]float64, 0)
+	a.ForIntersection(b, func(id int, a, b float64) {
+		intersectIDs = append(intersectIDs, id)
+		intersectA = append(intersectA, a)
+		intersectB = append(intersectB, b)
+	})
+	assert.Equal(t, []int{4, 6, 8}, intersectIDs)
+	assert.Equal(t, []float64{1, 1, 1}, intersectA)
+	assert.Equal(t, []float64{2, 2, 2}, intersectB)
 }
 
 func TestSparseVector(t *testing.T) {
@@ -109,19 +165,4 @@ func sliceToMap(a []float64) map[float64]bool {
 func TestNewDenseSparseMatrix(t *testing.T) {
 	a := NewDenseSparseMatrix(3)
 	assert.Equal(t, 3, len(a))
-}
-
-func TestSparseVectorsMean(t *testing.T) {
-	a := []*SparseVector{
-		{
-			Indices: []int{2, 4, 6, 7, 9},
-			Values:  []float64{1, 2, 3, 4, 5},
-		},
-		{
-			Indices: []int{2, 4, 6, 7, 9},
-			Values:  []float64{3, 4, 5, 6, 7},
-		},
-	}
-	b := SparseVectorsMean(a)
-	assert.Equal(t, []float64{3, 5}, b)
 }

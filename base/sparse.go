@@ -2,57 +2,151 @@ package base
 
 import (
 	"container/heap"
-	"gonum.org/v1/gonum/stat"
 	"sort"
 )
 
-// SparseIdSet manages the map between sparse IDs and dense IDs. The sparse ID is the ID
-// in raw user ID or item ID. The dense ID is the internal user ID or item ID optimized
-// for faster parameter access and less memory usage.
-type SparseIdSet struct {
-	DenseIds  map[int]int // sparse ID -> dense ID
-	SparseIds []int       // dense ID -> sparse ID
+// Indexer manages the map between sparse IDs and dense indices. A sparse ID is
+// a user ID or item ID. The dense index is the internal user index or item index
+// optimized for faster parameter access and less memory usage.
+type Indexer struct {
+	Indices map[int]int // sparse ID -> dense index
+	IDs     []int       // dense index -> sparse ID
 }
 
 // NotId represents an ID doesn't exist.
 const NotId = -1
 
-// NewSparseIdSet creates a SparseIdSet.
-func NewSparseIdSet() *SparseIdSet {
-	set := new(SparseIdSet)
-	set.DenseIds = make(map[int]int)
-	set.SparseIds = make([]int, 0)
+// NewIndexer creates a Indexer.
+func NewIndexer() *Indexer {
+	set := new(Indexer)
+	set.Indices = make(map[int]int)
+	set.IDs = make([]int, 0)
 	return set
 }
 
-// Len returns the number of IDs.
-func (set *SparseIdSet) Len() int {
-	return len(set.SparseIds)
+// Len returns the number of indexed IDs.
+func (set *Indexer) Len() int {
+	return len(set.IDs)
 }
 
-// Add adds a new ID to the ID set.
-func (set *SparseIdSet) Add(sparseId int) {
-	if _, exist := set.DenseIds[sparseId]; !exist {
-		set.DenseIds[sparseId] = len(set.SparseIds)
-		set.SparseIds = append(set.SparseIds, sparseId)
+// Add adds a new ID to the indexer.
+func (set *Indexer) Add(ID int) {
+	if _, exist := set.Indices[ID]; !exist {
+		set.Indices[ID] = len(set.IDs)
+		set.IDs = append(set.IDs, ID)
 	}
 }
 
-// ToDenseId converts a sparse ID to a dense ID.
-func (set *SparseIdSet) ToDenseId(sparseId int) int {
-	// Return NotId if set is null
-	if set == nil {
-		return NotId
-	}
-	if denseId, exist := set.DenseIds[sparseId]; exist {
+// ToIndex converts a sparse ID to a dense index.
+func (set *Indexer) ToIndex(ID int) int {
+	if denseId, exist := set.Indices[ID]; exist {
 		return denseId
 	}
 	return NotId
 }
 
-// ToSparseId converts a dense ID to a sparse ID.
-func (set *SparseIdSet) ToSparseId(denseId int) int {
-	return set.SparseIds[denseId]
+// ToID converts a dense index to a sparse ID.
+func (set *Indexer) ToID(index int) int {
+	return set.IDs[index]
+}
+
+// MarginalSubSet constructs a subset over a list of IDs, indices and values.
+type MarginalSubSet struct {
+	IDs     []int     // the full list of IDs
+	Indices []int     // the full list of indices
+	Values  []float64 // the full list of values
+	SubSet  []int     // indices of the subset
+}
+
+// NewMarginalSubSet creates a MarginalSubSet.
+func NewMarginalSubSet(id, indices []int, values []float64, subset []int) *MarginalSubSet {
+	set := new(MarginalSubSet)
+	set.IDs = id
+	set.Indices = indices
+	set.Values = values
+	set.SubSet = subset
+	sort.Sort(set)
+	return set
+}
+
+// Len returns the number of items.
+func (set *MarginalSubSet) Len() int {
+	return len(set.SubSet)
+}
+
+// Swap two items.
+func (set *MarginalSubSet) Swap(i, j int) {
+	set.SubSet[i], set.SubSet[j] = set.SubSet[j], set.SubSet[i]
+}
+
+// Less compares two items.
+func (set *MarginalSubSet) Less(i, j int) bool {
+	return set.IDs[set.SubSet[i]] < set.IDs[set.SubSet[j]]
+}
+
+// Count gets the size of marginal subset.
+func (set *MarginalSubSet) Count() int {
+	return len(set.SubSet)
+}
+
+// Contain returns true am ID existed in the subset.
+func (set *MarginalSubSet) Contain(id int) bool {
+	// if id is out of range
+	if id < set.IDs[set.SubSet[0]] || id > set.IDs[set.SubSet[set.Len()-1]] {
+		return false
+	}
+	// binary search
+	low, high := 0, set.Len()-1
+	for low <= high {
+		// in bound
+		if set.IDs[set.SubSet[low]] == id || set.IDs[set.SubSet[high]] == id {
+			return true
+		}
+		mid := (low + high) / 2
+		// in mid
+		if id == set.IDs[set.SubSet[mid]] {
+			return true
+		} else if id < set.IDs[set.SubSet[mid]] {
+			low = low + 1
+			high = mid - 1
+		} else if id > set.IDs[set.SubSet[mid]] {
+			low = mid + 1
+			high = high - 1
+		}
+	}
+	return false
+}
+
+// ForIntersection iterates items in the intersection of two subsets.
+// The method find items with common indices in linear time.
+func (set *MarginalSubSet) ForIntersection(other *MarginalSubSet, f func(id int, a, b float64)) {
+	// Iterate
+	i, j := 0, 0
+	for i < set.Len() && j < other.Len() {
+		if set.IDs[set.SubSet[i]] == other.IDs[other.SubSet[j]] {
+			f(set.IDs[set.SubSet[i]], set.Values[set.SubSet[i]], other.Values[other.SubSet[j]])
+			i++
+			j++
+		} else if set.IDs[set.SubSet[i]] < other.IDs[other.SubSet[j]] {
+			i++
+		} else {
+			j++
+		}
+	}
+}
+
+// ForEach iterates items in the subset with IDs.
+func (set *MarginalSubSet) ForEach(f func(i, id int, value float64)) {
+	for i, offset := range set.SubSet {
+		f(i, set.IDs[offset], set.Values[offset])
+	}
+}
+
+// ForEachIndex iterates items in the subset with indices.
+func (set *MarginalSubSet) ForEachIndex(f func(i, index int, value float64)) {
+	for i, offset := range set.SubSet {
+		f(i, set.Indices[offset], set.Values[offset])
+	}
 }
 
 // SparseVector is the data structure for the sparse vector.
@@ -77,15 +171,6 @@ func NewDenseSparseMatrix(row int) []*SparseVector {
 		mat[i] = NewSparseVector()
 	}
 	return mat
-}
-
-// SparseVectorsMean computes the mean of each sparse vector.
-func SparseVectorsMean(a []*SparseVector) []float64 {
-	m := make([]float64, len(a))
-	for i := range a {
-		m[i] = stat.Mean(a[i].Values, nil)
-	}
-	return m
 }
 
 // Add a new item.
