@@ -52,8 +52,6 @@ type DataSetInterface interface {
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
 	ratings     []float64              // ratings
-	userIDs     []int                  // user IDs
-	itemIDs     []int                  // item IDs
 	userIndices []int                  // user indices
 	itemIndices []int                  // item indices
 	userIndexer *base.Indexer          // user indexer
@@ -65,8 +63,6 @@ type DataSet struct {
 // NewDataSet creates a data set.
 func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
 	set := new(DataSet)
-	set.userIDs = userIDs
-	set.itemIDs = itemIDs
 	set.ratings = ratings
 	// Index users and items
 	set.userIndexer = base.NewIndexer()
@@ -74,8 +70,8 @@ func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
 	set.userIndices = make([]int, set.Count())
 	set.itemIndices = make([]int, set.Count())
 	for i := 0; i < set.Count(); i++ {
-		userId := set.userIDs[i]
-		itemId := set.itemIDs[i]
+		userId := userIDs[i]
+		itemId := itemIDs[i]
 		set.userIndexer.Add(userId)
 		set.itemIndexer.Add(itemId)
 		set.userIndices[i] = set.userIndexer.ToIndex(userId)
@@ -85,8 +81,8 @@ func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
 	userSubsetIndices := base.NewMatrixInt(set.UserCount(), 0)
 	itemSubsetIndices := base.NewMatrixInt(set.ItemCount(), 0)
 	for i := 0; i < set.Count(); i++ {
-		userId := set.userIDs[i]
-		itemId := set.itemIDs[i]
+		userId := userIDs[i]
+		itemId := itemIDs[i]
 		userIndex := set.userIndexer.ToIndex(userId)
 		itemIndex := set.itemIndexer.ToIndex(itemId)
 		userSubsetIndices[userIndex] = append(userSubsetIndices[userIndex], i)
@@ -95,10 +91,10 @@ func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
 	set.users = make([]*base.MarginalSubSet, set.UserCount())
 	set.items = make([]*base.MarginalSubSet, set.ItemCount())
 	for u := range set.users {
-		set.users[u] = base.NewMarginalSubSet(set.itemIDs, set.itemIndices, ratings, userSubsetIndices[u])
+		set.users[u] = base.NewMarginalSubSet(set.itemIndexer, set.itemIndices, ratings, userSubsetIndices[u])
 	}
 	for i := range set.items {
-		set.items[i] = base.NewMarginalSubSet(set.userIDs, set.userIndices, ratings, itemSubsetIndices[i])
+		set.items[i] = base.NewMarginalSubSet(set.userIndexer, set.userIndices, ratings, itemSubsetIndices[i])
 	}
 	return set
 }
@@ -113,7 +109,8 @@ func (set *DataSet) Count() int {
 
 // Get the i-th record by <user ID, item ID, rating>.
 func (set *DataSet) Get(i int) (int, int, float64) {
-	return set.userIDs[i], set.itemIDs[i], set.ratings[i]
+	userIndex, itemIndex, rating := set.GetWithIndex(i)
+	return set.userIndexer.ToID(userIndex), set.itemIndexer.ToID(itemIndex), rating
 }
 
 // GetWithIndex gets the i-th record by <user index, item index, rating>.
@@ -198,20 +195,18 @@ func NewSubSet(dataSet *DataSet, subset []int) DataSetInterface {
 	userSubsetIndices := base.NewMatrixInt(set.UserCount(), 0)
 	itemSubsetIndices := base.NewMatrixInt(set.ItemCount(), 0)
 	for _, i := range set.subset {
-		userId := set.userIDs[i]
-		itemId := set.itemIDs[i]
-		userIndex := set.userIndexer.ToIndex(userId)
-		itemIndex := set.itemIndexer.ToIndex(itemId)
+		userIndex := set.userIndices[i]
+		itemIndex := set.itemIndices[i]
 		userSubsetIndices[userIndex] = append(userSubsetIndices[userIndex], i)
 		itemSubsetIndices[itemIndex] = append(itemSubsetIndices[itemIndex], i)
 	}
 	set.users = make([]*base.MarginalSubSet, set.UserCount())
 	set.items = make([]*base.MarginalSubSet, set.ItemCount())
 	for u := range set.users {
-		set.users[u] = base.NewMarginalSubSet(set.itemIDs, set.itemIndices, set.ratings, userSubsetIndices[u])
+		set.users[u] = base.NewMarginalSubSet(set.itemIndexer, set.itemIndices, set.ratings, userSubsetIndices[u])
 	}
 	for i := range set.items {
-		set.items[i] = base.NewMarginalSubSet(set.userIDs, set.userIndices, set.ratings, itemSubsetIndices[i])
+		set.items[i] = base.NewMarginalSubSet(set.userIndexer, set.userIndices, set.ratings, itemSubsetIndices[i])
 	}
 	return set
 }

@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+func NewTestIndexer(id []int) *Indexer {
+	indexer := NewIndexer()
+	for _, v := range id {
+		indexer.Add(v)
+	}
+	return indexer
+}
+
 func TestIndexer(t *testing.T) {
 	// Create a indexer
 	set := NewIndexer()
@@ -30,11 +38,11 @@ func TestIndexer(t *testing.T) {
 
 func TestNewMarginalSubSet(t *testing.T) {
 	// Create a subset
-	id := []int{2, 4, 6, 8, 10}
+	indexer := NewTestIndexer([]int{2, 4, 6, 8, 10})
 	indices := []int{0, 1, 2, 3, 4}
 	values := []float64{1, 1, 1, 1, 1}
 	subset := []int{4, 2, 0}
-	set := NewMarginalSubSet(id, indices, values, subset)
+	set := NewMarginalSubSet(indexer, indices, values, subset)
 	assert.Equal(t, []int{0, 2, 4}, set.SubSet)
 	// Check Count()
 	assert.Equal(t, 3, set.Count())
@@ -67,10 +75,10 @@ func TestNewMarginalSubSet(t *testing.T) {
 
 func TestMarginalSubSet_ForIntersection(t *testing.T) {
 	// Create two subsets
-	id := []int{2, 4, 6, 8, 10}
+	indexer := NewTestIndexer([]int{2, 4, 6, 8, 10})
 	indices := []int{0, 1, 2, 3, 4}
-	a := NewMarginalSubSet(id, indices, []float64{1, 1, 1, 1, 1}, []int{0, 1, 2, 3})
-	b := NewMarginalSubSet(id, indices, []float64{2, 2, 2, 2, 2}, []int{1, 2, 3, 4})
+	a := NewMarginalSubSet(indexer, indices, []float64{1, 1, 1, 1, 1}, []int{0, 1, 2, 3})
+	b := NewMarginalSubSet(indexer, indices, []float64{2, 2, 2, 2, 2}, []int{1, 2, 3, 4})
 	intersectIDs := make([]int, 0)
 	intersectA := make([]float64, 0)
 	intersectB := make([]float64, 0)

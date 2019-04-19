@@ -52,16 +52,16 @@ func (set *Indexer) ToID(index int) int {
 
 // MarginalSubSet constructs a subset over a list of IDs, indices and values.
 type MarginalSubSet struct {
-	IDs     []int     // the full list of IDs
+	Indexer *Indexer  // the indexer
 	Indices []int     // the full list of indices
 	Values  []float64 // the full list of values
 	SubSet  []int     // indices of the subset
 }
 
 // NewMarginalSubSet creates a MarginalSubSet.
-func NewMarginalSubSet(id, indices []int, values []float64, subset []int) *MarginalSubSet {
+func NewMarginalSubSet(indexer *Indexer, indices []int, values []float64, subset []int) *MarginalSubSet {
 	set := new(MarginalSubSet)
-	set.IDs = id
+	set.Indexer = indexer
 	set.Indices = indices
 	set.Values = values
 	set.SubSet = subset
@@ -81,7 +81,7 @@ func (set *MarginalSubSet) Swap(i, j int) {
 
 // Less compares two items.
 func (set *MarginalSubSet) Less(i, j int) bool {
-	return set.IDs[set.SubSet[i]] < set.IDs[set.SubSet[j]]
+	return set.GetID(i) < set.GetID(j)
 }
 
 // Count gets the size of marginal subset.
@@ -92,6 +92,12 @@ func (set *MarginalSubSet) Count() int {
 // GetIndex returns the index of i-th item.
 func (set *MarginalSubSet) GetIndex(i int) int {
 	return set.Indices[set.SubSet[i]]
+}
+
+// GetID returns the ID of i-th item.
+func (set *MarginalSubSet) GetID(i int) int {
+	index := set.GetIndex(i)
+	return set.Indexer.ToID(index)
 }
 
 // Mean of ratings in the subset.
@@ -106,24 +112,24 @@ func (set *MarginalSubSet) Mean() float64 {
 // Contain returns true am ID existed in the subset.
 func (set *MarginalSubSet) Contain(id int) bool {
 	// if id is out of range
-	if id < set.IDs[set.SubSet[0]] || id > set.IDs[set.SubSet[set.Len()-1]] {
+	if id < set.GetID(0) || id > set.GetID(set.Len()-1) {
 		return false
 	}
 	// binary search
 	low, high := 0, set.Len()-1
 	for low <= high {
 		// in bound
-		if set.IDs[set.SubSet[low]] == id || set.IDs[set.SubSet[high]] == id {
+		if set.GetID(low) == id || set.GetID(high) == id {
 			return true
 		}
 		mid := (low + high) / 2
 		// in mid
-		if id == set.IDs[set.SubSet[mid]] {
+		if id == set.GetID(mid) {
 			return true
-		} else if id < set.IDs[set.SubSet[mid]] {
+		} else if id < set.GetID(mid) {
 			low = low + 1
 			high = mid - 1
-		} else if id > set.IDs[set.SubSet[mid]] {
+		} else if id > set.GetID(mid) {
 			low = mid + 1
 			high = high - 1
 		}
@@ -137,11 +143,11 @@ func (set *MarginalSubSet) ForIntersection(other *MarginalSubSet, f func(id int,
 	// Iterate
 	i, j := 0, 0
 	for i < set.Len() && j < other.Len() {
-		if set.IDs[set.SubSet[i]] == other.IDs[other.SubSet[j]] {
-			f(set.IDs[set.SubSet[i]], set.Values[set.SubSet[i]], other.Values[other.SubSet[j]])
+		if set.GetID(i) == other.GetID(j) {
+			f(set.GetID(i), set.Values[set.SubSet[i]], other.Values[other.SubSet[j]])
 			i++
 			j++
-		} else if set.IDs[set.SubSet[i]] < other.IDs[other.SubSet[j]] {
+		} else if set.GetID(i) < other.GetID(j) {
 			i++
 		} else {
 			j++
@@ -152,7 +158,7 @@ func (set *MarginalSubSet) ForIntersection(other *MarginalSubSet, f func(id int,
 // ForEach iterates items in the subset with IDs.
 func (set *MarginalSubSet) ForEach(f func(i, id int, value float64)) {
 	for i, offset := range set.SubSet {
-		f(i, set.IDs[offset], set.Values[offset])
+		f(i, set.GetID(i), set.Values[offset])
 	}
 }
 
