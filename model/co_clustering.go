@@ -58,27 +58,28 @@ func (coc *CoClustering) SetParams(params base.Params) {
 
 // Predict by the CoClustering model.
 func (coc *CoClustering) Predict(userId, itemId int) float64 {
-	// Convert sparse IDs to dense IDs
-	denseUserId := coc.UserIdSet.ToDenseId(userId)
-	denseItemId := coc.ItemIdSet.ToDenseId(itemId)
-	return coc.predict(denseUserId, denseItemId)
+	// Convert IDs to indices
+	userIndex := coc.UserIndexer.ToIndex(userId)
+	itemIndex := coc.ItemIndexer.ToIndex(itemId)
+	return coc.predict(userIndex, itemIndex)
 }
 
-func (coc *CoClustering) predict(denseUserId, denseItemId int) float64 {
+func (coc *CoClustering) predict(userIndex, itemIndex int) float64 {
 	prediction := 0.0
-	if denseUserId != base.NotId && denseItemId != base.NotId {
+	if userIndex != base.NotId && itemIndex != base.NotId &&
+		!math.IsNaN(coc.UserMeans[userIndex]) && !math.IsNaN(coc.ItemMeans[itemIndex]) {
 		// old user & old item
-		userCluster := coc.UserClusters[denseUserId]
-		itemCluster := coc.ItemClusters[denseItemId]
-		prediction = coc.UserMeans[denseUserId] + coc.ItemMeans[denseItemId] -
+		userCluster := coc.UserClusters[userIndex]
+		itemCluster := coc.ItemClusters[itemIndex]
+		prediction = coc.UserMeans[userIndex] + coc.ItemMeans[itemIndex] -
 			coc.UserClusterMeans[userCluster] - coc.ItemClusterMeans[itemCluster] +
 			coc.CoClusterMeans[userCluster][itemCluster]
-	} else if denseUserId != base.NotId {
+	} else if userIndex != base.NotId && !math.IsNaN(coc.UserMeans[userIndex]) {
 		// old user & new item
-		prediction = coc.UserMeans[denseUserId]
-	} else if denseItemId != base.NotId {
+		prediction = coc.UserMeans[userIndex]
+	} else if itemIndex != base.NotId && !math.IsNaN(coc.ItemMeans[itemIndex]) {
 		// new user & old item
-		prediction = coc.ItemMeans[denseItemId]
+		prediction = coc.ItemMeans[itemIndex]
 	} else {
 		// new user & new item
 		prediction = coc.GlobalMean
@@ -87,33 +88,47 @@ func (coc *CoClustering) predict(denseUserId, denseItemId int) float64 {
 }
 
 // Fit the CoClustering model.
-func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.RuntimeOption) {
+func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOption) {
 	coc.Init(trainSet, options)
 	// Initialize parameters
-	coc.GlobalMean = trainSet.GlobalMean
-	userRatings := trainSet.DenseUserRatings
-	itemRatings := trainSet.DenseItemRatings
-	coc.UserMeans = base.SparseVectorsMean(userRatings)
-	coc.ItemMeans = base.SparseVectorsMean(itemRatings)
-	coc.UserClusters = coc.rng.NewUniformVectorInt(trainSet.UserCount(), 0, coc.nUserClusters)
-	coc.ItemClusters = coc.rng.NewUniformVectorInt(trainSet.ItemCount(), 0, coc.nItemClusters)
+	coc.GlobalMean = trainSet.GlobalMean()
+	coc.UserMeans = make([]float64, trainSet.UserCount())
+	for i := 0; i < trainSet.UserCount(); i++ {
+		coc.UserMeans[i] = trainSet.UserByIndex(i).Mean()
+	}
+	coc.ItemMeans = make([]float64, trainSet.ItemCount())
+	for i := 0; i < trainSet.ItemCount(); i++ {
+		coc.ItemMeans[i] = trainSet.ItemByIndex(i).Mean()
+	}
+	coc.UserClusters = make([]int, trainSet.UserCount())
+	for i := range coc.UserClusters {
+		if trainSet.UserByIndex(i).Len() > 0 {
+			coc.UserClusters[i] = coc.rng.Intn(coc.nUserClusters)
+		}
+	}
+	coc.ItemClusters = make([]int, trainSet.ItemCount())
+	for i := range coc.ItemClusters {
+		if trainSet.ItemByIndex(i).Len() > 0 {
+			coc.ItemClusters[i] = coc.rng.Intn(coc.nItemClusters)
+		}
+	}
 	coc.UserClusterMeans = make([]float64, coc.nUserClusters)
 	coc.ItemClusterMeans = make([]float64, coc.nItemClusters)
 	coc.CoClusterMeans = base.NewMatrix(coc.nUserClusters, coc.nItemClusters)
 	// Clustering
 	for ep := 0; ep < coc.nEpochs; ep++ {
 		// Compute averages A^{COC}, A^{RC}, A^{CC}, A^R, A^C
-		coc.clusterMean(coc.UserClusterMeans, coc.UserClusters, userRatings)
-		coc.clusterMean(coc.ItemClusterMeans, coc.ItemClusters, itemRatings)
-		coc.coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, userRatings)
+		coc.clusterMean(coc.UserClusterMeans, coc.UserClusters, trainSet.Users())
+		coc.clusterMean(coc.ItemClusterMeans, coc.ItemClusters, trainSet.Items())
+		coc.coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, trainSet.Users())
 		// Update row (user) cluster assignments
-		base.ParallelFor(0, trainSet.UserCount(), func(denseUserId int) {
+		base.ParallelFor(0, trainSet.UserCount(), func(userIndex int) {
 			bestCluster, leastCost := -1, math.Inf(1)
 			for g := 0; g < coc.nUserClusters; g++ {
 				cost := 0.0
-				userRatings[denseUserId].ForEach(func(_, denseItemId int, value float64) {
-					itemCluster := coc.ItemClusters[denseItemId]
-					prediction := coc.UserMeans[denseUserId] + coc.ItemMeans[denseItemId] -
+				trainSet.UserByIndex(userIndex).ForEachIndex(func(_, itemIndex int, value float64) {
+					itemCluster := coc.ItemClusters[itemIndex]
+					prediction := coc.UserMeans[userIndex] + coc.ItemMeans[itemIndex] -
 						coc.UserClusterMeans[g] -
 						coc.ItemClusterMeans[itemCluster] +
 						coc.CoClusterMeans[g][itemCluster]
@@ -125,16 +140,16 @@ func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.RuntimeOpti
 					leastCost = cost
 				}
 			}
-			coc.UserClusters[denseUserId] = bestCluster
+			coc.UserClusters[userIndex] = bestCluster
 		})
 		// Update column (item) cluster assignments
-		base.ParallelFor(0, trainSet.ItemCount(), func(denseItemId int) {
+		base.ParallelFor(0, trainSet.ItemCount(), func(itemIndex int) {
 			bestCluster, leastCost := -1, math.Inf(1)
 			for h := 0; h < coc.nItemClusters; h++ {
 				cost := 0.0
-				itemRatings[denseItemId].ForEach(func(_, denseUserId int, value float64) {
-					userCluster := coc.UserClusters[denseUserId]
-					prediction := coc.UserMeans[denseUserId] + coc.ItemMeans[denseItemId] -
+				trainSet.ItemByIndex(itemIndex).ForEachIndex(func(_, userIndex int, value float64) {
+					userCluster := coc.UserClusters[userIndex]
+					prediction := coc.UserMeans[userIndex] + coc.ItemMeans[itemIndex] -
 						coc.UserClusterMeans[userCluster] - coc.ItemClusterMeans[h] +
 						coc.CoClusterMeans[userCluster][h]
 					temp := prediction - value
@@ -145,17 +160,17 @@ func (coc *CoClustering) Fit(trainSet *core.DataSet, options ...core.RuntimeOpti
 					leastCost = cost
 				}
 			}
-			coc.ItemClusters[denseItemId] = bestCluster
+			coc.ItemClusters[itemIndex] = bestCluster
 		})
 	}
 }
 
 // clusterMean computes the mean ratings of clusters.
-func (coc *CoClustering) clusterMean(dst []float64, clusters []int, ratings []*base.SparseVector) {
+func (coc *CoClustering) clusterMean(dst []float64, clusters []int, ratings []*base.MarginalSubSet) {
 	base.FillZeroVector(dst)
 	count := make([]float64, len(dst))
-	for id, cluster := range clusters {
-		ratings[id].ForEach(func(_, index int, value float64) {
+	for index, cluster := range clusters {
+		ratings[index].ForEachIndex(func(_, index int, value float64) {
 			dst[cluster] += value
 			count[cluster]++
 		})
@@ -170,12 +185,12 @@ func (coc *CoClustering) clusterMean(dst []float64, clusters []int, ratings []*b
 }
 
 // coClusterMean computes the mean ratings of co-clusters.
-func (coc *CoClustering) coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []*base.SparseVector) {
+func (coc *CoClustering) coClusterMean(dst [][]float64, userClusters, itemClusters []int, userRatings []*base.MarginalSubSet) {
 	base.FillZeroMatrix(dst)
 	count := base.NewMatrix(coc.nUserClusters, coc.nItemClusters)
-	for denseUserId, userCluster := range userClusters {
-		userRatings[denseUserId].ForEach(func(_, denseItemId int, value float64) {
-			itemCluster := itemClusters[denseItemId]
+	for userIndex, userCluster := range userClusters {
+		userRatings[userIndex].ForEachIndex(func(_, itemIndex int, value float64) {
+			itemCluster := itemClusters[itemIndex]
 			count[userCluster][itemCluster]++
 			dst[userCluster][itemCluster] += value
 		})
