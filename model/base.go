@@ -8,12 +8,12 @@ import "github.com/zhenghaoz/gorse/base"
 // Base model must be included by every recommendation model. Hyper-parameters,
 // ID sets, random generator and fitting options are managed the Base model.
 type Base struct {
-	Params     base.Params          // Hyper-parameters
-	UserIdSet  *base.SparseIdSet    // Users' ID set
-	ItemIdSet  *base.SparseIdSet    // Items' ID set
-	rng        base.RandomGenerator // Random generator
-	randState  int64                // Random seed
-	fitOptions *core.RuntimeOptions // Fit options
+	Params      base.Params          // Hyper-parameters
+	UserIndexer *base.Indexer        // Users' ID set
+	ItemIndexer *base.Indexer        // Items' ID set
+	rng         base.RandomGenerator // Random generator
+	randState   int64                // Random seed
+	fitOptions  *core.RuntimeOptions // Fit options
 	// Tracker
 	isSetParamsCalled bool // Check whether SetParams called
 }
@@ -41,14 +41,14 @@ func (model *Base) Fit(trainSet core.DataSet, options ...core.RuntimeOption) {
 }
 
 // Init the Base model. The method must be called at the beginning of Fit.
-func (model *Base) Init(trainSet *core.DataSet, options []core.RuntimeOption) {
+func (model *Base) Init(trainSet core.DataSetInterface, options []core.RuntimeOption) {
 	// Check Base.GetParams() called
 	if model.isSetParamsCalled == false {
 		panic("Base.GetParams() not called")
 	}
 	// Setup ID set
-	model.UserIdSet = trainSet.UserIdSet
-	model.ItemIdSet = trainSet.ItemIdSet
+	model.UserIndexer = trainSet.UserIndexer()
+	model.ItemIndexer = trainSet.ItemIndexer()
 	// Setup random state
 	model.rng = base.NewRandomGenerator(model.randState)
 	// Setup runtime options
@@ -93,8 +93,8 @@ func (baseLine *BaseLine) SetParams(params base.Params) {
 
 // Predict by the BaseLine model.
 func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
-	denseUserId := baseLine.UserIdSet.ToDenseId(userId)
-	denseItemId := baseLine.ItemIdSet.ToDenseId(itemId)
+	denseUserId := baseLine.UserIndexer.ToIndex(userId)
+	denseItemId := baseLine.ItemIndexer.ToIndex(itemId)
 	return baseLine.predict(denseUserId, denseItemId)
 }
 
@@ -110,16 +110,16 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 }
 
 // Fit the BaseLine model.
-func (baseLine *BaseLine) Fit(trainSet *core.DataSet, options ...core.RuntimeOption) {
+func (baseLine *BaseLine) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOption) {
 	baseLine.Init(trainSet, options)
 	// Initialize parameters
-	baseLine.GlobalBias = trainSet.GlobalMean
+	baseLine.GlobalBias = trainSet.GlobalMean()
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
 	baseLine.ItemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < baseLine.nEpochs; epoch++ {
-		for i := 0; i < trainSet.Len(); i++ {
-			denseUserId, denseItemId, rating := trainSet.GetDense(i)
+		for i := 0; i < trainSet.Count(); i++ {
+			denseUserId, denseItemId, rating := trainSet.GetWithIndex(i)
 			userBias := baseLine.UserBias[denseUserId]
 			itemBias := baseLine.ItemBias[denseItemId]
 			// Compute gradient
@@ -148,19 +148,19 @@ func NewItemPop(params base.Params) *ItemPop {
 }
 
 // Fit the ItemPop model.
-func (pop *ItemPop) Fit(set *core.DataSet, options ...core.RuntimeOption) {
+func (pop *ItemPop) Fit(set core.DataSetInterface, options ...core.RuntimeOption) {
 	pop.Init(set, options)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())
-	for i := range set.DenseItemRatings {
-		pop.Pop[i] = float64(set.DenseItemRatings[i].Len())
+	for i := 0; i < set.ItemCount(); i++ {
+		pop.Pop[i] = float64(set.ItemByIndex(i).Len())
 	}
 }
 
 // Predict by the ItemPop model.
 func (pop *ItemPop) Predict(userId, itemId int) float64 {
 	// Return items' popularity
-	denseItemId := pop.ItemIdSet.ToDenseId(itemId)
+	denseItemId := pop.ItemIndexer.ToIndex(itemId)
 	if denseItemId == base.NotId {
 		return 0
 	}
