@@ -123,7 +123,7 @@ func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
 	return params
 }
 
-func CreateModelFromName(name string, params base.Params) core.Model {
+func CreateModelFromName(name string, params base.Params) core.ModelInterface {
 	switch name {
 	case "svd":
 		return model.NewSVD(params)

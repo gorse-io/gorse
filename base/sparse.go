@@ -89,6 +89,20 @@ func (set *MarginalSubSet) Count() int {
 	return len(set.SubSet)
 }
 
+// GetIndex returns the index of i-th item.
+func (set *MarginalSubSet) GetIndex(i int) int {
+	return set.Indices[set.SubSet[i]]
+}
+
+// Mean of ratings in the subset.
+func (set *MarginalSubSet) Mean() float64 {
+	sum := 0.0
+	for _, i := range set.SubSet {
+		sum += set.Values[i]
+	}
+	return sum / float64(set.Len())
+}
+
 // Contain returns true am ID existed in the subset.
 func (set *MarginalSubSet) Contain(id int) bool {
 	// if id is out of range

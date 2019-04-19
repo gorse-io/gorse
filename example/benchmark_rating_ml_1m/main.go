@@ -15,23 +15,23 @@ import (
 func main() {
 	fmt.Println("Benchmarks on MovieLens 1M")
 	// Models for benchmarks
-	models := []core.Model{
-		// SlopOne
-		model.NewSlopOne(nil),
-		// CoClustering
-		model.NewCoClustering(base.Params{
-			base.NUserClusters: 5,
-			base.NItemClusters: 5,
-			base.NEpochs:       30,
-		}),
-		// KNN
-		model.NewKNN(base.Params{
-			base.Type:       base.Baseline,
-			base.UserBased:  false,
-			base.Similarity: base.Pearson,
-			base.K:          20,
-			base.Shrinkage:  50,
-		}),
+	models := []core.ModelInterface{
+		//// SlopOne
+		//model.NewSlopOne(nil),
+		//// CoClustering
+		//model.NewCoClustering(base.Params{
+		//	base.NUserClusters: 5,
+		//	base.NItemClusters: 5,
+		//	base.NEpochs:       30,
+		//}),
+		//// KNN
+		//model.NewKNN(base.Params{
+		//	base.Type:       base.Baseline,
+		//	base.UserBased:  false,
+		//	base.Similarity: base.Pearson,
+		//	base.K:          20,
+		//	base.Shrinkage:  50,
+		//}),
 		// SVD
 		model.NewSVD(base.Params{
 			base.NEpochs:    100,
@@ -41,15 +41,15 @@ func main() {
 			base.InitMean:   0,
 			base.InitStdDev: 0.001,
 		}),
-		//SVD++
-		model.NewSVDpp(base.Params{
-			base.NFactors:   80,
-			base.Reg:        0.05,
-			base.Lr:         0.005,
-			base.NEpochs:    100,
-			base.InitMean:   0,
-			base.InitStdDev: 0.001,
-		}),
+		////SVD++
+		//model.NewSVDpp(base.Params{
+		//	base.NFactors:   80,
+		//	base.Reg:        0.05,
+		//	base.Lr:         0.005,
+		//	base.NEpochs:    100,
+		//	base.InitMean:   0,
+		//	base.InitStdDev: 0.001,
+		//}),
 	}
 	// Load data
 	data := core.LoadDataFromBuiltIn("ml-1m")

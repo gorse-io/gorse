@@ -57,9 +57,9 @@ func UpdateRecommends(config TomlConfig, metaData toml.MetaData) {
 	// Generate recommends
 	log.Println("generate recommends")
 	items := core.Items(dataSet)
-	for denseUserId := 0; denseUserId < dataSet.UserCount(); denseUserId++ {
-		userId := dataSet.UserIdSet.ToSparseId(denseUserId)
-		exclude := dataSet.GetUserRatingsSet(userId)
+	for userIndex := 0; userIndex < dataSet.UserCount(); userIndex++ {
+		userId := dataSet.UserIndexer().ToID(userIndex)
+		exclude := dataSet.UserByIndex(userIndex)
 		recommendItems, ratings := core.Top(items, userId, config.Recommend.CacheSize, exclude, model)
 		if err = db.PutRecommends(userId, recommendItems, ratings); err != nil {
 			log.Fatal(err)
@@ -69,7 +69,7 @@ func UpdateRecommends(config TomlConfig, metaData toml.MetaData) {
 	log.Printf("generate neighbors by %v", config.Recommend.Similarity)
 	similarity := CreateSimilarityFromName(config.Recommend.Similarity)
 	for denseItemId := 0; denseItemId < dataSet.ItemCount(); denseItemId++ {
-		itemId := dataSet.ItemIdSet.ToSparseId(denseItemId)
+		itemId := dataSet.ItemIndexer().ToID(denseItemId)
 		neighbors, similarities := core.Neighbors(dataSet, itemId, config.Recommend.CacheSize, similarity)
 		if err = db.PutNeighbors(itemId, neighbors, similarities); err != nil {
 			log.Fatal(err)

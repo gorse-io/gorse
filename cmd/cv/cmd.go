@@ -52,7 +52,7 @@ var CmdTest = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		modelName := args[0]
-		var model core.Model
+		var model core.ModelInterface
 		var exist bool
 		if model, exist = Models[modelName]; !exist {
 			log.Fatalf("Unknown model %s\n", modelName)
@@ -154,7 +154,7 @@ var CmdTest = &cobra.Command{
 
 /* Models */
 
-var Models = map[string]core.Model{
+var Models = map[string]core.ModelInterface{
 	"svd":           model.NewSVD(nil),
 	"knn":           model.NewKNN(nil),
 	"wrmf":          model.NewWRMF(nil),

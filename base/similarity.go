@@ -1,7 +1,6 @@
 package base
 
 import (
-	"gonum.org/v1/gonum/stat"
 	"math"
 )
 
@@ -32,9 +31,9 @@ func MSDSimilarity(a, b *MarginalSubSet) float64 {
 // PearsonSimilarity computes the absolute Pearson correlation coefficient between a pair of vectors.
 func PearsonSimilarity(a, b *MarginalSubSet) float64 {
 	// Mean of a
-	meanA := stat.Mean(a.Values, nil)
+	meanA := a.Mean()
 	// Mean of b
-	meanB := stat.Mean(b.Values, nil)
+	meanB := b.Mean()
 	// Mean-centered cosine
 	m, n, l := .0, .0, .0
 	a.ForIntersection(b, func(index int, a, b float64) {

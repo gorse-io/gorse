@@ -15,7 +15,7 @@ import (
 func main() {
 	fmt.Println("Benchmarks on MovieLens 10M")
 	// Models for benchmarks
-	models := []core.Model{
+	models := []core.ModelInterface{
 		// SlopOne
 		model.NewSlopOne(nil),
 		// CoClustering
