@@ -1,7 +1,6 @@
 package core
 
 import (
-	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"math"
 	"testing"
@@ -61,20 +60,8 @@ func (tester *EvaluatorTesterModel) SetParams(params base.Params) {
 	panic("EvaluatorTesterModel.SetParams() should never be called.")
 }
 
-func (tester *EvaluatorTesterModel) Fit(set *DataSet, options ...RuntimeOption) {
+func (tester *EvaluatorTesterModel) Fit(set DataSetInterface, options ...RuntimeOption) {
 	panic("EvaluatorTesterModel.Fit() should never be called.")
-}
-
-func TestAUC(t *testing.T) {
-	// The mocked test dataset:
-	// 1.0 0.0 0.0
-	// 0.0 0.5 0.0
-	// 0.0 0.0 1.0
-	a := NewEvaluatorTesterModel([]int{0, 0, 0, 1, 1, 1, 2, 2, 2},
-		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
-		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
-	b := NewDataSet(NewDataTable([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0}))
-	assert.Equal(t, 1.0, AUC(a, b, nil))
 }
 
 func TestRMSE(t *testing.T) {
@@ -93,32 +80,41 @@ func TestMAE(t *testing.T) {
 	}
 }
 
+func NewTestTargetSet(ids []int) *base.MarginalSubSet {
+	values := make([]float64, len(ids))
+	subset := make([]int, len(ids))
+	for i := range subset {
+		subset[i] = i
+	}
+	return base.NewMarginalSubSet(ids, ids, values, subset)
+}
+
 func TestNDCG(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 5: 0, 7: 0}
+	targetSet := NewTestTargetSet([]int{1, 3, 5, 7})
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	EqualEpsilon(t, NDCG(targetSet, rankList), 0.6766372989, evalEpsilon)
 }
 
 func TestPrecision(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 5: 0, 7: 0}
+	targetSet := NewTestTargetSet([]int{1, 3, 5, 7})
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	EqualEpsilon(t, Precision(targetSet, rankList), 0.4, evalEpsilon)
 }
 
 func TestRecall(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 15: 0, 17: 0, 19: 0}
+	targetSet := NewTestTargetSet([]int{1, 3, 15, 17, 19})
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	EqualEpsilon(t, Recall(targetSet, rankList), 0.4, evalEpsilon)
 }
 
 func TestAP(t *testing.T) {
-	targetSet := map[int]float64{1: 0, 3: 0, 7: 0, 9: 0}
+	targetSet := NewTestTargetSet([]int{1, 3, 7, 9})
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	EqualEpsilon(t, MAP(targetSet, rankList), 0.44375, evalEpsilon)
 }
 
 func TestRR(t *testing.T) {
-	targetSet := map[int]float64{3: 0}
+	targetSet := NewTestTargetSet([]int{3})
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	EqualEpsilon(t, MRR(targetSet, rankList), 0.25, evalEpsilon)
 }

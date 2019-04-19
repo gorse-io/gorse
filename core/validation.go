@@ -1,6 +1,8 @@
 package core
 
 import (
+	"bytes"
+	"encoding/gob"
 	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/stat"
 	"gopkg.in/cheggaaa/pb.v1"
@@ -34,7 +36,7 @@ func (sv CrossValidateResult) MeanAndMargin() (float64, float64) {
 }
 
 // CrossValidate evaluates a model by k-fold cross validation.
-func CrossValidate(model Model, dataSet Table, splitter Splitter, seed int64,
+func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Splitter, seed int64,
 	evaluators ...CVEvaluator) []CrossValidateResult {
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, seed)
@@ -43,7 +45,7 @@ func CrossValidate(model Model, dataSet Table, splitter Splitter, seed int64,
 	scores := make([][]float64, length)
 	params := model.GetParams()
 	base.ParallelFor(0, length, func(i int) {
-		cp := reflect.New(reflect.TypeOf(model).Elem()).Interface().(Model)
+		cp := reflect.New(reflect.TypeOf(model).Elem()).Interface().(ModelInterface)
 		Copy(cp, model)
 		trainFold := trainFolds[i]
 		testFold := testFolds[i]
@@ -78,7 +80,7 @@ type ModelSelectionResult struct {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
+func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid ParameterGrid,
 	splitter Splitter, seed int64, evaluators ...CVEvaluator) []ModelSelectionResult {
 	// Retrieve parameter names and length
 	paramNames := make([]base.ParamName, 0, len(paramGrid))
@@ -133,7 +135,7 @@ func GridSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
+func RandomSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid ParameterGrid,
 	splitter Splitter, trial int, seed int64, evaluators ...CVEvaluator) []ModelSelectionResult {
 	rng := base.NewRandomGenerator(seed)
 	// Create results
@@ -167,4 +169,16 @@ func RandomSearchCV(estimator Model, dataSet Table, paramGrid ParameterGrid,
 		}
 	}
 	return results
+}
+
+// Copy a object from src to dst.
+func Copy(dst, src interface{}) error {
+	buffer := new(bytes.Buffer)
+	encoder := gob.NewEncoder(buffer)
+	if err := encoder.Encode(src); err != nil {
+		return err
+	}
+	decoder := gob.NewDecoder(buffer)
+	err := decoder.Decode(dst)
+	return err
 }

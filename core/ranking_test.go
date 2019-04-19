@@ -11,10 +11,10 @@ func TestTop(t *testing.T) {
 	model := NewEvaluatorTesterModel([]int{0, 0, 0, 0, 0, 0, 0, 0, 0},
 		[]int{0, 1, 2, 3, 4, 5, 6, 7, 8},
 		[]float64{1, 9, 2, 8, 3, 7, 4, 6, 5})
-	testSet := NewDataSet(NewDataTable([]int{0, 0, 0, 0, 0, 0, 0, 0, 0},
+	testSet := NewDataSet([]int{0, 0, 0, 0, 0, 0, 0, 0, 0},
 		[]int{0, 1, 2, 3, 4, 5, 6, 7, 8},
-		[]float64{1, 9, 2, 8, 3, 7, 4, 6, 5}))
-	exclude := map[int]float64{7: 0, 8: 0}
+		[]float64{1, 9, 2, 8, 3, 7, 4, 6, 5})
+	exclude := base.NewMarginalSubSet([]int{7, 8}, []int{0, 1}, []float64{0, 0}, []int{0, 1})
 	items := Items(testSet)
 	top, _ := Top(items, 0, 5, exclude, model)
 	assert.Equal(t, []int{1, 3, 5, 6, 4}, top)
@@ -48,7 +48,7 @@ func TestNeighbors(t *testing.T) {
 			}
 		}
 	}
-	dataSet := NewDataSet(NewDataTable(users, items, ratings))
+	dataSet := NewDataSet(users, items, ratings)
 	// Find N nearest neighbors
 	neighbors, _ := Neighbors(dataSet, 1, 5, base.MSDSimilarity)
 	sort.Sort(sort.IntSlice(neighbors))

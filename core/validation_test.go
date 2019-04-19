@@ -23,9 +23,9 @@ func (model *CVTestModel) Predict(userId, itemId int) float64 {
 	panic("Predict() not implemented")
 }
 
-func (model *CVTestModel) Fit(trainSet *DataSet, setters ...RuntimeOption) {}
+func (model *CVTestModel) Fit(trainSet DataSetInterface, setters ...RuntimeOption) {}
 
-func CVTestEvaluator(estimator Model, testSet *DataSet, excludeSet *DataSet) []float64 {
+func CVTestEvaluator(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface) []float64 {
 	params := estimator.GetParams()
 	a := params.GetFloat64(base.Lr, 0)
 	b := params.GetFloat64(base.Reg, 0)

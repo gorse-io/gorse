@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/zhenghaoz/gorse/base"
+	"gonum.org/v1/gonum/stat"
 	"io"
 	"log"
 	"net/http"
@@ -15,72 +16,271 @@ import (
 	"strings"
 )
 
-// DataSet contains the raw Data table and preprocessed Data structures for recommendation models.
-type DataSet struct {
-	Table
-	GlobalMean       float64              // Global mean of ratings
-	DenseUserIds     []int                // Dense user IDs of ratings
-	DenseItemIds     []int                // Dense item IDs of ratings
-	DenseUserRatings []*base.SparseVector // Ratings of each user
-	DenseItemRatings []*base.SparseVector // Ratings of each item
-	UserIdSet        *base.SparseIdSet    // User ID set
-	ItemIdSet        *base.SparseIdSet    // Item ID set
+type DataSetInterface interface {
+	// GlobalMean returns the global mean of ratings in the dataset.
+	GlobalMean() float64
+	// Count returns the number of ratings in the dataset.
+	Count() int
+	// UserCount returns the number of users in the dataset.
+	UserCount() int
+	// ItemCount returns the number of items in the dataset.
+	ItemCount() int
+	// Get i-th rating by (user ID, item ID, rating).
+	Get(i int) (int, int, float64)
+	// GetWithIndex gets i-th rating by (user index, item index, rating).
+	GetWithIndex(i int) (int, int, float64)
+	// UserIndexer returns the user indexer.
+	UserIndexer() *base.Indexer
+	// ItemIndexer returns the item indexer.
+	ItemIndexer() *base.Indexer
+	// SubSet gets a subset of current dataset.
+	SubSet(subset []int) DataSetInterface
+	// Users returns subsets of users.
+	Users() []*base.MarginalSubSet
+	// Items returns subsets of items.
+	Items() []*base.MarginalSubSet
+	// User returns the subset of a user.
+	User(userId int) *base.MarginalSubSet
+	// Item returns the subset of a item.
+	Item(itemId int) *base.MarginalSubSet
+	// UserByIndex returns the subset of a user by the index.
+	UserByIndex(userIndex int) *base.MarginalSubSet
+	// ItemByIndex returns the subset of a item by the index.
+	ItemByIndex(itemIndex int) *base.MarginalSubSet
 }
 
-// NewDataSet creates a train set from a raw Data set.
-func NewDataSet(table Table) *DataSet {
+// DataSet contains preprocessed data structures for recommendation models.
+type DataSet struct {
+	ratings     []float64              // ratings
+	userIDs     []int                  // user IDs
+	itemIDs     []int                  // item IDs
+	userIndices []int                  // user indices
+	itemIndices []int                  // item indices
+	userIndexer *base.Indexer          // user indexer
+	itemIndexer *base.Indexer          // item indexer
+	users       []*base.MarginalSubSet // subsets of users' ratings
+	items       []*base.MarginalSubSet // subsets of items' ratings
+}
+
+// NewDataSet creates a data set.
+func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
 	set := new(DataSet)
-	set.Table = table
-	set.GlobalMean = table.Mean()
-	set.DenseItemIds = make([]int, 0)
-	set.DenseUserIds = make([]int, 0)
-	// Create ID set
-	set.UserIdSet = base.NewSparseIdSet()
-	set.ItemIdSet = base.NewSparseIdSet()
-	table.ForEach(func(userId, itemId int, rating float64) {
-		set.UserIdSet.Add(userId)
-		set.ItemIdSet.Add(itemId)
-		set.DenseUserIds = append(set.DenseUserIds, set.UserIdSet.ToDenseId(userId))
-		set.DenseItemIds = append(set.DenseItemIds, set.ItemIdSet.ToDenseId(itemId))
-	})
-	// Create user-based and item-based ratings
-	set.DenseUserRatings = base.NewDenseSparseMatrix(set.UserCount())
-	set.DenseItemRatings = base.NewDenseSparseMatrix(set.ItemCount())
-	table.ForEach(func(userId, itemId int, rating float64) {
-		userDenseId := set.UserIdSet.ToDenseId(userId)
-		itemDenseId := set.ItemIdSet.ToDenseId(itemId)
-		set.DenseUserRatings[userDenseId].Add(itemDenseId, rating)
-		set.DenseItemRatings[itemDenseId].Add(userDenseId, rating)
-	})
+	set.userIDs = userIDs
+	set.itemIDs = itemIDs
+	set.ratings = ratings
+	// Index users and items
+	set.userIndexer = base.NewIndexer()
+	set.itemIndexer = base.NewIndexer()
+	set.userIndices = make([]int, set.Count())
+	set.itemIndices = make([]int, set.Count())
+	for i := 0; i < set.Count(); i++ {
+		userId := set.userIDs[i]
+		itemId := set.itemIDs[i]
+		set.userIndexer.Add(userId)
+		set.itemIndexer.Add(itemId)
+		set.userIndices[i] = set.userIndexer.ToIndex(userId)
+		set.itemIndices[i] = set.itemIndexer.ToIndex(itemId)
+	}
+	// Index users' ratings and items' ratings
+	userSubsetIndices := base.NewMatrixInt(set.UserCount(), 0)
+	itemSubsetIndices := base.NewMatrixInt(set.ItemCount(), 0)
+	for i := 0; i < set.Count(); i++ {
+		userId := set.userIDs[i]
+		itemId := set.itemIDs[i]
+		userIndex := set.userIndexer.ToIndex(userId)
+		itemIndex := set.itemIndexer.ToIndex(itemId)
+		userSubsetIndices[userIndex] = append(userSubsetIndices[userIndex], i)
+		itemSubsetIndices[itemIndex] = append(itemSubsetIndices[itemIndex], i)
+	}
+	set.users = make([]*base.MarginalSubSet, set.UserCount())
+	set.items = make([]*base.MarginalSubSet, set.ItemCount())
+	for u := range set.users {
+		set.users[u] = base.NewMarginalSubSet(set.itemIDs, set.itemIndices, ratings, userSubsetIndices[u])
+	}
+	for i := range set.items {
+		set.items[i] = base.NewMarginalSubSet(set.userIDs, set.userIndices, ratings, itemSubsetIndices[i])
+	}
 	return set
 }
 
-// GetDense get the i-th record by <denseUserId, denseItemId, rating>.
-func (dataSet *DataSet) GetDense(i int) (int, int, float64) {
-	_, _, rating := dataSet.Get(i)
-	return dataSet.DenseUserIds[i], dataSet.DenseItemIds[i], rating
+// Count returns the number of ratings.
+func (set *DataSet) Count() int {
+	if set == nil {
+		return 0
+	}
+	return len(set.ratings)
+}
+
+// Get the i-th record by <user ID, item ID, rating>.
+func (set *DataSet) Get(i int) (int, int, float64) {
+	return set.userIDs[i], set.itemIDs[i], set.ratings[i]
+}
+
+// GetWithIndex gets the i-th record by <user index, item index, rating>.
+func (set *DataSet) GetWithIndex(i int) (int, int, float64) {
+	return set.userIndices[i], set.itemIndices[i], set.ratings[i]
+}
+
+// GlobalMean computes the global mean of ratings.
+func (set *DataSet) GlobalMean() float64 {
+	return stat.Mean(set.ratings, nil)
+}
+
+// UserIndexer returns the user indexer.
+func (set *DataSet) UserIndexer() *base.Indexer {
+	return set.userIndexer
+}
+
+// ItemIndexer returns the item indexer.
+func (set *DataSet) ItemIndexer() *base.Indexer {
+	return set.itemIndexer
 }
 
 // UserCount returns the number of users.
-func (dataSet *DataSet) UserCount() int {
-	return dataSet.UserIdSet.Len()
+func (set *DataSet) UserCount() int {
+	return set.UserIndexer().Len()
 }
 
 // ItemCount returns the number of items.
-func (dataSet *DataSet) ItemCount() int {
-	return dataSet.ItemIdSet.Len()
+func (set *DataSet) ItemCount() int {
+	return set.ItemIndexer().Len()
 }
 
-// GetUserRatingsSet gets a user's ratings by the sparse user ID. The returned object
-// is a map between item sparse IDs and given ratings.
-func (dataSet *DataSet) GetUserRatingsSet(userId int) map[int]float64 {
-	denseUserId := dataSet.UserIdSet.ToDenseId(userId)
-	set := make(map[int]float64)
-	dataSet.DenseUserRatings[denseUserId].ForEach(func(i, index int, value float64) {
-		itemId := dataSet.ItemIdSet.ToSparseId(index)
-		set[itemId] = value
-	})
+// SubSet returns a subset of current dataset.
+func (set *DataSet) SubSet(subset []int) DataSetInterface {
+	return NewSubSet(set, subset)
+}
+
+// UserByIndex gets ratings of a user by index.
+func (set *DataSet) UserByIndex(userIndex int) *base.MarginalSubSet {
+	return set.users[userIndex]
+}
+
+// ItemByIndex gets ratings of a item by index.
+func (set *DataSet) ItemByIndex(itemIndex int) *base.MarginalSubSet {
+	return set.items[itemIndex]
+}
+
+// Users gets ratings of a user by index.
+func (set *DataSet) Users() []*base.MarginalSubSet {
+	return set.users
+}
+
+// Items gets ratings of a item by index.
+func (set *DataSet) Items() []*base.MarginalSubSet {
+	return set.items
+}
+
+func (set *DataSet) User(userId int) *base.MarginalSubSet {
+	userIndex := set.userIndexer.ToIndex(userId)
+	return set.UserByIndex(userIndex)
+}
+
+func (set *DataSet) Item(itemId int) *base.MarginalSubSet {
+	itemIndex := set.itemIndexer.ToIndex(itemId)
+	return set.ItemByIndex(itemIndex)
+}
+
+// SubSet creates a subset index over a existed dataset.
+type SubSet struct {
+	*DataSet                        // the existed dataset.
+	subset   []int                  // indices of subset's samples
+	users    []*base.MarginalSubSet // subsets of users' ratings
+	items    []*base.MarginalSubSet // subsets of items' ratings
+}
+
+// NewSubSet creates a subset of a dataset.
+func NewSubSet(dataSet *DataSet, subset []int) DataSetInterface {
+	set := new(SubSet)
+	set.DataSet = dataSet
+	set.subset = subset
+	// Index users' ratings and items' ratings
+	userSubsetIndices := base.NewMatrixInt(set.UserCount(), 0)
+	itemSubsetIndices := base.NewMatrixInt(set.ItemCount(), 0)
+	for _, i := range set.subset {
+		userId := set.userIDs[i]
+		itemId := set.itemIDs[i]
+		userIndex := set.userIndexer.ToIndex(userId)
+		itemIndex := set.itemIndexer.ToIndex(itemId)
+		userSubsetIndices[userIndex] = append(userSubsetIndices[userIndex], i)
+		itemSubsetIndices[itemIndex] = append(itemSubsetIndices[itemIndex], i)
+	}
+	set.users = make([]*base.MarginalSubSet, set.UserCount())
+	set.items = make([]*base.MarginalSubSet, set.ItemCount())
+	for u := range set.users {
+		set.users[u] = base.NewMarginalSubSet(set.itemIDs, set.itemIndices, set.ratings, userSubsetIndices[u])
+	}
+	for i := range set.items {
+		set.items[i] = base.NewMarginalSubSet(set.userIDs, set.userIndices, set.ratings, itemSubsetIndices[i])
+	}
 	return set
+}
+
+// Count returns the number of ratings.
+func (set *SubSet) Count() int {
+	if set == nil {
+		return 0
+	}
+	return len(set.subset)
+}
+
+// Get the i-th record by <user ID, item ID, rating>.
+func (set *SubSet) Get(i int) (int, int, float64) {
+	return set.DataSet.Get(set.subset[i])
+}
+
+// GetWithIndex gets the i-th record by <user index, item index, rating>.
+func (set *SubSet) GetWithIndex(i int) (int, int, float64) {
+	return set.DataSet.GetWithIndex(set.subset[i])
+}
+
+// GlobalMean computes the global mean of ratings.
+func (set *SubSet) GlobalMean() float64 {
+	sum := 0.0
+	for i := 0; i < set.Count(); i++ {
+		_, _, rating := set.Get(i)
+		sum += rating
+	}
+	return sum / float64(set.Count())
+}
+
+// SubSet returns a subset of current dataset.
+func (set *SubSet) SubSet(indices []int) DataSetInterface {
+	rawIndices := make([]int, len(indices))
+	for i, index := range indices {
+		rawIndices[i] = set.subset[index]
+	}
+	return NewSubSet(set.DataSet, rawIndices)
+}
+
+// UserByIndex gets ratings of a user by index.
+func (set *SubSet) UserByIndex(userIndex int) *base.MarginalSubSet {
+	return set.users[userIndex]
+}
+
+// ItemByIndex gets ratings of a item by index.
+func (set *SubSet) ItemByIndex(itemIndex int) *base.MarginalSubSet {
+	return set.items[itemIndex]
+}
+
+// Users gets ratings of a user by index.
+func (set *SubSet) Users() []*base.MarginalSubSet {
+	return set.users
+}
+
+// Items gets ratings of a item by index.
+func (set *SubSet) Items() []*base.MarginalSubSet {
+	return set.items
+}
+
+func (set *SubSet) User(userId int) *base.MarginalSubSet {
+	userIndex := set.userIndexer.ToIndex(userId)
+	return set.UserByIndex(userIndex)
+}
+
+func (set *SubSet) Item(itemId int) *base.MarginalSubSet {
+	itemIndex := set.itemIndexer.ToIndex(itemId)
+	return set.ItemByIndex(itemIndex)
 }
 
 /* Loader */
@@ -150,7 +350,7 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 		items = append(items, item)
 		ratings = append(ratings, rating)
 	}
-	return NewDataSet(NewDataTable(users, items, ratings))
+	return NewDataSet(users, items, ratings)
 }
 
 // LoadDataFromNetflix loads Data from the Netflix dataset. The file should be:
@@ -189,7 +389,7 @@ func LoadDataFromNetflix(fileName string, _ string, _ bool) *DataSet {
 			ratings = append(ratings, float64(rating))
 		}
 	}
-	return NewDataSet(NewDataTable(users, items, ratings))
+	return NewDataSet(users, items, ratings)
 }
 
 // LoadDataFromSQL loads data from a SQL database.
@@ -215,7 +415,7 @@ func LoadDataFromSQL(db *sql.DB, tableName string,
 		items = append(items, itemId)
 		ratings = append(ratings, float64(rating))
 	}
-	return NewDataSet(NewDataTable(users, items, ratings)), nil
+	return NewDataSet(users, items, ratings), nil
 }
 
 /* Utils */

@@ -1,9 +1,5 @@
 package core
 
-import (
-	"runtime"
-)
-
 /* Options for Model.Fit()  */
 
 // RuntimeOptions defines options used for runtime.
@@ -15,7 +11,7 @@ type RuntimeOptions struct {
 // NewRuntimeOptions creates a (RuntimeOptions) object from (RuntimeOption)s.
 func NewRuntimeOptions(setters []RuntimeOption) *RuntimeOptions {
 	options := new(RuntimeOptions)
-	options.NJobs = runtime.NumCPU()
+	options.NJobs = 1 //runtime.NumCPU()
 	options.Verbose = true
 	for _, setter := range setters {
 		setter(options)
