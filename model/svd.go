@@ -577,8 +577,7 @@ func (mf *WRMF) Fit(set core.DataSetInterface, options ...core.RuntimeOption) {
 			})
 			a.Add(a, regI)
 			if err := temp1.Inverse(a); err != nil {
-				log.Println(err)
-				panic("A")
+				log.Fatal(err)
 			}
 			temp2.MulVec(temp1, b)
 			mf.UserFactor.SetRow(u, temp2.RawVector().Data)
@@ -602,8 +601,7 @@ func (mf *WRMF) Fit(set core.DataSetInterface, options ...core.RuntimeOption) {
 			})
 			a.Add(a, regI)
 			if err := temp1.Inverse(a); err != nil {
-				log.Println(err)
-				panic("B")
+				log.Fatal(err)
 			}
 			temp2.MulVec(temp1, b)
 			mf.ItemFactor.SetRow(i, temp2.RawVector().Data)

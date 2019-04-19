@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func ModelParallelTest(t *testing.T, models ...core.Model) {
+func ModelParallelTest(t *testing.T, models ...core.ModelInterface) {
 	data := core.LoadDataFromBuiltIn("ml-100k")
 	splitter := core.NewRatioSplitter(1, 0.2)
 	trains, tests := splitter(data, 0)

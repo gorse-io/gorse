@@ -13,14 +13,16 @@ const (
 	rankingEpsilon = 0.008
 )
 
-func checkRegression(t *testing.T, model Model, dataSet Table, splitter Splitter, evalNames []string,
+func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CVEvaluator) {
 	// Cross validation
 	results := CrossValidate(model, dataSet, splitter, 0, evaluators...)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
-		if accuracy > expectations[i]+ratingEpsilon {
+		if math.IsNaN(accuracy) {
+			t.Fatalf("%s: NaN", evalNames[i])
+		} else if accuracy > expectations[i]+ratingEpsilon {
 			t.Fatalf("%s: %.3f > %.3f+%.3f", evalNames[i], accuracy, expectations[i], ratingEpsilon)
 		} else {
 			t.Logf("%s: %.3f = %.3f%+.3f", evalNames[i], accuracy, expectations[i], accuracy-expectations[i])
@@ -28,7 +30,7 @@ func checkRegression(t *testing.T, model Model, dataSet Table, splitter Splitter
 	}
 }
 
-func checkRank(t *testing.T, model Model, dataSet Table, splitter Splitter, evalNames []string,
+func checkRank(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CVEvaluator) {
 	// Cross validation
 	results := CrossValidate(model, dataSet, splitter, 0, evaluators...)
