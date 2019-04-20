@@ -128,7 +128,7 @@ var CmdTest = &cobra.Command{
 			evaluators = append(evaluators, core.NewRankEvaluator(n, rankMetrics...))
 		}
 		// Cross validation
-		out := core.CrossValidate(model, data, core.NewKFoldSplitter(5), 0, evaluators...)
+		out := core.CrossValidate(model, data, core.NewKFoldSplitter(5), 0, nil, evaluators...)
 		// Render table
 		header := make([]string, k+2)
 		header[k+1] = "Mean"

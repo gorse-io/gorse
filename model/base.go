@@ -13,7 +13,6 @@ type Base struct {
 	ItemIndexer *base.Indexer        // Items' ID set
 	rng         base.RandomGenerator // Random generator
 	randState   int64                // Random seed
-	fitOptions  *core.RuntimeOptions // Fit options
 	// Tracker
 	isSetParamsCalled bool // Check whether SetParams called
 }
@@ -36,12 +35,12 @@ func (model *Base) Predict(userId, itemId int) float64 {
 }
 
 // Fit has not been implemented,
-func (model *Base) Fit(trainSet core.DataSet, options ...core.RuntimeOption) {
+func (model *Base) Fit(trainSet core.DataSet, options *base.RuntimeOptions) {
 	panic("Fit() not implemented")
 }
 
 // Init the Base model. The method must be called at the beginning of Fit.
-func (model *Base) Init(trainSet core.DataSetInterface, options []core.RuntimeOption) {
+func (model *Base) Init(trainSet core.DataSetInterface) {
 	// Check Base.GetParams() called
 	if model.isSetParamsCalled == false {
 		panic("Base.GetParams() not called")
@@ -51,8 +50,6 @@ func (model *Base) Init(trainSet core.DataSetInterface, options []core.RuntimeOp
 	model.ItemIndexer = trainSet.ItemIndexer()
 	// Setup random state
 	model.rng = base.NewRandomGenerator(model.randState)
-	// Setup runtime options
-	model.fitOptions = core.NewRuntimeOptions(options)
 }
 
 // BaseLine predicts the rating for given user and item by
@@ -110,8 +107,8 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 }
 
 // Fit the BaseLine model.
-func (baseLine *BaseLine) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOption) {
-	baseLine.Init(trainSet, options)
+func (baseLine *BaseLine) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	baseLine.Init(trainSet)
 	// Initialize parameters
 	baseLine.GlobalBias = trainSet.GlobalMean()
 	baseLine.UserBias = make([]float64, trainSet.UserCount())
@@ -148,8 +145,8 @@ func NewItemPop(params base.Params) *ItemPop {
 }
 
 // Fit the ItemPop model.
-func (pop *ItemPop) Fit(set core.DataSetInterface, options ...core.RuntimeOption) {
-	pop.Init(set, options)
+func (pop *ItemPop) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
+	pop.Init(set)
 	// Get items' popularity
 	pop.Pop = make([]float64, set.ItemCount())
 	for i := 0; i < set.ItemCount(); i++ {

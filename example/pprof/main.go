@@ -29,7 +29,7 @@ func main() {
 		base.InitMean:   0,
 		base.InitStdDev: 0.001,
 	})
-	core.CrossValidate(svd, data, core.NewKFoldSplitter(5), 0,
+	core.CrossValidate(svd, data, core.NewKFoldSplitter(5), 0, nil,
 		core.NewRankEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
 
 	// Save memory profile

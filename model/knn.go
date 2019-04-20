@@ -115,8 +115,8 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 }
 
 // Fit the KNN model.
-func (knn *KNN) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOption) {
-	knn.Init(trainSet, options)
+func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	knn.Init(trainSet)
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean()
 	// Retrieve user (item) iRatings
@@ -151,7 +151,7 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOptio
 	}
 	if knn._type == base.Baseline {
 		baseLine := NewBaseLine(knn.Params)
-		baseLine.Fit(trainSet)
+		baseLine.Fit(trainSet, nil)
 		if knn.userBased {
 			knn.Bias = baseLine.UserBias
 		} else {
@@ -160,7 +160,7 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOptio
 	}
 	// Pairwise similarity
 	knn.SimMatrix = base.NewMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
-	base.Parallel(len(knn.LeftRatings), knn.fitOptions.NJobs, func(begin, end int) {
+	base.Parallel(len(knn.LeftRatings), options.GetJobs(), func(begin, end int) {
 		for iIndex := begin; iIndex < end; iIndex++ {
 			iRatings := knn.LeftRatings[iIndex]
 			for jIndex := 0; jIndex < len(knn.LeftRatings); jIndex++ {

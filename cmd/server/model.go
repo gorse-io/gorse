@@ -53,7 +53,7 @@ func UpdateRecommends(config TomlConfig, metaData toml.MetaData) {
 	model := CreateModelFromName(config.Recommend.Model, params)
 	// Training model
 	log.Println("training model")
-	model.Fit(dataSet)
+	model.Fit(dataSet, nil)
 	// Generate recommends
 	log.Println("generate recommends")
 	items := core.Items(dataSet)

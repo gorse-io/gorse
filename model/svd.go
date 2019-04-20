@@ -97,8 +97,8 @@ func (svd *SVD) predict(userIndex int, itemIndex int) float64 {
 }
 
 // Fit the SVD model.
-func (svd *SVD) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOption) {
-	svd.Init(trainSet, options)
+func (svd *SVD) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	svd.Init(trainSet)
 	// Initialize parameters
 	svd.GlobalMean = 0
 	svd.UserBias = make([]float64, trainSet.UserCount())
@@ -108,15 +108,15 @@ func (svd *SVD) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOptio
 	// Select fit function
 	switch svd.target {
 	case base.SGD:
-		svd.fitSGD(trainSet)
+		svd.fitSGD(trainSet, options)
 	case base.BPR:
-		svd.fitBPR(trainSet)
+		svd.fitBPR(trainSet, options)
 	default:
 		panic(fmt.Sprintf("Unknown target: %v", svd.target))
 	}
 }
 
-func (svd *SVD) fitSGD(trainSet core.DataSetInterface) {
+func (svd *SVD) fitSGD(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
 	svd.GlobalMean = trainSet.GlobalMean()
 	// Create buffers
 	temp := make([]float64, svd.nFactors)
@@ -124,6 +124,7 @@ func (svd *SVD) fitSGD(trainSet core.DataSetInterface) {
 	itemFactor := make([]float64, svd.nFactors)
 	// Optimize
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
+		options.Logf("epoch = %v/%v", epoch+1, svd.nEpochs)
 		perm := svd.rng.Perm(trainSet.Count())
 		for _, i := range perm {
 			userIndex, itemIndex, rating := trainSet.GetWithIndex(i)
@@ -153,7 +154,7 @@ func (svd *SVD) fitSGD(trainSet core.DataSetInterface) {
 	}
 }
 
-func (svd *SVD) fitBPR(trainSet core.DataSetInterface) {
+func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
 	// Create buffers
 	temp := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
@@ -259,8 +260,8 @@ func (nmf *NMF) predict(userIndex int, itemIndex int) float64 {
 }
 
 // Fit the NMF model.
-func (nmf *NMF) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOption) {
-	nmf.Init(trainSet, options)
+func (nmf *NMF) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	nmf.Init(trainSet)
 	// Initialize parameters
 	nmf.GlobalMean = trainSet.GlobalMean()
 	nmf.UserFactor = nmf.rng.NewUniformMatrix(trainSet.UserCount(), nmf.nFactors, nmf.initLow, nmf.initHigh)
@@ -406,8 +407,8 @@ func (svd *SVDpp) sumOverImplicitFactors(userIndex int) []float64 {
 }
 
 // Fit the SVD++ model.
-func (svd *SVDpp) Fit(trainSet core.DataSetInterface, setters ...core.RuntimeOption) {
-	svd.Init(trainSet, setters)
+func (svd *SVDpp) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	svd.Init(trainSet)
 	// Initialize parameters
 	svd.GlobalMean = trainSet.GlobalMean()
 	svd.UserBias = make([]float64, trainSet.UserCount())
@@ -422,7 +423,7 @@ func (svd *SVDpp) Fit(trainSet core.DataSetInterface, setters ...core.RuntimeOpt
 	step := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
 	itemFactor := make([]float64, svd.nFactors)
-	c := base.NewMatrix(svd.fitOptions.NJobs, svd.nFactors)
+	c := base.NewMatrix(options.GetJobs(), svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
@@ -458,11 +459,11 @@ func (svd *SVDpp) Fit(trainSet core.DataSetInterface, setters ...core.RuntimeOpt
 			})
 			// Update implicit latent factor
 			var wg sync.WaitGroup
-			wg.Add(svd.fitOptions.NJobs)
-			for j := 0; j < svd.fitOptions.NJobs; j++ {
+			wg.Add(options.GetJobs())
+			for j := 0; j < options.GetJobs(); j++ {
 				go func(jobId int) {
-					low := size * jobId / svd.fitOptions.NJobs
-					high := size * (jobId + 1) / svd.fitOptions.NJobs
+					low := size * jobId / options.GetJobs()
+					high := size * (jobId + 1) / options.GetJobs()
 					a := c[jobId]
 					for i := low; i < high; i++ {
 						itemIndex := svd.TrainSet.UserByIndex(userIndex).Indices[i]
@@ -538,8 +539,8 @@ func (mf *WRMF) Predict(userId, itemId int) float64 {
 }
 
 // Fit the WRMF model.
-func (mf *WRMF) Fit(set core.DataSetInterface, options ...core.RuntimeOption) {
-	mf.Init(set, options)
+func (mf *WRMF) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
+	mf.Init(set)
 	// Initialize
 	mf.UserFactor = mat.NewDense(set.UserCount(), mf.nFactors,
 		mf.rng.NewNormalVector(set.UserCount()*mf.nFactors, mf.initMean, mf.initStdDev))

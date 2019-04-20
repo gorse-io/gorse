@@ -88,8 +88,8 @@ func (coc *CoClustering) predict(userIndex, itemIndex int) float64 {
 }
 
 // Fit the CoClustering model.
-func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options ...core.RuntimeOption) {
-	coc.Init(trainSet, options)
+func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	coc.Init(trainSet)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean()
 	coc.UserMeans = make([]float64, trainSet.UserCount())
@@ -117,6 +117,7 @@ func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options ...core.Run
 	coc.CoClusterMeans = base.NewMatrix(coc.nUserClusters, coc.nItemClusters)
 	// Clustering
 	for ep := 0; ep < coc.nEpochs; ep++ {
+		options.Logf("epoch = %v/%v", ep+1, coc.nEpochs)
 		// Compute averages A^{COC}, A^{RC}, A^{CC}, A^R, A^C
 		coc.clusterMean(coc.UserClusterMeans, coc.UserClusters, trainSet.Users())
 		coc.clusterMean(coc.ItemClusterMeans, coc.ItemClusters, trainSet.Items())

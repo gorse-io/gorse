@@ -37,24 +37,26 @@ func (sv CrossValidateResult) MeanAndMargin() (float64, float64) {
 
 // CrossValidate evaluates a model by k-fold cross validation.
 func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Splitter, seed int64,
-	evaluators ...CVEvaluator) []CrossValidateResult {
+	options *base.RuntimeOptions, evaluators ...CVEvaluator) []CrossValidateResult {
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, seed)
 	length := len(trainFolds)
 	// Cross validation
 	scores := make([][]float64, length)
 	params := model.GetParams()
-	base.ParallelFor(0, length, func(i int) {
+	base.Parallel(length, options.GetJobs(), func(begin, end int) {
 		cp := reflect.New(reflect.TypeOf(model).Elem()).Interface().(ModelInterface)
 		Copy(cp, model)
-		trainFold := trainFolds[i]
-		testFold := testFolds[i]
 		cp.SetParams(params)
-		cp.Fit(trainFold)
-		// Evaluate on test set
-		scores[i] = make([]float64, 0)
-		for _, evaluator := range evaluators {
-			scores[i] = append(scores[i], evaluator(cp, testFold, trainFold)...)
+		for i := begin; i < end; i++ {
+			trainFold := trainFolds[i]
+			testFold := testFolds[i]
+			cp.Fit(trainFold, nil)
+			// Evaluate on test set
+			scores[i] = make([]float64, 0)
+			for _, evaluator := range evaluators {
+				scores[i] = append(scores[i], evaluator(cp, testFold, trainFold)...)
+			}
 		}
 	})
 	// Create return structures
@@ -81,7 +83,7 @@ type ModelSelectionResult struct {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid ParameterGrid,
-	splitter Splitter, seed int64, evaluators ...CVEvaluator) []ModelSelectionResult {
+	splitter Splitter, seed int64, options *base.RuntimeOptions, evaluators ...CVEvaluator) []ModelSelectionResult {
 	// Retrieve parameter names and length
 	paramNames := make([]base.ParamName, 0, len(paramGrid))
 	count := 1
@@ -106,7 +108,7 @@ func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid 
 			// Cross validate
 			estimator.GetParams().Merge(params)
 			estimator.SetParams(estimator.GetParams())
-			cvResults := CrossValidate(estimator, dataSet, splitter, seed, evaluators...)
+			cvResults := CrossValidate(estimator, dataSet, splitter, seed, options, evaluators...)
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
 				results[i].AllParams = append(results[i].AllParams, params.Copy())
@@ -136,7 +138,7 @@ func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid 
 
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid ParameterGrid,
-	splitter Splitter, trial int, seed int64, evaluators ...CVEvaluator) []ModelSelectionResult {
+	splitter Splitter, trial int, seed int64, options *base.RuntimeOptions, evaluators ...CVEvaluator) []ModelSelectionResult {
 	rng := base.NewRandomGenerator(seed)
 	// Create results
 	results := make([]ModelSelectionResult, len(evaluators))
@@ -156,7 +158,7 @@ func RandomSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGri
 		// Cross validate
 		estimator.GetParams().Merge(params)
 		estimator.SetParams(estimator.GetParams())
-		cvResults := CrossValidate(estimator, dataSet, splitter, seed, evaluators...)
+		cvResults := CrossValidate(estimator, dataSet, splitter, seed, options, evaluators...)
 		for j := range cvResults {
 			results[j].CVResults[i] = cvResults[j]
 			results[j].AllParams[i] = params.Copy()

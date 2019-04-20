@@ -20,7 +20,7 @@ func main() {
 		base.Reg:      0.1,
 	})
 	// Fit model
-	svd.Fit(train)
+	svd.Fit(train, nil)
 	// Evaluate model
 	scores := core.EvaluateRating(svd, test, core.RMSE, core.MAE)
 	fmt.Printf("RMSE = %.5f\n", scores[0])

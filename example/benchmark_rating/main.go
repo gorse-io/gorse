@@ -12,10 +12,44 @@ import (
 	"time"
 )
 
-func main() {
-	fmt.Println("Benchmarks on MovieLens 10M")
-	// Models for benchmarks
-	models := []core.ModelInterface{
+var models = map[string][]core.ModelInterface{
+	"ml-100k": {
+		// SlopOne
+		model.NewSlopOne(nil),
+		// CoClustering
+		model.NewCoClustering(base.Params{
+			base.NUserClusters: 5,
+			base.NItemClusters: 3,
+			base.NEpochs:       20,
+		}),
+		// KNN
+		model.NewKNN(base.Params{
+			base.Type:       base.Baseline,
+			base.UserBased:  false,
+			base.Similarity: base.Pearson,
+			base.K:          30,
+			base.Shrinkage:  90,
+		}),
+		// SVD
+		model.NewSVD(base.Params{
+			base.NEpochs:    100,
+			base.Reg:        0.1,
+			base.Lr:         0.01,
+			base.NFactors:   50,
+			base.InitMean:   0,
+			base.InitStdDev: 0.001,
+		}),
+		//SVD++
+		model.NewSVDpp(base.Params{
+			base.NEpochs:    100,
+			base.Reg:        0.05,
+			base.Lr:         0.005,
+			base.NFactors:   50,
+			base.InitMean:   0,
+			base.InitStdDev: 0.001,
+		}),
+	},
+	"ml-1m": {
 		// SlopOne
 		model.NewSlopOne(nil),
 		// CoClustering
@@ -37,11 +71,11 @@ func main() {
 			base.NEpochs:    100,
 			base.Reg:        0.05,
 			base.Lr:         0.005,
-			base.NFactors:   100,
+			base.NFactors:   80,
 			base.InitMean:   0,
 			base.InitStdDev: 0.001,
 		}),
-		// SVD++
+		//SVD++
 		model.NewSVDpp(base.Params{
 			base.NFactors:   80,
 			base.Reg:        0.05,
@@ -50,14 +84,28 @@ func main() {
 			base.InitMean:   0,
 			base.InitStdDev: 0.001,
 		}),
+	},
+}
+
+func main() {
+	if len(os.Args) == 1 {
+		// Show usage
+		fmt.Printf("usage: %s <dataset>\n\n", os.Args[0])
+		fmt.Println("support dataset:")
+		fmt.Println()
+		fmt.Println("\tml-100k")
+		fmt.Println("\tml-1m")
+		os.Exit(0)
 	}
+	dataset := os.Args[1]
+	fmt.Printf("benchmarks on %s\n", dataset)
 	// Load data
-	data := core.LoadDataFromBuiltIn("ml-10m")
+	data := core.LoadDataFromBuiltIn(dataset)
 	// Cross Validation
 	lines := make([][]string, 0)
-	for _, m := range models {
+	for _, m := range models[dataset] {
 		start := time.Now()
-		cv := core.CrossValidate(m, data, core.NewKFoldSplitter(5), 0,
+		cv := core.CrossValidate(m, data, core.NewKFoldSplitter(5), 0, nil,
 			core.NewRatingEvaluator(core.RMSE, core.MAE))
 		tm := time.Since(start)
 		meanRMSE, marginRMSE := cv[0].MeanAndMargin()

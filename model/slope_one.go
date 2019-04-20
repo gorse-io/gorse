@@ -64,9 +64,9 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 }
 
 // Fit the SlopeOne model.
-func (so *SlopeOne) Fit(trainSet core.DataSetInterface, setters ...core.RuntimeOption) {
+func (so *SlopeOne) Fit(trainSet core.DataSetInterface, setters *base.RuntimeOptions) {
 	// Initialize
-	so.Init(trainSet, setters)
+	so.Init(trainSet)
 	so.GlobalMean = trainSet.GlobalMean()
 	so.UserRatings = trainSet.Users()
 	so.UserMeans = make([]float64, trainSet.UserCount())
