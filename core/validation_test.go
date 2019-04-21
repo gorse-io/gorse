@@ -23,7 +23,7 @@ func (model *CVTestModel) Predict(userId, itemId int) float64 {
 	panic("Predict() not implemented")
 }
 
-func (model *CVTestModel) Fit(trainSet DataSetInterface, setters ...RuntimeOption) {}
+func (model *CVTestModel) Fit(trainSet DataSetInterface, setters *base.RuntimeOptions) {}
 
 func CVTestEvaluator(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface) []float64 {
 	params := estimator.GetParams()
@@ -41,7 +41,7 @@ func TestCrossValidate(t *testing.T) {
 		base.Reg:   5,
 		base.Alpha: 7,
 	})
-	out := CrossValidate(model, nil, NewKFoldSplitter(5), 0, CVTestEvaluator)
+	out := CrossValidate(model, nil, NewKFoldSplitter(5), 0, nil, CVTestEvaluator)
 	assert.Equal(t, 15.0, stat.Mean(out[0].TestScore, nil))
 }
 
@@ -54,7 +54,7 @@ func TestGridSearchCV(t *testing.T) {
 	}
 	model := new(CVTestModel)
 	model.SetParams(base.Params{base.InitMean: 10})
-	out := GridSearchCV(model, nil, paramGrid, NewKFoldSplitter(5), 0, CVTestEvaluator)
+	out := GridSearchCV(model, nil, paramGrid, NewKFoldSplitter(5), 0, nil, CVTestEvaluator)
 	// Check best parameters
 	assert.Equal(t, 16.0, out[0].BestScore)
 	assert.Equal(t, 26, out[0].BestIndex)
@@ -70,7 +70,7 @@ func TestRandomSearchCV(t *testing.T) {
 	}
 	model := new(CVTestModel)
 	model.SetParams(base.Params{base.InitMean: 10})
-	out := RandomSearchCV(model, nil, paramGrid, NewKFoldSplitter(5), 100, 0, CVTestEvaluator)
+	out := RandomSearchCV(model, nil, paramGrid, NewKFoldSplitter(5), 100, 0, nil, CVTestEvaluator)
 	// Check best parameters
 	assert.Equal(t, 16.0, out[0].BestScore)
 	assert.Equal(t, base.Params{base.Lr: 2, base.Reg: 3, base.Alpha: 1}, out[0].BestParams)

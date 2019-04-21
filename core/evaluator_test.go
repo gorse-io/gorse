@@ -60,8 +60,16 @@ func (tester *EvaluatorTesterModel) SetParams(params base.Params) {
 	panic("EvaluatorTesterModel.SetParams() should never be called.")
 }
 
-func (tester *EvaluatorTesterModel) Fit(set DataSetInterface, options ...RuntimeOption) {
+func (tester *EvaluatorTesterModel) Fit(set DataSetInterface, options *base.RuntimeOptions) {
 	panic("EvaluatorTesterModel.Fit() should never be called.")
+}
+
+func NewTestIndexer(id []int) *base.Indexer {
+	indexer := base.NewIndexer()
+	for _, v := range id {
+		indexer.Add(v)
+	}
+	return indexer
 }
 
 func TestRMSE(t *testing.T) {
@@ -81,12 +89,13 @@ func TestMAE(t *testing.T) {
 }
 
 func NewTestTargetSet(ids []int) *base.MarginalSubSet {
+	indexer := NewTestIndexer(ids)
 	values := make([]float64, len(ids))
 	subset := make([]int, len(ids))
 	for i := range subset {
 		subset[i] = i
 	}
-	return base.NewMarginalSubSet(ids, ids, values, subset)
+	return base.NewMarginalSubSet(indexer, subset, values, subset)
 }
 
 func TestNDCG(t *testing.T) {
