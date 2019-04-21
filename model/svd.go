@@ -125,8 +125,7 @@ func (svd *SVD) fitSGD(trainSet core.DataSetInterface, options *base.RuntimeOpti
 	// Optimize
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		options.Logf("epoch = %v/%v", epoch+1, svd.nEpochs)
-		perm := svd.rng.Perm(trainSet.Count())
-		for _, i := range perm {
+		for i := 0; i < trainSet.Count(); i++ {
 			userIndex, itemIndex, rating := trainSet.GetWithIndex(i)
 			// Compute error: e_{ui} = r - \hat r
 			upGrad := rating - svd.predict(userIndex, itemIndex)
