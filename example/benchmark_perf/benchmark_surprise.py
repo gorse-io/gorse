@@ -23,7 +23,7 @@ if __name__ == '__main__':
         exit(0)
     dataset = sys.argv[1]
     # Load the movielens-100k dataset (download it if needed).
-    data = Dataset.load_builtin('ml-100k')
+    data = Dataset.load_builtin(dataset)
     # Use the famous SVD algorithm.
     algo = models[dataset]
     # Run 5-fold cross-validation and print results.
