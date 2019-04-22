@@ -100,6 +100,18 @@ Request 5 recommended items for the 1-th user. See [more APIs](https://github.co
 - Visit [GoDoc](https://godoc.org/github.com/zhenghaoz/gorse) for detailed documentation of codes.
 - Visit [Wiki](https://github.com/zhenghaoz/gorse/wiki) for tutorial, examples and high-level introduction.
 
+## Performance
+
+gorse is much faster than Surprise, and comparable to librec while using less memory space than Surprise and librec. The memory efficiency is achieved by sophisticated data structures. 
+
+- cross-validation of SVD on MovieLens 100K:
+
+<img width=320 src="https://img.sine-x.com/perf_time_svd_ml_100k.png"><img width=320 src="https://img.sine-x.com/perf_mem_svd_ml_100k.png">
+
+- cross-validation of SVD on MovieLens 1M:
+
+<img width=320 src="https://img.sine-x.com/perf_time_svd_ml_1m.png"><img width=320 src="https://img.sine-x.com/perf_mem_svd_ml_1m.png">
+
 ## Contributors
 
 [![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/0)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/0)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/1)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/1)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/2)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/2)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/3)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/3)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/4)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/4)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/5)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/5)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/6)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/6)[![](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/images/7)](https://sourcerer.io/fame/zhenghaoz/zhenghaoz/gorse/links/7)
