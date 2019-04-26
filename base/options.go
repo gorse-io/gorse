@@ -10,7 +10,7 @@ type RuntimeOptions struct {
 
 // GetJobs returns the number of concurrent jobs.
 func (options *RuntimeOptions) GetJobs() int {
-	if options == nil {
+	if options == nil || options.NJobs < 1 {
 		return 1
 	}
 	return options.NJobs
