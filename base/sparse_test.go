@@ -36,6 +36,27 @@ func TestIndexer(t *testing.T) {
 	assert.Equal(t, 8, set.ToID(3))
 }
 
+func TestStringIndexer(t *testing.T) {
+	// Create a string indexer
+	set := NewStringIndexer()
+	assert.Equal(t, set.Len(), 0)
+	// Add IDs
+	set.Add("1")
+	set.Add("2")
+	set.Add("4")
+	set.Add("8")
+	assert.Equal(t, 4, set.Len())
+	assert.Equal(t, 0, set.ToIndex("1"))
+	assert.Equal(t, 1, set.ToIndex("2"))
+	assert.Equal(t, 2, set.ToIndex("4"))
+	assert.Equal(t, 3, set.ToIndex("8"))
+	assert.Equal(t, NotId, set.ToIndex("1000"))
+	assert.Equal(t, "1", set.ToName(0))
+	assert.Equal(t, "2", set.ToName(1))
+	assert.Equal(t, "4", set.ToName(2))
+	assert.Equal(t, "8", set.ToName(3))
+}
+
 func TestNewMarginalSubSet(t *testing.T) {
 	// Create a subset
 	indexer := NewTestIndexer([]int{2, 4, 6, 8, 10})

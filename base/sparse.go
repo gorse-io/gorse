@@ -50,6 +50,47 @@ func (set *Indexer) ToID(index int) int {
 	return set.IDs[index]
 }
 
+// StringIndexer manages the map between names and indices. The index is the internal index
+// optimized for faster parameter access and less memory usage.
+type StringIndexer struct {
+	Indices map[string]int
+	Names   []string
+}
+
+// NewIndexer creates a Indexer.
+func NewStringIndexer() *StringIndexer {
+	set := new(StringIndexer)
+	set.Indices = make(map[string]int)
+	set.Names = make([]string, 0)
+	return set
+}
+
+// Len returns the number of indexed IDs.
+func (set *StringIndexer) Len() int {
+	return len(set.Names)
+}
+
+// Add adds a new ID to the indexer.
+func (set *StringIndexer) Add(name string) {
+	if _, exist := set.Indices[name]; !exist {
+		set.Indices[name] = len(set.Names)
+		set.Names = append(set.Names, name)
+	}
+}
+
+// ToIndex converts a sparse ID to a dense index.
+func (set *StringIndexer) ToIndex(name string) int {
+	if denseId, exist := set.Indices[name]; exist {
+		return denseId
+	}
+	return NotId
+}
+
+// ToID converts a dense index to a sparse ID.
+func (set *StringIndexer) ToName(index int) string {
+	return set.Names[index]
+}
+
 // MarginalSubSet constructs a subset over a list of IDs, indices and values.
 type MarginalSubSet struct {
 	Indexer *Indexer  // the indexer
