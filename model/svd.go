@@ -46,6 +46,9 @@ type SVD struct {
 	initMean   float64
 	initStdDev float64
 	target     string
+	// Fallback model
+	UserRatings []*base.MarginalSubSet
+	ItemPop     *ItemPop
 }
 
 // NewSVD creates a SVD model.
@@ -74,7 +77,17 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	// Convert sparse IDs to dense IDs
 	userIndex := svd.UserIndexer.ToIndex(userId)
 	itemIndex := svd.ItemIndexer.ToIndex(itemId)
-	return svd.predict(userIndex, itemIndex)
+	switch svd.target {
+	case base.SGD:
+		return svd.predict(userIndex, itemIndex)
+	case base.BPR:
+		if userIndex == base.NotId || svd.UserRatings[userIndex].Len() == 0 {
+			// If users not exist in dataset, use ItemPop model.
+			return svd.ItemPop.Predict(userId, itemId)
+		}
+		return svd.predict(userIndex, itemIndex)
+	}
+	panic(fmt.Sprintf("Unknown target: %v", svd.target))
 }
 
 func (svd *SVD) predict(userIndex int, itemIndex int) float64 {
@@ -154,6 +167,10 @@ func (svd *SVD) fitSGD(trainSet core.DataSetInterface, options *base.RuntimeOpti
 }
 
 func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	svd.UserRatings = trainSet.Users()
+	// Create item pop model
+	svd.ItemPop = NewItemPop(nil)
+	svd.ItemPop.Fit(trainSet, options)
 	// Create buffers
 	temp := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
@@ -511,6 +528,9 @@ type WRMF struct {
 	initMean   float64
 	initStdDev float64
 	alpha      float64
+	// Fallback model
+	UserRatings []*base.MarginalSubSet
+	ItemPop     *ItemPop
 }
 
 // NewWRMF creates a WRMF model.
@@ -534,7 +554,11 @@ func (mf *WRMF) SetParams(params base.Params) {
 func (mf *WRMF) Predict(userId, itemId int) float64 {
 	userIndex := mf.UserIndexer.ToIndex(userId)
 	itemIndex := mf.ItemIndexer.ToIndex(itemId)
-	if userIndex == base.NotId || itemIndex == base.NotId {
+	if userIndex == base.NotId || mf.UserRatings[userIndex].Len() == 0 {
+		// If users not exist in dataset, use ItemPop model.
+		return mf.ItemPop.Predict(userId, itemId)
+	}
+	if itemIndex == base.NotId {
 		return 0
 	}
 	return mat.Dot(mf.UserFactor.RowView(userIndex),
@@ -544,6 +568,10 @@ func (mf *WRMF) Predict(userId, itemId int) float64 {
 // Fit the WRMF model.
 func (mf *WRMF) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
 	mf.Init(set)
+	// Create ItemPop model
+	mf.UserRatings = set.Users()
+	mf.ItemPop = NewItemPop(nil)
+	mf.ItemPop.Fit(set, options)
 	// Initialize
 	mf.UserFactor = mat.NewDense(set.UserCount(), mf.nFactors,
 		mf.rng.NewNormalVector(set.UserCount()*mf.nFactors, mf.initMean, mf.initStdDev))
