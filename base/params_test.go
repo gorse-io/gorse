@@ -47,11 +47,11 @@ func TestParams_Merge(t *testing.T) {
 		Alpha: 0.4,
 	}
 	// Merge
-	a.Merge(b)
+	c := a.Merge(b)
 	// Check
-	assert.Equal(t, 0.1, a.GetFloat64(Lr, -1))
-	assert.Equal(t, 0.3, a.GetFloat64(Reg, -1))
-	assert.Equal(t, 0.4, a.GetFloat64(Alpha, -1))
+	assert.Equal(t, 0.1, c.GetFloat64(Lr, -1))
+	assert.Equal(t, 0.3, c.GetFloat64(Reg, -1))
+	assert.Equal(t, 0.4, c.GetFloat64(Alpha, -1))
 }
 
 func TestParams_GetBool(t *testing.T) {
