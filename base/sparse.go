@@ -153,7 +153,7 @@ func (set *MarginalSubSet) Mean() float64 {
 // Contain returns true am ID existed in the subset.
 func (set *MarginalSubSet) Contain(id int) bool {
 	// if id is out of range
-	if id < set.GetID(0) || id > set.GetID(set.Len()-1) {
+	if set.Len() == 0 || id < set.GetID(0) || id > set.GetID(set.Len()-1) {
 		return false
 	}
 	// binary search
