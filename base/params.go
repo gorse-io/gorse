@@ -149,8 +149,13 @@ func (parameters Params) GetString(name ParamName, _default string) string {
 }
 
 // Merge another group of hyper-parameters to current group of hyper-parameters.
-func (parameters Params) Merge(params Params) {
-	for k, v := range params {
-		parameters[k] = v
+func (parameters Params) Merge(params Params) Params {
+	merged := make(Params)
+	for k, v := range parameters {
+		merged[k] = v
 	}
+	for k, v := range params {
+		merged[k] = v
+	}
+	return merged
 }

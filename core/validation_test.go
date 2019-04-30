@@ -25,13 +25,13 @@ func (model *CVTestModel) Predict(userId, itemId int) float64 {
 
 func (model *CVTestModel) Fit(trainSet DataSetInterface, setters *base.RuntimeOptions) {}
 
-func CVTestEvaluator(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface) []float64 {
+func CVTestEvaluator(estimator ModelInterface, testSet, excludeSet DataSetInterface) ([]float64, []float64) {
 	params := estimator.GetParams()
 	a := params.GetFloat64(base.Lr, 0)
 	b := params.GetFloat64(base.Reg, 0)
 	c := params.GetFloat64(base.Alpha, 0)
 	d := params.GetFloat64(base.InitMean, 0)
-	return []float64{a + b + c + d}
+	return []float64{a + b + c + d}, []float64{a + b + c + d}
 }
 
 func TestCrossValidate(t *testing.T) {

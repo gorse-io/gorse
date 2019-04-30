@@ -6,17 +6,24 @@ import (
 	"math"
 )
 
-type CVEvaluator func(estimator ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) []float64
+type CVEvaluator func(estimator ModelInterface, testSet, trainSet DataSetInterface) (scores, costs []float64)
 
 func NewRatingEvaluator(metrics ...RatingMetric) CVEvaluator {
-	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) []float64 {
-		return EvaluateRating(model, testSet, metrics...)
+	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) (scores, costs []float64) {
+		scores = EvaluateRating(model, testSet, metrics...)
+		costs = scores
+		return
 	}
 }
 
 func NewRankEvaluator(n int, metrics ...RankMetric) CVEvaluator {
-	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) []float64 {
-		return EvaluateRank(model, testSet, trainSet, n, metrics...)
+	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) (scores, costs []float64) {
+		scores = EvaluateRank(model, testSet, trainSet, n, metrics...)
+		costs = make([]float64, len(scores))
+		for i := range costs {
+			costs[i] = -scores[i]
+		}
+		return
 	}
 }
 

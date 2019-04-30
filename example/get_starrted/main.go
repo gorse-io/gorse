@@ -9,22 +9,26 @@ import (
 
 func main() {
 	// Load dataset
-	data := core.LoadDataFromBuiltIn("ml-100k")
+	data := core.LoadDataFromCSV("steam-100k.csv", ",", true)
 	// Split dataset
 	train, test := core.Split(data, 0.2)
 	// Create model
 	svd := model.NewSVD(base.Params{
-		base.Lr:       0.007,
-		base.NEpochs:  100,
-		base.NFactors: 80,
-		base.Reg:      0.1,
+		base.Optimizer:  base.BPR,
+		base.NFactors:   10,
+		base.Reg:        0.01,
+		base.Lr:         0.05,
+		base.NEpochs:    100,
+		base.InitMean:   0,
+		base.InitStdDev: 0.001,
 	})
 	// Fit model
 	svd.Fit(train, nil)
 	// Evaluate model
-	scores := core.EvaluateRating(svd, test, core.RMSE, core.MAE)
-	fmt.Printf("RMSE = %.5f\n", scores[0])
-	fmt.Printf("RMSE = %.5f\n", scores[1])
+	scores := core.EvaluateRank(svd, test, train, 10, core.Precision, core.Recall, core.NDCG)
+	fmt.Printf("Precision@10 = %.5f\n", scores[0])
+	fmt.Printf("Recall@10 = %.5f\n", scores[1])
+	fmt.Printf("NDCG@10 = %.5f\n", scores[1])
 	// Predict a rating
 	fmt.Printf("Predict(4,8) = %.5f\n", svd.Predict(4, 8))
 }

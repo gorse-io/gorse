@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/stat"
-	"gopkg.in/cheggaaa/pb.v1"
 	"math"
 	"reflect"
 )
@@ -18,8 +17,7 @@ type ParameterGrid map[base.ParamName][]interface{}
 // CrossValidateResult contains the result of cross validate
 type CrossValidateResult struct {
 	TestScore []float64
-	TestTime  []float64
-	FitTime   []float64
+	TestCosts []float64
 }
 
 // MeanAndMargin returns the mean and the margin of cross validation scores.
@@ -43,6 +41,7 @@ func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Spli
 	length := len(trainFolds)
 	// Cross validation
 	scores := make([][]float64, length)
+	costs := make([][]float64, length)
 	params := model.GetParams()
 	base.Parallel(length, options.GetJobs(), func(begin, end int) {
 		cp := reflect.New(reflect.TypeOf(model).Elem()).Interface().(ModelInterface)
@@ -53,9 +52,10 @@ func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Spli
 			testFold := testFolds[i]
 			cp.Fit(trainFold, nil)
 			// Evaluate on test set
-			scores[i] = make([]float64, 0)
 			for _, evaluator := range evaluators {
-				scores[i] = append(scores[i], evaluator(cp, testFold, trainFold)...)
+				tempScore, tempCost := evaluator(cp, testFold, trainFold)
+				scores[i] = append(scores[i], tempScore...)
+				costs[i] = append(costs[i], tempCost...)
 			}
 		}
 	})
@@ -63,8 +63,10 @@ func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Spli
 	ret := make([]CrossValidateResult, len(scores[0]))
 	for i := 0; i < len(ret); i++ {
 		ret[i].TestScore = make([]float64, length)
+		ret[i].TestCosts = make([]float64, length)
 		for j := range ret[i].TestScore {
 			ret[i].TestScore[j] = scores[j][i]
+			ret[i].TestCosts[j] = costs[j][i]
 		}
 	}
 	return ret
@@ -75,6 +77,7 @@ func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Spli
 // ModelSelectionResult contains the return of grid search.
 type ModelSelectionResult struct {
 	BestScore  float64
+	BestCost   float64
 	BestParams base.Params
 	BestIndex  int
 	CVResults  []CrossValidateResult
@@ -91,35 +94,38 @@ func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid 
 		paramNames = append(paramNames, paramName)
 		count *= len(values)
 	}
-	// Create GridSearch result
-	results := make([]ModelSelectionResult, len(evaluators))
-	for i := range results {
-		results[i] = ModelSelectionResult{}
-		results[i].BestScore = math.Inf(1)
-		results[i].CVResults = make([]CrossValidateResult, 0, count)
-		results[i].AllParams = make([]base.Params, 0, count)
-	}
-	// Progress bar
-	bar := pb.StartNew(count)
 	// Construct DFS procedure
+	var results []ModelSelectionResult
 	var dfs func(deep int, params base.Params)
+	progress := 0
 	dfs = func(deep int, params base.Params) {
 		if deep == len(paramNames) {
+			progress++
+			options.Logf("grid search (%v/%v): %v", progress, count, params)
 			// Cross validate
-			estimator.GetParams().Merge(params)
-			estimator.SetParams(estimator.GetParams())
+			estimator.SetParams(estimator.GetParams().Merge(params))
 			cvResults := CrossValidate(estimator, dataSet, splitter, seed, options, evaluators...)
+			// Create GridSearch result
+			if results == nil {
+				results = make([]ModelSelectionResult, len(cvResults))
+				for i := range results {
+					results[i] = ModelSelectionResult{}
+					results[i].BestCost = math.Inf(1)
+					results[i].CVResults = make([]CrossValidateResult, 0, count)
+					results[i].AllParams = make([]base.Params, 0, count)
+				}
+			}
 			for i := range cvResults {
 				results[i].CVResults = append(results[i].CVResults, cvResults[i])
 				results[i].AllParams = append(results[i].AllParams, params.Copy())
+				cost := stat.Mean(cvResults[i].TestCosts, nil)
 				score := stat.Mean(cvResults[i].TestScore, nil)
-				if score < results[i].BestScore {
+				if cost < results[i].BestCost {
 					results[i].BestScore = score
+					results[i].BestCost = cost
 					results[i].BestParams = params.Copy()
 					results[i].BestIndex = len(results[i].AllParams) - 1
 				}
-				// Progress bar
-				bar.Increment()
 			}
 		} else {
 			paramName := paramNames[deep]
@@ -132,7 +138,6 @@ func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid 
 	}
 	params := make(map[base.ParamName]interface{})
 	dfs(0, params)
-	bar.FinishPrint("Completed!")
 	return results
 }
 
@@ -140,14 +145,7 @@ func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid 
 func RandomSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid ParameterGrid,
 	splitter Splitter, trial int, seed int64, options *base.RuntimeOptions, evaluators ...CVEvaluator) []ModelSelectionResult {
 	rng := base.NewRandomGenerator(seed)
-	// Create results
-	results := make([]ModelSelectionResult, len(evaluators))
-	for i := range results {
-		results[i] = ModelSelectionResult{}
-		results[i].BestScore = math.Inf(1)
-		results[i].CVResults = make([]CrossValidateResult, trial)
-		results[i].AllParams = make([]base.Params, trial)
-	}
+	var results []ModelSelectionResult
 	for i := 0; i < trial; i++ {
 		// Make parameters
 		params := base.Params{}
@@ -156,14 +154,25 @@ func RandomSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGri
 			params[paramName] = value
 		}
 		// Cross validate
-		estimator.GetParams().Merge(params)
-		estimator.SetParams(estimator.GetParams())
+		options.Logf("random search (%v/%v): %v", i+1, trial, params)
+		estimator.SetParams(estimator.GetParams().Merge(params))
 		cvResults := CrossValidate(estimator, dataSet, splitter, seed, options, evaluators...)
+		if results == nil {
+			results = make([]ModelSelectionResult, len(cvResults))
+			for i := range results {
+				results[i] = ModelSelectionResult{}
+				results[i].BestCost = math.Inf(1)
+				results[i].CVResults = make([]CrossValidateResult, trial)
+				results[i].AllParams = make([]base.Params, trial)
+			}
+		}
 		for j := range cvResults {
 			results[j].CVResults[i] = cvResults[j]
 			results[j].AllParams[i] = params.Copy()
 			score := stat.Mean(cvResults[j].TestScore, nil)
-			if score < results[j].BestScore {
+			cost := stat.Mean(cvResults[j].TestCosts, nil)
+			if cost < results[j].BestCost {
+				results[j].BestCost = cost
 				results[j].BestScore = score
 				results[j].BestParams = params.Copy()
 				results[j].BestIndex = len(results[j].AllParams) - 1

@@ -92,6 +92,11 @@ func TestCoClustering(t *testing.T) {
 		[]string{"RMSE", "MAE"}, []float64{0.963, 0.753}, NewRatingEvaluator(RMSE, MAE))
 }
 
+func TestFM(t *testing.T) {
+	checkRegression(t, NewFM(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []float64{0.934, 0.737}, NewRatingEvaluator(RMSE, MAE))
+}
+
 // LibRec Benchmarks: https://www.librec.net/release/v1.3/example.html
 
 func TestKNN_UserBased_LibRec(t *testing.T) {

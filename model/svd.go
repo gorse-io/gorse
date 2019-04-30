@@ -165,7 +165,11 @@ func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOpti
 		for i := 0; i < trainSet.Count(); i++ {
 			// Select a user
 			userIndex := svd.rng.Intn(trainSet.UserCount())
-			posIndex := trainSet.UserByIndex(userIndex).GetIndex(svd.rng.Intn(trainSet.UserByIndex(userIndex).Len()))
+			ratingCount := trainSet.UserByIndex(userIndex).Len()
+			if ratingCount == 0 {
+				continue
+			}
+			posIndex := trainSet.UserByIndex(userIndex).GetIndex(svd.rng.Intn(ratingCount))
 			// Select a negative sample
 			negIndex := -1
 			for {
