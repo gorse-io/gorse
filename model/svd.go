@@ -45,7 +45,7 @@ type SVD struct {
 	reg        float64
 	initMean   float64
 	initStdDev float64
-	target     string
+	optimizer  string
 	// Fallback model
 	UserRatings []*base.MarginalSubSet
 	ItemPop     *ItemPop
@@ -69,7 +69,7 @@ func (svd *SVD) SetParams(params base.Params) {
 	svd.reg = svd.Params.GetFloat64(base.Reg, 0.02)
 	svd.initMean = svd.Params.GetFloat64(base.InitMean, 0)
 	svd.initStdDev = svd.Params.GetFloat64(base.InitStdDev, 0.1)
-	svd.target = svd.Params.GetString(base.Optimizer, base.SGD)
+	svd.optimizer = svd.Params.GetString(base.Optimizer, base.SGD)
 }
 
 // Predict by the SVD model.
@@ -77,7 +77,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	// Convert sparse IDs to dense IDs
 	userIndex := svd.UserIndexer.ToIndex(userId)
 	itemIndex := svd.ItemIndexer.ToIndex(itemId)
-	switch svd.target {
+	switch svd.optimizer {
 	case base.SGD:
 		return svd.predict(userIndex, itemIndex)
 	case base.BPR:
@@ -87,7 +87,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 		}
 		return svd.predict(userIndex, itemIndex)
 	}
-	panic(fmt.Sprintf("Unknown target: %v", svd.target))
+	panic(fmt.Sprintf("Unknown optimizer: %v", svd.optimizer))
 }
 
 func (svd *SVD) predict(userIndex int, itemIndex int) float64 {
@@ -119,13 +119,13 @@ func (svd *SVD) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 	svd.UserFactor = svd.rng.NewNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	svd.ItemFactor = svd.rng.NewNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	// Select fit function
-	switch svd.target {
+	switch svd.optimizer {
 	case base.SGD:
 		svd.fitSGD(trainSet, options)
 	case base.BPR:
 		svd.fitBPR(trainSet, options)
 	default:
-		panic(fmt.Sprintf("Unknown target: %v", svd.target))
+		panic(fmt.Sprintf("Unknown optimizer: %v", svd.optimizer))
 	}
 }
 
@@ -181,10 +181,13 @@ func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOpti
 		// Training epoch
 		for i := 0; i < trainSet.Count(); i++ {
 			// Select a user
-			userIndex := svd.rng.Intn(trainSet.UserCount())
-			ratingCount := trainSet.UserByIndex(userIndex).Len()
-			if ratingCount == 0 {
-				continue
+			var userIndex, ratingCount int
+			for {
+				userIndex = svd.rng.Intn(trainSet.UserCount())
+				ratingCount = trainSet.UserByIndex(userIndex).Len()
+				if ratingCount > 0 {
+					break
+				}
 			}
 			posIndex := trainSet.UserByIndex(userIndex).GetIndex(svd.rng.Intn(ratingCount))
 			// Select a negative sample
