@@ -243,6 +243,9 @@ func (vec *SparseVector) Add(index int, value float64) {
 
 // Len returns the number of items.
 func (vec *SparseVector) Len() int {
+	if vec == nil {
+		return 0
+	}
 	return len(vec.Values)
 }
 
@@ -259,8 +262,10 @@ func (vec *SparseVector) Swap(i, j int) {
 
 // ForEach iterates items in the sparse vector.
 func (vec *SparseVector) ForEach(f func(i, index int, value float64)) {
-	for i := range vec.Indices {
-		f(i, vec.Indices[i], vec.Values[i])
+	if vec != nil {
+		for i := range vec.Indices {
+			f(i, vec.Indices[i], vec.Values[i])
+		}
 	}
 }
 
