@@ -91,8 +91,36 @@ func TestLoadDataFromBuiltIn(t *testing.T) {
 	assert.Equal(t, 100000, data.Count())
 }
 
+func TestLoadDataFromCSV_Implicit(t *testing.T) {
+	data := LoadDataFromCSV("../example/file_data/feedback_implicit.csv", ",", false)
+	assert.Equal(t, 5, data.Count())
+	for i := 0; i < data.Count(); i++ {
+		userId, itemId, value := data.Get(i)
+		userIndex, itemIndex, _ := data.GetWithIndex(i)
+		assert.Equal(t, i, userId)
+		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, 0.0, value)
+		assert.Equal(t, i, userIndex)
+		assert.Equal(t, i, itemIndex)
+	}
+}
+
 func TestLoadDataFromCSV_Explicit(t *testing.T) {
-	data := LoadDataFromCSV("../example/data/implicit.csv", ",", true)
+	data := LoadDataFromCSV("../example/file_data/feedback_explicit.csv", ",", false)
+	assert.Equal(t, 5, data.Count())
+	for i := 0; i < data.Count(); i++ {
+		userId, itemId, value := data.Get(i)
+		userIndex, itemIndex, _ := data.GetWithIndex(i)
+		assert.Equal(t, i, userId)
+		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, 3*i, int(value))
+		assert.Equal(t, i, userIndex)
+		assert.Equal(t, i, itemIndex)
+	}
+}
+
+func TestLoadDataFromCSV_Explicit_Header(t *testing.T) {
+	data := LoadDataFromCSV("../example/file_data/feedback_explicit_header.csv", ",", true)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -106,7 +134,7 @@ func TestLoadDataFromCSV_Explicit(t *testing.T) {
 }
 
 func TestLoadDataFromNetflix(t *testing.T) {
-	data := LoadDataFromNetflix("../example/data/netflix.txt", ",", true)
+	data := LoadDataFromNetflix("../example/file_data/feedback_netflix.txt", ",", true)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -156,23 +184,37 @@ func TestLoadDataFromSQL(t *testing.T) {
 	}
 }
 
-func TestDataSet_GetUserRatingsSet(t *testing.T) {
-	//data := DataSet{
-	//	itemIndexer: &base.Indexer{
-	//		Indices: map[int]int{0: 0, 2: 1, 4: 2, 6: 3},
-	//		IDs:     []int{0, 2, 4, 6},
-	//	},
-	//	userIndexer: &base.Indexer{
-	//		Indices: map[int]int{2: 0},
-	//		IDs:     []int{2},
-	//	},
-	//	denseUserRatings: []*base.SparseVector{
-	//		{
-	//			Indices: []int{1, 2},
-	//			Values:  []float64{10.0, 20.0},
-	//		},
-	//	},
-	//}
-	//set := data.GetUserRatingsSet(2)
-	//assert.Equal(t, map[int]float64{2: 10, 4: 20}, set)
+func TestLoadEntityFromCSV(t *testing.T) {
+	entities := LoadEntityFromCSV("../example/file_data/items.csv", "::", "|", false,
+		[]string{"ItemId", "Title", "Genres"}, 0)
+	// 1::Toy Story (1995)::Animation|Children's|Comedy
+	// 2::Jumanji (1995)::Adventure|Children's|Fantasy
+	// 3::Grumpier Old Men (1995)::Comedy|Romance
+	// 4::Waiting to Exhale (1995)::Comedy|Drama
+	// 5::Father of the Bride Part II (1995)::Comedy
+	expected := []map[string]interface{}{
+		{"ItemId": 1, "Title": "Toy Story (1995)", "Genres": []string{"Animation", "Children's", "Comedy"}},
+		{"ItemId": 2, "Title": "Jumanji (1995)", "Genres": []string{"Adventure", "Children's", "Fantasy"}},
+		{"ItemId": 3, "Title": "Grumpier Old Men (1995)", "Genres": []string{"Comedy", "Romance"}},
+		{"ItemId": 4, "Title": "Waiting to Exhale (1995)", "Genres": []string{"Comedy", "Drama"}},
+		{"ItemId": 5, "Title": "Father of the Bride Part II (1995)", "Genres": "Comedy"},
+	}
+	assert.Equal(t, expected, entities)
+}
+
+func TestLoadEntityFromCSV_Header(t *testing.T) {
+	entities := LoadEntityFromCSV("../example/file_data/items_header.csv", "::", "|", true, nil, 0)
+	// 1::Toy Story (1995)::Animation|Children's|Comedy
+	// 2::Jumanji (1995)::Adventure|Children's|Fantasy
+	// 3::Grumpier Old Men (1995)::Comedy|Romance
+	// 4::Waiting to Exhale (1995)::Comedy|Drama
+	// 5::Father of the Bride Part II (1995)::Comedy
+	expected := []map[string]interface{}{
+		{"ItemId": 1, "Title": "Toy Story (1995)", "Genres": []string{"Animation", "Children's", "Comedy"}},
+		{"ItemId": 2, "Title": "Jumanji (1995)", "Genres": []string{"Adventure", "Children's", "Fantasy"}},
+		{"ItemId": 3, "Title": "Grumpier Old Men (1995)", "Genres": []string{"Comedy", "Romance"}},
+		{"ItemId": 4, "Title": "Waiting to Exhale (1995)", "Genres": []string{"Comedy", "Drama"}},
+		{"ItemId": 5, "Title": "Father of the Bride Part II (1995)", "Genres": "Comedy"},
+	}
+	assert.Equal(t, expected, entities)
 }

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -25,6 +26,8 @@ type DataSetInterface interface {
 	UserCount() int
 	// ItemCount returns the number of items in the dataset.
 	ItemCount() int
+	// FeatureCount returns the number of additional features.
+	FeatureCount() int
 	// Get i-th rating by (user ID, item ID, rating).
 	Get(i int) (int, int, float64)
 	// GetWithIndex gets i-th rating by (user index, item index, rating).
@@ -39,6 +42,10 @@ type DataSetInterface interface {
 	Users() []*base.MarginalSubSet
 	// Items returns subsets of items.
 	Items() []*base.MarginalSubSet
+	// UserFeatures returns additional features of users.
+	UserFeatures() []*base.SparseVector
+	// ItemFeatures returns additional features of items.
+	ItemFeatures() []*base.SparseVector
 	// User returns the subset of a user.
 	User(userId int) *base.MarginalSubSet
 	// Item returns the subset of a item.
@@ -51,13 +58,16 @@ type DataSetInterface interface {
 
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
-	ratings     []float64              // ratings
-	userIndices []int                  // user indices
-	itemIndices []int                  // item indices
-	userIndexer *base.Indexer          // user indexer
-	itemIndexer *base.Indexer          // item indexer
-	users       []*base.MarginalSubSet // subsets of users' ratings
-	items       []*base.MarginalSubSet // subsets of items' ratings
+	ratings        []float64              // ratings
+	userIndices    []int                  // user indices
+	itemIndices    []int                  // item indices
+	userIndexer    *base.Indexer          // user indexer
+	itemIndexer    *base.Indexer          // item indexer
+	featureIndexer *base.StringIndexer    // feature indexer
+	users          []*base.MarginalSubSet // subsets of users' ratings
+	items          []*base.MarginalSubSet // subsets of items' ratings
+	userFeatures   []*base.SparseVector   // additional features of users
+	itemFeatures   []*base.SparseVector   // additional features of items
 }
 
 // NewDataSet creates a data set.
@@ -67,6 +77,7 @@ func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
 	// Index users and items
 	set.userIndexer = base.NewIndexer()
 	set.itemIndexer = base.NewIndexer()
+	set.featureIndexer = base.NewStringIndexer()
 	set.userIndices = make([]int, set.Count())
 	set.itemIndices = make([]int, set.Count())
 	for i := 0; i < set.Count(); i++ {
@@ -97,6 +108,56 @@ func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
 		set.items[i] = base.NewMarginalSubSet(set.userIndexer, set.userIndices, ratings, itemSubsetIndices[i])
 	}
 	return set
+}
+
+// encodeFeature
+func (set *DataSet) encodeFeature(entity map[string]interface{}, features []string) *base.SparseVector {
+	vec := base.NewSparseVector()
+	for _, name := range features {
+		if value, exist := entity[name]; exist {
+			switch value.(type) {
+			case float64:
+				set.featureIndexer.Add(name)
+				index := set.featureIndexer.ToIndex(name)
+				vec.Add(index, value.(float64))
+			case string:
+				featureName := fmt.Sprintf("%v-%v", name, value)
+				set.featureIndexer.Add(featureName)
+				index := set.featureIndexer.ToIndex(featureName)
+				vec.Add(index, 1)
+			case []string:
+				for _, tag := range value.([]string) {
+					featureName := fmt.Sprintf("%v-%v", name, tag)
+					set.featureIndexer.Add(featureName)
+					index := set.featureIndexer.ToIndex(featureName)
+					vec.Add(index, 1)
+				}
+			default:
+				log.Fatalf("undkown type %v", reflect.TypeOf(value))
+			}
+		}
+	}
+	return vec
+}
+
+// SetUserFeatures
+func (set *DataSet) SetUserFeatures(users []map[string]interface{}, features []string, idName string) {
+	set.userFeatures = make([]*base.SparseVector, set.UserCount())
+	for _, entity := range users {
+		userId := entity[idName].(int)
+		userIndex := set.userIndexer.ToIndex(userId)
+		set.userFeatures[userIndex] = set.encodeFeature(entity, features)
+	}
+}
+
+// SetItemFeature
+func (set *DataSet) SetItemFeature(items []map[string]interface{}, features []string, idName string) {
+	set.itemFeatures = make([]*base.SparseVector, set.ItemCount())
+	for _, entity := range items {
+		itemId := entity[idName].(int)
+		itemIndex := set.itemIndexer.ToIndex(itemId)
+		set.itemFeatures[itemIndex] = set.encodeFeature(entity, features)
+	}
 }
 
 // Count returns the number of ratings.
@@ -143,6 +204,11 @@ func (set *DataSet) ItemCount() int {
 	return set.ItemIndexer().Len()
 }
 
+// FeatureCount returns the number of additional features.
+func (set *DataSet) FeatureCount() int {
+	return set.featureIndexer.Len()
+}
+
 // SubSet returns a subset of current dataset.
 func (set *DataSet) SubSet(subset []int) DataSetInterface {
 	return NewSubSet(set, subset)
@@ -168,11 +234,23 @@ func (set *DataSet) Items() []*base.MarginalSubSet {
 	return set.items
 }
 
+// UserFeatures returns additional features of users.
+func (set *DataSet) UserFeatures() []*base.SparseVector {
+	return set.userFeatures
+}
+
+// UserFeatures returns additional features of items.
+func (set *DataSet) ItemFeatures() []*base.SparseVector {
+	return set.itemFeatures
+}
+
+// User returns the subset of a user.
 func (set *DataSet) User(userId int) *base.MarginalSubSet {
 	userIndex := set.userIndexer.ToIndex(userId)
 	return set.UserByIndex(userIndex)
 }
 
+// User returns the subset of a item.
 func (set *DataSet) Item(itemId int) *base.MarginalSubSet {
 	itemIndex := set.itemIndexer.ToIndex(itemId)
 	return set.ItemByIndex(itemIndex)
@@ -340,7 +418,10 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 		}
 		user, _ := strconv.Atoi(fields[0])
 		item, _ := strconv.Atoi(fields[1])
-		rating, _ := strconv.ParseFloat(fields[2], 32)
+		rating := 0.0
+		if len(fields) > 2 {
+			rating, _ = strconv.ParseFloat(fields[2], 32)
+		}
 		users = append(users, user)
 		items = append(items, item)
 		ratings = append(ratings, rating)
@@ -411,6 +492,50 @@ func LoadDataFromSQL(db *sql.DB, tableName string,
 		ratings = append(ratings, float64(rating))
 	}
 	return NewDataSet(users, items, ratings), nil
+}
+
+// LoadEntityFromCSV load entities (items or users) from a csv file.
+func LoadEntityFromCSV(filePath string, fieldSep string, tagSep string, header bool,
+	names []string, index int) []map[string]interface{} {
+	// Open file
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	// Read file
+	scanner := bufio.NewScanner(file)
+	// Parse header
+	if header {
+		scanner.Scan()
+		line := scanner.Text()
+		if names == nil {
+			names = strings.Split(line, fieldSep)
+		}
+	}
+	entities := make([]map[string]interface{}, 0)
+	for scanner.Scan() {
+		entity := make(map[string]interface{})
+		line := scanner.Text()
+		fields := strings.Split(line, fieldSep)
+		for i, field := range fields {
+			if i == index {
+				entity[names[i]], err = strconv.Atoi(field)
+				if err != nil {
+					log.Fatal(err)
+				}
+			} else if strings.Contains(field, tagSep) {
+				tags := strings.Split(field, tagSep)
+				entity[names[i]] = tags
+			} else if num, err := strconv.ParseFloat(field, 64); err == nil {
+				entity[names[i]] = num
+			} else {
+				entity[names[i]] = field
+			}
+		}
+		entities = append(entities, entity)
+	}
+	return entities
 }
 
 /* Utils */
