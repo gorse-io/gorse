@@ -57,34 +57,34 @@ func md5Sum(fileName string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func TestDownloadFromUrl(t *testing.T) {
-	// Download
-	fileName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Checksum
-	if md5 := md5Sum(fileName); md5 != "0e33842e24a9c977be4e0107933c0723" {
-		t.Logf("MD5 sum doesn't match (%s != 0e33842e24a9c977be4e0107933c0723)", md5)
-	}
-}
-
-func TestUnzip(t *testing.T) {
-	// Download
-	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
-	if err != nil {
-		t.Fatal("download file failed ", err)
-	}
-	// Extract files
-	fileNames, err := unzip(zipName, dataSetDir)
-	// Check
-	if err != nil {
-		t.Fatal("unzip file failed ", err)
-	}
-	if len(fileNames) != 24 {
-		t.Fatal("Number of file doesn't match")
-	}
-}
+//func TestDownloadFromUrl(t *testing.T) {
+//	// Download
+//	fileName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	// Checksum
+//	if sum := md5Sum(fileName); sum != "0e33842e24a9c977be4e0107933c0723" {
+//		t.Logf("MD5 sum doesn't match (%s != 0e33842e24a9c977be4e0107933c0723)", sum)
+//	}
+//}
+//
+//func TestUnzip(t *testing.T) {
+//	// Download
+//	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", downloadDir)
+//	if err != nil {
+//		t.Fatal("download file failed ", err)
+//	}
+//	// Extract files
+//	fileNames, err := unzip(zipName, dataSetDir)
+//	// Check
+//	if err != nil {
+//		t.Fatal("unzip file failed ", err)
+//	}
+//	if len(fileNames) != 24 {
+//		t.Fatal("Number of file doesn't match")
+//	}
+//}
 
 func TestLoadDataFromBuiltIn(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
