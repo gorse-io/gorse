@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"math"
 	"testing"
@@ -126,4 +127,16 @@ func TestRR(t *testing.T) {
 	targetSet := NewTestTargetSet([]int{3})
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	EqualEpsilon(t, MRR(targetSet, rankList), 0.25, evalEpsilon)
+}
+
+func TestAUC(t *testing.T) {
+	// The mocked test dataset:
+	// 1.0 0.0 0.0
+	// 0.0 0.5 0.0
+	// 0.0 0.0 1.0
+	a := NewEvaluatorTesterModel([]int{0, 0, 0, 1, 1, 1, 2, 2, 2},
+		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
+		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
+	b := NewDataSet([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0})
+	assert.Equal(t, 1.0, EvaluateAUC(a, b, nil))
 }

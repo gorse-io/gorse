@@ -168,3 +168,56 @@ func MRR(targetSet *base.MarginalSubSet, rankList []int) float64 {
 	}
 	return 0
 }
+
+// AUC evaluator.
+func EvaluateAUC(estimator ModelInterface, testSet, excludeSet DataSetInterface) float64 {
+	sum := 0.0
+	userCount := 0.0
+	// Find all userIds
+	for userTestIndex, userRating := range testSet.Users() {
+		if userRating.Len() > 0 {
+			userCount++
+			userId := testSet.UserIndexer().ToID(userTestIndex)
+			// Find all <userId, j>s in training Data set and test Data set.
+			positiveSet := make(map[int]float64)
+			if excludeSet != nil {
+				userExcludeIndex := excludeSet.UserIndexer().ToIndex(userId)
+				if userExcludeIndex != base.NotId {
+					excludeSet.UserByIndex(userExcludeIndex).ForEachIndex(func(i, index int, value float64) {
+						itemId := excludeSet.ItemIndexer().ToID(index)
+						positiveSet[itemId] = value
+					})
+				}
+			}
+			testSet.UserByIndex(userTestIndex).ForEachIndex(func(i, index int, value float64) {
+				itemId := testSet.ItemIndexer().ToID(index)
+				positiveSet[itemId] = value
+			})
+			// Generate scores for all items
+			predictions := make([]float64, testSet.ItemCount())
+			for itemTestIndex := range predictions {
+				itemId := testSet.ItemIndexer().ToID(itemTestIndex)
+				predictions[itemTestIndex] = estimator.Predict(userId, itemId)
+			}
+			// Find all <userId, i>s in test Data set
+			correctCount, pairCount := 0.0, 0.0
+			userRating.ForEachIndex(func(i, posTestIndex int, value float64) {
+				// Find all <userId, j>s not in full Data set
+				for j := 0; j < testSet.ItemCount(); j++ {
+					negId := testSet.ItemIndexer().ToID(j)
+					if _, exist := positiveSet[negId]; !exist {
+						// I(\hat{x}_{ui} - \hat{x}_{uj})
+						if predictions[posTestIndex] > predictions[j] {
+							correctCount++
+						}
+						pairCount++
+					}
+				}
+			})
+			// += \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
+			sum += correctCount / pairCount
+		}
+	}
+	// \frac{1}{|U|} \sum_u \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
+	return sum / userCount
+}
