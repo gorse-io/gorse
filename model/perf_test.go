@@ -5,6 +5,7 @@ import (
 	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/stat"
 	"math"
+	"runtime"
 	"testing"
 )
 
@@ -16,7 +17,7 @@ const (
 func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CVEvaluator) {
 	// Cross validation
-	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false}, evaluators...)
+	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false, NJobs: runtime.NumCPU()}, evaluators...)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
@@ -33,7 +34,7 @@ func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterfac
 func checkRank(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CVEvaluator) {
 	// Cross validation
-	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false}, evaluators...)
+	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false, NJobs: runtime.NumCPU()}, evaluators...)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
@@ -90,11 +91,6 @@ func TestKNNBaseLine(t *testing.T) {
 func TestCoClustering(t *testing.T) {
 	checkRegression(t, NewCoClustering(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
 		[]string{"RMSE", "MAE"}, []float64{0.963, 0.753}, NewRatingEvaluator(RMSE, MAE))
-}
-
-func TestFM(t *testing.T) {
-	checkRegression(t, NewFM(nil), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
-		[]string{"RMSE", "MAE"}, []float64{0.934, 0.737}, NewRatingEvaluator(RMSE, MAE))
 }
 
 // LibRec Benchmarks: https://www.librec.net/release/v1.3/example.html
@@ -198,6 +194,35 @@ func TestWRMF(t *testing.T) {
 	}), data, NewKFoldSplitter(5),
 		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG"},
 		[]float64{0.416, 0.142, 0.353, 0.227, 0.287, 0.624},
+		NewRankEvaluator(5, Precision, Recall),
+		NewRankEvaluator(10, Precision, Recall),
+		NewRankEvaluator(math.MaxInt32, MAP, NDCG))
+}
+
+func TestFM_SVD(t *testing.T) {
+	checkRegression(t, NewFM(Params{
+		Lr:       0.007,
+		NEpochs:  100,
+		NFactors: 80,
+		Reg:      0.1,
+	}), LoadDataFromBuiltIn("ml-100k"), NewKFoldSplitter(5),
+		[]string{"RMSE", "MAE"}, []float64{0.911, 0.718}, NewRatingEvaluator(RMSE, MAE))
+}
+
+func TestFM_BPR(t *testing.T) {
+	data := LoadDataFromBuiltIn("ml-100k")
+	checkRank(t, NewFM(Params{
+		Optimizer:  BPR,
+		NFactors:   10,
+		Reg:        0.01,
+		Lr:         0.05,
+		NEpochs:    100,
+		InitMean:   0,
+		InitStdDev: 0.001,
+	}),
+		data, NewKFoldSplitter(5),
+		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG"},
+		[]float64{0.378, 0.129, 0.321, 0.209, 0.260, 0.601},
 		NewRankEvaluator(5, Precision, Recall),
 		NewRankEvaluator(10, Precision, Recall),
 		NewRankEvaluator(math.MaxInt32, MAP, NDCG))
