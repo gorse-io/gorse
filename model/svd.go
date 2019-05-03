@@ -179,6 +179,7 @@ func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOpti
 	// Training
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		// Training epoch
+		cost := 0.0
 		for i := 0; i < trainSet.Count(); i++ {
 			// Select a user
 			var userIndex, ratingCount int
@@ -201,6 +202,7 @@ func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOpti
 				}
 			}
 			diff := svd.predict(userIndex, posIndex) - svd.predict(userIndex, negIndex)
+			cost += math.Log(1 + math.Exp(-diff))
 			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
 			// Pairwise update
 			copy(userFactor, svd.UserFactor[userIndex])
@@ -220,6 +222,7 @@ func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOpti
 			floats.MulConstAddTo(userFactor, -svd.reg, temp)
 			floats.MulConstAddTo(temp, svd.lr, svd.UserFactor[userIndex])
 		}
+		options.Logf("epoch = %v/%v, cost = %v", epoch+1, svd.nEpochs, cost)
 	}
 }
 
