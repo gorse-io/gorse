@@ -50,7 +50,7 @@ func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Spli
 		for i := begin; i < end; i++ {
 			trainFold := trainFolds[i]
 			testFold := testFolds[i]
-			cp.Fit(trainFold, nil)
+			cp.Fit(trainFold, options)
 			// Evaluate on test set
 			for _, evaluator := range evaluators {
 				tempScore, tempCost := evaluator(cp, testFold, trainFold)
