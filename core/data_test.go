@@ -86,8 +86,8 @@ func md5Sum(fileName string) string {
 //}
 
 func TestLoadDataFromBuiltIn(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-100k")
-	assert.Equal(t, 100000, data.Count())
+	data := LoadDataFromBuiltIn("filmtrust")
+	assert.Equal(t, 35497, data.Count())
 }
 
 func TestLoadDataFromCSV_Implicit(t *testing.T) {

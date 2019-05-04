@@ -6,6 +6,12 @@ go:
 env:
  - GO111MODULE=on
 
+before_script:
+  - mkdir -p ~/.gorse/dataset
+  - mkdir -p ~/.gorse/download
+  - wget https://cdn.sine-x.com/datasets/movielens/ml-100k.zip -P ~/.gorse/download
+  - unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+
 matrix:
   include:
     - script:
