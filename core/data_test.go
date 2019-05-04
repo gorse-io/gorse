@@ -75,7 +75,7 @@ func md5Sum(fileName string) string {
 //		t.Fatal("download file failed ", err)
 //	}
 //	// Extract files
-//	fileNames, err := unzip(zipName, dataSetDir)
+//	fileNames, err := unzip(zipName, DataSetDir)
 //	// Check
 //	if err != nil {
 //		t.Fatal("unzip file failed ", err)

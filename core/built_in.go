@@ -2,6 +2,7 @@ package core
 
 import (
 	"log"
+	"os"
 	"os/user"
 )
 
@@ -68,9 +69,8 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 
 // The Data directories
 var (
-	downloadDir string
-	dataSetDir  string
-	TempDir     string
+	DataSetDir string
+	TempDir    string
 )
 
 func init() {
@@ -81,8 +81,14 @@ func init() {
 	}
 
 	gorseDir := usr.HomeDir + "/.gorse"
-	downloadDir = gorseDir + "/download"
-	dataSetDir = gorseDir + "/dataset"
+	DataSetDir = gorseDir + "/dataset"
 	TempDir = gorseDir + "/temp"
 
+	// create all folders
+	if err = os.MkdirAll(DataSetDir, os.ModePerm); err != nil {
+		panic(err)
+	}
+	if err = os.MkdirAll(TempDir, os.ModePerm); err != nil {
+		panic(err)
+	}
 }

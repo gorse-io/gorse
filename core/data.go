@@ -371,10 +371,10 @@ func LoadDataFromBuiltIn(dataSetName string) *DataSet {
 	if !exist {
 		log.Fatal("no such Data set ", dataSetName)
 	}
-	dataFileName := filepath.Join(dataSetDir, dataSet.path)
+	dataFileName := filepath.Join(DataSetDir, dataSet.path)
 	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
-		zipFileName, _ := downloadFromUrl(dataSet.url, downloadDir)
-		if _, err := unzip(zipFileName, dataSetDir); err != nil {
+		zipFileName, _ := downloadFromUrl(dataSet.url, TempDir)
+		if _, err := unzip(zipFileName, DataSetDir); err != nil {
 			panic(err)
 		}
 	}
