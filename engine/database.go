@@ -192,6 +192,9 @@ type RecommendedItem struct {
 func (db *DB) GetRandom(n int) ([]RecommendedItem, error) {
 	// count items
 	count, err := db.CountItems()
+	if err != nil {
+		return nil, err
+	}
 	n = base.Min([]int{count, n})
 	threshold := float64(n) / float64(count)
 	items := make([]RecommendedItem, 0)

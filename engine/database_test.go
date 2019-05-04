@@ -92,6 +92,9 @@ func TestDB_SetGetMeta(t *testing.T) {
 	assert.Equal(t, "2", value)
 	// Get meta not existed
 	value, err = db.GetMeta("NULL")
+	if err != nil {
+		t.Fatal(err)
+	}
 	assert.Equal(t, "", value)
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_meta.db")); err != nil {
