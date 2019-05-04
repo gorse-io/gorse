@@ -139,7 +139,7 @@ func CreateModelFromName(name string, params base.Params) core.ModelInterface {
 	case "svd++":
 		return model.NewSVDpp(params)
 	default:
-		log.Fatalf("unkown model %v\n", name)
+		log.Fatalf("unknown model %v\n", name)
 	}
 	panic("CreateModelFromName error")
 }
@@ -153,7 +153,7 @@ func CreateSimilarityFromName(name string) base.FuncSimilarity {
 	case "msd":
 		return base.MSDSimilarity
 	default:
-		log.Fatalf("unkown similarity %v\n", name)
+		log.Fatalf("unknown similarity %v\n", name)
 	}
 	panic("CreateSimilarityFromName error")
 }
