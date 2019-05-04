@@ -8,16 +8,22 @@
 
 `gorse` is a a transparent recommender system engine over SQL database based on collaborative filtering written in Go.
 
+## Install
+
+```bash
+go get github.com/zhenghaoz/gorse/...
+```
+
 ## Build
 
 ```bash
-go build github.com/zhenghaoz/gorse/cmd/gorse.go
+go build github.com/zhenghaoz/gorse/cmd/gorse
 ```
 
 If the CPU of your device supports AVX2 and FMA3 instructions, use the `avx2` build tag to enable AVX2 support.
 
 ```bash
-go build -tags='avx2' github.com/zhenghaoz/gorse/cmd/gorse.go
+go build -tags='avx2' github.com/zhenghaoz/gorse/cmd/gorse
 ```
 
 ## Usage
