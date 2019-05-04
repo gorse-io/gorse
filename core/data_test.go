@@ -3,7 +3,6 @@ package core
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"log"
@@ -144,43 +143,6 @@ func TestLoadDataFromNetflix(t *testing.T) {
 		assert.Equal(t, 3*i, int(value))
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
-	}
-}
-
-func TestLoadDataFromSQL(t *testing.T) {
-	// Create mock database
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
-	// Create expect query
-	expectRows := sqlmock.NewRows([]string{"user_id", "item_id", "rating"})
-	expectRows.AddRow(0, 0, 0)
-	expectRows.AddRow(1, 2, 3)
-	expectRows.AddRow(2, 4, 6)
-	expectRows.AddRow(3, 6, 9)
-	expectRows.AddRow(4, 8, 12)
-	mock.ExpectQuery("SELECT user_id, item_id, rating FROM ratings;").WillReturnRows(expectRows)
-	// Load data from SQL
-	data, err := LoadDataFromSQL(db, "ratings", "user_id", "item_id", "rating")
-	if err != nil {
-		t.Fatalf("error was not expected while query: %s", err)
-	}
-	// Check data
-	assert.Equal(t, 5, data.Count())
-	for i := 0; i < data.Count(); i++ {
-		userId, itemId, value := data.Get(i)
-		denseUserId, denseItemId, _ := data.GetWithIndex(i)
-		assert.Equal(t, i, userId)
-		assert.Equal(t, 2*i, itemId)
-		assert.Equal(t, 3*i, int(value))
-		assert.Equal(t, i, denseUserId)
-		assert.Equal(t, i, denseItemId)
-	}
-	// we make sure that all expectations were met
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("there were unfulfilled expectations: %s", err)
 	}
 }
 

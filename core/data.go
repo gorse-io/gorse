@@ -3,7 +3,6 @@ package core
 import (
 	"archive/zip"
 	"bufio"
-	"database/sql"
 	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"gonum.org/v1/gonum/stat"
@@ -466,32 +465,6 @@ func LoadDataFromNetflix(fileName string, _ string, _ bool) *DataSet {
 		}
 	}
 	return NewDataSet(users, items, ratings)
-}
-
-// LoadDataFromSQL loads data from a SQL database.
-func LoadDataFromSQL(db *sql.DB, tableName string,
-	userColumn string, itemColumn string, ratingColumn string) (*DataSet, error) {
-	users := make([]int, 0)
-	items := make([]int, 0)
-	ratings := make([]float64, 0)
-	query := fmt.Sprintf("SELECT %s, %s, %s FROM %s;",
-		userColumn, itemColumn, ratingColumn, tableName)
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var itemId, userId int
-		var rating float64
-		err = rows.Scan(&userId, &itemId, &rating)
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, userId)
-		items = append(items, itemId)
-		ratings = append(ratings, float64(rating))
-	}
-	return NewDataSet(users, items, ratings), nil
 }
 
 // LoadEntityFromCSV load entities (items or users) from a csv file.

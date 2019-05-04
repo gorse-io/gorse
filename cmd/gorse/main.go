@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/cmd/cv"
-	"github.com/zhenghaoz/gorse/cmd/data"
-	"github.com/zhenghaoz/gorse/cmd/engine"
-	"github.com/zhenghaoz/gorse/cmd/initdb"
+	"github.com/zhenghaoz/gorse/cmd/dump"
 	"github.com/zhenghaoz/gorse/cmd/server"
+	"github.com/zhenghaoz/gorse/cmd/test"
 	"log"
 )
+
+var VersionName = 0.1
 
 var rootCmd = &cobra.Command{
 	Use:   "gorse",
@@ -26,14 +26,13 @@ var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Check the version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(engine.VersionName)
+		fmt.Println(VersionName)
 	},
 }
 
 func main() {
-	rootCmd.AddCommand(cv.CmdTest)
-	rootCmd.AddCommand(initdb.CmdInit)
-	rootCmd.AddCommand(data.CmdData)
+	rootCmd.AddCommand(test.CmdTest)
+	rootCmd.AddCommand(dump.CmdDump)
 	rootCmd.AddCommand(serve.CmdServer)
 	rootCmd.AddCommand(VersionCmd)
 	if err := rootCmd.Execute(); err != nil {

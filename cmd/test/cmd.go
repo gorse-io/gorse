@@ -1,4 +1,4 @@
-package cv
+package test
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func init() {
 }
 
 var CmdTest = &cobra.Command{
-	Use:   "cv [model]",
+	Use:   "test [model]",
 	Short: "Test a model by cross validation",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {

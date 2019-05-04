@@ -1,4 +1,4 @@
-package serve
+package engine
 
 import (
 	"github.com/BurntSushi/toml"
@@ -21,8 +21,7 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Driver string `toml:"driver"`
-	Access string `toml:"access"`
+	File string `toml:"file"`
 }
 
 type RecommendConfig struct {
@@ -157,4 +156,13 @@ func CreateSimilarityFromName(name string) base.FuncSimilarity {
 		log.Fatalf("unkown similarity %v\n", name)
 	}
 	panic("CreateSimilarityFromName error")
+}
+
+func LoadConfig(path string) (TomlConfig, toml.MetaData) {
+	var conf TomlConfig
+	metaData, err := toml.DecodeFile(path, &conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return conf, metaData
 }

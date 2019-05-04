@@ -3,14 +3,14 @@ package serve
 import (
 	"fmt"
 	"github.com/emicklei/go-restful"
-	"github.com/zhenghaoz/gorse/cmd/engine"
+	"github.com/zhenghaoz/gorse/engine"
 	"log"
 	"net/http"
 	"strconv"
 )
 
 // Server receives requests from clients and sent responses back.
-func Server(config ServerConfig) {
+func Server(config engine.ServerConfig) {
 	// Create a web service
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
@@ -37,18 +37,12 @@ func Server(config ServerConfig) {
 	ws.Route(ws.PUT("/items").To(PutItems)).
 		Doc("put items")
 	// Add ratings
-	ws.Route(ws.PUT("/ratings").To(PutRatings).
-		Doc("put ratings"))
+	ws.Route(ws.PUT("/feedback").To(PutFeedback).
+		Doc("put feedback"))
 	// Start web service
 	restful.DefaultContainer.Add(ws)
 	log.Printf("start a server at %v\n", fmt.Sprintf("%s:%d", config.Host, config.Port))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", config.Host, config.Port), nil))
-}
-
-// QueryResponse capsules results for queries.
-type QueryResponse struct {
-	Failed bool  // `false` for success
-	Items  []int // items in the response
 }
 
 // GetPopular gets popular items from database.
@@ -65,13 +59,13 @@ func GetPopular(request *restful.Request, response *restful.Response) {
 		}
 	}
 	// Get the popular list
-	items, _, err := db.GetPopular(number)
+	items, err := db.GetPopular(number)
 	if err != nil {
 		Failed(response, err)
 		return
 	}
 	// Send result
-	Json(response, QueryResponse{Items: items})
+	Json(response, items)
 }
 
 // GetRandom gets random items from database.
@@ -94,7 +88,7 @@ func GetRandom(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Send result
-	Json(response, QueryResponse{Items: items})
+	Json(response, items)
 }
 
 // GetNeighbors gets neighbors of a item from database.
@@ -123,7 +117,7 @@ func GetNeighbors(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Send result
-	Json(response, QueryResponse{Items: items})
+	Json(response, items)
 }
 
 // GetRecommends gets cached recommended items from database.
@@ -152,14 +146,14 @@ func GetRecommends(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Send result
-	Json(response, QueryResponse{Items: items})
+	Json(response, items)
 }
 
-// ExecResponse capsules result of execution.
-type ExecResponse struct {
-	Failed      bool // `false` for success
-	BeforeCount int  // the number of elements before execution
-	AfterCount  int  // the number of elements after execution
+type Status struct {
+	ItemsBefore    int
+	ItemsAfter     int
+	FeedbackBefore int
+	FeedbackAfter  int
 }
 
 // PutItems puts items
@@ -170,48 +164,73 @@ func PutItems(request *restful.Request, response *restful.Response) {
 		Failed(response, err)
 		return
 	}
-	beforeCount, err := db.CountItems()
+	var err error
+	status := Status{}
+	status.FeedbackBefore, err = db.CountFeedback()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	err = db.PutItems(*items)
+	status.FeedbackAfter = status.FeedbackBefore
+	status.ItemsBefore, err = db.CountItems()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	afterCount, err := db.CountItems()
+	for _, itemId := range *items {
+		err = db.InsertItem(itemId)
+		if err != nil {
+			Failed(response, err)
+			return
+		}
+	}
+	status.ItemsAfter, err = db.CountItems()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	Json(response, ExecResponse{BeforeCount: beforeCount, AfterCount: afterCount})
+	Json(response, status)
 }
 
-// PutRatings puts new ratings into database.
-func PutRatings(request *restful.Request, response *restful.Response) {
+// PutFeedback puts new ratings into database.
+func PutFeedback(request *restful.Request, response *restful.Response) {
 	// Add ratings
-	ratings := new([]engine.RatingTuple)
+	ratings := new([]engine.Feedback)
 	if err := request.ReadEntity(ratings); err != nil {
 		Failed(response, err)
 		return
 	}
-	beforeCount, err := db.CountRatings()
+	var err error
+	status := Status{}
+	status.FeedbackBefore, err = db.CountFeedback()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	err = db.PutRatings(*ratings)
+	status.FeedbackAfter = status.FeedbackBefore
+	status.ItemsBefore, err = db.CountItems()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	afterCount, err := db.CountRatings()
+	for _, feedback := range *ratings {
+		err = db.InsertFeedback(feedback.UserId, feedback.ItemId, feedback.Feedback)
+		if err != nil {
+			Failed(response, err)
+			return
+		}
+	}
+	status.FeedbackAfter, err = db.CountFeedback()
 	if err != nil {
 		Failed(response, err)
 		return
 	}
-	Json(response, ExecResponse{BeforeCount: beforeCount, AfterCount: afterCount})
+	status.ItemsAfter, err = db.CountItems()
+	if err != nil {
+		Failed(response, err)
+		return
+	}
+	Json(response, status)
 }
 
 // ErrorResponse capsules the error message.
