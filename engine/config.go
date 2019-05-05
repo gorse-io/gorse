@@ -26,11 +26,10 @@ type DatabaseConfig struct {
 
 type RecommendConfig struct {
 	Model           string `toml:"model"`
+	Similarity      string `toml:"similarity"`
 	CacheSize       int    `toml:"cache_size"`
 	UpdateThreshold int    `toml:"update_threshold"`
 	CheckPeriod     int    `toml:"check_period"`
-	Similarity      string `toml:"similarity"`
-	ListSize        int    `toml:"list_size"`
 }
 
 type ParamsConfig struct {
@@ -58,71 +57,44 @@ type ParamsConfig struct {
 }
 
 func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
+	type ParamValues struct {
+		name  string
+		key   base.ParamName
+		value interface{}
+	}
+	values := []ParamValues{
+		{"lr", base.Lr, config.Lr},
+		{"reg", base.Reg, config.Reg},
+		{"n_epochs", base.NEpochs, config.NEpochs},
+		{"n_factors", base.NFactors, config.NFactors},
+		{"random_state", base.RandomState, config.RandomState},
+		{"use_bias", base.UseBias, config.UseBias},
+		{"init_mean", base.InitMean, config.InitMean},
+		{"init_std", base.InitStdDev, config.InitStdDev},
+		{"init_low", base.InitLow, config.InitLow},
+		{"init_high", base.InitHigh, config.InitHigh},
+		{"n_user_clusters", base.NUserClusters, config.NUserClusters},
+		{"n_item_clusters", base.NItemClusters, config.NItemClusters},
+		{"type", base.Type, config.Type},
+		{"user_based", base.UserBased, config.UserBased},
+		{"similarity", base.Similarity, config.Similarity},
+		{"k", base.K, config.K},
+		{"min_k", base.MinK, config.MinK},
+		{"optimizer", base.Optimizer, config.Optimizer},
+		{"shrinkage", base.Shrinkage, config.Shrinkage},
+		{"alpha", base.Alpha, config.Alpha},
+	}
 	params := base.Params{}
-	if metaData.IsDefined("params", "lr") {
-		params[base.Lr] = config.Lr
-	}
-	if metaData.IsDefined("params", "reg") {
-		params[base.Reg] = config.Reg
-	}
-	if metaData.IsDefined("params", "n_epochs") {
-		params[base.NEpochs] = config.NEpochs
-	}
-	if metaData.IsDefined("params", "n_factors") {
-		params[base.NFactors] = config.NFactors
-	}
-	if metaData.IsDefined("params", "random_state") {
-		params[base.RandomState] = config.RandomState
-	}
-	if metaData.IsDefined("params", "use_bias") {
-		params[base.UseBias] = config.UseBias
-	}
-	if metaData.IsDefined("params", "init_mean") {
-		params[base.InitMean] = config.InitMean
-	}
-	if metaData.IsDefined("params", "init_std") {
-		params[base.InitStdDev] = config.InitStdDev
-	}
-	if metaData.IsDefined("params", "init_low") {
-		params[base.InitLow] = config.InitLow
-	}
-	if metaData.IsDefined("params", "init_high") {
-		params[base.InitHigh] = config.InitHigh
-	}
-	if metaData.IsDefined("params", "n_user_clusters") {
-		params[base.NUserClusters] = config.NUserClusters
-	}
-	if metaData.IsDefined("params", "n_item_clusters") {
-		params[base.NItemClusters] = config.NItemClusters
-	}
-	if metaData.IsDefined("params", "type") {
-		params[base.Type] = config.Type
-	}
-	if metaData.IsDefined("params", "user_based") {
-		params[base.UserBased] = config.UserBased
-	}
-	if metaData.IsDefined("params", "similarity") {
-		params[base.Similarity] = config.Similarity
-	}
-	if metaData.IsDefined("params", "k") {
-		params[base.K] = config.K
-	}
-	if metaData.IsDefined("params", "min_k") {
-		params[base.MinK] = config.MinK
-	}
-	if metaData.IsDefined("params", "optimizer") {
-		params[base.Optimizer] = config.Optimizer
-	}
-	if metaData.IsDefined("params", "shrinkage") {
-		params[base.Shrinkage] = config.Shrinkage
-	}
-	if metaData.IsDefined("params", "alpha") {
-		params[base.Alpha] = config.Alpha
+	for _, v := range values {
+		if metaData.IsDefined("params", v.name) {
+			params[v.key] = v.value
+		}
 	}
 	return params
 }
 
-func CreateModelFromName(name string, params base.Params) core.ModelInterface {
+// LoadModel creates model from name and parameters.
+func LoadModel(name string, params base.Params) core.ModelInterface {
 	switch name {
 	case "svd":
 		return model.NewSVD(params)
@@ -138,13 +110,12 @@ func CreateModelFromName(name string, params base.Params) core.ModelInterface {
 		return model.NewWRMF(params)
 	case "svd++":
 		return model.NewSVDpp(params)
-	default:
-		log.Fatalf("unknown model %v\n", name)
 	}
-	panic("CreateModelFromName error")
+	return nil
 }
 
-func CreateSimilarityFromName(name string) base.FuncSimilarity {
+// LoadSimilarity creates similarity metric from name.
+func LoadSimilarity(name string) base.FuncSimilarity {
 	switch name {
 	case "pearson":
 		return base.PearsonSimilarity
@@ -152,17 +123,45 @@ func CreateSimilarityFromName(name string) base.FuncSimilarity {
 		return base.CosineSimilarity
 	case "msd":
 		return base.MSDSimilarity
-	default:
-		log.Fatalf("unknown similarity %v\n", name)
 	}
-	panic("CreateSimilarityFromName error")
+	return nil
 }
 
+// FillDefault fill default values for missing values.
+func (config *TomlConfig) FillDefault(meta toml.MetaData) {
+	if !meta.IsDefined("server", "host") {
+		config.Server.Host = "127.0.0.1"
+	}
+	if !meta.IsDefined("server", "port") {
+		config.Server.Port = 8080
+	}
+	if !meta.IsDefined("database", "file") {
+		config.Database.File = "gorse.db"
+	}
+	if !meta.IsDefined("recommend", "model") {
+		config.Recommend.Model = "svd"
+	}
+	if !meta.IsDefined("recommend", "cache_size") {
+		config.Recommend.CacheSize = 100
+	}
+	if !meta.IsDefined("recommend", "update_threshold") {
+		config.Recommend.UpdateThreshold = 10
+	}
+	if !meta.IsDefined("recommend", "check_period") {
+		config.Recommend.CheckPeriod = 1
+	}
+	if !meta.IsDefined("recommend", "similarity") {
+		config.Recommend.Similarity = "pearson"
+	}
+}
+
+// LoadConfig loads configuration from toml file.
 func LoadConfig(path string) (TomlConfig, toml.MetaData) {
 	var conf TomlConfig
 	metaData, err := toml.DecodeFile(path, &conf)
 	if err != nil {
 		log.Fatal(err)
 	}
+	conf.FillDefault(metaData)
 	return conf, metaData
 }
