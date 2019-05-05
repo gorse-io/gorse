@@ -34,8 +34,9 @@ func decodeInt(buf []byte) int {
 	return int(binary.BigEndian.Uint64(buf))
 }
 
+// DB manages all data for the engine.
 type DB struct {
-	db *bolt.DB
+	db *bolt.DB // based on BoltDB
 }
 
 func Open(path string) (*DB, error) {
@@ -383,4 +384,41 @@ func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool) erro
 		}
 	}
 	return err
+}
+
+func (db *DB) SaveFeedbackToCSV(fileName string, sep string) error {
+	// Open file
+	file, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	// Save feedback
+	users, items, feedback, err := db.GetFeedback()
+	if err != nil {
+		return err
+	}
+	for i := range users {
+		if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v\n", users[i], sep, items[i], sep, feedback[i])); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (db *DB) SaveItemsToCSV(fileName string, sep string) error {
+	// Open file
+	file, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	// Save items
+	items, err := db.GetItems()
+	for _, itemId := range items {
+		if _, err := file.WriteString(fmt.Sprintln(itemId)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
