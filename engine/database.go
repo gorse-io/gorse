@@ -415,6 +415,9 @@ func (db *DB) SaveItemsToCSV(fileName string, sep string) error {
 	defer file.Close()
 	// Save items
 	items, err := db.GetItems()
+	if err != nil {
+		return err
+	}
 	for _, itemId := range items {
 		if _, err := file.WriteString(fmt.Sprintln(itemId)); err != nil {
 			return err
