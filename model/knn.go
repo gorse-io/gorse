@@ -78,10 +78,18 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	if leftIndex == base.NotId || rightIndex == base.NotId {
 		return knn.GlobalMean
 	}
+
 	// Find user (item) interacted with item (user)
-	neighbors := base.NewKNNHeap(knn.k)
+	neighbors := base.NewMaxHeap(knn.k)
+	type Neighbor struct {
+		Id     int
+		Rating float64
+	}
 	knn.RightRatings[rightIndex].ForEachIndex(func(i, index int, value float64) {
-		neighbors.Add(index, value, knn.SimMatrix[leftIndex][index])
+		sim := knn.SimMatrix[leftIndex][index]
+		if sim > 0 {
+			neighbors.Add(Neighbor{index, value}, sim)
+		}
 	})
 	// Return global mean for a user (item) with the number of neighborhoods less than min k
 	if neighbors.Len() < knn.minK {
@@ -90,7 +98,10 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 	// Predict
 	weightSum := 0.0
 	weightRating := 0.0
-	neighbors.SparseVector.ForEach(func(i, index int, value float64) {
+	for i := 0; i < neighbors.Len(); i++ {
+		v := neighbors.Elem[i].(Neighbor)
+		index := v.Id
+		value := v.Rating
 		weightSum += knn.SimMatrix[leftIndex][index]
 		rating := value
 		if knn._type == base.Centered {
@@ -101,7 +112,7 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 			rating -= knn.Bias[index]
 		}
 		weightRating += knn.SimMatrix[leftIndex][index] * rating
-	})
+	}
 	prediction := weightRating / weightSum
 	if knn._type == base.Centered {
 		prediction += knn.LeftMean[leftIndex]

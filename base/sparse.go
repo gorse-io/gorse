@@ -2,6 +2,7 @@ package base
 
 import (
 	"container/heap"
+	"gonum.org/v1/gonum/floats"
 	"sort"
 )
 
@@ -299,79 +300,90 @@ func (vec *SparseVector) ForIntersection(other *SparseVector, f func(index int, 
 	}
 }
 
-// KNNHeap is designed for neighbor-based models to store K nearest neighbors.
-// Heap is used to reduce time complexity and memory complexity in neighbors
-// searching.
-type KNNHeap struct {
-	SparseVector           // Store neighbor IDs and ratings.
-	Similarities []float64 // Store similarity.
-	K            int       // Number of required neighbors.
+// MaxHeap is designed for store K maximal elements. Heap is used to reduce time complexity
+// and memory complexity in top-K searching.
+type MaxHeap struct {
+	Elem  []interface{} // store elements
+	Score []float64     // store scores
+	K     int           // the size of heap
 }
 
-// NewKNNHeap creates a KNNHeap.
-func NewKNNHeap(k int) *KNNHeap {
-	knnHeap := new(KNNHeap)
-	knnHeap.SparseVector = SparseVector{}
-	knnHeap.Similarities = make([]float64, 0)
+// NewMaxHeap creates a MaxHeap.
+func NewMaxHeap(k int) *MaxHeap {
+	knnHeap := new(MaxHeap)
+	knnHeap.Elem = make([]interface{}, 0)
+	knnHeap.Score = make([]float64, 0)
 	knnHeap.K = k
 	return knnHeap
 }
 
-// Less returns true if the similarity of i-th item is less than the similarity of j-th item.
+// Less returns true if the score of i-th item is less than the score of j-th item.
 // It is a method of heap.Interface.
-func (knnHeap *KNNHeap) Less(i, j int) bool {
-	return knnHeap.Similarities[i] < knnHeap.Similarities[j]
+func (maxHeap *MaxHeap) Less(i, j int) bool {
+	return maxHeap.Score[i] < maxHeap.Score[j]
 }
 
 // Swap the i-th item with the j-th item. It is a method of heap.Interface.
-func (knnHeap *KNNHeap) Swap(i, j int) {
-	knnHeap.SparseVector.Swap(i, j)
-	knnHeap.Similarities[i], knnHeap.Similarities[j] = knnHeap.Similarities[j], knnHeap.Similarities[i]
+func (maxHeap *MaxHeap) Swap(i, j int) {
+	maxHeap.Elem[i], maxHeap.Elem[j] = maxHeap.Elem[j], maxHeap.Elem[i]
+	maxHeap.Score[i], maxHeap.Score[j] = maxHeap.Score[j], maxHeap.Score[i]
 }
 
-// _KNNHeapItem is designed for heap.Interface to pass neighborhoods.
-type _KNNHeapItem struct {
-	Id         int
-	Rating     float64
-	Similarity float64
+// Len returns the size of heap. It is a method of heap.Interface.
+func (maxHeap *MaxHeap) Len() int {
+	return len(maxHeap.Elem)
 }
 
-// Push a neighbors into the KNNHeap. It is a method of heap.Interface.
-func (knnHeap *KNNHeap) Push(x interface{}) {
-	item := x.(_KNNHeapItem)
-	knnHeap.Indices = append(knnHeap.Indices, item.Id)
-	knnHeap.Values = append(knnHeap.Values, item.Rating)
-	knnHeap.Similarities = append(knnHeap.Similarities, item.Similarity)
+// _HeapItem is designed for heap.Interface to pass neighborhoods.
+type _HeapItem struct {
+	Elem  interface{}
+	Score float64
 }
 
-// Pop the last item (the neighbor with minimum similarity) in the KNNHeap.
+// Push a neighbors into the MaxHeap. It is a method of heap.Interface.
+func (maxHeap *MaxHeap) Push(x interface{}) {
+	item := x.(_HeapItem)
+	maxHeap.Elem = append(maxHeap.Elem, item.Elem)
+	maxHeap.Score = append(maxHeap.Score, item.Score)
+}
+
+// Pop the last item (the element with minimal score) in the MaxHeap.
 // It is a method of heap.Interface.
-func (knnHeap *KNNHeap) Pop() interface{} {
+func (maxHeap *MaxHeap) Pop() interface{} {
 	// Extract the minimum
-	n := knnHeap.Len()
-	item := _KNNHeapItem{
-		Id:         knnHeap.Indices[n-1],
-		Rating:     knnHeap.Values[n-1],
-		Similarity: knnHeap.Similarities[n-1],
+	n := maxHeap.Len()
+	item := _HeapItem{
+		Elem:  maxHeap.Elem[n-1],
+		Score: maxHeap.Score[n-1],
 	}
 	// Remove last element
-	knnHeap.Indices = knnHeap.Indices[0 : n-1]
-	knnHeap.Values = knnHeap.Values[0 : n-1]
-	knnHeap.Similarities = knnHeap.Similarities[0 : n-1]
+	maxHeap.Elem = maxHeap.Elem[0 : n-1]
+	maxHeap.Score = maxHeap.Score[0 : n-1]
 	// We never use returned item
 	return item
 }
 
-// Add a new neighbor to the KNNHeap. Neighbors with zero similarity will be ignored.
-func (knnHeap *KNNHeap) Add(id int, rating float64, similarity float64) {
-	// Deprecate zero items
-	if similarity == 0 {
-		return
-	}
+// Add a new element to the MaxHeap.
+func (maxHeap *MaxHeap) Add(elem interface{}, score float64) {
 	// Insert item
-	heap.Push(knnHeap, _KNNHeapItem{id, rating, similarity})
+	heap.Push(maxHeap, _HeapItem{elem, score})
 	// Remove minimum
-	if knnHeap.Len() > knnHeap.K {
-		heap.Pop(knnHeap)
+	if maxHeap.Len() > maxHeap.K {
+		heap.Pop(maxHeap)
 	}
+}
+
+func (maxHeap *MaxHeap) ToSorted() ([]interface{}, []float64) {
+	// sort indices
+	scores := make([]float64, maxHeap.Len())
+	indices := make([]int, maxHeap.Len())
+	copy(scores, maxHeap.Score)
+	floats.Argsort(scores, indices)
+	// make output
+	sorted := make([]interface{}, maxHeap.Len())
+	for i := range indices {
+		sorted[i] = maxHeap.Elem[indices[maxHeap.Len()-1-i]]
+		scores[i] = maxHeap.Score[indices[maxHeap.Len()-1-i]]
+	}
+	return sorted, scores
 }

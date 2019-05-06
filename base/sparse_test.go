@@ -157,26 +157,28 @@ func TestSparseVector_ForIntersection(t *testing.T) {
 	assert.Equal(t, []float64{0, 1}, intersectB)
 }
 
-func TestKNNHeap(t *testing.T) {
+func TestMaxHeap(t *testing.T) {
 	// Test a adjacent vec
-	a := NewKNNHeap(3)
-	a.Add(10, 0, 1)
-	a.Add(20, 0, 8)
-	a.Add(30, 0, 0)
-	assert.Equal(t, sliceToMapInt([]int{10, 20}), sliceToMapInt(a.Indices))
-	assert.Equal(t, sliceToMap([]float64{1, 8}), sliceToMap(a.Similarities))
+	a := NewMaxHeap(3)
+	a.Add(10, 2)
+	a.Add(20, 8)
+	a.Add(30, 1)
+	elem, scores := a.ToSorted()
+	assert.Equal(t, []interface{}{20, 10, 30}, elem)
+	assert.Equal(t, []float64{8, 2, 1}, scores)
 	// Test a full adjacent vec
-	a.Add(40, 0, 2)
-	a.Add(50, 0, 5)
-	a.Add(12, 0, 10)
-	a.Add(67, 0, 7)
-	a.Add(32, 0, 9)
-	assert.Equal(t, sliceToMapInt([]int{12, 32, 20}), sliceToMapInt(a.Indices))
-	assert.Equal(t, sliceToMap([]float64{8, 9, 10}), sliceToMap(a.Similarities))
+	a.Add(40, 2)
+	a.Add(50, 5)
+	a.Add(12, 10)
+	a.Add(67, 7)
+	a.Add(32, 9)
+	elem, scores = a.ToSorted()
+	assert.Equal(t, []interface{}{12, 32, 20}, elem)
+	assert.Equal(t, []float64{10, 9, 8}, scores)
 }
 
-func sliceToMapInt(a []int) map[int]bool {
-	set := make(map[int]bool)
+func sliceToMapGeneral(a []interface{}) map[interface{}]bool {
+	set := make(map[interface{}]bool)
 	for _, i := range a {
 		set[i] = true
 	}
