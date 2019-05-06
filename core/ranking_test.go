@@ -3,7 +3,6 @@ package core
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
-	"sort"
 	"testing"
 )
 
@@ -51,6 +50,15 @@ func TestNeighbors(t *testing.T) {
 	dataSet := NewDataSet(users, items, ratings)
 	// Find N nearest neighbors
 	neighbors, _ := Neighbors(dataSet, 1, 5, base.MSDSimilarity)
-	sort.Sort(sort.IntSlice(neighbors))
 	assert.Equal(t, []int{2, 3, 4, 5, 6}, neighbors)
+}
+
+func TestPopular(t *testing.T) {
+	users := []int{1, 1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5}
+	items := []int{1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5}
+	ratings := []float64{1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5}
+	dataSet := NewDataSet(users, items, ratings)
+	items, scores := Popular(dataSet, 3)
+	assert.Equal(t, []int{5, 4, 3}, items)
+	assert.Equal(t, []float64{5, 4, 3}, scores)
 }

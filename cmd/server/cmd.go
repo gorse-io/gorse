@@ -6,6 +6,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/engine"
 	"log"
+	"strconv"
+	"time"
 )
 
 var db *engine.DB
@@ -84,5 +86,39 @@ func ImportData(cmd *cobra.Command, db *engine.DB) {
 			log.Fatal(err)
 		}
 		log.Println("Items are imported successfully!")
+	}
+}
+
+// Watcher is watching database and calls UpdateRecommends when necessary.
+func Watcher(config engine.TomlConfig, metaData toml.MetaData) {
+	log.Println("start model daemon")
+	for {
+		// Count ratings
+		count, err := db.CountItems()
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Get commit ratings
+		lastCountString, err := db.GetMeta("last_count")
+		if err != nil {
+			log.Fatal(err)
+		}
+		lastCount, err := strconv.Atoi(lastCountString)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("current number of ratings: %v, last number of ratings: %v\n", count, lastCount)
+		// Compare
+		if count-lastCount > config.Recommend.UpdateThreshold {
+			log.Printf("current count (%v) - last count (%v) > threshold (%v), start to update recommends\n",
+				count, lastCount, config.Recommend.UpdateThreshold)
+			engine.Update(config, metaData, db)
+			if err = db.SetMeta("last_count", strconv.Itoa(count)); err != nil {
+				log.Println(err)
+			}
+			log.Printf("recommends update-to-date, last_count = %v", count)
+		}
+		// Sleep
+		time.Sleep(time.Duration(config.Recommend.CheckPeriod) * time.Minute)
 	}
 }
