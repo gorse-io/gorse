@@ -2,31 +2,23 @@ package core
 
 import (
 	"github.com/zhenghaoz/gorse/base"
-	"gonum.org/v1/gonum/floats"
 )
 
 // Top gets the ranking
 func Top(items map[int]bool, userId int, n int, exclude *base.MarginalSubSet, model ModelInterface) ([]int, []float64) {
 	// Get top-n list
-	list := make([]int, 0)
-	ratings := make([]float64, 0)
-	ids := make([]int, 0)
-	indices := make([]int, 0)
-	negRatings := make([]float64, 0)
+	itemsHeap := base.NewMaxHeap(n)
 	for itemId := range items {
 		if !exclude.Contain(itemId) {
-			indices = append(indices, len(indices))
-			ids = append(ids, itemId)
-			negRatings = append(negRatings, -model.Predict(userId, itemId))
+			itemsHeap.Add(itemId, model.Predict(userId, itemId))
 		}
 	}
-	floats.Argsort(negRatings, indices)
-	for i := 0; i < n && i < len(indices); i++ {
-		index := indices[i]
-		list = append(list, ids[index])
-		ratings = append(ratings, -negRatings[index])
+	elem, scores := itemsHeap.ToSorted()
+	recommends := make([]int, len(elem))
+	for i := range recommends {
+		recommends[i] = elem[i].(int)
 	}
-	return list, ratings
+	return recommends, scores
 }
 
 // Items gets all items from the test set and the training set.
