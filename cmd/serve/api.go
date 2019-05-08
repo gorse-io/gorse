@@ -39,10 +39,39 @@ func Server(config engine.ServerConfig) {
 	// Add ratings
 	ws.Route(ws.PUT("/feedback").To(PutFeedback).
 		Doc("put feedback"))
+	ws.Route(ws.GET("/status").To(GetStatus))
 	// Start web service
 	restful.DefaultContainer.Add(ws)
 	log.Printf("start a server at %v\n", fmt.Sprintf("%s:%d", config.Host, config.Port))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", config.Host, config.Port), nil))
+}
+
+type Status struct {
+	FeedbackCount int
+	ItemCount     int
+	CommitCount   int
+}
+
+func GetStatus(request *restful.Request, response *restful.Response) {
+	status := Status{}
+	var err error
+	// Get feedback count
+	if status.FeedbackCount, err = db.CountFeedback(); err != nil {
+		InternalServerError(response, err)
+	}
+	// Get item count
+	if status.ItemCount, err = db.CountItems(); err != nil {
+		InternalServerError(response, err)
+	}
+	// Get commit count
+	var commit string
+	if commit, err = db.GetMeta("commit"); err != nil {
+		InternalServerError(response, err)
+	}
+	if status.CommitCount, err = strconv.Atoi(commit); len(commit) > 0 && err != nil {
+		InternalServerError(response, err)
+	}
+	Json(response, status)
 }
 
 // GetPopular gets popular items from database.
@@ -54,14 +83,14 @@ func GetPopular(request *restful.Request, response *restful.Response) {
 		if len(paramNumber) == 0 {
 			number = 10
 		} else {
-			Failed(response, err)
+			BadRequest(response, err)
 			return
 		}
 	}
 	// Get the popular list
 	items, err := db.GetPopular(number)
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	// Send result
@@ -77,14 +106,14 @@ func GetRandom(request *restful.Request, response *restful.Response) {
 		if len(paramNumber) == 0 {
 			number = 10
 		} else {
-			Failed(response, err)
+			BadRequest(response, err)
 			return
 		}
 	}
 	// Get random items
 	items, err := db.GetRandom(number)
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	// Send result
@@ -97,7 +126,7 @@ func GetNeighbors(request *restful.Request, response *restful.Response) {
 	paramUserId := request.PathParameter("item-id")
 	itemId, err := strconv.Atoi(paramUserId)
 	if err != nil {
-		Failed(response, err)
+		BadRequest(response, err)
 	}
 	// Get the number
 	paramNumber := request.QueryParameter("number")
@@ -106,14 +135,14 @@ func GetNeighbors(request *restful.Request, response *restful.Response) {
 		if len(paramNumber) == 0 {
 			number = 10
 		} else {
-			Failed(response, err)
+			BadRequest(response, err)
 			return
 		}
 	}
 	// Get recommended items
 	items, err := db.GetNeighbors(itemId, number)
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	// Send result
@@ -126,7 +155,7 @@ func GetRecommends(request *restful.Request, response *restful.Response) {
 	paramUserId := request.PathParameter("user-id")
 	userId, err := strconv.Atoi(paramUserId)
 	if err != nil {
-		Failed(response, err)
+		BadRequest(response, err)
 	}
 	// Get the number
 	paramNumber := request.QueryParameter("number")
@@ -135,21 +164,21 @@ func GetRecommends(request *restful.Request, response *restful.Response) {
 		if len(paramNumber) == 0 {
 			number = 10
 		} else {
-			Failed(response, err)
+			BadRequest(response, err)
 			return
 		}
 	}
 	// Get recommended items
 	items, err := db.GetRecommends(userId, number)
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	// Send result
 	Json(response, items)
 }
 
-type Status struct {
+type Change struct {
 	ItemsBefore    int
 	ItemsAfter     int
 	FeedbackBefore int
@@ -161,35 +190,35 @@ func PutItems(request *restful.Request, response *restful.Response) {
 	// Add ratings
 	items := new([]int)
 	if err := request.ReadEntity(items); err != nil {
-		Failed(response, err)
+		BadRequest(response, err)
 		return
 	}
 	var err error
-	status := Status{}
-	status.FeedbackBefore, err = db.CountFeedback()
+	change := Change{}
+	change.FeedbackBefore, err = db.CountFeedback()
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	status.FeedbackAfter = status.FeedbackBefore
-	status.ItemsBefore, err = db.CountItems()
+	change.FeedbackAfter = change.FeedbackBefore
+	change.ItemsBefore, err = db.CountItems()
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	for _, itemId := range *items {
 		err = db.InsertItem(itemId)
 		if err != nil {
-			Failed(response, err)
+			InternalServerError(response, err)
 			return
 		}
 	}
-	status.ItemsAfter, err = db.CountItems()
+	change.ItemsAfter, err = db.CountItems()
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	Json(response, status)
+	Json(response, change)
 }
 
 // PutFeedback puts new ratings into database.
@@ -197,52 +226,52 @@ func PutFeedback(request *restful.Request, response *restful.Response) {
 	// Add ratings
 	ratings := new([]engine.Feedback)
 	if err := request.ReadEntity(ratings); err != nil {
-		Failed(response, err)
+		BadRequest(response, err)
 		return
 	}
 	var err error
-	status := Status{}
+	status := Change{}
 	status.FeedbackBefore, err = db.CountFeedback()
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	status.FeedbackAfter = status.FeedbackBefore
 	status.ItemsBefore, err = db.CountItems()
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	for _, feedback := range *ratings {
 		err = db.InsertFeedback(feedback.UserId, feedback.ItemId, feedback.Feedback)
 		if err != nil {
-			Failed(response, err)
+			InternalServerError(response, err)
 			return
 		}
 	}
 	status.FeedbackAfter, err = db.CountFeedback()
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	status.ItemsAfter, err = db.CountItems()
 	if err != nil {
-		Failed(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	Json(response, status)
 }
 
-// ErrorResponse capsules the error message.
-type ErrorResponse struct {
-	Failed bool   // `true` for error message
-	Error  string // error message
+func BadRequest(response *restful.Response, err error) {
+	log.Println(err)
+	if err = response.WriteError(400, err); err != nil {
+		log.Println(err)
+	}
 }
 
-// Failed sends the error message to the client.
-func Failed(response *restful.Response, err error) {
+func InternalServerError(response *restful.Response, err error) {
 	log.Println(err)
-	if err = response.WriteAsJson(ErrorResponse{true, err.Error()}); err != nil {
+	if err = response.WriteError(500, err); err != nil {
 		log.Println(err)
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/cmd/dump"
-	"github.com/zhenghaoz/gorse/cmd/server"
+	"github.com/zhenghaoz/gorse/cmd/serve"
 	"github.com/zhenghaoz/gorse/cmd/test"
 	"log"
 )
@@ -32,7 +32,10 @@ var VersionCmd = &cobra.Command{
 
 func main() {
 	rootCmd.AddCommand(test.CmdTest)
-	rootCmd.AddCommand(dump.CmdDump)
+	rootCmd.AddCommand(dump.CmdImportFeedback)
+	rootCmd.AddCommand(dump.CmdImportItems)
+	rootCmd.AddCommand(dump.CmdExportFeedback)
+	rootCmd.AddCommand(dump.CmdExportItems)
 	rootCmd.AddCommand(serve.CmdServer)
 	rootCmd.AddCommand(VersionCmd)
 	if err := rootCmd.Execute(); err != nil {
