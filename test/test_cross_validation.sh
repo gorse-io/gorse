@@ -20,6 +20,12 @@ declare RESULT=($(gorse test svd --load-builtin ml-100k \
     --set-init-mean 0 \
     --set-init-std 0.001 | grep -P '\d+\.\d+(?=\()' -o))
 
+# Check result
+if [[ -z ${RESULT[0]} || -z ${RESULT[1]} ]]; then
+    echo '--- FAIL  runtime error'
+    exit 1
+fi
+
 echo $(date +'%Y/%m/%d %H:%M:%S') RMSE = ${RESULT[0]}, MAE = ${RESULT[1]}
 
 # Check RMSE

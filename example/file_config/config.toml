@@ -5,8 +5,7 @@ port = 8080             # server port
 
 # This section declares setting for the database.
 [database]
-driver = "mysql"        # database driver
-access = "gorse:password@/gorse"# database access
+file = "gorse.db"       # database file
 
 # This section declares settings for recommendation.
 [recommend]
