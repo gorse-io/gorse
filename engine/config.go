@@ -6,6 +6,7 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
 	"log"
+	"path"
 )
 
 type TomlConfig struct {
@@ -123,6 +124,8 @@ func LoadSimilarity(name string) base.FuncSimilarity {
 		return base.CosineSimilarity
 	case "msd":
 		return base.MSDSimilarity
+	case "intersect":
+		return base.IntersectSimilarity
 	}
 	return nil
 }
