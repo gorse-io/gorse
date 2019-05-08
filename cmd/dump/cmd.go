@@ -6,47 +6,121 @@ import (
 	"log"
 )
 
-var CmdDump = &cobra.Command{
-	Use:   "dump [database]",
-	Short: "Import/export data from database",
-	Args:  cobra.ExactArgs(1),
+var CmdImportFeedback = &cobra.Command{
+	Use:   "import-feedback [database_file] [csv_file]",
+	Short: "Import feedback from CSV",
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		databaseFile := args[0]
+		csvFile := args[1]
+		sep, _ := cmd.PersistentFlags().GetString("sep")
+		header, _ := cmd.PersistentFlags().GetBool("header")
 		// Connect database
 		db, err := engine.Open(databaseFile)
 		if err != nil {
 			log.Fatal(err)
 		}
-		// Import ratings
-		if cmd.PersistentFlags().Changed("import-feedback-csv") {
-			name, _ := cmd.PersistentFlags().GetString("import-feedback-csv")
-			sep, _ := cmd.PersistentFlags().GetString("feedback-csv-sep")
-			header, _ := cmd.PersistentFlags().GetBool("feedback-csv-header")
-			log.Printf("Import feedback from %s\n", name)
-			if err = db.LoadFeedbackFromCSV(name, sep, header); err != nil {
-				log.Fatal(err)
-			}
-			log.Println("Feedback are imported successfully!")
+		// Import feedback
+		printCount(db)
+		log.Printf("import feedback from %s\n", csvFile)
+		if err = db.LoadFeedbackFromCSV(csvFile, sep, header); err != nil {
+			log.Fatal(err)
 		}
-		// Import items
-		if cmd.PersistentFlags().Changed("import-items-csv") {
-			name, _ := cmd.PersistentFlags().GetString("import-items-csv")
-			sep, _ := cmd.PersistentFlags().GetString("items-csv-sep")
-			header, _ := cmd.PersistentFlags().GetBool("items-csv-header")
-			log.Printf("Import items from %s\n", name)
-			if err = db.LoadItemsFromCSV(name, sep, header); err != nil {
-				log.Fatal(err)
-			}
-			log.Println("Items are imported successfully!")
+		printCount(db)
+		log.Printf("feedback are imported successfully!")
+	},
+}
+
+var CmdImportItems = &cobra.Command{
+	Use:   "import-items [database_file] [csv_file]",
+	Short: "Import items from CSV",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		databaseFile := args[0]
+		csvFile := args[1]
+		sep, _ := cmd.PersistentFlags().GetString("sep")
+		header, _ := cmd.PersistentFlags().GetBool("header")
+		// Connect database
+		db, err := engine.Open(databaseFile)
+		if err != nil {
+			log.Fatal(err)
 		}
+		// Import feedback
+		printCount(db)
+		log.Printf("import items from %s\n", csvFile)
+		if err = db.LoadItemsFromCSV(csvFile, sep, header); err != nil {
+			log.Fatal(err)
+		}
+		printCount(db)
+		log.Println("items are imported successfully!")
+	},
+}
+
+var CmdExportFeedback = &cobra.Command{
+	Use:   "export-feedback [database_file] [csv_file]",
+	Short: "Export feedback to CSV",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		databaseFile := args[0]
+		csvFile := args[1]
+		sep, _ := cmd.PersistentFlags().GetString("sep")
+		header, _ := cmd.PersistentFlags().GetBool("header")
+		// Connect database
+		db, err := engine.Open(databaseFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Import feedback
+		log.Printf("export feedback to %s\n", csvFile)
+		if err = db.SaveFeedbackToCSV(csvFile, sep, header); err != nil {
+			log.Fatal(err)
+		}
+		log.Println("feedback are exported successfully!")
+	},
+}
+
+var CmdExportItems = &cobra.Command{
+	Use:   "export-items [database_file] [csv_file]",
+	Short: "Export items to CSV",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		databaseFile := args[0]
+		csvFile := args[1]
+		sep, _ := cmd.PersistentFlags().GetString("sep")
+		header, _ := cmd.PersistentFlags().GetBool("header")
+		// Connect database
+		db, err := engine.Open(databaseFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Import feedback
+		log.Printf("export items to %s\n", csvFile)
+		if err = db.SaveItemsToCSV(csvFile, sep, header); err != nil {
+			log.Fatal(err)
+		}
+		log.Println("items are exported successfully!")
 	},
 }
 
 func init() {
-	CmdDump.PersistentFlags().String("import-feedback-csv", "", "import feedback from CSV file")
-	CmdDump.PersistentFlags().String("feedback-csv-sep", "\t", "import feedback from CSV file with separator")
-	CmdDump.PersistentFlags().Bool("feedback-csv-header", false, "import feedback from CSV file with header")
-	CmdDump.PersistentFlags().String("import-items-csv", "", "import items from CSV file")
-	CmdDump.PersistentFlags().String("items-csv-sep", "\t", "import items from CSV file with separator")
-	CmdDump.PersistentFlags().Bool("items-csv-header", false, "import items from CSV file with header")
+	commands := []*cobra.Command{CmdImportFeedback, CmdImportItems, CmdExportFeedback, CmdExportItems}
+	for _, command := range commands {
+		command.PersistentFlags().String("sep", ",", "set the separator for CSV files")
+		command.PersistentFlags().Bool("header", false, "set the header for CSV files")
+		command.PersistentFlags().StringP("config", "c", "", "configure file")
+	}
+}
+
+func printCount(db *engine.DB) {
+	// Count feedback
+	nFeedback, err := db.CountFeedback()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Count items
+	nItems, err := db.CountItems()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("database status: %v feedback, %v items", nFeedback, nItems)
 }
