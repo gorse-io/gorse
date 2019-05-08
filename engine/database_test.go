@@ -345,7 +345,7 @@ func TestDB_SaveFeedbackToCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Save data
-	if err = db.SaveFeedbackToCSV(path.Join(core.TempDir, "test_save_feedback.csv"), ","); err != nil {
+	if err = db.SaveFeedbackToCSV(path.Join(core.TempDir, "test_save_feedback.csv"), ",", false); err != nil {
 		t.Fatal(err)
 	}
 	// Check data
@@ -377,7 +377,7 @@ func TestDB_SaveItemsToCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Save data
-	if err = db.SaveItemsToCSV(path.Join(core.TempDir, "test_save_items.csv"), "::"); err != nil {
+	if err = db.SaveItemsToCSV(path.Join(core.TempDir, "test_save_items.csv"), "::", false); err != nil {
 		t.Fatal(err)
 	}
 	// Check data

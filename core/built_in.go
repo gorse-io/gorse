@@ -69,6 +69,7 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 
 // The Data directories
 var (
+	GorseDir   string
 	DataSetDir string
 	TempDir    string
 )
@@ -80,9 +81,9 @@ func init() {
 			"see https://github.com/zhenghaoz/gorse/issues/3", err)
 	}
 
-	gorseDir := usr.HomeDir + "/.gorse"
-	DataSetDir = gorseDir + "/dataset"
-	TempDir = gorseDir + "/temp"
+	GorseDir = usr.HomeDir + "/.gorse"
+	DataSetDir = GorseDir + "/dataset"
+	TempDir = GorseDir + "/temp"
 
 	// create all folders
 	if err = os.MkdirAll(DataSetDir, os.ModePerm); err != nil {

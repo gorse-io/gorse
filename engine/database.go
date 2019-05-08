@@ -94,6 +94,33 @@ func (db *DB) InsertFeedback(userId, itemId int, feedback float64) error {
 	return db.InsertItem(itemId)
 }
 
+func (db *DB) InsertMultiFeedback(userId, itemId []int, feedback []float64) error {
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bktFeedback))
+		// Get next index
+		index, err := bucket.NextSequence()
+		if err != nil {
+			return err
+		}
+		for i := range feedback {
+			// Marshal data into bytes.
+			buf, err := json.Marshal(Feedback{userId[i], itemId[i], feedback[i]})
+			if err != nil {
+				return err
+			}
+			// Persist bytes to users bucket.
+			if err = bucket.Put(encodeInt(int(index)+i), buf); err != nil {
+				return err
+			}
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return db.InsertMultiItems(itemId)
+}
+
 func (db *DB) GetFeedback() (users []int, items []int, feedback []float64, err error) {
 	err = db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktFeedback))
@@ -125,6 +152,18 @@ func (db *DB) CountFeedback() (int, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+func (db *DB) InsertMultiItems(itemId []int) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bktItems))
+		for _, v := range itemId {
+			if err := bucket.Put(encodeInt(v), nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (db *DB) InsertItem(itemId int) error {
@@ -251,7 +290,7 @@ func (db *DB) GetRecommends(userId int, n int) ([]RecommendedItem, error) {
 	return items, nil
 }
 
-func (db *DB) SetNeighbors(userId int, items []RecommendedItem) error {
+func (db *DB) SetNeighbors(itemId int, items []RecommendedItem) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		// Get bucket
 		bucket := tx.Bucket([]byte(bktNeighbors))
@@ -261,17 +300,17 @@ func (db *DB) SetNeighbors(userId int, items []RecommendedItem) error {
 			return err
 		}
 		// Persist bytes to bucket
-		return bucket.Put(encodeInt(userId), buf)
+		return bucket.Put(encodeInt(itemId), buf)
 	})
 }
 
-func (db *DB) GetNeighbors(userId int, n int) ([]RecommendedItem, error) {
+func (db *DB) GetNeighbors(ItemId int, n int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
 		// Get bucket
 		bucket := tx.Bucket([]byte(bktNeighbors))
 		// Unmarshal data into bytes
-		buf := bucket.Get(encodeInt(userId))
+		buf := bucket.Get(encodeInt(ItemId))
 		return json.Unmarshal(buf, &items)
 	})
 	if err != nil {
@@ -324,6 +363,9 @@ func (db *DB) ToDataSet() (*core.DataSet, error) {
 }
 
 func (db *DB) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) error {
+	users := make([]int, 0)
+	items := make([]int, 0)
+	feedbacks := make([]float64, 0)
 	// Open file
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -350,11 +392,11 @@ func (db *DB) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) e
 		if len(fields) > 2 {
 			feedback, _ = strconv.ParseFloat(fields[2], 32)
 		}
-		if err = db.InsertFeedback(userId, itemId, feedback); err != nil {
-			return err
-		}
+		users = append(users, userId)
+		items = append(items, itemId)
+		feedbacks = append(feedbacks, feedback)
 	}
-	return nil
+	return db.InsertMultiFeedback(users, items, feedbacks)
 }
 
 func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool) error {
@@ -375,7 +417,7 @@ func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool) erro
 		}
 		fields := strings.Split(line, sep)
 		// Ignore empty line
-		if len(fields) < 2 {
+		if len(fields) < 1 {
 			continue
 		}
 		itemId, _ := strconv.Atoi(fields[0])
@@ -386,7 +428,7 @@ func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool) erro
 	return err
 }
 
-func (db *DB) SaveFeedbackToCSV(fileName string, sep string) error {
+func (db *DB) SaveFeedbackToCSV(fileName string, sep string, header bool) error {
 	// Open file
 	file, err := os.Create(fileName)
 	if err != nil {
@@ -406,7 +448,7 @@ func (db *DB) SaveFeedbackToCSV(fileName string, sep string) error {
 	return nil
 }
 
-func (db *DB) SaveItemsToCSV(fileName string, sep string) error {
+func (db *DB) SaveItemsToCSV(fileName string, sep string, header bool) error {
 	// Open file
 	file, err := os.Create(fileName)
 	if err != nil {

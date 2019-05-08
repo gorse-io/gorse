@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/zhenghaoz/gorse/base"
+	"math"
 )
 
 // Top gets the ranking
@@ -45,7 +46,10 @@ func Neighbors(dataSet DataSetInterface, itemId int, n int, similarity base.Func
 		if neighborIndex != itemIndex {
 			neighborRatings := dataSet.ItemByIndex(neighborIndex)
 			neighborId := dataSet.ItemIndexer().ToID(neighborIndex)
-			neighbors.Add(neighborId, similarity(itemRatings, neighborRatings))
+			sim := similarity(itemRatings, neighborRatings)
+			if !math.IsNaN(sim) {
+				neighbors.Add(neighborId, sim)
+			}
 		}
 	}
 	elem, scores := neighbors.ToSorted()

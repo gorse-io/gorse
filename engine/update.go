@@ -33,6 +33,7 @@ func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, 
 			recommends[i].Score = similarities[i]
 		}
 		if err := db.SetNeighbors(itemId, recommends); err != nil {
+			log.Println(err)
 			return err
 		}
 	}
