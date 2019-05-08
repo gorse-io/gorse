@@ -139,7 +139,7 @@ func (config *TomlConfig) FillDefault(meta toml.MetaData) {
 		config.Server.Port = 8080
 	}
 	if !meta.IsDefined("database", "file") {
-		config.Database.File = "gorse.db"
+		config.Database.File = path.Join(core.GorseDir, "gorse.db")
 	}
 	if !meta.IsDefined("recommend", "model") {
 		config.Recommend.Model = "svd"
@@ -163,7 +163,7 @@ func LoadConfig(path string) (TomlConfig, toml.MetaData) {
 	var conf TomlConfig
 	metaData, err := toml.DecodeFile(path, &conf)
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
 	}
 	conf.FillDefault(metaData)
 	return conf, metaData

@@ -3,7 +3,9 @@ package engine
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
+	"path"
 	"reflect"
 	"testing"
 )
@@ -65,7 +67,23 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", config.Server.Host)
 	assert.Equal(t, 8080, config.Server.Port)
 	// database configuration
-	assert.Equal(t, "gorse.db", config.Database.File)
+	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
+	// recommend configuration
+	assert.Equal(t, "svd", config.Recommend.Model)
+	assert.Equal(t, "pearson", config.Recommend.Similarity)
+	assert.Equal(t, 100, config.Recommend.CacheSize)
+	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
+	assert.Equal(t, 1, config.Recommend.CheckPeriod)
+
+	config, _ = LoadConfig("../example/file_config/config_not_exist.toml")
+
+	/* Check configuration */
+
+	// server configuration
+	assert.Equal(t, "127.0.0.1", config.Server.Host)
+	assert.Equal(t, 8080, config.Server.Port)
+	// database configuration
+	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
 	// recommend configuration
 	assert.Equal(t, "svd", config.Recommend.Model)
 	assert.Equal(t, "pearson", config.Recommend.Similarity)
