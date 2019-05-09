@@ -8,7 +8,9 @@
 |---|---|---|---|---|
 | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/1)](https://travis-ci.org/zhenghaoz/gorse) | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/2)](https://travis-ci.org/zhenghaoz/gorse) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse) |
 
-`gorse` 是一个使用 Go 语言实现的、基于协同过滤算法的推荐系统后端。本项目旨在于在小规模推荐任务下，提供一个高效的、易用的、编程语言无关的协同过滤推荐系统微服务。我们可以直接使用它构建一个简易的推荐系统，或者根据它生成的候选物品来构建更加精细的推荐服务。项目的主要特点如下：
+`gorse` 是一个使用 Go 语言实现的、基于协同过滤算法的推荐系统后端。
+
+本项目旨在于在小规模推荐任务下，提供一个高效的、易用的、编程语言无关的协同过滤推荐系统微服务。我们可以直接使用它构建一个简易的推荐系统，或者根据它生成的候选物品来构建更加精细的推荐服务。项目的主要特点如下：
 
 - **完整的流程**: 支持数据加载、数据分割、模型训练、模型评估和参数搜索。
 - **丰富的工具**: 提供了数据导入导出工具、模型评估工具，以及最重要的 RESTful 推荐系统服务端。
@@ -49,7 +51,7 @@ gorse import-items ~/.gorse/gorse.db u.item --sep '|'
 gorse server -c config.toml
 ```
 
-程序会加载配置文件 `config.toml` 之后启动一个推荐系统服务。之后，我们需要等待一段时间让推荐系统生成推荐给用户的候选物品列表以及物品的相似物品列表。配置文件的写法可以参考 Wiki 中的 [Configuration](https://github.com/zhenghaoz/gorse/wiki/Configuration)，配置文件中还设置了模型的参数，为了能够达到模型最佳效果，建议使用 [模型测试工具](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools#cross-validation-tool) 验证模型推荐性能。
+程序会加载配置文件 [config.toml](<https://github.com/zhenghaoz/gorse/blob/master/example/file_config/config.toml>) 之后启动一个推荐系统服务。之后，我们需要等待一段时间让推荐系统生成推荐给用户的候选物品列表以及物品的相似物品列表。配置文件的写法可以参考 Wiki 中的 [Configuration](https://github.com/zhenghaoz/gorse/wiki/Configuration)，配置文件中还设置了模型的参数，为了能够达到模型最佳效果，建议使用 [模型测试工具](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools#cross-validation-tool) 验证模型推荐性能。
 
 - **第三步**: 获取推荐结果
 
@@ -59,7 +61,7 @@ curl 127.0.0.1:8080/recommends/1?number=5
 
 该命令从服务器请求获取 5 个推荐给 1 号用户的物品，返回的结果有可能是：
 
-```json
+```
 [
     {
         "ItemId": 202,
@@ -82,7 +84,7 @@ curl 127.0.0.1:8080/recommends/1?number=5
 
 ## 性能
 
-本项目运行速度快于 Surprise，和 librec 持平，但是需要的运行内存更少。
+本项目运行速度快于 [Surprise](http://surpriselib.com/)，和 [librec](https://www.librec.net/) 持平，但是需要的运行内存更少。
 
 - 在 MovieLens 100K 数据集上对SVD模型进行交叉验证 \[[源代码](https://github.com/zhenghaoz/gorse/tree/master/example/benchmark_perf)\]:
 
