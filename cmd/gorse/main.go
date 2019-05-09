@@ -14,7 +14,7 @@ var VersionName = 0.1
 var rootCmd = &cobra.Command{
 	Use:   "gorse",
 	Short: "gorse: Go Recommender System Engine",
-	Long:  "A high performance recommender system engine in Go",
+	Long:  "gorse is an offline recommender system backend based on collaborative filtering written in Go.",
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			cmd.Help()

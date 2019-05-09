@@ -34,6 +34,29 @@ go get -tags='avx2' github.com/zhenghaoz/gorse/...
 
 ## Usage
 
+```
+gorse is an offline recommender system backend based on collaborative filtering written in Go.
+
+Usage:
+  gorse [flags]
+  gorse [command]
+
+Available Commands:
+  export-feedback Export feedback to CSV
+  export-items    Export items to CSV
+  help            Help about any command
+  import-feedback Import feedback from CSV
+  import-items    Import items from CSV
+  serve           Start a recommender sever
+  test            Test a model by cross validation
+  version         Check the version
+
+Flags:
+  -h, --help   help for gorse
+
+Use "gorse [command] --help" for more information about a command.
+```
+
 It's easy to setup a recomendation service with `gorse`. 
 
 - **Step 1**: Import feedback and items.
@@ -43,7 +66,7 @@ gorse import-feedback ~/.gorse/gorse.db u.data --sep $'\t'
 gorse import-items ~/.gorse/gorse.db u.item --sep '|'
 ```
 
-It imports feedback and items from CSV files into the database file `~/.gorse/gorse.db`. The low level storage engine is implemented by BoltDB. `u.data` is the CSV file of ratings in MovieLens 100K dataset and `u.item` is the CSV file of items in MovieLens 100K dataset. All CLI tools are listed in the [CLI-Tools](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools) section of Wiki.
+It imports feedback and items from CSV files into the database file `~/.gorse/gorse.db`. The low level storage engine is implemented by BoltDB. `u.data` is the CSV file of ratings in [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) dataset and `u.item` is the CSV file of items in [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) dataset. All CLI tools are listed in the [CLI-Tools](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools) section of Wiki.
 
 - **Step 2**: Start a server.
 
@@ -51,7 +74,7 @@ It imports feedback and items from CSV files into the database file `~/.gorse/go
 ./gorse server -c config.toml
 ```
 
-It loads configurations from [config.toml](<https://github.com/zhenghaoz/gorse/blob/master/example/file_config/config.toml>) and start a recommendation server. It may take a while to generate all recommendations. Detailed information about configuration is in the [Configuration](https://github.com/zhenghaoz/gorse/wiki/Configuration) section of Wiki. Before set hyper-parameters for the model, it is useful to test the performance of chosen hyper-parameters by the [model evaluation tool](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools#cross-validation-tool).
+It loads configurations from [config.toml](https://github.com/zhenghaoz/gorse/blob/master/example/file_config/config.toml) and start a recommendation server. It may take a while to generate all recommendations. Detailed information about configuration is in the [Configuration](https://github.com/zhenghaoz/gorse/wiki/Configuration) section of Wiki. Before set hyper-parameters for the model, it is useful to test the performance of chosen hyper-parameters by the [model evaluation tool](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools#cross-validation-tool).
 
 - **Step 3**: Get recommendations.
 

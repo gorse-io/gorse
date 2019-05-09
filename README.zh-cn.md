@@ -34,6 +34,29 @@ go get -tags='avx2' github.com/zhenghaoz/gorse/...
 
 ## 使用
 
+```
+gorse is an offline recommender system backend based on collaborative filtering written in Go.
+
+Usage:
+  gorse [flags]
+  gorse [command]
+
+Available Commands:
+  export-feedback Export feedback to CSV
+  export-items    Export items to CSV
+  help            Help about any command
+  import-feedback Import feedback from CSV
+  import-items    Import items from CSV
+  serve           Start a recommender sever
+  test            Test a model by cross validation
+  version         Check the version
+
+Flags:
+  -h, --help   help for gorse
+
+Use "gorse [command] --help" for more information about a command.
+```
+
 使用本项目构建一下推荐系统服务是相当容易的。
 
 - **第一步**: 导入反馈和物品
@@ -43,7 +66,7 @@ gorse import-feedback ~/.gorse/gorse.db u.data --sep $'\t'
 gorse import-items ~/.gorse/gorse.db u.item --sep '|'
 ```
 
-程序将反馈数据 `u.data` 和物品数据 `u.item` 导入到数据库文件 `~/.gorse/gorse.db`， 底层存储使用了 BoltDB，因此 `~/.gorse/gorse.db` 其实就是 BoltDB 的数据库文件。示例中的 `u.data` 是 MovieLens 100K 数据集中的用户-电影评分数据表， `u.item` 是 MovieLens 100K 数据集中的物品数据表。有关命令行工具的使用，可见 Wiki 中的 [CLI-Tools](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools)。
+程序将反馈数据 `u.data` 和物品数据 `u.item` 导入到数据库文件 `~/.gorse/gorse.db`， 底层存储使用了 BoltDB，因此 `~/.gorse/gorse.db` 其实就是 BoltDB 的数据库文件。示例中的 `u.data` 是 [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) 数据集中的用户-电影评分数据表， `u.item` 是 [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) 数据集中的物品数据表。有关命令行工具的使用，可见 Wiki 中的 [CLI-Tools](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools)。
 
 - **第二步**: 启动服务程序
 
@@ -51,7 +74,7 @@ gorse import-items ~/.gorse/gorse.db u.item --sep '|'
 gorse server -c config.toml
 ```
 
-程序会加载配置文件 [config.toml](<https://github.com/zhenghaoz/gorse/blob/master/example/file_config/config.toml>) 之后启动一个推荐系统服务。之后，我们需要等待一段时间让推荐系统生成推荐给用户的候选物品列表以及物品的相似物品列表。配置文件的写法可以参考 Wiki 中的 [Configuration](https://github.com/zhenghaoz/gorse/wiki/Configuration)，配置文件中还设置了模型的参数，为了能够达到模型最佳效果，建议使用 [模型测试工具](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools#cross-validation-tool) 验证模型推荐性能。
+程序会加载配置文件 [config.toml](https://github.com/zhenghaoz/gorse/blob/master/example/file_config/config.toml) 之后启动一个推荐系统服务。之后，我们需要等待一段时间让推荐系统生成推荐给用户的候选物品列表以及物品的相似物品列表。配置文件的写法可以参考 Wiki 中的 [Configuration](https://github.com/zhenghaoz/gorse/wiki/Configuration)，配置文件中还设置了模型的参数，为了能够达到模型最佳效果，建议使用 [模型测试工具](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools#cross-validation-tool) 验证模型推荐性能。
 
 - **第三步**: 获取推荐结果
 
