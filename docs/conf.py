@@ -86,6 +86,10 @@ html_theme_options = {
         ("GitHub", "https://github.com/zhenghaoz/gorse", True, 'code'),
         ("GoDoc", "https://godoc.org/github.com/zhenghaoz/gorse", True, 'book')
     ],
+    'fixed_drawer': True,
+    'fixed_header': True,
+    'header_waterfall': True,
+    'header_scroll': False,
     'primary_color': 'blue',
     'show_drawer_title': False
 }
