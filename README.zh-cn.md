@@ -4,9 +4,9 @@
 
 <img width=160 src="https://img.sine-x.com/gorse.png"/>
 
-| 持续集成 | 持续集成 (AVX2) | 测试覆盖率 | 代码文档 | 代码报告 |
-|---|---|---|---|---|
-| [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/1)](https://travis-ci.org/zhenghaoz/gorse) | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/2)](https://travis-ci.org/zhenghaoz/gorse) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse) |
+| 持续集成 | 持续集成 (AVX2) | 测试覆盖率 | 代码报告 | 代码文档 | 使用文档 | 
+|---|---|---|---|---|---|
+| [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/1)](https://travis-ci.org/zhenghaoz/gorse) | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/2)](https://travis-ci.org/zhenghaoz/gorse) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)  | [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse) | [![Documentation Status](https://readthedocs.org/projects/gorse/badge/?version=latest)](https://gorse.readthedocs.io/en/latest/?badge=latest) |
 
 `gorse` 是一个使用 Go 语言实现的、基于协同过滤算法的推荐系统后端。
 
@@ -103,7 +103,7 @@ curl 127.0.0.1:8080/recommends/1?number=5
 ## 文档
 
 - 访问 [GoDoc](https://godoc.org/github.com/zhenghaoz/gorse) 查看代码的详细文档。
-- 访问 [Wiki](https://github.com/zhenghaoz/gorse/wiki) 查看教程、示例和概述。
+- 访问 [ReadTheDocs](https://gorse.readthedocs.io/) 查看教程、示例和使用指南。
 
 ## 性能
 
