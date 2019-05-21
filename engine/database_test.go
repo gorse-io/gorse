@@ -115,24 +115,27 @@ func TestDB_GetRandom(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Sample all
-	retItems, err := db.GetRandom(10)
-	if err != nil {
-		t.Fatal(err)
+	// Test multiple times
+	for i := 0; i < 3; i++ {
+		// Sample all
+		retItems, err := db.GetRandom(10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, []RecommendedItem{{ItemId: 0}, {ItemId: 2}, {ItemId: 4}, {ItemId: 6}, {ItemId: 8}}, retItems)
+		// Sample part
+		items1, err := db.GetRandom(3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		items2, err := db.GetRandom(3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, 3, len(items1))
+		assert.Equal(t, 3, len(items2))
+		assert.NotEqual(t, items1, items2)
 	}
-	assert.Equal(t, []RecommendedItem{{ItemId: 0}, {ItemId: 2}, {ItemId: 4}, {ItemId: 6}, {ItemId: 8}}, retItems)
-	// Sample part
-	items1, err := db.GetRandom(3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	items2, err := db.GetRandom(3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 3, len(items1))
-	assert.Equal(t, 3, len(items2))
-	assert.NotEqual(t, items1, items2)
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_random.db")); err != nil {
 		t.Fatal(err)

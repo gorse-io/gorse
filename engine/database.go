@@ -236,16 +236,22 @@ func (db *DB) GetRandom(n int) ([]RecommendedItem, error) {
 		return nil, err
 	}
 	n = base.Min([]int{count, n})
-	threshold := float64(n) / float64(count)
+	// generate random indices
+	selected := make(map[int]bool)
+	for len(selected) < n {
+		randomIndex := rand.Intn(count)
+		selected[randomIndex] = true
+	}
 	items := make([]RecommendedItem, 0)
 	err = db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktItems))
+		ptr := 0
 		return bucket.ForEach(func(k, v []byte) error {
 			// Sample
-			random := rand.Float64()
-			if random < threshold && len(items) < n {
+			if _, exist := selected[ptr]; exist {
 				items = append(items, RecommendedItem{ItemId: decodeInt(k)})
 			}
+			ptr++
 			return nil
 		})
 	})
