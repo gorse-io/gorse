@@ -1,14 +1,18 @@
 ==========
-Benchamrks
+Benchmarks
 ==========
 
-Cross Validation
-================
+
+
+Cross Validation Speed
+======================
+
+*gorse* is much faster than Surprise [#Surprise]_, and comparable to librec [#Librec]_ while using less memory space than both of them. The memory efficiency is achieved by sophisticated data structures.
 
 MovieLens 100K
 --------------
 
-- [SVD](https://godoc.org/github.com/zhenghaoz/gorse/model#SVD)
+Cross-validation of SVD on MovieLens 100K [`Source <https://github.com/zhenghaoz/gorse/tree/master/example/benchmark_perf>`_]:
 
 ========== ======= ===== =======
 Software   Memory  Time  RMSE
@@ -21,8 +25,7 @@ Surprise   83.4MB  1m12s 0.90720
 MovieLens 1M
 ------------
 
-- [SVD](https://godoc.org/github.com/zhenghaoz/gorse/model#SVD)
-
+Cross-validation of SVD on MovieLens 1M [`Source <https://github.com/zhenghaoz/gorse/tree/master/example/benchmark_perf>`_]:
 
 ======== ======= ===== =======
 Software Memory  Time  RMSE
@@ -33,11 +36,13 @@ Surprise 597.6MB 16m8s 0.84300
 ======== ======= ===== =======
 
 
-Rating Prediction
-=================
+Rating Prediction Accuracy
+==========================
 
 MovieLens 100K
 --------------
+
+Cross-validation of rating models on MovieLens 100K [`Source <https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_rating/main.go>`_]. 
 
 ============ ======= ======= =======
 Model        RMSE    MAE     Time   
@@ -52,6 +57,8 @@ SVD++        0.90384 0.70952 0:00:21
 MovieLens 1M
 ------------
 
+Cross-validation of rating models on MovieLens 1M [`Source <https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_rating/main.go>`_]. 
+
 ============ ======= ======= ======= =======
 Model        RMSE    MAE     Time    (AVX2)
 ============ ======= ======= ======= =======
@@ -62,11 +69,13 @@ SVD          0.84252 0.66189 0:02:21 0:01:48
 SVD++        0.84194 0.66156 0:03:39 0:02:47
 ============ ======= ======= ======= =======
 
-Item Ranking
-============
+Item Ranking Accuracy
+=====================
 
 MovieLens 100K
 --------------
+
+Cross-validation of ranking models on MovieLens 100K [`Source <https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_ranking/main.go>`_].
 
 ======= ============ ========= ======= ======= ======= =======
 Model   Precision@10 Recall@10 MAP@10  NDCG@10 MRR@10  Time
@@ -76,6 +85,9 @@ SVD     0.32083      0.20906   0.11848 0.37643 0.59818 0:00:13
 WRMF    0.34727      0.23665   0.14550 0.41614 0.65439 0:00:14
 ======= ============ ========= ======= ======= ======= =======
 
--- [#Surprise] Surprise benchmark: https://github.com/NicolasHug/Surprise#benchmarks
+References
+==========
 
--- [#Librec] Librec benchmark: https://www.librec.net/release/v1.3/example.html
+.. [#Surprise] Surprise benchmark: https://github.com/NicolasHug/Surprise#benchmarks
+
+.. [#Librec] Librec benchmark: https://www.librec.net/release/v1.3/example.html
