@@ -26,7 +26,7 @@ User Item Rating
 1    2    4
 ==== ==== ======
 
-Example: [MovieLens]_ 
+Example: MovieLens [#MovieLens]_
 
 Implicit Feedback
 =================
@@ -50,7 +50,7 @@ User Item
 1    2   
 ==== ====
 
-Example: [Last.FM]_
+Example: Last.FM [#LastFM]_
 
 Weighted Implicit Feedback
 ==========================
@@ -74,11 +74,11 @@ User Item Weight
 1    2    50
 ==== ==== ======
 
-Example: [SteamVideoGames]_
+Example: Steam Video Games [#Steam]_.
 
 Datasets
 ========
 
-.. [MovieLens] https://grouplens.org/datasets/movielens/
-.. [Last.FM] https://grouplens.org/datasets/hetrec-2011/
-.. [SteamVideoGames] https://www.kaggle.com/tamber/steam-video-games
+.. [#MovieLens] MovieLens: https://grouplens.org/datasets/movielens/
+.. [#LastFM] Last.FM: https://grouplens.org/datasets/hetrec-2011/
+.. [#Steam] Steam Video Games https://www.kaggle.com/tamber/steam-video-games
