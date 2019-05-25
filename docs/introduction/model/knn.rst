@@ -50,7 +50,7 @@ Then, the *Mean Square Distance Similarity* is
 
 .. math::
 
-    \text{msd_sim}(u, v) = \frac{1}{\text{msd}(u, v) + 1}
+    \text{MSDSim}(u, v) = \frac{1}{\text{msd}(u, v) + 1}
 
 
 Predict
