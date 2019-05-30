@@ -9,6 +9,7 @@ import (
 	"path"
 )
 
+// TomlConfig is the configuration for the engine.
 type TomlConfig struct {
 	Server    ServerConfig    `toml:"server"`
 	Database  DatabaseConfig  `toml:"database"`
@@ -16,15 +17,18 @@ type TomlConfig struct {
 	Recommend RecommendConfig `toml:"recommend"`
 }
 
+// ServerConfig is the configuration for the server.
 type ServerConfig struct {
 	Host string `toml:"host"`
 	Port int    `toml:"port"`
 }
 
+// DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
 	File string `toml:"file"`
 }
 
+// RecommendConfig is the configuration for recommendation.
 type RecommendConfig struct {
 	Model           string `toml:"model"`
 	Similarity      string `toml:"similarity"`
@@ -33,6 +37,7 @@ type RecommendConfig struct {
 	CheckPeriod     int    `toml:"check_period"`
 }
 
+// ParamsConfig is the configuration for hyper-parameters of the recommendation model.
 type ParamsConfig struct {
 	// Hyper-parameters
 	Lr            float64 `toml:"lr"`              // learning rate
@@ -57,6 +62,7 @@ type ParamsConfig struct {
 	Alpha         float64 `toml:"alpha"`           // alpha value, depend on context
 }
 
+// ToParams convert a configuration for hyper-parameters into hyper-parameters.
 func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
 	type ParamValues struct {
 		name  string

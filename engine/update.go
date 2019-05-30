@@ -7,6 +7,7 @@ import (
 	"log"
 )
 
+// UpdateItemPop updates popular items for the database.
 func UpdateItemPop(cacheSize int, dataSet core.DataSetInterface, db *DB) error {
 	log.Printf("update popular items")
 	items, scores := core.Popular(dataSet, cacheSize)
@@ -21,6 +22,7 @@ func UpdateItemPop(cacheSize int, dataSet core.DataSetInterface, db *DB) error {
 	return nil
 }
 
+// UpdateNeighbors updates neighbors for the database.
 func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, db *DB) error {
 	log.Printf("update neighbors by %v", name)
 	similarity := LoadSimilarity(name)
@@ -40,6 +42,7 @@ func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, 
 	return nil
 }
 
+// UpdateRecommends updates personalized recommendations for the database.
 func UpdateRecommends(name string, params base.Params, cacheSize int, dataSet core.DataSetInterface, db *DB) error {
 	// Create model
 	log.Printf("create model %v with params = %v\n", name, params)
@@ -66,6 +69,7 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, dataSet co
 	return nil
 }
 
+// Update all kinds recommendations for the database.
 func Update(config TomlConfig, metaData toml.MetaData, db *DB) error {
 	// Load data
 	log.Println("load data from database")

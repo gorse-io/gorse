@@ -39,6 +39,7 @@ type DB struct {
 	db *bolt.DB // based on BoltDB
 }
 
+// Open a connection to the database.
 func Open(path string) (*DB, error) {
 	db := new(DB)
 	var err error
@@ -62,16 +63,19 @@ func Open(path string) (*DB, error) {
 	return db, nil
 }
 
+// Close the connection to the database.
 func (db *DB) Close() error {
 	return db.db.Close()
 }
 
+// Feedback is the feedback from a user to an item.
 type Feedback struct {
-	UserId   int
-	ItemId   int
-	Feedback float64
+	UserId   int     // identifier of the user
+	ItemId   int     // identifier of the item
+	Feedback float64 // rating, confidence or indicator
 }
 
+// InsertFeedback inserts a feedback into the database.
 func (db *DB) InsertFeedback(userId, itemId int, feedback float64) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktFeedback))
@@ -94,6 +98,7 @@ func (db *DB) InsertFeedback(userId, itemId int, feedback float64) error {
 	return db.InsertItem(itemId)
 }
 
+// InsertMultiFeedback inserts multiple feedback into the database.
 func (db *DB) InsertMultiFeedback(userId, itemId []int, feedback []float64) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktFeedback))
@@ -121,6 +126,7 @@ func (db *DB) InsertMultiFeedback(userId, itemId []int, feedback []float64) erro
 	return db.InsertMultiItems(itemId)
 }
 
+// GetFeedback returns all feedback in the database.
 func (db *DB) GetFeedback() (users []int, items []int, feedback []float64, err error) {
 	err = db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktFeedback))
@@ -141,6 +147,7 @@ func (db *DB) GetFeedback() (users []int, items []int, feedback []float64, err e
 	return
 }
 
+// CountFeedback returns the number of feedback in the database.
 func (db *DB) CountFeedback() (int, error) {
 	count := 0
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -154,6 +161,7 @@ func (db *DB) CountFeedback() (int, error) {
 	return count, nil
 }
 
+// InsertMultiItems inserts multiple items into the database.
 func (db *DB) InsertMultiItems(itemId []int) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktItems))
@@ -166,6 +174,7 @@ func (db *DB) InsertMultiItems(itemId []int) error {
 	})
 }
 
+// InsertItem inserts a item into the database.
 func (db *DB) InsertItem(itemId int) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktItems))
@@ -176,6 +185,7 @@ func (db *DB) InsertItem(itemId int) error {
 	})
 }
 
+// GetItems returns all items in the dataset.
 func (db *DB) GetItems() ([]int, error) {
 	items := make([]int, 0)
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -191,6 +201,7 @@ func (db *DB) GetItems() ([]int, error) {
 	return items, nil
 }
 
+// CountItems returns the number of items in the database.
 func (db *DB) CountItems() (int, error) {
 	count := 0
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -204,6 +215,7 @@ func (db *DB) CountItems() (int, error) {
 	return count, nil
 }
 
+// GetMeta gets the value of a metadata.
 func (db *DB) GetMeta(name string) (string, error) {
 	var value string
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -214,6 +226,7 @@ func (db *DB) GetMeta(name string) (string, error) {
 	return value, err
 }
 
+// SetMeta sets the value of a metadata.
 func (db *DB) SetMeta(name string, val string) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktMeta))
@@ -224,11 +237,13 @@ func (db *DB) SetMeta(name string, val string) error {
 	})
 }
 
+// RecommendedItem is the structure for a recommended item.
 type RecommendedItem struct {
-	ItemId int
-	Score  float64
+	ItemId int     // identifier
+	Score  float64 // score
 }
 
+// GetRandom returns random items.
 func (db *DB) GetRandom(n int) ([]RecommendedItem, error) {
 	// count items
 	count, err := db.CountItems()
@@ -261,6 +276,7 @@ func (db *DB) GetRandom(n int) ([]RecommendedItem, error) {
 	return items, nil
 }
 
+// SetRecommends sets recommendations for a user.
 func (db *DB) SetRecommends(userId int, items []RecommendedItem) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		// Get bucket
@@ -275,6 +291,7 @@ func (db *DB) SetRecommends(userId int, items []RecommendedItem) error {
 	})
 }
 
+// GetRecommends gets n recommendations for a user.
 func (db *DB) GetRecommends(userId int, n int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -296,6 +313,7 @@ func (db *DB) GetRecommends(userId int, n int) ([]RecommendedItem, error) {
 	return items, nil
 }
 
+// SetNeighbors sets neighbors for a item.
 func (db *DB) SetNeighbors(itemId int, items []RecommendedItem) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		// Get bucket
@@ -310,6 +328,7 @@ func (db *DB) SetNeighbors(itemId int, items []RecommendedItem) error {
 	})
 }
 
+// GetNeighbors gets n neighbors for a item.
 func (db *DB) GetNeighbors(ItemId int, n int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -328,6 +347,7 @@ func (db *DB) GetNeighbors(ItemId int, n int) ([]RecommendedItem, error) {
 	return items, nil
 }
 
+// SetPopular sets popular items in the database.
 func (db *DB) SetPopular(items []RecommendedItem) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		// Get bucket
@@ -342,6 +362,7 @@ func (db *DB) SetPopular(items []RecommendedItem) error {
 	})
 }
 
+// GetPopular returns popular items from the database.
 func (db *DB) GetPopular(n int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -360,6 +381,7 @@ func (db *DB) GetPopular(n int) ([]RecommendedItem, error) {
 	return items, nil
 }
 
+// ToDataSet creates a dataset from the database.
 func (db *DB) ToDataSet() (*core.DataSet, error) {
 	users, items, feedback, err := db.GetFeedback()
 	if err != nil {
@@ -368,6 +390,7 @@ func (db *DB) ToDataSet() (*core.DataSet, error) {
 	return core.NewDataSet(users, items, feedback), nil
 }
 
+// LoadFeedbackFromCSV import feedback from a CSV file into the database.
 func (db *DB) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) error {
 	users := make([]int, 0)
 	items := make([]int, 0)
@@ -405,6 +428,7 @@ func (db *DB) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) e
 	return db.InsertMultiFeedback(users, items, feedbacks)
 }
 
+// LoadItemsFromCSV imports items from a CSV file into the database.
 func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool) error {
 	// Open file
 	file, err := os.Open(fileName)
@@ -434,6 +458,7 @@ func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool) erro
 	return err
 }
 
+// SaveFeedbackToCSV exports feedback from the database into a CSV file.
 func (db *DB) SaveFeedbackToCSV(fileName string, sep string, header bool) error {
 	// Open file
 	file, err := os.Create(fileName)
@@ -454,6 +479,7 @@ func (db *DB) SaveFeedbackToCSV(fileName string, sep string, header bool) error 
 	return nil
 }
 
+// SaveItemsToCSV exports items from the database into a CSV file.
 func (db *DB) SaveItemsToCSV(fileName string, sep string, header bool) error {
 	// Open file
 	file, err := os.Create(fileName)
