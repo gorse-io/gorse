@@ -178,10 +178,7 @@ func (db *DB) InsertMultiItems(itemId []int) error {
 func (db *DB) InsertItem(itemId int) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktItems))
-		if err := bucket.Put(encodeInt(itemId), nil); err != nil {
-			return err
-		}
-		return nil
+		return bucket.Put(encodeInt(itemId), nil)
 	})
 }
 
@@ -230,10 +227,7 @@ func (db *DB) GetMeta(name string) (string, error) {
 func (db *DB) SetMeta(name string, val string) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktMeta))
-		if err := bucket.Put([]byte(name), []byte(val)); err != nil {
-			return err
-		}
-		return nil
+		return bucket.Put([]byte(name), []byte(val))
 	})
 }
 
