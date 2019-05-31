@@ -16,10 +16,7 @@ func UpdateItemPop(cacheSize int, dataSet core.DataSetInterface, db *DB) error {
 		recommends[i].ItemId = items[i]
 		recommends[i].Score = scores[i]
 	}
-	if err := db.SetPopular(recommends); err != nil {
-		return err
-	}
-	return nil
+	return db.SetPopular(recommends)
 }
 
 // UpdateNeighbors updates neighbors for the database.
@@ -87,8 +84,5 @@ func Update(config TomlConfig, metaData toml.MetaData, db *DB) error {
 		return err
 	}
 	// Generate popular items
-	if err = UpdateItemPop(config.Recommend.CacheSize, dataSet, db); err != nil {
-		return err
-	}
-	return nil
+	return UpdateItemPop(config.Recommend.CacheSize, dataSet, db)
 }

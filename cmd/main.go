@@ -27,6 +27,7 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+// Main is the main entry of gorse.
 func Main() {
 	rootCmd.AddCommand(commandTest)
 	rootCmd.AddCommand(commandImportFeedback)
