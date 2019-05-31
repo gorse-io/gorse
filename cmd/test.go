@@ -1,4 +1,4 @@
-package test
+package cmd
 
 import (
 	"fmt"
@@ -14,39 +14,39 @@ import (
 
 func init() {
 	modelNames := make([]string, 0)
-	for name := range Models {
+	for name := range models {
 		modelNames = append(modelNames, name)
 	}
-	CmdTest.Long = fmt.Sprintf("Test a model with cross validation. Models includes %s.",
+	commandTest.Long = fmt.Sprintf("Test a model with cross validation. Models includes %s.",
 		strings.Join(modelNames, ", "))
 	// Data loaders
-	CmdTest.PersistentFlags().String("load-builtin", "", "load data from built-in")
-	CmdTest.PersistentFlags().String("load-csv", "", "load data from CSV file")
-	CmdTest.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
-	CmdTest.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
+	commandTest.PersistentFlags().String("load-builtin", "", "load data from built-in")
+	commandTest.PersistentFlags().String("load-csv", "", "load data from CSV file")
+	commandTest.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
+	commandTest.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
 	// Splitter
-	CmdTest.PersistentFlags().Int("split-fold", 5, "split data by k fold")
+	commandTest.PersistentFlags().Int("split-fold", 5, "split data by k fold")
 	// Evaluators
-	CmdTest.PersistentFlags().Int("top", 10, "evaluate the model in top N ranking")
-	for _, evalFlag := range EvalFlags {
-		CmdTest.PersistentFlags().Bool(evalFlag.Name, false, evalFlag.Help)
+	commandTest.PersistentFlags().Int("top", 10, "evaluate the model in top N ranking")
+	for _, evalFlag := range evalFlags {
+		commandTest.PersistentFlags().Bool(evalFlag.Name, false, evalFlag.Help)
 	}
 	// Hyper-parameters
-	for _, paramFlag := range ParamFlags {
+	for _, paramFlag := range paramFlags {
 		switch paramFlag.Type {
-		case INT:
-			CmdTest.PersistentFlags().Int(paramFlag.Name, 0, paramFlag.Help)
-		case FLOAT64:
-			CmdTest.PersistentFlags().Float64(paramFlag.Name, 0, paramFlag.Help)
-		case STRING:
-			CmdTest.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
-		case BOOL:
-			CmdTest.PersistentFlags().Bool(paramFlag.Name, false, paramFlag.Help)
+		case intFlag:
+			commandTest.PersistentFlags().Int(paramFlag.Name, 0, paramFlag.Help)
+		case float64Flag:
+			commandTest.PersistentFlags().Float64(paramFlag.Name, 0, paramFlag.Help)
+		case stringFlag:
+			commandTest.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
+		case boolFlag:
+			commandTest.PersistentFlags().Bool(paramFlag.Name, false, paramFlag.Help)
 		}
 	}
 }
 
-var CmdTest = &cobra.Command{
+var commandTest = &cobra.Command{
 	Use:   "test [model]",
 	Short: "Test a model by cross validation",
 	Args:  cobra.ExactArgs(1),
@@ -54,7 +54,7 @@ var CmdTest = &cobra.Command{
 		modelName := args[0]
 		var model core.ModelInterface
 		var exist bool
-		if model, exist = Models[modelName]; !exist {
+		if model, exist = models[modelName]; !exist {
 			log.Fatalf("Unknown model %s\n", modelName)
 		}
 		// Load data
@@ -74,19 +74,19 @@ var CmdTest = &cobra.Command{
 		}
 		// Load hyper-parameters
 		params := make(base.Params)
-		for _, paramFlag := range ParamFlags {
+		for _, paramFlag := range paramFlags {
 			if cmd.PersistentFlags().Changed(paramFlag.Name) {
 				switch paramFlag.Type {
-				case INT:
+				case intFlag:
 					value, _ := cmd.PersistentFlags().GetInt(paramFlag.Name)
 					params[paramFlag.Key] = value
-				case FLOAT64:
+				case float64Flag:
 					value, _ := cmd.PersistentFlags().GetFloat64(paramFlag.Name)
 					params[paramFlag.Key] = value
-				case STRING:
+				case stringFlag:
 					value, _ := cmd.PersistentFlags().GetString(paramFlag.Name)
 					params[paramFlag.Key] = value
-				case BOOL:
+				case boolFlag:
 					value, _ := cmd.PersistentFlags().GetBool(paramFlag.Name)
 					params[paramFlag.Key] = value
 				}
@@ -103,7 +103,7 @@ var CmdTest = &cobra.Command{
 		rankMetrics := make([]core.RankMetric, 0)
 		ratingMetrics := make([]core.RatingMetric, 0)
 		evalChanged := false
-		for _, evalFlag := range EvalFlags {
+		for _, evalFlag := range evalFlags {
 			if cmd.PersistentFlags().Changed(evalFlag.Name) {
 				evalChanged = true
 				if evalFlag.Rank {
@@ -120,7 +120,7 @@ var CmdTest = &cobra.Command{
 			evaluatorNames = append(evaluatorNames, "RMSE")
 		}
 		log.Printf("Use evaluators %v\n", evaluatorNames)
-		evaluators := make([]core.CVEvaluator, 0)
+		evaluators := make([]core.CrossValidationEvaluator, 0)
 		if len(ratingMetrics) > 0 {
 			evaluators = append(evaluators, core.NewRatingEvaluator(ratingMetrics...))
 		}
@@ -154,7 +154,7 @@ var CmdTest = &cobra.Command{
 
 /* Models */
 
-var Models = map[string]core.ModelInterface{
+var models = map[string]core.ModelInterface{
 	"svd":           model.NewSVD(nil),
 	"knn":           model.NewKNN(nil),
 	"wrmf":          model.NewWRMF(nil),
@@ -166,7 +166,7 @@ var Models = map[string]core.ModelInterface{
 
 /* Flags for evaluators */
 
-type EvalFlag struct {
+type _EvalFlag struct {
 	Rank         bool
 	Print        string
 	Name         string
@@ -175,7 +175,7 @@ type EvalFlag struct {
 	RankMetric   core.RankMetric
 }
 
-var EvalFlags = []EvalFlag{
+var evalFlags = []_EvalFlag{
 	{Rank: false, RatingMetric: core.RMSE, Print: "RMSE", Name: "eval-rmse", Help: "evaluate the model by RMSE"},
 	{Rank: false, RatingMetric: core.MAE, Print: "MAE", Name: "eval-mae", Help: "evaluate the model by MAE"},
 	{Rank: true, RankMetric: core.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
@@ -188,38 +188,38 @@ var EvalFlags = []EvalFlag{
 /* Flags for hyper-parameters */
 
 const (
-	INT     = 0
-	FLOAT64 = 1
-	BOOL    = 2
-	STRING  = 3
+	intFlag     = 0
+	float64Flag = 1
+	boolFlag    = 2
+	stringFlag  = 3
 )
 
-type ParamFlag struct {
+type _ParamFlag struct {
 	Type int
 	Key  base.ParamName
 	Name string
 	Help string
 }
 
-var ParamFlags = []ParamFlag{
-	{FLOAT64, base.Lr, "set-lr", "set learning rate"},
-	{FLOAT64, base.Reg, "set-reg", "set regularization strength"},
-	{INT, base.NEpochs, "set-n-epochs", "set number of epochs"},
-	{INT, base.NFactors, "set-n-factors", "set number of factors"},
-	{INT, base.RandomState, "set-random-state", "set random state (seed)"},
-	{BOOL, base.UseBias, "set-use-bias", "set use bias"},
-	{FLOAT64, base.InitMean, "set-init-mean", "set mean of gaussian initial parameter"},
-	{FLOAT64, base.InitStdDev, "set-init-std", "set standard deviation of gaussian initial parameter"},
-	{FLOAT64, base.InitLow, "set-init-low", "set lower bound of uniform initial parameter"},
-	{FLOAT64, base.InitHigh, "set-init-high", "set upper bound of uniform initial parameter"},
-	{INT, base.NUserClusters, "set-user-clusters", "set number of user cluster"},
-	{INT, base.NItemClusters, "set-item-clusters", "set number of item cluster"},
-	{STRING, base.Type, "set-type", "set type for KNN"},
-	{BOOL, base.UserBased, "set-user-based", "set user based if true. otherwise item based."},
-	{STRING, base.Similarity, "set-similarity", "set similarity metrics"},
-	{STRING, base.K, "set-k", "set number of neighbors"},
-	{STRING, base.MinK, "set-mink", "set least number of neighbors"},
-	{STRING, base.Optimizer, "set-optimizer", "set optimizer for optimization (sgd/bpr)"},
-	{INT, base.Shrinkage, "set-shrinkage", "set shrinkage strength of similarity"},
-	{FLOAT64, base.Alpha, "set-alpha", "set alpha value, depend on context"},
+var paramFlags = []_ParamFlag{
+	{float64Flag, base.Lr, "set-lr", "set learning rate"},
+	{float64Flag, base.Reg, "set-reg", "set regularization strength"},
+	{intFlag, base.NEpochs, "set-n-epochs", "set number of epochs"},
+	{intFlag, base.NFactors, "set-n-factors", "set number of factors"},
+	{intFlag, base.RandomState, "set-random-state", "set random state (seed)"},
+	{boolFlag, base.UseBias, "set-use-bias", "set use bias"},
+	{float64Flag, base.InitMean, "set-init-mean", "set mean of gaussian initial parameter"},
+	{float64Flag, base.InitStdDev, "set-init-std", "set standard deviation of gaussian initial parameter"},
+	{float64Flag, base.InitLow, "set-init-low", "set lower bound of uniform initial parameter"},
+	{float64Flag, base.InitHigh, "set-init-high", "set upper bound of uniform initial parameter"},
+	{intFlag, base.NUserClusters, "set-user-clusters", "set number of user cluster"},
+	{intFlag, base.NItemClusters, "set-item-clusters", "set number of item cluster"},
+	{stringFlag, base.Type, "set-type", "set type for KNN"},
+	{boolFlag, base.UserBased, "set-user-based", "set user based if true. otherwise item based."},
+	{stringFlag, base.Similarity, "set-similarity", "set similarity metrics"},
+	{stringFlag, base.K, "set-k", "set number of neighbors"},
+	{stringFlag, base.MinK, "set-mink", "set least number of neighbors"},
+	{stringFlag, base.Optimizer, "set-optimizer", "set optimizer for optimization (sgd/bpr)"},
+	{intFlag, base.Shrinkage, "set-shrinkage", "set shrinkage strength of similarity"},
+	{float64Flag, base.Alpha, "set-alpha", "set alpha value, depend on context"},
 }

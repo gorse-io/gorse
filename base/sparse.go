@@ -58,7 +58,7 @@ type StringIndexer struct {
 	Names   []string
 }
 
-// NewIndexer creates a Indexer.
+// NewStringIndexer creates a StringIndexer.
 func NewStringIndexer() *StringIndexer {
 	set := new(StringIndexer)
 	set.Indices = make(map[string]int)
@@ -87,7 +87,7 @@ func (set *StringIndexer) ToIndex(name string) int {
 	return NotId
 }
 
-// ToID converts a dense index to a sparse ID.
+// ToName converts an index to a name.
 func (set *StringIndexer) ToName(index int) string {
 	return set.Names[index]
 }
@@ -373,6 +373,7 @@ func (maxHeap *MaxHeap) Add(elem interface{}, score float64) {
 	}
 }
 
+// ToSorted returns a sorted slice od elements in the heap.
 func (maxHeap *MaxHeap) ToSorted() ([]interface{}, []float64) {
 	// sort indices
 	scores := make([]float64, maxHeap.Len())

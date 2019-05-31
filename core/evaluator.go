@@ -6,9 +6,11 @@ import (
 	"math"
 )
 
-type CVEvaluator func(estimator ModelInterface, testSet, trainSet DataSetInterface) (scores, costs []float64)
+// CrossValidationEvaluator is the evaluator for cross-validation.
+type CrossValidationEvaluator func(estimator ModelInterface, testSet, trainSet DataSetInterface) (scores, costs []float64)
 
-func NewRatingEvaluator(metrics ...RatingMetric) CVEvaluator {
+// NewRatingEvaluator creates a evaluator for rating prediction cross-validation.
+func NewRatingEvaluator(metrics ...RatingMetric) CrossValidationEvaluator {
 	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) (scores, costs []float64) {
 		scores = EvaluateRating(model, testSet, metrics...)
 		costs = scores
@@ -16,7 +18,8 @@ func NewRatingEvaluator(metrics ...RatingMetric) CVEvaluator {
 	}
 }
 
-func NewRankEvaluator(n int, metrics ...RankMetric) CVEvaluator {
+// NewRankEvaluator creates a evaluator for personalized ranking cross-validation.
+func NewRankEvaluator(n int, metrics ...RankMetric) CrossValidationEvaluator {
 	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) (scores, costs []float64) {
 		scores = EvaluateRank(model, testSet, trainSet, n, metrics...)
 		costs = make([]float64, len(scores))
@@ -68,7 +71,7 @@ func MAE(groundTruth []float64, prediction []float64) float64 {
 
 /* Evaluate Item Ranking */
 
-// RatingMetric is used by evaluators in rating prediction tasks.
+// RankMetric is used by evaluators in personalized ranking tasks.
 type RankMetric func(targetSet *base.MarginalSubSet, rankList []int) float64
 
 // EvaluateRank evaluates a model in top-n tasks.
@@ -111,7 +114,7 @@ func NDCG(targetSet *base.MarginalSubSet, rankList []int) float64 {
 	return dcg / idcg
 }
 
-// Precision:
+// Precision is the fraction of relevant items among the recommended items.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{retrieved documents}|}
 func Precision(targetSet *base.MarginalSubSet, rankList []int) float64 {
 	hit := 0.0
@@ -123,7 +126,8 @@ func Precision(targetSet *base.MarginalSubSet, rankList []int) float64 {
 	return float64(hit) / float64(len(rankList))
 }
 
-// Recall:
+// Recall is the fraction of relevant items that have been recommended over the total
+// amount of relevant items.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{relevant documents}|}
 func Recall(targetSet *base.MarginalSubSet, rankList []int) float64 {
 	hit := 0
@@ -169,7 +173,7 @@ func MRR(targetSet *base.MarginalSubSet, rankList []int) float64 {
 	return 0
 }
 
-// AUC evaluator.
+// EvaluateAUC evaluates a model by AUC.
 func EvaluateAUC(estimator ModelInterface, testSet, excludeSet DataSetInterface) float64 {
 	sum := 0.0
 	userCount := 0.0

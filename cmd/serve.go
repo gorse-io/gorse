@@ -1,4 +1,4 @@
-package serve
+package cmd
 
 import (
 	"fmt"
@@ -12,14 +12,14 @@ import (
 
 var db *engine.DB
 
-var CmdServer = &cobra.Command{
+var commandServe = &cobra.Command{
 	Use:   "serve",
 	Short: "Start a recommender sever",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Print welcome
-		Welcome()
+		welcome()
 		// Load configuration
-		conf, metaData := LoadConfig(cmd)
+		conf, metaData := loadConfig(cmd)
 		// Connect database
 		var err error
 		db, err = engine.Open(conf.Database.File)
@@ -28,16 +28,16 @@ var CmdServer = &cobra.Command{
 		}
 		log.Printf("connect to database: %v", conf.Database.File)
 		// Start model daemon
-		go Watcher(conf, metaData)
-		Server(conf.Server)
+		go watch(conf, metaData)
+		serve(conf.Server)
 	},
 }
 
 func init() {
-	CmdServer.PersistentFlags().StringP("config", "c", "", "Configure file")
+	commandServe.PersistentFlags().StringP("config", "c", "", "Configure file")
 }
 
-func Welcome() {
+func welcome() {
 	// Print Header
 	fmt.Println("     __ _  ___  _ __ ___  ___      ")
 	fmt.Println("    / _` |/ _ \\| '__/ __|/ _ \\   ")
@@ -50,7 +50,7 @@ func Welcome() {
 	fmt.Println("-----------------------------------")
 }
 
-func LoadConfig(cmd *cobra.Command) (engine.TomlConfig, toml.MetaData) {
+func loadConfig(cmd *cobra.Command) (engine.TomlConfig, toml.MetaData) {
 	if !cmd.PersistentFlags().Changed("config") {
 		log.Fatal("please use specify a configuration")
 	}
@@ -58,8 +58,8 @@ func LoadConfig(cmd *cobra.Command) (engine.TomlConfig, toml.MetaData) {
 	return engine.LoadConfig(configFile)
 }
 
-// Watcher is watching database and calls UpdateRecommends when necessary.
-func Watcher(config engine.TomlConfig, metaData toml.MetaData) {
+// watch is watching database and calls UpdateRecommends when necessary.
+func watch(config engine.TomlConfig, metaData toml.MetaData) {
 	log.Println("start model updater")
 	for {
 		// Count ratings

@@ -131,7 +131,7 @@ func LoadSimilarity(name string) base.FuncSimilarity {
 	case "msd":
 		return base.MSDSimilarity
 	case "intersect":
-		return base.IntersectSimilarity
+		return base.ImplicitSimilarity
 	}
 	return nil
 }

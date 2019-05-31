@@ -1,15 +1,12 @@
-package main
+package cmd
 
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/cmd/dump"
-	"github.com/zhenghaoz/gorse/cmd/serve"
-	"github.com/zhenghaoz/gorse/cmd/test"
 	"log"
 )
 
-var VersionName = 0.1
+var versionName = 0.1
 
 var rootCmd = &cobra.Command{
 	Use:   "gorse",
@@ -22,22 +19,22 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-var VersionCmd = &cobra.Command{
+var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Check the version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(VersionName)
+		fmt.Println(versionName)
 	},
 }
 
-func main() {
-	rootCmd.AddCommand(test.CmdTest)
-	rootCmd.AddCommand(dump.CmdImportFeedback)
-	rootCmd.AddCommand(dump.CmdImportItems)
-	rootCmd.AddCommand(dump.CmdExportFeedback)
-	rootCmd.AddCommand(dump.CmdExportItems)
-	rootCmd.AddCommand(serve.CmdServer)
-	rootCmd.AddCommand(VersionCmd)
+func Main() {
+	rootCmd.AddCommand(commandTest)
+	rootCmd.AddCommand(commandImportFeedback)
+	rootCmd.AddCommand(commandImportItems)
+	rootCmd.AddCommand(commandExportFeedback)
+	rootCmd.AddCommand(commandExportItems)
+	rootCmd.AddCommand(commandServe)
+	rootCmd.AddCommand(versionCmd)
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}

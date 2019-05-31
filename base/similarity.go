@@ -46,7 +46,8 @@ func PearsonSimilarity(a, b *MarginalSubSet) float64 {
 	return math.Abs(l) / (math.Sqrt(m) * math.Sqrt(n))
 }
 
-func IntersectSimilarity(a, b *MarginalSubSet) float64 {
+// ImplicitSimilarity computes similarity between two vectors with implicit feedback.
+func ImplicitSimilarity(a, b *MarginalSubSet) float64 {
 	intersect := 0.0
 	a.ForIntersection(b, func(index int, a, b float64) {
 		intersect++

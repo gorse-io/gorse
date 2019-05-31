@@ -12,7 +12,7 @@ type _BiasUpdateCache struct {
 	cache map[int]float64
 }
 
-func NewBiasUpdateCache() *_BiasUpdateCache {
+func _NewBiasUpdateCache() *_BiasUpdateCache {
 	cache := new(_BiasUpdateCache)
 	cache.cache = make(map[int]float64)
 	return cache
@@ -37,7 +37,7 @@ type _FactorUpdateCache struct {
 	cache   map[int][]float64
 }
 
-func NewFactorUpdateCache(nFactor int) *_FactorUpdateCache {
+func _NewFactorUpdateCache(nFactor int) *_FactorUpdateCache {
 	cache := new(_FactorUpdateCache)
 	cache.nFactor = nFactor
 	cache.cache = make(map[int][]float64)
@@ -92,7 +92,7 @@ type FM struct {
 	ItemPop     *ItemPop
 }
 
-// NewSVD creates a factorization machine.
+// NewFM creates a factorization machine.
 func NewFM(params base.Params) *FM {
 	fm := new(FM)
 	fm.SetParams(params)
@@ -270,7 +270,7 @@ func (fm *FM) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOption
 			upGrad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
 			// Update bias:
 			//   \frac {\partial\hat{y}(x)} {\partial w_i} = x_i
-			biasCache := NewBiasUpdateCache()
+			biasCache := _NewBiasUpdateCache()
 			// 1. Positive sample
 			posVec.ForEach(func(_, index int, value float64) {
 				gradBias := upGrad*value - fm.reg*fm.Bias[index]
@@ -286,7 +286,7 @@ func (fm *FM) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOption
 			// Update factors:
 			//   \frac {\partial\hat{y}(x)} {\partial v_{i,f}}
 			//   = x_i \sum^n_{j=1} v_{i,f}x_j - v_{i,g}x^2_i
-			factorCache := NewFactorUpdateCache(fm.nFactors)
+			factorCache := _NewFactorUpdateCache(fm.nFactors)
 			// 1. Positive sample
 			base.FillZeroVector(temp)
 			posVec.ForEach(func(_, index int, value float64) {

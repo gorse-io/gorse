@@ -1,4 +1,4 @@
-package dump
+package cmd
 
 import (
 	"github.com/spf13/cobra"
@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-var CmdImportFeedback = &cobra.Command{
+var commandImportFeedback = &cobra.Command{
 	Use:   "import-feedback [database_file] [csv_file]",
 	Short: "Import feedback from CSV",
 	Args:  cobra.ExactArgs(2),
@@ -31,7 +31,7 @@ var CmdImportFeedback = &cobra.Command{
 	},
 }
 
-var CmdImportItems = &cobra.Command{
+var commandImportItems = &cobra.Command{
 	Use:   "import-items [database_file] [csv_file]",
 	Short: "Import items from CSV",
 	Args:  cobra.ExactArgs(2),
@@ -56,7 +56,7 @@ var CmdImportItems = &cobra.Command{
 	},
 }
 
-var CmdExportFeedback = &cobra.Command{
+var commandExportFeedback = &cobra.Command{
 	Use:   "export-feedback [database_file] [csv_file]",
 	Short: "Export feedback to CSV",
 	Args:  cobra.ExactArgs(2),
@@ -79,7 +79,7 @@ var CmdExportFeedback = &cobra.Command{
 	},
 }
 
-var CmdExportItems = &cobra.Command{
+var commandExportItems = &cobra.Command{
 	Use:   "export-items [database_file] [csv_file]",
 	Short: "Export items to CSV",
 	Args:  cobra.ExactArgs(2),
@@ -103,7 +103,7 @@ var CmdExportItems = &cobra.Command{
 }
 
 func init() {
-	commands := []*cobra.Command{CmdImportFeedback, CmdImportItems, CmdExportFeedback, CmdExportItems}
+	commands := []*cobra.Command{commandImportFeedback, commandImportItems, commandExportFeedback, commandExportItems}
 	for _, command := range commands {
 		command.PersistentFlags().String("sep", ",", "set the separator for CSV files")
 		command.PersistentFlags().Bool("header", false, "set the header for CSV files")

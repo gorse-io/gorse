@@ -35,7 +35,7 @@ func (sv CrossValidateResult) MeanAndMargin() (float64, float64) {
 
 // CrossValidate evaluates a model by k-fold cross validation.
 func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Splitter, seed int64,
-	options *base.RuntimeOptions, evaluators ...CVEvaluator) []CrossValidateResult {
+	options *base.RuntimeOptions, evaluators ...CrossValidationEvaluator) []CrossValidateResult {
 	// Split data set
 	trainFolds, testFolds := splitter(dataSet, seed)
 	length := len(trainFolds)
@@ -86,7 +86,7 @@ type ModelSelectionResult struct {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid ParameterGrid,
-	splitter Splitter, seed int64, options *base.RuntimeOptions, evaluators ...CVEvaluator) []ModelSelectionResult {
+	splitter Splitter, seed int64, options *base.RuntimeOptions, evaluators ...CrossValidationEvaluator) []ModelSelectionResult {
 	// Retrieve parameter names and length
 	paramNames := make([]base.ParamName, 0, len(paramGrid))
 	count := 1
@@ -143,7 +143,7 @@ func GridSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid 
 
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator ModelInterface, dataSet DataSetInterface, paramGrid ParameterGrid,
-	splitter Splitter, trial int, seed int64, options *base.RuntimeOptions, evaluators ...CVEvaluator) []ModelSelectionResult {
+	splitter Splitter, trial int, seed int64, options *base.RuntimeOptions, evaluators ...CrossValidationEvaluator) []ModelSelectionResult {
 	rng := base.NewRandomGenerator(seed)
 	var results []ModelSelectionResult
 	for i := 0; i < trial; i++ {

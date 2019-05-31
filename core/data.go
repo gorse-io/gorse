@@ -16,6 +16,7 @@ import (
 	"strings"
 )
 
+// DataSetInterface is the interface for a dataset object.
 type DataSetInterface interface {
 	// GlobalMean returns the global mean of ratings in the dataset.
 	GlobalMean() float64
@@ -139,7 +140,7 @@ func (set *DataSet) encodeFeature(entity map[string]interface{}, features []stri
 	return vec
 }
 
-// SetUserFeatures
+// SetUserFeatures sets features of users.
 func (set *DataSet) SetUserFeatures(users []map[string]interface{}, features []string, idName string) {
 	set.userFeatures = make([]*base.SparseVector, set.UserCount())
 	for _, entity := range users {
@@ -149,7 +150,7 @@ func (set *DataSet) SetUserFeatures(users []map[string]interface{}, features []s
 	}
 }
 
-// SetItemFeature
+// SetItemFeature sets features of items.
 func (set *DataSet) SetItemFeature(items []map[string]interface{}, features []string, idName string) {
 	set.itemFeatures = make([]*base.SparseVector, set.ItemCount())
 	for _, entity := range items {
@@ -238,7 +239,7 @@ func (set *DataSet) UserFeatures() []*base.SparseVector {
 	return set.userFeatures
 }
 
-// UserFeatures returns additional features of items.
+// ItemFeatures returns additional features of items.
 func (set *DataSet) ItemFeatures() []*base.SparseVector {
 	return set.itemFeatures
 }
@@ -249,7 +250,7 @@ func (set *DataSet) User(userId int) *base.MarginalSubSet {
 	return set.UserByIndex(userIndex)
 }
 
-// User returns the subset of a item.
+// Item returns the subset of a item.
 func (set *DataSet) Item(itemId int) *base.MarginalSubSet {
 	itemIndex := set.itemIndexer.ToIndex(itemId)
 	return set.ItemByIndex(itemIndex)
@@ -345,11 +346,13 @@ func (set *SubSet) Items() []*base.MarginalSubSet {
 	return set.items
 }
 
+// User returns ratings subset of a user.
 func (set *SubSet) User(userId int) *base.MarginalSubSet {
 	userIndex := set.userIndexer.ToIndex(userId)
 	return set.UserByIndex(userIndex)
 }
 
+// Item returns ratings subset of a item.
 func (set *SubSet) Item(itemId int) *base.MarginalSubSet {
 	itemIndex := set.itemIndexer.ToIndex(itemId)
 	return set.ItemByIndex(itemIndex)

@@ -2,7 +2,7 @@ package core
 
 import "github.com/zhenghaoz/gorse/base"
 
-// Model is the interface for all models. Any model in this
+// ModelInterface is the interface for all models. Any model in this
 // package should implement it.
 type ModelInterface interface {
 	// Set parameters.
