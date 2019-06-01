@@ -9,6 +9,7 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	bolt "go.etcd.io/bbolt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"strconv"
@@ -16,12 +17,13 @@ import (
 )
 
 const (
-	bktMeta       = "meta"
-	bktItems      = "items"
-	bktPopular    = "popular"
-	bktFeedback   = "feedback"
-	bktNeighbors  = "neighbors"
-	bktRecommends = "recommends"
+	bktMeta         = "meta"
+	bktItems        = "items"
+	bktPopular      = "popular"
+	bktFeedback     = "feedback"
+	bktNeighbors    = "neighbors"
+	bktRecommends   = "recommends"
+	bktUserFeedback = "user_feedback"
 )
 
 func encodeInt(v int) []byte {
@@ -32,6 +34,16 @@ func encodeInt(v int) []byte {
 
 func decodeInt(buf []byte) int {
 	return int(binary.BigEndian.Uint64(buf))
+}
+
+func encodeFloat(v float64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, math.Float64bits(v))
+	return b
+}
+
+func decodeFloat(buf []byte) float64 {
+	return math.Float64frombits(binary.BigEndian.Uint64(buf))
 }
 
 // DB manages all data for the engine.
@@ -49,7 +61,7 @@ func Open(path string) (*DB, error) {
 	}
 	// Create buckets
 	err = db.db.Update(func(tx *bolt.Tx) error {
-		bucketNames := []string{bktMeta, bktItems, bktFeedback, bktRecommends, bktNeighbors, bktPopular}
+		bucketNames := []string{bktMeta, bktItems, bktFeedback, bktRecommends, bktNeighbors, bktPopular, bktUserFeedback}
 		for _, name := range bucketNames {
 			if _, err = tx.CreateBucketIfNotExists([]byte(name)); err != nil {
 				return err
@@ -68,62 +80,91 @@ func (db *DB) Close() error {
 	return db.db.Close()
 }
 
-// Feedback is the feedback from a user to an item.
-type Feedback struct {
-	UserId   int     // identifier of the user
-	ItemId   int     // identifier of the item
-	Feedback float64 // rating, confidence or indicator
+type FeedbackKey struct {
+	UserId int
+	ItemId int
 }
 
 // InsertFeedback inserts a feedback into the database.
 func (db *DB) InsertFeedback(userId, itemId int, feedback float64) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktFeedback))
-		// Get next index
-		index, err := bucket.NextSequence()
-		if err != nil {
-			return err
-		}
 		// Marshal data into bytes.
-		buf, err := json.Marshal(Feedback{userId, itemId, feedback})
+		key, err := json.Marshal(FeedbackKey{userId, itemId})
 		if err != nil {
 			return err
 		}
 		// Persist bytes to users bucket.
-		return bucket.Put(encodeInt(int(index)), buf)
+		return bucket.Put(key, encodeFloat(feedback))
 	})
 	if err != nil {
 		return err
 	}
-	return db.InsertItem(itemId)
+	if err = db.InsertItem(itemId); err != nil {
+		return err
+	}
+	return db.InsertUserFeedback(userId, itemId, feedback)
 }
 
 // InsertMultiFeedback inserts multiple feedback into the database.
 func (db *DB) InsertMultiFeedback(userId, itemId []int, feedback []float64) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktFeedback))
-		// Get next index
-		index, err := bucket.NextSequence()
-		if err != nil {
-			return err
-		}
 		for i := range feedback {
 			// Marshal data into bytes.
-			buf, err := json.Marshal(Feedback{userId[i], itemId[i], feedback[i]})
+			key, err := json.Marshal(FeedbackKey{userId[i], itemId[i]})
 			if err != nil {
 				return err
 			}
 			// Persist bytes to users bucket.
-			if err = bucket.Put(encodeInt(int(index)+i), buf); err != nil {
+			if err = bucket.Put(key, encodeFloat(feedback[i])); err != nil {
 				return err
 			}
 		}
-		return err
+		return nil
 	})
 	if err != nil {
 		return err
 	}
-	return db.InsertMultiItems(itemId)
+	if err = db.InsertMultiItems(itemId); err != nil {
+		return err
+	}
+	return db.InsertMultiUserFeedback(userId, itemId, feedback)
+}
+
+// InsertUserFeedback inserts a feedback into the user feedback bucket of the database.
+func (db *DB) InsertUserFeedback(userId, itemId int, feedback float64) error {
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bktUserFeedback))
+		// Get user's bucket
+		userBucket, err := bucket.CreateBucketIfNotExists(encodeInt(userId))
+		if err != nil {
+			return err
+		}
+		// Persist bytes to users bucket.
+		return userBucket.Put(encodeInt(itemId), encodeFloat(feedback))
+	})
+	return err
+}
+
+// InsertMultiUserFeedback inserts multiple feedback into the user feedback bucket of the database.
+func (db *DB) InsertMultiUserFeedback(userId, itemId []int, feedback []float64) error {
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bktUserFeedback))
+		for i := range feedback {
+			// Get user's bucket
+			userBucket, err := bucket.CreateBucketIfNotExists(encodeInt(userId[i]))
+			if err != nil {
+				return err
+			}
+			// Persist bytes to users bucket.
+			if err = userBucket.Put(encodeInt(itemId[i]), encodeFloat(feedback[i])); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return err
 }
 
 // GetFeedback returns all feedback in the database.
@@ -131,13 +172,13 @@ func (db *DB) GetFeedback() (users []int, items []int, feedback []float64, err e
 	err = db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktFeedback))
 		return bucket.ForEach(func(k, v []byte) error {
-			row := Feedback{}
-			if err := json.Unmarshal(v, &row); err != nil {
+			key := FeedbackKey{}
+			if err := json.Unmarshal(k, &key); err != nil {
 				return err
 			}
-			users = append(users, row.UserId)
-			items = append(items, row.ItemId)
-			feedback = append(feedback, row.Feedback)
+			users = append(users, key.UserId)
+			items = append(items, key.ItemId)
+			feedback = append(feedback, decodeFloat(v))
 			return nil
 		})
 	})
@@ -145,6 +186,25 @@ func (db *DB) GetFeedback() (users []int, items []int, feedback []float64, err e
 		return nil, nil, nil, err
 	}
 	return
+}
+
+func (db *DB) GetUserFeedback(userId int) ([]RecommendedItem, error) {
+	var items []RecommendedItem
+	err := db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bktUserFeedback))
+		// Get user's bucket
+		userBucket := bucket.Bucket(encodeInt(userId))
+		return userBucket.ForEach(func(k, v []byte) error {
+			itemId := decodeInt(k)
+			feedback := decodeFloat(v)
+			items = append(items, RecommendedItem{itemId, feedback})
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 // CountFeedback returns the number of feedback in the database.

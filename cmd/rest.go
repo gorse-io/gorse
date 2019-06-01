@@ -19,6 +19,11 @@ func serve(config engine.ServerConfig) {
 		Doc("get the top list for a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
 		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")))
+	// Get user's feedback
+	ws.Route(ws.GET("/user/{user-id}").
+		To(getUser).
+		Doc("get a user's feedback").
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")))
 	// Popular items
 	ws.Route(ws.GET("/popular").To(getPopular).
 		Doc("get popular items").
@@ -72,6 +77,23 @@ func getStatus(request *restful.Request, response *restful.Response) {
 		internalServerError(response, err)
 	}
 	json(response, status)
+}
+
+func getUser(request *restful.Request, response *restful.Response) {
+	// Get user id
+	paramUserId := request.PathParameter("user-id")
+	userId, err := strconv.Atoi(paramUserId)
+	if err != nil {
+		badRequest(response, err)
+	}
+	// Get the user's feedback
+	items, err := db.GetUserFeedback(userId)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
+	// Send result
+	json(response, items)
 }
 
 // getPopular gets popular items from database.
@@ -222,10 +244,17 @@ func putItems(request *restful.Request, response *restful.Response) {
 	json(response, change)
 }
 
+// Feedback is the feedback from a user to an item.
+type Feedback struct {
+	UserId   int     // identifier of the user
+	ItemId   int     // identifier of the item
+	Feedback float64 // rating, confidence or indicator
+}
+
 // putFeedback puts new ratings into the database.
 func putFeedback(request *restful.Request, response *restful.Response) {
 	// Add ratings
-	ratings := new([]engine.Feedback)
+	ratings := new([]Feedback)
 	if err := request.ReadEntity(ratings); err != nil {
 		badRequest(response, err)
 		return
