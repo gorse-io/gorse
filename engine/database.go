@@ -194,6 +194,9 @@ func (db *DB) GetUserFeedback(userId int) ([]RecommendedItem, error) {
 		bucket := tx.Bucket([]byte(bktUserFeedback))
 		// Get user's bucket
 		userBucket := bucket.Bucket(encodeInt(userId))
+		if userBucket == nil {
+			return bolt.ErrBucketNotFound
+		}
 		return userBucket.ForEach(func(k, v []byte) error {
 			itemId := decodeInt(k)
 			feedback := decodeFloat(v)
