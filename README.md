@@ -4,9 +4,9 @@ Language: English | [中文](https://github.com/zhenghaoz/gorse/blob/master/READ
 
 <img width=160 src="https://img.sine-x.com/gorse.png"/>
 
-| Build | Build (AVX2) | Coverage | Report | GoDoc | RTD |
-|---|---|---|---|---|---|
-| [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/1)](https://travis-ci.org/zhenghaoz/gorse) | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/2)](https://travis-ci.org/zhenghaoz/gorse) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse) | [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse) | [![Documentation Status](https://readthedocs.org/projects/gorse/badge/?version=latest)](https://gorse.readthedocs.io/en/latest/?badge=latest) |
+| Build | Build (AVX2) | Coverage | Report | GoDoc | RTD | Demo |
+|---|---|---|---|---|---|---|
+| [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/1)](https://travis-ci.org/zhenghaoz/gorse) | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/2)](https://travis-ci.org/zhenghaoz/gorse) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse) | [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse) | [![Documentation Status](https://readthedocs.org/projects/gorse/badge/?version=latest)](https://gorse.readthedocs.io/en/latest/?badge=latest) | [![Website](https://img.shields.io/website-up-down-green-red/https/steamlens.gorse.io.svg)](https://steamlens.gorse.io) |
 
 `gorse` is an offline recommender system backend based on collaborative filtering written in Go. 
 
