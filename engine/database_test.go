@@ -29,6 +29,12 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 5, count)
+	// Count user
+	count, err = db.CountUsers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 5, count)
 	// Get feedback
 	retUsers, retItems, retFeedback, err := db.GetFeedback()
 	if err != nil {
@@ -37,6 +43,10 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 	assert.Equal(t, users, retUsers)
 	assert.Equal(t, items, retItems)
 	assert.Equal(t, feedback, retFeedback)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_feedback.db")); err != nil {
 		t.Fatal(err)
@@ -68,6 +78,10 @@ func TestDB_InsertGetItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_items.db")); err != nil {
 		t.Fatal(err)
@@ -96,6 +110,10 @@ func TestDB_SetGetMeta(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, "", value)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_meta.db")); err != nil {
 		t.Fatal(err)
@@ -136,6 +154,10 @@ func TestDB_GetRandom(t *testing.T) {
 		assert.Equal(t, 3, len(items2))
 		assert.NotEqual(t, items1, items2)
 	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_random.db")); err != nil {
 		t.Fatal(err)
@@ -168,6 +190,10 @@ func TestDB_SetGetRecommends(t *testing.T) {
 	// Test new user
 	if _, err = db.GetRecommends(1, 0); err == nil {
 		t.Fatal("error is expected for new user")
+	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
 	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_recommends.db")); err != nil {
@@ -202,6 +228,10 @@ func TestDB_SetGetNeighbors(t *testing.T) {
 	if _, err = db.GetNeighbors(1, 0); err == nil {
 		t.Fatal("error is expected for new user")
 	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_neighbors.db")); err != nil {
 		t.Fatal(err)
@@ -231,6 +261,10 @@ func TestDB_SetGetPopular(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_popular.db")); err != nil {
 		t.Fatal(err)
@@ -255,6 +289,10 @@ func TestDB_ToDataSet(t *testing.T) {
 	assert.Equal(t, 5, dataSet.Count())
 	assert.Equal(t, 5, dataSet.UserCount())
 	assert.Equal(t, 5, dataSet.ItemCount())
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_to_dataset.db")); err != nil {
 		t.Fatal(err)
@@ -301,6 +339,10 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 	for i := 0; i < count; i++ {
 		assert.Equal(t, 2*i, items[i])
 	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_load_feedback.db")); err != nil {
 		t.Fatal(err)
@@ -330,6 +372,10 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 	}
 	for i := 0; i < count; i++ {
 		assert.Equal(t, 1+i, items[i])
+	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
 	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_load_items.db")); err != nil {
@@ -363,6 +409,10 @@ func TestDB_SaveFeedbackToCSV(t *testing.T) {
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
 	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_save_feedback.db")); err != nil {
 		t.Fatal(err)
@@ -394,6 +444,10 @@ func TestDB_SaveItemsToCSV(t *testing.T) {
 		{"ItemId": 5},
 	}
 	assert.Equal(t, expected, entities)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_save_items.db")); err != nil {
 		t.Fatal(err)

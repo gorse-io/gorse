@@ -54,27 +54,41 @@ func serve(config engine.ServerConfig) {
 type Status struct {
 	FeedbackCount int // number of feedback
 	ItemCount     int // number of items
+	UserCount     int // number of users
 	CommitCount   int // number of committed feedback
 }
 
-func getStatus(request *restful.Request, response *restful.Response) {
+func status() (Status, error) {
 	status := Status{}
 	var err error
 	// Get feedback count
 	if status.FeedbackCount, err = db.CountFeedback(); err != nil {
-		internalServerError(response, err)
+		return status, err
 	}
 	// Get item count
 	if status.ItemCount, err = db.CountItems(); err != nil {
-		internalServerError(response, err)
+		return status, err
+	}
+	// Get user count
+	if status.UserCount, err = db.CountUsers(); err != nil {
+		return status, err
 	}
 	// Get commit count
 	var commit string
 	if commit, err = db.GetMeta("commit"); err != nil {
-		internalServerError(response, err)
+		return status, err
 	}
 	if status.CommitCount, err = strconv.Atoi(commit); len(commit) > 0 && err != nil {
+		return status, err
+	}
+	return status, nil
+}
+
+func getStatus(request *restful.Request, response *restful.Response) {
+	status, err := status()
+	if err != nil {
 		internalServerError(response, err)
+		return
 	}
 	json(response, status)
 }
@@ -204,6 +218,8 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 type Change struct {
 	ItemsBefore    int // number of items before change
 	ItemsAfter     int // number of items after change
+	UsersBefore    int // number of users before change
+	UsersAfter     int // number of user after change
 	FeedbackBefore int // number of feedback before change
 	FeedbackAfter  int // number of feedback after change
 }
@@ -218,17 +234,16 @@ func putItems(request *restful.Request, response *restful.Response) {
 	}
 	var err error
 	change := Change{}
-	change.FeedbackBefore, err = db.CountFeedback()
+	// Get status before change
+	stat, err := status()
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
-	change.FeedbackAfter = change.FeedbackBefore
-	change.ItemsBefore, err = db.CountItems()
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
+	change.FeedbackBefore = stat.FeedbackCount
+	change.ItemsBefore = stat.ItemCount
+	change.UsersBefore = stat.UserCount
+	// Insert items
 	for _, itemId := range *items {
 		err = db.InsertItem(itemId)
 		if err != nil {
@@ -236,11 +251,15 @@ func putItems(request *restful.Request, response *restful.Response) {
 			return
 		}
 	}
-	change.ItemsAfter, err = db.CountItems()
+	// Get status after change
+	stat, err = status()
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
+	change.FeedbackAfter = stat.FeedbackCount
+	change.ItemsAfter = stat.ItemCount
+	change.UsersAfter = stat.UserCount
 	json(response, change)
 }
 
@@ -260,18 +279,17 @@ func putFeedback(request *restful.Request, response *restful.Response) {
 		return
 	}
 	var err error
-	status := Change{}
-	status.FeedbackBefore, err = db.CountFeedback()
+	change := Change{}
+	// Get status before change
+	stat, err := status()
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
-	status.FeedbackAfter = status.FeedbackBefore
-	status.ItemsBefore, err = db.CountItems()
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
+	change.FeedbackBefore = stat.FeedbackCount
+	change.ItemsBefore = stat.ItemCount
+	change.UsersBefore = stat.UserCount
+	// Insert feedback
 	for _, feedback := range *ratings {
 		err = db.InsertFeedback(feedback.UserId, feedback.ItemId, feedback.Feedback)
 		if err != nil {
@@ -279,17 +297,16 @@ func putFeedback(request *restful.Request, response *restful.Response) {
 			return
 		}
 	}
-	status.FeedbackAfter, err = db.CountFeedback()
+	// Get status after change
+	stat, err = status()
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
-	status.ItemsAfter, err = db.CountItems()
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	json(response, status)
+	change.FeedbackAfter = stat.FeedbackCount
+	change.ItemsAfter = stat.ItemCount
+	change.UsersAfter = stat.UserCount
+	json(response, change)
 }
 
 func badRequest(response *restful.Response, err error) {

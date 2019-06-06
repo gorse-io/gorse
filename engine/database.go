@@ -275,6 +275,20 @@ func (db *DB) CountItems() (int, error) {
 	return count, nil
 }
 
+// CountUsers returns the number of users in the database.
+func (db *DB) CountUsers() (int, error) {
+	count := 0
+	err := db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bktUserFeedback))
+		count = bucket.Stats().InlineBucketN
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // GetMeta gets the value of a metadata.
 func (db *DB) GetMeta(name string) (string, error) {
 	var value string
