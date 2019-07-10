@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/floats"
@@ -10,8 +9,6 @@ import (
 	"math"
 	"sync"
 )
-
-/* SVD */
 
 // SVD algorithm, as popularized by Simon Funk during the
 // Netflix Prize. The prediction \hat{r}_{ui} is set as:
@@ -69,7 +66,6 @@ func (svd *SVD) SetParams(params base.Params) {
 	svd.reg = svd.Params.GetFloat64(base.Reg, 0.02)
 	svd.initMean = svd.Params.GetFloat64(base.InitMean, 0)
 	svd.initStdDev = svd.Params.GetFloat64(base.InitStdDev, 0.1)
-	svd.optimizer = svd.Params.GetString(base.Optimizer, base.SGD)
 }
 
 // Predict by the SVD model.
@@ -77,17 +73,7 @@ func (svd *SVD) Predict(userId int, itemId int) float64 {
 	// Convert sparse IDs to dense IDs
 	userIndex := svd.UserIndexer.ToIndex(userId)
 	itemIndex := svd.ItemIndexer.ToIndex(itemId)
-	switch svd.optimizer {
-	case base.SGD:
-		return svd.predict(userIndex, itemIndex)
-	case base.BPR:
-		if userIndex == base.NotId || svd.UserRatings[userIndex].Len() == 0 {
-			// If users not exist in dataset, use ItemPop model.
-			return svd.ItemPop.Predict(userId, itemId)
-		}
-		return svd.predict(userIndex, itemIndex)
-	}
-	panic(fmt.Sprintf("Unknown optimizer: %v", svd.optimizer))
+	return svd.predict(userIndex, itemIndex)
 }
 
 func (svd *SVD) predict(userIndex int, itemIndex int) float64 {
@@ -118,18 +104,6 @@ func (svd *SVD) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 	svd.ItemBias = make([]float64, trainSet.ItemCount())
 	svd.UserFactor = svd.rng.NewNormalMatrix(trainSet.UserCount(), svd.nFactors, svd.initMean, svd.initStdDev)
 	svd.ItemFactor = svd.rng.NewNormalMatrix(trainSet.ItemCount(), svd.nFactors, svd.initMean, svd.initStdDev)
-	// Select fit function
-	switch svd.optimizer {
-	case base.SGD:
-		svd.fitSGD(trainSet, options)
-	case base.BPR:
-		svd.fitBPR(trainSet, options)
-	default:
-		panic(fmt.Sprintf("Unknown optimizer: %v", svd.optimizer))
-	}
-}
-
-func (svd *SVD) fitSGD(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
 	svd.GlobalMean = trainSet.GlobalMean()
 	// Create buffers
 	temp := make([]float64, svd.nFactors)
@@ -166,63 +140,143 @@ func (svd *SVD) fitSGD(trainSet core.DataSetInterface, options *base.RuntimeOpti
 	}
 }
 
-func (svd *SVD) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
-	svd.UserRatings = trainSet.Users()
+// BPR means Bayesian Personal Ranking, is a pairwise learning algorithm for matrix factorization
+// model with implicit feedback. The pairwise ranking between item i and j for user u is estimated
+// by:
+//
+//   p(i >_u j) = \sigma( p_u^T (q_i - q_j) )
+//
+// Hyper-parameters:
+//	 Reg 		- The regularization parameter of the cost function that is
+// 				  optimized. Default is 0.01.
+//	 Lr 		- The learning rate of SGD. Default is 0.05.
+//	 nFactors	- The number of latent factors. Default is 10.
+//	 NEpochs	- The number of iteration of the SGD procedure. Default is 100.
+//	 InitMean	- The mean of initial random latent factors. Default is 0.
+//	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.001.
+type BPR struct {
+	Base
+	// Model parameters
+	UserFactor [][]float64 // p_u
+	ItemFactor [][]float64 // q_i
+	// Hyper parameters
+	useBias    bool
+	nFactors   int
+	nEpochs    int
+	lr         float64
+	reg        float64
+	initMean   float64
+	initStdDev float64
+	// Fallback model
+	UserRatings []*base.MarginalSubSet
+	ItemPop     *ItemPop
+}
+
+// NewBPR creates a BPR model.
+func NewBPR(params base.Params) *BPR {
+	bpr := new(BPR)
+	bpr.SetParams(params)
+	return bpr
+}
+
+// SetParams sets hyper-parameters of the BPR model.
+func (bpr *BPR) SetParams(params base.Params) {
+	bpr.Base.SetParams(params)
+	// Setup hyper-parameters
+	bpr.nFactors = bpr.Params.GetInt(base.NFactors, 10)
+	bpr.nEpochs = bpr.Params.GetInt(base.NEpochs, 100)
+	bpr.lr = bpr.Params.GetFloat64(base.Lr, 0.05)
+	bpr.reg = bpr.Params.GetFloat64(base.Reg, 0.01)
+	bpr.initMean = bpr.Params.GetFloat64(base.InitMean, 0)
+	bpr.initStdDev = bpr.Params.GetFloat64(base.InitStdDev, 0.001)
+}
+
+// Predict by the BPR model.
+func (bpr *BPR) Predict(userId int, itemId int) float64 {
+	// Convert sparse IDs to dense IDs
+	userIndex := bpr.UserIndexer.ToIndex(userId)
+	itemIndex := bpr.ItemIndexer.ToIndex(itemId)
+	if userIndex == base.NotId || bpr.UserRatings[userIndex].Len() == 0 {
+		// If users not exist in dataset, use ItemPop model.
+		return bpr.ItemPop.Predict(userId, itemId)
+	}
+	return bpr.predict(userIndex, itemIndex)
+}
+
+func (bpr *BPR) predict(userIndex int, itemIndex int) float64 {
+	ret := 0.0
+	// + q_i^Tp_u
+	if itemIndex != base.NotId && userIndex != base.NotId {
+		userFactor := bpr.UserFactor[userIndex]
+		itemFactor := bpr.ItemFactor[itemIndex]
+		ret += floats.Dot(userFactor, itemFactor)
+	}
+	return ret
+}
+
+// Fit the BPR model.
+func (bpr *BPR) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	bpr.Init(trainSet)
+	// Initialize parameters
+	bpr.UserFactor = bpr.rng.NewNormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
+	bpr.ItemFactor = bpr.rng.NewNormalMatrix(trainSet.ItemCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
+	// Select fit function
+	bpr.UserRatings = trainSet.Users()
 	// Create item pop model
-	svd.ItemPop = NewItemPop(nil)
-	svd.ItemPop.Fit(trainSet, options)
+	bpr.ItemPop = NewItemPop(nil)
+	bpr.ItemPop.Fit(trainSet, options)
 	// Create buffers
-	temp := make([]float64, svd.nFactors)
-	userFactor := make([]float64, svd.nFactors)
-	positiveItemFactor := make([]float64, svd.nFactors)
-	negativeItemFactor := make([]float64, svd.nFactors)
+	temp := make([]float64, bpr.nFactors)
+	userFactor := make([]float64, bpr.nFactors)
+	positiveItemFactor := make([]float64, bpr.nFactors)
+	negativeItemFactor := make([]float64, bpr.nFactors)
 	// Training
-	for epoch := 0; epoch < svd.nEpochs; epoch++ {
+	for epoch := 0; epoch < bpr.nEpochs; epoch++ {
 		// Training epoch
 		cost := 0.0
 		for i := 0; i < trainSet.Count(); i++ {
 			// Select a user
 			var userIndex, ratingCount int
 			for {
-				userIndex = svd.rng.Intn(trainSet.UserCount())
+				userIndex = bpr.rng.Intn(trainSet.UserCount())
 				ratingCount = trainSet.UserByIndex(userIndex).Len()
 				if ratingCount > 0 {
 					break
 				}
 			}
-			posIndex := trainSet.UserByIndex(userIndex).GetIndex(svd.rng.Intn(ratingCount))
+			posIndex := trainSet.UserByIndex(userIndex).GetIndex(bpr.rng.Intn(ratingCount))
 			// Select a negative sample
 			negIndex := -1
 			for {
-				temp := svd.rng.Intn(trainSet.ItemCount())
-				tempId := svd.ItemIndexer.ToID(temp)
+				temp := bpr.rng.Intn(trainSet.ItemCount())
+				tempId := bpr.ItemIndexer.ToID(temp)
 				if !trainSet.UserByIndex(userIndex).Contain(tempId) {
 					negIndex = temp
 					break
 				}
 			}
-			diff := svd.predict(userIndex, posIndex) - svd.predict(userIndex, negIndex)
+			diff := bpr.predict(userIndex, posIndex) - bpr.predict(userIndex, negIndex)
 			cost += math.Log(1 + math.Exp(-diff))
 			grad := math.Exp(-diff) / (1.0 + math.Exp(-diff))
 			// Pairwise update
-			copy(userFactor, svd.UserFactor[userIndex])
-			copy(positiveItemFactor, svd.ItemFactor[posIndex])
-			copy(negativeItemFactor, svd.ItemFactor[negIndex])
+			copy(userFactor, bpr.UserFactor[userIndex])
+			copy(positiveItemFactor, bpr.ItemFactor[posIndex])
+			copy(negativeItemFactor, bpr.ItemFactor[negIndex])
 			// Update positive item latent factor: +w_u
 			floats.MulConstTo(userFactor, grad, temp)
-			floats.MulConstAddTo(positiveItemFactor, -svd.reg, temp)
-			floats.MulConstAddTo(temp, svd.lr, svd.ItemFactor[posIndex])
+			floats.MulConstAddTo(positiveItemFactor, -bpr.reg, temp)
+			floats.MulConstAddTo(temp, bpr.lr, bpr.ItemFactor[posIndex])
 			// Update negative item latent factor: -w_u
 			floats.MulConstTo(userFactor, -grad, temp)
-			floats.MulConstAddTo(negativeItemFactor, -svd.reg, temp)
-			floats.MulConstAddTo(temp, svd.lr, svd.ItemFactor[negIndex])
+			floats.MulConstAddTo(negativeItemFactor, -bpr.reg, temp)
+			floats.MulConstAddTo(temp, bpr.lr, bpr.ItemFactor[negIndex])
 			// Update user latent factor: h_i-h_j
 			floats.SubTo(positiveItemFactor, negativeItemFactor, temp)
 			floats.MulConst(temp, grad)
-			floats.MulConstAddTo(userFactor, -svd.reg, temp)
-			floats.MulConstAddTo(temp, svd.lr, svd.UserFactor[userIndex])
+			floats.MulConstAddTo(userFactor, -bpr.reg, temp)
+			floats.MulConstAddTo(temp, bpr.lr, bpr.UserFactor[userIndex])
 		}
-		options.Logf("epoch = %v/%v, cost = %v", epoch+1, svd.nEpochs, cost)
+		options.Logf("epoch = %v/%v, cost = %v", epoch+1, bpr.nEpochs, cost)
 	}
 }
 

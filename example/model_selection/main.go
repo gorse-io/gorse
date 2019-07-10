@@ -11,8 +11,7 @@ import (
 func main() {
 	data := core.LoadDataFromCSV("steam-100k.csv", ",", true)
 	//data := core.LoadDataFromBuiltIn("ml-100k")
-	cv := core.GridSearchCV(model.NewSVD(nil), data, core.ParameterGrid{
-		base.Optimizer:  {base.BPR},
+	cv := core.GridSearchCV(model.NewBPR(nil), data, core.ParameterGrid{
 		base.NFactors:   {5, 10, 50},
 		base.Reg:        {0.005, 0.01, 0.5},
 		base.Lr:         {0.01, 0.05, 0.1},

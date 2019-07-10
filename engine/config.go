@@ -57,9 +57,9 @@ type ParamsConfig struct {
 	Similarity    string  `toml:"similarity"`      // similarity metrics
 	K             int     `toml:"k"`               // number of neighbors
 	MinK          int     `toml:"min_k"`           // least number of neighbors
-	Optimizer     string  `toml:"optimizer"`       // optimizer for optimization (SGD/ALS/BPR)
-	Shrinkage     int     `toml:"shrinkage"`       // shrinkage strength of similarity
-	Alpha         float64 `toml:"alpha"`           // alpha value, depend on context
+	//Optimizer     string  `toml:"optimizer"`     // optimizer for optimization (SGD/ALS/BPR)
+	Shrinkage int     `toml:"shrinkage"` // shrinkage strength of similarity
+	Alpha     float64 `toml:"alpha"`     // alpha value, depend on context
 }
 
 // ToParams convert a configuration for hyper-parameters into hyper-parameters.
@@ -87,7 +87,7 @@ func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
 		{"similarity", base.Similarity, config.Similarity},
 		{"k", base.K, config.K},
 		{"min_k", base.MinK, config.MinK},
-		{"optimizer", base.Optimizer, config.Optimizer},
+		//{"optimizer", base.Optimizer, config.Optimizer},
 		{"shrinkage", base.Shrinkage, config.Shrinkage},
 		{"alpha", base.Alpha, config.Alpha},
 	}
@@ -105,6 +105,8 @@ func LoadModel(name string, params base.Params) core.ModelInterface {
 	switch name {
 	case "svd":
 		return model.NewSVD(params)
+	case "bpr":
+		return model.NewBPR(params)
 	case "knn":
 		return model.NewKNN(params)
 	case "slope_one":
@@ -148,7 +150,7 @@ func (config *TomlConfig) FillDefault(meta toml.MetaData) {
 		config.Database.File = path.Join(core.GorseDir, "gorse.db")
 	}
 	if !meta.IsDefined("recommend", "model") {
-		config.Recommend.Model = "svd"
+		config.Recommend.Model = "bpr"
 	}
 	if !meta.IsDefined("recommend", "cache_size") {
 		config.Recommend.CacheSize = 100

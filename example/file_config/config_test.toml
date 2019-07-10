@@ -34,6 +34,5 @@ user_based = true       # user based if true. otherwise item based.
 similarity = "pearson"  # similarity metrics
 k = 100                 # number of neighbors
 min_k = 5               # least number of neighbors
-optimizer = "bpr"       # optimizer for optimization (SGD/ALS/BPR)
 shrinkage = 50          # shrinkage strength of similarity
 alpha = 1.0             # alpha value, depend on context

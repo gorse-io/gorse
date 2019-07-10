@@ -15,8 +15,7 @@ import (
 var models = map[string][]core.ModelInterface{
 	"ml-100k": {
 		model.NewItemPop(nil),
-		model.NewSVD(base.Params{
-			base.Optimizer:  base.BPR,
+		model.NewBPR(base.Params{
 			base.NFactors:   10,
 			base.Reg:        0.01,
 			base.Lr:         0.05,
@@ -33,8 +32,7 @@ var models = map[string][]core.ModelInterface{
 	},
 	"ml-1m": {
 		model.NewItemPop(nil),
-		model.NewSVD(base.Params{
-			base.Optimizer:  base.BPR,
+		model.NewBPR(base.Params{
 			base.NFactors:   10,
 			base.Reg:        0.01,
 			base.Lr:         0.05,

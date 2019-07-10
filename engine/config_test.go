@@ -42,7 +42,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "pearson", config.Params.Similarity)
 	assert.Equal(t, 100, config.Params.K)
 	assert.Equal(t, 5, config.Params.MinK)
-	assert.Equal(t, "bpr", config.Params.Optimizer)
+	//assert.Equal(t, "bpr", config.Params.Optimizer)
 	assert.Equal(t, 1.0, config.Params.Alpha)
 }
 
@@ -50,7 +50,7 @@ func TestParamsConfig_ToParams(t *testing.T) {
 	// test on full configuration
 	config, meta := LoadConfig("../example/file_config/config_test.toml")
 	params := config.Params.ToParams(meta)
-	assert.Equal(t, 20, len(params))
+	assert.Equal(t, 19, len(params))
 
 	// test on empty configuration
 	config, meta = LoadConfig("../example/file_config/config_empty.toml")

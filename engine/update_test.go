@@ -90,7 +90,6 @@ func TestUpdateRecommends(t *testing.T) {
 	dataSet := core.LoadDataFromBuiltIn("ml-100k")
 	trainSet, testSet := core.Split(dataSet, 0.2)
 	params := base.Params{
-		base.Optimizer:  base.BPR,
 		base.NFactors:   10,
 		base.Reg:        0.01,
 		base.Lr:         0.05,
@@ -98,7 +97,7 @@ func TestUpdateRecommends(t *testing.T) {
 		base.InitMean:   0,
 		base.InitStdDev: 0.001,
 	}
-	if err = UpdateRecommends("svd", params, 10, trainSet, db); err != nil {
+	if err = UpdateRecommends("bpr", params, 10, trainSet, db); err != nil {
 		t.Fatal(err)
 	}
 	// Check result
