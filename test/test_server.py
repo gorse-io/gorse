@@ -6,7 +6,7 @@ from typing import Dict, Set, List
 
 import math
 import pandas as pd
-from pandas.core.groupby.groupby import DataFrameGroupBy
+from pandas.core.groupby.generic import DataFrameGroupBy
 
 EPSILON = 0.05
 
