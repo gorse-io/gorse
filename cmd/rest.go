@@ -19,6 +19,10 @@ func serve(config engine.ServerConfig) {
 		Doc("get the top list for a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
 		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")))
+	// Get user list
+	ws.Route(ws.GET("/users").
+		To(getUsers).
+		Doc("get the list of users"))
 	// Get user's feedback
 	ws.Route(ws.GET("/user/{user-id}").
 		To(getUser).
@@ -77,6 +81,15 @@ func getStatus(request *restful.Request, response *restful.Response) {
 		internalServerError(response, err)
 	}
 	json(response, status)
+}
+
+func getUsers(request *restful.Request, response *restful.Response) {
+	users, err := db.GetUsers()
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
+	json(response, users)
 }
 
 func getUser(request *restful.Request, response *restful.Response) {
