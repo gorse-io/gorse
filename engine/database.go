@@ -188,6 +188,23 @@ func (db *DB) GetFeedback() (users []int, items []int, feedback []float64, err e
 	return
 }
 
+func (db *DB) GetUsers() ([]int, error) {
+	var users []int
+	err := db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bktUserFeedback))
+		return bucket.ForEach(func(k, v []byte) error {
+			if v == nil {
+				users = append(users, decodeInt(k))
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func (db *DB) GetUserFeedback(userId int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
