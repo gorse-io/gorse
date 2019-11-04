@@ -56,10 +56,11 @@ func serve(config engine.ServerConfig) {
 
 // Status contains information about engine.
 type Status struct {
-	FeedbackCount int // number of feedback
-	ItemCount     int // number of items
-	UserCount     int // number of users
-	CommitCount   int // number of committed feedback
+	FeedbackCount int    // number of feedback
+	ItemCount     int    // number of items
+	UserCount     int    // number of users
+	CommitCount   int    // number of committed feedback
+	CommitTime    string // time for commit
 }
 
 func status() (Status, error) {
@@ -83,6 +84,10 @@ func status() (Status, error) {
 		return status, err
 	}
 	if status.CommitCount, err = strconv.Atoi(commit); len(commit) > 0 && err != nil {
+		return status, err
+	}
+	// Get commit time
+	if status.CommitTime, err = db.GetMeta("commit_time"); err != nil {
 		return status, err
 	}
 	return status, nil

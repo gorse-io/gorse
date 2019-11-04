@@ -78,7 +78,6 @@ func watch(config engine.TomlConfig, metaData toml.MetaData) {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("current number of feedback: %v, commit: %v\n", count, lastCount)
 		// Compare
 		if count-lastCount > config.Recommend.UpdateThreshold {
 			log.Printf("current count (%v) - commit (%v) > threshold (%v), start to update recommends\n",
@@ -87,6 +86,10 @@ func watch(config engine.TomlConfig, metaData toml.MetaData) {
 				log.Fatal(err)
 			}
 			if err = db.SetMeta("commit", strconv.Itoa(count)); err != nil {
+				log.Fatal(err)
+			}
+			t := time.Now()
+			if err = db.SetMeta("commit_time", t.String()); err != nil {
 				log.Fatal(err)
 			}
 			log.Printf("recommends update-to-date, commit = %v", count)
