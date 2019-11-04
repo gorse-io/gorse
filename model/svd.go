@@ -111,11 +111,12 @@ func (svd *SVD) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 	itemFactor := make([]float64, svd.nFactors)
 	// Optimize
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
-		options.Logf("epoch = %v/%v", epoch+1, svd.nEpochs)
+		loss := 0.0
 		for i := 0; i < trainSet.Count(); i++ {
 			userIndex, itemIndex, rating := trainSet.GetWithIndex(i)
 			// Compute error: e_{ui} = r - \hat r
 			upGrad := rating - svd.predict(userIndex, itemIndex)
+			loss += upGrad * upGrad
 			if svd.useBias {
 				userBias := svd.UserBias[userIndex]
 				itemBias := svd.ItemBias[itemIndex]
@@ -137,6 +138,7 @@ func (svd *SVD) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 			floats.MulConstAddTo(itemFactor, -svd.reg, temp)
 			floats.MulConstAddTo(temp, svd.lr, svd.ItemFactor[itemIndex])
 		}
+		options.Logf("epoch = %v/%v, loss = %v", epoch+1, svd.nEpochs, loss)
 	}
 }
 
@@ -276,7 +278,7 @@ func (bpr *BPR) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 			floats.MulConstAddTo(userFactor, -bpr.reg, temp)
 			floats.MulConstAddTo(temp, bpr.lr, bpr.UserFactor[userIndex])
 		}
-		options.Logf("epoch = %v/%v, cost = %v", epoch+1, bpr.nEpochs, cost)
+		options.Logf("epoch = %v/%v, loss = %v", epoch+1, bpr.nEpochs, cost)
 	}
 }
 
@@ -354,6 +356,7 @@ func (nmf *NMF) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 	itemDen := base.NewMatrix(trainSet.ItemCount(), nmf.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < nmf.nEpochs; epoch++ {
+		loss := 0.0
 		// Reset intermediate matrices
 		base.FillZeroMatrix(userNum)
 		base.FillZeroMatrix(userDen)
@@ -363,6 +366,7 @@ func (nmf *NMF) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 		for i := 0; i < trainSet.Count(); i++ {
 			userIndex, itemIndex, rating := trainSet.GetWithIndex(i)
 			prediction := nmf.predict(userIndex, itemIndex)
+			loss += (prediction - rating) * (prediction - rating)
 			// Update \sum_{i\in{I_u}} q_{if}⋅r_{ui}
 			floats.MulConstAddTo(nmf.ItemFactor[itemIndex], rating, userNum[userIndex])
 			// Update \sum_{i\in{I_u}} q_{if}⋅\hat{r}_{ui} + \lambda|I_u|p_{uf}
@@ -386,6 +390,7 @@ func (nmf *NMF) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 			floats.Div(buffer, itemDen[i])
 			floats.Mul(nmf.ItemFactor[i], buffer)
 		}
+		options.Logf("epoch = %v/%v, loss = %v", epoch+1, nmf.nEpochs, loss)
 	}
 }
 
@@ -506,6 +511,7 @@ func (svd *SVDpp) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptio
 	c := base.NewMatrix(options.GetJobs(), svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
+		cost := 0.0
 		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
 			base.FillZeroVector(step)
 			size := svd.TrainSet.UserByIndex(userIndex).Len()
@@ -519,6 +525,7 @@ func (svd *SVDpp) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptio
 				// Compute error: e_{ui} = r - \hat r
 				pred := svd.predict(userIndex, itemIndex, sumFactor)
 				diff := rating - pred
+				cost += diff * diff
 				// Update user Bias: b_u <- b_u + \gamma (e_{ui} - \lambda b_u)
 				gradUserBias := diff - svd.reg*userBias
 				svd.UserBias[userIndex] += svd.lr * gradUserBias
@@ -561,6 +568,7 @@ func (svd *SVDpp) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptio
 			//Wait all updates completed
 			wg.Wait()
 		}
+		options.Logf("epoch = %v/%v, loss = %f", epoch+1, svd.nEpochs, cost)
 	}
 }
 
@@ -698,6 +706,7 @@ func (mf *WRMF) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
 			temp2.MulVec(temp1, b)
 			mf.ItemFactor.SetRow(i, temp2.RawVector().Data)
 		}
+		options.Logf("epoch = %v/%v", ep+1, mf.nEpochs)
 	}
 }
 

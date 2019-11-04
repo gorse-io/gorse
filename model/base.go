@@ -115,18 +115,21 @@ func (baseLine *BaseLine) Fit(trainSet core.DataSetInterface, options *base.Runt
 	baseLine.ItemBias = make([]float64, trainSet.ItemCount())
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < baseLine.nEpochs; epoch++ {
+		loss := 0.0
 		for i := 0; i < trainSet.Count(); i++ {
 			denseUserId, denseItemId, rating := trainSet.GetWithIndex(i)
 			userBias := baseLine.UserBias[denseUserId]
 			itemBias := baseLine.ItemBias[denseItemId]
 			// Compute gradient
 			diff := baseLine.predict(denseUserId, denseItemId) - rating
+			loss += diff * diff
 			gradUserBias := diff + baseLine.reg*userBias
 			gradItemBias := diff + baseLine.reg*itemBias
 			// Update parameters
 			baseLine.UserBias[denseUserId] -= baseLine.lr * gradUserBias
 			baseLine.ItemBias[denseItemId] -= baseLine.lr * gradItemBias
 		}
+		options.Logf("epoch = %v/%v, loss = %v", epoch+1, baseLine.nEpochs, loss)
 	}
 }
 

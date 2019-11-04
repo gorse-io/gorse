@@ -1,6 +1,7 @@
 package base
 
 import (
+	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 	"sync"
 )
@@ -35,6 +36,21 @@ func ParallelFor(begin, end int, worker func(i int)) {
 		}(j)
 	}
 	wg.Wait()
+}
+
+// ParallelForSum runs for loop in parallel.
+func ParallelForSum(begin, end int, worker func(i int) float64) float64 {
+	retValues := make([]float64, end-begin)
+	var wg sync.WaitGroup
+	wg.Add(end - begin)
+	for j := begin; j < end; j++ {
+		go func(i int) {
+			retValues[i] = worker(i)
+			wg.Done()
+		}(j)
+	}
+	wg.Wait()
+	return floats.Sum(retValues)
 }
 
 // ParallelMean schedules and runs tasks in parallel, then returns the mean of returned values.

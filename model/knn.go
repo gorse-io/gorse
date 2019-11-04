@@ -140,6 +140,7 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 	}
 	// Retrieve user (item) Mean
 	if knn._type == base.Centered || knn._type == base.ZScore {
+		options.Logf("compute mean")
 		knn.LeftMean = make([]float64, len(knn.LeftRatings))
 		for i := 0; i < len(knn.LeftRatings); i++ {
 			knn.LeftRatings[i].ForEachIndex(func(_, index int, value float64) {
@@ -150,6 +151,7 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 	}
 	// Retrieve user (item) standard deviation
 	if knn._type == base.ZScore {
+		options.Logf("compute standard deviation")
 		knn.StdDev = make([]float64, len(knn.LeftRatings))
 		for i := range knn.LeftMean {
 			sum, count := 0.0, 0.0
@@ -161,8 +163,9 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 		}
 	}
 	if knn._type == base.Baseline {
+		options.Logf("fit baseline model")
 		baseLine := NewBaseLine(knn.Params)
-		baseLine.Fit(trainSet, nil)
+		baseLine.Fit(trainSet, options)
 		if knn.userBased {
 			knn.Bias = baseLine.UserBias
 		} else {
@@ -170,6 +173,7 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 		}
 	}
 	// Pairwise similarity
+	options.Logf("compute similarity matrix")
 	knn.SimMatrix = base.NewMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
 	base.Parallel(len(knn.LeftRatings), options.GetJobs(), func(begin, end int) {
 		for iIndex := begin; iIndex < end; iIndex++ {
