@@ -110,7 +110,7 @@ func (fm *FM) SetParams(params base.Params) {
 	fm.reg = fm.Params.GetFloat64(base.Reg, 0.02)
 	fm.initMean = fm.Params.GetFloat64(base.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat64(base.InitStdDev, 0.1)
-	fm.optimizer = fm.Params.GetString(base.Optimizer, base.SGD)
+	fm.optimizer = fm.Params.GetString(base.Optimizer, base.SGDOptimizer)
 }
 
 // Predict by the factorization machine.
@@ -178,9 +178,9 @@ func (fm *FM) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) 
 	fm.Factors = fm.rng.NewNormalMatrix(paramCount, fm.nFactors, fm.initMean, fm.initStdDev)
 	// Optimize
 	switch fm.optimizer {
-	case base.SGD:
+	case base.SGDOptimizer:
 		fm.fitSGD(trainSet, options)
-	case base.BPR:
+	case base.BPROptimizer:
 		fm.fitBPR(trainSet, options)
 	default:
 		panic(fmt.Sprintf("Unknown optimizer: %v", fm.optimizer))

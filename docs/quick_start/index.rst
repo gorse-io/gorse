@@ -1,6 +1,6 @@
-========
-Tutorial
-========
+===========
+Quick Start
+===========
 
 .. toctree::
    :caption: Table of Contents

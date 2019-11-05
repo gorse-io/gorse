@@ -64,7 +64,7 @@ func (so *SlopeOne) Predict(userId, itemId int) float64 {
 }
 
 // Fit the SlopeOne model.
-func (so *SlopeOne) Fit(trainSet core.DataSetInterface, setters *base.RuntimeOptions) {
+func (so *SlopeOne) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
 	// Initialize
 	so.Init(trainSet)
 	so.GlobalMean = trainSet.GlobalMean()
@@ -76,6 +76,7 @@ func (so *SlopeOne) Fit(trainSet core.DataSetInterface, setters *base.RuntimeOpt
 	}
 	so.Dev = base.NewMatrix(trainSet.ItemCount(), trainSet.ItemCount())
 	// Compute deviations
+	options.Logf("compute deviations")
 	base.ParallelFor(0, trainSet.ItemCount(), func(i int) {
 		for j := 0; j < i; j++ {
 			count, sum := 0.0, 0.0

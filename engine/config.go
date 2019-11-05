@@ -35,6 +35,7 @@ type RecommendConfig struct {
 	CacheSize       int    `toml:"cache_size"`
 	UpdateThreshold int    `toml:"update_threshold"`
 	CheckPeriod     int    `toml:"check_period"`
+	FitJobs         int    `toml:"fit_jobs"`
 }
 
 // ParamsConfig is the configuration for hyper-parameters of the recommendation model.
@@ -57,7 +58,6 @@ type ParamsConfig struct {
 	Similarity    string  `toml:"similarity"`      // similarity metrics
 	K             int     `toml:"k"`               // number of neighbors
 	MinK          int     `toml:"min_k"`           // least number of neighbors
-	Optimizer     string  `toml:"optimizer"`       // optimizer for optimization (SGD/ALS/BPR)
 	Shrinkage     int     `toml:"shrinkage"`       // shrinkage strength of similarity
 	Alpha         float64 `toml:"alpha"`           // alpha value, depend on context
 }
@@ -87,7 +87,6 @@ func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
 		{"similarity", base.Similarity, config.Similarity},
 		{"k", base.K, config.K},
 		{"min_k", base.MinK, config.MinK},
-		{"optimizer", base.Optimizer, config.Optimizer},
 		{"shrinkage", base.Shrinkage, config.Shrinkage},
 		{"alpha", base.Alpha, config.Alpha},
 	}
@@ -105,6 +104,8 @@ func LoadModel(name string, params base.Params) core.ModelInterface {
 	switch name {
 	case "svd":
 		return model.NewSVD(params)
+	case "bpr":
+		return model.NewBPR(params)
 	case "knn":
 		return model.NewKNN(params)
 	case "slope_one":
@@ -117,6 +118,8 @@ func LoadModel(name string, params base.Params) core.ModelInterface {
 		return model.NewWRMF(params)
 	case "svd++":
 		return model.NewSVDpp(params)
+	case "knn_implicit":
+		return model.NewKNNImplicit(params)
 	}
 	return nil
 }
@@ -148,7 +151,7 @@ func (config *TomlConfig) FillDefault(meta toml.MetaData) {
 		config.Database.File = path.Join(core.GorseDir, "gorse.db")
 	}
 	if !meta.IsDefined("recommend", "model") {
-		config.Recommend.Model = "svd"
+		config.Recommend.Model = "bpr"
 	}
 	if !meta.IsDefined("recommend", "cache_size") {
 		config.Recommend.CacheSize = 100
@@ -158,6 +161,9 @@ func (config *TomlConfig) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "check_period") {
 		config.Recommend.CheckPeriod = 1
+	}
+	if !meta.IsDefined("recommend", "fit_jobs") {
+		config.Recommend.FitJobs = 1
 	}
 	if !meta.IsDefined("recommend", "similarity") {
 		config.Recommend.Similarity = "pearson"

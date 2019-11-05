@@ -17,7 +17,7 @@ const (
 func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CrossValidationEvaluator) {
 	// Cross validation
-	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false, NJobs: runtime.NumCPU()}, evaluators...)
+	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{CVJobs: runtime.NumCPU()}, evaluators...)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
@@ -34,7 +34,7 @@ func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterfac
 func checkRank(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CrossValidationEvaluator) {
 	// Cross validation
-	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false, NJobs: runtime.NumCPU()}, evaluators...)
+	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{CVJobs: runtime.NumCPU()}, evaluators...)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
@@ -165,10 +165,9 @@ func TestItemPop(t *testing.T) {
 		NewRankEvaluator(math.MaxInt32, MAP, NDCG, MRR))
 }
 
-func TestSVD_BPR(t *testing.T) {
+func TestBPR(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
-	checkRank(t, NewSVD(Params{
-		Optimizer:  BPR,
+	checkRank(t, NewBPR(Params{
 		NFactors:   10,
 		Reg:        0.01,
 		Lr:         0.05,
@@ -199,6 +198,17 @@ func TestWRMF(t *testing.T) {
 		NewRankEvaluator(math.MaxInt32, MAP, NDCG))
 }
 
+func TestKNN_Implicit(t *testing.T) {
+	data := LoadDataFromBuiltIn("ml-100k")
+	// KNN should perform better than ItemPop.
+	checkRank(t, NewKNNImplicit(nil), data, NewKFoldSplitter(5),
+		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG", "MRR"},
+		[]float64{0.211, 0.070, 0.190, 0.116, 0.135, 0.477, 0.417},
+		NewRankEvaluator(5, Precision, Recall),
+		NewRankEvaluator(10, Precision, Recall),
+		NewRankEvaluator(math.MaxInt32, MAP, NDCG, MRR))
+}
+
 func TestFM_SVD(t *testing.T) {
 	checkRegression(t, NewFM(Params{
 		Lr:       0.007,
@@ -212,7 +222,7 @@ func TestFM_SVD(t *testing.T) {
 func TestFM_BPR(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	checkRank(t, NewFM(Params{
-		Optimizer:  BPR,
+		Optimizer:  BPROptimizer,
 		NFactors:   10,
 		Reg:        0.01,
 		Lr:         0.05,

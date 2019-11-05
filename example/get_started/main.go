@@ -13,8 +13,7 @@ func main() {
 	// Split dataset
 	train, test := core.Split(data, 0.2)
 	// Create model
-	svd := model.NewSVD(base.Params{
-		base.Optimizer:  base.BPR,
+	svd := model.NewBPR(base.Params{
 		base.NFactors:   10,
 		base.Reg:        0.01,
 		base.Lr:         0.05,

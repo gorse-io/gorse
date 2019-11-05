@@ -117,13 +117,12 @@ func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options *base.Runti
 	coc.CoClusterMeans = base.NewMatrix(coc.nUserClusters, coc.nItemClusters)
 	// Clustering
 	for ep := 0; ep < coc.nEpochs; ep++ {
-		options.Logf("epoch = %v/%v", ep+1, coc.nEpochs)
 		// Compute averages A^{COC}, A^{RC}, A^{CC}, A^R, A^C
 		coc.clusterMean(coc.UserClusterMeans, coc.UserClusters, trainSet.Users())
 		coc.clusterMean(coc.ItemClusterMeans, coc.ItemClusters, trainSet.Items())
 		coc.coClusterMean(coc.CoClusterMeans, coc.UserClusters, coc.ItemClusters, trainSet.Users())
 		// Update row (user) cluster assignments
-		base.ParallelFor(0, trainSet.UserCount(), func(userIndex int) {
+		cost := base.ParallelForSum(0, trainSet.UserCount(), func(userIndex int) float64 {
 			bestCluster, leastCost := -1, math.Inf(1)
 			for g := 0; g < coc.nUserClusters; g++ {
 				cost := 0.0
@@ -142,9 +141,11 @@ func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options *base.Runti
 				}
 			}
 			coc.UserClusters[userIndex] = bestCluster
+			return leastCost
 		})
+		options.Logf("epoch = %v/%v (user phrase), loss = %f", ep+1, coc.nEpochs, cost)
 		// Update column (item) cluster assignments
-		base.ParallelFor(0, trainSet.ItemCount(), func(itemIndex int) {
+		cost = base.ParallelForSum(0, trainSet.ItemCount(), func(itemIndex int) float64 {
 			bestCluster, leastCost := -1, math.Inf(1)
 			for h := 0; h < coc.nItemClusters; h++ {
 				cost := 0.0
@@ -162,7 +163,9 @@ func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options *base.Runti
 				}
 			}
 			coc.ItemClusters[itemIndex] = bestCluster
+			return leastCost
 		})
+		options.Logf("epoch = %v/%v (item phrase), loss = %f", ep+1, coc.nEpochs, cost)
 	}
 }
 

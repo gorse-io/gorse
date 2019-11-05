@@ -26,6 +26,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
+	assert.Equal(t, 10, config.Recommend.FitJobs)
 	// params configuration
 	assert.Equal(t, 0.05, config.Params.Lr)
 	assert.Equal(t, 0.01, config.Params.Reg)
@@ -42,7 +43,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "pearson", config.Params.Similarity)
 	assert.Equal(t, 100, config.Params.K)
 	assert.Equal(t, 5, config.Params.MinK)
-	assert.Equal(t, "bpr", config.Params.Optimizer)
+	//assert.Equal(t, "bpr", config.Params.Optimizer)
 	assert.Equal(t, 1.0, config.Params.Alpha)
 }
 
@@ -50,7 +51,7 @@ func TestParamsConfig_ToParams(t *testing.T) {
 	// test on full configuration
 	config, meta := LoadConfig("../example/file_config/config_test.toml")
 	params := config.Params.ToParams(meta)
-	assert.Equal(t, 20, len(params))
+	assert.Equal(t, 19, len(params))
 
 	// test on empty configuration
 	config, meta = LoadConfig("../example/file_config/config_empty.toml")
@@ -69,11 +70,12 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	// database configuration
 	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
 	// recommend configuration
-	assert.Equal(t, "svd", config.Recommend.Model)
+	assert.Equal(t, "bpr", config.Recommend.Model)
 	assert.Equal(t, "pearson", config.Recommend.Similarity)
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
+	assert.Equal(t, 1, config.Recommend.FitJobs)
 
 	config, _ = LoadConfig("../example/file_config/config_not_exist.toml")
 
@@ -85,11 +87,12 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	// database configuration
 	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
 	// recommend configuration
-	assert.Equal(t, "svd", config.Recommend.Model)
+	assert.Equal(t, "bpr", config.Recommend.Model)
 	assert.Equal(t, "pearson", config.Recommend.Similarity)
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
+	assert.Equal(t, 1, config.Recommend.FitJobs)
 }
 
 func TestLoadSimilarity(t *testing.T) {
@@ -99,6 +102,8 @@ func TestLoadSimilarity(t *testing.T) {
 		reflect.ValueOf(LoadSimilarity("cosine")).Pointer())
 	assert.Equal(t, reflect.ValueOf(base.MSDSimilarity).Pointer(),
 		reflect.ValueOf(LoadSimilarity("msd")).Pointer())
+	assert.Equal(t, reflect.ValueOf(base.ImplicitSimilarity).Pointer(),
+		reflect.ValueOf(LoadSimilarity("implicit")).Pointer())
 
 	// Test similarity not existed
 	assert.Equal(t, uintptr(0), reflect.ValueOf(LoadSimilarity("none")).Pointer())
@@ -111,12 +116,14 @@ func TestLoadModel(t *testing.T) {
 	}
 	models := []Model{
 		{"svd", reflect.TypeOf(model.NewSVD(nil))},
+		{"bpr", reflect.TypeOf(model.NewBPR(nil))},
 		{"knn", reflect.TypeOf(model.NewKNN(nil))},
 		{"slope_one", reflect.TypeOf(model.NewSlopOne(nil))},
 		{"co_clustering", reflect.TypeOf(model.NewCoClustering(nil))},
 		{"nmf", reflect.TypeOf(model.NewNMF(nil))},
 		{"wrmf", reflect.TypeOf(model.NewWRMF(nil))},
 		{"svd++", reflect.TypeOf(model.NewSVDpp(nil))},
+		{"knn_implicit", reflect.TypeOf(model.NewKNNImplicit(nil))},
 	}
 	for _, m := range models {
 		assert.Equal(t, m.typeOf, reflect.TypeOf(LoadModel(m.name, nil)))

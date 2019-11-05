@@ -43,7 +43,7 @@ func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Spli
 	scores := make([][]float64, length)
 	costs := make([][]float64, length)
 	params := model.GetParams()
-	base.Parallel(length, options.GetJobs(), func(begin, end int) {
+	base.Parallel(length, options.GetCVJobs(), func(begin, end int) {
 		cp := reflect.New(reflect.TypeOf(model).Elem()).Interface().(ModelInterface)
 		Copy(cp, model)
 		cp.SetParams(params)

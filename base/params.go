@@ -46,8 +46,8 @@ const (
 
 // Predefined values for hyper-parameter Optimizer.
 const (
-	SGD string = "sgd" // Fit model (MF) with stochastic gradient descent.
-	BPR string = "bpr" // Fit model (MF) with bayesian personal ranking.
+	SGDOptimizer string = "sgd" // Fit model (FM) with stochastic gradient descent.
+	BPROptimizer string = "bpr" // Fit model (FM) with bayesian personal ranking.
 )
 
 // Predefined values for hyper-parameter Similarity.

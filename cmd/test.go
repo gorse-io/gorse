@@ -44,6 +44,10 @@ func init() {
 			commandTest.PersistentFlags().Bool(paramFlag.Name, false, paramFlag.Help)
 		}
 	}
+	// Runtime options
+	commandTest.PersistentFlags().BoolP("verbose", "v", true, "verbose")
+	commandTest.PersistentFlags().Int("fit-jobs", 1, "number of jobs for model fitting")
+	commandTest.PersistentFlags().IntP("cv-jobs", "j", 1, "number of jobs for cross validation")
 }
 
 var commandTest = &cobra.Command{
@@ -127,8 +131,15 @@ var commandTest = &cobra.Command{
 		if len(rankMetrics) > 0 {
 			evaluators = append(evaluators, core.NewRankEvaluator(n, rankMetrics...))
 		}
+		// Load runtime options
+		verbose, _ := cmd.PersistentFlags().GetBool("verbose")
+		fitJobs, _ := cmd.PersistentFlags().GetInt("fit-jobs")
+		cvJobs, _ := cmd.PersistentFlags().GetInt("cv-jobs")
+		options := &base.RuntimeOptions{verbose, fitJobs, cvJobs}
+		log.Printf("Runtime options: verbose = %v, fit_jobs = %v, cv_jobs = %v\n",
+			options.GetVerbose(), options.GetFitJobs(), options.GetCVJobs())
 		// Cross validation
-		out := core.CrossValidate(model, data, core.NewKFoldSplitter(5), 0, nil, evaluators...)
+		out := core.CrossValidate(model, data, core.NewKFoldSplitter(5), 0, options, evaluators...)
 		// Render table
 		header := make([]string, k+2)
 		header[k+1] = "Mean"
