@@ -69,7 +69,7 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	// database configuration
 	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
 	// recommend configuration
-	assert.Equal(t, "svd", config.Recommend.Model)
+	assert.Equal(t, "bpr", config.Recommend.Model)
 	assert.Equal(t, "pearson", config.Recommend.Similarity)
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
@@ -85,7 +85,7 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	// database configuration
 	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
 	// recommend configuration
-	assert.Equal(t, "svd", config.Recommend.Model)
+	assert.Equal(t, "bpr", config.Recommend.Model)
 	assert.Equal(t, "pearson", config.Recommend.Similarity)
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
