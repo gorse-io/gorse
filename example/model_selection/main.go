@@ -18,7 +18,7 @@ func main() {
 		base.NEpochs:    {50},
 		base.InitMean:   {0},
 		base.InitStdDev: {0.001},
-	}, core.NewKFoldSplitter(5), 0, &base.RuntimeOptions{true, runtime.NumCPU()},
+	}, core.NewKFoldSplitter(5), 0, &base.RuntimeOptions{true, 1, runtime.NumCPU()},
 		core.NewRankEvaluator(10, core.Precision, core.Recall, core.NDCG))
 	fmt.Println("=== Precision@10")
 	fmt.Printf("The best score is: %.5f\n", cv[0].BestScore)

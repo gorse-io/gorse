@@ -175,7 +175,7 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 	// Pairwise similarity
 	options.Logf("compute similarity matrix")
 	knn.SimMatrix = base.NewMatrix(len(knn.LeftRatings), len(knn.LeftRatings))
-	base.Parallel(len(knn.LeftRatings), options.GetJobs(), func(begin, end int) {
+	base.Parallel(len(knn.LeftRatings), options.GetFitJobs(), func(begin, end int) {
 		for iIndex := begin; iIndex < end; iIndex++ {
 			iRatings := knn.LeftRatings[iIndex]
 			for jIndex := 0; jIndex < len(knn.LeftRatings); jIndex++ {
@@ -230,7 +230,7 @@ func (knn *KNNImplicit) Fit(trainSet core.DataSetInterface, options *base.Runtim
 	// Pairwise similarity
 	options.Logf("compute similarity matrix")
 	knn.Matrix = base.NewMatrix(trainSet.ItemCount(), trainSet.ItemCount())
-	base.Parallel(trainSet.ItemCount(), options.GetJobs(), func(begin, end int) {
+	base.Parallel(trainSet.ItemCount(), options.GetFitJobs(), func(begin, end int) {
 		for iIndex := begin; iIndex < end; iIndex++ {
 			iRatings := trainSet.Items()[iIndex]
 			for jIndex := 0; jIndex < trainSet.ItemCount(); jIndex++ {

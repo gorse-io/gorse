@@ -5,15 +5,24 @@ import "log"
 // RuntimeOptions defines options used for runtime.
 type RuntimeOptions struct {
 	Verbose bool // Verbose switch
-	NJobs   int  // Number of jobs
+	FitJobs int  // Number of jobs for model fitting
+	CVJobs  int  // Number of jobs for cross validation
 }
 
-// GetJobs returns the number of concurrent jobs.
-func (options *RuntimeOptions) GetJobs() int {
-	if options == nil || options.NJobs < 1 {
+// GetFitJobs returns the number of concurrent jobs for model fitting.
+func (options *RuntimeOptions) GetFitJobs() int {
+	if options == nil || options.FitJobs < 1 {
 		return 1
 	}
-	return options.NJobs
+	return options.FitJobs
+}
+
+// GetCVJobs returns the number of concurrent jobs for cross validation.
+func (options *RuntimeOptions) GetCVJobs() int {
+	if options == nil || options.CVJobs < 1 {
+		return 1
+	}
+	return options.CVJobs
 }
 
 // GetVerbose returns the indicator of verbose.

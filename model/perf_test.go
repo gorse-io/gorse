@@ -17,7 +17,7 @@ const (
 func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CrossValidationEvaluator) {
 	// Cross validation
-	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false, NJobs: runtime.NumCPU()}, evaluators...)
+	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{CVJobs: runtime.NumCPU()}, evaluators...)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)
@@ -34,7 +34,7 @@ func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterfac
 func checkRank(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...CrossValidationEvaluator) {
 	// Cross validation
-	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{Verbose: false, NJobs: runtime.NumCPU()}, evaluators...)
+	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{CVJobs: runtime.NumCPU()}, evaluators...)
 	// Check accuracy
 	for i := range evalNames {
 		accuracy := stat.Mean(results[i].TestScore, nil)

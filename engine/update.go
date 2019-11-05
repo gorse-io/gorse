@@ -40,13 +40,13 @@ func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, 
 }
 
 // UpdateRecommends updates personalized recommendations for the database.
-func UpdateRecommends(name string, params base.Params, cacheSize int, dataSet core.DataSetInterface, db *DB) error {
+func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs int, dataSet core.DataSetInterface, db *DB) error {
 	// Create model
 	log.Printf("create model %v with params = %v\n", name, params)
 	model := LoadModel(name, params)
 	// Training model
 	log.Println("training model")
-	model.Fit(dataSet, nil)
+	model.Fit(dataSet, &base.RuntimeOptions{Verbose:true, FitJobs:fitJobs})
 	// Generate recommends
 	log.Println("update recommends")
 	items := core.Items(dataSet)
@@ -76,7 +76,8 @@ func Update(config TomlConfig, metaData toml.MetaData, db *DB) error {
 	}
 	// Generate recommends
 	params := config.Params.ToParams(metaData)
-	if err = UpdateRecommends(config.Recommend.Model, params, config.Recommend.CacheSize, dataSet, db); err != nil {
+	if err = UpdateRecommends(config.Recommend.Model, params, config.Recommend.CacheSize, config.Recommend.FitJobs,
+		dataSet, db); err != nil {
 		return err
 	}
 	// Generate neighbors

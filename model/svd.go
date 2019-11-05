@@ -508,7 +508,7 @@ func (svd *SVDpp) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptio
 	step := make([]float64, svd.nFactors)
 	userFactor := make([]float64, svd.nFactors)
 	itemFactor := make([]float64, svd.nFactors)
-	c := base.NewMatrix(options.GetJobs(), svd.nFactors)
+	c := base.NewMatrix(options.GetFitJobs(), svd.nFactors)
 	// Stochastic Gradient Descent
 	for epoch := 0; epoch < svd.nEpochs; epoch++ {
 		cost := 0.0
@@ -546,11 +546,11 @@ func (svd *SVDpp) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptio
 			})
 			// Update implicit latent factor
 			var wg sync.WaitGroup
-			wg.Add(options.GetJobs())
-			for j := 0; j < options.GetJobs(); j++ {
+			wg.Add(options.GetFitJobs())
+			for j := 0; j < options.GetFitJobs(); j++ {
 				go func(jobId int) {
-					low := size * jobId / options.GetJobs()
-					high := size * (jobId + 1) / options.GetJobs()
+					low := size * jobId / options.GetFitJobs()
+					high := size * (jobId + 1) / options.GetFitJobs()
 					a := c[jobId]
 					for i := low; i < high; i++ {
 						itemIndex := svd.TrainSet.UserByIndex(userIndex).Indices[i]

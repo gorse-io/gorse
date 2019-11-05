@@ -26,6 +26,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
+	assert.Equal(t, 10, config.Recommend.FitJobs)
 	// params configuration
 	assert.Equal(t, 0.05, config.Params.Lr)
 	assert.Equal(t, 0.01, config.Params.Reg)
@@ -74,6 +75,7 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
+	assert.Equal(t, 1, config.Recommend.FitJobs)
 
 	config, _ = LoadConfig("../example/file_config/config_not_exist.toml")
 
@@ -90,6 +92,7 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
+	assert.Equal(t, 1, config.Recommend.FitJobs)
 }
 
 func TestLoadSimilarity(t *testing.T) {
@@ -99,6 +102,8 @@ func TestLoadSimilarity(t *testing.T) {
 		reflect.ValueOf(LoadSimilarity("cosine")).Pointer())
 	assert.Equal(t, reflect.ValueOf(base.MSDSimilarity).Pointer(),
 		reflect.ValueOf(LoadSimilarity("msd")).Pointer())
+	assert.Equal(t, reflect.ValueOf(base.ImplicitSimilarity).Pointer(),
+		reflect.ValueOf(LoadSimilarity("implicit")).Pointer())
 
 	// Test similarity not existed
 	assert.Equal(t, uintptr(0), reflect.ValueOf(LoadSimilarity("none")).Pointer())
@@ -111,12 +116,14 @@ func TestLoadModel(t *testing.T) {
 	}
 	models := []Model{
 		{"svd", reflect.TypeOf(model.NewSVD(nil))},
+		{"bpr", reflect.TypeOf(model.NewBPR(nil))},
 		{"knn", reflect.TypeOf(model.NewKNN(nil))},
 		{"slope_one", reflect.TypeOf(model.NewSlopOne(nil))},
 		{"co_clustering", reflect.TypeOf(model.NewCoClustering(nil))},
 		{"nmf", reflect.TypeOf(model.NewNMF(nil))},
 		{"wrmf", reflect.TypeOf(model.NewWRMF(nil))},
 		{"svd++", reflect.TypeOf(model.NewSVDpp(nil))},
+		{"knn_implicit", reflect.TypeOf(model.NewKNNImplicit(nil))},
 	}
 	for _, m := range models {
 		assert.Equal(t, m.typeOf, reflect.TypeOf(LoadModel(m.name, nil)))
