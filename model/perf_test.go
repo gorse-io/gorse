@@ -165,7 +165,7 @@ func TestItemPop(t *testing.T) {
 		NewRankEvaluator(math.MaxInt32, MAP, NDCG, MRR))
 }
 
-func TestSVD_BPR(t *testing.T) {
+func TestBPR(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	checkRank(t, NewBPR(Params{
 		NFactors:   10,
@@ -196,6 +196,17 @@ func TestWRMF(t *testing.T) {
 		NewRankEvaluator(5, Precision, Recall),
 		NewRankEvaluator(10, Precision, Recall),
 		NewRankEvaluator(math.MaxInt32, MAP, NDCG))
+}
+
+func TestKNN_Implicit(t *testing.T) {
+	data := LoadDataFromBuiltIn("ml-100k")
+	// KNN should perform better than ItemPop.
+	checkRank(t, NewKNNImplicit(nil), data, NewKFoldSplitter(5),
+		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG", "MRR"},
+		[]float64{0.211, 0.070, 0.190, 0.116, 0.135, 0.477, 0.417},
+		NewRankEvaluator(5, Precision, Recall),
+		NewRankEvaluator(10, Precision, Recall),
+		NewRankEvaluator(math.MaxInt32, MAP, NDCG, MRR))
 }
 
 func TestFM_SVD(t *testing.T) {
