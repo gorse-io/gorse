@@ -6,6 +6,7 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	"os"
 	"path"
+	"runtime"
 	"testing"
 )
 
@@ -97,7 +98,7 @@ func TestUpdateRecommends(t *testing.T) {
 		base.InitMean:   0,
 		base.InitStdDev: 0.001,
 	}
-	if err = UpdateRecommends("bpr", params, 10, trainSet, db); err != nil {
+	if err = UpdateRecommends("bpr", params, 10, runtime.NumCPU(), trainSet, db); err != nil {
 		t.Fatal(err)
 	}
 	// Check result
