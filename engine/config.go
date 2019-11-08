@@ -120,7 +120,10 @@ func LoadModel(name string, params base.Params) core.ModelInterface {
 		return model.NewSVDpp(params)
 	case "knn_implicit":
 		return model.NewKNNImplicit(params)
+	case "item_pop":
+		return model.NewItemPop(params)
 	}
+	log.Fatalf("unkown model %s", name)
 	return nil
 }
 

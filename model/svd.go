@@ -97,6 +97,9 @@ func (svd *SVD) predict(userIndex int, itemIndex int) float64 {
 
 // Fit the SVD model.
 func (svd *SVD) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit SVD with hyper-parameters: "+
+		"use_bias = %v, n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
+		svd.useBias, svd.nFactors, svd.nEpochs, svd.lr, svd.reg, svd.initMean, svd.initStdDev)
 	svd.Init(trainSet)
 	// Initialize parameters
 	svd.GlobalMean = 0
@@ -218,6 +221,9 @@ func (bpr *BPR) predict(userIndex int, itemIndex int) float64 {
 
 // Fit the BPR model.
 func (bpr *BPR) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit BPR with hyper-parameters: "+
+		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
+		bpr.nFactors, bpr.nEpochs, bpr.lr, bpr.reg, bpr.initMean, bpr.initStdDev)
 	bpr.Init(trainSet)
 	// Initialize parameters
 	bpr.UserFactor = bpr.rng.NewNormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
@@ -343,6 +349,9 @@ func (nmf *NMF) predict(userIndex int, itemIndex int) float64 {
 
 // Fit the NMF model.
 func (nmf *NMF) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit NMF with hyper-parameters: "+
+		"n_factors = %v, n_epochs = %v, reg = %v, init_low = %v, init_high = %v",
+		nmf.nFactors, nmf.nEpochs, nmf.reg, nmf.initLow, nmf.initLow)
 	nmf.Init(trainSet)
 	// Initialize parameters
 	nmf.GlobalMean = trainSet.GlobalMean()
@@ -493,6 +502,9 @@ func (svd *SVDpp) sumOverImplicitFactors(userIndex int) []float64 {
 
 // Fit the SVD++ model.
 func (svd *SVDpp) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit SVD++ with hyper-parameters: "+
+		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
+		svd.nFactors, svd.nEpochs, svd.lr, svd.reg, svd.initMean, svd.initStdDev)
 	svd.Init(trainSet)
 	// Initialize parameters
 	svd.GlobalMean = trainSet.GlobalMean()
@@ -616,6 +628,7 @@ func (mf *WRMF) SetParams(params base.Params) {
 	mf.initMean = mf.Params.GetFloat64(base.InitMean, 0)
 	mf.initStdDev = mf.Params.GetFloat64(base.InitStdDev, 0.1)
 	mf.reg = mf.Params.GetFloat64(base.Reg, 0.06)
+	mf.alpha = mf.Params.GetFloat64(base.Alpha, 1)
 }
 
 // Predict by the WRMF model.
@@ -635,6 +648,9 @@ func (mf *WRMF) Predict(userId, itemId int) float64 {
 
 // Fit the WRMF model.
 func (mf *WRMF) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit WRMF with hyper-parameters: "+
+		"n_factors = %v, n_epochs = %v, reg = %v, alpha = %v, init_mean = %v, init_stddev = %v",
+		mf.nFactors, mf.nEpochs, mf.reg, mf.alpha, mf.initMean, mf.initStdDev)
 	mf.Init(set)
 	// Create ItemPop model
 	mf.UserRatings = set.Users()
@@ -668,11 +684,11 @@ func (mf *WRMF) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
 			b := mat.NewVecDense(mf.nFactors, nil)
 			set.UserByIndex(u).ForEachIndex(func(_, index int, value float64) {
 				// Y^T (C^u-I) Y
-				weight := value
-				temp1.Outer(weight, mf.ItemFactor.RowView(index), mf.ItemFactor.RowView(index))
+				w := mf.weight(value)
+				temp1.Outer(w-1, mf.ItemFactor.RowView(index), mf.ItemFactor.RowView(index))
 				a.Add(a, temp1)
 				// Y^T C^u p(u)
-				temp2.ScaleVec(weight+1, mf.ItemFactor.RowView(index))
+				temp2.ScaleVec(w, mf.ItemFactor.RowView(index))
 				b.AddVec(b, temp2)
 			})
 			a.Add(a, regI)
@@ -692,11 +708,11 @@ func (mf *WRMF) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
 			b := mat.NewVecDense(mf.nFactors, nil)
 			set.ItemByIndex(i).ForEachIndex(func(_, index int, value float64) {
 				// X^T (C^i-I) X
-				weight := value
-				temp1.Outer(weight, mf.UserFactor.RowView(index), mf.UserFactor.RowView(index))
+				w := mf.weight(value)
+				temp1.Outer(w-1, mf.UserFactor.RowView(index), mf.UserFactor.RowView(index))
 				a.Add(a, temp1)
 				// X^T C^i p(i)
-				temp2.ScaleVec(weight+1, mf.UserFactor.RowView(index))
+				temp2.ScaleVec(w, mf.UserFactor.RowView(index))
 				b.AddVec(b, temp2)
 			})
 			a.Add(a, regI)
@@ -711,5 +727,5 @@ func (mf *WRMF) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
 }
 
 func (mf *WRMF) weight(value float64) float64 {
-	return mf.alpha * value
+	return mf.alpha*value + 1
 }

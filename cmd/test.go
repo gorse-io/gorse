@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 func init() {
@@ -17,8 +18,8 @@ func init() {
 	for name := range models {
 		modelNames = append(modelNames, name)
 	}
-	commandTest.Long = fmt.Sprintf("Test a model with cross validation. Models includes %s.",
-		strings.Join(modelNames, ", "))
+	commandTest.Long = fmt.Sprintf("Test a model with cross validation. \n\nModels: \n  %s",
+		strings.Join(modelNames, " | "))
 	// Data loaders
 	commandTest.PersistentFlags().String("load-builtin", "", "load data from built-in")
 	commandTest.PersistentFlags().String("load-csv", "", "load data from CSV file")
@@ -139,7 +140,9 @@ var commandTest = &cobra.Command{
 		log.Printf("Runtime options: verbose = %v, fit_jobs = %v, cv_jobs = %v\n",
 			options.GetVerbose(), options.GetFitJobs(), options.GetCVJobs())
 		// Cross validation
+		start := time.Now()
 		out := core.CrossValidate(model, data, core.NewKFoldSplitter(5), 0, options, evaluators...)
+		elapsed := time.Since(start)
 		// Render table
 		header := make([]string, k+2)
 		header[k+1] = "Mean"
@@ -159,7 +162,7 @@ var commandTest = &cobra.Command{
 			table.Append(row)
 		}
 		table.Render()
-		log.Printf("Complete cross validation:\n")
+		log.Printf("Complete cross validation (%v7.0.0.)\n", elapsed)
 	},
 }
 
@@ -173,6 +176,8 @@ var models = map[string]core.ModelInterface{
 	"item-pop":      model.NewItemPop(nil),
 	"slope-one":     model.NewSlopOne(nil),
 	"co-clustering": model.NewCoClustering(nil),
+	"bpr":           model.NewBPR(nil),
+	"knn_implicit":  model.NewKNNImplicit(nil),
 }
 
 /* Flags for evaluators */

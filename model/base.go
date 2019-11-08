@@ -108,6 +108,9 @@ func (baseLine *BaseLine) predict(denseUserId, denseItemId int) float64 {
 
 // Fit the BaseLine model.
 func (baseLine *BaseLine) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit Baseline with hyper-parameters: "+
+		"n_epochs = %v, reg = %v, lr = %v",
+		baseLine.nEpochs, baseLine.reg, baseLine.lr)
 	baseLine.Init(trainSet)
 	// Initialize parameters
 	baseLine.GlobalBias = trainSet.GlobalMean()

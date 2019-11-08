@@ -89,6 +89,9 @@ func (coc *CoClustering) predict(userIndex, itemIndex int) float64 {
 
 // Fit the CoClustering model.
 func (coc *CoClustering) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit CoClustering with hyper-parameters: "+
+		"user_clusters = %v, item_clusters = %v, n_epochs = %v",
+		coc.nUserClusters, coc.nItemClusters, coc.nEpochs)
 	coc.Init(trainSet)
 	// Initialize parameters
 	coc.GlobalMean = trainSet.GlobalMean()

@@ -25,12 +25,13 @@ type KNN struct {
 	StdDev       []float64 // KNN with Z Score: user (item) standard deviation
 	Bias         []float64 // KNN Baseline: Bias
 	// Hyper-parameters
-	_type      string
-	userBased  bool
-	similarity base.FuncSimilarity
-	k          int
-	minK       int
-	shrinkage  int
+	_type          string
+	userBased      bool
+	similarity     base.FuncSimilarity
+	similarityName string
+	k              int
+	minK           int
+	shrinkage      int
 }
 
 // NewKNN creates a KNN model.
@@ -50,7 +51,7 @@ func (knn *KNN) SetParams(params base.Params) {
 	knn.minK = knn.Params.GetInt(base.MinK, 1)
 	knn.shrinkage = knn.Params.GetInt(base.Shrinkage, 100)
 	// Setup similarity function
-	switch name := knn.Params.GetString(base.Similarity, base.MSD); name {
+	switch knn.similarityName = knn.Params.GetString(base.Similarity, base.MSD); knn.similarityName {
 	case base.MSD:
 		knn.similarity = base.MSDSimilarity
 	case base.Cosine:
@@ -58,7 +59,7 @@ func (knn *KNN) SetParams(params base.Params) {
 	case base.Pearson:
 		knn.similarity = base.PearsonSimilarity
 	default:
-		panic(fmt.Sprintf("Unknown similarity function: %v", name))
+		panic(fmt.Sprintf("Unknown similarity function: %v", knn.similarityName))
 	}
 }
 
@@ -127,6 +128,9 @@ func (knn *KNN) Predict(userId, itemId int) float64 {
 
 // Fit the KNN model.
 func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+	options.Logf("Fit KNN with hyper-parameters: "+
+		"type = %v, user_based = %v, k = %v, min_k = %v, shrinkage = %v, similarity = %v",
+		knn._type, knn.userBased, knn.k, knn.minK, knn.shrinkage, knn.similarityName)
 	knn.Init(trainSet)
 	// Set global GlobalMean for new users (items)
 	knn.GlobalMean = trainSet.GlobalMean()
