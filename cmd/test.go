@@ -177,7 +177,7 @@ var models = map[string]core.ModelInterface{
 	"slope-one":     model.NewSlopOne(nil),
 	"co-clustering": model.NewCoClustering(nil),
 	"bpr":           model.NewBPR(nil),
-	"knn_implicit":  model.NewKNNImplicit(nil),
+	"knn-implicit":  model.NewKNNImplicit(nil),
 }
 
 /* Flags for evaluators */
