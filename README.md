@@ -17,7 +17,7 @@ This project is aim to provide a high performance, easy-to-use, programming lang
 - Provides the data import/export tool, model evaluation tool and RESTful recomender server.
 - Accelerates computations by SIMD instructions and multi-threading.
 
-<img width=540 src="https://img.sine-x.com/gorse-arch.png"/>
+<p align="center"><img width=540 src="https://img.sine-x.com/gorse-arch.png"/></p>
 
 For more information:
 
