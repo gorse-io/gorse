@@ -2,14 +2,15 @@
 set -e
 
 # Build executable
-go install ../...
+ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && pwd )"
+go install ${ROOT_DIR}/...
 
 # Create temp files
 TMP_DB=$(mktemp /tmp/test_server.XXXXXX)
 TMP_CONFIG=$(mktemp /tmp/test_server.XXXXXX)
 
 # Create config file
-cp ../example/file_config/config.toml ${TMP_CONFIG}
+cp ${ROOT_DIR}/example/file_config/config.toml ${TMP_CONFIG}
 sed -i "s:gorse.db:${TMP_DB}:g" ${TMP_CONFIG}
 
 # Import ml-100k data

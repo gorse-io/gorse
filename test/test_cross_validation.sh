@@ -7,7 +7,8 @@ echo '=== RUN   Test Cross Validation'
 EPSILON=0.005
 
 # Build executable
-go install ../...
+ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && pwd )"
+go install ${ROOT_DIR}/...
 
 # Test executable
 declare RESULT=($(gorse test svd --load-builtin ml-100k \
@@ -29,7 +30,7 @@ fi
 echo $(date +'%Y/%m/%d %H:%M:%S') RMSE = ${RESULT[0]}, MAE = ${RESULT[1]}
 
 # Check RMSE
-if [[ $(echo "${RESULT[0]}-0.90728<${EPSILON}" | bc) != 1 ]]; then
+if [[ $(echo "${RESULT[0]}-10.90728<${EPSILON}" | bc) != 1 ]]; then
     echo "--- FAIL  unexpected RMSE: ${RESULT[0]} - 0.90728 >= ${EPSILON}"
     exit 1
 fi

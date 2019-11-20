@@ -1,12 +1,11 @@
 import json
+import math
 import sys
 import time
 import urllib.request
 from typing import Dict, Set, List
 
-import math
 import pandas as pd
-from pandas.core.groupby.generic import DataFrameGroupBy
 
 EPSILON = 0.05
 
@@ -44,7 +43,7 @@ def ndcg(target_set: Set[int], top_list: List[int]) -> float:
     return dcg / idcg
 
 
-def eval_item_pop(url: str, users: DataFrameGroupBy):
+def eval_item_pop(url: str, users):
     prec_score, recall_score, ndcg_score = 0, 0, 0
     for user_id, user_df in users:
         response = get(url + 'popular/')
@@ -56,7 +55,7 @@ def eval_item_pop(url: str, users: DataFrameGroupBy):
     return prec_score / len(users), recall_score / len(users), ndcg_score / len(users)
 
 
-def eval_svd_bpr(url: str, users: DataFrameGroupBy):
+def eval_svd_bpr(url: str, users):
     prec_score, recall_score, ndcg_score = 0, 0, 0
     for user_id, user_df in users:
         response = get(url + 'recommends/' + str(user_id))
@@ -88,26 +87,26 @@ def test_server(server_host: str, server_port: int):
     prec_score, recall_score, ndcg_score = eval_item_pop(url, users)
     print('Precision@10 = %f, Recall@10 = %f, NDCG@10 = %f' % (prec_score, recall_score, ndcg_score))
     if prec_score - 0.19081 < -EPSILON:
-        print('precision is low')
+        print('--- FAIL  precision is low')
         exit(1)
     if recall_score - 0.11584 < -EPSILON:
-        print('recall is low')
+        print('--- FAIL  recall is low')
         exit(1)
     if ndcg_score - 0.21785 < -EPSILON:
-        print('NDCG is low')
+        print('--- FAIL  NDCG is low')
         exit(1)
 
     # Evaluate SVD BPR
     prec_score, recall_score, ndcg_score = eval_svd_bpr(url, users)
     print('Precision@10 = %f, Recall@10 = %f, NDCG@10 = %f' % (prec_score, recall_score, ndcg_score))
     if prec_score - 0.32083 < -EPSILON:
-        print('precision is low')
+        print('--- FAIL  precision is low')
         exit(1)
     if recall_score - 0.20906 < -EPSILON:
-        print('recall is low')
+        print('--- FAIL  recall is low')
         exit(1)
     if ndcg_score - 0.37643 < -EPSILON:
-        print('NDCG is low')
+        print('--- FAIL  NDCG is low')
         exit(1)
 
 

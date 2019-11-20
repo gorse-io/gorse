@@ -11,12 +11,20 @@ before_script:
   - mkdir -p ~/.gorse/download
   - wget https://cdn.sine-x.com/datasets/movielens/ml-100k.zip -P ~/.gorse/download
   - unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+  - sudo apt-get -y install python3
+  - pip3 install -r test/requirements.txt
 
 matrix:
   include:
     - script:
       - go test -v ./... -coverprofile=coverage.txt -covermode=atomic
+      - bash test/test_cross_validation.sh
+      - bash test/test_data_import_export.sh
+      - bash test/test_server.sh
       after_success:
       - bash <(curl -s https://codecov.io/bash)
     - script:
       - go test -v -tags='avx2' ./... -coverprofile=coverage.txt -covermode=atomic
+      - bash test/test_cross_validation.sh
+      - bash test/test_data_import_export.sh
+      - bash test/test_server.sh

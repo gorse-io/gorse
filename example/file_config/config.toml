@@ -9,7 +9,7 @@ file = "gorse.db"       # database file
 
 # This section declares settings for recommendation.
 [recommend]
-model = "svd"           # recommendation model
+model = "bpr"           # recommendation model
 cache_size = 100        # the number of cached recommendations
 update_threshold = 10   # update model when more than 10 ratings are added
 check_period = 1        # check for update every one minute
@@ -18,7 +18,6 @@ fit_jobs = 1            # concurrent jobs for fitting
 
 # This section declares hyperparameters for the recommendation model.
 [params]
-optimizer = "bpr"       # the optimizer to oprimize matrix factorization model
 n_factors = 10          # the number of latent factors
 reg = 0.01              # regularization strength
 lr = 0.05               # learning rate
