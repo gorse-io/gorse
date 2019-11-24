@@ -39,9 +39,9 @@ const (
 // Predefined values for hyper-parameter Type.
 const (
 	Basic    string = "basic"    // Basic KNN
-	Centered string = "Centered" // KNN with centered ratings
-	ZScore   string = "ZScore"   // KNN with standardized ratings
-	Baseline string = "Baseline" // KNN with baseline ratings
+	Centered string = "centered" // KNN with centered ratings
+	ZScore   string = "z_score"  // KNN with standardized ratings
+	Baseline string = "baseline" // KNN with baseline ratings
 )
 
 // Predefined values for hyper-parameter Optimizer.
@@ -52,9 +52,9 @@ const (
 
 // Predefined values for hyper-parameter Similarity.
 const (
-	Pearson string = "Pearson" // Pearson similarity
-	Cosine  string = "Cosine"  // Cosine similarity
-	MSD     string = "MSD"     // MSD similarity
+	Pearson string = "pearson" // Pearson similarity
+	Cosine  string = "cosine"  // Cosine similarity
+	MSD     string = "msd"     // MSD similarity
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
