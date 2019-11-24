@@ -35,21 +35,11 @@ There are all models implemented in *gorse*:
 Apparently, these models using implicit feedbacks are more general since explicit feedbacks could be converted to implicit feedbacks and item ranking could be done by rating prediction.
 
 
-Non-Personalized Models
-=======================
-
-ItemPop
--------
-
-The only non-personalized model is ItemPop. It always recommmends top K popular items to all users.
-
-Personalized Models
-===================
-
 .. toctree::
    :caption: Personalized Models
    :maxdepth: 1
 
+   baseline
    matrix_factorization
    knn
    coclustering

@@ -111,3 +111,40 @@ Get top 10 similar items for the 100th item.
         "Failed": false,
         "Items": [247, 897, 442, 643, 757, 788, 838, 957, 907, 891]
     }
+
+Get User History
+----------------
+
+.. code-block:: bash
+
+    curl 127.0.0.1:8080/user/1
+
+Get interaction history of user 1.
+
+.. code-block:: json
+
+    [
+        {
+            "ItemId": 1,
+            "Score": 5
+        },
+        ...
+    ]
+
+
+Get all users
+-------------
+
+.. code-block:: bash
+
+    curl 127.0.0.1:8080/users
+
+List all users.
+
+.. code-block:: json
+
+    [
+        1,
+        2,
+        ...
+    ]

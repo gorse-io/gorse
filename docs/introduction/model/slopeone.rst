@@ -4,6 +4,10 @@ Slope One
 
 Slope One [#SO]_ predicts ratings by deviations between ratings of each pair of items.
 
+Hyperparameters
+===============
+
+There are no hyperparameters for Slope One.
 
 Definition
 ==========

@@ -13,6 +13,30 @@ KNN for Explicit Feedback
 
 For explicit feedback, neighbors-based models predict ratings from similar items or similar users.
 
+Hyperparameters
+---------------
+
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| Key             | Hyperparameter | Type    | Description                                                       | Default |
++=================+================+=========+===================================================================+=========+
+| lr              | Lr             | float64 | learning rate (for baseline)                                      | 0.005   |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| reg             | Reg            | float64 | regularization strength (for baseline)                            | 0.02    |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| n_epochs        | NEpochs        | int     | number of epochs (for baseline)                                   | 20      |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| type            | Type           | string  | type for KNN (``basic``, ``centered``, ``z_score``, ``baseline``) | basic   |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| user_based      | UserBased      | bool    | user based if true. otherwise item based                          | true    |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| similarity      | Similarity     | string  | similarity metrics (``pearson``, ``cosine``, ``msd``)             | msd     |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| k               | K              | int     | number of neighbors                                               | 40      |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| min_k           | MinK           | int     | least number of neighbors                                         | 1       |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
+| shrinkage       | Shrinkage      | int     | shrinkage strength of similarity                                  | 100     |
++-----------------+----------------+---------+-------------------------------------------------------------------+---------+
 
 Definition
 ----------
@@ -115,6 +139,11 @@ KNN for Implicit Feedback
 =========================
 
 For implicit feedback [#BPR]_, neighbors-based models predict wheater a users will interact with a item from similar items or similar users.
+
+Hyperparameters
+---------------
+
+There are no hyperparameters for implicit version KNN.
 
 Definition
 ----------
