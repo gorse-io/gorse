@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-var versionName = 0.1
+var versionName = "0.1.1"
 
 var rootCmd = &cobra.Command{
 	Use:   "gorse",
