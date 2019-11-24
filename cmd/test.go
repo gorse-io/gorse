@@ -162,7 +162,7 @@ var commandTest = &cobra.Command{
 			table.Append(row)
 		}
 		table.Render()
-		log.Printf("Complete cross validation (%v7.0.0.)\n", elapsed)
+		log.Printf("Complete cross validation (%v)\n", elapsed)
 	},
 }
 
