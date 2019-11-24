@@ -1,2 +1,2 @@
 sphinx-materialdesign-theme==0.1.11
-
+sphinxemoji==0.1.4
