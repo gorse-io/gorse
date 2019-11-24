@@ -168,7 +168,7 @@ func (config *TomlConfig) FillDefault(meta toml.MetaData) {
 		config.Recommend.FitJobs = 1
 	}
 	if !meta.IsDefined("recommend", "similarity") {
-		config.Recommend.Similarity = "pearson"
+		config.Recommend.Similarity = "implicit"
 	}
 }
 

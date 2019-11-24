@@ -71,7 +71,7 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
 	// recommend configuration
 	assert.Equal(t, "bpr", config.Recommend.Model)
-	assert.Equal(t, "pearson", config.Recommend.Similarity)
+	assert.Equal(t, "implicit", config.Recommend.Similarity)
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
@@ -88,7 +88,7 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	assert.Equal(t, path.Join(core.GorseDir, "gorse.db"), config.Database.File)
 	// recommend configuration
 	assert.Equal(t, "bpr", config.Recommend.Model)
-	assert.Equal(t, "pearson", config.Recommend.Similarity)
+	assert.Equal(t, "implicit", config.Recommend.Similarity)
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
