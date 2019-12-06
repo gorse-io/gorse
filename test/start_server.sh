@@ -14,7 +14,8 @@ cp ${ROOT_DIR}/example/file_config/config.toml ${TMP_CONFIG}
 sed -i "s:gorse.db:${TMP_DB}:g" ${TMP_CONFIG}
 
 # Import ml-100k data
-gorse import-feedback ${TMP_DB} ~/.gorse/dataset/ml-100k/u1.base --sep $'\t'
+gorse import-items ${TMP_DB} ~/.gorse/dataset/ml-100k/u.item --sep $'|' --timestamp 2
+gorse import-feedback ${TMP_DB} ~/.gorse/dataset/ml-100k/u.data --sep $'\t'
 
 # Start server
 gorse serve -c ${TMP_CONFIG}
