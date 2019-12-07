@@ -13,40 +13,57 @@ func serve(config engine.ServerConfig) {
 	// Create a web service
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
+
 	// Get the recommendation list
 	ws.Route(ws.GET("/recommends/{user-id}").
 		To(getRecommends).
 		Doc("get the top list for a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
-		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")))
-	// Get user list
-	ws.Route(ws.GET("/users").
-		To(getUsers).
-		Doc("get the list of users"))
-	// Get user's feedback
-	ws.Route(ws.GET("/user/{user-id}").
-		To(getUser).
-		Doc("get a user's feedback").
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")))
-	// Popular items
+		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")).
+		Param(ws.FormParameter("p", "weight of popularity").DataType("float")).
+		Param(ws.FormParameter("t", "weight of time").DataType("float")).
+		Param(ws.PathParameter("c", "weight of collaborative filtering").DataType("float")))
+	// Get popular items
 	ws.Route(ws.GET("/popular").To(getPopular).
 		Doc("get popular items").
 		Param(ws.FormParameter("number", "the number of popular items").DataType("int")))
-	// Random items
+	// Get latest items
+	ws.Route(ws.GET("/latest").To(getLatest).
+		Doc("get latest items").
+		Param(ws.FormParameter("number", "the number of latest items").DataType("int")))
+	// Get random items
 	ws.Route(ws.GET("/random").To(getRandom).
 		Doc("get random items").
 		Param(ws.FormParameter("number", "the number of random items").DataType("int")))
-	// Neighbors
+	// Get neighbors
 	ws.Route(ws.GET("/neighbors/{item-id}").To(getNeighbors).
 		Doc("get neighbors of a item").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
 		Param(ws.FormParameter("number", "the number of neighbors").DataType("int")))
-	// Add items
+
+	// Put items
 	ws.Route(ws.PUT("/items").To(putItems)).
 		Doc("put items")
-	// Add ratings
+	// Get items
+	ws.Route(ws.GET("/items").To(getItems)).
+		Doc("get items")
+	// Get item
+	ws.Route(ws.GET("/item/{item-id}").To(getItem).
+		Doc("get a item").
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")))
+
+	// Put feedback
 	ws.Route(ws.PUT("/feedback").To(putFeedback).
 		Doc("put feedback"))
+	// Get users
+	ws.Route(ws.GET("/users").
+		To(getUsers).
+		Doc("get the list of users"))
+	// Get user feedback
+	ws.Route(ws.GET("/user/{user-id}/feedback").To(getUserFeedback).
+		Doc("get a user's feedback").
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")))
+
 	ws.Route(ws.GET("/status").To(getStatus))
 	// Start web service
 	restful.DefaultContainer.Add(ws)
@@ -111,7 +128,7 @@ func getUsers(request *restful.Request, response *restful.Response) {
 	json(response, users)
 }
 
-func getUser(request *restful.Request, response *restful.Response) {
+func getUserFeedback(request *restful.Request, response *restful.Response) {
 	// Get user id
 	paramUserId := request.PathParameter("user-id")
 	userId, err := strconv.Atoi(paramUserId)
@@ -142,7 +159,29 @@ func getPopular(request *restful.Request, response *restful.Response) {
 		}
 	}
 	// Get the popular list
-	items, err := db.GetPopular(number)
+	items, err := db.GetList(engine.ListPop, number)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
+	// Send result
+	json(response, items)
+}
+
+func getLatest(request *restful.Request, response *restful.Response) {
+	// Get the number
+	paramNumber := request.QueryParameter("number")
+	number, err := strconv.Atoi(paramNumber)
+	if err != nil {
+		if len(paramNumber) == 0 {
+			number = 10
+		} else {
+			badRequest(response, err)
+			return
+		}
+	}
+	// Get the popular list
+	items, err := db.GetList(engine.ListLatest, number)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -194,7 +233,7 @@ func getNeighbors(request *restful.Request, response *restful.Response) {
 		}
 	}
 	// Get recommended items
-	items, err := db.GetNeighbors(itemId, number)
+	items, err := db.GetIdentList(engine.BucketNeighbors, itemId, number)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -222,8 +261,25 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 			return
 		}
 	}
+	// Get weights
+	//weights := []float64{0.0, 0.0, 1.0}
+	//params := []string{
+	//	request.QueryParameter("p"),
+	//	request.QueryParameter("t"),
+	//	request.QueryParameter("c"),
+	//}
+	//for i := range params {
+	//	if len(params[i]) > 0 {
+	//		weights[i], err = strconv.ParseFloat(params[i], 64)
+	//		if err != nil {
+	//			badRequest(response, err)
+	//		}
+	//	}
+	//}
+	//p, q, t := weights[0], weights[1], weights[2]
 	// Get recommended items
-	items, err := db.GetRecommends(userId, number)
+	items, err := db.GetIdentList(engine.BucketRecommends, userId, number)
+	fmt.Println(userId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -245,7 +301,7 @@ type Change struct {
 // putItems puts items into the database.
 func putItems(request *restful.Request, response *restful.Response) {
 	// Add ratings
-	items := new([]int)
+	items := new([]engine.Item)
 	if err := request.ReadEntity(items); err != nil {
 		badRequest(response, err)
 		return
@@ -262,8 +318,8 @@ func putItems(request *restful.Request, response *restful.Response) {
 	change.ItemsBefore = stat.ItemCount
 	change.UsersBefore = stat.UserCount
 	// Insert items
-	for _, itemId := range *items {
-		err = db.InsertItem(itemId)
+	for _, item := range *items {
+		err = db.InsertItem(item.Id, &item.Timestamp)
 		if err != nil {
 			internalServerError(response, err)
 			return
@@ -279,6 +335,29 @@ func putItems(request *restful.Request, response *restful.Response) {
 	change.ItemsAfter = stat.ItemCount
 	change.UsersAfter = stat.UserCount
 	json(response, change)
+}
+
+func getItems(request *restful.Request, response *restful.Response) {
+	items, err := db.GetItems()
+	if err != nil {
+		internalServerError(response, err)
+	}
+	json(response, items)
+}
+
+func getItem(request *restful.Request, response *restful.Response) {
+	// Get item id
+	paramUserId := request.PathParameter("item-id")
+	itemId, err := strconv.Atoi(paramUserId)
+	if err != nil {
+		badRequest(response, err)
+	}
+	// Get item
+	item, err := db.GetItem(itemId)
+	if err != nil {
+		internalServerError(response, err)
+	}
+	json(response, item)
 }
 
 // Feedback is the feedback from a user to an item.
