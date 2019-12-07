@@ -267,7 +267,7 @@ func (db *DB) CountFeedback() (int, error) {
 
 // Item stores meta data about item.
 type Item struct {
-	Id         int
+	ItemId     int
 	Popularity float64
 	Timestamp  time.Time
 }
@@ -278,7 +278,7 @@ func (db *DB) InsertItems(itemId []int, timestamps []time.Time) error {
 		bucket := tx.Bucket([]byte(bktItems))
 		for i, v := range itemId {
 			// Retrieve old item
-			item := Item{Id: v}
+			item := Item{ItemId: v}
 			buf := bucket.Get(encodeInt(v))
 			if buf != nil {
 				if err := json.Unmarshal(buf, &item); err != nil {
@@ -307,7 +307,7 @@ func (db *DB) InsertItem(itemId int, timestamp *time.Time) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktItems))
 		// Retrieve old item
-		item := Item{Id: itemId}
+		item := Item{ItemId: itemId}
 		buf := bucket.Get(encodeInt(itemId))
 		if buf != nil {
 			if err := json.Unmarshal(buf, &item); err != nil {
@@ -350,7 +350,7 @@ func (db *DB) GetItems() ([]Item, error) {
 	err := db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bktItems))
 		return bucket.ForEach(func(k, v []byte) error {
-			item := Item{Id: decodeInt(k)}
+			item := Item{ItemId: decodeInt(k)}
 			if v != nil {
 				err := json.Unmarshal(v, &item)
 				if err != nil {
@@ -525,7 +525,7 @@ func (db *DB) UpdatePopularity(itemId []int, popularity []float64) error {
 		bucket := tx.Bucket([]byte(bktItems))
 		for i, id := range itemId {
 			// Unmarshal data from bytes
-			item := Item{Id: id}
+			item := Item{ItemId: id}
 			buf := bucket.Get(encodeInt(id))
 			if buf != nil {
 				if err := json.Unmarshal(buf, &item); err != nil {
@@ -704,13 +704,13 @@ func (db *DB) SaveItemsToCSV(fileName string, sep string, header bool, date bool
 	}
 	if date {
 		for _, item := range items {
-			if _, err := file.WriteString(fmt.Sprintf("%d%s%s\n", item.Id, sep, item.Timestamp.String())); err != nil {
+			if _, err := file.WriteString(fmt.Sprintf("%d%s%s\n", item.ItemId, sep, item.Timestamp.String())); err != nil {
 				return err
 			}
 		}
 	} else {
 		for _, item := range items {
-			if _, err := file.WriteString(fmt.Sprintln(item.Id)); err != nil {
+			if _, err := file.WriteString(fmt.Sprintln(item.ItemId)); err != nil {
 				return err
 			}
 		}

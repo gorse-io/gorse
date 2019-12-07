@@ -319,7 +319,7 @@ func putItems(request *restful.Request, response *restful.Response) {
 	change.UsersBefore = stat.UserCount
 	// Insert items
 	for _, item := range *items {
-		err = db.InsertItem(item.Id, &item.Timestamp)
+		err = db.InsertItem(item.ItemId, &item.Timestamp)
 		if err != nil {
 			internalServerError(response, err)
 			return

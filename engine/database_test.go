@@ -90,7 +90,7 @@ func TestDB_InsertGetItem(t *testing.T) {
 	}
 	items := make([]Item, 5)
 	for i := range itemIds {
-		items[i].Id = itemIds[i]
+		items[i].ItemId = itemIds[i]
 		items[i].Timestamp = timestamps[i]
 	}
 	for i, itemId := range itemIds {
@@ -116,7 +116,7 @@ func TestDB_InsertGetItem(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, itemId, item.Id)
+		assert.Equal(t, itemId, item.ItemId)
 		assert.Equal(t, timestamps[i], item.Timestamp)
 	}
 	// Get items by IDs
@@ -125,7 +125,7 @@ func TestDB_InsertGetItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, item := range items {
-		assert.Equal(t, itemIds[4-i], item.Id)
+		assert.Equal(t, itemIds[4-i], item.ItemId)
 		assert.Equal(t, timestamps[4-i], item.Timestamp)
 	}
 	// Close database
@@ -200,11 +200,11 @@ func TestDB_GetRandom(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.Equal(t, []RecommendedItem{
-			{Item: Item{Id: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{Id: 2, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{Id: 4, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{Id: 6, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{Id: 8, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}}}, retItems)
+			{Item: Item{ItemId: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: 2, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: 4, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: 6, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: 8, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}}}, retItems)
 		// Sample part
 		items1, err := db.GetRandom(3)
 		if err != nil {
@@ -237,11 +237,11 @@ func TestDB_PutGetIdentList(t *testing.T) {
 	}
 	// Put recommends
 	items := []RecommendedItem{
-		{Item{Id: 0}, 0.0},
-		{Item{Id: 1}, 0.1},
-		{Item{Id: 2}, 0.2},
-		{Item{Id: 3}, 0.3},
-		{Item{Id: 4}, 0.4},
+		{Item{ItemId: 0}, 0.0},
+		{Item{ItemId: 1}, 0.1},
+		{Item{ItemId: 2}, 0.2},
+		{Item{ItemId: 3}, 0.3},
+		{Item{ItemId: 4}, 0.4},
 	}
 	if err = db.PutIdentList(BucketRecommends, 0, items); err != nil {
 		t.Fatal(err)
@@ -281,11 +281,11 @@ func TestDB_PutGetList(t *testing.T) {
 	}
 	// Put neighbors
 	items := []RecommendedItem{
-		{Item{Id: 0}, 0},
-		{Item{Id: 1}, 1},
-		{Item{Id: 2}, 2},
-		{Item{Id: 3}, 3},
-		{Item{Id: 4}, 4},
+		{Item{ItemId: 0}, 0},
+		{Item{ItemId: 1}, 1},
+		{Item{ItemId: 2}, 2},
+		{Item{ItemId: 3}, 3},
+		{Item{ItemId: 4}, 4},
 	}
 	if err = db.PutList(ListPop, items); err != nil {
 		t.Fatal(err)
@@ -380,7 +380,7 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 2*i, items[i].Id)
+		assert.Equal(t, 2*i, items[i].ItemId)
 	}
 	// Close database
 	if err = db.Close(); err != nil {
@@ -415,7 +415,7 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 1+i, items[i].Id)
+		assert.Equal(t, 1+i, items[i].ItemId)
 	}
 	// Close database
 	if err = db.Close(); err != nil {
@@ -450,7 +450,7 @@ func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 1+i, items[i].Id)
+		assert.Equal(t, 1+i, items[i].ItemId)
 		date := time.Date(2020, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
 		assert.Equal(t, date, items[i].Timestamp)
 	}

@@ -38,9 +38,9 @@ func TestUpdateItemPop(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, []RecommendedItem{
-		{Item{Id: 5, Popularity: 5}, 5},
-		{Item{Id: 4, Popularity: 4}, 4},
-		{Item{Id: 3, Popularity: 3}, 3},
+		{Item{ItemId: 5, Popularity: 5}, 5},
+		{Item{ItemId: 4, Popularity: 4}, 4},
+		{Item{ItemId: 3, Popularity: 3}, 3},
 	}, recommends)
 	// Close database
 	if err = db.Close(); err != nil {
@@ -82,9 +82,9 @@ func TestUpdateLatest(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, []RecommendedItem{
-		{Item{Id: itemIds[2], Timestamp: timestamps[2]}, float64(timestamps[2].Unix())},
-		{Item{Id: itemIds[3], Timestamp: timestamps[3]}, float64(timestamps[3].Unix())},
-		{Item{Id: itemIds[1], Timestamp: timestamps[1]}, float64(timestamps[1].Unix())},
+		{Item{ItemId: itemIds[2], Timestamp: timestamps[2]}, float64(timestamps[2].Unix())},
+		{Item{ItemId: itemIds[3], Timestamp: timestamps[3]}, float64(timestamps[3].Unix())},
+		{Item{ItemId: itemIds[1], Timestamp: timestamps[1]}, float64(timestamps[1].Unix())},
 	}, recommends)
 	// Close database
 	if err = db.Close(); err != nil {
@@ -130,11 +130,11 @@ func TestUpdateNeighbors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 2, recommends[0].Id)
-	assert.Equal(t, 3, recommends[1].Id)
-	assert.Equal(t, 4, recommends[2].Id)
-	assert.Equal(t, 5, recommends[3].Id)
-	assert.Equal(t, 6, recommends[4].Id)
+	assert.Equal(t, 2, recommends[0].ItemId)
+	assert.Equal(t, 3, recommends[1].ItemId)
+	assert.Equal(t, 4, recommends[2].ItemId)
+	assert.Equal(t, 5, recommends[3].ItemId)
+	assert.Equal(t, 6, recommends[4].ItemId)
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
@@ -188,7 +188,7 @@ func TestUpdateRecommends(t *testing.T) {
 			count++
 			items := make([]int, len(rankList))
 			for i := range rankList {
-				items[i] = rankList[i].Id
+				items[i] = rankList[i].ItemId
 			}
 			precision += core.Precision(targetSet, items)
 			recall += core.Recall(targetSet, items)
