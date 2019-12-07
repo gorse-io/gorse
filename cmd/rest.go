@@ -262,29 +262,29 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 		}
 	}
 	// Get weights
-	//weights := []float64{0.0, 0.0, 1.0}
-	//params := []string{
-	//	request.QueryParameter("p"),
-	//	request.QueryParameter("t"),
-	//	request.QueryParameter("c"),
-	//}
-	//for i := range params {
-	//	if len(params[i]) > 0 {
-	//		weights[i], err = strconv.ParseFloat(params[i], 64)
-	//		if err != nil {
-	//			badRequest(response, err)
-	//		}
-	//	}
-	//}
-	//p, q, t := weights[0], weights[1], weights[2]
+	weights := []float64{0.0, 0.0, 1.0}
+	params := []string{
+		request.QueryParameter("p"),
+		request.QueryParameter("t"),
+		request.QueryParameter("c"),
+	}
+	for i := range params {
+		if len(params[i]) > 0 {
+			weights[i], err = strconv.ParseFloat(params[i], 64)
+			if err != nil {
+				badRequest(response, err)
+			}
+		}
+	}
+	p, t, c := weights[0], weights[1], weights[2]
 	// Get recommended items
-	items, err := db.GetIdentList(engine.BucketRecommends, userId, number)
-	fmt.Println(userId)
+	items, err := db.GetIdentList(engine.BucketRecommends, userId, 0)
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
 	// Send result
+	items = engine.Ranking(items, number, p, t, c)
 	json(response, items)
 }
 
