@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/araddon/dateparse"
 	"github.com/emicklei/go-restful"
 	"github.com/zhenghaoz/gorse/engine"
 	"log"
@@ -298,15 +299,29 @@ type Change struct {
 	FeedbackAfter  int // number of feedback after change
 }
 
+type ItemStringTime struct {
+	ItemId    int
+	Timestamp string
+}
+
 // putItems puts items into the database.
 func putItems(request *restful.Request, response *restful.Response) {
 	// Add ratings
-	items := new([]engine.Item)
-	if err := request.ReadEntity(items); err != nil {
+	temp := new([]ItemStringTime)
+	if err := request.ReadEntity(temp); err != nil {
 		badRequest(response, err)
 		return
 	}
+	// Parse timestamp
 	var err error
+	items := make([]engine.Item, len(*temp))
+	for i, v := range *temp {
+		items[i].ItemId = v.ItemId
+		items[i].Timestamp, err = dateparse.ParseAny(v.Timestamp)
+		if err != nil {
+			badRequest(response, err)
+		}
+	}
 	change := Change{}
 	// Get status before change
 	stat, err := status()
@@ -318,7 +333,7 @@ func putItems(request *restful.Request, response *restful.Response) {
 	change.ItemsBefore = stat.ItemCount
 	change.UsersBefore = stat.UserCount
 	// Insert items
-	for _, item := range *items {
+	for _, item := range items {
 		err = db.InsertItem(item.ItemId, &item.Timestamp)
 		if err != nil {
 			internalServerError(response, err)
