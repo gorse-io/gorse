@@ -2,15 +2,18 @@ package engine
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/thanhpk/randstr"
 	"github.com/zhenghaoz/gorse/core"
 	"os"
 	"path"
 	"testing"
+	"time"
 )
 
 func TestDB_InsertGetFeedback(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_feedback.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,54 +46,102 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 	assert.Equal(t, users, retUsers)
 	assert.Equal(t, items, retItems)
 	assert.Equal(t, feedback, retFeedback)
+	// Get users
+	retUsers, err = db.GetUsers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, users, retUsers)
+	// Get user feedback
+	for i, userId := range users {
+		userFeedback, err := db.GetUserFeedback(userId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, []Feedback{
+			{FeedbackKey{userId, items[i]}, feedback[i]},
+		}, userFeedback)
+	}
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_feedback.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_InsertGetItem(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_items.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	items := []int{0, 2, 4, 6, 8}
-	for _, itemId := range items {
-		if err := db.InsertItem(itemId); err != nil {
+	itemIds := []int{0, 2, 4, 6, 8}
+	timestamps := []time.Time{
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+	}
+	items := make([]Item, 5)
+	for i := range itemIds {
+		items[i].Id = itemIds[i]
+		items[i].Timestamp = timestamps[i]
+	}
+	for i, itemId := range itemIds {
+		if err := db.InsertItem(itemId, &timestamps[i]); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Count feedback
+	// Count item
 	count, err := db.CountItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 5, count)
-	// Get feedback
+	// Get items
 	retItems, err := db.GetItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
+	// Get item
+	for i, itemId := range itemIds {
+		item, err := db.GetItem(itemId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, itemId, item.Id)
+		assert.Equal(t, timestamps[i], item.Timestamp)
+	}
+	// Get items by IDs
+	items, err = db.GetItemsByID([]int{8, 6, 4, 2, 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, item := range items {
+		assert.Equal(t, itemIds[4-i], item.Id)
+		assert.Equal(t, timestamps[4-i], item.Timestamp)
+	}
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_items.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_SetGetMeta(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_meta.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,21 +166,29 @@ func TestDB_SetGetMeta(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_meta.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_GetRandom(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_random.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Insert feedback
 	items := []int{0, 2, 4, 6, 8}
-	for _, itemId := range items {
-		if err := db.InsertItem(itemId); err != nil {
+	stamps := []time.Time{
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+	}
+	for i, itemId := range items {
+		if err := db.InsertItem(itemId, &stamps[i]); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -140,7 +199,12 @@ func TestDB_GetRandom(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, []RecommendedItem{{ItemId: 0}, {ItemId: 2}, {ItemId: 4}, {ItemId: 6}, {ItemId: 8}}, retItems)
+		assert.Equal(t, []RecommendedItem{
+			{Item: Item{Id: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{Id: 2, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{Id: 4, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{Id: 6, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{Id: 8, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}}}, retItems)
 		// Sample part
 		items1, err := db.GetRandom(3)
 		if err != nil {
@@ -159,36 +223,43 @@ func TestDB_GetRandom(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_random.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestDB_SetGetRecommends(t *testing.T) {
+func TestDB_PutGetIdentList(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_recommends.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Put recommends
-	items := []RecommendedItem{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}}
-	if err = db.SetRecommends(0, items); err != nil {
+	items := []RecommendedItem{
+		{Item{Id: 0}, 0.0},
+		{Item{Id: 1}, 0.1},
+		{Item{Id: 2}, 0.2},
+		{Item{Id: 3}, 0.3},
+		{Item{Id: 4}, 0.4},
+	}
+	if err = db.PutIdentList(BucketRecommends, 0, items); err != nil {
 		t.Fatal(err)
 	}
 	// Get recommends
-	retItems, err := db.GetRecommends(0, 0)
+	retItems, err := db.GetIdentList(BucketRecommends, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n recommends
-	nItems, err := db.GetRecommends(0, 3)
+	nItems, err := db.GetIdentList(BucketRecommends, 0, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
 	// Test new user
-	if _, err = db.GetRecommends(1, 0); err == nil {
+	if _, err = db.GetIdentList(BucketRecommends, 1, 0); err == nil {
 		t.Fatal("error is expected for new user")
 	}
 	// Close database
@@ -196,67 +267,37 @@ func TestDB_SetGetRecommends(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_recommends.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestDB_SetGetNeighbors(t *testing.T) {
+func TestDB_PutGetList(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_neighbors.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Put neighbors
-	items := []RecommendedItem{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}}
-	if err = db.SetNeighbors(0, items); err != nil {
+	items := []RecommendedItem{
+		{Item{Id: 0}, 0},
+		{Item{Id: 1}, 1},
+		{Item{Id: 2}, 2},
+		{Item{Id: 3}, 3},
+		{Item{Id: 4}, 4},
+	}
+	if err = db.PutList(ListPop, items); err != nil {
 		t.Fatal(err)
 	}
 	// Get neighbors
-	retItems, err := db.GetNeighbors(0, 0)
+	retItems, err := db.GetList(ListPop, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n neighbors
-	nItems, err := db.GetNeighbors(0, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, items[:3], nItems)
-	// Test new user
-	if _, err = db.GetNeighbors(1, 0); err == nil {
-		t.Fatal("error is expected for new user")
-	}
-	// Close database
-	if err = db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_neighbors.db")); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestDB_SetGetPopular(t *testing.T) {
-	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_popular.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Put neighbors
-	items := []RecommendedItem{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}}
-	if err = db.SetPopular(items); err != nil {
-		t.Fatal(err)
-	}
-	// Get neighbors
-	retItems, err := db.GetPopular(0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, items, retItems)
-	// Get n neighbors
-	nItems, err := db.GetPopular(3)
+	nItems, err := db.GetList(ListPop, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,14 +307,15 @@ func TestDB_SetGetPopular(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_popular.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_ToDataSet(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_to_dataset.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,14 +336,15 @@ func TestDB_ToDataSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_to_dataset.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_load_feedback.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,13 +359,13 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 	}
 	assert.Equal(t, 5, count)
 	// Check data
-	users, items, feedback, err := db.GetFeedback()
+	users, itemIds, feedback, err := db.GetFeedback()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
 		assert.Equal(t, i, users[i])
-		assert.Equal(t, 2*i, items[i])
+		assert.Equal(t, 2*i, itemIds[i])
 		assert.Equal(t, 3*i, int(feedback[i]))
 	}
 	// Count feedback
@@ -332,31 +375,32 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 	}
 	assert.Equal(t, 5, count)
 	// Check data
-	items, err = db.GetItems()
+	items, err := db.GetItems()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 2*i, items[i])
+		assert.Equal(t, 2*i, items[i].Id)
 	}
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_load_feedback.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_LoadItemsFromCSV(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_load_items.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/items.csv", "::", false); err != nil {
+	if err = db.LoadItemsFromCSV("../example/file_data/items.csv", "::", false, -1); err != nil {
 		t.Fatal(err)
 	}
 	// Count feedback
@@ -371,21 +415,59 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 1+i, items[i])
+		assert.Equal(t, 1+i, items[i].Id)
 	}
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_load_items.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
+	// Create database
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Load data
+	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1); err != nil {
+		t.Fatal(err)
+	}
+	// Count feedback
+	count, err := db.CountItems()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 5, count)
+	// Check data
+	items, err := db.GetItems()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < count; i++ {
+		assert.Equal(t, 1+i, items[i].Id)
+		date := time.Date(2020, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
+		assert.Equal(t, date, items[i].Timestamp)
+	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Clean database
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_SaveFeedbackToCSV(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_save_feedback.db"))
+	databaseFileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(databaseFileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,11 +476,12 @@ func TestDB_SaveFeedbackToCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Save data
-	if err = db.SaveFeedbackToCSV(path.Join(core.TempDir, "test_save_feedback.csv"), ",", false); err != nil {
+	csvFileName := path.Join(core.TempDir, randstr.String(16))
+	if err = db.SaveFeedbackToCSV(csvFileName, ",", false); err != nil {
 		t.Fatal(err)
 	}
 	// Check data
-	data := core.LoadDataFromCSV(path.Join(core.TempDir, "test_save_feedback.csv"), ",", false)
+	data := core.LoadDataFromCSV(csvFileName, ",", false)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -409,33 +492,39 @@ func TestDB_SaveFeedbackToCSV(t *testing.T) {
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
 	}
+	// Clean csv file
+	if err = os.Remove(csvFileName); err != nil {
+		t.Fatal(err)
+	}
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_save_feedback.db")); err != nil {
+	if err = os.Remove(databaseFileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDB_SaveItemsToCSV(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_save_items.db"))
+	databaseFileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(databaseFileName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/items.csv", "::", false); err != nil {
+	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1); err != nil {
 		t.Fatal(err)
 	}
 	// Save data
-	if err = db.SaveItemsToCSV(path.Join(core.TempDir, "test_save_items.csv"), "::", false); err != nil {
+	csvFileName := path.Join(core.TempDir, randstr.String(16))
+	if err = db.SaveItemsToCSV(csvFileName, "::", false, false); err != nil {
 		t.Fatal(err)
 	}
 	// Check data
-	entities := core.LoadEntityFromCSV(path.Join(core.TempDir, "test_save_items.csv"), "::", "|", false,
-		[]string{"ItemId"}, 0)
+	entities := core.LoadEntityFromCSV(csvFileName, "::", "|", false,
+		[]string{"ItemId", "Timestamp"}, 0)
 	expected := []map[string]interface{}{
 		{"ItemId": 1},
 		{"ItemId": 2},
@@ -449,7 +538,81 @@ func TestDB_SaveItemsToCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_save_items.db")); err != nil {
+	if err = os.Remove(databaseFileName); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDB_SaveItemsToCSV_Date(t *testing.T) {
+	// Create database
+	databaseFileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(databaseFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Load data
+	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1); err != nil {
+		t.Fatal(err)
+	}
+	// Save data
+	csvFileName := path.Join(core.TempDir, randstr.String(16))
+	if err = db.SaveItemsToCSV(csvFileName, "::", false, true); err != nil {
+		t.Fatal(err)
+	}
+	// Check data
+	entities := core.LoadEntityFromCSV(csvFileName, "::", "|", false,
+		[]string{"ItemId", "Timestamp"}, 0)
+	expected := []map[string]interface{}{
+		{"ItemId": 1, "Timestamp": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).String()},
+		{"ItemId": 2, "Timestamp": time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC).String()},
+		{"ItemId": 3, "Timestamp": time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC).String()},
+		{"ItemId": 4, "Timestamp": time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC).String()},
+		{"ItemId": 5, "Timestamp": time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC).String()},
+	}
+	assert.Equal(t, expected, entities)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Clean database
+	if err = os.Remove(databaseFileName); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDB_UpdatePopularity(t *testing.T) {
+	// Create database
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Insert feedback
+	itemIds := []int{0, 2, 4, 6, 8}
+	popularity := []float64{3, 4, 5, 6, 7}
+	for _, itemId := range itemIds {
+		if err := db.InsertItem(itemId, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Update popularity
+	if err := db.UpdatePopularity(itemIds, popularity); err != nil {
+		t.Fatal(err)
+	}
+	// Check popularity
+	retItems, err := db.GetItems()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, item := range retItems {
+		assert.Equal(t, popularity[i], item.Popularity)
+	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Clean database
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
