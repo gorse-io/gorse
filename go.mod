@@ -11,7 +11,7 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.2.2
-	go.etcd.io/bbolt v1.3.2
+	go.etcd.io/bbolt v1.3.3
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
 	gopkg.in/cheggaaa/pb.v1 v1.0.27
 )
