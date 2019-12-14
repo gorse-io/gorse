@@ -17,14 +17,14 @@ before_script:
 matrix:
   include:
     - script:
-      - go test -v ./... -coverprofile=coverage.txt -covermode=atomic
+      - go test -timeout 20m -v ./... -coverprofile=coverage.txt -covermode=atomic
       - bash test/test_cross_validation.sh
       - bash test/test_data_import_export.sh
       - bash test/test_server.sh
       after_success:
       - bash <(curl -s https://codecov.io/bash)
     - script:
-      - go test -v -tags='avx2' ./... -coverprofile=coverage.txt -covermode=atomic
+      - go test -timeout 20m -v -tags='avx2' ./... -coverprofile=coverage.txt -covermode=atomic
       - bash test/test_cross_validation.sh
       - bash test/test_data_import_export.sh
       - bash test/test_server.sh
