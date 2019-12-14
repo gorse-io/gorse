@@ -131,11 +131,7 @@ func getUsers(request *restful.Request, response *restful.Response) {
 
 func getUserFeedback(request *restful.Request, response *restful.Response) {
 	// Get user id
-	paramUserId := request.PathParameter("user-id")
-	userId, err := strconv.Atoi(paramUserId)
-	if err != nil {
-		badRequest(response, err)
-	}
+	userId := request.PathParameter("user-id")
 	// Get the user's feedback
 	items, err := db.GetUserFeedback(userId)
 	if err != nil {
@@ -217,11 +213,7 @@ func getRandom(request *restful.Request, response *restful.Response) {
 // getNeighbors gets neighbors of a item from database.
 func getNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
-	paramUserId := request.PathParameter("item-id")
-	itemId, err := strconv.Atoi(paramUserId)
-	if err != nil {
-		badRequest(response, err)
-	}
+	itemId := request.PathParameter("item-id")
 	// Get the number
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
@@ -246,11 +238,7 @@ func getNeighbors(request *restful.Request, response *restful.Response) {
 // getRecommends gets cached recommended items from database.
 func getRecommends(request *restful.Request, response *restful.Response) {
 	// Get user id
-	paramUserId := request.PathParameter("user-id")
-	userId, err := strconv.Atoi(paramUserId)
-	if err != nil {
-		badRequest(response, err)
-	}
+	userId := request.PathParameter("user-id")
 	// Get the number
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
@@ -300,7 +288,7 @@ type Change struct {
 }
 
 type ItemStringTime struct {
-	ItemId    int
+	ItemId    string
 	Timestamp string
 }
 
@@ -362,11 +350,7 @@ func getItems(request *restful.Request, response *restful.Response) {
 
 func getItem(request *restful.Request, response *restful.Response) {
 	// Get item id
-	paramUserId := request.PathParameter("item-id")
-	itemId, err := strconv.Atoi(paramUserId)
-	if err != nil {
-		badRequest(response, err)
-	}
+	itemId := request.PathParameter("item-id")
 	// Get item
 	item, err := db.GetItem(itemId)
 	if err != nil {
@@ -377,8 +361,8 @@ func getItem(request *restful.Request, response *restful.Response) {
 
 // Feedback is the feedback from a user to an item.
 type Feedback struct {
-	UserId   int     // identifier of the user
-	ItemId   int     // identifier of the item
+	UserId   string     // identifier of the user
+	ItemId   string     // identifier of the item
 	Feedback float64 // rating, confidence or indicator
 }
 

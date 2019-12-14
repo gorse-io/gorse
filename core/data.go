@@ -29,7 +29,7 @@ type DataSetInterface interface {
 	// FeatureCount returns the number of additional features.
 	FeatureCount() int
 	// Get i-th rating by (user ID, item ID, rating).
-	Get(i int) (int, int, float64)
+	Get(i int) (string, string, float64)
 	// GetWithIndex gets i-th rating by (user index, item index, rating).
 	GetWithIndex(i int) (int, int, float64)
 	// UserIndexer returns the user indexer.
@@ -47,9 +47,9 @@ type DataSetInterface interface {
 	// ItemFeatures returns additional features of items.
 	ItemFeatures() []*base.SparseVector
 	// User returns the subset of a user.
-	User(userId int) *base.MarginalSubSet
+	User(userId string) *base.MarginalSubSet
 	// Item returns the subset of a item.
-	Item(itemId int) *base.MarginalSubSet
+	Item(itemId string) *base.MarginalSubSet
 	// UserByIndex returns the subset of a user by the index.
 	UserByIndex(userIndex int) *base.MarginalSubSet
 	// ItemByIndex returns the subset of a item by the index.
@@ -71,7 +71,7 @@ type DataSet struct {
 }
 
 // NewDataSet creates a data set.
-func NewDataSet(userIDs, itemIDs []int, ratings []float64) *DataSet {
+func NewDataSet(userIDs, itemIDs []string, ratings []float64) *DataSet {
 	set := new(DataSet)
 	set.ratings = ratings
 	// Index users and items
@@ -144,7 +144,7 @@ func (set *DataSet) encodeFeature(entity map[string]interface{}, features []stri
 func (set *DataSet) SetUserFeatures(users []map[string]interface{}, features []string, idName string) {
 	set.userFeatures = make([]*base.SparseVector, set.UserCount())
 	for _, entity := range users {
-		userId := entity[idName].(int)
+		userId := entity[idName].(string)
 		userIndex := set.userIndexer.ToIndex(userId)
 		set.userFeatures[userIndex] = set.encodeFeature(entity, features)
 	}
@@ -154,7 +154,7 @@ func (set *DataSet) SetUserFeatures(users []map[string]interface{}, features []s
 func (set *DataSet) SetItemFeature(items []map[string]interface{}, features []string, idName string) {
 	set.itemFeatures = make([]*base.SparseVector, set.ItemCount())
 	for _, entity := range items {
-		itemId := entity[idName].(int)
+		itemId := entity[idName].(string)
 		itemIndex := set.itemIndexer.ToIndex(itemId)
 		set.itemFeatures[itemIndex] = set.encodeFeature(entity, features)
 	}
@@ -169,7 +169,7 @@ func (set *DataSet) Count() int {
 }
 
 // Get the i-th record by <user ID, item ID, rating>.
-func (set *DataSet) Get(i int) (int, int, float64) {
+func (set *DataSet) Get(i int) (string, string, float64) {
 	userIndex, itemIndex, rating := set.GetWithIndex(i)
 	return set.userIndexer.ToID(userIndex), set.itemIndexer.ToID(itemIndex), rating
 }
@@ -245,13 +245,13 @@ func (set *DataSet) ItemFeatures() []*base.SparseVector {
 }
 
 // User returns the subset of a user.
-func (set *DataSet) User(userId int) *base.MarginalSubSet {
+func (set *DataSet) User(userId string) *base.MarginalSubSet {
 	userIndex := set.userIndexer.ToIndex(userId)
 	return set.UserByIndex(userIndex)
 }
 
 // Item returns the subset of a item.
-func (set *DataSet) Item(itemId int) *base.MarginalSubSet {
+func (set *DataSet) Item(itemId string) *base.MarginalSubSet {
 	itemIndex := set.itemIndexer.ToIndex(itemId)
 	return set.ItemByIndex(itemIndex)
 }
@@ -298,7 +298,7 @@ func (set *SubSet) Count() int {
 }
 
 // Get the i-th record by <user ID, item ID, rating>.
-func (set *SubSet) Get(i int) (int, int, float64) {
+func (set *SubSet) Get(i int) (string, string, float64) {
 	return set.DataSet.Get(set.subset[i])
 }
 
@@ -347,13 +347,13 @@ func (set *SubSet) Items() []*base.MarginalSubSet {
 }
 
 // User returns ratings subset of a user.
-func (set *SubSet) User(userId int) *base.MarginalSubSet {
+func (set *SubSet) User(userId string) *base.MarginalSubSet {
 	userIndex := set.userIndexer.ToIndex(userId)
 	return set.UserByIndex(userIndex)
 }
 
 // Item returns ratings subset of a item.
-func (set *SubSet) Item(itemId int) *base.MarginalSubSet {
+func (set *SubSet) Item(itemId string) *base.MarginalSubSet {
 	itemIndex := set.itemIndexer.ToIndex(itemId)
 	return set.ItemByIndex(itemIndex)
 }
@@ -395,8 +395,8 @@ func LoadDataFromBuiltIn(dataSetName string) *DataSet {
 //  186\t302\t3\t891717742
 //  22\t377\t1\t878887116
 func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
-	users := make([]int, 0)
-	items := make([]int, 0)
+	users := make([]string, 0)
+	items := make([]string, 0)
 	ratings := make([]float64, 0)
 	// Open file
 	file, err := os.Open(fileName)
@@ -418,9 +418,7 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 		if len(fields) < 2 {
 			continue
 		}
-		user, _ := strconv.Atoi(fields[0])
-		item, _ := strconv.Atoi(fields[1])
-		rating := 0.0
+		user, item, rating := fields[0], fields[1], 0.0
 		if len(fields) > 2 {
 			rating, _ = strconv.ParseFloat(fields[2], 32)
 		}
@@ -438,8 +436,8 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 //   <userId 3>, <rating 3>, <date>
 //   ...
 func LoadDataFromNetflix(fileName string, _ string, _ bool) *DataSet {
-	users := make([]int, 0)
-	items := make([]int, 0)
+	users := make([]string, 0)
+	items := make([]string, 0)
 	ratings := make([]float64, 0)
 	// Open file
 	file, err := os.Open(fileName)
@@ -449,18 +447,18 @@ func LoadDataFromNetflix(fileName string, _ string, _ bool) *DataSet {
 	defer file.Close()
 	// Read file
 	scanner := bufio.NewScanner(file)
-	itemId := -1
+	var itemId string
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line[len(line)-1] == ':' {
 			// <itemId>:
-			if itemId, err = strconv.Atoi(line[0 : len(line)-1]); err != nil {
-				log.Fatal(err)
+			if itemId = line[0 : len(line)-1]; len(itemId) == 0 {
+				log.Fatal("empty item id")
 			}
 		} else {
 			// <userId>, <rating>, <date>
 			fields := strings.Split(line, ",")
-			userId, _ := strconv.Atoi(fields[0])
+			userId := fields[0]
 			rating, _ := strconv.Atoi(fields[1])
 			users = append(users, userId)
 			items = append(items, itemId)

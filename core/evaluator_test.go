@@ -4,6 +4,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -43,13 +44,17 @@ func NewEvaluatorTesterModel(users, items []int, ratings []float64) *EvaluatorTe
 	return test
 }
 
-func (tester *EvaluatorTesterModel) Predict(userId, itemId int) float64 {
-	if userId > tester.MaxUserId {
+func (tester *EvaluatorTesterModel) Predict(userId, itemId string) float64 {
+	userIndex, err1 := strconv.Atoi(userId)
+	itemIndex, err2 := strconv.Atoi(itemId)
+	if err1 != nil || err2 != nil {
 		return 0
-	} else if itemId > tester.MaxItemId {
+	} else if userIndex > tester.MaxUserId {
+		return 0
+	} else if itemIndex > tester.MaxItemId {
 		return 0
 	} else {
-		return tester.Matrix[userId][itemId]
+		return tester.Matrix[userIndex][itemIndex]
 	}
 }
 
@@ -65,7 +70,7 @@ func (tester *EvaluatorTesterModel) Fit(set DataSetInterface, options *base.Runt
 	panic("EvaluatorTesterModel.Fit() should never be called.")
 }
 
-func NewTestIndexer(id []int) *base.Indexer {
+func NewTestIndexer(id []string) *base.Indexer {
 	indexer := base.NewIndexer()
 	for _, v := range id {
 		indexer.Add(v)
@@ -89,44 +94,46 @@ func TestMAE(t *testing.T) {
 	}
 }
 
-func NewTestTargetSet(ids []int) *base.MarginalSubSet {
+func NewTestTargetSet(ids []string) *base.MarginalSubSet {
 	indexer := NewTestIndexer(ids)
+	indices := make([]int, len(ids))
 	values := make([]float64, len(ids))
 	subset := make([]int, len(ids))
 	for i := range subset {
 		subset[i] = i
+		indices[i] = i
 	}
-	return base.NewMarginalSubSet(indexer, subset, values, subset)
+	return base.NewMarginalSubSet(indexer, indices, values, subset)
 }
 
 func TestNDCG(t *testing.T) {
-	targetSet := NewTestTargetSet([]int{1, 3, 5, 7})
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, NDCG(targetSet, rankList), 0.6766372989, evalEpsilon)
+	targetSet := NewTestTargetSet([]string{"1", "3", "5", "7"})
+	rankList := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	EqualEpsilon(t, 0.6766372989, NDCG(targetSet, rankList), evalEpsilon)
 }
 
 func TestPrecision(t *testing.T) {
-	targetSet := NewTestTargetSet([]int{1, 3, 5, 7})
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, Precision(targetSet, rankList), 0.4, evalEpsilon)
+	targetSet := NewTestTargetSet([]string{"1", "3", "5", "7"})
+	rankList := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	EqualEpsilon(t, 0.4, Precision(targetSet, rankList), evalEpsilon)
 }
 
 func TestRecall(t *testing.T) {
-	targetSet := NewTestTargetSet([]int{1, 3, 15, 17, 19})
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, Recall(targetSet, rankList), 0.4, evalEpsilon)
+	targetSet := NewTestTargetSet([]string{"1", "3", "15", "17", "19"})
+	rankList := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	EqualEpsilon(t, 0.4, Recall(targetSet, rankList), evalEpsilon)
 }
 
 func TestAP(t *testing.T) {
-	targetSet := NewTestTargetSet([]int{1, 3, 7, 9})
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, MAP(targetSet, rankList), 0.44375, evalEpsilon)
+	targetSet := NewTestTargetSet([]string{"1", "3", "7", "9"})
+	rankList := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	EqualEpsilon(t, 0.44375, MAP(targetSet, rankList), evalEpsilon)
 }
 
 func TestRR(t *testing.T) {
-	targetSet := NewTestTargetSet([]int{3})
-	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, MRR(targetSet, rankList), 0.25, evalEpsilon)
+	targetSet := NewTestTargetSet([]string{"3"})
+	rankList := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	EqualEpsilon(t, 0.25, MRR(targetSet, rankList), evalEpsilon)
 }
 
 func TestAUC(t *testing.T) {
@@ -137,6 +144,6 @@ func TestAUC(t *testing.T) {
 	a := NewEvaluatorTesterModel([]int{0, 0, 0, 1, 1, 1, 2, 2, 2},
 		[]int{0, 1, 2, 0, 1, 2, 0, 1, 2},
 		[]float64{1.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0})
-	b := NewDataSet([]int{0, 1, 2}, []int{0, 1, 2}, []float64{1.0, 0.5, 1.0})
+	b := NewDataSet([]string{"0", "1", "2"}, []string{"0", "1", "2"}, []float64{1.0, 0.5, 1.0})
 	assert.Equal(t, 1.0, EvaluateAUC(a, b, nil))
 }

@@ -88,12 +88,12 @@ func NewUserLOOSplitter(repeat int) Splitter {
 		rand.Seed(seed)
 		for i := 0; i < repeat; i++ {
 			trainUsers, trainItems, trainRatings :=
-				make([]int, 0, dataSet.Count()-dataSet.UserCount()),
-				make([]int, 0, dataSet.Count()-dataSet.UserCount()),
+				make([]string, 0, dataSet.Count()-dataSet.UserCount()),
+				make([]string, 0, dataSet.Count()-dataSet.UserCount()),
 				make([]float64, 0, dataSet.Count()-dataSet.UserCount())
 			testUsers, testItems, testRatings :=
-				make([]int, 0, dataSet.UserCount()),
-				make([]int, 0, dataSet.UserCount()),
+				make([]string, 0, dataSet.UserCount()),
+				make([]string, 0, dataSet.UserCount()),
 				make([]float64, 0, dataSet.UserCount())
 			for innerUserId := 0; innerUserId < dataSet.UserCount(); innerUserId++ {
 				irs := dataSet.UserByIndex(innerUserId)

@@ -39,7 +39,7 @@ func NewSlopOne(params base.Params) *SlopeOne {
 }
 
 // Predict by the SlopeOne model.
-func (so *SlopeOne) Predict(userId, itemId int) float64 {
+func (so *SlopeOne) Predict(userId, itemId string) float64 {
 	// Convert to index
 	userIndex := so.UserIndexer.ToIndex(userId)
 	itemIndex := so.ItemIndexer.ToIndex(itemId)
@@ -81,7 +81,7 @@ func (so *SlopeOne) Fit(trainSet core.DataSetInterface, options *base.RuntimeOpt
 		for j := 0; j < i; j++ {
 			count, sum := 0.0, 0.0
 			// Find common user's ratings
-			trainSet.ItemByIndex(i).ForIntersection(trainSet.ItemByIndex(j), func(index int, a float64, b float64) {
+			trainSet.ItemByIndex(i).ForIntersection(trainSet.ItemByIndex(j), func(index string, a float64, b float64) {
 				sum += a - b
 				count++
 			})

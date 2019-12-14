@@ -6,7 +6,7 @@ import (
 )
 
 // Top gets the ranking
-func Top(items map[int]bool, userId int, n int, exclude *base.MarginalSubSet, model ModelInterface) ([]int, []float64) {
+func Top(items map[string]bool, userId string, n int, exclude *base.MarginalSubSet, model ModelInterface) ([]string, []float64) {
 	// Get top-n list
 	itemsHeap := base.NewMaxHeap(n)
 	for itemId := range items {
@@ -15,16 +15,16 @@ func Top(items map[int]bool, userId int, n int, exclude *base.MarginalSubSet, mo
 		}
 	}
 	elem, scores := itemsHeap.ToSorted()
-	recommends := make([]int, len(elem))
+	recommends := make([]string, len(elem))
 	for i := range recommends {
-		recommends[i] = elem[i].(int)
+		recommends[i] = elem[i].(string)
 	}
 	return recommends, scores
 }
 
 // Items gets all items from the test set and the training set.
-func Items(dataSet ...DataSetInterface) map[int]bool {
-	items := make(map[int]bool)
+func Items(dataSet ...DataSetInterface) map[string]bool {
+	items := make(map[string]bool)
 	for _, data := range dataSet {
 		for i := 0; i < data.ItemCount(); i++ {
 			itemId := data.ItemIndexer().ToID(i)
@@ -36,7 +36,7 @@ func Items(dataSet ...DataSetInterface) map[int]bool {
 
 // Neighbors finds N nearest neighbors of a item. It returns a unordered slice of items (sparse ID) and
 // corresponding similarities.
-func Neighbors(dataSet DataSetInterface, itemId int, n int, similarity base.FuncSimilarity) ([]int, []float64) {
+func Neighbors(dataSet DataSetInterface, itemId string, n int, similarity base.FuncSimilarity) ([]string, []float64) {
 	// Convert sparse ID to dense ID
 	itemIndex := dataSet.ItemIndexer().ToIndex(itemId)
 	itemRatings := dataSet.ItemByIndex(itemIndex)
@@ -53,16 +53,16 @@ func Neighbors(dataSet DataSetInterface, itemId int, n int, similarity base.Func
 		}
 	}
 	elem, scores := neighbors.ToSorted()
-	items := make([]int, neighbors.Len())
+	items := make([]string, neighbors.Len())
 	for i := range items {
-		items[i] = elem[i].(int)
+		items[i] = elem[i].(string)
 	}
 	return items, scores
 }
 
 // Popularity compute popularity for all items.
-func Popularity(dataSet DataSetInterface) (itemId []int, popularity []float64) {
-	itemId = make([]int, dataSet.ItemCount())
+func Popularity(dataSet DataSetInterface) (itemId []string, popularity []float64) {
+	itemId = make([]string, dataSet.ItemCount())
 	popularity = make([]float64, dataSet.ItemCount())
 	for itemIndex := 0; itemIndex < dataSet.ItemCount(); itemIndex++ {
 		popularity[itemIndex] = float64(dataSet.ItemByIndex(itemIndex).Len())

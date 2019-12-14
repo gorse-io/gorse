@@ -6,6 +6,7 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	"os"
 	"path"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -18,8 +19,8 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	users := []int{0, 1, 2, 3, 4}
-	items := []int{0, 2, 4, 6, 8}
+	users := []string{"0", "1", "2", "3", "4"}
+	items := []string{"0", "2", "4", "6", "8"}
 	feedback := []float64{0, 3, 6, 9, 12}
 	for i := range users {
 		if err := db.InsertFeedback(users[i], items[i], feedback[i]); err != nil {
@@ -80,7 +81,7 @@ func TestDB_InsertGetItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	itemIds := []int{0, 2, 4, 6, 8}
+	itemIds := []string{"0", "2", "4", "6", "8"}
 	timestamps := []time.Time{
 		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
@@ -120,7 +121,7 @@ func TestDB_InsertGetItem(t *testing.T) {
 		assert.Equal(t, timestamps[i], item.Timestamp)
 	}
 	// Get items by IDs
-	items, err = db.GetItemsByID([]int{8, 6, 4, 2, 0})
+	items, err = db.GetItemsByID([]string{"8", "6", "4", "2", "0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func TestDB_GetRandom(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	items := []int{0, 2, 4, 6, 8}
+	items := []string{"0", "2", "4", "6", "8"}
 	stamps := []time.Time{
 		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
@@ -200,11 +201,11 @@ func TestDB_GetRandom(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.Equal(t, []RecommendedItem{
-			{Item: Item{ItemId: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{ItemId: 2, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{ItemId: 4, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{ItemId: 6, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
-			{Item: Item{ItemId: 8, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}}}, retItems)
+			{Item: Item{ItemId: "0", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: "2", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: "4", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: "6", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}},
+			{Item: Item{ItemId: "8", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)}}}, retItems)
 		// Sample part
 		items1, err := db.GetRandom(3)
 		if err != nil {
@@ -237,29 +238,29 @@ func TestDB_PutGetIdentList(t *testing.T) {
 	}
 	// Put recommends
 	items := []RecommendedItem{
-		{Item{ItemId: 0}, 0.0},
-		{Item{ItemId: 1}, 0.1},
-		{Item{ItemId: 2}, 0.2},
-		{Item{ItemId: 3}, 0.3},
-		{Item{ItemId: 4}, 0.4},
+		{Item{ItemId: "0"}, 0.0},
+		{Item{ItemId: "1"}, 0.1},
+		{Item{ItemId: "2"}, 0.2},
+		{Item{ItemId: "3"}, 0.3},
+		{Item{ItemId: "4"}, 0.4},
 	}
-	if err = db.PutIdentList(BucketRecommends, 0, items); err != nil {
+	if err = db.PutIdentList(BucketRecommends, "0", items); err != nil {
 		t.Fatal(err)
 	}
 	// Get recommends
-	retItems, err := db.GetIdentList(BucketRecommends, 0, 0)
+	retItems, err := db.GetIdentList(BucketRecommends, "0", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n recommends
-	nItems, err := db.GetIdentList(BucketRecommends, 0, 3)
+	nItems, err := db.GetIdentList(BucketRecommends, "0", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
 	// Test new user
-	if _, err = db.GetIdentList(BucketRecommends, 1, 0); err == nil {
+	if _, err = db.GetIdentList(BucketRecommends, "1", 0); err == nil {
 		t.Fatal("error is expected for new user")
 	}
 	// Close database
@@ -281,11 +282,11 @@ func TestDB_PutGetList(t *testing.T) {
 	}
 	// Put neighbors
 	items := []RecommendedItem{
-		{Item{ItemId: 0}, 0},
-		{Item{ItemId: 1}, 1},
-		{Item{ItemId: 2}, 2},
-		{Item{ItemId: 3}, 3},
-		{Item{ItemId: 4}, 4},
+		{Item{ItemId: "0"}, 0},
+		{Item{ItemId: "1"}, 1},
+		{Item{ItemId: "2"}, 2},
+		{Item{ItemId: "3"}, 3},
+		{Item{ItemId: "4"}, 4},
 	}
 	if err = db.PutList(ListPop, items); err != nil {
 		t.Fatal(err)
@@ -364,8 +365,8 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, i, users[i])
-		assert.Equal(t, 2*i, itemIds[i])
+		assert.Equal(t, strconv.Itoa(i), users[i])
+		assert.Equal(t, strconv.Itoa(2*i), itemIds[i])
 		assert.Equal(t, 3*i, int(feedback[i]))
 	}
 	// Count feedback
@@ -380,7 +381,7 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 2*i, items[i].ItemId)
+		assert.Equal(t, strconv.Itoa(2*i), items[i].ItemId)
 	}
 	// Close database
 	if err = db.Close(); err != nil {
@@ -415,7 +416,7 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 1+i, items[i].ItemId)
+		assert.Equal(t, strconv.Itoa(1+i), items[i].ItemId)
 	}
 	// Close database
 	if err = db.Close(); err != nil {
@@ -450,7 +451,7 @@ func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 1+i, items[i].ItemId)
+		assert.Equal(t, strconv.Itoa(1+i), items[i].ItemId)
 		date := time.Date(2020, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
 		assert.Equal(t, date, items[i].Timestamp)
 	}
@@ -486,8 +487,8 @@ func TestDB_SaveFeedbackToCSV(t *testing.T) {
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
 		userIndex, itemIndex, _ := data.GetWithIndex(i)
-		assert.Equal(t, i, userId)
-		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, strconv.Itoa(i), userId)
+		assert.Equal(t, strconv.Itoa(2*i), itemId)
 		assert.Equal(t, 3*i, int(value))
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
@@ -588,7 +589,7 @@ func TestDB_UpdatePopularity(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	itemIds := []int{0, 2, 4, 6, 8}
+	itemIds := []string{"0", "2", "4", "6", "8"}
 	popularity := []float64{3, 4, 5, 6, 7}
 	for _, itemId := range itemIds {
 		if err := db.InsertItem(itemId, nil); err != nil {
