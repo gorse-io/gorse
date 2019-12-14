@@ -10,7 +10,7 @@ type ModelInterface interface {
 	// Get parameters.
 	GetParams() base.Params
 	// Predict the rating given by a user (userId) to a item (itemId).
-	Predict(userId, itemId int) float64
+	Predict(userId, itemId string) float64
 	// Fit a model with a train set and parameters.
 	Fit(trainSet DataSetInterface, options *base.RuntimeOptions)
 }

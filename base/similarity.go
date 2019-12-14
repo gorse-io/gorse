@@ -10,7 +10,7 @@ type FuncSimilarity func(a, b *MarginalSubSet) float64
 // CosineSimilarity computes the cosine similarity between a pair of vectors.
 func CosineSimilarity(a, b *MarginalSubSet) float64 {
 	m, n, l := .0, .0, .0
-	a.ForIntersection(b, func(index int, a, b float64) {
+	a.ForIntersection(b, func(_ string, a, b float64) {
 		m += a * a
 		n += b * b
 		l += a * b
@@ -21,7 +21,7 @@ func CosineSimilarity(a, b *MarginalSubSet) float64 {
 // MSDSimilarity computes the Mean Squared Difference similarity between a pair of vectors.
 func MSDSimilarity(a, b *MarginalSubSet) float64 {
 	count, sum := 0.0, 0.0
-	a.ForIntersection(b, func(index int, a, b float64) {
+	a.ForIntersection(b, func(_ string, a, b float64) {
 		sum += (a - b) * (a - b)
 		count += 1
 	})
@@ -36,7 +36,7 @@ func PearsonSimilarity(a, b *MarginalSubSet) float64 {
 	meanB := b.Mean()
 	// Mean-centered cosine
 	m, n, l := .0, .0, .0
-	a.ForIntersection(b, func(index int, a, b float64) {
+	a.ForIntersection(b, func(_ string, a, b float64) {
 		ratingA := a - meanA
 		ratingB := b - meanB
 		m += ratingA * ratingA
@@ -49,7 +49,7 @@ func PearsonSimilarity(a, b *MarginalSubSet) float64 {
 // ImplicitSimilarity computes similarity between two vectors with implicit feedback.
 func ImplicitSimilarity(a, b *MarginalSubSet) float64 {
 	intersect := 0.0
-	a.ForIntersection(b, func(index int, a, b float64) {
+	a.ForIntersection(b, func(_ string, a, b float64) {
 		intersect++
 	})
 	return intersect / (float64(a.Len()) + float64(b.Len()) - intersect)

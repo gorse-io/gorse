@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func NewTestIndexer(id []int) *Indexer {
+func NewTestIndexer(id []string) *Indexer {
 	indexer := NewIndexer()
 	for _, v := range id {
 		indexer.Add(v)
@@ -20,20 +20,20 @@ func TestIndexer(t *testing.T) {
 	set := NewIndexer()
 	assert.Equal(t, set.Len(), 0)
 	// Add IDs
-	set.Add(1)
-	set.Add(2)
-	set.Add(4)
-	set.Add(8)
+	set.Add("1")
+	set.Add("2")
+	set.Add("4")
+	set.Add("8")
 	assert.Equal(t, 4, set.Len())
-	assert.Equal(t, 0, set.ToIndex(1))
-	assert.Equal(t, 1, set.ToIndex(2))
-	assert.Equal(t, 2, set.ToIndex(4))
-	assert.Equal(t, 3, set.ToIndex(8))
-	assert.Equal(t, NotId, set.ToIndex(1000))
-	assert.Equal(t, 1, set.ToID(0))
-	assert.Equal(t, 2, set.ToID(1))
-	assert.Equal(t, 4, set.ToID(2))
-	assert.Equal(t, 8, set.ToID(3))
+	assert.Equal(t, 0, set.ToIndex("1"))
+	assert.Equal(t, 1, set.ToIndex("2"))
+	assert.Equal(t, 2, set.ToIndex("4"))
+	assert.Equal(t, 3, set.ToIndex("8"))
+	assert.Equal(t, NotId, set.ToIndex("1000"))
+	assert.Equal(t, "1", set.ToID(0))
+	assert.Equal(t, "2", set.ToID(1))
+	assert.Equal(t, "4", set.ToID(2))
+	assert.Equal(t, "8", set.ToID(3))
 }
 
 func TestStringIndexer(t *testing.T) {
@@ -59,7 +59,7 @@ func TestStringIndexer(t *testing.T) {
 
 func TestNewMarginalSubSet(t *testing.T) {
 	// Create a subset
-	indexer := NewTestIndexer([]int{2, 4, 6, 8, 10})
+	indexer := NewTestIndexer([]string{"2", "4", "6", "8", "9"})
 	indices := []int{0, 1, 2, 3, 4}
 	values := []float64{1, 1, 1, 1, 1}
 	subset := []int{4, 2, 0}
@@ -68,22 +68,22 @@ func TestNewMarginalSubSet(t *testing.T) {
 	// Check Count()
 	assert.Equal(t, 3, set.Count())
 	// Check Contain()
-	assert.True(t, !set.Contain(0))
-	assert.True(t, set.Contain(2))
-	assert.True(t, !set.Contain(4))
-	assert.True(t, set.Contain(6))
-	assert.True(t, !set.Contain(8))
-	assert.True(t, set.Contain(10))
-	assert.True(t, !set.Contain(12))
+	assert.True(t, !set.Contain("0"))
+	assert.True(t, set.Contain("2"))
+	assert.True(t, !set.Contain("4"))
+	assert.True(t, set.Contain("6"))
+	assert.True(t, !set.Contain("8"))
+	assert.True(t, set.Contain("9"))
+	assert.True(t, !set.Contain("12"))
 	// Check ForEach()
-	subID := make([]int, set.Len())
+	subID := make([]string, set.Len())
 	subIndices := make([]int, set.Len())
 	subValues := make([]float64, set.Len())
-	set.ForEach(func(i, id int, value float64) {
+	set.ForEach(func(i int, id string, value float64) {
 		subID[i] = id
 		subValues[i] = value
 	})
-	assert.Equal(t, []int{2, 6, 10}, subID)
+	assert.Equal(t, []string{"2", "6", "9"}, subID)
 	assert.Equal(t, []float64{1, 1, 1}, subValues)
 	// Check ForEachIndex()
 	set.ForEachIndex(func(i, index int, value float64) {
@@ -96,19 +96,19 @@ func TestNewMarginalSubSet(t *testing.T) {
 
 func TestMarginalSubSet_ForIntersection(t *testing.T) {
 	// Create two subsets
-	indexer := NewTestIndexer([]int{2, 4, 6, 8, 10})
+	indexer := NewTestIndexer([]string{"2", "4", "6", "8", "10"})
 	indices := []int{0, 1, 2, 3, 4}
 	a := NewMarginalSubSet(indexer, indices, []float64{1, 1, 1, 1, 1}, []int{0, 1, 2, 3})
 	b := NewMarginalSubSet(indexer, indices, []float64{2, 2, 2, 2, 2}, []int{1, 2, 3, 4})
-	intersectIDs := make([]int, 0)
+	intersectIDs := make([]string, 0)
 	intersectA := make([]float64, 0)
 	intersectB := make([]float64, 0)
-	a.ForIntersection(b, func(id int, a, b float64) {
+	a.ForIntersection(b, func(id string, a, b float64) {
 		intersectIDs = append(intersectIDs, id)
 		intersectA = append(intersectA, a)
 		intersectB = append(intersectB, b)
 	})
-	assert.Equal(t, []int{4, 6, 8}, intersectIDs)
+	assert.Equal(t, []string{"4", "6", "8"}, intersectIDs)
 	assert.Equal(t, []float64{1, 1, 1}, intersectA)
 	assert.Equal(t, []float64{2, 2, 2}, intersectB)
 }

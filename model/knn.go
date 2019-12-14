@@ -64,7 +64,7 @@ func (knn *KNN) SetParams(params base.Params) {
 }
 
 // Predict by the KNN model.
-func (knn *KNN) Predict(userId, itemId int) float64 {
+func (knn *KNN) Predict(userId, itemId string) float64 {
 	// Convert IDs to indices
 	userIndex := knn.UserIndexer.ToIndex(userId)
 	itemIndex := knn.ItemIndexer.ToIndex(itemId)
@@ -188,7 +188,7 @@ func (knn *KNN) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 					ret := knn.similarity(iRatings, jRatings)
 					// Get the number of common
 					common := 0.0
-					iRatings.ForIntersection(jRatings, func(index int, a, b float64) {
+					iRatings.ForIntersection(jRatings, func(index string, a, b float64) {
 						common += 1
 					})
 					if !math.IsNaN(ret) {
@@ -215,7 +215,7 @@ func NewKNNImplicit(params base.Params) *KNNImplicit {
 }
 
 // Predict by the KNN model.
-func (knn *KNNImplicit) Predict(userId, itemId int) float64 {
+func (knn *KNNImplicit) Predict(userId, itemId string) float64 {
 	userIndex := knn.UserIndexer.ToIndex(userId)
 	itemIndex := knn.ItemIndexer.ToIndex(itemId)
 	score := 0.0
@@ -243,7 +243,7 @@ func (knn *KNNImplicit) Fit(trainSet core.DataSetInterface, options *base.Runtim
 					ret := base.ImplicitSimilarity(iRatings, jRatings)
 					// Get the number of common
 					common := 0.0
-					iRatings.ForIntersection(jRatings, func(index int, a, b float64) {
+					iRatings.ForIntersection(jRatings, func(index string, a, b float64) {
 						common += 1
 					})
 					if !math.IsNaN(ret) {

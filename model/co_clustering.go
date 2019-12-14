@@ -57,7 +57,7 @@ func (coc *CoClustering) SetParams(params base.Params) {
 }
 
 // Predict by the CoClustering model.
-func (coc *CoClustering) Predict(userId, itemId int) float64 {
+func (coc *CoClustering) Predict(userId, itemId string) float64 {
 	// Convert IDs to indices
 	userIndex := coc.UserIndexer.ToIndex(userId)
 	itemIndex := coc.ItemIndexer.ToIndex(itemId)

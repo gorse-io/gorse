@@ -32,8 +32,8 @@ func main() {
 	// Get all items in the full dataset
 	items := core.Items(data)
 	// Get user(4)'s ratings in the training dataset
-	excludeItems := train.User(4)
+	excludeItems := train.User("4")
 	// Get top 10 recommended items (excluding rated items) for user(4) using BPR
-	recommendItems, _ := core.Top(items, 4, 10, excludeItems, bpr)
+	recommendItems, _ := core.Top(items, "4", 10, excludeItems, bpr)
 	fmt.Printf("Recommend for user(4) = %v\n", recommendItems)
 }

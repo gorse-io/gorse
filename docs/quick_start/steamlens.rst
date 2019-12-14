@@ -195,12 +195,12 @@ We can use the `RESTful API <https://gorse.readthedocs.io/en/latest/usage/server
     $ curl http://127.0.0.1:8080/recommends/76561197960272226?number=10
     [
         {
-            "ItemId": 4540,
+            "ItemId": "4540",
             "Score": 23.479386364078838
         },
         ...
         {
-            "ItemId": 57300,
+            "ItemId": "57300",
             "Score": 22.156954153653245
         }
     ]

@@ -47,7 +47,7 @@ def eval_item_pop(url: str, users):
     prec_score, recall_score, ndcg_score = 0, 0, 0
     for user_id, user_df in users:
         response = get(url + 'popular/')
-        top_list = [v['ItemId'] for v in response]
+        top_list = [int(v['ItemId']) for v in response]
         target_set = set(user_df['item_id'])
         prec_score += precision(target_set, top_list)
         recall_score += recall(target_set, top_list)
@@ -59,7 +59,7 @@ def eval_svd_bpr(url: str, users):
     prec_score, recall_score, ndcg_score = 0, 0, 0
     for user_id, user_df in users:
         response = get(url + 'recommends/' + str(user_id))
-        top_list = [v['ItemId'] for v in response]
+        top_list = [int(v['ItemId']) for v in response]
         target_set = set(user_df['item_id'])
         prec_score += precision(target_set, top_list)
         recall_score += recall(target_set, top_list)

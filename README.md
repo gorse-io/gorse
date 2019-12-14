@@ -121,11 +121,11 @@ It requests 5 recommended items for the 1-th user. The response might be:
 ```
 [
     {
-        "ItemId": 202,
+        "ItemId": "202",
         "Score": 2.901297852545712
     },
     {
-        "ItemId": 151,
+        "ItemId": "151",
         "Score": 2.8871064286482864
     },
     ...
@@ -173,9 +173,9 @@ func main() {
 	// Get all items in the full dataset
 	items := core.Items(data)
 	// Get user(4)'s ratings in the training dataset
-	excludeItems := train.User(4)
+	excludeItems := train.User("4")
 	// Get top 10 recommended items (excluding rated items) for user(4) using BPR
-	recommendItems, _ := core.Top(items, 4, 10, excludeItems, bpr)
+	recommendItems, _ := core.Top(items, "4", 10, excludeItems, bpr)
 	fmt.Printf("Recommend for user(4) = %v\n", recommendItems)
 }
 ```

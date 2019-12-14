@@ -114,7 +114,7 @@ func (fm *FM) SetParams(params base.Params) {
 }
 
 // Predict by the factorization machine.
-func (fm *FM) Predict(userId int, itemId int) float64 {
+func (fm *FM) Predict(userId string, itemId string) float64 {
 	// Convert sparse IDs to dense IDs
 	userIndex := fm.UserIndexer.ToIndex(userId)
 	itemIndex := fm.ItemIndexer.ToIndex(itemId)

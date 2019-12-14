@@ -10,8 +10,8 @@ import (
 // a user ID or item ID. The dense index is the internal user index or item index
 // optimized for faster parameter access and less memory usage.
 type Indexer struct {
-	Indices map[int]int // sparse ID -> dense index
-	IDs     []int       // dense index -> sparse ID
+	Indices map[string]int // sparse ID -> dense index
+	IDs     []string       // dense index -> sparse ID
 }
 
 // NotId represents an ID doesn't exist.
@@ -20,8 +20,8 @@ const NotId = -1
 // NewIndexer creates a Indexer.
 func NewIndexer() *Indexer {
 	set := new(Indexer)
-	set.Indices = make(map[int]int)
-	set.IDs = make([]int, 0)
+	set.Indices = make(map[string]int)
+	set.IDs = make([]string, 0)
 	return set
 }
 
@@ -31,7 +31,7 @@ func (set *Indexer) Len() int {
 }
 
 // Add adds a new ID to the indexer.
-func (set *Indexer) Add(ID int) {
+func (set *Indexer) Add(ID string) {
 	if _, exist := set.Indices[ID]; !exist {
 		set.Indices[ID] = len(set.IDs)
 		set.IDs = append(set.IDs, ID)
@@ -39,7 +39,7 @@ func (set *Indexer) Add(ID int) {
 }
 
 // ToIndex converts a sparse ID to a dense index.
-func (set *Indexer) ToIndex(ID int) int {
+func (set *Indexer) ToIndex(ID string) int {
 	if denseId, exist := set.Indices[ID]; exist {
 		return denseId
 	}
@@ -47,7 +47,7 @@ func (set *Indexer) ToIndex(ID int) int {
 }
 
 // ToID converts a dense index to a sparse ID.
-func (set *Indexer) ToID(index int) int {
+func (set *Indexer) ToID(index int) string {
 	return set.IDs[index]
 }
 
@@ -137,7 +137,7 @@ func (set *MarginalSubSet) GetIndex(i int) int {
 }
 
 // GetID returns the ID of i-th item.
-func (set *MarginalSubSet) GetID(i int) int {
+func (set *MarginalSubSet) GetID(i int) string {
 	index := set.GetIndex(i)
 	return set.Indexer.ToID(index)
 }
@@ -152,7 +152,7 @@ func (set *MarginalSubSet) Mean() float64 {
 }
 
 // Contain returns true am ID existed in the subset.
-func (set *MarginalSubSet) Contain(id int) bool {
+func (set *MarginalSubSet) Contain(id string) bool {
 	// if id is out of range
 	if set.Len() == 0 || id < set.GetID(0) || id > set.GetID(set.Len()-1) {
 		return false
@@ -181,7 +181,7 @@ func (set *MarginalSubSet) Contain(id int) bool {
 
 // ForIntersection iterates items in the intersection of two subsets.
 // The method find items with common indices in linear time.
-func (set *MarginalSubSet) ForIntersection(other *MarginalSubSet, f func(id int, a, b float64)) {
+func (set *MarginalSubSet) ForIntersection(other *MarginalSubSet, f func(id string, a, b float64)) {
 	// Iterate
 	i, j := 0, 0
 	for i < set.Len() && j < other.Len() {
@@ -198,7 +198,7 @@ func (set *MarginalSubSet) ForIntersection(other *MarginalSubSet, f func(id int,
 }
 
 // ForEach iterates items in the subset with IDs.
-func (set *MarginalSubSet) ForEach(f func(i, id int, value float64)) {
+func (set *MarginalSubSet) ForEach(f func(i int, id string, value float64)) {
 	for i, offset := range set.SubSet {
 		f(i, set.GetID(i), set.Values[offset])
 	}

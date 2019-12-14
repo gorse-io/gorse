@@ -72,7 +72,7 @@ func MAE(groundTruth []float64, prediction []float64) float64 {
 /* Evaluate Item Ranking */
 
 // RankMetric is used by evaluators in personalized ranking tasks.
-type RankMetric func(targetSet *base.MarginalSubSet, rankList []int) float64
+type RankMetric func(targetSet *base.MarginalSubSet, rankList []string) float64
 
 // EvaluateRank evaluates a model in top-n tasks.
 func EvaluateRank(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface, n int, metrics ...RankMetric) []float64 {
@@ -98,7 +98,7 @@ func EvaluateRank(estimator ModelInterface, testSet DataSetInterface, excludeSet
 }
 
 // NDCG means Normalized Discounted Cumulative Gain.
-func NDCG(targetSet *base.MarginalSubSet, rankList []int) float64 {
+func NDCG(targetSet *base.MarginalSubSet, rankList []string) float64 {
 	// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
 	idcg := 0.0
 	for i := 0; i < targetSet.Len() && i < len(rankList); i++ {
@@ -116,7 +116,7 @@ func NDCG(targetSet *base.MarginalSubSet, rankList []int) float64 {
 
 // Precision is the fraction of relevant items among the recommended items.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{retrieved documents}|}
-func Precision(targetSet *base.MarginalSubSet, rankList []int) float64 {
+func Precision(targetSet *base.MarginalSubSet, rankList []string) float64 {
 	hit := 0.0
 	for _, itemId := range rankList {
 		if targetSet.Contain(itemId) {
@@ -129,7 +129,7 @@ func Precision(targetSet *base.MarginalSubSet, rankList []int) float64 {
 // Recall is the fraction of relevant items that have been recommended over the total
 // amount of relevant items.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{relevant documents}|}
-func Recall(targetSet *base.MarginalSubSet, rankList []int) float64 {
+func Recall(targetSet *base.MarginalSubSet, rankList []string) float64 {
 	hit := 0
 	for _, itemId := range rankList {
 		if targetSet.Contain(itemId) {
@@ -141,7 +141,7 @@ func Recall(targetSet *base.MarginalSubSet, rankList []int) float64 {
 
 // MAP means Mean Average Precision.
 // mAP: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
-func MAP(targetSet *base.MarginalSubSet, rankList []int) float64 {
+func MAP(targetSet *base.MarginalSubSet, rankList []string) float64 {
 	sumPrecision := 0.0
 	hit := 0
 	for i, itemId := range rankList {
@@ -164,7 +164,7 @@ func MAP(targetSet *base.MarginalSubSet, rankList []int) float64 {
 // a sample of queries Q:
 //
 //   MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
-func MRR(targetSet *base.MarginalSubSet, rankList []int) float64 {
+func MRR(targetSet *base.MarginalSubSet, rankList []string) float64 {
 	for i, itemId := range rankList {
 		if targetSet.Contain(itemId) {
 			return 1 / float64(i+1)
@@ -183,7 +183,7 @@ func EvaluateAUC(estimator ModelInterface, testSet, excludeSet DataSetInterface)
 			userCount++
 			userId := testSet.UserIndexer().ToID(userTestIndex)
 			// Find all <userId, j>s in training Data set and test Data set.
-			positiveSet := make(map[int]float64)
+			positiveSet := make(map[string]float64)
 			if excludeSet != nil {
 				userExcludeIndex := excludeSet.UserIndexer().ToIndex(userId)
 				if userExcludeIndex != base.NotId {

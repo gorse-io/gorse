@@ -69,7 +69,7 @@ func (svd *SVD) SetParams(params base.Params) {
 }
 
 // Predict by the SVD model.
-func (svd *SVD) Predict(userId int, itemId int) float64 {
+func (svd *SVD) Predict(userId, itemId string) float64 {
 	// Convert sparse IDs to dense IDs
 	userIndex := svd.UserIndexer.ToIndex(userId)
 	itemIndex := svd.ItemIndexer.ToIndex(itemId)
@@ -197,7 +197,7 @@ func (bpr *BPR) SetParams(params base.Params) {
 }
 
 // Predict by the BPR model.
-func (bpr *BPR) Predict(userId int, itemId int) float64 {
+func (bpr *BPR) Predict(userId, itemId string) float64 {
 	// Convert sparse IDs to dense IDs
 	userIndex := bpr.UserIndexer.ToIndex(userId)
 	itemIndex := bpr.ItemIndexer.ToIndex(itemId)
@@ -332,7 +332,7 @@ func (nmf *NMF) SetParams(params base.Params) {
 }
 
 // Predict by the NMF model.
-func (nmf *NMF) Predict(userId int, itemId int) float64 {
+func (nmf *NMF) Predict(userId, itemId string) float64 {
 	userIndex := nmf.UserIndexer.ToIndex(userId)
 	itemIndex := nmf.ItemIndexer.ToIndex(itemId)
 	return nmf.predict(userIndex, itemIndex)
@@ -458,7 +458,7 @@ func (svd *SVDpp) SetParams(params base.Params) {
 }
 
 // Predict by the SVD++ model.
-func (svd *SVDpp) Predict(userId int, itemId int) float64 {
+func (svd *SVDpp) Predict(userId, itemId string) float64 {
 	userIndex := svd.UserIndexer.ToIndex(userId)
 	itemIndex := svd.ItemIndexer.ToIndex(itemId)
 	ret := svd.predict(userIndex, itemIndex, nil)
@@ -632,7 +632,7 @@ func (mf *WRMF) SetParams(params base.Params) {
 }
 
 // Predict by the WRMF model.
-func (mf *WRMF) Predict(userId, itemId int) float64 {
+func (mf *WRMF) Predict(userId, itemId string) float64 {
 	userIndex := mf.UserIndexer.ToIndex(userId)
 	itemIndex := mf.ItemIndexer.ToIndex(itemId)
 	if userIndex == base.NotId || mf.UserRatings[userIndex].Len() == 0 {
