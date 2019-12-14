@@ -19,7 +19,7 @@ func (model *CVTestModel) GetParams() base.Params {
 	return model.Params
 }
 
-func (model *CVTestModel) Predict(userId, itemId int) float64 {
+func (model *CVTestModel) Predict(userId, itemId string) float64 {
 	panic("Predict() not implemented")
 }
 

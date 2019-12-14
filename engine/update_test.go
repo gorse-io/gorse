@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strconv"
 	"testing"
 )
 
@@ -19,8 +20,8 @@ func TestUpdateItemPop(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Update popular items
-	users := []int{1, 1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5}
-	items := []int{1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5}
+	users := []string{"1", "1", "2", "1", "2", "3", "1", "2", "3", "4", "1", "2", "3", "4", "5"}
+	items := []string{"1", "2", "2", "3", "3", "3", "4", "4", "4", "4", "5", "5", "5", "5", "5"}
 	ratings := []float64{1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5}
 	dataSet := core.NewDataSet(users, items, ratings)
 	if err = UpdateItemPop(3, dataSet, db); err != nil {
@@ -32,7 +33,7 @@ func TestUpdateItemPop(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, []RecommendedItem{
-		{5, 5}, {4, 4}, {3, 3},
+		{"5", 5}, {"4", 4}, {"3", 3},
 	}, recommends)
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_update_item_pop.db")); err != nil {
@@ -47,13 +48,13 @@ func TestUpdateNeighbors(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Update neighbor
-	users := make([]int, 0, 81)
-	items := make([]int, 0, 81)
+	users := make([]string, 0, 81)
+	items := make([]string, 0, 81)
 	ratings := make([]float64, 0, 81)
 	for i := 1; i < 10; i++ {
 		for j := 1; j < 10; j++ {
-			users = append(users, i)
-			items = append(items, j)
+			users = append(users, strconv.Itoa(i))
+			items = append(items, strconv.Itoa(j))
 			if i+j < 9 {
 				ratings = append(ratings, 1)
 			} else {
@@ -66,15 +67,15 @@ func TestUpdateNeighbors(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Find N nearest neighbors
-	recommends, err := db.GetNeighbors(1, 0)
+	recommends, err := db.GetNeighbors("1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 2, recommends[0].ItemId)
-	assert.Equal(t, 3, recommends[1].ItemId)
-	assert.Equal(t, 4, recommends[2].ItemId)
-	assert.Equal(t, 5, recommends[3].ItemId)
-	assert.Equal(t, 6, recommends[4].ItemId)
+	assert.Equal(t, "2", recommends[0].ItemId)
+	assert.Equal(t, "3", recommends[1].ItemId)
+	assert.Equal(t, "4", recommends[2].ItemId)
+	assert.Equal(t, "5", recommends[3].ItemId)
+	assert.Equal(t, "6", recommends[4].ItemId)
 	// Clean database
 	if err = os.Remove(path.Join(core.TempDir, "/test_update_neighbors.db")); err != nil {
 		t.Fatal(err)
@@ -114,7 +115,7 @@ func TestUpdateRecommends(t *testing.T) {
 				t.Fatal(err)
 			}
 			count++
-			items := make([]int, len(rankList))
+			items := make([]string, len(rankList))
 			for i := range rankList {
 				items[i] = rankList[i].ItemId
 			}

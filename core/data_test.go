@@ -7,12 +7,13 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"testing"
 )
 
 func TestNewDataSet(t *testing.T) {
-	userIDs := []int{1, 2, 3, 4, 5}
-	itemIDs := []int{2, 4, 6, 8, 10}
+	userIDs := []string{"1", "2", "3", "4", "5"}
+	itemIDs := []string{"2", "4", "6", "8", "10"}
 	ratings := []float64{3, 6, 9, 12, 15}
 	dataSet := NewDataSet(userIDs, itemIDs, ratings)
 	// Check Count()
@@ -21,8 +22,8 @@ func TestNewDataSet(t *testing.T) {
 	assert.Equal(t, 0, nilSet.Count())
 	// Check Get()
 	userId, itemId, rating := dataSet.Get(0)
-	assert.Equal(t, 1, userId)
-	assert.Equal(t, 2, itemId)
+	assert.Equal(t, "1", userId)
+	assert.Equal(t, "2", itemId)
 	assert.Equal(t, float64(3), rating)
 	// Check GetWithIndex()
 	userIndex, itemIndex, rating := dataSet.GetWithIndex(0)
@@ -96,8 +97,8 @@ func TestLoadDataFromCSV_Implicit(t *testing.T) {
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
 		userIndex, itemIndex, _ := data.GetWithIndex(i)
-		assert.Equal(t, i, userId)
-		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, strconv.Itoa(i), userId)
+		assert.Equal(t, strconv.Itoa(2*i), itemId)
 		assert.Equal(t, 0.0, value)
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
@@ -110,8 +111,8 @@ func TestLoadDataFromCSV_Explicit(t *testing.T) {
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
 		userIndex, itemIndex, _ := data.GetWithIndex(i)
-		assert.Equal(t, i, userId)
-		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, strconv.Itoa(i), userId)
+		assert.Equal(t, strconv.Itoa(2*i), itemId)
 		assert.Equal(t, 3*i, int(value))
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
@@ -124,8 +125,8 @@ func TestLoadDataFromCSV_Explicit_Header(t *testing.T) {
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
 		userIndex, itemIndex, _ := data.GetWithIndex(i)
-		assert.Equal(t, i, userId)
-		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, strconv.Itoa(i), userId)
+		assert.Equal(t, strconv.Itoa(2*i), itemId)
 		assert.Equal(t, 3*i, int(value))
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
@@ -138,8 +139,8 @@ func TestLoadDataFromNetflix(t *testing.T) {
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
 		userIndex, itemIndex, _ := data.GetWithIndex(i)
-		assert.Equal(t, 2*i, userId)
-		assert.Equal(t, i, itemId)
+		assert.Equal(t, strconv.Itoa(2*i), userId)
+		assert.Equal(t, strconv.Itoa(i), itemId)
 		assert.Equal(t, 3*i, int(value))
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)

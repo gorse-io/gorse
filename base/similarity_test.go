@@ -9,7 +9,7 @@ import (
 const simTestEpsilon = 1e-3
 
 func TestCosine(t *testing.T) {
-	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	indexer := NewTestIndexer([]string{"0", "1", "2", "3"})
 	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
 	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := CosineSimilarity(a, b)
@@ -17,7 +17,7 @@ func TestCosine(t *testing.T) {
 }
 
 func TestMSD(t *testing.T) {
-	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	indexer := NewTestIndexer([]string{"0", "1", "2", "3"})
 	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
 	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := MSDSimilarity(a, b)
@@ -25,7 +25,7 @@ func TestMSD(t *testing.T) {
 }
 
 func TestPearson(t *testing.T) {
-	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	indexer := NewTestIndexer([]string{"0", "1", "2", "3"})
 	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
 	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := PearsonSimilarity(a, b)
@@ -33,7 +33,7 @@ func TestPearson(t *testing.T) {
 }
 
 func TestImplicitSimilarity(t *testing.T) {
-	indexer := NewTestIndexer([]int{0, 1, 2, 3})
+	indexer := NewTestIndexer([]string{"0", "1", "2", "3"})
 	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
 	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := ImplicitSimilarity(a, b)

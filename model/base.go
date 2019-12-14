@@ -89,7 +89,7 @@ func (baseLine *BaseLine) SetParams(params base.Params) {
 }
 
 // Predict by the BaseLine model.
-func (baseLine *BaseLine) Predict(userId, itemId int) float64 {
+func (baseLine *BaseLine) Predict(userId, itemId string) float64 {
 	denseUserId := baseLine.UserIndexer.ToIndex(userId)
 	denseItemId := baseLine.ItemIndexer.ToIndex(itemId)
 	return baseLine.predict(denseUserId, denseItemId)
@@ -161,7 +161,7 @@ func (pop *ItemPop) Fit(set core.DataSetInterface, options *base.RuntimeOptions)
 }
 
 // Predict by the ItemPop model.
-func (pop *ItemPop) Predict(userId, itemId int) float64 {
+func (pop *ItemPop) Predict(userId, itemId string) float64 {
 	// Return items' popularity
 	denseItemId := pop.ItemIndexer.ToIndex(itemId)
 	if denseItemId == base.NotId {

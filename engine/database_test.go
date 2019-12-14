@@ -5,6 +5,7 @@ import (
 	"github.com/zhenghaoz/gorse/core"
 	"os"
 	"path"
+	"strconv"
 	"testing"
 )
 
@@ -15,8 +16,8 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	users := []int{0, 1, 2, 3, 4}
-	items := []int{0, 2, 4, 6, 8}
+	users := []string{"0", "1", "2", "3", "4"}
+	items := []string{"0", "2", "4", "6", "8"}
 	feedback := []float64{0, 3, 6, 9, 12}
 	for i := range users {
 		if err := db.InsertFeedback(users[i], items[i], feedback[i]); err != nil {
@@ -60,7 +61,7 @@ func TestDB_InsertGetItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	items := []int{0, 2, 4, 6, 8}
+	items := []string{"0", "2", "4", "6", "8"}
 	for _, itemId := range items {
 		if err := db.InsertItem(itemId); err != nil {
 			t.Fatal(err)
@@ -127,7 +128,7 @@ func TestDB_GetRandom(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Insert feedback
-	items := []int{0, 2, 4, 6, 8}
+	items := []string{"0", "2", "4", "6", "8"}
 	for _, itemId := range items {
 		if err := db.InsertItem(itemId); err != nil {
 			t.Fatal(err)
@@ -140,7 +141,7 @@ func TestDB_GetRandom(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, []RecommendedItem{{ItemId: 0}, {ItemId: 2}, {ItemId: 4}, {ItemId: 6}, {ItemId: 8}}, retItems)
+		assert.Equal(t, []RecommendedItem{{ItemId: "0"}, {ItemId: "2"}, {ItemId: "4"}, {ItemId: "6"}, {ItemId: "8"}}, retItems)
 		// Sample part
 		items1, err := db.GetRandom(3)
 		if err != nil {
@@ -171,24 +172,24 @@ func TestDB_SetGetRecommends(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Put recommends
-	items := []RecommendedItem{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}}
-	if err = db.SetRecommends(0, items); err != nil {
+	items := []RecommendedItem{{"0", 0}, {"1", 1}, {"2", 2}, {"3", 3}, {"4", 4}}
+	if err = db.SetRecommends("0", items); err != nil {
 		t.Fatal(err)
 	}
 	// Get recommends
-	retItems, err := db.GetRecommends(0, 0)
+	retItems, err := db.GetRecommends("0", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n recommends
-	nItems, err := db.GetRecommends(0, 3)
+	nItems, err := db.GetRecommends("0", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
 	// Test new user
-	if _, err = db.GetRecommends(1, 0); err == nil {
+	if _, err = db.GetRecommends("1", 0); err == nil {
 		t.Fatal("error is expected for new user")
 	}
 	// Close database
@@ -208,24 +209,24 @@ func TestDB_SetGetNeighbors(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Put neighbors
-	items := []RecommendedItem{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}}
-	if err = db.SetNeighbors(0, items); err != nil {
+	items := []RecommendedItem{{"0", 0}, {"1", 1}, {"2", 2}, {"3", 3}, {"4", 4}}
+	if err = db.SetNeighbors("0", items); err != nil {
 		t.Fatal(err)
 	}
 	// Get neighbors
-	retItems, err := db.GetNeighbors(0, 0)
+	retItems, err := db.GetNeighbors("0", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n neighbors
-	nItems, err := db.GetNeighbors(0, 3)
+	nItems, err := db.GetNeighbors("0", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
 	// Test new user
-	if _, err = db.GetNeighbors(1, 0); err == nil {
+	if _, err = db.GetNeighbors("1", 0); err == nil {
 		t.Fatal("error is expected for new user")
 	}
 	// Close database
@@ -245,7 +246,7 @@ func TestDB_SetGetPopular(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Put neighbors
-	items := []RecommendedItem{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}}
+	items := []RecommendedItem{{"0", 0}, {"1", 1}, {"2", 2}, {"3", 3}, {"4", 4}}
 	if err = db.SetPopular(items); err != nil {
 		t.Fatal(err)
 	}
@@ -321,8 +322,8 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, i, users[i])
-		assert.Equal(t, 2*i, items[i])
+		assert.Equal(t, strconv.Itoa(i), users[i])
+		assert.Equal(t, strconv.Itoa(2*i), items[i])
 		assert.Equal(t, 3*i, int(feedback[i]))
 	}
 	// Count feedback
@@ -337,7 +338,7 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 2*i, items[i])
+		assert.Equal(t, strconv.Itoa(2*i), items[i])
 	}
 	// Close database
 	if err = db.Close(); err != nil {
@@ -371,7 +372,7 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < count; i++ {
-		assert.Equal(t, 1+i, items[i])
+		assert.Equal(t, strconv.Itoa(1+i), items[i])
 	}
 	// Close database
 	if err = db.Close(); err != nil {
@@ -403,8 +404,8 @@ func TestDB_SaveFeedbackToCSV(t *testing.T) {
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
 		userIndex, itemIndex, _ := data.GetWithIndex(i)
-		assert.Equal(t, i, userId)
-		assert.Equal(t, 2*i, itemId)
+		assert.Equal(t, strconv.Itoa(i), userId)
+		assert.Equal(t, strconv.Itoa(2*i), itemId)
 		assert.Equal(t, 3*i, int(value))
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
