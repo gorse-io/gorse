@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/engine"
 	"log"
+	"time"
 )
 
 var commandImportFeedback = &cobra.Command{
@@ -23,11 +24,13 @@ var commandImportFeedback = &cobra.Command{
 		// Import feedback
 		printCount(db)
 		log.Printf("import feedback from %s\n", csvFile)
+		start := time.Now()
 		if err = db.LoadFeedbackFromCSV(csvFile, sep, header); err != nil {
 			log.Fatal(err)
 		}
+		elapsed := time.Since(start)
 		printCount(db)
-		log.Printf("feedback are imported successfully!")
+		log.Printf("feedback are imported successfully! (%v)\n", elapsed)
 	},
 }
 
@@ -40,6 +43,7 @@ var commandImportItems = &cobra.Command{
 		csvFile := args[1]
 		sep, _ := cmd.PersistentFlags().GetString("sep")
 		header, _ := cmd.PersistentFlags().GetBool("header")
+		timestampColumn, _ := cmd.PersistentFlags().GetInt("timestamp")
 		// Connect database
 		db, err := engine.Open(databaseFile)
 		if err != nil {
@@ -48,11 +52,13 @@ var commandImportItems = &cobra.Command{
 		// Import feedback
 		printCount(db)
 		log.Printf("import items from %s\n", csvFile)
-		if err = db.LoadItemsFromCSV(csvFile, sep, header); err != nil {
+		start := time.Now()
+		if err = db.LoadItemsFromCSV(csvFile, sep, header, timestampColumn); err != nil {
 			log.Fatal(err)
 		}
+		elapsed := time.Since(start)
 		printCount(db)
-		log.Println("items are imported successfully!")
+		log.Printf("items are imported successfully! (%v)\n", elapsed)
 	},
 }
 
@@ -88,6 +94,7 @@ var commandExportItems = &cobra.Command{
 		csvFile := args[1]
 		sep, _ := cmd.PersistentFlags().GetString("sep")
 		header, _ := cmd.PersistentFlags().GetBool("header")
+		timestamp, _ := cmd.PersistentFlags().GetBool("timestamp")
 		// Connect database
 		db, err := engine.Open(databaseFile)
 		if err != nil {
@@ -95,7 +102,7 @@ var commandExportItems = &cobra.Command{
 		}
 		// Import feedback
 		log.Printf("export items to %s\n", csvFile)
-		if err = db.SaveItemsToCSV(csvFile, sep, header); err != nil {
+		if err = db.SaveItemsToCSV(csvFile, sep, header, timestamp); err != nil {
 			log.Fatal(err)
 		}
 		log.Println("items are exported successfully!")
@@ -104,6 +111,8 @@ var commandExportItems = &cobra.Command{
 
 func init() {
 	commands := []*cobra.Command{commandImportFeedback, commandImportItems, commandExportFeedback, commandExportItems}
+	commandImportItems.PersistentFlags().IntP("timestamp", "t", 0, "specify the timestamp column")
+	commandExportItems.PersistentFlags().BoolP("timestamp", "t", false, "export with timestamp")
 	for _, command := range commands {
 		command.PersistentFlags().String("sep", ",", "set the separator for CSV files")
 		command.PersistentFlags().Bool("header", false, "set the header for CSV files")

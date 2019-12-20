@@ -53,13 +53,3 @@ func TestNeighbors(t *testing.T) {
 	neighbors, _ := Neighbors(dataSet, "1", 5, base.MSDSimilarity)
 	assert.Equal(t, []string{"2", "3", "4", "5", "6"}, neighbors)
 }
-
-func TestPopular(t *testing.T) {
-	users := []string{"1", "1", "2", "1", "2", "3", "1", "2", "3", "4", "1", "2", "3", "4", "5"}
-	items := []string{"1", "2", "2", "3", "3", "3", "4", "4", "4", "4", "5", "5", "5", "5", "5"}
-	ratings := []float64{1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5}
-	dataSet := NewDataSet(users, items, ratings)
-	items, scores := Popular(dataSet, 3)
-	assert.Equal(t, []string{"5", "4", "3"}, items)
-	assert.Equal(t, []float64{5, 4, 3}, scores)
-}

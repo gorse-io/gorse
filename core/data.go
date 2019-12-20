@@ -493,18 +493,20 @@ func LoadEntityFromCSV(filePath string, fieldSep string, tagSep string, header b
 		line := scanner.Text()
 		fields := strings.Split(line, fieldSep)
 		for i, field := range fields {
-			if i == index {
-				entity[names[i]], err = strconv.Atoi(field)
-				if err != nil {
-					log.Fatal(err)
+			if i < len(names) {
+				if i == index {
+					entity[names[i]], err = strconv.Atoi(field)
+					if err != nil {
+						log.Fatal(err)
+					}
+				} else if strings.Contains(field, tagSep) {
+					tags := strings.Split(field, tagSep)
+					entity[names[i]] = tags
+				} else if num, err := strconv.ParseFloat(field, 64); err == nil {
+					entity[names[i]] = num
+				} else {
+					entity[names[i]] = field
 				}
-			} else if strings.Contains(field, tagSep) {
-				tags := strings.Split(field, tagSep)
-				entity[names[i]] = tags
-			} else if num, err := strconv.ParseFloat(field, 64); err == nil {
-				entity[names[i]] = num
-			} else {
-				entity[names[i]] = field
 			}
 		}
 		entities = append(entities, entity)

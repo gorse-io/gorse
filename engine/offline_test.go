@@ -2,6 +2,7 @@ package engine
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/thanhpk/randstr"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
 	"os"
@@ -9,13 +10,15 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+	"time"
 )
 
 const rankingEpsilon = 0.008
 
 func TestUpdateItemPop(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_update_item_pop.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,26 +27,80 @@ func TestUpdateItemPop(t *testing.T) {
 	items := []string{"1", "2", "2", "3", "3", "3", "4", "4", "4", "4", "5", "5", "5", "5", "5"}
 	ratings := []float64{1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5}
 	dataSet := core.NewDataSet(users, items, ratings)
-	if err = UpdateItemPop(3, dataSet, db); err != nil {
+	if err = UpdatePopularity(dataSet, db); err != nil {
+		t.Fatal(err)
+	}
+	if err = UpdatePopItem(3, db); err != nil {
 		t.Fatal(err)
 	}
 	// Check popular items
-	recommends, err := db.GetPopular(0)
+	recommends, err := db.GetList(ListPop, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, []RecommendedItem{
-		{"5", 5}, {"4", 4}, {"3", 3},
+		{Item{ItemId: "5", Popularity: 5}, 5},
+		{Item{ItemId: "4", Popularity: 4}, 4},
+		{Item{ItemId: "3", Popularity: 3}, 3},
 	}, recommends)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_update_item_pop.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUpdateLatest(t *testing.T) {
+	// Create database
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Insert items
+	itemIds := []string{"1", "2", "3", "4", "5", "6"}
+	timestamps := []time.Time{
+		time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC),
+		time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC),
+		time.Date(2030, 1, 1, 1, 1, 1, 1, time.UTC),
+		time.Date(2025, 1, 1, 1, 1, 1, 1, time.UTC),
+		time.Date(2015, 1, 1, 1, 1, 1, 1, time.UTC),
+		time.Date(2005, 1, 1, 1, 1, 1, 1, time.UTC),
+	}
+	if err = db.InsertItems(itemIds, timestamps); err != nil {
+		t.Fatal(err)
+	}
+	// Update latest
+	if err = UpdateLatest(3, db); err != nil {
+		t.Fatal(err)
+	}
+	// Check popular items
+	recommends, err := db.GetList(ListLatest, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, []RecommendedItem{
+		{Item{ItemId: itemIds[2], Timestamp: timestamps[2]}, float64(timestamps[2].Unix())},
+		{Item{ItemId: itemIds[3], Timestamp: timestamps[3]}, float64(timestamps[3].Unix())},
+		{Item{ItemId: itemIds[1], Timestamp: timestamps[1]}, float64(timestamps[1].Unix())},
+	}, recommends)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Clean database
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestUpdateNeighbors(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_update_neighbors.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,11 +120,14 @@ func TestUpdateNeighbors(t *testing.T) {
 		}
 	}
 	dataSet := core.NewDataSet(users, items, ratings)
+	if err = db.InsertItems(items, nil); err != nil {
+		t.Fatal(err)
+	}
 	if err = UpdateNeighbors("msd", 5, dataSet, db); err != nil {
 		t.Fatal(err)
 	}
 	// Find N nearest neighbors
-	recommends, err := db.GetNeighbors("1", 0)
+	recommends, err := db.GetIdentList(BucketNeighbors, "1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,20 +136,32 @@ func TestUpdateNeighbors(t *testing.T) {
 	assert.Equal(t, "4", recommends[2].ItemId)
 	assert.Equal(t, "5", recommends[3].ItemId)
 	assert.Equal(t, "6", recommends[4].ItemId)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_update_neighbors.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestUpdateRecommends(t *testing.T) {
 	// Create database
-	db, err := Open(path.Join(core.TempDir, "/test_update_recommends.db"))
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Update recommends
 	dataSet := core.LoadDataFromBuiltIn("ml-100k")
+	itemId := make([]string, dataSet.ItemCount())
+	for itemIndex := 0; itemIndex < dataSet.ItemCount(); itemIndex++ {
+		itemId[itemIndex] = dataSet.ItemIndexer().ToID(itemIndex)
+	}
+	if err = db.InsertItems(itemId, nil); err != nil {
+		t.Fatal(err)
+	}
 	trainSet, testSet := core.Split(dataSet, 0.2)
 	params := base.Params{
 		base.NFactors:   10,
@@ -110,7 +182,7 @@ func TestUpdateRecommends(t *testing.T) {
 		targetSet := testSet.UserByIndex(userIndex)
 		if targetSet.Len() > 0 {
 			// Find top-n items in database
-			rankList, err := db.GetRecommends(userId, 10)
+			rankList, err := db.GetIdentList(BucketRecommends, userId, 10)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -132,8 +204,12 @@ func TestUpdateRecommends(t *testing.T) {
 	if precision-0.209 < -rankingEpsilon {
 		t.Log("unexpected Recall@10")
 	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	// Clean database
-	if err = os.Remove(path.Join(core.TempDir, "/test_update_recommends.db")); err != nil {
+	if err = os.Remove(fileName); err != nil {
 		t.Fatal(err)
 	}
 }

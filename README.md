@@ -96,7 +96,7 @@ It's easy to setup a recomendation service with `gorse`.
 - **Step 1**: Import feedback and items.
 
 ```bash
-$ gorse import-feedback ~/.gorse/gorse.db u.data --sep $'\t'
+$ gorse import-feedback ~/.gorse/gorse.db u.data --sep $'\t' --timestamp 2
 $ gorse import-items ~/.gorse/gorse.db u.item --sep '|'
 ```
 
@@ -121,12 +121,16 @@ It requests 5 recommended items for the 1-th user. The response might be:
 ```
 [
     {
-        "ItemId": "202",
-        "Score": 2.901297852545712
+        "ItemId": "919",
+        "Popularity": 96,
+        "Timestamp": "1995-01-01T00:00:00Z",
+        "Score": 1
     },
     {
-        "ItemId": "151",
-        "Score": 2.8871064286482864
+        "ItemId": "474",
+        "Popularity": 194,
+        "Timestamp": "1963-01-01T00:00:00Z",
+        "Score": 0.9486470268850127
     },
     ...
 ]

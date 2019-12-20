@@ -60,18 +60,13 @@ func Neighbors(dataSet DataSetInterface, itemId string, n int, similarity base.F
 	return items, scores
 }
 
-// Popular finds popular items in the dataset.
-func Popular(dataSet DataSetInterface, n int) ([]string, []float64) {
-	popItems := base.NewMaxHeap(n)
+// Popularity compute popularity for all items.
+func Popularity(dataSet DataSetInterface) (itemId []string, popularity []float64) {
+	itemId = make([]string, dataSet.ItemCount())
+	popularity = make([]float64, dataSet.ItemCount())
 	for itemIndex := 0; itemIndex < dataSet.ItemCount(); itemIndex++ {
-		itemScore := dataSet.ItemByIndex(itemIndex).Len()
-		itemId := dataSet.ItemIndexer().ToID(itemIndex)
-		popItems.Add(itemId, float64(itemScore))
+		popularity[itemIndex] = float64(dataSet.ItemByIndex(itemIndex).Len())
+		itemId[itemIndex] = dataSet.ItemIndexer().ToID(itemIndex)
 	}
-	elem, scores := popItems.ToSorted()
-	recommends := make([]string, len(elem))
-	for i := range recommends {
-		recommends[i] = elem[i].(string)
-	}
-	return recommends, scores
+	return
 }
