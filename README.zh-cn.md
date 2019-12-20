@@ -93,7 +93,7 @@ $ gorse test bpr --load-csv u.data --csv-sep $'\t' --eval-precision --eval-recal
 - **第一步**: 导入反馈和物品
 
 ```bash
-$ gorse import-feedback ~/.gorse/gorse.db u.data --sep $'\t'
+$ gorse import-feedback ~/.gorse/gorse.db u.data --sep $'\t' --timestamp 2
 $ gorse import-items ~/.gorse/gorse.db u.item --sep '|'
 ```
 
@@ -118,12 +118,16 @@ $ curl 127.0.0.1:8080/recommends/1?number=5
 ```
 [
     {
-        "ItemId": "202",
-        "Score": 2.901297852545712
+        "ItemId": "919",
+        "Popularity": 96,
+        "Timestamp": "1995-01-01T00:00:00Z",
+        "Score": 1
     },
     {
-        "ItemId": "151",
-        "Score": 2.8871064286482864
+        "ItemId": "474",
+        "Popularity": 194,
+        "Timestamp": "1963-01-01T00:00:00Z",
+        "Score": 0.9486470268850127
     },
     ...
 ]
