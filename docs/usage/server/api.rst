@@ -11,10 +11,10 @@ Insert New Items
 .. code-block:: bash
 
     curl -X PUT -H 'Content-Type: application/json' 127.0.0.1:8080/items \
-        -d '[{"ItemId":2048,"Timestamp":"2010-1-1"},{"ItemId":2049,"Timestamp":"2011-1-1"},{"ItemId":2050,"Timestamp":"2012-1-1"}]'
+        -d '[{"ItemId":"2048","Timestamp":"2010-1-1"},{"ItemId":"2049","Timestamp":"2011-1-1"},{"ItemId":"2050","Timestamp":"2012-1-1"}]'
 
 
-Insert three new items ``[{"ItemId":2048,"Timestamp":"2010-1-1"},{"ItemId":2049,"Timestamp":"2011-1-1"},{"ItemId":2050,"Timestamp":"2012-1-1"}]``.
+Insert three new items ``[{"ItemId":"2048","Timestamp":"2010-1-1"},{"ItemId":"2049","Timestamp":"2011-1-1"},{"ItemId":"2050","Timestamp":"2012-1-1"}]``.
 
 .. code-block:: json
 
@@ -33,7 +33,7 @@ Insert New Feedback
 .. code-block:: bash
 
     curl -X PUT -H 'Content-Type: application/json' 127.0.0.1:8080/feedback \
-        -d '[{"UserId":2048,"ItemId":1000,"Rating":3},{"UserId":2049,"ItemId":1000,"Rating":3},{"UserId":2050,"ItemId":1000,"Rating":3}]'
+        -d '[{"UserId":"2048","ItemId":"1000","Rating":3},{"UserId":"2049","ItemId":"1000","Rating":3},{"UserId":"2050","ItemId":"1000","Rating":3}]'
 
 Insert three new ratings: ``<2048,1000,3>``, ``<2049,1000,3>`` and ``<2050,1000,3>``.
 
@@ -86,20 +86,20 @@ Get top 10 popular items.
 
     [
         {
-            "ItemId": 50,
+            "ItemId": "50",
             "Popularity": 583,
             "Timestamp": "1977-01-01T00:00:00Z",
             "Score": 583
         },
         {
-            "ItemId": 258,
+            "ItemId": "258",
             "Popularity": 509,
             "Timestamp": "1997-07-11T00:00:00Z",
             "Score": 509
         },
         ...
         {
-            "ItemId": 121,
+            "ItemId": "121",
             "Popularity": 429,
             "Timestamp": "1996-07-03T00:00:00Z",
             "Score": 429
@@ -122,20 +122,20 @@ Get top 10 latest items.
 
     [
         {
-            "ItemId": 315,
+            "ItemId": "315",
             "Popularity": 160,
             "Timestamp": "1998-10-23T00:00:00Z",
             "Score": 909100800
         },
         {
-            "ItemId": 1432,
+            "ItemId": "1432",
             "Popularity": 3,
             "Timestamp": "1998-10-09T00:00:00Z",
             "Score": 907891200
         },
         ...
         {
-            "ItemId": 1648,
+            "ItemId": "1648",
             "Popularity": 1,
             "Timestamp": "1998-03-20T00:00:00Z",
             "Score": 890352000
@@ -157,20 +157,20 @@ Get 10 random items.
 
     [
         {
-            "ItemId": 42,
+            "ItemId": "42",
             "Popularity": 148,
             "Timestamp": "1994-01-01T00:00:00Z",
             "Score": 0
         },
         {
-            "ItemId": 71,
+            "ItemId": "71",
             "Popularity": 220,
             "Timestamp": "1994-01-01T00:00:00Z",
             "Score": 0
         },
         ...
         {
-            "ItemId": 1144,
+            "ItemId": "1144",
             "Popularity": 3,
             "Timestamp": "1997-05-02T00:00:00Z",
             "Score": 0
@@ -195,20 +195,20 @@ Recommend 10 items for the 100th user.
 
     [
         {
-            "ItemId": 748,
+            "ItemId": "748",
             "Popularity": 316,
             "Timestamp": "1997-03-14T00:00:00Z",
             "Score": 1.41319013391051
         },
         {
-            "ItemId": 307,
+            "ItemId": "307",
             "Popularity": 188,
             "Timestamp": "1997-01-01T00:00:00Z",
             "Score": 1.39176267281106
         },
         ...
         {
-            "ItemId": 259,
+            "ItemId": "259",
             "Popularity": 162,
             "Timestamp": "1997-01-01T00:00:00Z",
             "Score": 1.1303975574071174
@@ -231,20 +231,20 @@ Get top 10 similar items for the 100th item.
 
     [
         {
-            "ItemId": 1424,
+            "ItemId": "1424",
             "Popularity": 3,
             "Timestamp": "1994-01-01T00:00:00Z",
             "Score": 1.0000000000000002
         },
         {
-            "ItemId": 1234,
+            "ItemId": "1234",
             "Popularity": 8,
             "Timestamp": "1998-01-01T00:00:00Z",
             "Score": 1
         },
         ...
         {
-            "ItemId": 1554,
+            "ItemId": "1554",
             "Popularity": 2,
             "Timestamp": "1994-01-01T00:00:00Z",
             "Score": 1
@@ -264,8 +264,8 @@ Get interaction history of user 1.
 
     [
         {
-            "UserId": 1,
-            "ItemId": 1,
+            "UserId": "1",
+            "ItemId": "1",
             "Rating": 5
         },
         ...
@@ -284,7 +284,7 @@ List all users.
 .. code-block:: json
 
     [
-        1,
-        2,
+        "1",
+        "2",
         ...
     ]
