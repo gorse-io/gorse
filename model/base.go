@@ -41,9 +41,9 @@ func (model *Base) Fit(trainSet core.DataSet, options *base.RuntimeOptions) {
 
 // Init the Base model. The method must be called at the beginning of Fit.
 func (model *Base) Init(trainSet core.DataSetInterface) {
-	// Check Base.GetParams() called
+	// Check Base.SetParams() called
 	if model.isSetParamsCalled == false {
-		panic("Base.GetParams() not called")
+		panic("Base.SetParams() not called")
 	}
 	// Setup ID set
 	model.UserIndexer = trainSet.UserIndexer()
