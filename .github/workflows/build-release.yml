@@ -1,0 +1,28 @@
+name: build-release
+on: release
+jobs:
+  build-release:
+    name: Build release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.13
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+        id: go
+        
+      - name: Pull source
+        uses: actions/checkout@v1
+
+      - name: Install gox
+        run: go get -v github.com/mitchellh/gox
+        
+      - name: Build release
+        run: gox -os='darwin windows linux' -arch='386 amd64'
+
+      - name: Upload release
+        uses: JasonEtco/upload-to-release@master
+        with:
+          args: gorse_darwin_386 gorse_darwin_amd64 gorse_linux_386 gorse_linux_amd64 gorse_windows_386.exe gorse_windows_amd64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
