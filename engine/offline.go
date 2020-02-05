@@ -4,7 +4,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
-	"errors"
+	"fmt"
 	"log"
 )
 
@@ -86,8 +86,8 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 	log.Printf("create model %v with params = %v\n", name, params)
 	model := LoadModel(name, params)
 	if model == nil {
-		log.Fatalf("invalid model %v, aborting", name)
-		return errors.New("invalid model %v")
+		log.Printf("invalid model %v, aborting\n", name)
+		return fmt.Errorf("invalid model %v", name)
 	}
 	// Training model
 	log.Println("training model")
