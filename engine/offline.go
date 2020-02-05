@@ -84,6 +84,10 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 	// Create model
 	log.Printf("create model %v with params = %v\n", name, params)
 	model := LoadModel(name, params)
+	if model == nil {
+		log.Fatalf("invalid model %v, aborting", name)
+		return nil
+	}
 	// Training model
 	log.Println("training model")
 	model.Fit(dataSet, &base.RuntimeOptions{Verbose: true, FitJobs: fitJobs})
