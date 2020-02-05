@@ -213,3 +213,32 @@ func TestUpdateRecommends(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestUpdateRecommendsInvalidModel(t *testing.T) {
+	// Create database
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Update recommends
+	dataSet := core.LoadDataFromBuiltIn("ml-100k")
+	itemId := make([]string, dataSet.ItemCount())
+	for itemIndex := 0; itemIndex < dataSet.ItemCount(); itemIndex++ {
+		itemId[itemIndex] = dataSet.ItemIndexer().ToID(itemIndex)
+	}
+	if err = db.InsertItems(itemId, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = UpdateRecommends("invalid-model", nil, 10, runtime.NumCPU(), dataSet, db); err == nil {
+		t.Fatal("function should return an error")
+	}
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Clean database
+	if err = os.Remove(fileName); err != nil {
+		t.Fatal(err)
+	}
+}
