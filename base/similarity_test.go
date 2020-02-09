@@ -37,5 +37,5 @@ func TestImplicitSimilarity(t *testing.T) {
 	a := NewMarginalSubSet(indexer, []int{1, 2, 3}, []float64{4, 5, 6}, []int{0, 1, 2})
 	b := NewMarginalSubSet(indexer, []int{0, 1, 2}, []float64{0, 1, 2}, []int{0, 1, 2})
 	sim := ImplicitSimilarity(a, b)
-	assert.False(t, math.Abs(sim-0.5) > simTestEpsilon)
+	assert.False(t, math.Abs(sim-2.0/3) > simTestEpsilon)
 }

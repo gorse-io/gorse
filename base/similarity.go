@@ -52,5 +52,5 @@ func ImplicitSimilarity(a, b *MarginalSubSet) float64 {
 	a.ForIntersection(b, func(_ string, a, b float64) {
 		intersect++
 	})
-	return intersect / (float64(a.Len()) + float64(b.Len()) - intersect)
+	return intersect / (math.Sqrt(float64(a.Len())) * math.Sqrt(float64(b.Len())))
 }
