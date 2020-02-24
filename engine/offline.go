@@ -79,14 +79,6 @@ func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, 
 	}
 	return nil
 }
-func ExistRecommendedItem(item string,reads []RecommendedItem) bool{
-	for i := range reads {
-		if reads[i].Item.ItemId == item {
-			return true
-		}
-	}
-	return  false
-}
 // UpdateRecommends updates personalized recommendations for the database.
 func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs int,once bool, dataSet core.DataSetInterface, db *DB) error {
 	// Create model
@@ -108,13 +100,13 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 		// get read items
 		subItems := make(map[string]bool)
 		if once {
-			reads,err := db.GetIdentList(BucketReads, userId, 0 )
+			reads,err := db.GetIdentMap(BucketReads, userId)
 			if err != nil {
 				// reads is empty
 				subItems = items
 			}else{
 				for itemID := range items {
-					exist := ExistRecommendedItem(itemID,reads)
+					exist := reads[itemID]
 					if !exist {
 						subItems[itemID] = true
 					}

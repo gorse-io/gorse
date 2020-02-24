@@ -481,7 +481,38 @@ func (db *DB) GetRandom(n int) ([]RecommendedItem, error) {
 	}
 	return items, nil
 }
-
+// Set item table for a user.
+func (db *DB) PutIdentMap(bucketName string, id string, items map[string]bool) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+		// Get bucket
+		bucket := tx.Bucket([]byte(bucketName))
+		// Marshal data into bytes
+		buf, err := json.Marshal(items)
+		if err != nil {
+			return err
+		}
+		// Persist bytes to bucket
+		return bucket.Put([]byte(id), buf)
+	})
+}
+// Get item table for a user.
+func (db *DB) GetIdentMap(bucketName string, id string) (map[string]bool, error) {
+	var items map[string]bool
+	err := db.db.View(func(tx *bolt.Tx) error {
+		// Get bucket
+		bucket := tx.Bucket([]byte(bucketName))
+		// Unmarshal data into bytes
+		buf := bucket.Get([]byte(id))
+		if buf == nil {
+			return fmt.Errorf("%v not found", id)
+		}
+		return json.Unmarshal(buf, &items)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 // SetRecommends sets recommendations for a user.
 func (db *DB) PutIdentList(bucketName string, id string, items []RecommendedItem) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
