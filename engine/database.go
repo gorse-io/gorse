@@ -24,6 +24,7 @@ const (
 	bktFeedback      = "feedback"      // Bucket name for feedback
 	BucketNeighbors  = "neighbors"     // Bucket name for neighbors
 	BucketRecommends = "recommends"    // Bucket name for recommendations
+	BucketReads      = "reads"         // Bucket name for reads
 	bktUserFeedback  = "user_feedback" // Bucket name for user feedback
 )
 
@@ -67,7 +68,7 @@ func Open(path string) (*DB, error) {
 	}
 	// Create buckets
 	err = db.db.Update(func(tx *bolt.Tx) error {
-		bucketNames := []string{bktGlobal, bktItems, bktFeedback, BucketRecommends, BucketNeighbors, bktUserFeedback}
+		bucketNames := []string{bktGlobal, bktItems, bktFeedback, BucketRecommends,BucketReads, BucketNeighbors, bktUserFeedback}
 		for _, name := range bucketNames {
 			if _, err = tx.CreateBucketIfNotExists([]byte(name)); err != nil {
 				return err

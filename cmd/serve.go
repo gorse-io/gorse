@@ -29,7 +29,7 @@ var commandServe = &cobra.Command{
 		log.Printf("connect to database: %v", conf.Database.File)
 		// Start model daemon
 		go watch(conf, metaData)
-		serve(conf.Server)
+		serve(conf)
 	},
 }
 

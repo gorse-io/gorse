@@ -36,6 +36,7 @@ type RecommendConfig struct {
 	UpdateThreshold int    `toml:"update_threshold"`
 	CheckPeriod     int    `toml:"check_period"`
 	FitJobs         int    `toml:"fit_jobs"`
+	Once            bool   `toml:"once"`
 }
 
 // ParamsConfig is the configuration for hyper-parameters of the recommendation model.

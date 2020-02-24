@@ -79,9 +79,16 @@ func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, 
 	}
 	return nil
 }
-
+func ExistRecommendedItem(item string,reads []RecommendedItem) bool{
+	for i := range reads {
+		if reads[i].Item.ItemId == item {
+			return true
+		}
+	}
+	return  false
+}
 // UpdateRecommends updates personalized recommendations for the database.
-func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs int, dataSet core.DataSetInterface, db *DB) error {
+func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs int,once bool, dataSet core.DataSetInterface, db *DB) error {
 	// Create model
 	log.Printf("create model %v with params = %v\n", name, params)
 	model := LoadModel(name, params)
@@ -98,7 +105,25 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 	for userIndex := 0; userIndex < dataSet.UserCount(); userIndex++ {
 		userId := dataSet.UserIndexer().ToID(userIndex)
 		exclude := dataSet.UserByIndex(userIndex)
-		recommendItems, ratings := core.Top(items, userId, cacheSize, exclude, model)
+		// get read items
+		subItems := make(map[string]bool)
+		if once {
+			reads,err := db.GetIdentList(BucketReads, userId, 0 )
+			if err != nil {
+				// reads is empty
+				subItems = items
+			}else{
+				for itemID := range items {
+					exist := ExistRecommendedItem(itemID,reads)
+					if !exist {
+						subItems[itemID] = true
+					}
+				}
+			}
+		} else {
+			subItems = items
+		}
+		recommendItems, ratings := core.Top(subItems, userId, cacheSize, exclude, model)
 		recommends := make([]RecommendedItem, len(recommendItems))
 		items, err := db.GetItemsByID(recommendItems)
 		if err != nil {
@@ -137,7 +162,7 @@ func Update(config TomlConfig, metaData toml.MetaData, db *DB) error {
 	}
 	// Generate recommends
 	params := config.Params.ToParams(metaData)
-	if err = UpdateRecommends(config.Recommend.Model, params, config.Recommend.CacheSize, config.Recommend.FitJobs,
+	if err = UpdateRecommends(config.Recommend.Model, params, config.Recommend.CacheSize, config.Recommend.FitJobs, config.Recommend.Once,
 		dataSet, db); err != nil {
 		return err
 	}
