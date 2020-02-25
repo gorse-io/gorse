@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"strconv"
 )
+
 var engineConfig engine.TomlConfig
+
 func serve(config engine.TomlConfig) {
 	engineConfig = config
 	// Create a web service
@@ -275,10 +277,7 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 	}
 	if engineConfig.Recommend.Once {
 		// Get read recommended items
-		reads,err := db.GetIdentMap(engine.BucketReads, userId)
-		if reads == nil {
-			reads = make(map[string]bool)
-		}
+		reads, err := db.GetIdentList(engine.BucketReads, userId, 0)
 		var subItems []engine.RecommendedItem
 		change := false
 		notRecommended := false
@@ -286,25 +285,25 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 			change = false
 		} else {
 			for i := range items {
-				exist := reads[items[i].ItemId]
+				exist := engine.ExistRecommendedItem(items[i].ItemId, reads)
 				if !exist {
-					subItems = append(subItems,items[i])
+					subItems = append(subItems, items[i])
 					change = true
 				}
 			}
-			if !change{
+			if !change {
 				notRecommended = true
 			}
 		}
 		if notRecommended {
 			var empty []engine.RecommendedItem
 			json(response, empty)
-		}else if change {
+		} else if change {
 			subItems = engine.Ranking(subItems, number, p, t, c)
 			for i := range subItems {
-				reads[subItems[i].ItemId] = true
+				reads = append(reads, subItems[i])
 			}
-			if err := db.PutIdentMap(engine.BucketReads, userId, reads); err != nil {
+			if err := db.PutIdentList(engine.BucketReads, userId, reads); err != nil {
 				badRequest(response, err)
 			}
 			// Send result
@@ -313,14 +312,14 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 			// Send result
 			items = engine.Ranking(items, number, p, t, c)
 			for i := range items {
-				reads[items[i].ItemId] = true
+				reads = append(reads, items[i])
 			}
-			if err := db.PutIdentMap(engine.BucketReads, userId, reads); err != nil {
+			if err := db.PutIdentList(engine.BucketReads, userId, reads); err != nil {
 				badRequest(response, err)
 			}
 			json(response, items)
 		}
-	}else{
+	} else {
 		items = engine.Ranking(items, number, p, t, c)
 		json(response, items)
 	}
@@ -411,8 +410,8 @@ func getItem(request *restful.Request, response *restful.Response) {
 
 // Feedback is the feedback from a user to an item.
 type Feedback struct {
-	UserId   string     // identifier of the user
-	ItemId   string     // identifier of the item
+	UserId   string  // identifier of the user
+	ItemId   string  // identifier of the item
 	Feedback float64 // rating, confidence or indicator
 }
 

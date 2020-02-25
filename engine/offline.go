@@ -1,10 +1,10 @@
 package engine
 
 import (
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/core"
-	"fmt"
 	"log"
 )
 
@@ -79,8 +79,17 @@ func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, 
 	}
 	return nil
 }
+func ExistRecommendedItem(item string, reads []RecommendedItem) bool {
+	for i := range reads {
+		if reads[i].Item.ItemId == item {
+			return true
+		}
+	}
+	return false
+}
+
 // UpdateRecommends updates personalized recommendations for the database.
-func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs int,once bool, dataSet core.DataSetInterface, db *DB) error {
+func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs int, once bool, dataSet core.DataSetInterface, db *DB) error {
 	// Create model
 	log.Printf("create model %v with params = %v\n", name, params)
 	model := LoadModel(name, params)
@@ -100,13 +109,13 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 		// get read items
 		subItems := make(map[string]bool)
 		if once {
-			reads,err := db.GetIdentMap(BucketReads, userId)
+			reads, err := db.GetIdentList(BucketReads, userId, 0)
 			if err != nil {
 				// reads is empty
 				subItems = items
-			}else{
+			} else {
 				for itemID := range items {
-					exist := reads[itemID]
+					exist := ExistRecommendedItem(itemID, reads)
 					if !exist {
 						subItems[itemID] = true
 					}
