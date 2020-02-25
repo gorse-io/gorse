@@ -277,7 +277,11 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 	}
 	if engineConfig.Recommend.Once {
 		// Get read recommended items
-		reads, err := db.GetIdentList(engine.BucketReads, userId, 0)
+		readItems, err := db.GetIdentList(engine.BucketReads, userId, 0)
+		readSet := make(map[string]bool)
+		for _, item := range readItems {
+			readSet[item.ItemId] = true
+		}
 		var subItems []engine.RecommendedItem
 		change := false
 		notRecommended := false
@@ -285,8 +289,7 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 			change = false
 		} else {
 			for i := range items {
-				exist := engine.ExistRecommendedItem(items[i].ItemId, reads)
-				if !exist {
+				if _, exist := readSet[items[i].ItemId]; !exist {
 					subItems = append(subItems, items[i])
 					change = true
 				}
@@ -301,9 +304,9 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 		} else if change {
 			subItems = engine.Ranking(subItems, number, p, t, c)
 			for i := range subItems {
-				reads = append(reads, subItems[i])
+				readItems = append(readItems, subItems[i])
 			}
-			if err := db.PutIdentList(engine.BucketReads, userId, reads); err != nil {
+			if err := db.PutIdentList(engine.BucketReads, userId, readItems); err != nil {
 				badRequest(response, err)
 			}
 			// Send result
@@ -312,9 +315,9 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 			// Send result
 			items = engine.Ranking(items, number, p, t, c)
 			for i := range items {
-				reads = append(reads, items[i])
+				readItems = append(readItems, items[i])
 			}
-			if err := db.PutIdentList(engine.BucketReads, userId, reads); err != nil {
+			if err := db.PutIdentList(engine.BucketReads, userId, readItems); err != nil {
 				badRequest(response, err)
 			}
 			json(response, items)

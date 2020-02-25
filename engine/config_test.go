@@ -27,6 +27,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
 	assert.Equal(t, 10, config.Recommend.FitJobs)
+	assert.Equal(t, true, config.Recommend.Once)
 	// params configuration
 	assert.Equal(t, 0.05, config.Params.Lr)
 	assert.Equal(t, 0.01, config.Params.Reg)
@@ -43,7 +44,6 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "pearson", config.Params.Similarity)
 	assert.Equal(t, 100, config.Params.K)
 	assert.Equal(t, 5, config.Params.MinK)
-	//assert.Equal(t, "bpr", config.Params.Optimizer)
 	assert.Equal(t, 1.0, config.Params.Alpha)
 }
 
@@ -93,6 +93,7 @@ func TestTomlConfig_FillDefault(t *testing.T) {
 	assert.Equal(t, 10, config.Recommend.UpdateThreshold)
 	assert.Equal(t, 1, config.Recommend.CheckPeriod)
 	assert.Equal(t, 1, config.Recommend.FitJobs)
+	assert.Equal(t, false, config.Recommend.Once)
 }
 
 func TestLoadSimilarity(t *testing.T) {

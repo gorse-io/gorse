@@ -171,7 +171,7 @@ func TestUpdateRecommends(t *testing.T) {
 		base.InitMean:   0,
 		base.InitStdDev: 0.001,
 	}
-	if err = UpdateRecommends("bpr", params, 10, runtime.NumCPU(),false, trainSet, db); err != nil {
+	if err = UpdateRecommends("bpr", params, 10, runtime.NumCPU(), false, trainSet, db); err != nil {
 		t.Fatal(err)
 	}
 	// Check result
@@ -230,7 +230,7 @@ func TestUpdateRecommendsInvalidModel(t *testing.T) {
 	if err = db.InsertItems(itemId, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err = UpdateRecommends("invalid-model", nil, 10, runtime.NumCPU(), false,dataSet, db); err == nil {
+	if err = UpdateRecommends("invalid-model", nil, 10, runtime.NumCPU(), false, dataSet, db); err == nil {
 		t.Fatal("function should return an error")
 	}
 	// Close database

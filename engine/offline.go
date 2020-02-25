@@ -79,14 +79,6 @@ func UpdateNeighbors(name string, cacheSize int, dataSet core.DataSetInterface, 
 	}
 	return nil
 }
-func ExistRecommendedItem(item string, reads []RecommendedItem) bool {
-	for i := range reads {
-		if reads[i].Item.ItemId == item {
-			return true
-		}
-	}
-	return false
-}
 
 // UpdateRecommends updates personalized recommendations for the database.
 func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs int, once bool, dataSet core.DataSetInterface, db *DB) error {
@@ -106,25 +98,27 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 	for userIndex := 0; userIndex < dataSet.UserCount(); userIndex++ {
 		userId := dataSet.UserIndexer().ToID(userIndex)
 		exclude := dataSet.UserByIndex(userIndex)
-		// get read items
-		subItems := make(map[string]bool)
+		// exclude read items
+		candidateItems := items
 		if once {
-			reads, err := db.GetIdentList(BucketReads, userId, 0)
-			if err != nil {
-				// reads is empty
-				subItems = items
+			candidateItems = make(map[string]bool)
+			var err error
+			var readItems []RecommendedItem
+			if readItems, err = db.GetIdentList(BucketReads, userId, 0); err != nil {
+				candidateItems = items
 			} else {
-				for itemID := range items {
-					exist := ExistRecommendedItem(itemID, reads)
-					if !exist {
-						subItems[itemID] = true
+				readSet := make(map[string]bool)
+				for _, item := range readItems {
+					readSet[item.ItemId] = true
+				}
+				for itemId := range items {
+					if _, exist := readSet[itemId]; !exist {
+						candidateItems[itemId] = true
 					}
 				}
 			}
-		} else {
-			subItems = items
 		}
-		recommendItems, ratings := core.Top(subItems, userId, cacheSize, exclude, model)
+		recommendItems, ratings := core.Top(candidateItems, userId, cacheSize, exclude, model)
 		recommends := make([]RecommendedItem, len(recommendItems))
 		items, err := db.GetItemsByID(recommendItems)
 		if err != nil {

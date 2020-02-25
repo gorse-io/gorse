@@ -10,7 +10,7 @@ func TestRuntimeOptions(t *testing.T) {
 	var opt1 *RuntimeOptions
 	assert.Equal(t, true, opt1.GetVerbose())
 	assert.Equal(t, 1, opt1.GetFitJobs())
-	assert.Equal(t, 1,  opt1.GetCVJobs())
+	assert.Equal(t, 1, opt1.GetCVJobs())
 	// Check options
 	opt2 := &RuntimeOptions{false, 10, 5}
 	assert.Equal(t, false, opt2.GetVerbose())

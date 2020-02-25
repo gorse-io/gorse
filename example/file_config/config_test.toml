@@ -15,6 +15,7 @@ cache_size = 100        # the number of cached recommendations
 update_threshold = 10   # update model when more than 10 ratings are added
 check_period = 1        # check for update every one minute
 fit_jobs = 10           # concurrent jobs for fitting
+once = true             # recommend once
 
 # This section declares hyperparameters for the recommendation model.
 [params]
