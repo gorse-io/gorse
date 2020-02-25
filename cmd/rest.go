@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"strconv"
 )
-
-func serve(config engine.ServerConfig) {
+var engineConfig engine.TomlConfig
+func serve(config engine.TomlConfig) {
+	engineConfig = config
 	// Create a web service
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
@@ -68,8 +69,8 @@ func serve(config engine.ServerConfig) {
 	ws.Route(ws.GET("/status").To(getStatus))
 	// Start web service
 	restful.DefaultContainer.Add(ws)
-	log.Printf("start a server at %v\n", fmt.Sprintf("%s:%d", config.Host, config.Port))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", config.Host, config.Port), nil))
+	log.Printf("start a server at %v\n", fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port), nil))
 }
 
 // Status contains information about engine.
@@ -272,9 +273,58 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 		internalServerError(response, err)
 		return
 	}
-	// Send result
-	items = engine.Ranking(items, number, p, t, c)
-	json(response, items)
+	if engineConfig.Recommend.Once {
+		// Get read recommended items
+		reads,err := db.GetIdentMap(engine.BucketReads, userId)
+		if reads == nil {
+			reads = make(map[string]bool)
+		}
+		var subItems []engine.RecommendedItem
+		change := false
+		notRecommended := false
+		if err != nil {
+			change = false
+		} else {
+			for i := range items {
+				exist := reads[items[i].ItemId]
+				if !exist {
+					subItems = append(subItems,items[i])
+					change = true
+				}
+			}
+			if !change{
+				notRecommended = true
+			}
+		}
+		if notRecommended {
+			var empty []engine.RecommendedItem
+			json(response, empty)
+		}else if change {
+			subItems = engine.Ranking(subItems, number, p, t, c)
+			for i := range subItems {
+				reads[subItems[i].ItemId] = true
+			}
+			if err := db.PutIdentMap(engine.BucketReads, userId, reads); err != nil {
+				badRequest(response, err)
+			}
+			// Send result
+			json(response, subItems)
+		} else {
+			// Send result
+			items = engine.Ranking(items, number, p, t, c)
+			for i := range items {
+				reads[items[i].ItemId] = true
+			}
+			if err := db.PutIdentMap(engine.BucketReads, userId, reads); err != nil {
+				badRequest(response, err)
+			}
+			json(response, items)
+		}
+	}else{
+		items = engine.Ranking(items, number, p, t, c)
+		json(response, items)
+	}
+
 }
 
 // Change contains information of changes after insert.
