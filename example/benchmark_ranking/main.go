@@ -15,7 +15,7 @@ import (
 var models = map[string][]core.ModelInterface{
 	"ml-100k": {
 		model.NewItemPop(nil),
-		model.NewKNNImplicit(nil),
+		model.NewKNN(nil),
 		model.NewBPR(base.Params{
 			base.NFactors:   10,
 			base.Reg:        0.01,
@@ -24,7 +24,7 @@ var models = map[string][]core.ModelInterface{
 			base.InitMean:   0,
 			base.InitStdDev: 0.001,
 		}),
-		model.NewWRMF(base.Params{
+		model.NewALS(base.Params{
 			base.NFactors: 20,
 			base.Reg:      0.015,
 			base.Alpha:    1.0,
@@ -33,7 +33,7 @@ var models = map[string][]core.ModelInterface{
 	},
 	"ml-1m": {
 		model.NewItemPop(nil),
-		model.NewKNNImplicit(nil),
+		model.NewKNN(nil),
 		model.NewBPR(base.Params{
 			base.NFactors:   10,
 			base.Reg:        0.01,
@@ -42,7 +42,7 @@ var models = map[string][]core.ModelInterface{
 			base.InitMean:   0,
 			base.InitStdDev: 0.001,
 		}),
-		model.NewWRMF(base.Params{
+		model.NewALS(base.Params{
 			base.NFactors: 20,
 			base.Reg:      0.015,
 			base.Alpha:    1.0,
@@ -69,8 +69,7 @@ func main() {
 	lines := make([][]string, 0)
 	for _, m := range models[dataset] {
 		start := time.Now()
-		cv := core.CrossValidate(m, data, core.NewKFoldSplitter(5), 0, nil,
-			core.NewRankEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
+		cv := core.CrossValidate(m, data, core.NewKFoldSplitter(5), 0, nil, core.NewEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
 		tm := time.Since(start)
 		line := []string{fmt.Sprint(reflect.TypeOf(m))}
 		for i := range cv {

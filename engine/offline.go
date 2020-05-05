@@ -104,7 +104,7 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 			candidateItems = make(map[string]bool)
 			var err error
 			var readItems []RecommendedItem
-			if readItems, err = db.GetIdentList(BucketReads, userId, 0); err != nil {
+			if readItems, err = db.GetIdentList(BucketIgnore, userId, 0); err != nil {
 				candidateItems = items
 			} else {
 				readSet := make(map[string]bool)
