@@ -14,6 +14,23 @@ const (
 	rankingEpsilon = 0.008
 )
 
+func checkRegression(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
+	expectations []float64, evaluators ...Evaluator) {
+	// Cross validation
+	results := CrossValidate(model, dataSet, splitter, 0, &RuntimeOptions{CVJobs: runtime.NumCPU()}, evaluators...)
+	// Check accuracy
+	for i := range evalNames {
+		accuracy := stat.Mean(results[i].TestScore, nil)
+		if math.IsNaN(accuracy) {
+			t.Fatalf("%s: NaN", evalNames[i])
+		} else if accuracy > expectations[i]+ratingEpsilon {
+			t.Fatalf("%s: %.3f > %.3f+%.3f", evalNames[i], accuracy, expectations[i], ratingEpsilon)
+		} else {
+			t.Logf("%s: %.3f = %.3f%+.3f", evalNames[i], accuracy, expectations[i], accuracy-expectations[i])
+		}
+	}
+}
+
 func checkRank(t *testing.T, model ModelInterface, dataSet DataSetInterface, splitter Splitter, evalNames []string,
 	expectations []float64, evaluators ...Evaluator) {
 	// Cross validation
@@ -36,9 +53,9 @@ func TestItemPop(t *testing.T) {
 	checkRank(t, NewItemPop(nil), data, NewKFoldSplitter(5),
 		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG", "MRR"},
 		[]float64{0.211, 0.070, 0.190, 0.116, 0.135, 0.477, 0.417},
-		NewEvaluator(5, 0, Precision, Recall),
-		NewEvaluator(10, 0, Precision, Recall),
-		NewEvaluator(math.MaxInt32, 0, MAP, NDCG, MRR))
+		NewEvaluator(5, Precision, Recall),
+		NewEvaluator(10, Precision, Recall),
+		NewEvaluator(math.MaxInt32, MAP, NDCG, MRR))
 }
 
 func TestBPR(t *testing.T) {
@@ -54,9 +71,9 @@ func TestBPR(t *testing.T) {
 		data, NewKFoldSplitter(5),
 		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG"},
 		[]float64{0.378, 0.129, 0.321, 0.209, 0.260, 0.601},
-		NewEvaluator(5, 0, Precision, Recall),
-		NewEvaluator(10, 0, Precision, Recall),
-		NewEvaluator(math.MaxInt32, 0, MAP, NDCG))
+		NewEvaluator(5, Precision, Recall),
+		NewEvaluator(10, Precision, Recall),
+		NewEvaluator(math.MaxInt32, MAP, NDCG))
 }
 
 func TestALS(t *testing.T) {
@@ -69,9 +86,9 @@ func TestALS(t *testing.T) {
 	}), data, NewKFoldSplitter(5),
 		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG"},
 		[]float64{0.416, 0.142, 0.353, 0.227, 0.287, 0.624},
-		NewEvaluator(5, 0, Precision, Recall),
-		NewEvaluator(10, 0, Precision, Recall),
-		NewEvaluator(math.MaxInt32, 0, MAP, NDCG))
+		NewEvaluator(5, Precision, Recall),
+		NewEvaluator(10, Precision, Recall),
+		NewEvaluator(math.MaxInt32, MAP, NDCG))
 }
 
 func TestKNN(t *testing.T) {
@@ -80,9 +97,9 @@ func TestKNN(t *testing.T) {
 	checkRank(t, NewKNN(nil), data, NewKFoldSplitter(5),
 		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG", "MRR"},
 		[]float64{0.211, 0.070, 0.190, 0.116, 0.135, 0.477, 0.417},
-		NewEvaluator(5, 0, Precision, Recall),
-		NewEvaluator(10, 0, Precision, Recall),
-		NewEvaluator(math.MaxInt32, 0, MAP, NDCG, MRR))
+		NewEvaluator(5, Precision, Recall),
+		NewEvaluator(10, Precision, Recall),
+		NewEvaluator(math.MaxInt32, MAP, NDCG, MRR))
 }
 
 func TestFM_BPR(t *testing.T) {
@@ -99,7 +116,7 @@ func TestFM_BPR(t *testing.T) {
 		data, NewKFoldSplitter(5),
 		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG"},
 		[]float64{0.378, 0.129, 0.321, 0.209, 0.260, 0.601},
-		NewEvaluator(5, 0, Precision, Recall),
-		NewEvaluator(10, 0, Precision, Recall),
-		NewEvaluator(math.MaxInt32, 0, MAP, NDCG))
+		NewEvaluator(5, Precision, Recall),
+		NewEvaluator(10, Precision, Recall),
+		NewEvaluator(math.MaxInt32, MAP, NDCG))
 }
