@@ -105,33 +105,18 @@ var commandTest = &cobra.Command{
 		// Load evaluators
 		evaluatorNames := make([]string, 0)
 		n, _ := cmd.PersistentFlags().GetInt("top")
-		rankMetrics := make([]core.RankMetric, 0)
-		ratingMetrics := make([]core.RatingMetric, 0)
-		evalChanged := false
+		scorers := make([]core.Scorer, 0)
 		for _, evalFlag := range evalFlags {
 			if cmd.PersistentFlags().Changed(evalFlag.Name) {
-				evalChanged = true
-				if evalFlag.Rank {
-					rankMetrics = append(rankMetrics, evalFlag.RankMetric)
-					evaluatorNames = append(evaluatorNames, fmt.Sprintf("%s@%d", evalFlag.Print, n))
-				} else {
-					ratingMetrics = append(ratingMetrics, evalFlag.RatingMetric)
-					evaluatorNames = append(evaluatorNames, evalFlag.Print)
-				}
+				scorers = append(scorers, evalFlag.Scorer)
+				evaluatorNames = append(evaluatorNames, fmt.Sprintf("%s@%d", evalFlag.Print, n))
 			}
 		}
-		if !evalChanged {
-			ratingMetrics = append(ratingMetrics, core.RMSE)
-			evaluatorNames = append(evaluatorNames, "RMSE")
+		if len(scorers) == 0 {
+			scorers = append(scorers, core.NDCG)
+			evaluatorNames = append(evaluatorNames, fmt.Sprintf("NDCG@%d", n))
 		}
 		log.Printf("Use evaluators %v\n", evaluatorNames)
-		evaluators := make([]core.CrossValidationEvaluator, 0)
-		if len(ratingMetrics) > 0 {
-			evaluators = append(evaluators, core.NewRatingEvaluator(ratingMetrics...))
-		}
-		if len(rankMetrics) > 0 {
-			evaluators = append(evaluators, core.NewRankEvaluator(n, rankMetrics...))
-		}
 		// Load runtime options
 		verbose, _ := cmd.PersistentFlags().GetBool("verbose")
 		fitJobs, _ := cmd.PersistentFlags().GetInt("fit-jobs")
@@ -141,7 +126,7 @@ var commandTest = &cobra.Command{
 			options.GetVerbose(), options.GetFitJobs(), options.GetCVJobs())
 		// Cross validation
 		start := time.Now()
-		out := core.CrossValidate(model, data, core.NewKFoldSplitter(5), 0, options, evaluators...)
+		out := core.CrossValidate(model, data, core.NewUserLOOSplitter(5), 0, options, core.NewEvaluator(n, scorers...))
 		elapsed := time.Since(start)
 		// Render table
 		header := make([]string, k+2)
@@ -169,36 +154,25 @@ var commandTest = &cobra.Command{
 /* Models */
 
 var models = map[string]core.ModelInterface{
-	"svd":           model.NewSVD(nil),
-	"knn":           model.NewKNN(nil),
-	"wrmf":          model.NewWRMF(nil),
-	"baseline":      model.NewBaseLine(nil),
-	"item-pop":      model.NewItemPop(nil),
-	"slope-one":     model.NewSlopOne(nil),
-	"co-clustering": model.NewCoClustering(nil),
-	"bpr":           model.NewBPR(nil),
-	"knn-implicit":  model.NewKNNImplicit(nil),
+	"als":      model.NewALS(nil),
+	"item-pop": model.NewItemPop(nil),
+	"bpr":      model.NewBPR(nil),
+	"knn":      model.NewKNN(nil),
 }
 
 /* Flags for evaluators */
 
 type _EvalFlag struct {
-	Rank         bool
-	Print        string
-	Name         string
-	Help         string
-	RatingMetric core.RatingMetric
-	RankMetric   core.RankMetric
+	Print  string
+	Name   string
+	Help   string
+	Scorer core.Scorer
 }
 
 var evalFlags = []_EvalFlag{
-	{Rank: false, RatingMetric: core.RMSE, Print: "RMSE", Name: "eval-rmse", Help: "evaluate the model by RMSE"},
-	{Rank: false, RatingMetric: core.MAE, Print: "MAE", Name: "eval-mae", Help: "evaluate the model by MAE"},
-	{Rank: true, RankMetric: core.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
-	{Rank: true, RankMetric: core.Recall, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
-	{Rank: true, RankMetric: core.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
-	{Rank: true, RankMetric: core.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
-	{Rank: true, RankMetric: core.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
+	{Scorer: core.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
+	{Scorer: core.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
+	{Scorer: core.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
 }
 
 /* Flags for hyper-parameters */

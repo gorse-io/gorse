@@ -103,24 +103,12 @@ func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
 // LoadModel creates model from name and parameters.
 func LoadModel(name string, params base.Params) core.ModelInterface {
 	switch name {
-	case "svd":
-		return model.NewSVD(params)
 	case "bpr":
 		return model.NewBPR(params)
+	case "als":
+		return model.NewALS(params)
 	case "knn":
 		return model.NewKNN(params)
-	case "slope_one":
-		return model.NewSlopOne(params)
-	case "co_clustering":
-		return model.NewCoClustering(params)
-	case "nmf":
-		return model.NewNMF(params)
-	case "wrmf":
-		return model.NewWRMF(params)
-	case "svd++":
-		return model.NewSVDpp(params)
-	case "knn_implicit":
-		return model.NewKNNImplicit(params)
 	case "item_pop":
 		return model.NewItemPop(params)
 	}
