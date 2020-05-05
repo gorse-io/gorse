@@ -33,12 +33,6 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 5, count)
-	// Count user
-	count, err = db.CountUsers()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 5, count)
 	// Get feedback
 	retUsers, retItems, retFeedback, err := db.GetFeedback()
 	if err != nil {
@@ -47,22 +41,6 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 	assert.Equal(t, users, retUsers)
 	assert.Equal(t, items, retItems)
 	assert.Equal(t, feedback, retFeedback)
-	// Get users
-	retUsers, err = db.GetUsers()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, users, retUsers)
-	// Get user feedback
-	for i, userId := range users {
-		userFeedback, err := db.GetUserFeedback(userId)
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Equal(t, []Feedback{
-			{FeedbackKey{userId, items[i]}, feedback[i]},
-		}, userFeedback)
-	}
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)

@@ -116,15 +116,10 @@ func TestLoadModel(t *testing.T) {
 		typeOf reflect.Type
 	}
 	models := []Model{
-		{"svd", reflect.TypeOf(model.NewSVD(nil))},
 		{"bpr", reflect.TypeOf(model.NewBPR(nil))},
 		{"knn", reflect.TypeOf(model.NewKNN(nil))},
-		{"slope_one", reflect.TypeOf(model.NewSlopOne(nil))},
-		{"co_clustering", reflect.TypeOf(model.NewCoClustering(nil))},
-		{"nmf", reflect.TypeOf(model.NewNMF(nil))},
-		{"wrmf", reflect.TypeOf(model.NewWRMF(nil))},
-		{"svd++", reflect.TypeOf(model.NewSVDpp(nil))},
-		{"knn_implicit", reflect.TypeOf(model.NewKNNImplicit(nil))},
+		{"als", reflect.TypeOf(model.NewALS(nil))},
+		{"knn", reflect.TypeOf(model.NewKNN(nil))},
 	}
 	for _, m := range models {
 		assert.Equal(t, m.typeOf, reflect.TypeOf(LoadModel(m.name, nil)))
