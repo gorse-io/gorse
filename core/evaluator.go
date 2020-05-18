@@ -4,15 +4,16 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"math"
+	"math/rand"
 )
 
 // Evaluator is the evaluator for cross-validation.
 type Evaluator func(estimator ModelInterface, testSet, trainSet DataSetInterface) []float64
 
 // NewEvaluator creates a evaluator for personalized ranking cross-validation.
-func NewEvaluator(n int, metrics ...Scorer) Evaluator {
+func NewEvaluator(n int, numCandidates int, metrics ...Scorer) Evaluator {
 	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) []float64 {
-		return EvaluateRank(model, testSet, trainSet, n, metrics...)
+		return EvaluateRank(model, testSet, trainSet, n, numCandidates, metrics...)
 	}
 }
 
@@ -22,16 +23,39 @@ func NewEvaluator(n int, metrics ...Scorer) Evaluator {
 type Scorer func(targetSet *base.MarginalSubSet, rankList []string) float64
 
 // EvaluateRank evaluates a model in top-n tasks.
-func EvaluateRank(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface, n int, scorers ...Scorer) []float64 {
+func EvaluateRank(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface, n int, numCandidates int, scorers ...Scorer) []float64 {
 	sum := make([]float64, len(scorers))
 	count := 0.0
 	items := Items(testSet, excludeSet)
+	// Convert to slice
+	var itemIds []string
+	if numCandidates > 0 {
+		itemIds = make([]string, 0, len(items))
+		for itemId := range items {
+			itemIds = append(itemIds, itemId)
+		}
+	}
 	// For all users
 	for userIndex := 0; userIndex < testSet.UserCount(); userIndex++ {
 		userId := testSet.UserIndexer().ToID(userIndex)
 		// Find top-n items in test set
 		targetSet := testSet.UserByIndex(userIndex)
 		if targetSet.Len() > 0 {
+			if numCandidates > 0 {
+				// Sample items
+				items = make(map[string]bool)
+				targetSet.ForEach(func(i int, id string, value float64) {
+					items[id] = true
+				})
+				exclude := excludeSet.User(userId)
+				for len(items) < numCandidates+n {
+					index := rand.Intn(len(itemIds))
+					itemId := itemIds[index]
+					if _, isSampled := items[itemId]; !isSampled && !exclude.Contain(itemId) {
+						items[itemId] = true
+					}
+				}
+			}
 			// Find top-n items in predictions
 			rankList, _ := Top(items, userId, n, excludeSet.User(userId), estimator)
 			count++
@@ -84,6 +108,16 @@ func Recall(targetSet *base.MarginalSubSet, rankList []string) float64 {
 		}
 	}
 	return float64(hit) / float64(targetSet.Len())
+}
+
+// HR means Hit Ratio.
+func HR(targetSet *base.MarginalSubSet, rankList []string) float64 {
+	for _, itemId := range rankList {
+		if targetSet.Contain(itemId) {
+			return 1
+		}
+	}
+	return 0
 }
 
 // MAP means Mean Average Precision.
