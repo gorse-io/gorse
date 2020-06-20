@@ -33,7 +33,7 @@ Insert New Feedback
 .. code-block:: bash
 
     curl -X PUT -H 'Content-Type: application/json' 127.0.0.1:8080/feedback \
-        -d '[{"UserId":"2048","ItemId":"1000","Rating":3},{"UserId":"2049","ItemId":"1000","Rating":3},{"UserId":"2050","ItemId":"1000","Rating":3}]'
+        -d '[{"UserId":"2048","ItemId":"1000","Feedback":3},{"UserId":"2049","ItemId":"1000","Feedback":3},{"UserId":"2050","ItemId":"1000","Feedback":3}]'
 
 Insert three new ratings: ``<2048,1000,3>``, ``<2049,1000,3>`` and ``<2050,1000,3>``.
 
