@@ -1,0 +1,63 @@
+name: Go
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up dataset
+      run: |
+        mkdir -p ~/.gorse/dataset
+        mkdir -p ~/.gorse/download
+        wget https://cdn.sine-x.com/datasets/movielens/ml-100k.zip -P ~/.gorse/download
+        unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.13
+      id: go
+    
+    - name: Setup python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+        architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        go get -v -t -d ./...
+        if [ -f Gopkg.toml ]; then
+            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+            dep ensure
+        fi
+
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        pip3 install -r test/requirements.txt
+        
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+    
+    - name: Regression Test - CV
+      run: bash test/test_cross_validation.sh
+      
+    - name: Regression Test - Import/Export
+      run: bash test/test_data_import_export.sh
+    
+    - name: Regression Test - Server
+      run: bash test/test_server.sh
