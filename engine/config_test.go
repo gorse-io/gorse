@@ -37,13 +37,6 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, false, config.Params.UseBias)
 	assert.Equal(t, 0.0, config.Params.InitMean)
 	assert.Equal(t, 0.001, config.Params.InitStdDev)
-	assert.Equal(t, 10, config.Params.NUserClusters)
-	assert.Equal(t, 10, config.Params.NItemClusters)
-	assert.Equal(t, "baseline", config.Params.Type)
-	assert.Equal(t, true, config.Params.UserBased)
-	assert.Equal(t, "pearson", config.Params.Similarity)
-	assert.Equal(t, 100, config.Params.K)
-	assert.Equal(t, 5, config.Params.MinK)
 	assert.Equal(t, 1.0, config.Params.Alpha)
 }
 
@@ -51,7 +44,7 @@ func TestParamsConfig_ToParams(t *testing.T) {
 	// test on full configuration
 	config, meta := LoadConfig("../example/file_config/config_test.toml")
 	params := config.Params.ToParams(meta)
-	assert.Equal(t, 19, len(params))
+	assert.Equal(t, 9, len(params))
 
 	// test on empty configuration
 	config, meta = LoadConfig("../example/file_config/config_empty.toml")
