@@ -26,9 +26,10 @@ func init() {
 	commandTest.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
 	commandTest.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
 	// Splitter
-	commandTest.PersistentFlags().Int("split-fold", 5, "split data by k fold")
+	commandTest.PersistentFlags().Int("n-split", 5, "number of leave-one-out splits")
 	// Evaluators
-	commandTest.PersistentFlags().Int("top", 10, "evaluate the model in top N ranking")
+	commandTest.PersistentFlags().Int("top", 1, "evaluate the model in top N ranking")
+	commandTest.PersistentFlags().Int("n-negative", 100, "number of negative samples when evaluating")
 	for _, evalFlag := range evalFlags {
 		commandTest.PersistentFlags().Bool(evalFlag.Name, false, evalFlag.Help)
 	}
@@ -100,11 +101,12 @@ var commandTest = &cobra.Command{
 		log.Printf("Load hyper-parameters %v\n", params)
 		model.SetParams(params)
 		// Load splitter
-		k, _ := cmd.PersistentFlags().GetInt("split-fold")
+		k, _ := cmd.PersistentFlags().GetInt("n-split")
 		log.Printf("Use %d-fold splitter\n", k)
 		// Load evaluators
 		evaluatorNames := make([]string, 0)
 		n, _ := cmd.PersistentFlags().GetInt("top")
+		numSample, _ := cmd.PersistentFlags().GetInt("n-negative")
 		scorers := make([]core.Scorer, 0)
 		for _, evalFlag := range evalFlags {
 			if cmd.PersistentFlags().Changed(evalFlag.Name) {
@@ -126,7 +128,7 @@ var commandTest = &cobra.Command{
 			options.GetVerbose(), options.GetFitJobs(), options.GetCVJobs())
 		// Cross validation
 		start := time.Now()
-		out := core.CrossValidate(model, data, core.NewUserLOOSplitter(5), 0, options, core.NewEvaluator(n, scorers...))
+		out := core.CrossValidate(model, data, core.NewUserLOOSplitter(k), 0, options, core.NewEvaluator(n, numSample, scorers...))
 		elapsed := time.Since(start)
 		// Render table
 		header := make([]string, k+2)
@@ -170,6 +172,9 @@ type _EvalFlag struct {
 }
 
 var evalFlags = []_EvalFlag{
+	{Scorer: core.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
+	{Scorer: core.Recall, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
+	{Scorer: core.HR, Print: "HR", Name: "eval-hr", Help: "evaluate the model by HR@N"},
 	{Scorer: core.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
 	{Scorer: core.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
 	{Scorer: core.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
@@ -197,19 +202,7 @@ var paramFlags = []_ParamFlag{
 	{intFlag, base.NEpochs, "set-n-epochs", "set number of epochs"},
 	{intFlag, base.NFactors, "set-n-factors", "set number of factors"},
 	{intFlag, base.RandomState, "set-random-state", "set random state (seed)"},
-	{boolFlag, base.UseBias, "set-use-bias", "set use bias"},
 	{float64Flag, base.InitMean, "set-init-mean", "set mean of gaussian initial parameter"},
 	{float64Flag, base.InitStdDev, "set-init-std", "set standard deviation of gaussian initial parameter"},
-	{float64Flag, base.InitLow, "set-init-low", "set lower bound of uniform initial parameter"},
-	{float64Flag, base.InitHigh, "set-init-high", "set upper bound of uniform initial parameter"},
-	{intFlag, base.NUserClusters, "set-user-clusters", "set number of user cluster"},
-	{intFlag, base.NItemClusters, "set-item-clusters", "set number of item cluster"},
-	{stringFlag, base.Type, "set-type", "set type for KNN"},
-	{boolFlag, base.UserBased, "set-user-based", "set user based if true. otherwise item based."},
-	{stringFlag, base.Similarity, "set-similarity", "set similarity metrics"},
-	{stringFlag, base.K, "set-k", "set number of neighbors"},
-	{stringFlag, base.MinK, "set-mink", "set least number of neighbors"},
-	{stringFlag, base.Optimizer, "set-optimizer", "set optimizer for optimization (sgd/bpr)"},
-	{intFlag, base.Shrinkage, "set-shrinkage", "set shrinkage strength of similarity"},
 	{float64Flag, base.Alpha, "set-alpha", "set alpha value, depend on context"},
 }
