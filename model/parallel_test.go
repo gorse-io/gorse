@@ -16,10 +16,10 @@ func ModelParallelTest(t *testing.T, models ...core.ModelInterface) {
 		t.Log("Checking", reflect.TypeOf(model))
 		// Fit model
 		model.Fit(trains[0], &base.RuntimeOptions{FitJobs: 1})
-		rmse := core.EvaluateRank(model, tests[0], trains[0], 10, core.NDCG)[0]
+		rmse := core.EvaluateRank(model, tests[0], trains[0], 10, 0, core.NDCG)[0]
 		// Refit model
 		model.Fit(trains[0], &base.RuntimeOptions{FitJobs: 3})
-		rmse2 := core.EvaluateRank(model, tests[0], trains[0], 10, core.NDCG)[0]
+		rmse2 := core.EvaluateRank(model, tests[0], trains[0], 10, 0, core.NDCG)[0]
 		assert.Equal(t, rmse, rmse2)
 	}
 }
