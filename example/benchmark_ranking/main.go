@@ -69,7 +69,7 @@ func main() {
 	lines := make([][]string, 0)
 	for _, m := range models[dataset] {
 		start := time.Now()
-		cv := core.CrossValidate(m, data, core.NewKFoldSplitter(5), 0, nil, core.NewEvaluator(10, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
+		cv := core.CrossValidate(m, data, core.NewKFoldSplitter(5), 0, nil, core.NewEvaluator(10, 0, core.Precision, core.Recall, core.MAP, core.NDCG, core.MRR))
 		tm := time.Since(start)
 		line := []string{fmt.Sprint(reflect.TypeOf(m))}
 		for i := range cv {
