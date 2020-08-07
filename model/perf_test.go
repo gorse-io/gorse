@@ -59,22 +59,6 @@ func TestBPR(t *testing.T) {
 		NewEvaluator(math.MaxInt32, 0, MAP, NDCG))
 }
 
-func TestBPR_LOO(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-1m")
-	checkRank(t, NewBPR(Params{
-		NFactors:   10,
-		Reg:        0.01,
-		Lr:         0.05,
-		NEpochs:    20,
-		InitMean:   0,
-		InitStdDev: 0.001,
-	}),
-		data, NewUserLOOSplitter(5),
-		[]string{"HR@10", "NDCG@10"},
-		[]float64{0, 0},
-		NewEvaluator(10, 100, HR, NDCG))
-}
-
 func TestALS(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	checkRank(t, NewALS(Params{
@@ -90,19 +74,6 @@ func TestALS(t *testing.T) {
 		NewEvaluator(math.MaxInt32, 0, MAP, NDCG))
 }
 
-func TestALS_LOO(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-1m")
-	checkRank(t, NewALS(Params{
-		NFactors: 20,
-		Reg:      0.015,
-		Alpha:    1.0,
-		NEpochs:  10,
-	}), data, NewUserLOOSplitter(5),
-		[]string{"HR@10", "NDCG@10"},
-		[]float64{0, 0},
-		NewEvaluator(10, 100, HR, NDCG))
-}
-
 func TestKNN(t *testing.T) {
 	data := LoadDataFromBuiltIn("ml-100k")
 	// KNN should perform better than ItemPop.
@@ -112,15 +83,6 @@ func TestKNN(t *testing.T) {
 		NewEvaluator(5, 0, Precision, Recall),
 		NewEvaluator(10, 0, Precision, Recall),
 		NewEvaluator(math.MaxInt32, 0, MAP, NDCG, MRR))
-}
-
-func TestKNN_LOO(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-100k")
-	// KNN should perform better than ItemPop.
-	checkRank(t, NewKNN(nil), data, NewUserLOOSplitter(5),
-		[]string{"HR@10", "NDCG@10"},
-		[]float64{0, 0},
-		NewEvaluator(10, 100, HR, NDCG))
 }
 
 func TestFM_BPR(t *testing.T) {

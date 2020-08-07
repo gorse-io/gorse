@@ -26,9 +26,10 @@ func init() {
 	commandTest.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
 	commandTest.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
 	// Splitter
-	commandTest.PersistentFlags().Int("n-split", 5, "number of leave-one-out splits")
+	commandTest.PersistentFlags().Int("n-split", 5, "number of splits")
+	commandTest.PersistentFlags().String("splitter", "loo", "the splitter: loo or k-fold")
 	// Evaluators
-	commandTest.PersistentFlags().Int("top", 1, "evaluate the model in top N ranking")
+	commandTest.PersistentFlags().Int("top", 10, "evaluate the model in top N ranking")
 	commandTest.PersistentFlags().Int("n-negative", 100, "number of negative samples when evaluating")
 	for _, evalFlag := range evalFlags {
 		commandTest.PersistentFlags().Bool(evalFlag.Name, false, evalFlag.Help)
@@ -102,7 +103,20 @@ var commandTest = &cobra.Command{
 		model.SetParams(params)
 		// Load splitter
 		k, _ := cmd.PersistentFlags().GetInt("n-split")
-		log.Printf("Use %d-fold splitter\n", k)
+		splitterName, _ := cmd.PersistentFlags().GetString("splitter")
+		var splitter core.Splitter
+		switch splitterName {
+		case "loo":
+			log.Printf("Use loo splitter\n")
+			splitter = core.NewUserLOOSplitter(k)
+			break
+		case "k-fold":
+			log.Printf("Use %d-fold splitter\n", k)
+			splitter = core.NewKFoldSplitter(k)
+			break
+		default:
+			log.Fatalf("Unkown splitter %s\n", splitterName)
+		}
 		// Load evaluators
 		evaluatorNames := make([]string, 0)
 		n, _ := cmd.PersistentFlags().GetInt("top")
@@ -128,7 +142,7 @@ var commandTest = &cobra.Command{
 			options.GetVerbose(), options.GetFitJobs(), options.GetCVJobs())
 		// Cross validation
 		start := time.Now()
-		out := core.CrossValidate(model, data, core.NewUserLOOSplitter(k), 0, options, core.NewEvaluator(n, numSample, scorers...))
+		out := core.CrossValidate(model, data, splitter, 0, options, core.NewEvaluator(n, numSample, scorers...))
 		elapsed := time.Since(start)
 		// Render table
 		header := make([]string, k+2)
