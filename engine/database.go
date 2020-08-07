@@ -25,11 +25,8 @@ const (
 	BucketIgnore     = "ignored"    // Bucket name for ignored
 	BucketNeighbors  = "neighbors"  // Bucket name for neighbors
 	BucketRecommends = "recommends" // Bucket name for recommendations
-)
-
-const (
-	ListPop    = "pop"    // List name for popular items
-	ListLatest = "latest" // List name for latest items
+	BucketPop        = "pop"        // Bucket name for popular items
+	BucketLatest     = "latest"     // Bucket name for latest items
 )
 
 func encodeInt(v int) []byte {
@@ -263,21 +260,51 @@ func (db *DB) GetItem(itemId string) (Item, error) {
 }
 
 // GetItems returns all items in the dataset.
-func (db *DB) GetItems() ([]Item, error) {
+func (db *DB) GetItems(n int, offset int) ([]Item, error) {
 	items := make([]Item, 0)
 	err := db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(BucketItems))
-		return bucket.ForEach(func(k, v []byte) error {
-			item := Item{ItemId: string(k)}
-			if v != nil {
-				err := json.Unmarshal(v, &item)
+		if n == 0 {
+			n = bucket.Stats().KeyN
+		}
+		// Skip offset
+		cursor := bucket.Cursor()
+		cursor.First()
+		first := true
+		for i := 0; i < offset; i++ {
+			var key []byte
+			if first {
+				key, _ = cursor.First()
+				first = false
+			} else {
+				key, _ = cursor.Next()
+			}
+			if key == nil {
+				return nil
+			}
+		}
+		// Read n
+		for i := 0; i < n; i++ {
+			var key, value []byte
+			if first {
+				key, value = cursor.First()
+				first = false
+			} else {
+				key, value = cursor.Next()
+			}
+			if key == nil {
+				return nil
+			}
+			item := Item{ItemId: string(key)}
+			if value != nil {
+				err := json.Unmarshal(value, &item)
 				if err != nil {
 					return err
 				}
 			}
 			items = append(items, item)
-			return nil
-		})
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -390,34 +417,63 @@ func (db *DB) PutIdentList(bucketName string, id string, items []RecommendedItem
 	return db.db.Update(func(tx *bolt.Tx) error {
 		// Get bucket
 		bucket := tx.Bucket([]byte(bucketName))
-		// Marshal data into bytes
-		buf, err := json.Marshal(items)
-		if err != nil {
+		// Delete sub-bucket if exists
+		var sBucket *bolt.Bucket
+		var err error
+		if sBucket = bucket.Bucket([]byte(id)); sBucket != nil {
+			if err = bucket.DeleteBucket([]byte(id)); err != nil {
+				return err
+			}
+		}
+		// Create sub-bukcet
+		if sBucket, err = bucket.CreateBucket([]byte(id)); err != nil {
 			return err
 		}
-		// Persist bytes to bucket
-		return bucket.Put([]byte(id), buf)
+		// Persist list to bucket
+		for i, item := range items {
+			// Marshal data into bytes
+			buf, err := json.Marshal(item)
+			if err != nil {
+				return err
+			}
+			if err = sBucket.Put(encodeInt(i), buf); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
 // GetRecommends gets n recommendations for a user.
-func (db *DB) GetIdentList(bucketName string, id string, n int) ([]RecommendedItem, error) {
+func (db *DB) GetIdentList(bucketName string, id string, n int, offset int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
 		// Get bucket
 		bucket := tx.Bucket([]byte(bucketName))
-		// Unmarshal data into bytes
-		buf := bucket.Get([]byte(id))
-		if buf == nil {
-			return fmt.Errorf("%v not found", id)
+		// Get sub-bucket
+		sBucket := bucket.Bucket([]byte(id))
+		if sBucket == nil {
+			return bolt.ErrBucketNotFound
 		}
-		return json.Unmarshal(buf, &items)
+		// Unmarshal data into bytes
+		if n == 0 {
+			n = sBucket.Stats().KeyN
+		}
+		for i := offset; i < offset+n; i++ {
+			buf := sBucket.Get(encodeInt(i))
+			if buf == nil {
+				break
+			}
+			var item RecommendedItem
+			if err := json.Unmarshal(buf, &item); err != nil {
+				return err
+			}
+			items = append(items, item)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
-	}
-	if n > 0 && n < len(items) {
-		items = items[:n]
 	}
 	return items, nil
 }
@@ -452,33 +508,58 @@ func (db *DB) UpdatePopularity(itemId []string, popularity []float64) error {
 // PutList saves a list into the database.
 func (db *DB) PutList(name string, items []RecommendedItem) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(BucketMeta))
-		// Marshal data into bytes
-		buf, err := json.Marshal(items)
-		if err != nil {
+		var bucket *bolt.Bucket
+		var err error
+		// Delete bucket if exists
+		if bucket = tx.Bucket([]byte(name)); bucket != nil {
+			if err = tx.DeleteBucket([]byte(name)); err != nil {
+				return err
+			}
+		}
+		// Create bukcet
+		if bucket, err = tx.CreateBucket([]byte(name)); err != nil {
 			return err
 		}
-		// Persist bytes to bucket
-		return bucket.Put([]byte(name), buf)
+		// Persist list to bucket
+		for i, item := range items {
+			// Marshal data into bytes
+			buf, err := json.Marshal(item)
+			if err != nil {
+				return err
+			}
+			if err = bucket.Put(encodeInt(i), buf); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
 // GetList gets a list from the database.
-func (db *DB) GetList(name string, n int) ([]RecommendedItem, error) {
+func (db *DB) GetList(name string, n int, offset int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
 		// Get bucket
-		bucket := tx.Bucket([]byte(BucketMeta))
+		bucket := tx.Bucket([]byte(name))
 		// Unmarshal data into bytes
-		buf := bucket.Get([]byte(name))
-		return json.Unmarshal(buf, &items)
+		if n == 0 {
+			n = bucket.Stats().KeyN
+		}
+		for i := offset; i < offset+n; i++ {
+			buf := bucket.Get(encodeInt(i))
+			if buf == nil {
+				break
+			}
+			var item RecommendedItem
+			if err := json.Unmarshal(buf, &item); err != nil {
+				return err
+			}
+			items = append(items, item)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
-	}
-	if n > 0 && n < len(items) {
-		items = items[:n]
 	}
 	return items, nil
 }
@@ -602,7 +683,7 @@ func (db *DB) SaveItemsToCSV(fileName string, sep string, header bool, date bool
 	}
 	defer file.Close()
 	// Save items
-	items, err := db.GetItems()
+	items, err := db.GetItems(0, 0)
 	if err != nil {
 		return err
 	}

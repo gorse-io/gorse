@@ -84,11 +84,17 @@ func TestDB_InsertGetItem(t *testing.T) {
 	}
 	assert.Equal(t, 5, count)
 	// Get items
-	retItems, err := db.GetItems()
+	retItems, err := db.GetItems(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
+	// Get n items with offset
+	nItems, err := db.GetItems(3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, items[1:4], nItems)
 	// Get item
 	for i, itemId := range itemIds {
 		item, err := db.GetItem(itemId)
@@ -226,19 +232,25 @@ func TestDB_PutGetIdentList(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Get recommends
-	retItems, err := db.GetIdentList(BucketRecommends, "0", 0)
+	retItems, err := db.GetIdentList(BucketRecommends, "0", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n recommends
-	nItems, err := db.GetIdentList(BucketRecommends, "0", 3)
+	nItems, err := db.GetIdentList(BucketRecommends, "0", 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
+	// Get n recommends with offset
+	oItems, err := db.GetIdentList(BucketRecommends, "0", 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, items[1:4], oItems)
 	// Test new user
-	if _, err = db.GetIdentList(BucketRecommends, "1", 0); err == nil {
+	if _, err = db.GetIdentList(BucketRecommends, "1", 0, 0); err == nil {
 		t.Fatal("error is expected for new user")
 	}
 	// Close database
@@ -266,21 +278,27 @@ func TestDB_PutGetList(t *testing.T) {
 		{Item{ItemId: "3"}, 3},
 		{Item{ItemId: "4"}, 4},
 	}
-	if err = db.PutList(ListPop, items); err != nil {
+	if err = db.PutList(BucketPop, items); err != nil {
 		t.Fatal(err)
 	}
 	// Get neighbors
-	retItems, err := db.GetList(ListPop, 0)
+	retItems, err := db.GetList(BucketPop, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n neighbors
-	nItems, err := db.GetList(ListPop, 3)
+	nItems, err := db.GetList(BucketPop, 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
+	// Get n neighbors with offset
+	offsetItems, err := db.GetList(BucketPop, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, items[1:4], offsetItems)
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
@@ -354,7 +372,7 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 	}
 	assert.Equal(t, 5, count)
 	// Check data
-	items, err := db.GetItems()
+	items, err := db.GetItems(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +407,7 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 	}
 	assert.Equal(t, 5, count)
 	// Check data
-	items, err := db.GetItems()
+	items, err := db.GetItems(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +442,7 @@ func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
 	}
 	assert.Equal(t, 5, count)
 	// Check data
-	items, err := db.GetItems()
+	items, err := db.GetItems(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +597,7 @@ func TestDB_UpdatePopularity(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check popularity
-	retItems, err := db.GetItems()
+	retItems, err := db.GetItems(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

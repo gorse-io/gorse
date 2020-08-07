@@ -19,18 +19,3 @@ func checkItems(t *testing.T, expected []int, actual []RecommendedItem) {
 		assert.Equal(t, items[offset].Item, actual[i].Item)
 	}
 }
-
-func TestRanking_Pop(t *testing.T) {
-	rankedItems := Ranking(items, 3, 1, 0, 0)
-	checkItems(t, []int{0, 1, 2}, rankedItems)
-}
-
-func TestRanking_Latest(t *testing.T) {
-	rankedItems := Ranking(items, 3, 0, 1, 0)
-	checkItems(t, []int{4, 3, 2}, rankedItems)
-}
-
-func TestRanking_CF(t *testing.T) {
-	rankedItems := Ranking(items, 3, 0, 0, 1)
-	checkItems(t, []int{2, 3, 1}, rankedItems)
-}
