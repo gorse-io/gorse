@@ -3,9 +3,9 @@ module github.com/zhenghaoz/gorse
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
-	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/emicklei/go-restful v2.9.0+incompatible
+	github.com/emicklei/go-restful v2.13.0+incompatible
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/olekukonko/tablewriter v0.0.1
 	github.com/spf13/cobra v0.0.3
