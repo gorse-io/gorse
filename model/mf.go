@@ -29,7 +29,6 @@ type BPR struct {
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
 	// Hyper parameters
-	useBias    bool
 	nFactors   int
 	nEpochs    int
 	lr         float64
