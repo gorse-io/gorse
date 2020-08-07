@@ -18,7 +18,7 @@ func UpdatePopularity(dataSet core.DataSetInterface, db *DB) error {
 // UpdatePopItem updates popular items for the database.
 func UpdatePopItem(cacheSize int, db *DB) error {
 	log.Printf("update popular items")
-	items, err := db.GetItems()
+	items, err := db.GetItems(0, 0)
 	if err != nil {
 		return err
 	}
@@ -32,14 +32,14 @@ func UpdatePopItem(cacheSize int, db *DB) error {
 		recommends[i].Item = items[i]
 		recommends[i].Score = scores[i]
 	}
-	return db.PutList(ListPop, recommends)
+	return db.PutList(BucketPop, recommends)
 }
 
 // UpdateLatest updates latest items.
 func UpdateLatest(cacheSize int, db *DB) error {
 	log.Printf("update latest items")
 	// update latest items
-	items, err := db.GetItems()
+	items, err := db.GetItems(0, 0)
 	if err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func UpdateLatest(cacheSize int, db *DB) error {
 		recommends[i].Item = recommendItems[i]
 		recommends[i].Score = scores[i]
 	}
-	return db.PutList(ListLatest, recommends)
+	return db.PutList(BucketLatest, recommends)
 }
 
 // UpdateNeighbors updates neighbors for the database.
@@ -104,7 +104,7 @@ func UpdateRecommends(name string, params base.Params, cacheSize int, fitJobs in
 			candidateItems = make(map[string]bool)
 			var err error
 			var readItems []RecommendedItem
-			if readItems, err = db.GetIdentList(BucketIgnore, userId, 0); err != nil {
+			if readItems, err = db.GetIdentList(BucketIgnore, userId, 0, 0); err != nil {
 				candidateItems = items
 			} else {
 				readSet := make(map[string]bool)
