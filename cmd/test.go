@@ -109,11 +109,9 @@ var commandTest = &cobra.Command{
 		case "loo":
 			log.Printf("Use loo splitter\n")
 			splitter = core.NewUserLOOSplitter(k)
-			break
 		case "k-fold":
 			log.Printf("Use %d-fold splitter\n", k)
 			splitter = core.NewKFoldSplitter(k)
-			break
 		default:
 			log.Fatalf("Unkown splitter %s\n", splitterName)
 		}
