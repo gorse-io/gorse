@@ -34,7 +34,7 @@ func TestUpdateItemPop(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check popular items
-	recommends, err := db.GetList(ListPop, 0)
+	recommends, err := db.GetList(BucketPop, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestUpdateLatest(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check popular items
-	recommends, err := db.GetList(ListLatest, 0)
+	recommends, err := db.GetList(BucketLatest, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestUpdateNeighbors(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Find N nearest neighbors
-	recommends, err := db.GetIdentList(BucketNeighbors, "1", 0)
+	recommends, err := db.GetIdentList(BucketNeighbors, "1", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestUpdateRecommends(t *testing.T) {
 		targetSet := testSet.UserByIndex(userIndex)
 		if targetSet.Len() > 0 {
 			// Find top-n items in database
-			rankList, err := db.GetIdentList(BucketRecommends, userId, 10)
+			rankList, err := db.GetIdentList(BucketRecommends, userId, 10, 0)
 			if err != nil {
 				t.Fatal(err)
 			}

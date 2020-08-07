@@ -24,17 +24,17 @@ func serve(config engine.TomlConfig) {
 		Doc("get the top list for a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
 		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")).
-		Param(ws.FormParameter("p", "weight of popularity").DataType("float")).
-		Param(ws.FormParameter("t", "weight of time").DataType("float")).
-		Param(ws.PathParameter("c", "weight of collaborative filtering").DataType("float")))
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")))
 	// Get popular items
 	ws.Route(ws.GET("/popular").To(getPopular).
 		Doc("get popular items").
-		Param(ws.FormParameter("number", "the number of popular items").DataType("int")))
+		Param(ws.FormParameter("number", "the number of popular items").DataType("int")).
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(getLatest).
 		Doc("get latest items").
-		Param(ws.FormParameter("number", "the number of latest items").DataType("int")))
+		Param(ws.FormParameter("number", "the number of latest items").DataType("int")).
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")))
 	// Get random items
 	ws.Route(ws.GET("/random").To(getRandom).
 		Doc("get random items").
@@ -43,14 +43,17 @@ func serve(config engine.TomlConfig) {
 	ws.Route(ws.GET("/neighbors/{item-id}").To(getNeighbors).
 		Doc("get neighbors of a item").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
-		Param(ws.FormParameter("number", "the number of neighbors").DataType("int")))
+		Param(ws.FormParameter("number", "the number of neighbors").DataType("int")).
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")))
 
 	// Put items
 	ws.Route(ws.PUT("/items").To(putItems)).
 		Doc("put items")
 	// Get items
-	ws.Route(ws.GET("/items").To(getItems)).
-		Doc("get items")
+	ws.Route(ws.GET("/items").To(getItems).
+		Doc("get items").
+		Param(ws.FormParameter("number", "the number of neighbors").DataType("int")).
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")))
 	// Get item
 	ws.Route(ws.GET("/item/{item-id}").To(getItem).
 		Doc("get a item").
@@ -110,21 +113,30 @@ func getStatus(request *restful.Request, response *restful.Response) {
 	json(response, status)
 }
 
+func parseInt(request *restful.Request, name string, fallback int) (value int, err error) {
+	valueString := request.QueryParameter(name)
+	value, err = strconv.Atoi(valueString)
+	if err != nil && valueString == "" {
+		value = fallback
+		err = nil
+	}
+	return
+}
+
 // getPopular gets popular items from database.
 func getPopular(request *restful.Request, response *restful.Response) {
-	// Get the number
-	paramNumber := request.QueryParameter("number")
-	number, err := strconv.Atoi(paramNumber)
-	if err != nil {
-		if paramNumber == "" {
-			number = 10
-		} else {
-			badRequest(response, err)
-			return
-		}
+	var number, offset int
+	var err error
+	if number, err = parseInt(request, "number", 10); err != nil {
+		badRequest(response, err)
+		return
+	}
+	if offset, err = parseInt(request, "offset", 0); err != nil {
+		badRequest(response, err)
+		return
 	}
 	// Get the popular list
-	items, err := db.GetList(engine.ListPop, number)
+	items, err := db.GetList(engine.BucketPop, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -134,19 +146,18 @@ func getPopular(request *restful.Request, response *restful.Response) {
 }
 
 func getLatest(request *restful.Request, response *restful.Response) {
-	// Get the number
-	paramNumber := request.QueryParameter("number")
-	number, err := strconv.Atoi(paramNumber)
-	if err != nil {
-		if paramNumber == "" {
-			number = 10
-		} else {
-			badRequest(response, err)
-			return
-		}
+	var number, offset int
+	var err error
+	if number, err = parseInt(request, "number", 10); err != nil {
+		badRequest(response, err)
+		return
+	}
+	if offset, err = parseInt(request, "offset", 0); err != nil {
+		badRequest(response, err)
+		return
 	}
 	// Get the popular list
-	items, err := db.GetList(engine.ListLatest, number)
+	items, err := db.GetList(engine.BucketLatest, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -182,19 +193,19 @@ func getRandom(request *restful.Request, response *restful.Response) {
 func getNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
-	// Get the number
-	paramNumber := request.QueryParameter("number")
-	number, err := strconv.Atoi(paramNumber)
-	if err != nil {
-		if paramNumber == "" {
-			number = 10
-		} else {
-			badRequest(response, err)
-			return
-		}
+	// Get the number and offset
+	var number, offset int
+	var err error
+	if number, err = parseInt(request, "number", 10); err != nil {
+		badRequest(response, err)
+		return
+	}
+	if offset, err = parseInt(request, "offset", 0); err != nil {
+		badRequest(response, err)
+		return
 	}
 	// Get recommended items
-	items, err := db.GetIdentList(engine.BucketNeighbors, itemId, number)
+	items, err := db.GetIdentList(engine.BucketNeighbors, itemId, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -207,91 +218,25 @@ func getNeighbors(request *restful.Request, response *restful.Response) {
 func getRecommends(request *restful.Request, response *restful.Response) {
 	// Get user id
 	userId := request.PathParameter("user-id")
-	// Get the number
-	paramNumber := request.QueryParameter("number")
-	number, err := strconv.Atoi(paramNumber)
-	if err != nil {
-		if paramNumber == "" {
-			number = 10
-		} else {
-			badRequest(response, err)
-			return
-		}
+	// Get the number and offset
+	var number, offset int
+	var err error
+	if number, err = parseInt(request, "number", 10); err != nil {
+		badRequest(response, err)
+		return
 	}
-	// Get weights
-	weights := []float64{0.0, 0.0, 1.0}
-	params := []string{
-		request.QueryParameter("p"),
-		request.QueryParameter("t"),
-		request.QueryParameter("c"),
+	if offset, err = parseInt(request, "offset", 0); err != nil {
+		badRequest(response, err)
+		return
 	}
-	for i := range params {
-		if len(params[i]) > 0 {
-			weights[i], err = strconv.ParseFloat(params[i], 64)
-			if err != nil {
-				badRequest(response, err)
-			}
-		}
-	}
-	p, t, c := weights[0], weights[1], weights[2]
 	// Get recommended items
-	items, err := db.GetIdentList(engine.BucketRecommends, userId, 0)
+	items, err := db.GetIdentList(engine.BucketRecommends, userId, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
-	if engineConfig.Recommend.Once {
-		// Get read recommended items
-		readItems, err := db.GetIdentList(engine.BucketIgnore, userId, 0)
-		readSet := make(map[string]bool)
-		for _, item := range readItems {
-			readSet[item.ItemId] = true
-		}
-		var subItems []engine.RecommendedItem
-		change := false
-		notRecommended := false
-		if err != nil {
-			change = false
-		} else {
-			for i := range items {
-				if _, exist := readSet[items[i].ItemId]; !exist {
-					subItems = append(subItems, items[i])
-					change = true
-				}
-			}
-			if !change {
-				notRecommended = true
-			}
-		}
-		if notRecommended {
-			var empty []engine.RecommendedItem
-			json(response, empty)
-		} else if change {
-			subItems = engine.Ranking(subItems, number, p, t, c)
-			for i := range subItems {
-				readItems = append(readItems, subItems[i])
-			}
-			if err := db.PutIdentList(engine.BucketIgnore, userId, readItems); err != nil {
-				badRequest(response, err)
-			}
-			// Send result
-			json(response, subItems)
-		} else {
-			// Send result
-			items = engine.Ranking(items, number, p, t, c)
-			for i := range items {
-				readItems = append(readItems, items[i])
-			}
-			if err := db.PutIdentList(engine.BucketIgnore, userId, readItems); err != nil {
-				badRequest(response, err)
-			}
-			json(response, items)
-		}
-	} else {
-		items = engine.Ranking(items, number, p, t, c)
-		json(response, items)
-	}
-
+	// Send result
+	json(response, items)
 }
 
 // Change contains information of changes after insert.
@@ -356,7 +301,17 @@ func putItems(request *restful.Request, response *restful.Response) {
 }
 
 func getItems(request *restful.Request, response *restful.Response) {
-	items, err := db.GetItems()
+	var number, offset int
+	var err error
+	if number, err = parseInt(request, "number", 10); err != nil {
+		badRequest(response, err)
+		return
+	}
+	if offset, err = parseInt(request, "offset", 0); err != nil {
+		badRequest(response, err)
+		return
+	}
+	items, err := db.GetItems(number, offset)
 	if err != nil {
 		internalServerError(response, err)
 	}
