@@ -116,7 +116,7 @@ func getPopular(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -138,7 +138,7 @@ func getLatest(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -161,7 +161,7 @@ func getRandom(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -186,7 +186,7 @@ func getNeighbors(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -211,7 +211,7 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
