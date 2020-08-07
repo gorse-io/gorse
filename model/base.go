@@ -42,7 +42,7 @@ func (model *Base) Fit(trainSet core.DataSet, options *base.RuntimeOptions) {
 // Init the Base model. The method must be called at the beginning of Fit.
 func (model *Base) Init(trainSet core.DataSetInterface) {
 	// Check Base.SetParams() called
-	if model.isSetParamsCalled == false {
+	if !model.isSetParamsCalled {
 		panic("Base.SetParams() not called")
 	}
 	// Setup ID set
