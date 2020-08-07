@@ -80,9 +80,9 @@ func (parameters Params) Copy() Params {
 // GetInt gets a integer parameter by name. Returns _default if not exists or type doesn't match.
 func (parameters Params) GetInt(name ParamName, _default int) int {
 	if val, exist := parameters[name]; exist {
-		switch val.(type) {
+		switch val := val.(type) {
 		case int:
-			return val.(int)
+			return val
 		default:
 			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
@@ -94,11 +94,11 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 // type will be converted if given int.
 func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 	if val, exist := parameters[name]; exist {
-		switch val.(type) {
+		switch val := val.(type) {
 		case int64:
-			return val.(int64)
+			return val
 		case int:
-			return int64(val.(int))
+			return int64(val)
 		default:
 			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
@@ -109,9 +109,9 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 // GetBool gets a bool parameter by name. Returns _default if not exists or type doesn't match.
 func (parameters Params) GetBool(name ParamName, _default bool) bool {
 	if val, exist := parameters[name]; exist {
-		switch val.(type) {
+		switch val := val.(type) {
 		case bool:
-			return val.(bool)
+			return val
 		default:
 			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
@@ -123,11 +123,11 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 // type will be converted if given int.
 func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 	if val, exist := parameters[name]; exist {
-		switch val.(type) {
+		switch val := val.(type) {
 		case float64:
-			return val.(float64)
+			return val
 		case int:
-			return float64(val.(int))
+			return float64(val)
 		default:
 			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
@@ -138,9 +138,9 @@ func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 // GetString gets a string parameter. Returns _default if not exists or type doesn't match.
 func (parameters Params) GetString(name ParamName, _default string) string {
 	if val, exist := parameters[name]; exist {
-		switch val.(type) {
+		switch val := val.(type) {
 		case string:
-			return val.(string)
+			return val
 		default:
 			log.Printf("Expect %v to be string, but get %v", name, reflect.TypeOf(name))
 		}
