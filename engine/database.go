@@ -19,13 +19,12 @@ import (
 )
 
 const (
-	bktGlobal        = "global"        // Bucket name for global data
-	bktItems         = "items"         // Bucket name for items
-	bktFeedback      = "feedback"      // Bucket name for feedback
-	BucketNeighbors  = "neighbors"     // Bucket name for neighbors
-	BucketRecommends = "recommends"    // Bucket name for recommendations
-	BucketReads      = "reads"         // Bucket name for reads
-	bktUserFeedback  = "user_feedback" // Bucket name for user feedback
+	BucketMeta       = "meta"       // Bucket name for meta data
+	BucketItems      = "items"      // Bucket name for items
+	BucketFeedback   = "feedback"   // Bucket name for feedback
+	BucketIgnore     = "ignored"    // Bucket name for ignored
+	BucketNeighbors  = "neighbors"  // Bucket name for neighbors
+	BucketRecommends = "recommends" // Bucket name for recommendations
 )
 
 const (
@@ -68,7 +67,7 @@ func Open(path string) (*DB, error) {
 	}
 	// Create buckets
 	err = db.db.Update(func(tx *bolt.Tx) error {
-		bucketNames := []string{bktGlobal, bktItems, bktFeedback, BucketRecommends, BucketReads, BucketNeighbors, bktUserFeedback}
+		bucketNames := []string{BucketMeta, BucketItems, BucketFeedback, BucketRecommends, BucketIgnore, BucketNeighbors}
 		for _, name := range bucketNames {
 			if _, err = tx.CreateBucketIfNotExists([]byte(name)); err != nil {
 				return err
@@ -102,7 +101,7 @@ type Feedback struct {
 // InsertFeedback inserts a feedback into the database.
 func (db *DB) InsertFeedback(userId, itemId string, feedback float64) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktFeedback))
+		bucket := tx.Bucket([]byte(BucketFeedback))
 		// Marshal data into bytes.
 		key, err := json.Marshal(FeedbackKey{userId, itemId})
 		if err != nil {
@@ -114,16 +113,13 @@ func (db *DB) InsertFeedback(userId, itemId string, feedback float64) error {
 	if err != nil {
 		return err
 	}
-	if err = db.InsertItem(itemId, nil); err != nil {
-		return err
-	}
-	return db.InsertUserFeedback(userId, itemId, feedback)
+	return db.InsertItem(itemId, nil)
 }
 
 // InsertMultiFeedback inserts multiple feedback into the database.
 func (db *DB) InsertMultiFeedback(userId, itemId []string, feedback []float64) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktFeedback))
+		bucket := tx.Bucket([]byte(BucketFeedback))
 		for i := range feedback {
 			// Marshal data into bytes.
 			key, err := json.Marshal(FeedbackKey{userId[i], itemId[i]})
@@ -149,51 +145,13 @@ func (db *DB) InsertMultiFeedback(userId, itemId []string, feedback []float64) e
 			items = append(items, id)
 		}
 	}
-	if err = db.InsertItems(items, nil); err != nil {
-		return err
-	}
-	return db.InsertMultiUserFeedback(userId, itemId, feedback)
-}
-
-// InsertUserFeedback inserts a feedback into the user feedback bucket of the database.
-func (db *DB) InsertUserFeedback(userId, itemId string, feedback float64) error {
-	err := db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktUserFeedback))
-		// Get user's bucket
-		userBucket, err := bucket.CreateBucketIfNotExists([]byte(userId))
-		if err != nil {
-			return err
-		}
-		// Persist bytes to users bucket.
-		return userBucket.Put([]byte(itemId), encodeFloat(feedback))
-	})
-	return err
-}
-
-// InsertMultiUserFeedback inserts multiple feedback into the user feedback bucket of the database.
-func (db *DB) InsertMultiUserFeedback(userId, itemId []string, feedback []float64) error {
-	err := db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktUserFeedback))
-		for i := range feedback {
-			// Get user's bucket
-			userBucket, err := bucket.CreateBucketIfNotExists([]byte(userId[i]))
-			if err != nil {
-				return err
-			}
-			// Persist bytes to users bucket.
-			if err = userBucket.Put([]byte(itemId[i]), encodeFloat(feedback[i])); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return err
+	return db.InsertItems(items, nil)
 }
 
 // GetFeedback returns all feedback in the database.
 func (db *DB) GetFeedback() (users, items []string, feedback []float64, err error) {
 	err = db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktFeedback))
+		bucket := tx.Bucket([]byte(BucketFeedback))
 		return bucket.ForEach(func(k, v []byte) error {
 			key := FeedbackKey{}
 			if err := json.Unmarshal(k, &key); err != nil {
@@ -211,52 +169,11 @@ func (db *DB) GetFeedback() (users, items []string, feedback []float64, err erro
 	return
 }
 
-// GetUsers get all user IDs.
-func (db *DB) GetUsers() ([]string, error) {
-	var users []string
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktUserFeedback))
-		return bucket.ForEach(func(k, v []byte) error {
-			if v == nil {
-				users = append(users, string(k))
-			}
-			return nil
-		})
-	})
-	if err != nil {
-		return nil, err
-	}
-	return users, nil
-}
-
-// GetUserFeedback get a user's feedback.
-func (db *DB) GetUserFeedback(userId string) ([]Feedback, error) {
-	var items []Feedback
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktUserFeedback))
-		// Get user's bucket
-		userBucket := bucket.Bucket([]byte(userId))
-		if userBucket == nil {
-			return bolt.ErrBucketNotFound
-		}
-		return userBucket.ForEach(func(k, v []byte) error {
-			itemId := string(k)
-			feedback := decodeFloat(v)
-			items = append(items, Feedback{FeedbackKey{userId, itemId}, feedback})
-			return nil
-		})
-	})
-	if err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 // CountFeedback returns the number of feedback in the database.
 func (db *DB) CountFeedback() (int, error) {
 	count := 0
 	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktFeedback))
+		bucket := tx.Bucket([]byte(BucketFeedback))
 		count = bucket.Stats().KeyN
 		return nil
 	})
@@ -276,7 +193,7 @@ type Item struct {
 // InsertItems inserts multiple items into the database.
 func (db *DB) InsertItems(itemId []string, timestamps []time.Time) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		for i, v := range itemId {
 			// Retrieve old item
 			item := Item{ItemId: v}
@@ -306,7 +223,7 @@ func (db *DB) InsertItems(itemId []string, timestamps []time.Time) error {
 // InsertItem inserts a item into the database.
 func (db *DB) InsertItem(itemId string, timestamp *time.Time) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		// Retrieve old item
 		item := Item{ItemId: itemId}
 		buf := bucket.Get([]byte(itemId))
@@ -332,7 +249,7 @@ func (db *DB) InsertItem(itemId string, timestamp *time.Time) error {
 func (db *DB) GetItem(itemId string) (Item, error) {
 	item := Item{}
 	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		buf := bucket.Get([]byte(itemId))
 		if buf == nil {
 			return fmt.Errorf("item %v not found", itemId)
@@ -349,7 +266,7 @@ func (db *DB) GetItem(itemId string) (Item, error) {
 func (db *DB) GetItems() ([]Item, error) {
 	items := make([]Item, 0)
 	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		return bucket.ForEach(func(k, v []byte) error {
 			item := Item{ItemId: string(k)}
 			if v != nil {
@@ -372,7 +289,7 @@ func (db *DB) GetItems() ([]Item, error) {
 func (db *DB) GetItemsByID(id []string) ([]Item, error) {
 	items := make([]Item, len(id))
 	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		for i, v := range id {
 			item := Item{}
 			buf := bucket.Get([]byte(v))
@@ -396,22 +313,8 @@ func (db *DB) GetItemsByID(id []string) ([]Item, error) {
 func (db *DB) CountItems() (int, error) {
 	count := 0
 	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		count = bucket.Stats().KeyN
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// CountUsers returns the number of users in the database.
-func (db *DB) CountUsers() (int, error) {
-	count := 0
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktUserFeedback))
-		count = bucket.Stats().InlineBucketN
 		return nil
 	})
 	if err != nil {
@@ -424,7 +327,7 @@ func (db *DB) CountUsers() (int, error) {
 func (db *DB) GetMeta(name string) (string, error) {
 	var value string
 	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktGlobal))
+		bucket := tx.Bucket([]byte(BucketMeta))
 		value = string(bucket.Get([]byte(name)))
 		return nil
 	})
@@ -434,7 +337,7 @@ func (db *DB) GetMeta(name string) (string, error) {
 // SetMeta sets the value of a metadata.
 func (db *DB) SetMeta(name string, val string) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktGlobal))
+		bucket := tx.Bucket([]byte(BucketMeta))
 		return bucket.Put([]byte(name), []byte(val))
 	})
 }
@@ -461,7 +364,7 @@ func (db *DB) GetRandom(n int) ([]RecommendedItem, error) {
 	}
 	items := make([]RecommendedItem, 0)
 	err = db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		ptr := 0
 		return bucket.ForEach(func(k, v []byte) error {
 			// Sample
@@ -523,7 +426,7 @@ func (db *DB) GetIdentList(bucketName string, id string, n int) ([]RecommendedIt
 func (db *DB) UpdatePopularity(itemId []string, popularity []float64) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		// Get bucket
-		bucket := tx.Bucket([]byte(bktItems))
+		bucket := tx.Bucket([]byte(BucketItems))
 		for i, id := range itemId {
 			// Unmarshal data from bytes
 			item := Item{ItemId: id}
@@ -550,7 +453,7 @@ func (db *DB) UpdatePopularity(itemId []string, popularity []float64) error {
 func (db *DB) PutList(name string, items []RecommendedItem) error {
 	return db.db.Update(func(tx *bolt.Tx) error {
 		// Get bucket
-		bucket := tx.Bucket([]byte(bktGlobal))
+		bucket := tx.Bucket([]byte(BucketMeta))
 		// Marshal data into bytes
 		buf, err := json.Marshal(items)
 		if err != nil {
@@ -566,7 +469,7 @@ func (db *DB) GetList(name string, n int) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	err := db.db.View(func(tx *bolt.Tx) error {
 		// Get bucket
-		bucket := tx.Bucket([]byte(bktGlobal))
+		bucket := tx.Bucket([]byte(BucketMeta))
 		// Unmarshal data into bytes
 		buf := bucket.Get([]byte(name))
 		return json.Unmarshal(buf, &items)

@@ -26,9 +26,11 @@ func init() {
 	commandTest.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
 	commandTest.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
 	// Splitter
-	commandTest.PersistentFlags().Int("split-fold", 5, "split data by k fold")
+	commandTest.PersistentFlags().Int("n-split", 5, "number of splits")
+	commandTest.PersistentFlags().String("splitter", "loo", "the splitter: loo or k-fold")
 	// Evaluators
 	commandTest.PersistentFlags().Int("top", 10, "evaluate the model in top N ranking")
+	commandTest.PersistentFlags().Int("n-negative", 100, "number of negative samples when evaluating")
 	for _, evalFlag := range evalFlags {
 		commandTest.PersistentFlags().Bool(evalFlag.Name, false, evalFlag.Help)
 	}
@@ -100,38 +102,35 @@ var commandTest = &cobra.Command{
 		log.Printf("Load hyper-parameters %v\n", params)
 		model.SetParams(params)
 		// Load splitter
-		k, _ := cmd.PersistentFlags().GetInt("split-fold")
-		log.Printf("Use %d-fold splitter\n", k)
+		k, _ := cmd.PersistentFlags().GetInt("n-split")
+		splitterName, _ := cmd.PersistentFlags().GetString("splitter")
+		var splitter core.Splitter
+		switch splitterName {
+		case "loo":
+			log.Printf("Use loo splitter\n")
+			splitter = core.NewUserLOOSplitter(k)
+		case "k-fold":
+			log.Printf("Use %d-fold splitter\n", k)
+			splitter = core.NewKFoldSplitter(k)
+		default:
+			log.Fatalf("Unkown splitter %s\n", splitterName)
+		}
 		// Load evaluators
 		evaluatorNames := make([]string, 0)
 		n, _ := cmd.PersistentFlags().GetInt("top")
-		rankMetrics := make([]core.RankMetric, 0)
-		ratingMetrics := make([]core.RatingMetric, 0)
-		evalChanged := false
+		numSample, _ := cmd.PersistentFlags().GetInt("n-negative")
+		scorers := make([]core.Scorer, 0)
 		for _, evalFlag := range evalFlags {
 			if cmd.PersistentFlags().Changed(evalFlag.Name) {
-				evalChanged = true
-				if evalFlag.Rank {
-					rankMetrics = append(rankMetrics, evalFlag.RankMetric)
-					evaluatorNames = append(evaluatorNames, fmt.Sprintf("%s@%d", evalFlag.Print, n))
-				} else {
-					ratingMetrics = append(ratingMetrics, evalFlag.RatingMetric)
-					evaluatorNames = append(evaluatorNames, evalFlag.Print)
-				}
+				scorers = append(scorers, evalFlag.Scorer)
+				evaluatorNames = append(evaluatorNames, fmt.Sprintf("%s@%d", evalFlag.Print, n))
 			}
 		}
-		if !evalChanged {
-			ratingMetrics = append(ratingMetrics, core.RMSE)
-			evaluatorNames = append(evaluatorNames, "RMSE")
+		if len(scorers) == 0 {
+			scorers = append(scorers, core.NDCG)
+			evaluatorNames = append(evaluatorNames, fmt.Sprintf("NDCG@%d", n))
 		}
 		log.Printf("Use evaluators %v\n", evaluatorNames)
-		evaluators := make([]core.CrossValidationEvaluator, 0)
-		if len(ratingMetrics) > 0 {
-			evaluators = append(evaluators, core.NewRatingEvaluator(ratingMetrics...))
-		}
-		if len(rankMetrics) > 0 {
-			evaluators = append(evaluators, core.NewRankEvaluator(n, rankMetrics...))
-		}
 		// Load runtime options
 		verbose, _ := cmd.PersistentFlags().GetBool("verbose")
 		fitJobs, _ := cmd.PersistentFlags().GetInt("fit-jobs")
@@ -141,7 +140,7 @@ var commandTest = &cobra.Command{
 			options.GetVerbose(), options.GetFitJobs(), options.GetCVJobs())
 		// Cross validation
 		start := time.Now()
-		out := core.CrossValidate(model, data, core.NewKFoldSplitter(5), 0, options, evaluators...)
+		out := core.CrossValidate(model, data, splitter, 0, options, core.NewEvaluator(n, numSample, scorers...))
 		elapsed := time.Since(start)
 		// Render table
 		header := make([]string, k+2)
@@ -169,36 +168,28 @@ var commandTest = &cobra.Command{
 /* Models */
 
 var models = map[string]core.ModelInterface{
-	"svd":           model.NewSVD(nil),
-	"knn":           model.NewKNN(nil),
-	"wrmf":          model.NewWRMF(nil),
-	"baseline":      model.NewBaseLine(nil),
-	"item-pop":      model.NewItemPop(nil),
-	"slope-one":     model.NewSlopOne(nil),
-	"co-clustering": model.NewCoClustering(nil),
-	"bpr":           model.NewBPR(nil),
-	"knn-implicit":  model.NewKNNImplicit(nil),
+	"als":      model.NewALS(nil),
+	"item-pop": model.NewItemPop(nil),
+	"bpr":      model.NewBPR(nil),
+	"knn":      model.NewKNN(nil),
 }
 
 /* Flags for evaluators */
 
 type _EvalFlag struct {
-	Rank         bool
-	Print        string
-	Name         string
-	Help         string
-	RatingMetric core.RatingMetric
-	RankMetric   core.RankMetric
+	Print  string
+	Name   string
+	Help   string
+	Scorer core.Scorer
 }
 
 var evalFlags = []_EvalFlag{
-	{Rank: false, RatingMetric: core.RMSE, Print: "RMSE", Name: "eval-rmse", Help: "evaluate the model by RMSE"},
-	{Rank: false, RatingMetric: core.MAE, Print: "MAE", Name: "eval-mae", Help: "evaluate the model by MAE"},
-	{Rank: true, RankMetric: core.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
-	{Rank: true, RankMetric: core.Recall, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
-	{Rank: true, RankMetric: core.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
-	{Rank: true, RankMetric: core.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
-	{Rank: true, RankMetric: core.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
+	{Scorer: core.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
+	{Scorer: core.Recall, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
+	{Scorer: core.HR, Print: "HR", Name: "eval-hr", Help: "evaluate the model by HR@N"},
+	{Scorer: core.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
+	{Scorer: core.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
+	{Scorer: core.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
 }
 
 /* Flags for hyper-parameters */
@@ -223,19 +214,7 @@ var paramFlags = []_ParamFlag{
 	{intFlag, base.NEpochs, "set-n-epochs", "set number of epochs"},
 	{intFlag, base.NFactors, "set-n-factors", "set number of factors"},
 	{intFlag, base.RandomState, "set-random-state", "set random state (seed)"},
-	{boolFlag, base.UseBias, "set-use-bias", "set use bias"},
 	{float64Flag, base.InitMean, "set-init-mean", "set mean of gaussian initial parameter"},
 	{float64Flag, base.InitStdDev, "set-init-std", "set standard deviation of gaussian initial parameter"},
-	{float64Flag, base.InitLow, "set-init-low", "set lower bound of uniform initial parameter"},
-	{float64Flag, base.InitHigh, "set-init-high", "set upper bound of uniform initial parameter"},
-	{intFlag, base.NUserClusters, "set-user-clusters", "set number of user cluster"},
-	{intFlag, base.NItemClusters, "set-item-clusters", "set number of item cluster"},
-	{stringFlag, base.Type, "set-type", "set type for KNN"},
-	{boolFlag, base.UserBased, "set-user-based", "set user based if true. otherwise item based."},
-	{stringFlag, base.Similarity, "set-similarity", "set similarity metrics"},
-	{stringFlag, base.K, "set-k", "set number of neighbors"},
-	{stringFlag, base.MinK, "set-mink", "set least number of neighbors"},
-	{stringFlag, base.Optimizer, "set-optimizer", "set optimizer for optimization (sgd/bpr)"},
-	{intFlag, base.Shrinkage, "set-shrinkage", "set shrinkage strength of similarity"},
 	{float64Flag, base.Alpha, "set-alpha", "set alpha value, depend on context"},
 }

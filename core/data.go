@@ -115,18 +115,18 @@ func (set *DataSet) encodeFeature(entity map[string]interface{}, features []stri
 	vec := base.NewSparseVector()
 	for _, name := range features {
 		if value, exist := entity[name]; exist {
-			switch value.(type) {
+			switch value := value.(type) {
 			case float64:
 				set.featureIndexer.Add(name)
 				index := set.featureIndexer.ToIndex(name)
-				vec.Add(index, value.(float64))
+				vec.Add(index, value)
 			case string:
 				featureName := fmt.Sprintf("%v-%v", name, value)
 				set.featureIndexer.Add(featureName)
 				index := set.featureIndexer.ToIndex(featureName)
 				vec.Add(index, 1)
 			case []string:
-				for _, tag := range value.([]string) {
+				for _, tag := range value {
 					featureName := fmt.Sprintf("%v-%v", name, tag)
 					set.featureIndexer.Add(featureName)
 					index := set.featureIndexer.ToIndex(featureName)
@@ -452,7 +452,7 @@ func LoadDataFromNetflix(fileName string, _ string, _ bool) *DataSet {
 		line := scanner.Text()
 		if line[len(line)-1] == ':' {
 			// <itemId>:
-			if itemId = line[0 : len(line)-1]; len(itemId) == 0 {
+			if itemId = line[0 : len(line)-1]; itemId == "" {
 				log.Fatal("empty item id")
 			}
 		} else {

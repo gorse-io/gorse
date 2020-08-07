@@ -78,22 +78,6 @@ func NewTestIndexer(id []string) *base.Indexer {
 	return indexer
 }
 
-func TestRMSE(t *testing.T) {
-	a := []float64{0, 0, 0}
-	b := []float64{-2.0, 0, 2.0}
-	if math.Abs(RMSE(a, b)-1.63299) > evalEpsilon {
-		t.Fail()
-	}
-}
-
-func TestMAE(t *testing.T) {
-	a := []float64{0, 0, 0}
-	b := []float64{-2.0, 0, 2.0}
-	if math.Abs(MAE(a, b)-1.33333) > evalEpsilon {
-		t.Fail()
-	}
-}
-
 func NewTestTargetSet(ids []string) *base.MarginalSubSet {
 	indexer := NewTestIndexer(ids)
 	indices := make([]int, len(ids))

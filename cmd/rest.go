@@ -59,14 +59,6 @@ func serve(config engine.TomlConfig) {
 	// Put feedback
 	ws.Route(ws.PUT("/feedback").To(putFeedback).
 		Doc("put feedback"))
-	// Get users
-	ws.Route(ws.GET("/users").
-		To(getUsers).
-		Doc("get the list of users"))
-	// Get user feedback
-	ws.Route(ws.GET("/user/{user-id}/feedback").To(getUserFeedback).
-		Doc("get a user's feedback").
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")))
 
 	ws.Route(ws.GET("/status").To(getStatus))
 	// Start web service
@@ -79,7 +71,6 @@ func serve(config engine.TomlConfig) {
 type Status struct {
 	FeedbackCount int    // number of feedback
 	ItemCount     int    // number of items
-	UserCount     int    // number of users
 	CommitCount   int    // number of committed feedback
 	CommitTime    string // time for commit
 }
@@ -93,10 +84,6 @@ func status() (Status, error) {
 	}
 	// Get item count
 	if status.ItemCount, err = db.CountItems(); err != nil {
-		return status, err
-	}
-	// Get user count
-	if status.UserCount, err = db.CountUsers(); err != nil {
 		return status, err
 	}
 	// Get commit count
@@ -123,35 +110,13 @@ func getStatus(request *restful.Request, response *restful.Response) {
 	json(response, status)
 }
 
-func getUsers(request *restful.Request, response *restful.Response) {
-	users, err := db.GetUsers()
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	json(response, users)
-}
-
-func getUserFeedback(request *restful.Request, response *restful.Response) {
-	// Get user id
-	userId := request.PathParameter("user-id")
-	// Get the user's feedback
-	items, err := db.GetUserFeedback(userId)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	// Send result
-	json(response, items)
-}
-
 // getPopular gets popular items from database.
 func getPopular(request *restful.Request, response *restful.Response) {
 	// Get the number
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -173,7 +138,7 @@ func getLatest(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -196,7 +161,7 @@ func getRandom(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -221,7 +186,7 @@ func getNeighbors(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -246,7 +211,7 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 	paramNumber := request.QueryParameter("number")
 	number, err := strconv.Atoi(paramNumber)
 	if err != nil {
-		if len(paramNumber) == 0 {
+		if paramNumber == "" {
 			number = 10
 		} else {
 			badRequest(response, err)
@@ -277,7 +242,7 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 	}
 	if engineConfig.Recommend.Once {
 		// Get read recommended items
-		readItems, err := db.GetIdentList(engine.BucketReads, userId, 0)
+		readItems, err := db.GetIdentList(engine.BucketIgnore, userId, 0)
 		readSet := make(map[string]bool)
 		for _, item := range readItems {
 			readSet[item.ItemId] = true
@@ -306,7 +271,7 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 			for i := range subItems {
 				readItems = append(readItems, subItems[i])
 			}
-			if err := db.PutIdentList(engine.BucketReads, userId, readItems); err != nil {
+			if err := db.PutIdentList(engine.BucketIgnore, userId, readItems); err != nil {
 				badRequest(response, err)
 			}
 			// Send result
@@ -317,7 +282,7 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 			for i := range items {
 				readItems = append(readItems, items[i])
 			}
-			if err := db.PutIdentList(engine.BucketReads, userId, readItems); err != nil {
+			if err := db.PutIdentList(engine.BucketIgnore, userId, readItems); err != nil {
 				badRequest(response, err)
 			}
 			json(response, items)
@@ -371,7 +336,6 @@ func putItems(request *restful.Request, response *restful.Response) {
 	}
 	change.FeedbackBefore = stat.FeedbackCount
 	change.ItemsBefore = stat.ItemCount
-	change.UsersBefore = stat.UserCount
 	// Insert items
 	for _, item := range items {
 		err = db.InsertItem(item.ItemId, &item.Timestamp)
@@ -388,7 +352,6 @@ func putItems(request *restful.Request, response *restful.Response) {
 	}
 	change.FeedbackAfter = stat.FeedbackCount
 	change.ItemsAfter = stat.ItemCount
-	change.UsersAfter = stat.UserCount
 	json(response, change)
 }
 
@@ -436,7 +399,6 @@ func putFeedback(request *restful.Request, response *restful.Response) {
 	}
 	change.FeedbackBefore = stat.FeedbackCount
 	change.ItemsBefore = stat.ItemCount
-	change.UsersBefore = stat.UserCount
 	// Insert feedback
 	for _, feedback := range *ratings {
 		err = db.InsertFeedback(feedback.UserId, feedback.ItemId, feedback.Feedback)
@@ -453,7 +415,6 @@ func putFeedback(request *restful.Request, response *restful.Response) {
 	}
 	change.FeedbackAfter = stat.FeedbackCount
 	change.ItemsAfter = stat.ItemCount
-	change.UsersAfter = stat.UserCount
 	json(response, change)
 }
 

@@ -4,91 +4,62 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"math"
+	"math/rand"
 )
 
-// CrossValidationEvaluator is the evaluator for cross-validation.
-type CrossValidationEvaluator func(estimator ModelInterface, testSet, trainSet DataSetInterface) (scores, costs []float64)
+// Evaluator is the evaluator for cross-validation.
+type Evaluator func(estimator ModelInterface, testSet, trainSet DataSetInterface) []float64
 
-// NewRatingEvaluator creates a evaluator for rating prediction cross-validation.
-func NewRatingEvaluator(metrics ...RatingMetric) CrossValidationEvaluator {
-	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) (scores, costs []float64) {
-		scores = EvaluateRating(model, testSet, metrics...)
-		costs = scores
-		return
+// NewEvaluator creates a evaluator for personalized ranking cross-validation.
+func NewEvaluator(n int, numCandidates int, metrics ...Scorer) Evaluator {
+	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) []float64 {
+		return EvaluateRank(model, testSet, trainSet, n, numCandidates, metrics...)
 	}
-}
-
-// NewRankEvaluator creates a evaluator for personalized ranking cross-validation.
-func NewRankEvaluator(n int, metrics ...RankMetric) CrossValidationEvaluator {
-	return func(model ModelInterface, testSet DataSetInterface, trainSet DataSetInterface) (scores, costs []float64) {
-		scores = EvaluateRank(model, testSet, trainSet, n, metrics...)
-		costs = make([]float64, len(scores))
-		for i := range costs {
-			costs[i] = -scores[i]
-		}
-		return
-	}
-}
-
-/* Evaluate Rating Prediction */
-
-// RatingMetric is used by evaluators in rating prediction tasks.
-type RatingMetric func(groundTruth []float64, prediction []float64) float64
-
-// EvaluateRating evaluates a model in rating prediction tasks.
-func EvaluateRating(estimator ModelInterface, testSet DataSetInterface, metrics ...RatingMetric) []float64 {
-	groundTruth := make([]float64, testSet.Count())
-	predictions := make([]float64, testSet.Count())
-	scores := make([]float64, len(metrics))
-	for j := 0; j < testSet.Count(); j++ {
-		userId, itemId, rating := testSet.Get(j)
-		groundTruth[j] = rating
-		predictions[j] = estimator.Predict(userId, itemId)
-	}
-	for i, metric := range metrics {
-		scores[i] = metric(groundTruth, predictions)
-	}
-	return scores
-}
-
-// RMSE is root mean square error.
-func RMSE(groundTruth []float64, prediction []float64) float64 {
-	sum := 0.0
-	for j := 0; j < len(groundTruth); j++ {
-		sum += (prediction[j] - groundTruth[j]) * (prediction[j] - groundTruth[j])
-	}
-	return math.Sqrt(sum / float64(len(groundTruth)))
-}
-
-// MAE is mean absolute error.
-func MAE(groundTruth []float64, prediction []float64) float64 {
-	sum := 0.0
-	for j := 0; j < len(groundTruth); j++ {
-		sum += math.Abs(prediction[j] - groundTruth[j])
-	}
-	return sum / float64(len(groundTruth))
 }
 
 /* Evaluate Item Ranking */
 
-// RankMetric is used by evaluators in personalized ranking tasks.
-type RankMetric func(targetSet *base.MarginalSubSet, rankList []string) float64
+// Scorer is used by evaluators in personalized ranking tasks.
+type Scorer func(targetSet *base.MarginalSubSet, rankList []string) float64
 
 // EvaluateRank evaluates a model in top-n tasks.
-func EvaluateRank(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface, n int, metrics ...RankMetric) []float64 {
-	sum := make([]float64, len(metrics))
+func EvaluateRank(estimator ModelInterface, testSet DataSetInterface, excludeSet DataSetInterface, n int, numCandidates int, scorers ...Scorer) []float64 {
+	sum := make([]float64, len(scorers))
 	count := 0.0
 	items := Items(testSet, excludeSet)
+	// Convert to slice
+	var itemIds []string
+	if numCandidates > 0 {
+		itemIds = make([]string, 0, len(items))
+		for itemId := range items {
+			itemIds = append(itemIds, itemId)
+		}
+	}
 	// For all users
 	for userIndex := 0; userIndex < testSet.UserCount(); userIndex++ {
 		userId := testSet.UserIndexer().ToID(userIndex)
 		// Find top-n items in test set
 		targetSet := testSet.UserByIndex(userIndex)
 		if targetSet.Len() > 0 {
+			if numCandidates > 0 {
+				// Sample items
+				items = make(map[string]bool)
+				targetSet.ForEach(func(i int, id string, value float64) {
+					items[id] = true
+				})
+				exclude := excludeSet.User(userId)
+				for len(items) < numCandidates+n {
+					index := rand.Intn(len(itemIds))
+					itemId := itemIds[index]
+					if _, isSampled := items[itemId]; !isSampled && !exclude.Contain(itemId) {
+						items[itemId] = true
+					}
+				}
+			}
 			// Find top-n items in predictions
 			rankList, _ := Top(items, userId, n, excludeSet.User(userId), estimator)
 			count++
-			for i, metric := range metrics {
+			for i, metric := range scorers {
 				sum[i] += metric(targetSet, rankList)
 			}
 		}
@@ -137,6 +108,16 @@ func Recall(targetSet *base.MarginalSubSet, rankList []string) float64 {
 		}
 	}
 	return float64(hit) / float64(targetSet.Len())
+}
+
+// HR means Hit Ratio.
+func HR(targetSet *base.MarginalSubSet, rankList []string) float64 {
+	for _, itemId := range rankList {
+		if targetSet.Contain(itemId) {
+			return 1
+		}
+	}
+	return 0
 }
 
 // MAP means Mean Average Precision.

@@ -4,11 +4,11 @@ on:
   push:
     branches:    
       - master
-      - 'releases-**'
+      - 'release-**'
   pull_request:
     branches:    
       - master
-      - 'releases-**'
+      - 'release-**'
 
 jobs:
 
@@ -66,10 +66,8 @@ jobs:
     - name: Regression Test - Server
       run: bash test/test_server.sh
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
-      with:
-        file: ./coverage.txt
+    - name: Upload 
+      run: bash <(curl -s https://codecov.io/bash)
 
   build_test_avx2:
     name: Build and Test (AVX2)
@@ -114,7 +112,7 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -timeout 20m -v -tags='avx2' ./...
+      run: go test -timeout 20m -v -tags='avx2' ./... -coverprofile=coverage.txt -covermode=atomic
     
     - name: Regression Test - CV
       run: bash test/test_cross_validation.sh
