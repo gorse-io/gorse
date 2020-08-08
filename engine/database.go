@@ -350,6 +350,20 @@ func (db *DB) CountItems() (int, error) {
 	return count, nil
 }
 
+// CountIgnore returns the number of ignored items.
+func (db *DB) CountIgnore() (int, error) {
+	count := 0
+	err := db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(BucketIgnore))
+		count = bucket.Stats().KeyN
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // GetMeta gets the value of a metadata.
 func (db *DB) GetMeta(name string) (string, error) {
 	var value string
@@ -476,6 +490,80 @@ func (db *DB) GetIdentList(bucketName string, id string, n int, offset int) ([]R
 		return nil, err
 	}
 	return items, nil
+}
+
+// AppendIdentList items into a list.
+func (db *DB) AppendIdentList(bucketName string, id string, items []RecommendedItem) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+		// Get bucket
+		bucket := tx.Bucket([]byte(bucketName))
+		// Create sub-bukcet
+		var sBucket *bolt.Bucket
+		var err error
+		if sBucket, err = bucket.CreateBucketIfNotExists([]byte(id)); err != nil {
+			return err
+		}
+		// Locate start
+		key, _ := sBucket.Cursor().Last()
+		start := 0
+		if key != nil {
+			start = decodeInt(key) + 1
+		}
+		// Persist list to bucket
+		for i, item := range items {
+			// Marshal data into bytes
+			buf, err := json.Marshal(item)
+			if err != nil {
+				return err
+			}
+			if err = sBucket.Put(encodeInt(start+i), buf); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// ConsumeRecommends get recommendations and remove items from list.
+func (db *DB) ConsumeRecommends(id string, n int) ([]RecommendedItem, error) {
+	var items []RecommendedItem
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		// Get bucket
+		bucket := tx.Bucket([]byte(BucketRecommends))
+		// Get sub-bucket
+		sBucket := bucket.Bucket([]byte(id))
+		if sBucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		// Load items
+		cursor := sBucket.Cursor()
+		first := true
+		for i := 0; i < n; i++ {
+			var key, value []byte
+			if first {
+				key, value = cursor.First()
+				first = false
+			} else {
+				key, value = cursor.Next()
+			}
+			if err := cursor.Delete(); err != nil {
+				return err
+			}
+			if key == nil {
+				break
+			}
+			var item RecommendedItem
+			if err := json.Unmarshal(value, &item); err != nil {
+				return err
+			}
+			items = append(items, item)
+		}
+		return nil
+	})
+	if err = db.AppendIdentList(BucketIgnore, id, items); err != nil {
+		return nil, err
+	}
+	return items, err
 }
 
 // UpdatePopularity update popularity of items.
