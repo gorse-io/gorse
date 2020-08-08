@@ -62,37 +62,30 @@ func loadConfig(cmd *cobra.Command) (engine.TomlConfig, toml.MetaData) {
 func watch(config engine.TomlConfig, metaData toml.MetaData) {
 	log.Println("start model updater")
 	for {
-		// Count ratings
-		count, err := db.CountFeedback()
+		// Get status
+		stat, err := status()
 		if err != nil {
-			log.Fatal(err)
-		}
-		// Get commit ratings
-		lastCountString, err := db.GetMeta("commit")
-		if err != nil {
-			log.Fatal(err)
-		}
-		lastCount, err := strconv.Atoi(lastCountString)
-		if lastCountString == "" {
-			lastCount = 0
-		} else if err != nil {
 			log.Fatal(err)
 		}
 		// Compare
-		if count-lastCount > config.Recommend.UpdateThreshold {
+		if stat.FeedbackCount-stat.FeedbackCommit > config.Recommend.UpdateThreshold ||
+			stat.IgnoreCount-stat.IgnoreCommit > config.Recommend.CacheSize/2 {
 			log.Printf("current count (%v) - commit (%v) > threshold (%v), start to update recommends\n",
-				count, lastCount, config.Recommend.UpdateThreshold)
+				stat.FeedbackCount, stat.FeedbackCommit, config.Recommend.UpdateThreshold)
 			if err = engine.Update(config, metaData, db); err != nil {
 				log.Fatal(err)
 			}
-			if err = db.SetMeta("commit", strconv.Itoa(count)); err != nil {
+			if err = db.SetMeta("feedback_commit", strconv.Itoa(stat.FeedbackCount)); err != nil {
+				log.Fatal(err)
+			}
+			if err = db.SetMeta("ignore_commit", strconv.Itoa(stat.IgnoreCount)); err != nil {
 				log.Fatal(err)
 			}
 			t := time.Now()
 			if err = db.SetMeta("commit_time", t.String()); err != nil {
 				log.Fatal(err)
 			}
-			log.Printf("recommends update-to-date, commit = %v", count)
+			log.Printf("recommends update-to-date, commit = %v", stat.FeedbackCount)
 		}
 		// Sleep
 		time.Sleep(time.Duration(config.Recommend.CheckPeriod) * time.Minute)
