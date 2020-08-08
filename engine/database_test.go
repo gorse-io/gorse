@@ -613,3 +613,59 @@ func TestDB_UpdatePopularity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDB_ConsumeRecommends(t *testing.T) {
+	// Create database
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Put neighbors
+	items := []RecommendedItem{
+		{Item{ItemId: "0"}, 0},
+		{Item{ItemId: "1"}, 1},
+		{Item{ItemId: "2"}, 2},
+		{Item{ItemId: "3"}, 3},
+		{Item{ItemId: "4"}, 4},
+	}
+	if err = db.PutIdentList(BucketRecommends, "0", items); err != nil {
+		t.Fatal(err)
+	}
+	// Get all
+	retItems, err := db.GetIdentList(BucketRecommends, "0", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, items, retItems)
+	// Consume n
+	nItems, err := db.ConsumeRecommends("0", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, items[:3], nItems)
+	count, err := db.CountIgnore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 4, count)
+	// Consume n
+	nItems, err = db.ConsumeRecommends("0", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, items[3:], nItems)
+	count, err = db.CountIgnore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 6, count)
+	// Close database
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Clean database
+	if err = os.Remove(fileName); err != nil {
+		t.Fatal(err)
+	}
+}

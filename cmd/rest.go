@@ -72,10 +72,12 @@ func serve(config engine.TomlConfig) {
 
 // Status contains information about engine.
 type Status struct {
-	FeedbackCount int    // number of feedback
-	ItemCount     int    // number of items
-	CommitCount   int    // number of committed feedback
-	CommitTime    string // time for commit
+	FeedbackCount  int // number of feedback
+	ItemCount      int // number of items
+	IgnoreCount    int
+	FeedbackCommit int // number of committed feedback
+	IgnoreCommit   int
+	CommitTime     string // time for commit
 }
 
 func status() (Status, error) {
@@ -83,18 +85,29 @@ func status() (Status, error) {
 	var err error
 	// Get feedback count
 	if status.FeedbackCount, err = db.CountFeedback(); err != nil {
-		return status, err
+		return Status{}, err
 	}
 	// Get item count
 	if status.ItemCount, err = db.CountItems(); err != nil {
-		return status, err
+		return Status{}, err
 	}
-	// Get commit count
+	// Get ignore
+	if status.IgnoreCount, err = db.CountIgnore(); err != nil {
+		return Status{}, err
+	}
+	// Get feedback commit
 	var commit string
-	if commit, err = db.GetMeta("commit"); err != nil {
+	if commit, err = db.GetMeta("feedback_commit"); err != nil {
 		return status, err
 	}
-	if status.CommitCount, err = strconv.Atoi(commit); len(commit) > 0 && err != nil {
+	if status.FeedbackCommit, err = strconv.Atoi(commit); len(commit) > 0 && err != nil {
+		return status, err
+	}
+	// Get ignore commit
+	if commit, err = db.GetMeta("ignore_commit"); err != nil {
+		return status, err
+	}
+	if status.IgnoreCommit, err = strconv.Atoi(commit); len(commit) > 0 && err != nil {
 		return status, err
 	}
 	// Get commit time
@@ -230,7 +243,12 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Get recommended items
-	items, err := db.GetIdentList(engine.BucketRecommends, userId, number, offset)
+	var items []engine.RecommendedItem
+	if engineConfig.Recommend.Once {
+		items, err = db.ConsumeRecommends(userId, number)
+	} else {
+		items, err = db.GetIdentList(engine.BucketRecommends, userId, number, offset)
+	}
 	if err != nil {
 		internalServerError(response, err)
 		return
