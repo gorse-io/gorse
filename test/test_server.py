@@ -74,7 +74,7 @@ def test_server(server_host: str, server_port: int):
     print('waiting for gorse ...')
     while True:
         status = get(url + 'status')
-        if status['CommitCount'] > 0:
+        if status['FeedbackCommit'] > 0:
             break
         time.sleep(1)
 
