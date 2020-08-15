@@ -669,3 +669,36 @@ func TestDB_ConsumeRecommends(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDB_RemoveFromIdentList(t *testing.T) {
+	// Create database
+	fileName := path.Join(core.TempDir, randstr.String(16))
+	db, err := Open(fileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Put neighbors
+	items := []RecommendedItem{
+		{Item{ItemId: "0"}, 0},
+		{Item{ItemId: "1"}, 1},
+		{Item{ItemId: "2"}, 2},
+		{Item{ItemId: "3"}, 3},
+		{Item{ItemId: "4"}, 4},
+	}
+	if err = db.PutIdentList(BucketRecommends, "0", items); err != nil {
+		t.Fatal(err)
+	}
+	// Remove item
+	if err = db.RemoveFromIdentList(BucketRecommends, "0", "2"); err != nil {
+		t.Fatal(err)
+	}
+	dItems, err := db.GetIdentList(BucketRecommends, "0", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 4, len(dItems))
+	// Clean database
+	if err = os.Remove(fileName); err != nil {
+		t.Fatal(err)
+	}
+}
