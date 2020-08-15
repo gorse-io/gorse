@@ -110,7 +110,13 @@ func (db *DB) InsertFeedback(userId, itemId string, feedback float64) error {
 	if err != nil {
 		return err
 	}
-	return db.InsertItem(itemId, nil)
+	if err = db.InsertItem(itemId, nil); err != nil {
+		return err
+	}
+	if err = db.RemoveFromIdentList(BucketRecommends, userId, itemId); err != nil && err != bolt.ErrBucketNotFound {
+		return err
+	}
+	return nil
 }
 
 // InsertMultiFeedback inserts multiple feedback into the database.
@@ -476,7 +482,8 @@ func (db *DB) GetIdentList(bucketName string, id string, n int, offset int) ([]R
 		for i := offset; i < offset+n; i++ {
 			buf := sBucket.Get(encodeInt(i))
 			if buf == nil {
-				break
+				n++
+				continue
 			}
 			var item RecommendedItem
 			if err := json.Unmarshal(buf, &item); err != nil {
@@ -518,6 +525,42 @@ func (db *DB) AppendIdentList(bucketName string, id string, items []RecommendedI
 			}
 			if err = sBucket.Put(encodeInt(start+i), buf); err != nil {
 				return err
+			}
+		}
+		return nil
+	})
+}
+
+// RemoveFromIdentList remove item from list.
+func (db *DB) RemoveFromIdentList(bucketName string, id string, itemId string) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+		// Get bucket
+		bucket := tx.Bucket([]byte(bucketName))
+		// Get sub bucket
+		sBucket := bucket.Bucket([]byte(id))
+		if sBucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		// Search item
+		cursor := sBucket.Cursor()
+		first := true
+		for {
+			var key, value []byte
+			if first {
+				key, value = cursor.First()
+				first = false
+			} else {
+				key, value = cursor.Next()
+			}
+			if key == nil {
+				break
+			}
+			var item RecommendedItem
+			if err := json.Unmarshal(value, &item); err != nil {
+				return err
+			}
+			if item.ItemId == itemId {
+				return cursor.Delete()
 			}
 		}
 		return nil
