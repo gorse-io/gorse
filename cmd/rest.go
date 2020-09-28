@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/araddon/dateparse"
 	"github.com/emicklei/go-restful"
+	"github.com/zhenghaoz/gorse/database"
 	"github.com/zhenghaoz/gorse/engine"
 	"log"
 	"net/http"
@@ -58,6 +59,10 @@ func serve(config engine.TomlConfig) {
 	ws.Route(ws.GET("/item/{item-id}").To(getItem).
 		Doc("get a item").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")))
+	// Get items by label
+	ws.Route(ws.GET("/item/label/{label}").To(getItemsByLabel).
+		Doc(("get items by label")).
+		Param(ws.PathParameter("label", "label").DataType("string")))
 
 	// Put feedback
 	ws.Route(ws.PUT("/feedback").To(putFeedback).
@@ -149,7 +154,7 @@ func getPopular(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Get the popular list
-	items, err := db.GetList(engine.BucketPop, number, offset)
+	items, err := db.GetList(database.BucketPop, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -170,7 +175,7 @@ func getLatest(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Get the popular list
-	items, err := db.GetList(engine.BucketLatest, number, offset)
+	items, err := db.GetList(database.BucketLatest, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -218,7 +223,7 @@ func getNeighbors(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Get recommended items
-	items, err := db.GetIdentList(engine.BucketNeighbors, itemId, number, offset)
+	items, err := db.GetIdentList(database.BucketNeighbors, itemId, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -243,11 +248,11 @@ func getRecommends(request *restful.Request, response *restful.Response) {
 		return
 	}
 	// Get recommended items
-	var items []engine.RecommendedItem
+	var items []database.RecommendedItem
 	if engineConfig.Recommend.Once {
 		items, err = db.ConsumeRecommends(userId, number)
 	} else {
-		items, err = db.GetIdentList(engine.BucketRecommends, userId, number, offset)
+		items, err = db.GetIdentList(database.BucketRecommends, userId, number, offset)
 	}
 	if err != nil {
 		internalServerError(response, err)
@@ -282,7 +287,7 @@ func putItems(request *restful.Request, response *restful.Response) {
 	}
 	// Parse timestamp
 	var err error
-	items := make([]engine.Item, len(*temp))
+	items := make([]database.Item, len(*temp))
 	for i, v := range *temp {
 		items[i].ItemId = v.ItemId
 		items[i].Timestamp, err = dateparse.ParseAny(v.Timestamp)
@@ -301,7 +306,7 @@ func putItems(request *restful.Request, response *restful.Response) {
 	change.ItemsBefore = stat.ItemCount
 	// Insert items
 	for _, item := range items {
-		err = db.InsertItem(item.ItemId, &item.Timestamp)
+		err = db.InsertItem(database.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels}, true)
 		if err != nil {
 			internalServerError(response, err)
 			return
@@ -389,6 +394,17 @@ func putFeedback(request *restful.Request, response *restful.Response) {
 	change.FeedbackAfter = stat.FeedbackCount
 	change.ItemsAfter = stat.ItemCount
 	json(response, change)
+}
+
+func getItemsByLabel(request *restful.Request, response *restful.Response) {
+	// Get label
+	label := request.PathParameter("label")
+	// Get item
+	items, err := db.GetItemsByLabel(label)
+	if err != nil {
+		internalServerError(response, err)
+	}
+	json(response, items)
 }
 
 func badRequest(response *restful.Response, err error) {

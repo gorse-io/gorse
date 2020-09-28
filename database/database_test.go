@@ -1,4 +1,4 @@
-package engine
+package database
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -41,6 +41,14 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 	assert.Equal(t, users, retUsers)
 	assert.Equal(t, items, retItems)
 	assert.Equal(t, feedback, retFeedback)
+	// Get item
+	for _, itemId := range items {
+		item, err := db.GetItem(itemId)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, Item{ItemId: itemId}, item)
+	}
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
@@ -51,44 +59,52 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 	}
 }
 
-func TestDB_InsertGetItem(t *testing.T) {
+func TestDB_GetItem(t *testing.T) {
 	// Create database
 	fileName := path.Join(core.TempDir, randstr.String(16))
 	db, err := Open(fileName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Insert feedback
-	itemIds := []string{"0", "2", "4", "6", "8"}
-	timestamps := []time.Time{
-		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+	// Insert items
+	items := []Item{
+		{
+			ItemId:    "0",
+			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"a"},
+		},
+		{
+			ItemId:    "2",
+			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"a"},
+		},
+		{
+			ItemId:    "4",
+			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"a", "b"},
+		},
+		{
+			ItemId:    "6",
+			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"b"},
+		},
+		{
+			ItemId:    "8",
+			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"b"},
+		},
 	}
-	items := make([]Item, 5)
-	for i := range itemIds {
-		items[i].ItemId = itemIds[i]
-		items[i].Timestamp = timestamps[i]
-	}
-	for i, itemId := range itemIds {
-		if err := db.InsertItem(itemId, &timestamps[i]); err != nil {
+	for _, item := range items {
+		if err := db.InsertItem(item, true); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Count item
-	count, err := db.CountItems()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 5, count)
 	// Get items
-	retItems, err := db.GetItems(0, 0)
+	allItems, err := db.GetItems(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, items, retItems)
+	assert.Equal(t, items, allItems)
 	// Get n items with offset
 	nItems, err := db.GetItems(3, 1)
 	if err != nil {
@@ -96,23 +112,24 @@ func TestDB_InsertGetItem(t *testing.T) {
 	}
 	assert.Equal(t, items[1:4], nItems)
 	// Get item
-	for i, itemId := range itemIds {
-		item, err := db.GetItem(itemId)
+	for _, item := range items {
+		ret, err := db.GetItem(item.ItemId)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, itemId, item.ItemId)
-		assert.Equal(t, timestamps[i], item.Timestamp)
+		assert.Equal(t, item, ret)
 	}
-	// Get items by IDs
-	items, err = db.GetItemsByID([]string{"8", "6", "4", "2", "0"})
+	// Get items by labels
+	aItems, err := db.GetItemsByLabel("a")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, item := range items {
-		assert.Equal(t, itemIds[4-i], item.ItemId)
-		assert.Equal(t, timestamps[4-i], item.Timestamp)
+	assert.Equal(t, items[:3], aItems)
+	bItems, err := db.GetItemsByLabel("b")
+	if err != nil {
+		t.Fatal(err)
 	}
+	assert.Equal(t, items[2:], bItems)
 	// Close database
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
@@ -173,7 +190,7 @@ func TestDB_GetRandom(t *testing.T) {
 		time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 	}
 	for i, itemId := range items {
-		if err := db.InsertItem(itemId, &stamps[i]); err != nil {
+		if err := db.InsertItem(Item{ItemId: itemId, Timestamp: stamps[i]}, true); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -397,7 +414,7 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/items.csv", "::", false, -1); err != nil {
+	if err = db.LoadItemsFromCSV("../example/file_data/items.csv", "::", false, -1, "|", -1); err != nil {
 		t.Fatal(err)
 	}
 	// Count feedback
@@ -432,7 +449,7 @@ func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1); err != nil {
+	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1, "|", 2); err != nil {
 		t.Fatal(err)
 	}
 	// Count feedback
@@ -450,6 +467,11 @@ func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
 		assert.Equal(t, strconv.Itoa(1+i), items[i].ItemId)
 		date := time.Date(2020, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
 		assert.Equal(t, date, items[i].Timestamp)
+		if i%2 == 0 {
+			assert.Equal(t, []string{"a", "b", "c"}, items[i].Labels)
+		} else {
+			assert.Equal(t, []string{"e", "f", "g"}, items[i].Labels)
+		}
 	}
 	// Close database
 	if err = db.Close(); err != nil {
@@ -511,12 +533,12 @@ func TestDB_SaveItemsToCSV(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1); err != nil {
+	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1, "|", -1); err != nil {
 		t.Fatal(err)
 	}
 	// Save data
 	csvFileName := path.Join(core.TempDir, randstr.String(16))
-	if err = db.SaveItemsToCSV(csvFileName, "::", false, false); err != nil {
+	if err = db.SaveItemsToCSV(csvFileName, "::", false, false, "|", false); err != nil {
 		t.Fatal(err)
 	}
 	// Check data
@@ -548,23 +570,23 @@ func TestDB_SaveItemsToCSV_Date(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1); err != nil {
+	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1, "|", 2); err != nil {
 		t.Fatal(err)
 	}
 	// Save data
 	csvFileName := path.Join(core.TempDir, randstr.String(16))
-	if err = db.SaveItemsToCSV(csvFileName, "::", false, true); err != nil {
+	if err = db.SaveItemsToCSV(csvFileName, "::", false, true, "|", true); err != nil {
 		t.Fatal(err)
 	}
 	// Check data
 	entities := core.LoadEntityFromCSV(csvFileName, "::", "|", false,
-		[]string{"ItemId", "Timestamp"}, 0)
+		[]string{"ItemId", "Timestamp", "Labels"}, 0)
 	expected := []map[string]interface{}{
-		{"ItemId": 1, "Timestamp": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).String()},
-		{"ItemId": 2, "Timestamp": time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC).String()},
-		{"ItemId": 3, "Timestamp": time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC).String()},
-		{"ItemId": 4, "Timestamp": time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC).String()},
-		{"ItemId": 5, "Timestamp": time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC).String()},
+		{"ItemId": 1, "Timestamp": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
+		{"ItemId": 2, "Timestamp": time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
+		{"ItemId": 3, "Timestamp": time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
+		{"ItemId": 4, "Timestamp": time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
+		{"ItemId": 5, "Timestamp": time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
 	}
 	assert.Equal(t, expected, entities)
 	// Close database
@@ -588,7 +610,7 @@ func TestDB_UpdatePopularity(t *testing.T) {
 	itemIds := []string{"0", "2", "4", "6", "8"}
 	popularity := []float64{3, 4, 5, 6, 7}
 	for _, itemId := range itemIds {
-		if err := db.InsertItem(itemId, nil); err != nil {
+		if err := db.InsertItem(Item{ItemId: itemId}, true); err != nil {
 			t.Fatal(err)
 		}
 	}

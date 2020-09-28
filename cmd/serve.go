@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/database"
 	"github.com/zhenghaoz/gorse/engine"
 	"log"
 	"strconv"
 	"time"
 )
 
-var db *engine.DB
+var db *database.DB
 
 var commandServe = &cobra.Command{
 	Use:   "serve",
@@ -22,7 +23,7 @@ var commandServe = &cobra.Command{
 		conf, metaData := loadConfig(cmd)
 		// Connect database
 		var err error
-		db, err = engine.Open(conf.Database.File)
+		db, err = database.Open(conf.Database.File)
 		if err != nil {
 			log.Fatal(err)
 		}

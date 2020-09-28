@@ -70,8 +70,10 @@ func TestUpdateLatest(t *testing.T) {
 		time.Date(2015, 1, 1, 1, 1, 1, 1, time.UTC),
 		time.Date(2005, 1, 1, 1, 1, 1, 1, time.UTC),
 	}
-	if err = db.InsertItems(itemIds, timestamps); err != nil {
-		t.Fatal(err)
+	for i := range itemIds {
+		if err = db.InsertItem(Item{ItemId: itemIds[i], Timestamp: timestamps[i]}, true); err != nil {
+			t.Fatal(err)
+		}
 	}
 	// Update latest
 	if err = UpdateLatest(3, db); err != nil {
@@ -120,8 +122,10 @@ func TestUpdateNeighbors(t *testing.T) {
 		}
 	}
 	dataSet := core.NewDataSet(users, items, ratings)
-	if err = db.InsertItems(items, nil); err != nil {
-		t.Fatal(err)
+	for i := range items {
+		if err = db.InsertItem(Item{ItemId: items[i]}, true); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = UpdateNeighbors("msd", 5, dataSet, db); err != nil {
 		t.Fatal(err)
@@ -159,8 +163,10 @@ func TestUpdateRecommends(t *testing.T) {
 	for itemIndex := 0; itemIndex < dataSet.ItemCount(); itemIndex++ {
 		itemId[itemIndex] = dataSet.ItemIndexer().ToID(itemIndex)
 	}
-	if err = db.InsertItems(itemId, nil); err != nil {
-		t.Fatal(err)
+	for i := range itemId {
+		if err = db.InsertItem(Item{ItemId: itemId[i]}, true); err != nil {
+			t.Fatal(err)
+		}
 	}
 	trainSet, testSet := core.Split(dataSet, 0.2)
 	params := base.Params{
@@ -227,8 +233,10 @@ func TestUpdateRecommendsInvalidModel(t *testing.T) {
 	for itemIndex := 0; itemIndex < dataSet.ItemCount(); itemIndex++ {
 		itemId[itemIndex] = dataSet.ItemIndexer().ToID(itemIndex)
 	}
-	if err = db.InsertItems(itemId, nil); err != nil {
-		t.Fatal(err)
+	for i := range itemId {
+		if err = db.InsertItem(Item{ItemId: itemId[i]}, true); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = UpdateRecommends("invalid-model", nil, 10, runtime.NumCPU(), false, dataSet, db); err == nil {
 		t.Fatal("function should return an error")
