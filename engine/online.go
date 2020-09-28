@@ -1,5 +1,7 @@
 package engine
 
+import . "github.com/zhenghaoz/gorse/database"
+
 type RecommendedItems []RecommendedItem
 
 func (items RecommendedItems) Len() int {
