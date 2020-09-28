@@ -9,7 +9,7 @@ file = "gorse.db"       # database file
 
 # This section declares settings for recommendation.
 [recommend]
-model = "bpr"           # recommendation model
+model = "als"           # recommendation model
 cache_size = 100        # the number of cached recommendations
 update_threshold = 10   # update model when more than 10 ratings are added
 check_period = 1        # check for update every one minute
@@ -18,9 +18,6 @@ fit_jobs = 1            # concurrent jobs for fitting
 
 # This section declares hyperparameters for the recommendation model.
 [params]
-n_factors = 10          # the number of latent factors
-reg = 0.01              # regularization strength
-lr = 0.05               # learning rate
-n_epochs = 100          # the number of learning epochs
-init_mean = 0.0         # the mean of initial latent factors initilaized by Gaussian distribution
-init_std = 0.001        # the standard deviation of initial latent factors initilaized by Gaussian distribution
+n_factors = 20          # the number of latent factors
+reg = 0.015             # regularization strength
+n_epochs = 10           # the number of learning epochs
