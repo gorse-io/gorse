@@ -1,17 +1,27 @@
+// Copyright 2020 Zhenghao Zhang
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package database
 
 import (
 	"bufio"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/araddon/dateparse"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/core"
-	bolt "go.etcd.io/bbolt"
+	badger "github.com/dgraph-io/badger/v2"
+	"github.com/zhenghaoz/gorse/model"
 	"log"
-	"math"
-	"math/rand"
+	"math/bits"
 	"os"
 	"strconv"
 	"strings"
@@ -19,68 +29,57 @@ import (
 )
 
 const (
-	bucketMeta       = "meta"       // Bucket name for meta data
-	bucketIndex      = "index"      // Bucket name for index
-	bucketItems      = "items"      // Bucket name for items
-	bucketFeedback   = "feedback"   // Bucket name for feedback
-	BucketIgnore     = "ignored"    // Bucket name for ignored
-	BucketNeighbors  = "neighbors"  // Bucket name for neighbors
-	BucketRecommends = "recommends" // Bucket name for recommendations
-	BucketPop        = "pop"        // Bucket name for popular items
-	BucketLatest     = "latest"     // Bucket name for latest items
+	// Meta data
+	prefixMeta = "meta/" // prefix for meta data
+
+	// Source data
+	prefixLabelIndex = "index/label/" // prefix for label index
+	prefixItemIndex  = "index/item/"  // prefix for item index
+	prefixUserIndex  = "index/user/"  // prefix for user index
+	prefixItem       = "item/"        // prefix for items
+	prefixFeedback   = "feedback/"    // prefix for feedback
+	prefixIgnore     = "ignored/"     // prefix for ignored
+
+	// Derived data
+	prefixNeighbors  = "neighbors/"  // prefix for neighbors
+	prefixRecommends = "recommends/" // prefix for recommendations
+	prefixPop        = "populars/"   // prefix for popular items
+	prefixLatest     = "latest/"     // prefix for latest items
 )
 
-func encodeInt(v int) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(v))
-	return b
+func newKey(parts ...[]byte) []byte {
+	k := make([]byte, 0)
+	for _, p := range parts {
+		k = append(k, p...)
+	}
+	return k
 }
 
-func decodeInt(buf []byte) int {
-	return int(binary.BigEndian.Uint64(buf))
+func extractKey(key []byte, prefix ...[]byte) string {
+	prefixSize := 0
+	for _, p := range prefix {
+		prefixSize += len(p)
+	}
+	return string(key[prefixSize:])
 }
 
-func encodeFloat(v float64) []byte {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, math.Float64bits(v))
-	return b
-}
-
-func decodeFloat(buf []byte) float64 {
-	return math.Float64frombits(binary.BigEndian.Uint64(buf))
-}
-
-// DB manages all data for the engine.
-type DB struct {
-	db *bolt.DB // based on BoltDB
+// Database manages all data.
+type Database struct {
+	db *badger.DB
 }
 
 // Open a connection to the database.
-func Open(path string) (*DB, error) {
-	db := new(DB)
+func Open(path string) (*Database, error) {
 	var err error
-	db.db, err = bolt.Open(path, 0666, nil)
-	if err != nil {
+	database := new(Database)
+	if database.db, err = badger.Open(badger.DefaultOptions(path)); err != nil {
 		return nil, err
 	}
-	// Create buckets
-	err = db.db.Update(func(tx *bolt.Tx) error {
-		bucketNames := []string{bucketMeta, bucketItems, bucketIndex, bucketFeedback, BucketRecommends, BucketIgnore, BucketNeighbors}
-		for _, name := range bucketNames {
-			if _, err = tx.CreateBucketIfNotExists([]byte(name)); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
+	return database, nil
 }
 
 // Close the connection to the database.
-func (db *DB) Close() error {
+func (db *Database) Close() error {
 	return db.db.Close()
 }
 
@@ -92,67 +91,196 @@ type FeedbackKey struct {
 
 // Feedback stores feedback.
 type Feedback struct {
-	FeedbackKey
+	UserId string
+	ItemId string
 	Rating float64
 }
 
-// InsertFeedback inserts a feedback into the database. If the item doesn't exist, this item will be added.
-func (db *DB) InsertFeedback(userId, itemId string, feedback float64) error {
-	err := db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketFeedback))
-		// Marshal data into bytes.
-		key, err := json.Marshal(FeedbackKey{userId, itemId})
-		if err != nil {
-			return err
-		}
-		// Persist bytes to users bucket.
-		return bucket.Put(key, encodeFloat(feedback))
-	})
+// InsertFeedback inserts a feedback into the bucket.
+func InsertFeedback(txn *badger.Txn, feedback Feedback) error {
+	// Marshal key
+	key, err := json.Marshal(FeedbackKey{feedback.UserId, feedback.ItemId})
 	if err != nil {
 		return err
 	}
-	if err = db.InsertItem(Item{ItemId: itemId}, false); err != nil {
+	// Marshal value
+	value, err := json.Marshal(feedback)
+	if err != nil {
 		return err
 	}
-	if err = db.RemoveFromIdentList(BucketRecommends, userId, itemId); err != nil && err != bolt.ErrBucketNotFound {
+	// Insert feedback
+	if err := txn.Set(newKey([]byte(prefixFeedback), key), value); err != nil {
+		return err
+	}
+	// Insert user index
+	if err := txn.Set(newKey([]byte(prefixUserIndex), []byte(feedback.UserId), []byte("/"), []byte(feedback.ItemId)), nil); err != nil {
+		return err
+	}
+	// Insert item index
+	if err := txn.Set(newKey([]byte(prefixItemIndex), []byte(feedback.ItemId), []byte("/"), []byte(feedback.UserId)), nil); err != nil {
 		return err
 	}
 	return nil
 }
 
-// GetFeedback returns all feedback in the database.
-func (db *DB) GetFeedback() (users, items []string, feedback []float64, err error) {
-	err = db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketFeedback))
-		return bucket.ForEach(func(k, v []byte) error {
-			key := FeedbackKey{}
-			if err := json.Unmarshal(k, &key); err != nil {
+// BatchInsertFeedback inserts a feedback into the bucket within a batch write.
+func BatchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
+	// Marshal key
+	key, err := json.Marshal(FeedbackKey{feedback.UserId, feedback.ItemId})
+	if err != nil {
+		return err
+	}
+	// Marshal value
+	value, err := json.Marshal(feedback)
+	if err != nil {
+		return err
+	}
+	// Insert feedback
+	if err := wb.Set(newKey([]byte(prefixFeedback), key), value); err != nil {
+		return err
+	}
+	// Insert user index
+	if err := wb.Set(newKey([]byte(prefixUserIndex), []byte(feedback.UserId), []byte("/"), []byte(feedback.ItemId)), nil); err != nil {
+		return err
+	}
+	// Insert item index
+	if err := wb.Set(newKey([]byte(prefixItemIndex), []byte(feedback.ItemId), []byte("/"), []byte(feedback.UserId)), nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+// InsertFeedback inserts a feedback into the database. If the item doesn't exist, this item will be added.
+func (db *Database) InsertFeedback(feedback Feedback) error {
+	return db.db.Update(func(txn *badger.Txn) error {
+		// Insert feedback
+		if err := InsertFeedback(txn, feedback); err != nil {
+			return err
+		}
+		// Insert item
+		if err := InsertItem(txn, Item{ItemId: feedback.ItemId}, false); err != nil {
+			return err
+		}
+		// Refresh
+		if err := RefreshItemPop(txn, feedback.ItemId); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// InsertFeedbacks inserts multiple feedback into the database. If the item doesn't exist, this item will be added.
+func (db *Database) InsertFeedbacks(feedback []Feedback) error {
+	// Write feedback
+	txn := db.db.NewWriteBatch()
+	for _, f := range feedback {
+		if err := BatchInsertFeedback(txn, f); err != nil {
+			return err
+		}
+	}
+	if err := txn.Flush(); err != nil {
+		return err
+	}
+	return db.db.Update(func(txn *badger.Txn) error {
+		// Write items
+		for _, f := range feedback {
+			if err := InsertItem(txn, Item{ItemId: f.ItemId}, false); err != nil {
 				return err
 			}
-			users = append(users, key.UserId)
-			items = append(items, key.ItemId)
-			feedback = append(feedback, decodeFloat(v))
-			return nil
-		})
+			if err := RefreshItemPop(txn, f.ItemId); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
+}
+
+// GetFeedback returns all feedback in the database.
+func (db *Database) GetFeedback() (feedback []Feedback, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := []byte(prefixFeedback)
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			err := item.Value(func(v []byte) error {
+				var f Feedback
+				if err := json.Unmarshal(v, &f); err != nil {
+					return err
+				}
+				feedback = append(feedback, f)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return
+}
+
+func GetFeedback(txn *badger.Txn, userId string, itemId string) (feedback Feedback, err error) {
+	feedbackKey := FeedbackKey{UserId: userId, ItemId: itemId}
+	key, err := json.Marshal(feedbackKey)
 	if err != nil {
-		return nil, nil, nil, err
+		return Feedback{}, err
 	}
+	item, err := txn.Get(newKey([]byte(prefixFeedback), key))
+	if err != nil {
+		return Feedback{}, err
+	}
+	err = item.Value(func(val []byte) error {
+		return json.Unmarshal(val, &feedback)
+	})
+	return feedback, err
+}
+
+func (db *Database) GetFeedbackByUser(userId string) (feedback []Feedback, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := newKey([]byte(prefixUserIndex), []byte(userId), []byte("/"))
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			k := it.Item().Key()
+			itemId := extractKey(k, []byte(prefixUserIndex), []byte(userId), []byte("/"))
+			f, err := GetFeedback(txn, userId, itemId)
+			if err != nil {
+				return err
+			}
+			feedback = append(feedback, f)
+		}
+		return nil
+	})
+	return
+}
+
+func (db *Database) GetFeedbackByItem(itemId string) (feedback []Feedback, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := newKey([]byte(prefixItemIndex), []byte(itemId), []byte("/"))
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			k := it.Item().Key()
+			userId := extractKey(k, []byte(prefixItemIndex), []byte(itemId), []byte("/"))
+			f, err := GetFeedback(txn, userId, itemId)
+			if err != nil {
+				return err
+			}
+			feedback = append(feedback, f)
+		}
+		return nil
+	})
 	return
 }
 
 // CountFeedback returns the number of feedback in the database.
-func (db *DB) CountFeedback() (int, error) {
-	count := 0
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketFeedback))
-		count = bucket.Stats().KeyN
+func (db *Database) CountFeedback() (count int, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		count, err = CountPrefix(txn, []byte(prefixFeedback))
 		return nil
 	})
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
+	return
 }
 
 // Item stores meta data about item.
@@ -163,200 +291,214 @@ type Item struct {
 	Labels     []string
 }
 
-// InsertItem inserts a item into the database.
-func (db *DB) InsertItem(item Item, override bool) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-		var err error
-		bucket := tx.Bucket([]byte(bucketItems))
-		// Check existence
-		if !override && bucket.Get([]byte(item.ItemId)) != nil {
+func RefreshItemPop(txn *badger.Txn, itemId string) error {
+	// Check existence
+	it, err := txn.Get(newKey([]byte(prefixItem), []byte(itemId)))
+	if err != nil {
+		return err
+	}
+	var item Item
+	err = it.Value(func(val []byte) error {
+		return json.Unmarshal(val, &item)
+	})
+	if err != nil {
+		return err
+	}
+	// Collect feedback
+	item.Popularity = 0
+	iter := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer iter.Close()
+	prefix := newKey([]byte(prefixItemIndex), []byte(itemId), []byte("/"))
+	for iter.Seek(prefix); iter.ValidForPrefix(prefix); iter.Next() {
+		item.Popularity += 1
+	}
+	// Write item
+	buf, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	return txn.Set(newKey([]byte(prefixItem), []byte(itemId)), buf)
+}
+
+// InsertItem inserts a item into the bucket. The `override` flag indicates whether to overwrite existed item.
+func InsertItem(txn *badger.Txn, item Item, override bool) error {
+	// Check existence
+	refresh := false
+	if _, err := txn.Get(newKey([]byte(prefixItem), []byte(item.ItemId))); err == nil {
+		if override {
+			refresh = true
+		} else {
 			return nil
 		}
-		// Write item
-		itemId := item.ItemId
-		buf, err := json.Marshal(item)
-		if err != nil {
+	}
+	// Write item
+	itemId := item.ItemId
+	buf, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	if err = txn.Set(newKey([]byte(prefixItem), []byte(itemId)), buf); err != nil {
+		return err
+	}
+	// Write index
+	for _, tag := range item.Labels {
+		if err = txn.Set(newKey([]byte(prefixLabelIndex), []byte(tag), []byte("/"), []byte(itemId)), nil); err != nil {
 			return err
 		}
-		if err = bucket.Put([]byte(itemId), buf); err != nil {
+	}
+	// Refresh pop
+	if refresh {
+		if err := RefreshItemPop(txn, itemId); err != nil {
 			return err
 		}
-		// Write index
-		indexBucket := tx.Bucket([]byte(bucketIndex))
-		for _, tag := range item.Labels {
-			labelBucket, err := indexBucket.CreateBucketIfNotExists([]byte(tag))
-			if err != nil {
-				return err
-			}
-			if err = labelBucket.Put([]byte(itemId), nil); err != nil {
+	}
+	return nil
+}
+
+// InsertItem inserts a item into the database. The `override` flag indicates whether to overwrite existed item.
+func (db *Database) InsertItem(item Item, override bool) error {
+	return db.db.Update(func(txn *badger.Txn) error {
+		return InsertItem(txn, item, override)
+	})
+}
+
+// InsertItem inserts multiple items into the database. The `override` flag indicates whether to overwrite existed item.
+func (db *Database) InsertItems(items []Item, override bool) error {
+	return db.db.Update(func(txn *badger.Txn) error {
+		for _, item := range items {
+			if err := InsertItem(txn, item, override); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+func GetItem(txn *badger.Txn, itemId string) (item Item, err error) {
+	var it *badger.Item
+	it, err = txn.Get(newKey([]byte(prefixItem), []byte(itemId)))
+	if err != nil {
+		return
+	}
+	err = it.Value(func(val []byte) error {
+		return json.Unmarshal(val, &item)
+	})
+	return
 }
 
 // GetItem gets a item from database by item ID.
-func (db *DB) GetItem(itemId string) (Item, error) {
-	item := Item{}
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketItems))
-		buf := bucket.Get([]byte(itemId))
-		if buf == nil {
-			return fmt.Errorf("item %v not found", itemId)
-		}
-		if err := json.Unmarshal(buf, &item); err != nil {
-			return err
-		}
+func (db *Database) GetItem(itemId string) (item Item, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		item, err = GetItem(txn, itemId)
 		return nil
 	})
-	return item, err
+	return
 }
 
 // GetItems returns all items in the dataset.
-func (db *DB) GetItems(n int, offset int) ([]Item, error) {
+func (db *Database) GetItems(n int, offset int) ([]Item, error) {
+	if n == 0 {
+		n = (1<<bits.UintSize)/2 - 1
+	}
+	pos := 0
 	items := make([]Item, 0)
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketItems))
-		if n == 0 {
-			n = bucket.Stats().KeyN
-		}
-		// Skip offset
-		cursor := bucket.Cursor()
-		cursor.First()
-		first := true
-		for i := 0; i < offset; i++ {
-			var key []byte
-			if first {
-				key, _ = cursor.First()
-				first = false
+	err := db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := []byte(prefixItem)
+		for it.Seek(prefix); it.ValidForPrefix(prefix) && len(items) < n; it.Next() {
+			if pos < offset {
+				// Skip offset
+				pos += 1
 			} else {
-				key, _ = cursor.Next()
-			}
-			if key == nil {
-				return nil
-			}
-		}
-		// Read n
-		for i := 0; i < n; i++ {
-			var key, value []byte
-			if first {
-				key, value = cursor.First()
-				first = false
-			} else {
-				key, value = cursor.Next()
-			}
-			if key == nil {
-				return nil
-			}
-			item := Item{ItemId: string(key)}
-			if value != nil {
-				err := json.Unmarshal(value, &item)
+				// Read n
+				err := it.Item().Value(func(v []byte) error {
+					var item Item
+					if err := json.Unmarshal(v, &item); err != nil {
+						return err
+					}
+					items = append(items, item)
+					return nil
+				})
 				if err != nil {
 					return err
 				}
 			}
-			items = append(items, item)
 		}
 		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-// GetItemsByLabel list items with given label.
-func (db *DB) GetItemsByLabel(label string) ([]Item, error) {
-	items := make([]Item, 0)
-	err := db.db.View(func(tx *bolt.Tx) error {
-		itemBucket := tx.Bucket([]byte(bucketItems))
-		indexBucket := tx.Bucket([]byte(bucketIndex))
-		labelBucket := indexBucket.Bucket([]byte(label))
-		if labelBucket == nil {
-			return bolt.ErrBucketNotFound
-		}
-		return labelBucket.ForEach(func(k, v []byte) error {
-			buf := itemBucket.Get(k)
-			var item Item
-			if err := json.Unmarshal(buf, &item); err != nil {
-				return err
-			}
-			items = append(items, item)
-			return nil
-		})
 	})
 	return items, err
 }
 
-// GetItem gets items from database by item IDs.
-func (db *DB) GetItemsByID(id []string) ([]Item, error) {
-	items := make([]Item, len(id))
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketItems))
-		for i, v := range id {
-			item := Item{}
-			buf := bucket.Get([]byte(v))
-			if buf == nil {
-				return fmt.Errorf("item %v not found", v)
-			}
-			if err := json.Unmarshal(buf, &item); err != nil {
+// GetItemsByLabel list items with given label.
+func (db *Database) GetItemsByLabel(label string) ([]Item, error) {
+	items := make([]Item, 0)
+	err := db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := newKey([]byte(prefixLabelIndex), []byte(label), []byte("/"))
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			k := it.Item().Key()
+			itemId := extractKey(k, []byte(prefixLabelIndex), []byte(label), []byte("/"))
+			item, err := GetItem(txn, itemId)
+			if err != nil {
 				return err
 			}
-			items[i] = item
+			items = append(items, item)
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
+	return items, err
+}
+
+func CountPrefix(txn *badger.Txn, prefix []byte) (int, error) {
+	count := 0
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		count++
 	}
-	return items, nil
+	return count, nil
 }
 
 // CountItems returns the number of items in the database.
-func (db *DB) CountItems() (int, error) {
-	count := 0
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketItems))
-		count = bucket.Stats().KeyN
+func (db *Database) CountItems() (count int, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		count, err = CountPrefix(txn, []byte(prefixItem))
 		return nil
 	})
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
+	return
 }
 
 // CountIgnore returns the number of ignored items.
-func (db *DB) CountIgnore() (int, error) {
-	count := 0
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(BucketIgnore))
-		count = bucket.Stats().KeyN
+func (db *Database) CountIgnore() (count int, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		count, err = CountPrefix(txn, []byte(prefixIgnore))
 		return nil
 	})
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
+	return
 }
 
-// GetMeta gets the value of a metadata.
-func (db *DB) GetMeta(name string) (string, error) {
+// GetString gets the value of a metadata.
+func (db *Database) GetString(name string) (string, error) {
 	var value string
-	err := db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketMeta))
-		value = string(bucket.Get([]byte(name)))
-		return nil
+	err := db.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(newKey([]byte(prefixMeta), []byte(name)))
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			value = string(val)
+			return nil
+		})
 	})
 	return value, err
 }
 
-// SetMeta sets the value of a metadata.
-func (db *DB) SetMeta(name string, val string) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketMeta))
-		return bucket.Put([]byte(name), []byte(val))
+// SetString sets the value of a metadata.
+func (db *Database) SetString(name string, val string) error {
+	return db.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(newKey([]byte(prefixMeta), []byte(name)), []byte(val))
 	})
 }
 
@@ -366,68 +508,15 @@ type RecommendedItem struct {
 	Score float64 // score
 }
 
-// GetRandom returns random items.
-func (db *DB) GetRandom(n int) ([]RecommendedItem, error) {
-	// count items
-	count, err := db.CountItems()
-	if err != nil {
-		return nil, err
-	}
-	n = base.Min([]int{count, n})
-	// generate random indices
-	selected := make(map[int]bool)
-	for len(selected) < n {
-		randomIndex := rand.Intn(count)
-		selected[randomIndex] = true
-	}
-	items := make([]RecommendedItem, 0)
-	err = db.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bucketItems))
-		ptr := 0
-		return bucket.ForEach(func(k, v []byte) error {
-			// Sample
-			if _, exist := selected[ptr]; exist {
-				item := Item{}
-				if err := json.Unmarshal(v, &item); err != nil {
-					return err
-				}
-				items = append(items, RecommendedItem{Item: item})
-			}
-			ptr++
-			return nil
-		})
-	})
-	if err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 // SetRecommends sets recommendations for a user.
-func (db *DB) PutIdentList(bucketName string, id string, items []RecommendedItem) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(bucketName))
-		// Delete sub-bucket if exists
-		var sBucket *bolt.Bucket
-		var err error
-		if sBucket = bucket.Bucket([]byte(id)); sBucket != nil {
-			if err = bucket.DeleteBucket([]byte(id)); err != nil {
-				return err
-			}
-		}
-		// Create sub-bukcet
-		if sBucket, err = bucket.CreateBucket([]byte(id)); err != nil {
-			return err
-		}
-		// Persist list to bucket
+func (db *Database) setList(prefix string, listId string, items []RecommendedItem) error {
+	return db.db.Update(func(txn *badger.Txn) error {
 		for i, item := range items {
-			// Marshal data into bytes
 			buf, err := json.Marshal(item)
 			if err != nil {
 				return err
 			}
-			if err = sBucket.Put(encodeInt(i), buf); err != nil {
+			if err = txn.Set(newKey([]byte(prefix), []byte(listId), []byte("/"), []byte(strconv.Itoa(i))), buf); err != nil {
 				return err
 			}
 		}
@@ -436,250 +525,124 @@ func (db *DB) PutIdentList(bucketName string, id string, items []RecommendedItem
 }
 
 // GetRecommends gets n recommendations for a user.
-func (db *DB) GetIdentList(bucketName string, id string, n int, offset int) ([]RecommendedItem, error) {
+func (db *Database) getList(prefix string, listId string, n int, offset int,
+	filter func(txn *badger.Txn, listId string, item RecommendedItem) bool) ([]RecommendedItem, error) {
 	var items []RecommendedItem
-	err := db.db.View(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(bucketName))
-		// Get sub-bucket
-		sBucket := bucket.Bucket([]byte(id))
-		if sBucket == nil {
-			return bolt.ErrBucketNotFound
-		}
-		// Unmarshal data into bytes
-		if n == 0 {
-			n = sBucket.Stats().KeyN
-		}
-		for i := offset; i < offset+n; i++ {
-			buf := sBucket.Get(encodeInt(i))
-			if buf == nil {
-				n++
-				continue
-			}
-			var item RecommendedItem
-			if err := json.Unmarshal(buf, &item); err != nil {
-				return err
-			}
-			items = append(items, item)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	if n == 0 {
+		n = (1<<bits.UintSize)/2 - 1
 	}
-	return items, nil
-}
-
-// AppendIdentList items into a list.
-func (db *DB) AppendIdentList(bucketName string, id string, items []RecommendedItem) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(bucketName))
-		// Create sub-bukcet
-		var sBucket *bolt.Bucket
-		var err error
-		if sBucket, err = bucket.CreateBucketIfNotExists([]byte(id)); err != nil {
-			return err
-		}
-		// Locate start
-		key, _ := sBucket.Cursor().Last()
-		start := 0
-		if key != nil {
-			start = decodeInt(key) + 1
-		}
-		// Persist list to bucket
-		for i, item := range items {
-			// Marshal data into bytes
-			buf, err := json.Marshal(item)
+	err := db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := newKey([]byte(prefix), []byte(listId), []byte("/"))
+		pos := 0
+		for it.Seek(prefix); it.ValidForPrefix(prefix) && len(items) < n; it.Next() {
+			var item RecommendedItem
+			err := it.Item().Value(func(val []byte) error {
+				return json.Unmarshal(val, &item)
+			})
 			if err != nil {
 				return err
 			}
-			if err = sBucket.Put(encodeInt(start+i), buf); err != nil {
-				return err
+			if filter == nil || filter(txn, listId, item) {
+				if pos < offset {
+					pos++
+				} else {
+					items = append(items, item)
+				}
 			}
 		}
 		return nil
+	})
+	return items, err
+}
+
+func (db *Database) SetNeighbors(itemId string, items []RecommendedItem) error {
+	return db.setList(prefixNeighbors, itemId, items)
+}
+
+func (db *Database) SetPop(items []RecommendedItem) error {
+	return db.setList(prefixPop, "", items)
+}
+
+func (db *Database) SetLatest(items []RecommendedItem) error {
+	return db.setList(prefixLatest, "", items)
+}
+
+func (db *Database) SetRecommend(userId string, items []RecommendedItem) error {
+	return db.setList(prefixRecommends, userId, items)
+}
+
+func (db *Database) GetNeighbors(itemId string, n int, offset int) ([]RecommendedItem, error) {
+	return db.getList(prefixNeighbors, itemId, n, offset, nil)
+}
+
+func (db *Database) GetPop(n int, offset int) ([]RecommendedItem, error) {
+	return db.getList(prefixPop, "", n, offset, nil)
+}
+
+func (db *Database) GetLatest(n int, offset int) ([]RecommendedItem, error) {
+	return db.getList(prefixLatest, "", n, offset, nil)
+}
+
+func (db *Database) GetRecommend(userId string, n int, offset int) ([]RecommendedItem, error) {
+	return db.getList(prefixRecommends, userId, n, offset, func(txn *badger.Txn, listId string, item RecommendedItem) bool {
+		buf, err := json.Marshal(FeedbackKey{listId, item.ItemId})
+		if err != nil {
+			panic(err)
+		}
+		_, errIgnore := txn.Get(newKey([]byte(prefixIgnore), []byte(listId), []byte("/"), []byte(item.ItemId)))
+		_, errFeedback := txn.Get(newKey([]byte(prefixFeedback), buf))
+		if errIgnore == badger.ErrKeyNotFound && errFeedback == badger.ErrKeyNotFound {
+			return true
+		} else if errIgnore != nil && errIgnore != badger.ErrKeyNotFound {
+			panic(errIgnore)
+		} else if errFeedback != nil && errFeedback != badger.ErrKeyNotFound {
+			panic(errFeedback)
+		}
+		return false
 	})
 }
 
-// RemoveFromIdentList remove item from list.
-func (db *DB) RemoveFromIdentList(bucketName string, id string, itemId string) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(bucketName))
-		// Get sub bucket
-		sBucket := bucket.Bucket([]byte(id))
-		if sBucket == nil {
-			return bolt.ErrBucketNotFound
-		}
-		// Search item
-		cursor := sBucket.Cursor()
-		first := true
-		for {
-			var key, value []byte
-			if first {
-				key, value = cursor.First()
-				first = false
-			} else {
-				key, value = cursor.Next()
+func (db *Database) ConsumeRecommends(userId string, n int) ([]RecommendedItem, error) {
+	items, err := db.GetRecommend(userId, n, 0)
+	if err == nil {
+		err = db.db.Update(func(txn *badger.Txn) error {
+			for _, item := range items {
+				if err := txn.Set(newKey([]byte(prefixIgnore), []byte(userId), []byte("/"), []byte(item.ItemId)), nil); err != nil {
+					return err
+				}
 			}
-			if key == nil {
-				break
-			}
-			var item RecommendedItem
-			if err := json.Unmarshal(value, &item); err != nil {
-				return err
-			}
-			if item.ItemId == itemId {
-				return cursor.Delete()
-			}
-		}
-		return nil
-	})
-}
-
-// ConsumeRecommends get recommendations and remove items from list.
-func (db *DB) ConsumeRecommends(id string, n int) ([]RecommendedItem, error) {
-	var items []RecommendedItem
-	err := db.db.Update(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(BucketRecommends))
-		// Get sub-bucket
-		sBucket := bucket.Bucket([]byte(id))
-		if sBucket == nil {
-			return bolt.ErrBucketNotFound
-		}
-		// Load items
-		cursor := sBucket.Cursor()
-		first := true
-		for i := 0; i < n; i++ {
-			var key, value []byte
-			if first {
-				key, value = cursor.First()
-				first = false
-			} else {
-				key, value = cursor.Next()
-			}
-			if err := cursor.Delete(); err != nil {
-				return err
-			}
-			if key == nil {
-				break
-			}
-			var item RecommendedItem
-			if err := json.Unmarshal(value, &item); err != nil {
-				return err
-			}
-			items = append(items, item)
-		}
-		return nil
-	})
-	if err = db.AppendIdentList(BucketIgnore, id, items); err != nil {
-		return nil, err
+			return nil
+		})
 	}
 	return items, err
 }
 
-// UpdatePopularity update popularity of items.
-func (db *DB) UpdatePopularity(itemId []string, popularity []float64) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(bucketItems))
-		for i, id := range itemId {
-			// Unmarshal data from bytes
-			item := Item{ItemId: id}
-			buf := bucket.Get([]byte(id))
-			if buf != nil {
-				if err := json.Unmarshal(buf, &item); err != nil {
-					return err
-				}
-			}
-			item.Popularity = popularity[i]
-			buf, err := json.Marshal(item)
-			if err != nil {
-				return err
-			}
-			if err = bucket.Put([]byte(id), buf); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-// PutList saves a list into the database.
-func (db *DB) PutList(name string, items []RecommendedItem) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-		var bucket *bolt.Bucket
-		var err error
-		// Delete bucket if exists
-		if bucket = tx.Bucket([]byte(name)); bucket != nil {
-			if err = tx.DeleteBucket([]byte(name)); err != nil {
-				return err
-			}
-		}
-		// Create bukcet
-		if bucket, err = tx.CreateBucket([]byte(name)); err != nil {
-			return err
-		}
-		// Persist list to bucket
-		for i, item := range items {
-			// Marshal data into bytes
-			buf, err := json.Marshal(item)
-			if err != nil {
-				return err
-			}
-			if err = bucket.Put(encodeInt(i), buf); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-// GetList gets a list from the database.
-func (db *DB) GetList(name string, n int, offset int) ([]RecommendedItem, error) {
-	var items []RecommendedItem
-	err := db.db.View(func(tx *bolt.Tx) error {
-		// Get bucket
-		bucket := tx.Bucket([]byte(name))
-		// Unmarshal data into bytes
-		if n == 0 {
-			n = bucket.Stats().KeyN
-		}
-		for i := offset; i < offset+n; i++ {
-			buf := bucket.Get(encodeInt(i))
-			if buf == nil {
-				break
-			}
-			var item RecommendedItem
-			if err := json.Unmarshal(buf, &item); err != nil {
-				return err
-			}
-			items = append(items, item)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 // ToDataSet creates a dataset from the database.
-func (db *DB) ToDataSet() (*core.DataSet, error) {
-	users, items, feedback, err := db.GetFeedback()
+func (db *Database) ToDataSet() (*model.DataSet, error) {
+	// Count feedback
+	count, err := db.CountFeedback()
 	if err != nil {
 		return nil, err
 	}
-	return core.NewDataSet(users, items, feedback), nil
+	// Fetch
+	users, items, ratings := make([]string, count), make([]string, count), make([]float64, count)
+	feedback, err := db.GetFeedback()
+	if err != nil {
+		return nil, err
+	}
+	for i := range feedback {
+		users[i] = feedback[i].UserId
+		items[i] = feedback[i].ItemId
+		ratings[i] = feedback[i].Rating
+	}
+	return model.NewDataSet(users, items, ratings), nil
 }
 
 // LoadFeedbackFromCSV import feedback from a CSV file into the database.
-func (db *DB) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) error {
-	users := make([]string, 0)
-	items := make([]string, 0)
-	feedbacks := make([]float64, 0)
+func (db *Database) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) error {
+	feedbacks := make([]Feedback, 0)
 	// Open file
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -706,20 +669,13 @@ func (db *DB) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) e
 		if len(fields) > 2 {
 			feedback, _ = strconv.ParseFloat(fields[2], 32)
 		}
-		users = append(users, userId)
-		items = append(items, itemId)
-		feedbacks = append(feedbacks, feedback)
+		feedbacks = append(feedbacks, Feedback{userId, itemId, feedback})
 	}
-	for i := range users {
-		if err = db.InsertFeedback(users[i], items[i], feedbacks[i]); err != nil {
-			return err
-		}
-	}
-	return nil
+	return db.InsertFeedbacks(feedbacks)
 }
 
 // LoadItemsFromCSV imports items from a CSV file into the database.
-func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool, dateColumn int, labelSep string, labelColumn int) error {
+func (db *Database) LoadItemsFromCSV(fileName string, sep string, hasHeader bool, dateColumn int, labelSep string, labelColumn int) error {
 	// Open file
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -728,6 +684,7 @@ func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool, date
 	defer file.Close()
 	// Read CSV file
 	scanner := bufio.NewScanner(file)
+	items := make([]Item, 0)
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Ignore header
@@ -753,16 +710,13 @@ func (db *DB) LoadItemsFromCSV(fileName string, sep string, hasHeader bool, date
 		if labelColumn > 0 && labelColumn < len(fields) {
 			item.Labels = strings.Split(fields[labelColumn], labelSep)
 		}
-		// Insert
-		if err = db.InsertItem(item, true); err != nil {
-			return err
-		}
+		items = append(items, item)
 	}
-	return nil
+	return db.InsertItems(items, true)
 }
 
 // SaveFeedbackToCSV exports feedback from the database into a CSV file.
-func (db *DB) SaveFeedbackToCSV(fileName string, sep string, header bool) error {
+func (db *Database) SaveFeedbackToCSV(fileName string, sep string, header bool) error {
 	// Open file
 	file, err := os.Create(fileName)
 	if err != nil {
@@ -770,12 +724,12 @@ func (db *DB) SaveFeedbackToCSV(fileName string, sep string, header bool) error 
 	}
 	defer file.Close()
 	// Save feedback
-	users, items, feedback, err := db.GetFeedback()
+	feedback, err := db.GetFeedback()
 	if err != nil {
 		return err
 	}
-	for i := range users {
-		if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v\n", users[i], sep, items[i], sep, feedback[i])); err != nil {
+	for i := range feedback {
+		if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v\n", feedback[i].UserId, sep, feedback[i].ItemId, sep, feedback[i].Rating)); err != nil {
 			return err
 		}
 	}
@@ -783,7 +737,7 @@ func (db *DB) SaveFeedbackToCSV(fileName string, sep string, header bool) error 
 }
 
 // SaveItemsToCSV exports items from the database into a CSV file.
-func (db *DB) SaveItemsToCSV(fileName string, sep string, header bool, date bool, labelSep string, label bool) error {
+func (db *Database) SaveItemsToCSV(fileName string, sep string, header bool, date bool, labelSep string, label bool) error {
 	// Open file
 	file, err := os.Create(fileName)
 	if err != nil {
