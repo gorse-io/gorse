@@ -1,4 +1,17 @@
-package core
+// Copyright 2020 Zhenghao Zhang
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+package model
 
 import (
 	"github.com/zhenghaoz/gorse/base"
@@ -205,4 +218,33 @@ func EvaluateAUC(estimator ModelInterface, testSet, excludeSet DataSetInterface)
 	}
 	// \frac{1}{|U|} \sum_u \frac{1}{|E(u)|} \sum_{(i,j)\in{E(u)}} I(\hat{x}_{ui} - \hat{x}_{uj})
 	return sum / userCount
+}
+
+// Top gets the ranking
+func Top(items map[string]bool, userId string, n int, exclude *base.MarginalSubSet, model ModelInterface) ([]string, []float64) {
+	// Get top-n list
+	itemsHeap := base.NewMaxHeap(n)
+	for itemId := range items {
+		if !exclude.Contain(itemId) {
+			itemsHeap.Add(itemId, model.Predict(userId, itemId))
+		}
+	}
+	elem, scores := itemsHeap.ToSorted()
+	recommends := make([]string, len(elem))
+	for i := range recommends {
+		recommends[i] = elem[i].(string)
+	}
+	return recommends, scores
+}
+
+// Items gets all items from the test set and the training set.
+func Items(dataSet ...DataSetInterface) map[string]bool {
+	items := make(map[string]bool)
+	for _, data := range dataSet {
+		for i := 0; i < data.ItemCount(); i++ {
+			itemId := data.ItemIndexer().ToID(i)
+			items[itemId] = true
+		}
+	}
+	return items
 }

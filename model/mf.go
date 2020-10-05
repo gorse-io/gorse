@@ -1,8 +1,20 @@
+// Copyright 2020 Zhenghao Zhang
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package model
 
 import (
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/floats"
 	"gonum.org/v1/gonum/mat"
 	"log"
@@ -25,7 +37,7 @@ import (
 //	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.001.
 type BPR struct {
 	Base
-	// Model parameters
+	// ModelInterface parameters
 	UserFactor [][]float64 // p_u
 	ItemFactor [][]float64 // q_i
 	// Hyper parameters
@@ -83,7 +95,7 @@ func (bpr *BPR) predict(userIndex int, itemIndex int) float64 {
 }
 
 // Fit the BPR model.
-func (bpr *BPR) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+func (bpr *BPR) Fit(trainSet DataSetInterface, options *base.RuntimeOptions) {
 	options.Logf("Fit BPR with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
 		bpr.nFactors, bpr.nEpochs, bpr.lr, bpr.reg, bpr.initMean, bpr.initStdDev)
@@ -165,7 +177,7 @@ func (bpr *BPR) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions
 //   Reg        - The strength of regularization.
 type ALS struct {
 	Base
-	// Model parameters
+	// ModelInterface parameters
 	UserFactor *mat.Dense // p_u
 	ItemFactor *mat.Dense // q_i
 	// Hyper parameters
@@ -214,7 +226,7 @@ func (mf *ALS) Predict(userId, itemId string) float64 {
 }
 
 // Fit the ALS model.
-func (mf *ALS) Fit(set core.DataSetInterface, options *base.RuntimeOptions) {
+func (mf *ALS) Fit(set DataSetInterface, options *base.RuntimeOptions) {
 	options.Logf("Fit ALS with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, reg = %v, alpha = %v, init_mean = %v, init_stddev = %v",
 		mf.nFactors, mf.nEpochs, mf.reg, mf.alpha, mf.initMean, mf.initStdDev)
