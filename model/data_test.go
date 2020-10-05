@@ -1,4 +1,17 @@
-package core
+// Copyright 2020 Zhenghao Zhang
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+package model
 
 import (
 	"crypto/md5"
@@ -156,11 +169,11 @@ func TestLoadEntityFromCSV(t *testing.T) {
 	// 4::Waiting to Exhale (1995)::Comedy|Drama
 	// 5::Father of the Bride Part II (1995)::Comedy
 	expected := []map[string]interface{}{
-		{"ItemId": 1, "Title": "Toy Story (1995)", "Genres": []string{"Animation", "Children's", "Comedy"}},
-		{"ItemId": 2, "Title": "Jumanji (1995)", "Genres": []string{"Adventure", "Children's", "Fantasy"}},
-		{"ItemId": 3, "Title": "Grumpier Old Men (1995)", "Genres": []string{"Comedy", "Romance"}},
-		{"ItemId": 4, "Title": "Waiting to Exhale (1995)", "Genres": []string{"Comedy", "Drama"}},
-		{"ItemId": 5, "Title": "Father of the Bride Part II (1995)", "Genres": "Comedy"},
+		{"ItemId": "1", "Title": "Toy Story (1995)", "Genres": []string{"Animation", "Children's", "Comedy"}},
+		{"ItemId": "2", "Title": "Jumanji (1995)", "Genres": []string{"Adventure", "Children's", "Fantasy"}},
+		{"ItemId": "3", "Title": "Grumpier Old Men (1995)", "Genres": []string{"Comedy", "Romance"}},
+		{"ItemId": "4", "Title": "Waiting to Exhale (1995)", "Genres": []string{"Comedy", "Drama"}},
+		{"ItemId": "5", "Title": "Father of the Bride Part II (1995)", "Genres": "Comedy"},
 	}
 	assert.Equal(t, expected, entities)
 }
@@ -173,11 +186,11 @@ func TestLoadEntityFromCSV_Header(t *testing.T) {
 	// 4::Waiting to Exhale (1995)::Comedy|Drama
 	// 5::Father of the Bride Part II (1995)::Comedy
 	expected := []map[string]interface{}{
-		{"ItemId": 1, "Title": "Toy Story (1995)", "Genres": []string{"Animation", "Children's", "Comedy"}},
-		{"ItemId": 2, "Title": "Jumanji (1995)", "Genres": []string{"Adventure", "Children's", "Fantasy"}},
-		{"ItemId": 3, "Title": "Grumpier Old Men (1995)", "Genres": []string{"Comedy", "Romance"}},
-		{"ItemId": 4, "Title": "Waiting to Exhale (1995)", "Genres": []string{"Comedy", "Drama"}},
-		{"ItemId": 5, "Title": "Father of the Bride Part II (1995)", "Genres": "Comedy"},
+		{"ItemId": "1", "Title": "Toy Story (1995)", "Genres": []string{"Animation", "Children's", "Comedy"}},
+		{"ItemId": "2", "Title": "Jumanji (1995)", "Genres": []string{"Adventure", "Children's", "Fantasy"}},
+		{"ItemId": "3", "Title": "Grumpier Old Men (1995)", "Genres": []string{"Comedy", "Romance"}},
+		{"ItemId": "4", "Title": "Waiting to Exhale (1995)", "Genres": []string{"Comedy", "Drama"}},
+		{"ItemId": "5", "Title": "Father of the Bride Part II (1995)", "Genres": "Comedy"},
 	}
 	assert.Equal(t, expected, entities)
 }
