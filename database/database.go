@@ -626,7 +626,7 @@ func (db *Database) ToDataSet() (*model.DataSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Fetch
+	// Fetch ratings
 	users, items, ratings := make([]string, count), make([]string, count), make([]float64, count)
 	feedback, err := db.GetFeedback()
 	if err != nil {
@@ -637,7 +637,21 @@ func (db *Database) ToDataSet() (*model.DataSet, error) {
 		items[i] = feedback[i].ItemId
 		ratings[i] = feedback[i].Rating
 	}
-	return model.NewDataSet(users, items, ratings), nil
+	dataset := model.NewDataSet(users, items, ratings)
+	// Fetch features
+	featuredItems, err := db.GetItems(0, 0)
+	if err != nil {
+		return nil, err
+	}
+	convertedItems := make([]map[string]interface{}, len(featuredItems))
+	for i, item := range featuredItems {
+		cvt := make(map[string]interface{})
+		cvt["ItemId"] = item.ItemId
+		cvt["Label"] = item.Labels
+		convertedItems[i] = cvt
+	}
+	dataset.SetItemFeature(convertedItems, []string{"Label"}, "ItemId")
+	return dataset, nil
 }
 
 // LoadFeedbackFromCSV import feedback from a CSV file into the database.

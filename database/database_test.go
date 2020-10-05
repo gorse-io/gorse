@@ -378,8 +378,23 @@ func TestDB_ToDataSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	// Load data
-	if err = db.LoadFeedbackFromCSV("../example/file_data/feedback_explicit_header.csv", ",", true); err != nil {
+	// Insert data
+	feedback := []Feedback{
+		{UserId: "1", ItemId: "1"},
+		{UserId: "1", ItemId: "2"},
+		{UserId: "2", ItemId: "1"},
+		{UserId: "2", ItemId: "2"},
+		{UserId: "2", ItemId: "3"},
+	}
+	if err = db.InsertFeedbacks(feedback); err != nil {
+		t.Fatal(err)
+	}
+	items := []Item{
+		{ItemId: "1", Labels: []string{"a"}},
+		{ItemId: "2", Labels: []string{"b"}},
+		{ItemId: "3", Labels: []string{"c"}},
+	}
+	if err = db.InsertItems(items, true); err != nil {
 		t.Fatal(err)
 	}
 	// To dataset
@@ -388,8 +403,9 @@ func TestDB_ToDataSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 5, dataSet.Count())
-	assert.Equal(t, 5, dataSet.UserCount())
-	assert.Equal(t, 5, dataSet.ItemCount())
+	assert.Equal(t, 2, dataSet.UserCount())
+	assert.Equal(t, 3, dataSet.ItemCount())
+	assert.Equal(t, 3, dataSet.FeatureCount())
 }
 
 func TestDB_LoadFeedbackFromCSV(t *testing.T) {
