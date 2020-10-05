@@ -2,7 +2,6 @@ package model
 
 import (
 	. "github.com/zhenghaoz/gorse/base"
-	. "github.com/zhenghaoz/gorse/core"
 	"gonum.org/v1/gonum/stat"
 	"math"
 	"runtime"
@@ -72,17 +71,6 @@ func TestALS(t *testing.T) {
 		NewEvaluator(5, 0, Precision, Recall),
 		NewEvaluator(10, 0, Precision, Recall),
 		NewEvaluator(math.MaxInt32, 0, MAP, NDCG))
-}
-
-func TestKNN(t *testing.T) {
-	data := LoadDataFromBuiltIn("ml-100k")
-	// KNN should perform better than ItemPop.
-	checkRank(t, NewKNN(nil), data, NewKFoldSplitter(5),
-		[]string{"Prec@5", "Recall@5", "Prec@10", "Recall@10", "MAP", "NDCG", "MRR"},
-		[]float64{0.211, 0.070, 0.190, 0.116, 0.135, 0.477, 0.417},
-		NewEvaluator(5, 0, Precision, Recall),
-		NewEvaluator(10, 0, Precision, Recall),
-		NewEvaluator(math.MaxInt32, 0, MAP, NDCG, MRR))
 }
 
 func TestFM_BPR(t *testing.T) {

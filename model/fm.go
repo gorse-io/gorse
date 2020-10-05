@@ -3,7 +3,6 @@ package model
 import (
 	"fmt"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/floats"
 	"math"
 )
@@ -74,7 +73,7 @@ type FM struct {
 	Base
 	UserFeatures []*base.SparseVector
 	ItemFeatures []*base.SparseVector
-	// Model parameters
+	// ModelInterface parameters
 	GlobalBias float64     // w_0
 	Bias       []float64   // w_i
 	Factors    [][]float64 // v_i
@@ -167,7 +166,7 @@ func (fm *FM) predict(vector *base.SparseVector) float64 {
 }
 
 // Fit the factorization machine.
-func (fm *FM) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+func (fm *FM) Fit(trainSet DataSetInterface, options *base.RuntimeOptions) {
 	fm.Init(trainSet)
 	fm.UserFeatures = trainSet.UserFeatures()
 	fm.ItemFeatures = trainSet.ItemFeatures()
@@ -187,7 +186,7 @@ func (fm *FM) Fit(trainSet core.DataSetInterface, options *base.RuntimeOptions) 
 	}
 }
 
-func (fm *FM) fitSGD(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+func (fm *FM) fitSGD(trainSet DataSetInterface, options *base.RuntimeOptions) {
 	// Create buffers
 	temp := make([]float64, fm.nFactors)
 	gradFactor := make([]float64, fm.nFactors)
@@ -230,7 +229,7 @@ func (fm *FM) fitSGD(trainSet core.DataSetInterface, options *base.RuntimeOption
 	}
 }
 
-func (fm *FM) fitBPR(trainSet core.DataSetInterface, options *base.RuntimeOptions) {
+func (fm *FM) fitBPR(trainSet DataSetInterface, options *base.RuntimeOptions) {
 	fm.UserRatings = trainSet.Users()
 	// Create item pop model
 	fm.ItemPop = NewItemPop(nil)
