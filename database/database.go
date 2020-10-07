@@ -37,6 +37,7 @@ const (
 	prefixItemIndex  = "index/item/"  // prefix for item index
 	prefixUserIndex  = "index/user/"  // prefix for user index
 	prefixItem       = "item/"        // prefix for items
+	prefixUser       = "user/"        // prefix for users
 	prefixFeedback   = "feedback/"    // prefix for feedback
 	prefixIgnore     = "ignored/"     // prefix for ignored
 
@@ -45,6 +46,14 @@ const (
 	prefixRecommends = "recommends/" // prefix for recommendations
 	prefixPop        = "populars/"   // prefix for popular items
 	prefixLatest     = "latest/"     // prefix for latest items
+)
+
+const (
+	LastFitFeedbackCount    = "LastFitFeedbackCount"
+	LastUpdateFeedbackCount = "LastUpdateFeedbackCount"
+	LastUpdateIgnoreCount   = "LastUpdateIgnoreCount"
+	LastFitTime             = "LastFitTime"
+	LastUpdateTime          = "LastUpdateTime"
 )
 
 func newKey(parts ...[]byte) []byte {
@@ -112,6 +121,10 @@ func InsertFeedback(txn *badger.Txn, feedback Feedback) error {
 	if err := txn.Set(newKey([]byte(prefixFeedback), key), value); err != nil {
 		return err
 	}
+	// Insert user
+	if err := txn.Set(newKey([]byte(prefixUser), []byte(feedback.UserId)), nil); err != nil {
+		return err
+	}
 	// Insert user index
 	if err := txn.Set(newKey([]byte(prefixUserIndex), []byte(feedback.UserId), []byte("/"), []byte(feedback.ItemId)), nil); err != nil {
 		return err
@@ -137,6 +150,10 @@ func BatchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
 	}
 	// Insert feedback
 	if err := wb.Set(newKey([]byte(prefixFeedback), key), value); err != nil {
+		return err
+	}
+	// Insert user
+	if err := wb.Set(newKey([]byte(prefixUser), []byte(feedback.UserId)), nil); err != nil {
 		return err
 	}
 	// Insert user index
@@ -171,23 +188,36 @@ func (db *Database) InsertFeedback(feedback Feedback) error {
 
 // InsertFeedbacks inserts multiple feedback into the database. If the item doesn't exist, this item will be added.
 func (db *Database) InsertFeedbacks(feedback []Feedback) error {
+	// Read items
+	items, err := db.GetItems(0, 0)
+	if err != nil {
+		return err
+	}
+	itemSet := make(map[string]interface{})
+	for _, item := range items {
+		itemSet[item.ItemId] = nil
+	}
 	// Write feedback
 	txn := db.db.NewWriteBatch()
 	for _, f := range feedback {
 		if err := BatchInsertFeedback(txn, f); err != nil {
 			return err
 		}
+		if _, exist := itemSet[f.ItemId]; !exist {
+			itemSet[f.ItemId] = nil
+			items = append(items, Item{ItemId: f.ItemId})
+		}
 	}
 	if err := txn.Flush(); err != nil {
 		return err
 	}
+	if err := db.InsertItems(items, true); err != nil {
+		return err
+	}
 	return db.db.Update(func(txn *badger.Txn) error {
 		// Write items
-		for _, f := range feedback {
-			if err := InsertItem(txn, Item{ItemId: f.ItemId}, false); err != nil {
-				return err
-			}
-			if err := RefreshItemPop(txn, f.ItemId); err != nil {
+		for _, item := range items {
+			if err := RefreshItemPop(txn, item.ItemId); err != nil {
 				return err
 			}
 		}
@@ -318,6 +348,20 @@ func RefreshItemPop(txn *badger.Txn, itemId string) error {
 		return err
 	}
 	return txn.Set(newKey([]byte(prefixItem), []byte(itemId)), buf)
+}
+
+func (db *Database) GetUsers() (users []string, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := []byte(prefixUser)
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			userId := extractKey(it.Item().Key(), []byte(prefixUser))
+			users = append(users, userId)
+		}
+		return nil
+	})
+	return
 }
 
 // InsertItem inserts a item into the bucket. The `override` flag indicates whether to overwrite existed item.
@@ -470,10 +514,32 @@ func (db *Database) CountItems() (count int, err error) {
 	return
 }
 
+func (db *Database) CountUsers() (count int, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		count, err = CountPrefix(txn, []byte(prefixItem))
+		return nil
+	})
+	return
+}
+
 // CountIgnore returns the number of ignored items.
 func (db *Database) CountIgnore() (count int, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		count, err = CountPrefix(txn, []byte(prefixIgnore))
+		return nil
+	})
+	return
+}
+
+func (db *Database) GetIgnore(userId string) (ignored []string, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := []byte(prefixIgnore)
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			itemId := extractKey(it.Item().Key(), []byte(prefixIgnore), []byte(userId), []byte("/"))
+			ignored = append(ignored, itemId)
+		}
 		return nil
 	})
 	return
@@ -500,6 +566,18 @@ func (db *Database) SetString(name string, val string) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(newKey([]byte(prefixMeta), []byte(name)), []byte(val))
 	})
+}
+
+func (db *Database) GetInt(name string) (int, error) {
+	val, err := db.GetString(name)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(val)
+}
+
+func (db *Database) SetInt(name string, val int) error {
+	return db.SetString(name, strconv.Itoa(val))
 }
 
 // RecommendedItem is the structure for a recommended item.
@@ -561,12 +639,12 @@ func (db *Database) SetNeighbors(itemId string, items []RecommendedItem) error {
 	return db.setList(prefixNeighbors, itemId, items)
 }
 
-func (db *Database) SetPop(items []RecommendedItem) error {
-	return db.setList(prefixPop, "", items)
+func (db *Database) SetPop(label string, items []RecommendedItem) error {
+	return db.setList(prefixPop, label, items)
 }
 
-func (db *Database) SetLatest(items []RecommendedItem) error {
-	return db.setList(prefixLatest, "", items)
+func (db *Database) SetLatest(label string, items []RecommendedItem) error {
+	return db.setList(prefixLatest, label, items)
 }
 
 func (db *Database) SetRecommend(userId string, items []RecommendedItem) error {
@@ -577,12 +655,12 @@ func (db *Database) GetNeighbors(itemId string, n int, offset int) ([]Recommende
 	return db.getList(prefixNeighbors, itemId, n, offset, nil)
 }
 
-func (db *Database) GetPop(n int, offset int) ([]RecommendedItem, error) {
-	return db.getList(prefixPop, "", n, offset, nil)
+func (db *Database) GetPop(label string, n int, offset int) ([]RecommendedItem, error) {
+	return db.getList(prefixPop, label, n, offset, nil)
 }
 
-func (db *Database) GetLatest(n int, offset int) ([]RecommendedItem, error) {
-	return db.getList(prefixLatest, "", n, offset, nil)
+func (db *Database) GetLatest(label string, n int, offset int) ([]RecommendedItem, error) {
+	return db.getList(prefixLatest, label, n, offset, nil)
 }
 
 func (db *Database) GetRecommend(userId string, n int, offset int) ([]RecommendedItem, error) {

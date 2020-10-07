@@ -1,23 +1,34 @@
-package engine
+// Copyright 2020 Zhenghao Zhang
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+package config
 
 import (
 	"github.com/BurntSushi/toml"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/core"
+	. "github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"log"
 	"path"
 )
 
-// TomlConfig is the configuration for the engine.
-type TomlConfig struct {
-	Server    ServerConfig    `toml:"server"`
+// Config is the configuration for the engine.
+type Config struct {
+	Server    ServerConfig    `toml:"cmd"`
 	Database  DatabaseConfig  `toml:"database"`
 	Params    ParamsConfig    `toml:"params"`
 	Recommend RecommendConfig `toml:"recommend"`
 }
 
-// ServerConfig is the configuration for the server.
+// ServerConfig is the configuration for the cmd.
 type ServerConfig struct {
 	Host string `toml:"host"`
 	Port int    `toml:"port"`
@@ -25,18 +36,20 @@ type ServerConfig struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	File string `toml:"file"`
+	Path string `toml:"path"`
 }
 
 // RecommendConfig is the configuration for recommendation.
 type RecommendConfig struct {
 	Model           string `toml:"model"`
 	Similarity      string `toml:"similarity"`
-	CacheSize       int    `toml:"cache_size"`
+	TopN            int    `toml:"top_n"`
 	UpdateThreshold int    `toml:"update_threshold"`
+	FitThreshold    int    `toml:"fit_threshold"`
 	CheckPeriod     int    `toml:"check_period"`
 	FitJobs         int    `toml:"fit_jobs"`
-	Once            bool   `toml:"once"`
+	UpdateJobs      int    `toml:"update_jobs"`
+	Collectors      []string
 }
 
 // ParamsConfig is the configuration for hyper-parameters of the recommendation model.
@@ -54,24 +67,24 @@ type ParamsConfig struct {
 }
 
 // ToParams convert a configuration for hyper-parameters into hyper-parameters.
-func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
+func (config *ParamsConfig) ToParams(metaData toml.MetaData) Params {
 	type ParamValues struct {
 		name  string
-		key   base.ParamName
+		key   ParamName
 		value interface{}
 	}
 	values := []ParamValues{
-		{"lr", base.Lr, config.Lr},
-		{"reg", base.Reg, config.Reg},
-		{"n_epochs", base.NEpochs, config.NEpochs},
-		{"n_factors", base.NFactors, config.NFactors},
-		{"random_state", base.RandomState, config.RandomState},
-		{"use_bias", base.UseBias, config.UseBias},
-		{"init_mean", base.InitMean, config.InitMean},
-		{"init_std", base.InitStdDev, config.InitStdDev},
-		{"alpha", base.Alpha, config.Alpha},
+		{"lr", Lr, config.Lr},
+		{"reg", Reg, config.Reg},
+		{"n_epochs", NEpochs, config.NEpochs},
+		{"n_factors", NFactors, config.NFactors},
+		{"random_state", RandomState, config.RandomState},
+		{"use_bias", UseBias, config.UseBias},
+		{"init_mean", InitMean, config.InitMean},
+		{"init_std", InitStdDev, config.InitStdDev},
+		{"alpha", Alpha, config.Alpha},
 	}
-	params := base.Params{}
+	params := Params{}
 	for _, v := range values {
 		if metaData.IsDefined("params", v.name) {
 			params[v.key] = v.value
@@ -81,54 +94,40 @@ func (config *ParamsConfig) ToParams(metaData toml.MetaData) base.Params {
 }
 
 // LoadModel creates model from name and parameters.
-func LoadModel(name string, params base.Params) core.ModelInterface {
+func LoadModel(name string, params Params) model.ModelInterface {
 	switch name {
 	case "bpr":
 		return model.NewBPR(params)
 	case "als":
 		return model.NewALS(params)
-	case "knn":
-		return model.NewKNN(params)
 	case "item_pop":
 		return model.NewItemPop(params)
 	}
 	return nil
 }
 
-// LoadSimilarity creates similarity metric from name.
-func LoadSimilarity(name string) base.FuncSimilarity {
-	switch name {
-	case "pearson":
-		return base.PearsonSimilarity
-	case "cosine":
-		return base.CosineSimilarity
-	case "msd":
-		return base.MSDSimilarity
-	case "implicit":
-		return base.ImplicitSimilarity
-	}
-	return nil
-}
-
 // FillDefault fill default values for missing values.
-func (config *TomlConfig) FillDefault(meta toml.MetaData) {
-	if !meta.IsDefined("server", "host") {
+func (config *Config) FillDefault(meta toml.MetaData) {
+	if !meta.IsDefined("cmd", "host") {
 		config.Server.Host = "127.0.0.1"
 	}
-	if !meta.IsDefined("server", "port") {
+	if !meta.IsDefined("cmd", "port") {
 		config.Server.Port = 8080
 	}
-	if !meta.IsDefined("database", "file") {
-		config.Database.File = path.Join(core.GorseDir, "gorse.db")
+	if !meta.IsDefined("database", "path") {
+		config.Database.Path = path.Join(model.GorseDir, "database")
 	}
 	if !meta.IsDefined("recommend", "model") {
-		config.Recommend.Model = "bpr"
+		config.Recommend.Model = "als"
 	}
-	if !meta.IsDefined("recommend", "cache_size") {
-		config.Recommend.CacheSize = 100
+	if !meta.IsDefined("recommend", "top_n") {
+		config.Recommend.TopN = 100
 	}
 	if !meta.IsDefined("recommend", "update_threshold") {
 		config.Recommend.UpdateThreshold = 10
+	}
+	if !meta.IsDefined("recommend", "fit_threshold") {
+		config.Recommend.FitThreshold = 100
 	}
 	if !meta.IsDefined("recommend", "check_period") {
 		config.Recommend.CheckPeriod = 1
@@ -136,18 +135,24 @@ func (config *TomlConfig) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("recommend", "fit_jobs") {
 		config.Recommend.FitJobs = 1
 	}
+	if !meta.IsDefined("recommend", "update_jobs") {
+		config.Recommend.UpdateJobs = 1
+	}
 	if !meta.IsDefined("recommend", "similarity") {
-		config.Recommend.Similarity = "implicit"
+		config.Recommend.Similarity = "feedback"
+	}
+	if !meta.IsDefined("recommend", "collectors") {
+		config.Recommend.Collectors = []string{"all"}
 	}
 }
 
 // LoadConfig loads configuration from toml file.
-func LoadConfig(path string) (TomlConfig, toml.MetaData) {
-	var conf TomlConfig
+func LoadConfig(path string) (Config, toml.MetaData, error) {
+	var conf Config
 	metaData, err := toml.DecodeFile(path, &conf)
 	if err != nil {
-		log.Print(err)
+		return Config{}, toml.MetaData{}, err
 	}
 	conf.FillDefault(metaData)
-	return conf, metaData
+	return conf, metaData, nil
 }

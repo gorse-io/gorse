@@ -105,7 +105,7 @@ func TestLoadDataFromBuiltIn(t *testing.T) {
 }
 
 func TestLoadDataFromCSV_Implicit(t *testing.T) {
-	data := LoadDataFromCSV("../example/file_data/feedback_implicit.csv", ",", false)
+	data := LoadDataFromCSV("../example/data/feedback_implicit.csv", ",", false)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -119,7 +119,7 @@ func TestLoadDataFromCSV_Implicit(t *testing.T) {
 }
 
 func TestLoadDataFromCSV_Explicit(t *testing.T) {
-	data := LoadDataFromCSV("../example/file_data/feedback_explicit.csv", ",", false)
+	data := LoadDataFromCSV("../example/data/feedback_explicit.csv", ",", false)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -133,7 +133,7 @@ func TestLoadDataFromCSV_Explicit(t *testing.T) {
 }
 
 func TestLoadDataFromCSV_Explicit_Header(t *testing.T) {
-	data := LoadDataFromCSV("../example/file_data/feedback_explicit_header.csv", ",", true)
+	data := LoadDataFromCSV("../example/data/feedback_explicit_header.csv", ",", true)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -147,7 +147,7 @@ func TestLoadDataFromCSV_Explicit_Header(t *testing.T) {
 }
 
 func TestLoadDataFromNetflix(t *testing.T) {
-	data := LoadDataFromNetflix("../example/file_data/feedback_netflix.txt", ",", true)
+	data := LoadDataFromNetflix("../example/data/feedback_netflix.txt", ",", true)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userId, itemId, value := data.Get(i)
@@ -161,7 +161,7 @@ func TestLoadDataFromNetflix(t *testing.T) {
 }
 
 func TestLoadEntityFromCSV(t *testing.T) {
-	entities := LoadEntityFromCSV("../example/file_data/items.csv", "::", "|", false,
+	entities := LoadEntityFromCSV("../example/data/items.csv", "::", "|", false,
 		[]string{"ItemId", "Title", "Genres"}, 0)
 	// 1::Toy Story (1995)::Animation|Children's|Comedy
 	// 2::Jumanji (1995)::Adventure|Children's|Fantasy
@@ -179,7 +179,7 @@ func TestLoadEntityFromCSV(t *testing.T) {
 }
 
 func TestLoadEntityFromCSV_Header(t *testing.T) {
-	entities := LoadEntityFromCSV("../example/file_data/items_header.csv", "::", "|", true, nil, 0)
+	entities := LoadEntityFromCSV("../example/data/items_header.csv", "::", "|", true, nil, 0)
 	// 1::Toy Story (1995)::Animation|Children's|Comedy
 	// 2::Jumanji (1995)::Adventure|Children's|Fantasy
 	// 3::Grumpier Old Men (1995)::Comedy|Romance

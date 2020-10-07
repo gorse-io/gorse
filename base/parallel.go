@@ -11,18 +11,29 @@ import (
 // Parallel schedules and runs tasks in parallel. nTask is the number of tasks. nJob is
 // the number of executors. worker is the executed function which passed a range of task
 // IDs (begin, end).
-func Parallel(nTask int, nJob int, worker func(begin, end int)) {
+func Parallel(nTask int, nJob int, worker func(i int) error) error {
 	var wg sync.WaitGroup
 	wg.Add(nJob)
+	errs := make([]error, nJob)
 	for j := 0; j < nJob; j++ {
 		go func(jobId int) {
+			defer wg.Done()
 			begin := nTask * jobId / nJob
 			end := nTask * (jobId + 1) / nJob
-			worker(begin, end)
-			wg.Done()
+			for i := begin; i < end; i++ {
+				if errs[jobId] = worker(i); errs[jobId] != nil {
+					return
+				}
+			}
 		}(j)
 	}
 	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ParallelFor runs for loop in parallel.
