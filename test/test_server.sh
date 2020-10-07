@@ -11,18 +11,18 @@ TMP_CONFIG=$(mktemp /tmp/test_server.XXXXXX)
 
 # Create config file
 cp ${ROOT_DIR}/example/file_config/config.toml ${TMP_CONFIG}
-sed -i "s:gorse.db:${TMP_DB}:g" ${TMP_CONFIG}
+sed -i "s:database:${TMP_DB}:g" ${TMP_CONFIG}
 
 # Import ml-100k data
 gorse import-feedback ${TMP_DB} ~/.gorse/dataset/ml-100k/u1.base --sep $'\t'
 
-# Start server
+# Start cmd
 gorse serve -c ${TMP_CONFIG} &
 
-# Test server
+# Test cmd
 python3 ${ROOT_DIR}/test/test_server.py 127.0.0.1 8080
 
-# Kill server
+# Kill cmd
 pkill gorse
 
 echo '--- PASS  Test Server'

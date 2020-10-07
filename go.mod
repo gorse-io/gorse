@@ -10,6 +10,7 @@ require (
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/olekukonko/tablewriter v0.0.1
+	github.com/pkg/errors v0.8.1
 	github.com/spf13/cobra v0.0.5
 	github.com/stretchr/testify v1.6.1
 	github.com/thanhpk/randstr v1.0.4

@@ -416,7 +416,7 @@ func TestDB_LoadFeedbackFromCSV(t *testing.T) {
 	}
 	defer db.Close()
 	// Load data
-	if err = db.LoadFeedbackFromCSV("../example/file_data/feedback_explicit_header.csv", ",", true); err != nil {
+	if err = db.LoadFeedbackFromCSV("../example/data/feedback_explicit_header.csv", ",", true); err != nil {
 		t.Fatal(err)
 	}
 	// Count feedback
@@ -459,7 +459,7 @@ func TestDB_LoadItemsFromCSV(t *testing.T) {
 	}
 	defer db.Close()
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/items.csv", "::", false, -1, "|", -1); err != nil {
+	if err = db.LoadItemsFromCSV("../example/data/items.csv", "::", false, -1, "|", -1); err != nil {
 		t.Fatal(err)
 	}
 	// Count feedback
@@ -486,7 +486,7 @@ func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
 	}
 	defer db.Close()
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1, "|", 2); err != nil {
+	if err = db.LoadItemsFromCSV("../example/data/item_date.csv", ",", false, 1, "|", 2); err != nil {
 		t.Fatal(err)
 	}
 	// Count feedback
@@ -520,7 +520,7 @@ func TestDB_SaveFeedbackToCSV(t *testing.T) {
 	}
 	defer db.Close()
 	// Load data
-	if err = db.LoadFeedbackFromCSV("../example/file_data/feedback_explicit_header.csv", ",", true); err != nil {
+	if err = db.LoadFeedbackFromCSV("../example/data/feedback_explicit_header.csv", ",", true); err != nil {
 		t.Fatal(err)
 	}
 	// Save data
@@ -554,7 +554,7 @@ func TestDB_SaveItemsToCSV(t *testing.T) {
 	}
 	defer db.Close()
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1, "|", -1); err != nil {
+	if err = db.LoadItemsFromCSV("../example/data/item_date.csv", ",", false, 1, "|", -1); err != nil {
 		t.Fatal(err)
 	}
 	// Save data
@@ -566,11 +566,11 @@ func TestDB_SaveItemsToCSV(t *testing.T) {
 	entities := model.LoadEntityFromCSV(csvFileName, "::", "|", false,
 		[]string{"ItemId", "Timestamp"}, 0)
 	expected := []map[string]interface{}{
-		{"ItemId": 1},
-		{"ItemId": 2},
-		{"ItemId": 3},
-		{"ItemId": 4},
-		{"ItemId": 5},
+		{"ItemId": "1"},
+		{"ItemId": "2"},
+		{"ItemId": "3"},
+		{"ItemId": "4"},
+		{"ItemId": "5"},
 	}
 	assert.Equal(t, expected, entities)
 }
@@ -583,7 +583,7 @@ func TestDB_SaveItemsToCSV_Date(t *testing.T) {
 	}
 	defer db.Close()
 	// Load data
-	if err = db.LoadItemsFromCSV("../example/file_data/item_date.csv", ",", false, 1, "|", 2); err != nil {
+	if err = db.LoadItemsFromCSV("../example/data/item_date.csv", ",", false, 1, "|", 2); err != nil {
 		t.Fatal(err)
 	}
 	// Save data
@@ -595,11 +595,11 @@ func TestDB_SaveItemsToCSV_Date(t *testing.T) {
 	entities := model.LoadEntityFromCSV(csvFileName, "::", "|", false,
 		[]string{"ItemId", "Timestamp", "Labels"}, 0)
 	expected := []map[string]interface{}{
-		{"ItemId": 1, "Timestamp": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
-		{"ItemId": 2, "Timestamp": time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
-		{"ItemId": 3, "Timestamp": time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
-		{"ItemId": 4, "Timestamp": time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
-		{"ItemId": 5, "Timestamp": time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
+		{"ItemId": "1", "Timestamp": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
+		{"ItemId": "2", "Timestamp": time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
+		{"ItemId": "3", "Timestamp": time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
+		{"ItemId": "4", "Timestamp": time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
+		{"ItemId": "5", "Timestamp": time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
 	}
 	assert.Equal(t, expected, entities)
 }

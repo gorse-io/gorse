@@ -54,20 +54,19 @@ func CrossValidate(model ModelInterface, dataSet DataSetInterface, splitter Spli
 	// Cross validation
 	scores := make([][]float64, length)
 	params := model.GetParams()
-	base.Parallel(length, options.GetCVJobs(), func(begin, end int) {
+	base.Parallel(length, options.GetCVJobs(), func(i int) error {
 		cp := reflect.New(reflect.TypeOf(model).Elem()).Interface().(ModelInterface)
 		Copy(cp, model)
 		cp.SetParams(params)
-		for i := begin; i < end; i++ {
-			trainFold := trainFolds[i]
-			testFold := testFolds[i]
-			cp.Fit(trainFold, options)
-			// Evaluate on test set
-			for _, evaluator := range evaluators {
-				tempScore := evaluator(cp, testFold, trainFold)
-				scores[i] = append(scores[i], tempScore...)
-			}
+		trainFold := trainFolds[i]
+		testFold := testFolds[i]
+		cp.Fit(trainFold, options)
+		// Evaluate on test set
+		for _, evaluator := range evaluators {
+			tempScore := evaluator(cp, testFold, trainFold)
+			scores[i] = append(scores[i], tempScore...)
 		}
+		return nil
 	})
 	// Create return structures
 	ret := make([]CrossValidateResult, len(scores[0]))
