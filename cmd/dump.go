@@ -127,7 +127,7 @@ func init() {
 	}
 }
 
-func printCount(db *database.DB) {
+func printCount(db *database.Database) {
 	// Count feedback
 	nFeedback, err := db.CountFeedback()
 	if err != nil {

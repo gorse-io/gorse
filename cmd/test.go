@@ -5,7 +5,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/core"
 	"github.com/zhenghaoz/gorse/model"
 	"log"
 	"os"
@@ -59,24 +58,24 @@ var commandTest = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		modelName := args[0]
-		var model core.ModelInterface
+		var m model.ModelInterface
 		var exist bool
-		if model, exist = models[modelName]; !exist {
-			log.Fatalf("Unknown model %s\n", modelName)
+		if m, exist = models[modelName]; !exist {
+			log.Fatalf("Unknown m %s\n", modelName)
 		}
 		// Load data
-		var data *core.DataSet
+		var data *model.DataSet
 		if cmd.PersistentFlags().Changed("load-builtin") {
 			name, _ := cmd.PersistentFlags().GetString("load-builtin")
-			data = core.LoadDataFromBuiltIn(name)
+			data = model.LoadDataFromBuiltIn(name)
 			log.Printf("Load built-in dataset %s\n", name)
 		} else if cmd.PersistentFlags().Changed("load-csv") {
 			name, _ := cmd.PersistentFlags().GetString("load-csv")
 			sep, _ := cmd.PersistentFlags().GetString("csv-sep")
 			header, _ := cmd.PersistentFlags().GetBool("csv-header")
-			data = core.LoadDataFromCSV(name, sep, header)
+			data = model.LoadDataFromCSV(name, sep, header)
 		} else {
-			data = core.LoadDataFromBuiltIn("ml-100k")
+			data = model.LoadDataFromBuiltIn("ml-100k")
 			log.Println("Load default dataset ml-100k")
 		}
 		// Load hyper-parameters
@@ -100,18 +99,18 @@ var commandTest = &cobra.Command{
 			}
 		}
 		log.Printf("Load hyper-parameters %v\n", params)
-		model.SetParams(params)
+		m.SetParams(params)
 		// Load splitter
 		k, _ := cmd.PersistentFlags().GetInt("n-split")
 		splitterName, _ := cmd.PersistentFlags().GetString("splitter")
-		var splitter core.Splitter
+		var splitter model.Splitter
 		switch splitterName {
 		case "loo":
 			log.Printf("Use loo splitter\n")
-			splitter = core.NewUserLOOSplitter(k)
+			splitter = model.NewUserLOOSplitter(k)
 		case "k-fold":
 			log.Printf("Use %d-fold splitter\n", k)
-			splitter = core.NewKFoldSplitter(k)
+			splitter = model.NewKFoldSplitter(k)
 		default:
 			log.Fatalf("Unkown splitter %s\n", splitterName)
 		}
@@ -119,7 +118,7 @@ var commandTest = &cobra.Command{
 		evaluatorNames := make([]string, 0)
 		n, _ := cmd.PersistentFlags().GetInt("top")
 		numSample, _ := cmd.PersistentFlags().GetInt("n-negative")
-		scorers := make([]core.Scorer, 0)
+		scorers := make([]model.Scorer, 0)
 		for _, evalFlag := range evalFlags {
 			if cmd.PersistentFlags().Changed(evalFlag.Name) {
 				scorers = append(scorers, evalFlag.Scorer)
@@ -127,7 +126,7 @@ var commandTest = &cobra.Command{
 			}
 		}
 		if len(scorers) == 0 {
-			scorers = append(scorers, core.NDCG)
+			scorers = append(scorers, model.NDCG)
 			evaluatorNames = append(evaluatorNames, fmt.Sprintf("NDCG@%d", n))
 		}
 		log.Printf("Use evaluators %v\n", evaluatorNames)
@@ -140,7 +139,7 @@ var commandTest = &cobra.Command{
 			options.GetVerbose(), options.GetFitJobs(), options.GetCVJobs())
 		// Cross validation
 		start := time.Now()
-		out := core.CrossValidate(model, data, splitter, 0, options, core.NewEvaluator(n, numSample, scorers...))
+		out := model.CrossValidate(m, data, splitter, 0, options, model.NewEvaluator(n, numSample, scorers...))
 		elapsed := time.Since(start)
 		// Render table
 		header := make([]string, k+2)
@@ -167,11 +166,10 @@ var commandTest = &cobra.Command{
 
 /* Models */
 
-var models = map[string]core.ModelInterface{
+var models = map[string]model.ModelInterface{
 	"als":      model.NewALS(nil),
 	"item-pop": model.NewItemPop(nil),
 	"bpr":      model.NewBPR(nil),
-	"knn":      model.NewKNN(nil),
 }
 
 /* Flags for evaluators */
@@ -180,16 +178,16 @@ type _EvalFlag struct {
 	Print  string
 	Name   string
 	Help   string
-	Scorer core.Scorer
+	Scorer model.Scorer
 }
 
 var evalFlags = []_EvalFlag{
-	{Scorer: core.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
-	{Scorer: core.Recall, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
-	{Scorer: core.HR, Print: "HR", Name: "eval-hr", Help: "evaluate the model by HR@N"},
-	{Scorer: core.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
-	{Scorer: core.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
-	{Scorer: core.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
+	{Scorer: model.Precision, Print: "Precision", Name: "eval-precision", Help: "evaluate the model by Precision@N"},
+	{Scorer: model.Recall, Print: "Recall", Name: "eval-recall", Help: "evaluate the model by Recall@N"},
+	{Scorer: model.HR, Print: "HR", Name: "eval-hr", Help: "evaluate the model by HR@N"},
+	{Scorer: model.NDCG, Print: "NDCG", Name: "eval-ndcg", Help: "evaluate the model by NDCG@N"},
+	{Scorer: model.MAP, Print: "MAP", Name: "eval-map", Help: "evaluate the model by MAP@N"},
+	{Scorer: model.MRR, Print: "MRR", Name: "eval-mrr", Help: "evaluate the model by MRR@N"},
 }
 
 /* Flags for hyper-parameters */

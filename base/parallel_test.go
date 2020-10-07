@@ -1,18 +1,26 @@
 package base
 
 import (
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestParallel(t *testing.T) {
 	a := []int{1, 2, 3, 4, 5, 6}
-	Parallel(len(a), 4, func(begin, end int) {
-		for i := begin; i < end; i++ {
-			a[i] *= 2
-		}
+	_ = Parallel(len(a), 4, func(i int) error {
+		a[i] *= 2
+		return nil
 	})
 	assert.Equal(t, []int{2, 4, 6, 8, 10, 12}, a)
+}
+
+func TestParallelHandleError(t *testing.T) {
+	errs := []error{nil, errors.Errorf("1"), nil, errors.Errorf("2"), nil}
+	err := Parallel(len(errs), 4, func(i int) error {
+		return errs[i]
+	})
+	assert.Equal(t, "1", err.Error())
 }
 
 func TestParallelMean(t *testing.T) {
