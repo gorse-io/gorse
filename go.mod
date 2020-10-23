@@ -3,7 +3,7 @@ module github.com/zhenghaoz/gorse
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
-	github.com/emicklei/go-restful v2.14.2+incompatible
+	github.com/emicklei/go-restful v2.14.3+incompatible
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/spf13/cobra v0.0.7
