@@ -1,4 +1,4 @@
-// Copyright 2020 Zhenghao Zhang
+// Copyright 2020 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,97 +19,97 @@ import (
 	"github.com/araddon/dateparse"
 	"github.com/emicklei/go-restful"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/database"
+	"github.com/zhenghaoz/gorse/storage"
 	"log"
 	"net/http"
 	"strconv"
 )
 
-type Instance struct {
-	DB       *database.Database
+type Server struct {
+	DB       storage.Database
 	Config   *config.Config
 	MetaData *toml.MetaData
 }
 
-func Main(instance *Instance) {
-	// Create a web instance
+func (s *Server) Serve() {
+	// Create a server
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 
 	// Get recommends
-	ws.Route(ws.GET("/recommends/{user-id}").To(instance.getRecommends).
+	ws.Route(ws.GET("/recommends/{user-id}").To(s.getRecommends).
 		Doc("get the top list for a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
 		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]database.RecommendedItem{}))
-	ws.Route(ws.GET("/consume/{user-id}").To(instance.consumeRecommends).
+		Writes([]storage.RecommendedItem{}))
+	ws.Route(ws.GET("/consume/{user-id}").To(s.consumeRecommends).
 		Doc("consume the top list for a user").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
 		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")).
-		Writes([]database.RecommendedItem{}))
+		Writes([]storage.RecommendedItem{}))
 	// Get popular items
-	ws.Route(ws.GET("/popular").To(instance.getPopular).
+	ws.Route(ws.GET("/popular").To(s.getPopular).
 		Doc("get popular items").
 		Param(ws.FormParameter("number", "the number of popular items").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]database.RecommendedItem{}))
-	ws.Route(ws.GET("/popular/{label}").To(instance.getLabelPopular).
+		Writes([]storage.RecommendedItem{}))
+	ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
 		Doc("get popular items by label").
 		Param(ws.FormParameter("number", "the number of popular items").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]database.RecommendedItem{}))
+		Writes([]storage.RecommendedItem{}))
 	// Get latest items
-	ws.Route(ws.GET("/latest").To(instance.getLatest).
+	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("get latest items").
 		Param(ws.FormParameter("number", "the number of latest items").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]database.RecommendedItem{}))
-	ws.Route(ws.GET("/latest/{label}").To(instance.getLabelLatest).
+		Writes([]storage.RecommendedItem{}))
+	ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
 		Doc("get latest items").
 		Param(ws.FormParameter("number", "the number of latest items").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]database.RecommendedItem{}))
+		Writes([]storage.RecommendedItem{}))
 	// Get neighbors
-	ws.Route(ws.GET("/neighbors/{item-id}").To(instance.getNeighbors).
+	ws.Route(ws.GET("/neighbors/{item-id}").To(s.getNeighbors).
 		Doc("get neighbors of a item").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
 		Param(ws.FormParameter("number", "the number of neighbors").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]database.RecommendedItem{}))
+		Writes([]storage.RecommendedItem{}))
 
 	// Put items
-	ws.Route(ws.PUT("/items").To(instance.putItems).
+	ws.Route(ws.PUT("/items").To(s.putItems).
 		Doc("put items").
 		Reads([]Item{}))
 	// Put feedback
-	ws.Route(ws.PUT("/feedback").To(instance.putFeedback).
+	ws.Route(ws.PUT("/feedback").To(s.putFeedback).
 		Doc("put feedback").
-		Reads(database.Feedback{}))
+		Reads(storage.Feedback{}))
 	// Get items
-	ws.Route(ws.GET("/items").To(instance.getItems).
+	ws.Route(ws.GET("/items").To(s.getItems).
 		Doc("get items").
 		Param(ws.FormParameter("number", "the number of neighbors").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]database.Item{}))
+		Writes([]storage.Item{}))
 	// Get item
-	ws.Route(ws.GET("/item/{item-id}").To(instance.getItem).
+	ws.Route(ws.GET("/item/{item-id}").To(s.getItem).
 		Doc("get a item").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
-		Writes(database.Item{}))
+		Writes(storage.Item{}))
 	// Get items by label
-	ws.Route(ws.GET("/item/label/{label}").To(instance.getItemsByLabel).
+	ws.Route(ws.GET("/item/label/{label}").To(s.getItemsByLabel).
 		Doc(("get items by label")).
 		Param(ws.PathParameter("label", "label").DataType("string")).
-		Writes([]database.Item{}))
+		Writes([]storage.Item{}))
 
-	ws.Route(ws.GET("/status").To(instance.getStatus).Writes(Status{}))
+	ws.Route(ws.GET("/status").To(s.getStatus).Writes(Status{}))
 
-	// Start web instance
+	// Start web s
 	restful.DefaultContainer.Add(ws)
 
-	log.Printf("start a cmd at %v\n", fmt.Sprintf("%s:%d", instance.Config.Server.Host, instance.Config.Server.Port))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", instance.Config.Server.Host, instance.Config.Server.Port), nil))
+	log.Printf("start a cmd at %v\n", fmt.Sprintf("%s:%d", s.Config.Server.Host, s.Config.Server.Port))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.Config.Server.Host, s.Config.Server.Port), nil))
 }
 
 // Status contains information about engine.
@@ -125,42 +125,39 @@ type Status struct {
 	LastUpdateTime          string
 }
 
-func (instance *Instance) status() (Status, error) {
+func (s *Server) status() (Status, error) {
 	status := Status{}
 	var err error
 	// Get number of feedback
-	if status.FeedbackCount, err = instance.DB.CountFeedback(); err != nil {
+	if status.FeedbackCount, err = s.DB.CountFeedback(); err != nil {
 		return Status{}, err
 	}
 	// Get number of items
-	if status.ItemCount, err = instance.DB.CountItems(); err != nil {
+	if status.ItemCount, err = s.DB.CountItems(); err != nil {
 		return Status{}, err
 	}
 	// Get number of users
-	if status.UserCount, err = instance.DB.CountUsers(); err != nil {
+	if status.UserCount, err = s.DB.CountUsers(); err != nil {
 		return Status{}, err
 	}
 	// Get number of ignored
-	if status.IgnoreCount, err = instance.DB.CountIgnore(); err != nil {
+	if status.LastFitTime, err = s.DB.GetString(storage.LastFitTime); err != nil {
 		return Status{}, err
 	}
-	if status.LastFitTime, err = instance.DB.GetString(database.LastFitTime); err != nil {
+	if status.LastUpdateTime, err = s.DB.GetString(storage.LastUpdateTime); err != nil {
 		return Status{}, err
 	}
-	if status.LastUpdateTime, err = instance.DB.GetString(database.LastUpdateTime); err != nil {
+	if status.LastUpdateFeedbackCount, err = s.DB.GetInt(storage.LastUpdateFeedbackCount); err != nil {
 		return Status{}, err
 	}
-	if status.LastUpdateFeedbackCount, err = instance.DB.GetInt(database.LastUpdateFeedbackCount); err != nil {
-		return Status{}, err
-	}
-	if status.LastUpdateIgnoreCount, err = instance.DB.GetInt(database.LastUpdateIgnoreCount); err != nil {
+	if status.LastUpdateIgnoreCount, err = s.DB.GetInt(storage.LastUpdateIgnoreCount); err != nil {
 		return Status{}, err
 	}
 	return status, nil
 }
 
-func (instance *Instance) getStatus(request *restful.Request, response *restful.Response) {
-	status, err := instance.status()
+func (s *Server) getStatus(request *restful.Request, response *restful.Response) {
+	status, err := s.status()
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -179,7 +176,7 @@ func parseInt(request *restful.Request, name string, fallback int) (value int, e
 }
 
 // getPopular gets popular items from database.
-func (instance *Instance) getPopular(request *restful.Request, response *restful.Response) {
+func (s *Server) getPopular(request *restful.Request, response *restful.Response) {
 	var number, offset int
 	var err error
 	if number, err = parseInt(request, "number", 10); err != nil {
@@ -191,7 +188,7 @@ func (instance *Instance) getPopular(request *restful.Request, response *restful
 		return
 	}
 	// Get the popular list
-	items, err := instance.DB.GetPop("", number, offset)
+	items, err := s.DB.GetPop("", number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -200,7 +197,7 @@ func (instance *Instance) getPopular(request *restful.Request, response *restful
 	json(response, items)
 }
 
-func (instance *Instance) getLabelPopular(request *restful.Request, response *restful.Response) {
+func (s *Server) getLabelPopular(request *restful.Request, response *restful.Response) {
 	label := request.PathParameter("label")
 	var number, offset int
 	var err error
@@ -213,7 +210,7 @@ func (instance *Instance) getLabelPopular(request *restful.Request, response *re
 		return
 	}
 	// Get the popular list
-	items, err := instance.DB.GetPop(label, number, offset)
+	items, err := s.DB.GetPop(label, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -222,7 +219,7 @@ func (instance *Instance) getLabelPopular(request *restful.Request, response *re
 	json(response, items)
 }
 
-func (instance *Instance) getLatest(request *restful.Request, response *restful.Response) {
+func (s *Server) getLatest(request *restful.Request, response *restful.Response) {
 	var number, offset int
 	var err error
 	if number, err = parseInt(request, "number", 10); err != nil {
@@ -234,7 +231,7 @@ func (instance *Instance) getLatest(request *restful.Request, response *restful.
 		return
 	}
 	// Get the popular list
-	items, err := instance.DB.GetLatest("", number, offset)
+	items, err := s.DB.GetLatest("", number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -243,7 +240,7 @@ func (instance *Instance) getLatest(request *restful.Request, response *restful.
 	json(response, items)
 }
 
-func (instance *Instance) getLabelLatest(request *restful.Request, response *restful.Response) {
+func (s *Server) getLabelLatest(request *restful.Request, response *restful.Response) {
 	label := request.PathParameter("label")
 	var number, offset int
 	var err error
@@ -256,7 +253,7 @@ func (instance *Instance) getLabelLatest(request *restful.Request, response *res
 		return
 	}
 	// Get the popular list
-	items, err := instance.DB.GetLatest(label, number, offset)
+	items, err := s.DB.GetLatest(label, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -266,7 +263,7 @@ func (instance *Instance) getLabelLatest(request *restful.Request, response *res
 }
 
 // getNeighbors gets neighbors of a item from database.
-func (instance *Instance) getNeighbors(request *restful.Request, response *restful.Response) {
+func (s *Server) getNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get the number and offset
@@ -281,7 +278,7 @@ func (instance *Instance) getNeighbors(request *restful.Request, response *restf
 		return
 	}
 	// Get recommended items
-	items, err := instance.DB.GetNeighbors(itemId, number, offset)
+	items, err := s.DB.GetNeighbors(itemId, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -291,7 +288,7 @@ func (instance *Instance) getNeighbors(request *restful.Request, response *restf
 }
 
 // getRecommends gets cached recommended items from database.
-func (instance *Instance) getRecommends(request *restful.Request, response *restful.Response) {
+func (s *Server) getRecommends(request *restful.Request, response *restful.Response) {
 	// Get user id
 	userId := request.PathParameter("user-id")
 	// Get the number and offset
@@ -306,7 +303,7 @@ func (instance *Instance) getRecommends(request *restful.Request, response *rest
 		return
 	}
 	// Get recommended items
-	items, err := instance.DB.GetRecommend(userId, number, offset)
+	items, err := s.DB.GetRecommend(userId, number, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -315,7 +312,7 @@ func (instance *Instance) getRecommends(request *restful.Request, response *rest
 	json(response, items)
 }
 
-func (instance *Instance) consumeRecommends(request *restful.Request, response *restful.Response) {
+func (s *Server) consumeRecommends(request *restful.Request, response *restful.Response) {
 	// Get user id
 	userId := request.PathParameter("user-id")
 	// Get the number and offset
@@ -326,7 +323,7 @@ func (instance *Instance) consumeRecommends(request *restful.Request, response *
 		return
 	}
 	// Get recommended items
-	items, err := instance.DB.ConsumeRecommends(userId, number)
+	items, err := s.DB.ConsumeRecommends(userId, number)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -353,7 +350,7 @@ type Item struct {
 }
 
 // putItems puts items into the database.
-func (instance *Instance) putItems(request *restful.Request, response *restful.Response) {
+func (s *Server) putItems(request *restful.Request, response *restful.Response) {
 	// Add ratings
 	temp := new([]Item)
 	if err := request.ReadEntity(temp); err != nil {
@@ -362,7 +359,7 @@ func (instance *Instance) putItems(request *restful.Request, response *restful.R
 	}
 	// Parse timestamp
 	var err error
-	items := make([]database.Item, len(*temp))
+	items := make([]storage.Item, len(*temp))
 	for i, v := range *temp {
 		items[i].ItemId = v.ItemId
 		items[i].Timestamp, err = dateparse.ParseAny(v.Timestamp)
@@ -376,40 +373,40 @@ func (instance *Instance) putItems(request *restful.Request, response *restful.R
 		internalServerError(response, err)
 		return
 	}
-	change.FeedbackBefore, err = instance.DB.CountFeedback()
+	change.FeedbackBefore, err = s.DB.CountFeedback()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.ItemsBefore, err = instance.DB.CountItems()
+	change.ItemsBefore, err = s.DB.CountItems()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.UsersBefore, err = instance.DB.CountUsers()
+	change.UsersBefore, err = s.DB.CountUsers()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
 	// Insert items
 	for _, item := range items {
-		err = instance.DB.InsertItem(database.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels}, true)
+		err = s.DB.InsertItem(storage.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
 		if err != nil {
 			internalServerError(response, err)
 			return
 		}
 	}
-	change.FeedbackAfter, err = instance.DB.CountFeedback()
+	change.FeedbackAfter, err = s.DB.CountFeedback()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.ItemsAfter, err = instance.DB.CountItems()
+	change.ItemsAfter, err = s.DB.CountItems()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.UsersAfter, err = instance.DB.CountUsers()
+	change.UsersAfter, err = s.DB.CountUsers()
 	if err != nil {
 		badRequest(response, err)
 		return
@@ -417,7 +414,7 @@ func (instance *Instance) putItems(request *restful.Request, response *restful.R
 	json(response, change)
 }
 
-func (instance *Instance) getItems(request *restful.Request, response *restful.Response) {
+func (s *Server) getItems(request *restful.Request, response *restful.Response) {
 	var number, offset int
 	var err error
 	if number, err = parseInt(request, "number", 10); err != nil {
@@ -428,18 +425,18 @@ func (instance *Instance) getItems(request *restful.Request, response *restful.R
 		badRequest(response, err)
 		return
 	}
-	items, err := instance.DB.GetItems(number, offset)
+	items, err := s.DB.GetItems(number, offset)
 	if err != nil {
 		internalServerError(response, err)
 	}
 	json(response, items)
 }
 
-func (instance *Instance) getItem(request *restful.Request, response *restful.Response) {
+func (s *Server) getItem(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get item
-	item, err := instance.DB.GetItem(itemId)
+	item, err := s.DB.GetItem(itemId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -448,9 +445,9 @@ func (instance *Instance) getItem(request *restful.Request, response *restful.Re
 }
 
 // putFeedback puts new ratings into the database.
-func (instance *Instance) putFeedback(request *restful.Request, response *restful.Response) {
+func (s *Server) putFeedback(request *restful.Request, response *restful.Response) {
 	// Add ratings
-	ratings := new([]database.Feedback)
+	ratings := new([]storage.Feedback)
 	if err := request.ReadEntity(ratings); err != nil {
 		badRequest(response, err)
 		return
@@ -458,41 +455,41 @@ func (instance *Instance) putFeedback(request *restful.Request, response *restfu
 	var err error
 	change := Change{}
 	// Get status before change
-	change.FeedbackBefore, err = instance.DB.CountFeedback()
+	change.FeedbackBefore, err = s.DB.CountFeedback()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.ItemsBefore, err = instance.DB.CountItems()
+	change.ItemsBefore, err = s.DB.CountItems()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.UsersBefore, err = instance.DB.CountUsers()
+	change.UsersBefore, err = s.DB.CountUsers()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
 	// Insert feedback
 	for _, feedback := range *ratings {
-		err = instance.DB.InsertFeedback(feedback)
+		err = s.DB.InsertFeedback(feedback)
 		if err != nil {
 			internalServerError(response, err)
 			return
 		}
 	}
 	// Get status after change
-	change.FeedbackAfter, err = instance.DB.CountFeedback()
+	change.FeedbackAfter, err = s.DB.CountFeedback()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.ItemsAfter, err = instance.DB.CountItems()
+	change.ItemsAfter, err = s.DB.CountItems()
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	change.UsersAfter, err = instance.DB.CountUsers()
+	change.UsersAfter, err = s.DB.CountUsers()
 	if err != nil {
 		badRequest(response, err)
 		return
@@ -500,11 +497,11 @@ func (instance *Instance) putFeedback(request *restful.Request, response *restfu
 	json(response, change)
 }
 
-func (instance *Instance) getItemsByLabel(request *restful.Request, response *restful.Response) {
+func (s *Server) getItemsByLabel(request *restful.Request, response *restful.Response) {
 	// Get label
 	label := request.PathParameter("label")
 	// Get item
-	items, err := instance.DB.GetItemsByLabel(label)
+	items, err := s.DB.GetLabelItems(label)
 	if err != nil {
 		internalServerError(response, err)
 		return
