@@ -1,4 +1,4 @@
-// Copyright 2020 Zhenghao Zhang
+// Copyright 2020 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,21 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package database
+package storage
 
 import (
-	"bufio"
 	"encoding/json"
-	"fmt"
-	"github.com/araddon/dateparse"
 	badger "github.com/dgraph-io/badger/v2"
-	"github.com/zhenghaoz/gorse/model"
-	"log"
 	"math/bits"
-	"os"
 	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -73,22 +65,12 @@ func extractKey(key []byte, prefix ...[]byte) string {
 }
 
 // Database manages all data.
-type Database struct {
+type Badger struct {
 	db *badger.DB
 }
 
-// Open a connection to the database.
-func Open(path string) (*Database, error) {
-	var err error
-	database := new(Database)
-	if database.db, err = badger.Open(badger.DefaultOptions(path)); err != nil {
-		return nil, err
-	}
-	return database, nil
-}
-
 // Close the connection to the database.
-func (db *Database) Close() error {
+func (db *Badger) Close() error {
 	return db.db.Close()
 }
 
@@ -98,15 +80,8 @@ type FeedbackKey struct {
 	ItemId string
 }
 
-// Feedback stores feedback.
-type Feedback struct {
-	UserId string
-	ItemId string
-	Rating float64
-}
-
-// InsertFeedback inserts a feedback into the bucket.
-func InsertFeedback(txn *badger.Txn, feedback Feedback) error {
+// insertFeedback inserts a feedback into the bucket.
+func insertFeedback(txn *badger.Txn, feedback Feedback) error {
 	// Marshal key
 	key, err := json.Marshal(FeedbackKey{feedback.UserId, feedback.ItemId})
 	if err != nil {
@@ -136,8 +111,8 @@ func InsertFeedback(txn *badger.Txn, feedback Feedback) error {
 	return nil
 }
 
-// BatchInsertFeedback inserts a feedback into the bucket within a batch write.
-func BatchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
+// batchInsertFeedback inserts a feedback into the bucket within a batch write.
+func batchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
 	// Marshal key
 	key, err := json.Marshal(FeedbackKey{feedback.UserId, feedback.ItemId})
 	if err != nil {
@@ -167,27 +142,23 @@ func BatchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
 	return nil
 }
 
-// InsertFeedback inserts a feedback into the database. If the item doesn't exist, this item will be added.
-func (db *Database) InsertFeedback(feedback Feedback) error {
+// insertFeedback inserts a feedback into the database. If the item doesn't exist, this item will be added.
+func (db *Badger) InsertFeedback(feedback Feedback) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		// Insert feedback
-		if err := InsertFeedback(txn, feedback); err != nil {
+		if err := insertFeedback(txn, feedback); err != nil {
 			return err
 		}
 		// Insert item
-		if err := InsertItem(txn, Item{ItemId: feedback.ItemId}, false); err != nil {
-			return err
-		}
-		// Refresh
-		if err := RefreshItemPop(txn, feedback.ItemId); err != nil {
+		if err := insertItem(txn, Item{ItemId: feedback.ItemId}, false); err != nil {
 			return err
 		}
 		return nil
 	})
 }
 
-// InsertFeedbacks inserts multiple feedback into the database. If the item doesn't exist, this item will be added.
-func (db *Database) InsertFeedbacks(feedback []Feedback) error {
+// BatchInsertFeedback inserts multiple feedback into the database. If the item doesn't exist, this item will be added.
+func (db *Badger) BatchInsertFeedback(feedback []Feedback) error {
 	// Read items
 	items, err := db.GetItems(0, 0)
 	if err != nil {
@@ -200,7 +171,7 @@ func (db *Database) InsertFeedbacks(feedback []Feedback) error {
 	// Write feedback
 	txn := db.db.NewWriteBatch()
 	for _, f := range feedback {
-		if err := BatchInsertFeedback(txn, f); err != nil {
+		if err := batchInsertFeedback(txn, f); err != nil {
 			return err
 		}
 		if _, exist := itemSet[f.ItemId]; !exist {
@@ -211,13 +182,9 @@ func (db *Database) InsertFeedbacks(feedback []Feedback) error {
 	if err := txn.Flush(); err != nil {
 		return err
 	}
-	if err := db.InsertItems(items, true); err != nil {
-		return err
-	}
 	return db.db.Update(func(txn *badger.Txn) error {
-		// Write items
 		for _, item := range items {
-			if err := RefreshItemPop(txn, item.ItemId); err != nil {
+			if err := insertItem(txn, item, false); err != nil {
 				return err
 			}
 		}
@@ -225,8 +192,8 @@ func (db *Database) InsertFeedbacks(feedback []Feedback) error {
 	})
 }
 
-// GetFeedback returns all feedback in the database.
-func (db *Database) GetFeedback() (feedback []Feedback, err error) {
+// getFeedback returns all feedback in the database.
+func (db *Badger) GetFeedback() (feedback []Feedback, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -250,7 +217,7 @@ func (db *Database) GetFeedback() (feedback []Feedback, err error) {
 	return
 }
 
-func GetFeedback(txn *badger.Txn, userId string, itemId string) (feedback Feedback, err error) {
+func getFeedback(txn *badger.Txn, userId string, itemId string) (feedback Feedback, err error) {
 	feedbackKey := FeedbackKey{UserId: userId, ItemId: itemId}
 	key, err := json.Marshal(feedbackKey)
 	if err != nil {
@@ -266,7 +233,7 @@ func GetFeedback(txn *badger.Txn, userId string, itemId string) (feedback Feedba
 	return feedback, err
 }
 
-func (db *Database) GetFeedbackByUser(userId string) (feedback []Feedback, err error) {
+func (db *Badger) GetUserFeedback(userId string) (feedback []Feedback, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -274,7 +241,7 @@ func (db *Database) GetFeedbackByUser(userId string) (feedback []Feedback, err e
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			k := it.Item().Key()
 			itemId := extractKey(k, []byte(prefixUserIndex), []byte(userId), []byte("/"))
-			f, err := GetFeedback(txn, userId, itemId)
+			f, err := getFeedback(txn, userId, itemId)
 			if err != nil {
 				return err
 			}
@@ -285,7 +252,7 @@ func (db *Database) GetFeedbackByUser(userId string) (feedback []Feedback, err e
 	return
 }
 
-func (db *Database) GetFeedbackByItem(itemId string) (feedback []Feedback, err error) {
+func (db *Badger) GetItemFeedback(itemId string) (feedback []Feedback, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -293,7 +260,7 @@ func (db *Database) GetFeedbackByItem(itemId string) (feedback []Feedback, err e
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			k := it.Item().Key()
 			userId := extractKey(k, []byte(prefixItemIndex), []byte(itemId), []byte("/"))
-			f, err := GetFeedback(txn, userId, itemId)
+			f, err := getFeedback(txn, userId, itemId)
 			if err != nil {
 				return err
 			}
@@ -305,59 +272,34 @@ func (db *Database) GetFeedbackByItem(itemId string) (feedback []Feedback, err e
 }
 
 // CountFeedback returns the number of feedback in the database.
-func (db *Database) CountFeedback() (count int, err error) {
+func (db *Badger) CountFeedback() (count int, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = CountPrefix(txn, []byte(prefixFeedback))
+		count, err = countPrefix(txn, []byte(prefixFeedback))
 		return nil
 	})
 	return
 }
 
-// Item stores meta data about item.
-type Item struct {
-	ItemId     string
-	Popularity float64
-	Timestamp  time.Time
-	Labels     []string
+func (db *Badger) InsertUser(user User) error {
+	return nil
 }
 
-func RefreshItemPop(txn *badger.Txn, itemId string) error {
-	// Check existence
-	it, err := txn.Get(newKey([]byte(prefixItem), []byte(itemId)))
-	if err != nil {
-		return err
-	}
-	var item Item
-	err = it.Value(func(val []byte) error {
-		return json.Unmarshal(val, &item)
-	})
-	if err != nil {
-		return err
-	}
-	// Collect feedback
-	item.Popularity = 0
-	iter := txn.NewIterator(badger.DefaultIteratorOptions)
-	defer iter.Close()
-	prefix := newKey([]byte(prefixItemIndex), []byte(itemId), []byte("/"))
-	for iter.Seek(prefix); iter.ValidForPrefix(prefix); iter.Next() {
-		item.Popularity += 1
-	}
-	// Write item
-	buf, err := json.Marshal(item)
-	if err != nil {
-		return err
-	}
-	return txn.Set(newKey([]byte(prefixItem), []byte(itemId)), buf)
+func (db *Badger) DeleteUser(userId string) error {
+	return nil
 }
 
-func (db *Database) GetUsers() (users []string, err error) {
+func (db *Badger) GetUser(userId string) (users User, err error) {
+	return User{}, nil
+}
+
+func (db *Badger) GetUsers() (users []User, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 		prefix := []byte(prefixUser)
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			userId := extractKey(it.Item().Key(), []byte(prefixUser))
-			users = append(users, userId)
+			users = append(users, User{UserId: userId})
 		}
 		return nil
 	})
@@ -365,15 +307,10 @@ func (db *Database) GetUsers() (users []string, err error) {
 }
 
 // InsertItem inserts a item into the bucket. The `override` flag indicates whether to overwrite existed item.
-func InsertItem(txn *badger.Txn, item Item, override bool) error {
+func insertItem(txn *badger.Txn, item Item, override bool) error {
 	// Check existence
-	refresh := false
-	if _, err := txn.Get(newKey([]byte(prefixItem), []byte(item.ItemId))); err == nil {
-		if override {
-			refresh = true
-		} else {
-			return nil
-		}
+	if _, err := txn.Get(newKey([]byte(prefixItem), []byte(item.ItemId))); err == nil && !override {
+		return nil
 	}
 	// Write item
 	itemId := item.ItemId
@@ -390,27 +327,21 @@ func InsertItem(txn *badger.Txn, item Item, override bool) error {
 			return err
 		}
 	}
-	// Refresh pop
-	if refresh {
-		if err := RefreshItemPop(txn, itemId); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-// InsertItem inserts a item into the database. The `override` flag indicates whether to overwrite existed item.
-func (db *Database) InsertItem(item Item, override bool) error {
+// insertItem inserts a item into the database. The `override` flag indicates whether to overwrite existed item.
+func (db *Badger) InsertItem(item Item) error {
 	return db.db.Update(func(txn *badger.Txn) error {
-		return InsertItem(txn, item, override)
+		return insertItem(txn, item, true)
 	})
 }
 
-// InsertItem inserts multiple items into the database. The `override` flag indicates whether to overwrite existed item.
-func (db *Database) InsertItems(items []Item, override bool) error {
+// insertItem inserts multiple items into the database. The `override` flag indicates whether to overwrite existed item.
+func (db *Badger) BatchInsertItem(items []Item) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		for _, item := range items {
-			if err := InsertItem(txn, item, override); err != nil {
+			if err := insertItem(txn, item, true); err != nil {
 				return err
 			}
 		}
@@ -418,7 +349,7 @@ func (db *Database) InsertItems(items []Item, override bool) error {
 	})
 }
 
-func GetItem(txn *badger.Txn, itemId string) (item Item, err error) {
+func getItem(txn *badger.Txn, itemId string) (item Item, err error) {
 	var it *badger.Item
 	it, err = txn.Get(newKey([]byte(prefixItem), []byte(itemId)))
 	if err != nil {
@@ -430,17 +361,21 @@ func GetItem(txn *badger.Txn, itemId string) (item Item, err error) {
 	return
 }
 
-// GetItem gets a item from database by item ID.
-func (db *Database) GetItem(itemId string) (item Item, err error) {
+func (db *Badger) DeleteItem(itemId string) error {
+	return nil
+}
+
+// getItem gets a item from database by item ID.
+func (db *Badger) GetItem(itemId string) (item Item, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
-		item, err = GetItem(txn, itemId)
+		item, err = getItem(txn, itemId)
 		return nil
 	})
 	return
 }
 
 // GetItems returns all items in the dataset.
-func (db *Database) GetItems(n int, offset int) ([]Item, error) {
+func (db *Badger) GetItems(n int, offset int) ([]Item, error) {
 	if n == 0 {
 		n = (1<<bits.UintSize)/2 - 1
 	}
@@ -474,8 +409,8 @@ func (db *Database) GetItems(n int, offset int) ([]Item, error) {
 	return items, err
 }
 
-// GetItemsByLabel list items with given label.
-func (db *Database) GetItemsByLabel(label string) ([]Item, error) {
+// GetLabelItems list items with given label.
+func (db *Badger) GetLabelItems(label string) ([]Item, error) {
 	items := make([]Item, 0)
 	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -484,7 +419,7 @@ func (db *Database) GetItemsByLabel(label string) ([]Item, error) {
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			k := it.Item().Key()
 			itemId := extractKey(k, []byte(prefixLabelIndex), []byte(label), []byte("/"))
-			item, err := GetItem(txn, itemId)
+			item, err := getItem(txn, itemId)
 			if err != nil {
 				return err
 			}
@@ -495,7 +430,7 @@ func (db *Database) GetItemsByLabel(label string) ([]Item, error) {
 	return items, err
 }
 
-func CountPrefix(txn *badger.Txn, prefix []byte) (int, error) {
+func countPrefix(txn *badger.Txn, prefix []byte) (int, error) {
 	count := 0
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
@@ -506,32 +441,23 @@ func CountPrefix(txn *badger.Txn, prefix []byte) (int, error) {
 }
 
 // CountItems returns the number of items in the database.
-func (db *Database) CountItems() (count int, err error) {
+func (db *Badger) CountItems() (count int, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = CountPrefix(txn, []byte(prefixItem))
+		count, err = countPrefix(txn, []byte(prefixItem))
 		return nil
 	})
 	return
 }
 
-func (db *Database) CountUsers() (count int, err error) {
+func (db *Badger) CountUsers() (count int, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = CountPrefix(txn, []byte(prefixItem))
+		count, err = countPrefix(txn, []byte(prefixItem))
 		return nil
 	})
 	return
 }
 
-// CountIgnore returns the number of ignored items.
-func (db *Database) CountIgnore() (count int, err error) {
-	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = CountPrefix(txn, []byte(prefixIgnore))
-		return nil
-	})
-	return
-}
-
-func (db *Database) GetIgnore(userId string) (ignored []string, err error) {
+func (db *Badger) GetUserIgnore(userId string) (ignored []string, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -545,8 +471,17 @@ func (db *Database) GetIgnore(userId string) (ignored []string, err error) {
 	return
 }
 
+func (db *Badger) CountUserIgnore(userId string) (count int, err error) {
+	prefix := newKey([]byte(prefixIgnore), []byte(userId))
+	err = db.db.View(func(txn *badger.Txn) error {
+		count, err = countPrefix(txn, prefix)
+		return nil
+	})
+	return
+}
+
 // GetString gets the value of a metadata.
-func (db *Database) GetString(name string) (string, error) {
+func (db *Badger) GetString(name string) (string, error) {
 	var value string
 	err := db.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(newKey([]byte(prefixMeta), []byte(name)))
@@ -562,13 +497,13 @@ func (db *Database) GetString(name string) (string, error) {
 }
 
 // SetString sets the value of a metadata.
-func (db *Database) SetString(name string, val string) error {
+func (db *Badger) SetString(name string, val string) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(newKey([]byte(prefixMeta), []byte(name)), []byte(val))
 	})
 }
 
-func (db *Database) GetInt(name string) (int, error) {
+func (db *Badger) GetInt(name string) (int, error) {
 	val, err := db.GetString(name)
 	if err != nil {
 		return 0, err
@@ -576,18 +511,12 @@ func (db *Database) GetInt(name string) (int, error) {
 	return strconv.Atoi(val)
 }
 
-func (db *Database) SetInt(name string, val int) error {
+func (db *Badger) SetInt(name string, val int) error {
 	return db.SetString(name, strconv.Itoa(val))
 }
 
-// RecommendedItem is the structure for a recommended item.
-type RecommendedItem struct {
-	Item
-	Score float64 // score
-}
-
 // SetRecommends sets recommendations for a user.
-func (db *Database) setList(prefix string, listId string, items []RecommendedItem) error {
+func (db *Badger) setList(prefix string, listId string, items []RecommendedItem) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		for i, item := range items {
 			buf, err := json.Marshal(item)
@@ -603,7 +532,7 @@ func (db *Database) setList(prefix string, listId string, items []RecommendedIte
 }
 
 // GetRecommends gets n recommendations for a user.
-func (db *Database) getList(prefix string, listId string, n int, offset int,
+func (db *Badger) getList(prefix string, listId string, n int, offset int,
 	filter func(txn *badger.Txn, listId string, item RecommendedItem) bool) ([]RecommendedItem, error) {
 	var items []RecommendedItem
 	if n == 0 {
@@ -635,35 +564,35 @@ func (db *Database) getList(prefix string, listId string, n int, offset int,
 	return items, err
 }
 
-func (db *Database) SetNeighbors(itemId string, items []RecommendedItem) error {
+func (db *Badger) SetNeighbors(itemId string, items []RecommendedItem) error {
 	return db.setList(prefixNeighbors, itemId, items)
 }
 
-func (db *Database) SetPop(label string, items []RecommendedItem) error {
+func (db *Badger) SetPop(label string, items []RecommendedItem) error {
 	return db.setList(prefixPop, label, items)
 }
 
-func (db *Database) SetLatest(label string, items []RecommendedItem) error {
+func (db *Badger) SetLatest(label string, items []RecommendedItem) error {
 	return db.setList(prefixLatest, label, items)
 }
 
-func (db *Database) SetRecommend(userId string, items []RecommendedItem) error {
+func (db *Badger) SetRecommend(userId string, items []RecommendedItem) error {
 	return db.setList(prefixRecommends, userId, items)
 }
 
-func (db *Database) GetNeighbors(itemId string, n int, offset int) ([]RecommendedItem, error) {
+func (db *Badger) GetNeighbors(itemId string, n int, offset int) ([]RecommendedItem, error) {
 	return db.getList(prefixNeighbors, itemId, n, offset, nil)
 }
 
-func (db *Database) GetPop(label string, n int, offset int) ([]RecommendedItem, error) {
+func (db *Badger) GetPop(label string, n int, offset int) ([]RecommendedItem, error) {
 	return db.getList(prefixPop, label, n, offset, nil)
 }
 
-func (db *Database) GetLatest(label string, n int, offset int) ([]RecommendedItem, error) {
+func (db *Badger) GetLatest(label string, n int, offset int) ([]RecommendedItem, error) {
 	return db.getList(prefixLatest, label, n, offset, nil)
 }
 
-func (db *Database) GetRecommend(userId string, n int, offset int) ([]RecommendedItem, error) {
+func (db *Badger) GetRecommend(userId string, n int, offset int) ([]RecommendedItem, error) {
 	return db.getList(prefixRecommends, userId, n, offset, func(txn *badger.Txn, listId string, item RecommendedItem) bool {
 		buf, err := json.Marshal(FeedbackKey{listId, item.ItemId})
 		if err != nil {
@@ -682,7 +611,7 @@ func (db *Database) GetRecommend(userId string, n int, offset int) ([]Recommende
 	})
 }
 
-func (db *Database) ConsumeRecommends(userId string, n int) ([]RecommendedItem, error) {
+func (db *Badger) ConsumeRecommends(userId string, n int) ([]RecommendedItem, error) {
 	items, err := db.GetRecommend(userId, n, 0)
 	if err == nil {
 		err = db.db.Update(func(txn *badger.Txn) error {
@@ -695,180 +624,4 @@ func (db *Database) ConsumeRecommends(userId string, n int) ([]RecommendedItem, 
 		})
 	}
 	return items, err
-}
-
-// ToDataSet creates a dataset from the database.
-func (db *Database) ToDataSet() (*model.DataSet, error) {
-	// Count feedback
-	count, err := db.CountFeedback()
-	if err != nil {
-		return nil, err
-	}
-	// Fetch ratings
-	users, items, ratings := make([]string, count), make([]string, count), make([]float64, count)
-	feedback, err := db.GetFeedback()
-	if err != nil {
-		return nil, err
-	}
-	for i := range feedback {
-		users[i] = feedback[i].UserId
-		items[i] = feedback[i].ItemId
-		ratings[i] = feedback[i].Rating
-	}
-	dataset := model.NewDataSet(users, items, ratings)
-	// Fetch features
-	featuredItems, err := db.GetItems(0, 0)
-	if err != nil {
-		return nil, err
-	}
-	convertedItems := make([]map[string]interface{}, len(featuredItems))
-	for i, item := range featuredItems {
-		cvt := make(map[string]interface{})
-		cvt["ItemId"] = item.ItemId
-		cvt["Label"] = item.Labels
-		convertedItems[i] = cvt
-	}
-	dataset.SetItemFeature(convertedItems, []string{"Label"}, "ItemId")
-	return dataset, nil
-}
-
-// LoadFeedbackFromCSV import feedback from a CSV file into the database.
-func (db *Database) LoadFeedbackFromCSV(fileName string, sep string, hasHeader bool) error {
-	feedbacks := make([]Feedback, 0)
-	// Open file
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-	// Read CSV file
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Ignore header
-		if hasHeader {
-			hasHeader = false
-			continue
-		}
-		fields := strings.Split(line, sep)
-		// Ignore empty line
-		if len(fields) < 2 {
-			continue
-		}
-		userId := fields[0]
-		itemId := fields[1]
-		feedback := 0.0
-		if len(fields) > 2 {
-			feedback, _ = strconv.ParseFloat(fields[2], 32)
-		}
-		feedbacks = append(feedbacks, Feedback{userId, itemId, feedback})
-	}
-	return db.InsertFeedbacks(feedbacks)
-}
-
-// LoadItemsFromCSV imports items from a CSV file into the database.
-func (db *Database) LoadItemsFromCSV(fileName string, sep string, hasHeader bool, dateColumn int, labelSep string, labelColumn int) error {
-	// Open file
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-	// Read CSV file
-	scanner := bufio.NewScanner(file)
-	items := make([]Item, 0)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Ignore header
-		if hasHeader {
-			hasHeader = false
-			continue
-		}
-		fields := strings.Split(line, sep)
-		// Ignore empty line
-		if len(fields) < 1 {
-			continue
-		}
-		item := Item{ItemId: fields[0]}
-		// Parse date
-		if dateColumn > 0 && dateColumn < len(fields) {
-			t, err := dateparse.ParseAny(fields[dateColumn])
-			if err != nil && len(fields[dateColumn]) > 0 {
-				return err
-			}
-			item.Timestamp = t
-		}
-		// Parse labels
-		if labelColumn > 0 && labelColumn < len(fields) {
-			item.Labels = strings.Split(fields[labelColumn], labelSep)
-		}
-		items = append(items, item)
-	}
-	return db.InsertItems(items, true)
-}
-
-// SaveFeedbackToCSV exports feedback from the database into a CSV file.
-func (db *Database) SaveFeedbackToCSV(fileName string, sep string, header bool) error {
-	// Open file
-	file, err := os.Create(fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	// Save feedback
-	feedback, err := db.GetFeedback()
-	if err != nil {
-		return err
-	}
-	for i := range feedback {
-		if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v\n", feedback[i].UserId, sep, feedback[i].ItemId, sep, feedback[i].Rating)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// SaveItemsToCSV exports items from the database into a CSV file.
-func (db *Database) SaveItemsToCSV(fileName string, sep string, header bool, date bool, labelSep string, label bool) error {
-	// Open file
-	file, err := os.Create(fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	// Save items
-	items, err := db.GetItems(0, 0)
-	if err != nil {
-		return err
-	}
-	for _, item := range items {
-		if _, err = file.WriteString(item.ItemId); err != nil {
-			return err
-		}
-		if date {
-			if _, err = file.WriteString(fmt.Sprintf("%s%v", sep, item.Timestamp)); err != nil {
-				return err
-			}
-		}
-		if label {
-			for i, label := range item.Labels {
-				if i == 0 {
-					if _, err = file.WriteString(sep); err != nil {
-						return err
-					}
-				} else {
-					if _, err = file.WriteString(labelSep); err != nil {
-						return err
-					}
-				}
-				if _, err = file.WriteString(fmt.Sprintf("%v", label)); err != nil {
-					return err
-				}
-			}
-		}
-		if _, err = file.WriteString("\n"); err != nil {
-			return err
-		}
-	}
-	return nil
 }
