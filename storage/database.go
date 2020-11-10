@@ -55,10 +55,11 @@ type Database interface {
 	GetItemFeedback(itemId string) ([]Feedback, error)
 	// label
 	GetLabelItems(label string) ([]Item, error)
+	GetLabels() ([]string, error)
 	// users
 	InsertUser(user User) error
 	DeleteUser(userId string) error
-	//GetUser(userId string) error
+	GetUser(userId string) (User, error)
 	GetUsers() ([]User, error)
 	CountUsers() (int, error)
 	GetUserFeedback(userId string) ([]Feedback, error)

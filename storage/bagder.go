@@ -280,10 +280,12 @@ func (db *Badger) CountFeedback() (count int, err error) {
 	return
 }
 
+// TODO
 func (db *Badger) InsertUser(user User) error {
 	return nil
 }
 
+// TODO
 func (db *Badger) DeleteUser(userId string) error {
 	return nil
 }
@@ -428,6 +430,11 @@ func (db *Badger) GetLabelItems(label string) ([]Item, error) {
 		return nil
 	})
 	return items, err
+}
+
+// TODO
+func (db *Badger) getLabels() ([]string, error) {
+	return nil, nil
 }
 
 func countPrefix(txn *badger.Txn, prefix []byte) (int, error) {
