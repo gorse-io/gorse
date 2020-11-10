@@ -1,4 +1,4 @@
-// Copyright 2020 Zhenghao Zhang
+// Copyright 2020 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,16 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package database
+package storage
 
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/thanhpk/randstr"
-	"github.com/zhenghaoz/gorse/model"
 	"log"
 	"os"
 	"path"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -72,10 +70,10 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, Item{ItemId: itemId, Popularity: 1}, item)
+		assert.Equal(t, Item{ItemId: itemId}, item)
 	}
 	// Get feedback by user
-	feedback, err = db.GetFeedbackByUser("2")
+	feedback, err = db.GetUserFeedback("2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +82,7 @@ func TestDB_InsertGetFeedback(t *testing.T) {
 	assert.Equal(t, "4", feedback[0].ItemId)
 	assert.Equal(t, float64(6), feedback[0].Rating)
 	// Get feedback by item
-	feedback, err = db.GetFeedbackByItem("4")
+	feedback, err = db.GetItemFeedback("4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +109,7 @@ func TestDB_BatchInsertGetFeedback(t *testing.T) {
 		feedback[i].ItemId = items[i]
 		feedback[i].Rating = ratings[i]
 	}
-	if err := db.InsertFeedbacks(feedback); err != nil {
+	if err := db.BatchInsertFeedback(feedback); err != nil {
 		t.Fatal(err)
 	}
 	// Count ratings
@@ -136,10 +134,10 @@ func TestDB_BatchInsertGetFeedback(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, Item{ItemId: itemId, Popularity: 1}, item)
+		assert.Equal(t, Item{ItemId: itemId}, item)
 	}
 	// Get feedback by user
-	feedback, err = db.GetFeedbackByUser("2")
+	feedback, err = db.GetUserFeedback("2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +146,7 @@ func TestDB_BatchInsertGetFeedback(t *testing.T) {
 	assert.Equal(t, "4", feedback[0].ItemId)
 	assert.Equal(t, float64(6), feedback[0].Rating)
 	// Get feedback by item
-	feedback, err = db.GetFeedbackByItem("4")
+	feedback, err = db.GetItemFeedback("4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +192,7 @@ func TestDB_InsertGetItem(t *testing.T) {
 		},
 	}
 	for _, item := range items {
-		if err := db.InsertItem(item, true); err != nil {
+		if err := db.InsertItem(item); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -219,12 +217,12 @@ func TestDB_InsertGetItem(t *testing.T) {
 		assert.Equal(t, item, ret)
 	}
 	// Get items by labels
-	aItems, err := db.GetItemsByLabel("a")
+	aItems, err := db.GetLabelItems("a")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], aItems)
-	bItems, err := db.GetItemsByLabel("b")
+	bItems, err := db.GetLabelItems("b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +264,7 @@ func TestDB_BatchInsertGetItem(t *testing.T) {
 			Labels:    []string{"b"},
 		},
 	}
-	if err := db.InsertItems(items, true); err != nil {
+	if err := db.BatchInsertItem(items); err != nil {
 		t.Fatal(err)
 	}
 	// Get items
@@ -290,12 +288,12 @@ func TestDB_BatchInsertGetItem(t *testing.T) {
 		assert.Equal(t, item, ret)
 	}
 	// Get items by labels
-	aItems, err := db.GetItemsByLabel("a")
+	aItems, err := db.GetLabelItems("a")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], aItems)
-	bItems, err := db.GetItemsByLabel("b")
+	bItems, err := db.GetLabelItems("b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,296 +340,33 @@ func TestDB_PutGetList(t *testing.T) {
 		{Item{ItemId: "3"}, 0.3},
 		{Item{ItemId: "4"}, 0.4},
 	}
-	if err = db.setList(prefixRecommends, "0", items); err != nil {
+	if err = db.SetRecommend("0", items); err != nil {
 		t.Fatal(err)
 	}
 	// Get recommends
-	retItems, err := db.getList(prefixRecommends, "0", 0, 0, nil)
+	retItems, err := db.GetRecommend("0", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items, retItems)
 	// Get n recommends
-	nItems, err := db.getList(prefixRecommends, "0", 3, 0, nil)
+	nItems, err := db.GetRecommend("0", 3, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:3], nItems)
 	// Get n recommends with offset
-	oItems, err := db.getList(prefixRecommends, "0", 3, 1, nil)
+	oItems, err := db.GetRecommend("0", 3, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[1:4], oItems)
 	// Test new user
-	emptyItems, err := db.getList(prefixRecommends, "1", 0, 0, nil)
+	emptyItems, err := db.GetRecommend("1", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0, len(emptyItems))
-}
-
-func TestDB_ToDataSet(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Insert data
-	feedback := []Feedback{
-		{UserId: "1", ItemId: "1"},
-		{UserId: "1", ItemId: "2"},
-		{UserId: "2", ItemId: "1"},
-		{UserId: "2", ItemId: "2"},
-		{UserId: "2", ItemId: "3"},
-	}
-	if err = db.InsertFeedbacks(feedback); err != nil {
-		t.Fatal(err)
-	}
-	items := []Item{
-		{ItemId: "1", Labels: []string{"a"}},
-		{ItemId: "2", Labels: []string{"b"}},
-		{ItemId: "3", Labels: []string{"c"}},
-	}
-	if err = db.InsertItems(items, true); err != nil {
-		t.Fatal(err)
-	}
-	// To dataset
-	dataSet, err := db.ToDataSet()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 5, dataSet.Count())
-	assert.Equal(t, 2, dataSet.UserCount())
-	assert.Equal(t, 3, dataSet.ItemCount())
-	assert.Equal(t, 3, dataSet.FeatureCount())
-}
-
-func TestDB_LoadFeedbackFromCSV(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Load data
-	if err = db.LoadFeedbackFromCSV("../example/data/feedback_explicit_header.csv", ",", true); err != nil {
-		t.Fatal(err)
-	}
-	// Count feedback
-	count, err := db.CountFeedback()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 5, count)
-	// Check data
-	feedback, err := db.GetFeedback()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < count; i++ {
-		assert.Equal(t, strconv.Itoa(i), feedback[i].UserId)
-		assert.Equal(t, strconv.Itoa(2*i), feedback[i].ItemId)
-		assert.Equal(t, 3*i, int(feedback[i].Rating))
-	}
-	// Count feedback
-	count, err = db.CountItems()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 5, count)
-	// Check data
-	items, err := db.GetItems(0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < count; i++ {
-		assert.Equal(t, strconv.Itoa(2*i), items[i].ItemId)
-	}
-}
-
-func TestDB_LoadItemsFromCSV(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Load data
-	if err = db.LoadItemsFromCSV("../example/data/items.csv", "::", false, -1, "|", -1); err != nil {
-		t.Fatal(err)
-	}
-	// Count feedback
-	count, err := db.CountItems()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 5, count)
-	// Check data
-	items, err := db.GetItems(0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < count; i++ {
-		assert.Equal(t, strconv.Itoa(1+i), items[i].ItemId)
-	}
-}
-
-func TestDB_LoadItemsFromCSV_Date(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Load data
-	if err = db.LoadItemsFromCSV("../example/data/item_date.csv", ",", false, 1, "|", 2); err != nil {
-		t.Fatal(err)
-	}
-	// Count feedback
-	count, err := db.CountItems()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, 5, count)
-	// Check data
-	items, err := db.GetItems(0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < count; i++ {
-		assert.Equal(t, strconv.Itoa(1+i), items[i].ItemId)
-		date := time.Date(2020, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC)
-		assert.Equal(t, date, items[i].Timestamp)
-		if i%2 == 0 {
-			assert.Equal(t, []string{"a", "b", "c"}, items[i].Labels)
-		} else {
-			assert.Equal(t, []string{"e", "f", "g"}, items[i].Labels)
-		}
-	}
-}
-
-func TestDB_SaveFeedbackToCSV(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Load data
-	if err = db.LoadFeedbackFromCSV("../example/data/feedback_explicit_header.csv", ",", true); err != nil {
-		t.Fatal(err)
-	}
-	// Save data
-	csvFileName := path.Join(model.TempDir, randstr.String(16))
-	if err = db.SaveFeedbackToCSV(csvFileName, ",", false); err != nil {
-		t.Fatal(err)
-	}
-	// Check data
-	data := model.LoadDataFromCSV(csvFileName, ",", false)
-	assert.Equal(t, 5, data.Count())
-	for i := 0; i < data.Count(); i++ {
-		userId, itemId, value := data.Get(i)
-		userIndex, itemIndex, _ := data.GetWithIndex(i)
-		assert.Equal(t, strconv.Itoa(i), userId)
-		assert.Equal(t, strconv.Itoa(2*i), itemId)
-		assert.Equal(t, 3*i, int(value))
-		assert.Equal(t, i, userIndex)
-		assert.Equal(t, i, itemIndex)
-	}
-	// Clean csv file
-	if err = os.Remove(csvFileName); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestDB_SaveItemsToCSV(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Load data
-	if err = db.LoadItemsFromCSV("../example/data/item_date.csv", ",", false, 1, "|", -1); err != nil {
-		t.Fatal(err)
-	}
-	// Save data
-	csvFileName := path.Join(model.TempDir, randstr.String(16))
-	if err = db.SaveItemsToCSV(csvFileName, "::", false, false, "|", false); err != nil {
-		t.Fatal(err)
-	}
-	// Check data
-	entities := model.LoadEntityFromCSV(csvFileName, "::", "|", false,
-		[]string{"ItemId", "Timestamp"}, 0)
-	expected := []map[string]interface{}{
-		{"ItemId": "1"},
-		{"ItemId": "2"},
-		{"ItemId": "3"},
-		{"ItemId": "4"},
-		{"ItemId": "5"},
-	}
-	assert.Equal(t, expected, entities)
-}
-
-func TestDB_SaveItemsToCSV_Date(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Load data
-	if err = db.LoadItemsFromCSV("../example/data/item_date.csv", ",", false, 1, "|", 2); err != nil {
-		t.Fatal(err)
-	}
-	// Save data
-	csvFileName := path.Join(model.TempDir, randstr.String(16))
-	if err = db.SaveItemsToCSV(csvFileName, "::", false, true, "|", true); err != nil {
-		t.Fatal(err)
-	}
-	// Check data
-	entities := model.LoadEntityFromCSV(csvFileName, "::", "|", false,
-		[]string{"ItemId", "Timestamp", "Labels"}, 0)
-	expected := []map[string]interface{}{
-		{"ItemId": "1", "Timestamp": time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
-		{"ItemId": "2", "Timestamp": time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
-		{"ItemId": "3", "Timestamp": time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
-		{"ItemId": "4", "Timestamp": time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"e", "f", "g"}},
-		{"ItemId": "5", "Timestamp": time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC).String(), "Labels": []string{"a", "b", "c"}},
-	}
-	assert.Equal(t, expected, entities)
-}
-
-func TestDB_Popularity(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	// Insert feedback
-	itemIds := []string{"0", "2", "4", "6", "8"}
-	popularity := []float64{3, 4, 5, 6, 7}
-	for i, itemId := range itemIds {
-		if err := db.InsertItem(Item{ItemId: itemId}, true); err != nil {
-			t.Fatal(err)
-		}
-		for k := 0; k < int(popularity[i]); k++ {
-			if err := db.InsertFeedback(Feedback{UserId: strconv.Itoa(k), ItemId: itemId}); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	// Check popularity
-	retItems, err := db.GetItems(0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i, item := range retItems {
-		assert.Equal(t, popularity[i], item.Popularity)
-	}
 }
 
 func TestDB_GetRecommends(t *testing.T) {
@@ -649,11 +384,11 @@ func TestDB_GetRecommends(t *testing.T) {
 		{Item{ItemId: "3"}, 3},
 		{Item{ItemId: "4"}, 4},
 	}
-	if err = db.setList(prefixRecommends, "0", items); err != nil {
+	if err = db.SetRecommend("0", items); err != nil {
 		t.Fatal(err)
 	}
 	// Get all
-	retItems, err := db.getList(prefixRecommends, "0", 0, 0, nil)
+	retItems, err := db.GetRecommend("0", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -664,7 +399,7 @@ func TestDB_GetRecommends(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[:2], nItems)
-	count, err := db.CountIgnore()
+	count, err := db.CountUserIgnore("0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,7 +414,7 @@ func TestDB_GetRecommends(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, items[3:], nItems)
-	count, err = db.CountIgnore()
+	count, err = db.CountUserIgnore("0")
 	if err != nil {
 		t.Fatal(err)
 	}
