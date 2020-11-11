@@ -51,7 +51,6 @@ type Database interface {
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
 	GetItems(n int, offset int) ([]Item, error)
-	CountItems() (int, error)
 	GetItemFeedback(itemId string) ([]Feedback, error)
 	// label
 	GetLabelItems(label string) ([]Item, error)
@@ -61,15 +60,14 @@ type Database interface {
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
 	GetUsers() ([]User, error)
-	CountUsers() (int, error)
 	GetUserFeedback(userId string) ([]Feedback, error)
+	InsertUserIgnore(userId string, items []string) error
 	GetUserIgnore(userId string) ([]string, error)
 	CountUserIgnore(userId string) (int, error)
 	// feedback
 	InsertFeedback(feedback Feedback) error
 	BatchInsertFeedback(feedback []Feedback) error
 	GetFeedback() ([]Feedback, error)
-	CountFeedback() (int, error)
 	// metadata
 	GetString(name string) (string, error)
 	SetString(name string, val string) error
