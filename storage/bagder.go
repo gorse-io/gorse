@@ -28,6 +28,7 @@ const (
 	prefixLabelIndex = "index/label/" // prefix for label index
 	prefixItemIndex  = "index/item/"  // prefix for item index
 	prefixUserIndex  = "index/user/"  // prefix for user index
+	prefixLabel      = "label/"       // prefix for labels
 	prefixItem       = "item/"        // prefix for items
 	prefixUser       = "user/"        // prefix for users
 	prefixFeedback   = "feedback/"    // prefix for feedback
@@ -38,14 +39,6 @@ const (
 	prefixRecommends = "recommends/" // prefix for recommendations
 	prefixPop        = "populars/"   // prefix for popular items
 	prefixLatest     = "latest/"     // prefix for latest items
-)
-
-const (
-	LastFitFeedbackCount    = "LastFitFeedbackCount"
-	LastUpdateFeedbackCount = "LastUpdateFeedbackCount"
-	LastUpdateIgnoreCount   = "LastUpdateIgnoreCount"
-	LastFitTime             = "LastFitTime"
-	LastUpdateTime          = "LastUpdateTime"
 )
 
 func newKey(parts ...[]byte) []byte {
@@ -271,27 +264,60 @@ func (db *Badger) GetItemFeedback(itemId string) (feedback []Feedback, err error
 	return
 }
 
-// CountFeedback returns the number of feedback in the database.
-func (db *Badger) CountFeedback() (count int, err error) {
+// InsertUser insert a user into database.
+func (db *Badger) InsertUser(user User) error {
+	return db.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(newKey([]byte(prefixUser), []byte(user.UserId)), nil)
+	})
+}
+
+func deleteByPrefix(txn *badger.Txn, prefix []byte) error {
+	deleteKeys := func(keysForDelete [][]byte) error {
+		for _, key := range keysForDelete {
+			if err := txn.Delete(key); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	opts := badger.DefaultIteratorOptions
+	opts.AllVersions = false
+	opts.PrefetchValues = false
+	it := txn.NewIterator(opts)
+	defer it.Close()
+	keysForDelete := make([][]byte, 0, 0)
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		key := it.Item().KeyCopy(nil)
+		keysForDelete = append(keysForDelete, key)
+	}
+	if err := deleteKeys(keysForDelete); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *Badger) DeleteUser(userId string) error {
+	return db.db.Update(func(txn *badger.Txn) error {
+		if err := txn.Delete(newKey([]byte(prefixUser), []byte(userId))); err != nil {
+			return err
+		}
+		if err := deleteByPrefix(txn, newKey([]byte(prefixUserIndex), []byte(userId))); err != nil {
+			return err
+		}
+		return deleteByPrefix(txn, newKey([]byte(prefixIgnore), []byte(userId)))
+	})
+}
+
+func (db *Badger) GetUser(userId string) (user User, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = countPrefix(txn, []byte(prefixFeedback))
+		if _, err := txn.Get(newKey([]byte(prefixUser), []byte(userId))); err != nil {
+			return err
+		} else {
+			user.UserId = userId
+		}
 		return nil
 	})
 	return
-}
-
-// TODO
-func (db *Badger) InsertUser(user User) error {
-	return nil
-}
-
-// TODO
-func (db *Badger) DeleteUser(userId string) error {
-	return nil
-}
-
-func (db *Badger) GetUser(userId string) (users User, err error) {
-	return User{}, nil
 }
 
 func (db *Badger) GetUsers() (users []User, err error) {
@@ -306,6 +332,10 @@ func (db *Badger) GetUsers() (users []User, err error) {
 		return nil
 	})
 	return
+}
+
+func insertLabel(txn *badger.Txn, label string) error {
+	return txn.Set(newKey([]byte(prefixLabel), []byte(label)), nil)
 }
 
 // InsertItem inserts a item into the bucket. The `override` flag indicates whether to overwrite existed item.
@@ -325,6 +355,9 @@ func insertItem(txn *badger.Txn, item Item, override bool) error {
 	}
 	// Write index
 	for _, tag := range item.Labels {
+		if err = insertLabel(txn, tag); err != nil {
+			return err
+		}
 		if err = txn.Set(newKey([]byte(prefixLabelIndex), []byte(tag), []byte("/"), []byte(itemId)), nil); err != nil {
 			return err
 		}
@@ -364,14 +397,19 @@ func getItem(txn *badger.Txn, itemId string) (item Item, err error) {
 }
 
 func (db *Badger) DeleteItem(itemId string) error {
-	return nil
+	return db.db.Update(func(txn *badger.Txn) error {
+		if err := txn.Delete(newKey([]byte(prefixItem), []byte(itemId))); err != nil {
+			return err
+		}
+		return deleteByPrefix(txn, newKey([]byte(prefixItemIndex), []byte(itemId)))
+	})
 }
 
 // getItem gets a item from database by item ID.
 func (db *Badger) GetItem(itemId string) (item Item, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
 		item, err = getItem(txn, itemId)
-		return nil
+		return err
 	})
 	return
 }
@@ -411,6 +449,20 @@ func (db *Badger) GetItems(n int, offset int) ([]Item, error) {
 	return items, err
 }
 
+func (db *Badger) GetLabels() (labels []string, err error) {
+	err = db.db.View(func(txn *badger.Txn) error {
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		prefix := []byte(prefixLabel)
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			label := extractKey(it.Item().Key(), []byte(prefixLabel))
+			labels = append(labels, label)
+		}
+		return nil
+	})
+	return
+}
+
 // GetLabelItems list items with given label.
 func (db *Badger) GetLabelItems(label string) ([]Item, error) {
 	items := make([]Item, 0)
@@ -432,11 +484,6 @@ func (db *Badger) GetLabelItems(label string) ([]Item, error) {
 	return items, err
 }
 
-// TODO
-func (db *Badger) getLabels() ([]string, error) {
-	return nil, nil
-}
-
 func countPrefix(txn *badger.Txn, prefix []byte) (int, error) {
 	count := 0
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -447,21 +494,15 @@ func countPrefix(txn *badger.Txn, prefix []byte) (int, error) {
 	return count, nil
 }
 
-// CountItems returns the number of items in the database.
-func (db *Badger) CountItems() (count int, err error) {
-	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = countPrefix(txn, []byte(prefixItem))
+func (db *Badger) InsertUserIgnore(userId string, items []string) error {
+	return db.db.Update(func(txn *badger.Txn) error {
+		for _, itemId := range items {
+			if err := insertIgnore(txn, userId, itemId); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
-	return
-}
-
-func (db *Badger) CountUsers() (count int, err error) {
-	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = countPrefix(txn, []byte(prefixItem))
-		return nil
-	})
-	return
 }
 
 func (db *Badger) GetUserIgnore(userId string) (ignored []string, err error) {
@@ -618,12 +659,16 @@ func (db *Badger) GetRecommend(userId string, n int, offset int) ([]RecommendedI
 	})
 }
 
+func insertIgnore(txn *badger.Txn, userId string, itemId string) error {
+	return txn.Set(newKey([]byte(prefixIgnore), []byte(userId), []byte("/"), []byte(itemId)), nil)
+}
+
 func (db *Badger) ConsumeRecommends(userId string, n int) ([]RecommendedItem, error) {
 	items, err := db.GetRecommend(userId, n, 0)
 	if err == nil {
 		err = db.db.Update(func(txn *badger.Txn) error {
 			for _, item := range items {
-				if err := txn.Set(newKey([]byte(prefixIgnore), []byte(userId), []byte("/"), []byte(item.ItemId)), nil); err != nil {
+				if err := insertIgnore(txn, userId, item.ItemId); err != nil {
 					return err
 				}
 			}
