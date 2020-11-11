@@ -31,7 +31,7 @@ type Server struct {
 	MetaData *toml.MetaData
 }
 
-func (s *Server) Serve() {
+func (s *Server) SetupWebService() {
 	// Create a server
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
@@ -166,7 +166,10 @@ func (s *Server) Serve() {
 
 	// Start web s
 	restful.DefaultContainer.Add(ws)
+}
 
+func (s *Server) Serve() {
+	s.SetupWebService()
 	log.Printf("start a cmd at %v\n", fmt.Sprintf("%s:%d", s.Config.Server.Host, s.Config.Server.Port))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.Config.Server.Host, s.Config.Server.Port), nil))
 }
@@ -385,7 +388,6 @@ type Success struct {
 }
 
 func (s *Server) postUser(request *restful.Request, response *restful.Response) {
-
 	temp := storage.User{}
 	// get userInfo from request and put into temp
 	if err := request.ReadEntity(&temp); err != nil {
