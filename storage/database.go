@@ -39,8 +39,8 @@ type Feedback struct {
 
 // RecommendedItem is the structure for a recommended item.
 type RecommendedItem struct {
-	Item
-	Score float64 // score
+	ItemId string
+	Score  float64 // score
 }
 
 type Database interface {
