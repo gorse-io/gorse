@@ -77,17 +77,17 @@ func TestBadger_Feedback(t *testing.T) {
 	}
 	defer db.Close()
 	// Insert ret
-	feedbacks := []Feedback{
+	feedback := []Feedback{
 		{"0", "0", 0},
 		{"1", "2", 3},
 		{"2", "4", 6},
 		{"3", "6", 9},
 		{"4", "8", 12},
 	}
-	if err := db.InsertFeedback(feedbacks[0]); err != nil {
+	if err := db.InsertFeedback(feedback[0]); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.BatchInsertFeedback(feedbacks[1:]); err != nil {
+	if err := db.BatchInsertFeedback(feedback[1:]); err != nil {
 		t.Fatal(err)
 	}
 	// Get feedback
@@ -95,7 +95,7 @@ func TestBadger_Feedback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, feedbacks, feedbacks)
+	assert.Equal(t, feedback, feedback)
 	// Get items
 	if items, err := db.GetItems(0, 0); err != nil {
 		t.Fatal(err)
@@ -280,7 +280,8 @@ func TestBadger_Meta(t *testing.T) {
 	}
 }
 
-func TestDB_List(t *testing.T) {
+// todo
+func TestBadger_List(t *testing.T) {
 	// Create database
 	db, err := Open(createTempDir())
 	if err != nil {
@@ -300,13 +301,13 @@ func TestDB_List(t *testing.T) {
 	for _, operator := range operators {
 		// Put items
 		items := []RecommendedItem{
-			{Item{ItemId: "0"}, 0.0},
-			{Item{ItemId: "1"}, 0.1},
-			{Item{ItemId: "2"}, 0.2},
-			{Item{ItemId: "3"}, 0.3},
-			{Item{ItemId: "4"}, 0.4},
+			{"0", 0.0},
+			{"1", 0.1},
+			{"2", 0.2},
+			{"3", 0.3},
+			{"4", 0.4},
 		}
-		if err = operator.Set("0", items); err != nil {
+		if err := operator.Set("0", items); err != nil {
 			t.Fatal(err)
 		}
 		// Get items
@@ -336,7 +337,8 @@ func TestDB_List(t *testing.T) {
 	}
 }
 
-func TestDB_GetRecommends(t *testing.T) {
+// todo
+func TestBadger_GetRecommends(t *testing.T) {
 	// Create database
 	db, err := Open(createTempDir())
 	if err != nil {
@@ -345,13 +347,13 @@ func TestDB_GetRecommends(t *testing.T) {
 	defer db.Close()
 	// Put neighbors
 	items := []RecommendedItem{
-		{Item{ItemId: "0"}, 0},
-		{Item{ItemId: "1"}, 1},
-		{Item{ItemId: "2"}, 2},
-		{Item{ItemId: "3"}, 3},
-		{Item{ItemId: "4"}, 4},
+		{"0", 0.0},
+		{"1", 0.1},
+		{"2", 0.2},
+		{"3", 0.3},
+		{"4", 0.4},
 	}
-	if err = db.SetRecommend("0", items); err != nil {
+	if err := db.SetRecommend("0", items); err != nil {
 		t.Fatal(err)
 	}
 	// Get all
@@ -396,14 +398,14 @@ func TestBadger_DeleteUser(t *testing.T) {
 	}
 	defer db.Close()
 	// Insert ret
-	feedbacks := []Feedback{
+	feedback := []Feedback{
 		{"0", "0", 0},
 		{"0", "2", 3},
 		{"0", "4", 6},
 		{"0", "6", 9},
 		{"0", "8", 12},
 	}
-	if err := db.BatchInsertFeedback(feedbacks); err != nil {
+	if err := db.BatchInsertFeedback(feedback); err != nil {
 		t.Fatal(err)
 	}
 	// Insert ignore
