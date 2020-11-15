@@ -59,12 +59,12 @@ func (s *Server) SetupWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(Success{}))
 	// Get feedback by user-id
-	ws.Route(ws.GET("/user/{user-id}/feedback").To(s.getUserFeedback).
+	ws.Route(ws.GET("/user/{user-id}/feedback").To(s.getFeedbackByUser).
 		Doc("get feedback by user-id").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes([]storage.Feedback{}))
 	// Get ignorance by user-id
-	ws.Route(ws.GET("/user/{user-id}/ignore").To(s.getUserIgnore).
+	ws.Route(ws.GET("/user/{user-id}/ignore").To(s.getIgnoreByUser).
 		Doc("get ignorance by user-id").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes([]string{}))
@@ -78,7 +78,6 @@ func (s *Server) SetupWebService() {
 
 	ws.Route(ws.GET("/consume/{user-id}").To(s.consumeRecommends).
 		Doc("consume the top list for a user").
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("int")).
 		Param(ws.FormParameter("number", "the number of recommendations").DataType("int")).
 		Writes([]storage.RecommendedItem{}))
 
@@ -155,7 +154,7 @@ func (s *Server) SetupWebService() {
 		Doc("get labels").
 		Writes([]string{}))
 
-	// Put feedback
+	// Post feedback
 	ws.Route(ws.POST("/feedback").To(s.postFeedback).
 		Doc("put feedback").
 		Reads(storage.Feedback{}))
@@ -163,6 +162,14 @@ func (s *Server) SetupWebService() {
 	ws.Route(ws.GET("/feedback").To(s.getFeedback).
 		Doc("get feedback").
 		Writes([]storage.Feedback{}))
+
+	// Insert Ignore
+	ws.Route(ws.POST("/user/{user-id}/ignore").
+		To(s.postIgnore).
+		Doc("insert ignore").
+		Reads(Success{}))
+	// Count ignore
+	//ws.Route(ws.GET("/user/{user-id}/countIgnore"))
 
 	// Start web s
 	restful.DefaultContainer.Add(ws)
@@ -395,7 +402,7 @@ func (s *Server) postUser(request *restful.Request, response *restful.Response) 
 		return
 	}
 	if err := s.DB.InsertUser(temp); err != nil {
-		badRequest(response, err)
+		internalServerError(response, err)
 		return
 	}
 	json(response, Success{RowAffected: 1})
@@ -436,7 +443,7 @@ func (s *Server) getUsers(request *restful.Request, response *restful.Response) 
 	// get all users
 	users, err := s.DB.GetUsers()
 	if err != nil {
-		badRequest(response, err)
+		internalServerError(response, err)
 		return
 	}
 	json(response, users)
@@ -454,7 +461,7 @@ func (s *Server) deleteUser(request *restful.Request, response *restful.Response
 }
 
 // get feedback by user-id
-func (s *Server) getUserFeedback(request *restful.Request, response *restful.Response) {
+func (s *Server) getFeedbackByUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
 
 	feedback, err := s.DB.GetUserFeedback(userId)
@@ -466,7 +473,7 @@ func (s *Server) getUserFeedback(request *restful.Request, response *restful.Res
 }
 
 // get ignorance by user-id
-func (s *Server) getUserIgnore(request *restful.Request, response *restful.Response) {
+func (s *Server) getIgnoreByUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
 	ignore, err := s.DB.GetUserIgnore(userId)
 	if err != nil {
@@ -490,6 +497,7 @@ func (s *Server) postItems(request *restful.Request, response *restful.Response)
 	for i, v := range *temp {
 		items[i].ItemId = v.ItemId
 		items[i].Timestamp, err = dateparse.ParseAny(v.Timestamp)
+		items[i].Labels = v.Labels
 		if err != nil {
 			badRequest(response, err)
 		}
@@ -617,6 +625,18 @@ func (s *Server) getLabels(request *restful.Request, response *restful.Response)
 		return
 	}
 	json(response, labels)
+}
+
+func (s *Server) postIgnore(request *restful.Request, response *restful.Response) {
+	userId := request.PathParameter("user-id")
+	items := new([]string)
+	if err := request.ReadEntity(items); err != nil {
+		badRequest(response, err)
+	}
+	if err := s.DB.InsertUserIgnore(userId, *items); err != nil {
+		internalServerError(response, err)
+	}
+	json(response, Success{RowAffected: 1})
 }
 
 func badRequest(response *restful.Response, err error) {
