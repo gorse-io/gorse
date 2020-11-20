@@ -647,39 +647,3 @@ func (db *Badger) GetRecommend(userId string, n int, offset int) ([]RecommendedI
 func insertIgnore(txn *badger.Txn, userId string, itemId string) error {
 	return txn.Set(newKey([]byte(prefixIgnore), []byte(userId), []byte("/"), []byte(itemId)), nil)
 }
-
-func (db *Badger) ConsumeRecommends(userId string, n int) ([]RecommendedItem, error) {
-	// Read all recommendations
-	items, err := db.getList(prefixRecommends, userId, 0, 0, func(txn *badger.Txn, listId string, item RecommendedItem) bool {
-		buf, err := json.Marshal(FeedbackKey{listId, item.ItemId})
-		if err != nil {
-			panic(err)
-		}
-		_, errIgnore := txn.Get(newKey([]byte(prefixIgnore), []byte(listId), []byte("/"), []byte(item.ItemId)))
-		_, errFeedback := txn.Get(newKey([]byte(prefixFeedback), buf))
-		if errIgnore == badger.ErrKeyNotFound && errFeedback == badger.ErrKeyNotFound {
-			return true
-		} else if errIgnore != nil && errIgnore != badger.ErrKeyNotFound {
-			panic(errIgnore)
-		} else if errFeedback != nil && errFeedback != badger.ErrKeyNotFound {
-			panic(errFeedback)
-		}
-		return false
-	})
-	// Extract n items
-	if items != nil && len(items) > n {
-		items = items[:n]
-	}
-	// Add items to ignore
-	if err == nil {
-		err = db.db.Update(func(txn *badger.Txn) error {
-			for _, item := range items {
-				if err := insertIgnore(txn, userId, item.ItemId); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	}
-	return items, err
-}

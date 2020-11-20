@@ -82,7 +82,6 @@ type Database interface {
 	GetPop(label string, n int, offset int) ([]RecommendedItem, error)
 	GetLatest(label string, n int, offset int) ([]RecommendedItem, error)
 	GetRecommend(userId string, n int, offset int) ([]RecommendedItem, error)
-	ConsumeRecommends(userId string, n int) ([]RecommendedItem, error)
 }
 
 // Open a connection to a database.

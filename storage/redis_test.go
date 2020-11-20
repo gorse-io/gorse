@@ -14,30 +14,33 @@
 package storage
 
 import (
+	"github.com/alicebob/miniredis/v2"
+	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
-	"github.com/thanhpk/randstr"
-	"log"
-	"os"
-	"path"
 	"strconv"
 	"testing"
 	"time"
 )
 
-func createTempDir() string {
-	dir := path.Join(os.TempDir(), randstr.String(16))
-	err := os.Mkdir(dir, 0777)
+func createRedis() (Database, *miniredis.Miniredis, error) {
+	s, err := miniredis.Run()
 	if err != nil {
-		log.Fatal(err)
+		return nil, nil, err
 	}
-	return dir
+	c := redis.NewClient(&redis.Options{
+		Addr:     s.Addr(),
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+	return &Redis{client: c}, s, nil
 }
 
-func TestBadger_Users(t *testing.T) {
+func TestRedis_Users(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	// Insert users
 	for i := 0; i < 10; i++ {
 		if err := db.InsertUser(User{UserId: strconv.Itoa(i)}); err != nil {
@@ -67,11 +70,12 @@ func TestBadger_Users(t *testing.T) {
 	}
 }
 
-func TestBadger_Feedback(t *testing.T) {
+func TestRedis_Feedback(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	// Insert ret
 	feedback := []Feedback{
 		{"0", "0", 0},
@@ -128,11 +132,12 @@ func TestBadger_Feedback(t *testing.T) {
 	assert.Equal(t, float64(6), ret[0].Rating)
 }
 
-func TestBagder_Item(t *testing.T) {
+func TestRedis_Item(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	// Items
 	items := []Item{
 		{
@@ -213,11 +218,12 @@ func TestBagder_Item(t *testing.T) {
 	}
 }
 
-func TestBadger_Ignore(t *testing.T) {
+func TestRedis_Ignore(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	// Insert ignore
 	ignores := []string{"0", "1", "2", "3", "4", "5"}
 	if err := db.InsertUserIgnore("0", ignores); err != nil {
@@ -237,11 +243,12 @@ func TestBadger_Ignore(t *testing.T) {
 	}
 }
 
-func TestBadger_Meta(t *testing.T) {
+func TestRedis_Meta(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	// Set meta string
 	if err = db.SetString("1", "2"); err != nil {
 		t.Fatal(err)
@@ -270,11 +277,12 @@ func TestBadger_Meta(t *testing.T) {
 	}
 }
 
-func TestBadger_List(t *testing.T) {
+func TestRedis_List(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	type ListOperator struct {
 		Set func(label string, items []RecommendedItem) error
 		Get func(label string, n int, offset int) ([]RecommendedItem, error)
@@ -324,11 +332,12 @@ func TestBadger_List(t *testing.T) {
 	}
 }
 
-func TestBadger_DeleteUser(t *testing.T) {
+func TestRedis_DeleteUser(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	// Insert ret
 	feedback := []Feedback{
 		{"0", "0", 0},
@@ -363,11 +372,12 @@ func TestBadger_DeleteUser(t *testing.T) {
 	}
 }
 
-func TestBadger_DeleteItem(t *testing.T) {
+func TestRedis_DeleteItem(t *testing.T) {
 	// Create database
-	db, err := Open(createTempDir())
+	db, s, err := createRedis()
 	assert.Nil(t, err)
 	defer db.Close()
+	defer s.Close()
 	// Insert ret
 	feedbacks := []Feedback{
 		{"0", "0", 0},
