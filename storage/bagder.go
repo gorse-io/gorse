@@ -641,7 +641,16 @@ func (db *Badger) GetLatest(label string, n int, offset int) ([]RecommendedItem,
 }
 
 func (db *Badger) GetRecommend(userId string, n int, offset int) ([]RecommendedItem, error) {
-	return db.getList(prefixRecommends, userId, n, offset, func(txn *badger.Txn, listId string, item RecommendedItem) bool {
+	return db.getList(prefixRecommends, userId, n, offset, nil)
+}
+
+func insertIgnore(txn *badger.Txn, userId string, itemId string) error {
+	return txn.Set(newKey([]byte(prefixIgnore), []byte(userId), []byte("/"), []byte(itemId)), nil)
+}
+
+func (db *Badger) ConsumeRecommends(userId string, n int) ([]RecommendedItem, error) {
+	// Read all recommendations
+	items, err := db.getList(prefixRecommends, userId, 0, 0, func(txn *badger.Txn, listId string, item RecommendedItem) bool {
 		buf, err := json.Marshal(FeedbackKey{listId, item.ItemId})
 		if err != nil {
 			panic(err)
@@ -657,14 +666,11 @@ func (db *Badger) GetRecommend(userId string, n int, offset int) ([]RecommendedI
 		}
 		return false
 	})
-}
-
-func insertIgnore(txn *badger.Txn, userId string, itemId string) error {
-	return txn.Set(newKey([]byte(prefixIgnore), []byte(userId), []byte("/"), []byte(itemId)), nil)
-}
-
-func (db *Badger) ConsumeRecommends(userId string, n int) ([]RecommendedItem, error) {
-	items, err := db.GetRecommend(userId, n, 0)
+	// Extract n items
+	if items != nil && len(items) > n {
+		items = items[:n]
+	}
+	// Add items to ignore
 	if err == nil {
 		err = db.db.Update(func(txn *badger.Txn) error {
 			for _, item := range items {

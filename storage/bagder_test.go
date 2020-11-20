@@ -378,7 +378,7 @@ func TestBadger_GetRecommends(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Consume rest
-	nItems, err = db.GetRecommend("0", 3, 0)
+	nItems, err = db.ConsumeRecommends("0", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestBadger_GetRecommends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 2, count)
+	assert.Equal(t, 4, count)
 }
 
 func TestBadger_DeleteUser(t *testing.T) {
