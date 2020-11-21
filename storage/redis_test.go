@@ -379,14 +379,14 @@ func TestRedis_DeleteItem(t *testing.T) {
 	defer db.Close()
 	defer s.Close()
 	// Insert ret
-	feedbacks := []Feedback{
+	feedback := []Feedback{
 		{"0", "0", 0},
 		{"1", "0", 3},
 		{"2", "0", 6},
 		{"3", "0", 9},
 		{"4", "0", 12},
 	}
-	if err := db.BatchInsertFeedback(feedbacks); err != nil {
+	if err := db.BatchInsertFeedback(feedback); err != nil {
 		t.Fatal(err)
 	}
 	// Delete item
