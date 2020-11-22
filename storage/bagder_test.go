@@ -16,7 +16,6 @@ package storage
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/thanhpk/randstr"
-	"log"
 	"os"
 	"path"
 	"strconv"
@@ -24,20 +23,33 @@ import (
 	"time"
 )
 
-func createTempDir() string {
-	dir := path.Join(os.TempDir(), randstr.String(16))
-	err := os.Mkdir(dir, 0777)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return dir
+type mockBagder struct {
+	Database
+	DataFolder string
+}
+
+func newMockBagder(t *testing.T) *mockBagder {
+	db := new(mockBagder)
+	// Create folder
+	db.DataFolder = path.Join(os.TempDir(), randstr.String(16))
+	err := os.Mkdir(db.DataFolder, 0777)
+	assert.Nil(t, err)
+	// Create database
+	db.Database, err = Open(bagderPrefix + db.DataFolder)
+	assert.Nil(t, err)
+	return db
+}
+
+func (db mockBagder) Close(t *testing.T) {
+	err := db.Database.Close()
+	assert.Nil(t, err)
+	err = os.RemoveAll(db.DataFolder)
+	assert.Nil(t, err)
 }
 
 func TestBadger_Users(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	// Insert users
 	for i := 0; i < 10; i++ {
 		if err := db.InsertUser(User{UserId: strconv.Itoa(i)}); err != nil {
@@ -68,10 +80,8 @@ func TestBadger_Users(t *testing.T) {
 }
 
 func TestBadger_Feedback(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	// Insert ret
 	feedback := []Feedback{
 		{"0", "0", 0},
@@ -129,10 +139,8 @@ func TestBadger_Feedback(t *testing.T) {
 }
 
 func TestBagder_Item(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	// Items
 	items := []Item{
 		{
@@ -214,10 +222,8 @@ func TestBagder_Item(t *testing.T) {
 }
 
 func TestBadger_Ignore(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	// Insert ignore
 	ignores := []string{"0", "1", "2", "3", "4", "5"}
 	if err := db.InsertUserIgnore("0", ignores); err != nil {
@@ -238,12 +244,10 @@ func TestBadger_Ignore(t *testing.T) {
 }
 
 func TestBadger_Meta(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	// Set meta string
-	if err = db.SetString("1", "2"); err != nil {
+	if err := db.SetString("1", "2"); err != nil {
 		t.Fatal(err)
 	}
 	// Get meta string
@@ -271,10 +275,8 @@ func TestBadger_Meta(t *testing.T) {
 }
 
 func TestBadger_List(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	type ListOperator struct {
 		Set func(label string, items []RecommendedItem) error
 		Get func(label string, n int, offset int) ([]RecommendedItem, error)
@@ -325,10 +327,8 @@ func TestBadger_List(t *testing.T) {
 }
 
 func TestBadger_DeleteUser(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	// Insert ret
 	feedback := []Feedback{
 		{"0", "0", 0},
@@ -364,10 +364,8 @@ func TestBadger_DeleteUser(t *testing.T) {
 }
 
 func TestBadger_DeleteItem(t *testing.T) {
-	// Create database
-	db, err := Open(createTempDir())
-	assert.Nil(t, err)
-	defer db.Close()
+	db := newMockBagder(t)
+	defer db.Close(t)
 	// Insert ret
 	feedbacks := []Feedback{
 		{"0", "0", 0},

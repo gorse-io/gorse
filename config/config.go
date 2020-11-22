@@ -16,8 +16,6 @@ package config
 import (
 	"github.com/BurntSushi/toml"
 	. "github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model"
-	"path"
 )
 
 // Config is the configuration for the engine.
@@ -36,7 +34,7 @@ type ServerConfig struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	Path string `toml:"path"`
+	URL string `toml:"path"`
 }
 
 // RecommendConfig is the configuration for recommendation.
@@ -94,17 +92,17 @@ func (config *ParamsConfig) ToParams(metaData toml.MetaData) Params {
 }
 
 // LoadModel creates model from name and parameters.
-func LoadModel(name string, params Params) model.ModelInterface {
-	switch name {
-	case "bpr":
-		return model.NewBPR(params)
-	case "als":
-		return model.NewALS(params)
-	case "item_pop":
-		return model.NewItemPop(params)
-	}
-	return nil
-}
+//func LoadModel(name string, params Params) model.ModelInterface {
+//	switch name {
+//	case "bpr":
+//		return model.NewBPR(params)
+//	case "als":
+//		return model.NewALS(params)
+//	case "item_pop":
+//		return model.NewItemPop(params)
+//	}
+//	return nil
+//}
 
 // FillDefault fill default values for missing values.
 func (config *Config) FillDefault(meta toml.MetaData) {
@@ -114,9 +112,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("cmd", "port") {
 		config.Server.Port = 8080
 	}
-	if !meta.IsDefined("database", "path") {
-		config.Database.Path = path.Join(model.GorseDir, "database")
-	}
+	//if !meta.IsDefined("database", "path") {
+	//	config.Database.URL = path.Join(model.GorseDir, "database")
+	//}
 	if !meta.IsDefined("recommend", "model") {
 		config.Recommend.Model = "als"
 	}
