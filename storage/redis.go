@@ -21,7 +21,7 @@ import (
 	"strconv"
 )
 
-var ctx = context.Background()
+const count = 10
 
 type Redis struct {
 	client *redis.Client
@@ -32,6 +32,7 @@ func (redis *Redis) Close() error {
 }
 
 func (redis *Redis) InsertItem(item Item) error {
+	var ctx = context.Background()
 	// write item
 	data, err := json.Marshal(item)
 	if err != nil {
@@ -62,6 +63,7 @@ func (redis *Redis) BatchInsertItem(items []Item) error {
 }
 
 func (redis *Redis) DeleteItem(itemId string) error {
+	var ctx = context.Background()
 	if err := redis.client.Del(ctx, prefixItem+itemId).Err(); err != nil {
 		return err
 	}
@@ -70,6 +72,7 @@ func (redis *Redis) DeleteItem(itemId string) error {
 }
 
 func (redis *Redis) GetItem(itemId string) (Item, error) {
+	var ctx = context.Background()
 	data, err := redis.client.Get(ctx, prefixItem+itemId).Result()
 	if err != nil {
 		return Item{}, err
@@ -80,6 +83,7 @@ func (redis *Redis) GetItem(itemId string) (Item, error) {
 }
 
 func (redis *Redis) GetItems(n int, offset int) ([]Item, error) {
+	var ctx = context.Background()
 	if n == 0 {
 		n = (1<<bits.UintSize)/2 - 1
 	}
@@ -89,7 +93,7 @@ func (redis *Redis) GetItems(n int, offset int) ([]Item, error) {
 
 	for {
 		// scan * from zero util cursor is zero
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixItem+"*", 10).Result()
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixItem+"*", count).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -119,6 +123,7 @@ func (redis *Redis) GetItems(n int, offset int) ([]Item, error) {
 }
 
 func (redis *Redis) GetItemFeedback(itemId string) ([]Feedback, error) {
+	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	userIds, err := redis.client.LRange(ctx, prefixItemIndex+itemId, 0, -1).Result()
 	if err != nil {
@@ -137,6 +142,7 @@ func (redis *Redis) GetItemFeedback(itemId string) ([]Feedback, error) {
 
 // GetLabelItems list items by label
 func (redis *Redis) GetLabelItems(label string) ([]Item, error) {
+	var ctx = context.Background()
 	items := make([]Item, 0)
 
 	itemIds, err := redis.client.LRange(ctx, prefixLabelIndex+label, 0, -1).Result()
@@ -155,10 +161,11 @@ func (redis *Redis) GetLabelItems(label string) ([]Item, error) {
 }
 
 func (redis *Redis) GetLabels() ([]string, error) {
+	var ctx = context.Background()
 	labels := make([]string, 0)
 	cursor := uint64(0)
 	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixLabel+"*", 10).Result()
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixLabel+"*", count).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -176,6 +183,7 @@ func (redis *Redis) GetLabels() ([]string, error) {
 }
 
 func (redis *Redis) InsertUser(user User) error {
+	var ctx = context.Background()
 	data, err := json.Marshal(user)
 	if err != nil {
 		return err
@@ -184,6 +192,7 @@ func (redis *Redis) InsertUser(user User) error {
 }
 
 func (redis *Redis) DeleteUser(userId string) error {
+	var ctx = context.Background()
 	if err := redis.client.Del(ctx, prefixUser+userId).Err(); err != nil {
 		return err
 	}
@@ -194,6 +203,7 @@ func (redis *Redis) DeleteUser(userId string) error {
 }
 
 func (redis *Redis) GetUser(userId string) (User, error) {
+	var ctx = context.Background()
 	val, err := redis.client.Get(ctx, prefixUser+userId).Result()
 	if err != nil {
 		return User{}, err
@@ -207,11 +217,14 @@ func (redis *Redis) GetUser(userId string) (User, error) {
 }
 
 func (redis *Redis) GetUsers() ([]User, error) {
+	var ctx = context.Background()
 	users := make([]User, 0)
 	cursor := uint64(0)
 	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixUser+"*", 10).Result()
-
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixUser+"*", count).Result()
+		if err != nil {
+			return nil, err
+		}
 		for _, key := range keys {
 			var user User
 			val, err := redis.client.Get(ctx, key).Result()
@@ -231,6 +244,7 @@ func (redis *Redis) GetUsers() ([]User, error) {
 }
 
 func (redis *Redis) GetUserFeedback(userId string) ([]Feedback, error) {
+	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 
 	// get itemId list by userId
@@ -250,6 +264,7 @@ func (redis *Redis) GetUserFeedback(userId string) ([]Feedback, error) {
 }
 
 func (redis *Redis) getFeedback(userId string, itemId string) (Feedback, error) {
+	var ctx = context.Background()
 	feedbackKey := FeedbackKey{UserId: userId, ItemId: itemId}
 	key, err := json.Marshal(feedbackKey)
 	if err != nil {
@@ -266,6 +281,7 @@ func (redis *Redis) getFeedback(userId string, itemId string) (Feedback, error) 
 }
 
 func (redis *Redis) InsertUserIgnore(userId string, items []string) error {
+	var ctx = context.Background()
 	for item := range items {
 		err := redis.client.RPush(ctx, prefixIgnore+userId, item).Err()
 		if err != nil {
@@ -276,6 +292,7 @@ func (redis *Redis) InsertUserIgnore(userId string, items []string) error {
 }
 
 func (redis *Redis) GetUserIgnore(userId string) ([]string, error) {
+	var ctx = context.Background()
 	ignore, err := redis.client.LRange(ctx, prefixIgnore+userId, 0, -1).Result()
 	if err != nil {
 		return nil, err
@@ -284,6 +301,7 @@ func (redis *Redis) GetUserIgnore(userId string) ([]string, error) {
 }
 
 func (redis *Redis) CountUserIgnore(userId string) (int, error) {
+	var ctx = context.Background()
 	len, err := redis.client.LLen(ctx, prefixIgnore+userId).Result()
 	if err != nil {
 		return -1, err
@@ -292,12 +310,15 @@ func (redis *Redis) CountUserIgnore(userId string) (int, error) {
 }
 
 func (redis *Redis) InsertFeedback(feedback Feedback) error {
+	var ctx = context.Background()
 	key, err := json.Marshal(FeedbackKey{feedback.UserId, feedback.ItemId})
-
 	if err != nil {
 		return err
 	}
 	val, err := json.Marshal(feedback)
+	if err != nil {
+		return err
+	}
 	// insert feedback
 	err = redis.client.Set(ctx, prefixFeedback+string(key), val, 0).Err()
 	if err != nil {
@@ -332,10 +353,14 @@ func (redis *Redis) BatchInsertFeedback(feedback []Feedback) error {
 }
 
 func (redis *Redis) GetFeedback() ([]Feedback, error) {
+	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	cursor := uint64(0)
 	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixFeedback+"*", 10).Result()
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixFeedback+"*", count).Result()
+		if err != nil {
+			return nil, err
+		}
 		for _, key := range keys {
 			val, err := redis.client.Get(ctx, key).Result()
 			if err != nil {
@@ -355,6 +380,7 @@ func (redis *Redis) GetFeedback() ([]Feedback, error) {
 }
 
 func (redis *Redis) GetString(name string) (string, error) {
+	var ctx = context.Background()
 	val, err := redis.client.Get(ctx, prefixMeta+name).Result()
 	if err != nil {
 		return string(""), err
@@ -363,6 +389,7 @@ func (redis *Redis) GetString(name string) (string, error) {
 }
 
 func (redis *Redis) SetString(name string, val string) error {
+	var ctx = context.Background()
 	if err := redis.client.Set(ctx, prefixMeta+name, val, 0).Err(); err != nil {
 		return err
 	}
@@ -370,18 +397,19 @@ func (redis *Redis) SetString(name string, val string) error {
 }
 
 func (redis *Redis) GetInt(name string) (int, error) {
-	val, err := redis.client.Get(ctx, prefixMeta+name).Result()
+	val, err := redis.GetString(name)
 	if err != nil {
-		return int(-1), err
+		return -1, nil
 	}
 	buf, err := strconv.Atoi(val)
 	if err != nil {
-		return int(-1), err
+		return -1, err
 	}
 	return buf, err
 }
 
 func (redis *Redis) SetInt(name string, val int) error {
+	var ctx = context.Background()
 	if err := redis.client.Set(ctx, prefixMeta+name, val, 0).Err(); err != nil {
 		return err
 	}
@@ -421,12 +449,13 @@ func (redis *Redis) GetRecommend(userId string, n int, offset int) ([]Recommende
 }
 
 func (redis *Redis) SetList(prefix string, listId string, items []RecommendedItem) error {
-	for i, item := range items {
+	var ctx = context.Background()
+	for _, item := range items {
 		buf, err := json.Marshal(item)
 		if err != nil {
 			return err
 		}
-		err = redis.client.Set(ctx, prefix+listId+"/"+strconv.Itoa(i), buf, 0).Err()
+		err = redis.client.RPush(ctx, prefix+listId, buf).Err()
 		if err != nil {
 			return err
 		}
@@ -435,37 +464,28 @@ func (redis *Redis) SetList(prefix string, listId string, items []RecommendedIte
 }
 
 func (redis *Redis) GetList(prefix string, listId string, n int, offset int) ([]RecommendedItem, error) {
+	var ctx = context.Background()
 	recommendItems := make([]RecommendedItem, 0)
 	if n == 0 {
-		n = (1<<bits.UintSize)/2 - 1
-	}
-	pos := 0
-	cursor := uint64(0)
-	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefix+listId+"/*", 10).Result()
-		if pos < offset && cursor != uint64(0) {
-			pos += len(keys)
-			continue
-		}
+		val, err := redis.client.LLen(ctx, prefix+listId).Result()
 		if err != nil {
 			return nil, err
 		}
-		for _, key := range keys {
-			if pos >= offset && len(recommendItems) < n {
-				val, err := redis.client.Get(ctx, key).Result()
-				if err != nil {
-					return nil, err
-				}
-				var buf RecommendedItem
-				if err = json.Unmarshal([]byte(val), &buf); err != nil {
-					return nil, err
-				}
-				recommendItems = append(recommendItems, buf)
-			}
-			pos++
-		}
-		if cursor == uint64(0) {
-			return recommendItems, err
-		}
+		n = int(val) - offset
 	}
+	data, err := redis.client.LRange(ctx, prefix+listId, int64(offset), int64(n+offset-1)).Result()
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range data {
+		var recommendItem RecommendedItem
+		err := json.Unmarshal([]byte(item), &recommendItem)
+		if err != nil {
+			return nil, err
+		}
+		recommendItems = append(recommendItems, recommendItem)
+	}
+	return recommendItems, err
 }
