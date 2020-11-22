@@ -22,25 +22,30 @@ import (
 	"time"
 )
 
-func createRedis() (Database, *miniredis.Miniredis, error) {
-	s, err := miniredis.Run()
-	if err != nil {
-		return nil, nil, err
-	}
-	c := redis.NewClient(&redis.Options{
-		Addr:     s.Addr(),
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-	return &Redis{client: c}, s, nil
+type mockRedis struct {
+	Database
+	server *miniredis.Miniredis
+}
+
+func newMockRedis(t *testing.T) *mockRedis {
+	var err error
+	db := new(mockRedis)
+	db.server, err = miniredis.Run()
+	assert.Nil(t, err)
+	db.Database, err = Open(redisPrefix + db.server.Addr())
+	assert.Nil(t, err)
+	return db
+}
+
+func (db *mockRedis) Close(t *testing.T) {
+	err := db.Database.Close()
+	assert.Nil(t, err)
+	db.server.Close()
 }
 
 func TestRedis_Users(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	// Insert users
 	for i := 0; i < 10; i++ {
 		if err := db.InsertUser(User{UserId: strconv.Itoa(i)}); err != nil {
@@ -71,11 +76,8 @@ func TestRedis_Users(t *testing.T) {
 }
 
 func TestRedis_Feedback(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	// Insert ret
 	feedback := []Feedback{
 		{"0", "0", 0},
@@ -133,11 +135,8 @@ func TestRedis_Feedback(t *testing.T) {
 }
 
 func TestRedis_Item(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	// Items
 	items := []Item{
 		{
@@ -219,11 +218,8 @@ func TestRedis_Item(t *testing.T) {
 }
 
 func TestRedis_Ignore(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	// Insert ignore
 	ignores := []string{"0", "1", "2", "3", "4", "5"}
 	if err := db.InsertUserIgnore("0", ignores); err != nil {
@@ -244,11 +240,8 @@ func TestRedis_Ignore(t *testing.T) {
 }
 
 func TestRedis_Meta(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	// Set meta string
 	if err = db.SetString("1", "2"); err != nil {
 		t.Fatal(err)
@@ -278,11 +271,8 @@ func TestRedis_Meta(t *testing.T) {
 }
 
 func TestRedis_List(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	type ListOperator struct {
 		Set func(label string, items []RecommendedItem) error
 		Get func(label string, n int, offset int) ([]RecommendedItem, error)
@@ -333,11 +323,8 @@ func TestRedis_List(t *testing.T) {
 }
 
 func TestRedis_DeleteUser(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	// Insert ret
 	feedback := []Feedback{
 		{"0", "0", 0},
@@ -373,11 +360,8 @@ func TestRedis_DeleteUser(t *testing.T) {
 }
 
 func TestRedis_DeleteItem(t *testing.T) {
-	// Create database
-	db, s, err := createRedis()
-	assert.Nil(t, err)
-	defer db.Close()
-	defer s.Close()
+	db := newMockRedis(t)
+	defer db.Close(t)
 	// Insert ret
 	feedbacks := []Feedback{
 		{"0", "0", 0},
