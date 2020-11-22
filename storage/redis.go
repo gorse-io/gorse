@@ -21,7 +21,7 @@ import (
 	"strconv"
 )
 
-const count = 10
+const batchSize = 2
 
 type Redis struct {
 	client *redis.Client
@@ -93,7 +93,7 @@ func (redis *Redis) GetItems(n int, offset int) ([]Item, error) {
 
 	for {
 		// scan * from zero util cursor is zero
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixItem+"*", count).Result()
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixItem+"*", batchSize).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +165,7 @@ func (redis *Redis) GetLabels() ([]string, error) {
 	labels := make([]string, 0)
 	cursor := uint64(0)
 	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixLabel+"*", count).Result()
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixLabel+"*", batchSize).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +221,7 @@ func (redis *Redis) GetUsers() ([]User, error) {
 	users := make([]User, 0)
 	cursor := uint64(0)
 	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixUser+"*", count).Result()
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixUser+"*", batchSize).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -357,7 +357,7 @@ func (redis *Redis) GetFeedback() ([]Feedback, error) {
 	feedback := make([]Feedback, 0)
 	cursor := uint64(0)
 	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixFeedback+"*", count).Result()
+		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixFeedback+"*", batchSize).Result()
 		if err != nil {
 			return nil, err
 		}
