@@ -15,6 +15,9 @@ package storage
 
 import (
 	"github.com/dgraph-io/badger/v2"
+	"github.com/go-redis/redis/v8"
+	"github.com/pkg/errors"
+	"strings"
 	"time"
 )
 
@@ -84,12 +87,26 @@ type Database interface {
 	GetRecommend(userId string, n int, offset int) ([]RecommendedItem, error)
 }
 
+const bagderPrefix = "badger://"
+const redisPrefix = "redis://"
+
 // Open a connection to a database.
 func Open(path string) (Database, error) {
 	var err error
-	database := new(Badger)
-	if database.db, err = badger.Open(badger.DefaultOptions(path)); err != nil {
-		return nil, err
+	if strings.HasPrefix(path, bagderPrefix) {
+		dataFolder := path[len(bagderPrefix):]
+		database := new(Badger)
+		if database.db, err = badger.Open(badger.DefaultOptions(dataFolder)); err != nil {
+			return nil, err
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, redisPrefix) {
+		addr := path[len(redisPrefix):]
+		database := new(Redis)
+		if database.client = redis.NewClient(&redis.Options{Addr: addr}); err != nil {
+			return nil, err
+		}
+		return database, nil
 	}
-	return database, nil
+	return nil, errors.Errorf("Unknown database: %s", path)
 }

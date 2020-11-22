@@ -33,7 +33,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", config.Server.Host)
 	assert.Equal(t, 8080, config.Server.Port)
 	// database configuration
-	assert.Equal(t, "database", config.Database.Path)
+	assert.Equal(t, "database", config.Database.URL)
 	// recommend configuration
 	assert.Equal(t, "bpr", config.Recommend.Model)
 	assert.Equal(t, "tag", config.Recommend.Similarity)
@@ -86,7 +86,7 @@ func TestConfig_FillDefault(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", config.Server.Host)
 	assert.Equal(t, 8080, config.Server.Port)
 	// database configuration
-	assert.Equal(t, path.Join(model.GorseDir, "database"), config.Database.Path)
+	assert.Equal(t, path.Join(model.GorseDir, "database"), config.Database.URL)
 	// recommend configuration
 	assert.Equal(t, "als", config.Recommend.Model)
 	assert.Equal(t, "feedback", config.Recommend.Similarity)

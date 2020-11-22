@@ -177,7 +177,7 @@ func (s *Server) SetupWebService() {
 
 func (s *Server) Serve() {
 	s.SetupWebService()
-	log.Printf("start a cmd at %v\n", fmt.Sprintf("%s:%d", s.Config.Server.Host, s.Config.Server.Port))
+	log.Printf("start gorse server at %v\n", fmt.Sprintf("%s:%d", s.Config.Server.Host, s.Config.Server.Port))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.Config.Server.Host, s.Config.Server.Port), nil))
 }
 
@@ -354,23 +354,8 @@ func (s *Server) getRecommends(request *restful.Request, response *restful.Respo
 }
 
 func (s *Server) consumeRecommends(request *restful.Request, response *restful.Response) {
-	// Get user id
-	userId := request.PathParameter("user-id")
-	// Get the number and offset
-	var number int
-	var err error
-	if number, err = parseInt(request, "number", 10); err != nil {
-		badRequest(response, err)
-		return
-	}
-	// Get recommended items
-	items, err := s.DB.ConsumeRecommends(userId, number)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	// Send result
-	json(response, items)
+	// TODO
+	badRequest(response, fmt.Errorf("not implemented"))
 }
 
 // Change contains information of changes after insert.
