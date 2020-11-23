@@ -14,9 +14,11 @@
 package storage
 
 import (
+	"database/sql"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
+	_ "github.com/proullon/ramsql/driver"
 	"strings"
 	"time"
 )
@@ -47,6 +49,7 @@ type RecommendedItem struct {
 }
 
 type Database interface {
+	Init() error
 	Close() error
 	// items
 	InsertItem(item Item) error
@@ -89,6 +92,7 @@ type Database interface {
 
 const bagderPrefix = "badger://"
 const redisPrefix = "redis://"
+const ramSQLPrefix = "ramsql://"
 
 // Open a connection to a database.
 func Open(path string) (Database, error) {
@@ -103,7 +107,12 @@ func Open(path string) (Database, error) {
 	} else if strings.HasPrefix(path, redisPrefix) {
 		addr := path[len(redisPrefix):]
 		database := new(Redis)
-		if database.client = redis.NewClient(&redis.Options{Addr: addr}); err != nil {
+		database.client = redis.NewClient(&redis.Options{Addr: addr})
+		return database, nil
+	} else if strings.HasPrefix(path, ramSQLPrefix) {
+		name := path[len(redisPrefix):]
+		database := new(SQLDatabase)
+		if database.db, err = sql.Open("ramsql", name); err != nil {
 			return nil, err
 		}
 		return database, nil
