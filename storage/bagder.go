@@ -62,6 +62,10 @@ type Badger struct {
 	db *badger.DB
 }
 
+func (db *Badger) Init() error {
+	return nil
+}
+
 // Close the connection to the database.
 func (db *Badger) Close() error {
 	return db.db.Close()

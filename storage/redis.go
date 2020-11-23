@@ -27,6 +27,10 @@ type Redis struct {
 	client *redis.Client
 }
 
+func (redis *Redis) Init() error {
+	return nil
+}
+
 func (redis *Redis) Close() error {
 	return redis.client.Close()
 }
