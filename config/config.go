@@ -20,7 +20,7 @@ import (
 
 // Config is the configuration for the engine.
 type Config struct {
-	Server    ServerConfig    `toml:"cmd"`
+	Server    ServerConfig    `toml:"server"`
 	Database  DatabaseConfig  `toml:"database"`
 	Params    ParamsConfig    `toml:"params"`
 	Recommend RecommendConfig `toml:"recommend"`
@@ -106,10 +106,10 @@ func (config *ParamsConfig) ToParams(metaData toml.MetaData) Params {
 
 // FillDefault fill default values for missing values.
 func (config *Config) FillDefault(meta toml.MetaData) {
-	if !meta.IsDefined("cmd", "host") {
+	if !meta.IsDefined("server", "host") {
 		config.Server.Host = "127.0.0.1"
 	}
-	if !meta.IsDefined("cmd", "port") {
+	if !meta.IsDefined("server", "port") {
 		config.Server.Port = 8080
 	}
 	//if !meta.IsDefined("database", "path") {
@@ -145,12 +145,12 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 }
 
 // LoadConfig loads configuration from toml file.
-func LoadConfig(path string) (Config, toml.MetaData, error) {
+func LoadConfig(path string) (*Config, toml.MetaData, error) {
 	var conf Config
 	metaData, err := toml.DecodeFile(path, &conf)
 	if err != nil {
-		return Config{}, toml.MetaData{}, err
+		return nil, toml.MetaData{}, err
 	}
 	conf.FillDefault(metaData)
-	return conf, metaData, nil
+	return &conf, metaData, nil
 }
