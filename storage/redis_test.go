@@ -15,7 +15,6 @@ package storage
 
 import (
 	"github.com/alicebob/miniredis/v2"
-	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
@@ -99,12 +98,11 @@ func TestRedis_Feedback(t *testing.T) {
 	}
 	assert.Equal(t, feedback, feedback)
 	// Get items
-	if items, err := db.GetItems(0, 0); err != nil {
-		t.Fatal(err)
-	} else {
-		for i, item := range items {
-			assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
-		}
+	items, err := db.GetItems(0, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(items))
+	for i, item := range items {
+		assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
 	}
 	// Get users
 	if users, err := db.GetUsers(); err != nil {
@@ -243,7 +241,7 @@ func TestRedis_Meta(t *testing.T) {
 	db := newMockRedis(t)
 	defer db.Close(t)
 	// Set meta string
-	if err = db.SetString("1", "2"); err != nil {
+	if err := db.SetString("1", "2"); err != nil {
 		t.Fatal(err)
 	}
 	// Get meta string
