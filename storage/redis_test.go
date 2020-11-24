@@ -91,6 +91,13 @@ func TestRedis_Feedback(t *testing.T) {
 	if err := db.BatchInsertFeedback(feedback[1:]); err != nil {
 		t.Fatal(err)
 	}
+	// idempotent
+	if err := db.InsertFeedback(feedback[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.BatchInsertFeedback(feedback[1:]); err != nil {
+		t.Fatal(err)
+	}
 	// Get feedback
 	ret, err := db.GetFeedback()
 	if err != nil {
@@ -220,6 +227,10 @@ func TestRedis_Ignore(t *testing.T) {
 	defer db.Close(t)
 	// Insert ignore
 	ignores := []string{"0", "1", "2", "3", "4", "5"}
+	if err := db.InsertUserIgnore("0", ignores); err != nil {
+		t.Fatal(err)
+	}
+	// idempotent
 	if err := db.InsertUserIgnore("0", ignores); err != nil {
 		t.Fatal(err)
 	}
