@@ -103,12 +103,11 @@ func TestBadger_Feedback(t *testing.T) {
 	}
 	assert.Equal(t, feedback, feedback)
 	// Get items
-	if items, err := db.GetItems(0, 0); err != nil {
-		t.Fatal(err)
-	} else {
-		for i, item := range items {
-			assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
-		}
+	items, err := db.GetItems(0, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(items))
+	for i, item := range items {
+		assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
 	}
 	// Get users
 	if users, err := db.GetUsers(); err != nil {

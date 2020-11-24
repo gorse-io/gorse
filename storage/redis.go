@@ -57,7 +57,9 @@ func (redis *Redis) InsertItem(item Item) error {
 
 func (redis *Redis) BatchInsertItem(items []Item) error {
 	for _, item := range items {
-		redis.InsertItem(item)
+		if err := redis.InsertItem(item); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -334,6 +336,19 @@ func (redis *Redis) InsertFeedback(feedback Feedback) error {
 	if err = redis.client.Set(ctx, prefixUser+feedback.UserId, val, 0).Err(); err != nil {
 		return err
 	}
+	// Insert item
+	if exist, err := redis.client.Exists(ctx, prefixItem+feedback.ItemId).Result(); err != nil {
+		return err
+	} else if exist == 0 {
+		item := Item{ItemId: feedback.ItemId}
+		data, err := json.Marshal(item)
+		if err != nil {
+			return err
+		}
+		if err = redis.client.Set(ctx, prefixItem+feedback.ItemId, data, 0).Err(); err != nil {
+			return err
+		}
+	}
 	// insert user index
 	if err = redis.client.RPush(ctx, prefixUserIndex+feedback.UserId, feedback.ItemId).Err(); err != nil {
 		return err
@@ -347,7 +362,9 @@ func (redis *Redis) InsertFeedback(feedback Feedback) error {
 
 func (redis *Redis) BatchInsertFeedback(feedback []Feedback) error {
 	for _, temp := range feedback {
-		redis.InsertFeedback(temp)
+		if err := redis.InsertFeedback(temp); err != nil {
+			return err
+		}
 	}
 	return nil
 }
