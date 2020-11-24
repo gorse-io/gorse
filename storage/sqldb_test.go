@@ -88,6 +88,13 @@ func TestSQLDatabase_Feedback(t *testing.T) {
 	if err := db.BatchInsertFeedback(feedback[1:]); err != nil {
 		t.Fatal(err)
 	}
+	// idempotent
+	if err := db.InsertFeedback(feedback[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.BatchInsertFeedback(feedback[1:]); err != nil {
+		t.Fatal(err)
+	}
 	// Get feedback
 	ret, err := db.GetFeedback()
 	if err != nil {
@@ -95,12 +102,11 @@ func TestSQLDatabase_Feedback(t *testing.T) {
 	}
 	assert.Equal(t, feedback, feedback)
 	// Get items
-	if items, err := db.GetItems(0, 0); err != nil {
-		t.Fatal(err)
-	} else {
-		for i, item := range items {
-			assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
-		}
+	items, err := db.GetItems(0, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, 5, len(items))
+	for i, item := range items {
+		assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
 	}
 	// Get users
 	if users, err := db.GetUsers(); err != nil {
@@ -218,6 +224,10 @@ func TestSQLDatabase_Ignore(t *testing.T) {
 	defer db.Close(t)
 	// Insert ignore
 	ignores := []string{"0", "1", "2", "3", "4", "5"}
+	if err := db.InsertUserIgnore("0", ignores); err != nil {
+		t.Fatal(err)
+	}
+	// idempotent
 	if err := db.InsertUserIgnore("0", ignores); err != nil {
 		t.Fatal(err)
 	}
