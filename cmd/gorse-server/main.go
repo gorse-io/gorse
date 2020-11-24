@@ -42,7 +42,7 @@ var serverCommand = &cobra.Command{
 		}
 		// Start server
 		s := server.Server{
-			Config:   &conf,
+			Config:   conf,
 			MetaData: &meta,
 		}
 		if s.DB, err = storage.Open(conf.Database.URL); err != nil {
