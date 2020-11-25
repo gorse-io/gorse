@@ -35,11 +35,16 @@ type User struct {
 	UserId string
 }
 
+// FeedbackKey identifies feedback.
+type FeedbackKey struct {
+	UserId string
+	ItemId string
+}
+
 // Feedback stores feedback.
 type Feedback struct {
 	UserId string
 	ItemId string
-	Rating float64
 }
 
 // RecommendedItem is the structure for a recommended item.

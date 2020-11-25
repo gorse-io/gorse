@@ -86,11 +86,11 @@ func testUsers(t *testing.T, db Database) {
 func testFeedback(t *testing.T, db Database) {
 	// Insert ret
 	feedback := []Feedback{
-		{"0", "0", 0},
-		{"1", "2", 3},
-		{"2", "4", 6},
-		{"3", "6", 9},
-		{"4", "8", 12},
+		{"0", "0"},
+		{"1", "2"},
+		{"2", "4"},
+		{"3", "6"},
+		{"4", "8"},
 	}
 	if err := db.InsertFeedback(feedback[0]); err != nil {
 		t.Fatal(err)
@@ -126,7 +126,6 @@ func testFeedback(t *testing.T, db Database) {
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
-	assert.Equal(t, float64(6), ret[0].Rating)
 	// Get ret by item
 	ret, err = db.GetItemFeedback("4")
 	if err != nil {
@@ -135,7 +134,6 @@ func testFeedback(t *testing.T, db Database) {
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
-	assert.Equal(t, float64(6), ret[0].Rating)
 }
 
 func testItems(t *testing.T, db Database) {
@@ -317,11 +315,11 @@ func testList(t *testing.T, db Database) {
 func testDeleteUser(t *testing.T, db Database) {
 	// Insert ret
 	feedback := []Feedback{
-		{"0", "0", 0},
-		{"0", "2", 3},
-		{"0", "4", 6},
-		{"0", "6", 9},
-		{"0", "8", 12},
+		{"0", "0"},
+		{"0", "2"},
+		{"0", "4"},
+		{"0", "6"},
+		{"0", "8"},
 	}
 	if err := db.BatchInsertFeedback(feedback); err != nil {
 		t.Fatal(err)
@@ -352,11 +350,11 @@ func testDeleteUser(t *testing.T, db Database) {
 func testDeleteItem(t *testing.T, db Database) {
 	// Insert ret
 	feedbacks := []Feedback{
-		{"0", "0", 0},
-		{"1", "0", 3},
-		{"2", "0", 6},
-		{"3", "0", 9},
-		{"4", "0", 12},
+		{"0", "0"},
+		{"1", "0"},
+		{"2", "0"},
+		{"3", "0"},
+		{"4", "0"},
 	}
 	if err := db.BatchInsertFeedback(feedbacks); err != nil {
 		t.Fatal(err)
