@@ -56,7 +56,7 @@ type Database interface {
 	BatchInsertItem(items []Item) error
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
-	GetItems(n int, offset int) ([]Item, error)
+	GetItems(cursor string, n int) (string, []Item, error)
 	GetItemFeedback(itemId string) ([]Feedback, error)
 	// label
 	GetLabelItems(label string) ([]Item, error)
@@ -65,7 +65,7 @@ type Database interface {
 	InsertUser(user User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
-	GetUsers() ([]User, error)
+	GetUsers(cursor string, n int) (string, []User, error)
 	GetUserFeedback(userId string) ([]Feedback, error)
 	InsertUserIgnore(userId string, items []string) error
 	GetUserIgnore(userId string) ([]string, error)
@@ -73,7 +73,7 @@ type Database interface {
 	// feedback
 	InsertFeedback(feedback Feedback) error
 	BatchInsertFeedback(feedback []Feedback) error
-	GetFeedback() ([]Feedback, error)
+	GetFeedback(cursor string, n int) (string, []Feedback, error)
 	// metadata
 	GetString(name string) (string, error)
 	SetString(name string, val string) error
