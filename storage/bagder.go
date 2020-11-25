@@ -71,12 +71,6 @@ func (db *Badger) Close() error {
 	return db.db.Close()
 }
 
-// FeedbackKey identifies feedback.
-type FeedbackKey struct {
-	UserId string
-	ItemId string
-}
-
 // txnInsertFeedback inserts a feedback into the bucket.
 func txnInsertFeedback(txn *badger.Txn, feedback Feedback) error {
 	// Marshal key
