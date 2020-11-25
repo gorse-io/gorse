@@ -102,7 +102,7 @@ func (db *SQLDatabase) GetItem(itemId string) (Item, error) {
 	panic("not implemented")
 }
 
-func (db *SQLDatabase) GetItems(n int, offset int) ([]Item, error) {
+func (db *SQLDatabase) GetItems(cursor string, n int) (string, []Item, error) {
 	panic("not implemented")
 }
 
@@ -130,7 +130,7 @@ func (db *SQLDatabase) GetUser(userId string) (User, error) {
 	panic("not implemented")
 }
 
-func (db *SQLDatabase) GetUsers() ([]User, error) {
+func (db *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	panic("not implemented")
 }
 
@@ -157,7 +157,7 @@ func (db *SQLDatabase) BatchInsertFeedback(feedback []Feedback) error {
 	panic("not implemented")
 }
 
-func (db *SQLDatabase) GetFeedback() ([]Feedback, error) {
+func (db *SQLDatabase) GetFeedback(cursor string, n int) (string, []Feedback, error) {
 	panic("not implemented")
 }
 

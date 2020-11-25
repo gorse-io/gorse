@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
-	"math/bits"
 	"strconv"
 )
 
@@ -88,44 +87,41 @@ func (redis *Redis) GetItem(itemId string) (Item, error) {
 	return item, err
 }
 
-func (redis *Redis) GetItems(n int, offset int) ([]Item, error) {
+func (redis *Redis) GetItems(cursor string, n int) (string, []Item, error) {
 	var ctx = context.Background()
-	if n == 0 {
-		n = (1<<bits.UintSize)/2 - 1
-	}
-	pos := 0
-	items := make([]Item, 0)
-	cursor := uint64(0)
-
-	for {
-		// scan * from zero util cursor is zero
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixItem+"*", batchSize).Result()
+	var err error
+	cursorNum := uint64(0)
+	if len(cursor) > 0 {
+		cursorNum, err = strconv.ParseUint(cursor, 10, 64)
 		if err != nil {
-			return nil, err
-		}
-		if pos+len(keys) < offset && cursor != uint64(0) {
-			pos += len(keys)
-			continue
-		}
-		for _, key := range keys {
-			if len(items) < n && pos >= offset {
-				data, err := redis.client.Get(ctx, key).Result()
-				if err != nil {
-					return nil, err
-				}
-				var item Item
-				err = json.Unmarshal([]byte(data), &item)
-				if err != nil {
-					return nil, err
-				}
-				items = append(items, item)
-			}
-			pos++
-		}
-		if cursor == uint64(0) {
-			return items, nil
+			return "", nil, err
 		}
 	}
+	items := make([]Item, 0)
+	// scan * from zero util cursor is zero
+	var keys []string
+	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixItem+"*", batchSize).Result()
+	if err != nil {
+		return "", nil, err
+	}
+	for _, key := range keys {
+		data, err := redis.client.Get(ctx, key).Result()
+		if err != nil {
+			return "", nil, err
+		}
+		var item Item
+		err = json.Unmarshal([]byte(data), &item)
+		if err != nil {
+			return "", nil, err
+		}
+		items = append(items, item)
+	}
+	if cursorNum == 0 {
+		cursor = ""
+	} else {
+		cursor = strconv.Itoa(int(cursorNum))
+	}
+	return cursor, items, nil
 }
 
 func (redis *Redis) GetItemFeedback(itemId string) ([]Feedback, error) {
@@ -222,31 +218,40 @@ func (redis *Redis) GetUser(userId string) (User, error) {
 	return user, err
 }
 
-func (redis *Redis) GetUsers() ([]User, error) {
+func (redis *Redis) GetUsers(cursor string, n int) (string, []User, error) {
 	var ctx = context.Background()
-	users := make([]User, 0)
-	cursor := uint64(0)
-	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixUser+"*", batchSize).Result()
+	var err error
+	cursorNum := uint64(0)
+	if len(cursor) > 0 {
+		cursorNum, err = strconv.ParseUint(cursor, 10, 64)
 		if err != nil {
-			return nil, err
-		}
-		for _, key := range keys {
-			var user User
-			val, err := redis.client.Get(ctx, key).Result()
-			if err != nil {
-				return nil, err
-			}
-			err = json.Unmarshal([]byte(val), &user)
-			if err != nil {
-				return nil, err
-			}
-			users = append(users, user)
-		}
-		if cursor == uint64(0) {
-			return users, err
+			return "", nil, err
 		}
 	}
+	users := make([]User, 0)
+	var keys []string
+	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixUser+"*", batchSize).Result()
+	if err != nil {
+		return "", nil, err
+	}
+	for _, key := range keys {
+		var user User
+		val, err := redis.client.Get(ctx, key).Result()
+		if err != nil {
+			return "", nil, err
+		}
+		err = json.Unmarshal([]byte(val), &user)
+		if err != nil {
+			return "", nil, err
+		}
+		users = append(users, user)
+	}
+	if cursorNum == 0 {
+		cursor = ""
+	} else {
+		cursor = strconv.Itoa(int(cursorNum))
+	}
+	return cursor, users, nil
 }
 
 func (redis *Redis) GetUserFeedback(userId string) ([]Feedback, error) {
@@ -373,31 +378,40 @@ func (redis *Redis) BatchInsertFeedback(feedback []Feedback) error {
 	return nil
 }
 
-func (redis *Redis) GetFeedback() ([]Feedback, error) {
+func (redis *Redis) GetFeedback(cursor string, n int) (string, []Feedback, error) {
 	var ctx = context.Background()
-	feedback := make([]Feedback, 0)
-	cursor := uint64(0)
-	for {
-		keys, cursor, err := redis.client.Scan(ctx, cursor, prefixFeedback+"*", batchSize).Result()
+	var err error
+	cursorNum := uint64(0)
+	if len(cursor) > 0 {
+		cursorNum, err = strconv.ParseUint(cursor, 10, 64)
 		if err != nil {
-			return nil, err
-		}
-		for _, key := range keys {
-			val, err := redis.client.Get(ctx, key).Result()
-			if err != nil {
-				return nil, err
-			}
-			var data Feedback
-			err = json.Unmarshal([]byte(val), &data)
-			if err != nil {
-				return nil, err
-			}
-			feedback = append(feedback, data)
-		}
-		if cursor == uint64(0) {
-			return feedback, err
+			return "", nil, err
 		}
 	}
+	feedback := make([]Feedback, 0)
+	var keys []string
+	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixFeedback+"*", batchSize).Result()
+	if err != nil {
+		return "", nil, err
+	}
+	for _, key := range keys {
+		val, err := redis.client.Get(ctx, key).Result()
+		if err != nil {
+			return "", nil, err
+		}
+		var data Feedback
+		err = json.Unmarshal([]byte(val), &data)
+		if err != nil {
+			return "", nil, err
+		}
+		feedback = append(feedback, data)
+	}
+	if cursorNum == 0 {
+		cursor = ""
+	} else {
+		cursor = strconv.Itoa(int(cursorNum))
+	}
+	return cursor, feedback, nil
 }
 
 func (redis *Redis) GetString(name string) (string, error) {
