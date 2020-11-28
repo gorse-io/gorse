@@ -21,13 +21,13 @@ import (
 	"testing"
 )
 
-type mockBagder struct {
+type mockBadger struct {
 	Database
 	DataFolder string
 }
 
-func newMockBagder(t *testing.T) *mockBagder {
-	db := new(mockBagder)
+func newMockBadger(t *testing.T) *mockBadger {
+	db := new(mockBadger)
 	// Create folder
 	db.DataFolder = path.Join(os.TempDir(), randstr.String(16))
 	err := os.Mkdir(db.DataFolder, 0777)
@@ -38,7 +38,7 @@ func newMockBagder(t *testing.T) *mockBagder {
 	return db
 }
 
-func (db mockBagder) Close(t *testing.T) {
+func (db mockBadger) Close(t *testing.T) {
 	err := db.Database.Close()
 	assert.Nil(t, err)
 	err = os.RemoveAll(db.DataFolder)
@@ -46,49 +46,49 @@ func (db mockBagder) Close(t *testing.T) {
 }
 
 func TestBadger_Users(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testUsers(t, db.Database)
 }
 
 func TestBadger_Feedback(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testFeedback(t, db.Database)
 }
 
 func TestBagder_Item(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testItems(t, db.Database)
 }
 
 func TestBadger_Ignore(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testIgnore(t, db.Database)
 }
 
 func TestBadger_Meta(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testMeta(t, db.Database)
 }
 
 func TestBadger_List(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testList(t, db.Database)
 }
 
 func TestBadger_DeleteUser(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testDeleteUser(t, db.Database)
 }
 
 func TestBadger_DeleteItem(t *testing.T) {
-	db := newMockBagder(t)
+	db := newMockBadger(t)
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
