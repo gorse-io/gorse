@@ -15,7 +15,6 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
-	. "github.com/zhenghaoz/gorse/base"
 )
 
 // Config is the configuration for the engine.
@@ -28,8 +27,20 @@ type Config struct {
 
 // ServerConfig is the configuration for the cmd.
 type ServerConfig struct {
-	Host string `toml:"host"`
-	Port int    `toml:"port"`
+	Host     string `toml:"host"`
+	Port     int    `toml:"port"`
+	DefaultN int
+}
+
+func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
+	if config == nil {
+		return &ServerConfig{
+			Host:     "127.0.0.1",
+			Port:     6381,
+			DefaultN: 100,
+		}
+	}
+	return config
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -65,31 +76,31 @@ type ParamsConfig struct {
 }
 
 // ToParams convert a configuration for hyper-parameters into hyper-parameters.
-func (config *ParamsConfig) ToParams(metaData toml.MetaData) Params {
-	type ParamValues struct {
-		name  string
-		key   ParamName
-		value interface{}
-	}
-	values := []ParamValues{
-		{"lr", Lr, config.Lr},
-		{"reg", Reg, config.Reg},
-		{"n_epochs", NEpochs, config.NEpochs},
-		{"n_factors", NFactors, config.NFactors},
-		{"random_state", RandomState, config.RandomState},
-		{"use_bias", UseBias, config.UseBias},
-		{"init_mean", InitMean, config.InitMean},
-		{"init_std", InitStdDev, config.InitStdDev},
-		{"alpha", Alpha, config.Alpha},
-	}
-	params := Params{}
-	for _, v := range values {
-		if metaData.IsDefined("params", v.name) {
-			params[v.key] = v.value
-		}
-	}
-	return params
-}
+//func (config *ParamsConfig) ToParams(metaData toml.MetaData) Params {
+//	type ParamValues struct {
+//		name  string
+//		key   ParamName
+//		value interface{}
+//	}
+//	values := []ParamValues{
+//		{"lr", Lr, config.Lr},
+//		{"reg", Reg, config.Reg},
+//		{"n_epochs", NEpochs, config.NEpochs},
+//		{"n_factors", NFactors, config.NFactors},
+//		{"random_state", RandomState, config.RandomState},
+//		{"use_bias", UseBias, config.UseBias},
+//		{"init_mean", InitMean, config.InitMean},
+//		{"init_std", InitStdDev, config.InitStdDev},
+//		{"alpha", Alpha, config.Alpha},
+//	}
+//	params := Params{}
+//	for _, v := range values {
+//		if metaData.IsDefined("params", v.name) {
+//			params[v.key] = v.value
+//		}
+//	}
+//	return params
+//}
 
 // LoadModel creates model from name and parameters.
 //func LoadModel(name string, params Params) model.ModelInterface {

@@ -114,7 +114,7 @@ func (db *SQLDatabase) GetLabelItems(label string) ([]Item, error) {
 	panic("not implemented")
 }
 
-func (db *SQLDatabase) GetLabels() ([]string, error) {
+func (db *SQLDatabase) GetLabels(cursor string, n int) (string, []string, error) {
 	panic("not implemented")
 }
 
