@@ -16,6 +16,8 @@ package model
 import (
 	"github.com/chewxy/math32"
 	log "github.com/sirupsen/logrus"
+	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/floats"
 	"gonum.org/v1/gonum/mat"
 )
@@ -35,7 +37,7 @@ import (
 //	 InitMean	- The mean of initial random latent factors. Default is 0.
 //	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.001.
 type BPR struct {
-	Base
+	BaseMatrixFactorization
 	// Model parameters
 	UserFactor [][]float32 // p_u
 	ItemFactor [][]float32 // q_i
@@ -57,7 +59,7 @@ func NewBPR(params Params) *BPR {
 
 // SetParams sets hyper-parameters of the BPR model.
 func (bpr *BPR) SetParams(params Params) {
-	bpr.Base.SetParams(params)
+	bpr.BaseMatrixFactorization.SetParams(params)
 	// Setup hyper-parameters
 	bpr.nFactors = bpr.Params.GetInt(NFactors, 10)
 	bpr.nEpochs = bpr.Params.GetInt(NEpochs, 100)
@@ -72,19 +74,19 @@ func (bpr *BPR) Predict(userId, itemId string) float32 {
 	// Convert sparse Names to dense Names
 	userIndex := bpr.UserIndex.ToNumber(userId)
 	itemIndex := bpr.ItemIndex.ToNumber(itemId)
-	if userIndex == NotId {
+	if userIndex == base.NotId {
 		log.Warn("unknown user:", userId)
 	}
-	if itemIndex == NotId {
+	if itemIndex == base.NotId {
 		log.Warn("unknown item:", itemId)
 	}
-	return bpr.predict(userIndex, itemIndex)
+	return bpr.InternalPredict(userIndex, itemIndex)
 }
 
-func (bpr *BPR) predict(userIndex int, itemIndex int) float32 {
+func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 	ret := float32(0.0)
 	// + q_i^Tp_u
-	if itemIndex != NotId && userIndex != NotId {
+	if itemIndex != base.NotId && userIndex != base.NotId {
 		userFactor := bpr.UserFactor[userIndex]
 		itemFactor := bpr.ItemFactor[itemIndex]
 		ret += floats.Dot(userFactor, itemFactor)
@@ -93,8 +95,9 @@ func (bpr *BPR) predict(userIndex int, itemIndex int) float32 {
 }
 
 // Fit the BPR model.
-func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
-	log.Info("fit BPR with hyper-parameters: "+
+func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig) Score {
+	config = config.LoadDefaultIfNil()
+	log.Infof("fit BPR with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
 		bpr.nFactors, bpr.nEpochs, bpr.lr, bpr.reg, bpr.initMean, bpr.initStdDev)
 	bpr.Init(trainSet)
@@ -135,7 +138,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
 					break
 				}
 			}
-			diff := bpr.predict(userIndex, posIndex) - bpr.predict(userIndex, negIndex)
+			diff := bpr.InternalPredict(userIndex, posIndex) - bpr.InternalPredict(userIndex, negIndex)
 			cost += math32.Log(1 + math32.Exp(-diff))
 			grad := math32.Exp(-diff) / (1.0 + math32.Exp(-diff))
 			// Pairwise update
@@ -156,39 +159,40 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
 			floats.MulConstAddTo(userFactor, -bpr.reg, temp)
 			floats.MulConstAddTo(temp, bpr.lr, bpr.UserFactor[userIndex])
 		}
-		log.Info("epoch = %v/%v, loss = %v", epoch+1, bpr.nEpochs, cost)
 		// Cross validation
-		if epoch%config.Verbose == 0 || epoch == bpr.nEpochs {
+		if epoch%config.Verbose == 0 {
 			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
-			log.Infof("NDCG@{}={}, Precision@{}={}, Recall@{}={}",
-				config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+			log.Infof("epoch %v/%v: loss=%v, NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
+				epoch, bpr.nEpochs, cost, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
 		}
 	}
+	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
 func (bpr *BPR) Init(trainSet *DataSet) {
 	// Initialize parameters
-	newUserFactor := bpr.rng.NormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, float32(bpr.initStdDev))
-	newItemFactor := bpr.rng.NormalMatrix(trainSet.ItemCount(), bpr.nFactors, bpr.initMean, float32(bpr.initStdDev))
+	newUserFactor := bpr.rng.NormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
+	newItemFactor := bpr.rng.NormalMatrix(trainSet.ItemCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
 	// Relocate parameters
-	for _, userId := range trainSet.UserIndex.Names {
+	for _, userId := range trainSet.UserIndex.GetNames() {
 		oldIndex := bpr.UserIndex.ToNumber(userId)
 		newIndex := trainSet.UserIndex.ToNumber(userId)
-		if oldIndex != NotId {
+		if oldIndex != base.NotId {
 			newUserFactor[newIndex] = bpr.UserFactor[oldIndex]
 		}
 	}
-	for _, itemId := range trainSet.ItemIndex.Names {
+	for _, itemId := range trainSet.ItemIndex.GetNames() {
 		oldIndex := bpr.ItemIndex.ToNumber(itemId)
 		newIndex := trainSet.ItemIndex.ToNumber(itemId)
-		if oldIndex != NotId {
+		if oldIndex != base.NotId {
 			newItemFactor[newIndex] = bpr.ItemFactor[oldIndex]
 		}
 	}
 	// Initialize base
 	bpr.UserFactor = newUserFactor
 	bpr.ItemFactor = newItemFactor
-	bpr.Base.Init(trainSet)
+	bpr.BaseMatrixFactorization.Init(trainSet)
 }
 
 // ALS [7] is the Weighted Regularized Matrix Factorization, which exploits
@@ -204,7 +208,7 @@ func (bpr *BPR) Init(trainSet *DataSet) {
 //   InitStdDev - The standard deviation of initial latent factors. Default is 0.1.
 //   Reg        - The strength of regularization.
 type ALS struct {
-	Base
+	BaseMatrixFactorization
 	// Model parameters
 	UserFactor *mat.Dense // p_u
 	ItemFactor *mat.Dense // q_i
@@ -214,7 +218,7 @@ type ALS struct {
 	reg        float64
 	initMean   float64
 	initStdDev float64
-	alpha      float64
+	weight     float64
 }
 
 // NewALS creates a ALS model.
@@ -226,36 +230,41 @@ func NewALS(params Params) *ALS {
 
 // SetParams sets hyper-parameters for the ALS model.
 func (als *ALS) SetParams(params Params) {
-	als.Base.SetParams(params)
+	als.BaseMatrixFactorization.SetParams(params)
 	als.nFactors = als.Params.GetInt(NFactors, 15)
 	als.nEpochs = als.Params.GetInt(NEpochs, 50)
 	als.initMean = als.Params.GetFloat64(InitMean, 0)
 	als.initStdDev = als.Params.GetFloat64(InitStdDev, 0.1)
 	als.reg = als.Params.GetFloat64(Reg, 0.06)
-	als.alpha = als.Params.GetFloat64(Alpha, 1)
+	als.weight = als.Params.GetFloat64(Weight, 0.001)
 }
 
 // Predict by the ALS model.
 func (als *ALS) Predict(userId, itemId string) float32 {
 	userIndex := als.UserIndex.ToNumber(userId)
 	itemIndex := als.ItemIndex.ToNumber(itemId)
-	if userIndex == NotId {
+	if userIndex == base.NotId {
 		log.Info("unknown user:", userId)
 		return 0
 	}
-	if itemIndex == NotId {
+	if itemIndex == base.NotId {
 		log.Info("unknown item:", itemId)
 		return 0
 	}
+	return als.InternalPredict(userIndex, itemIndex)
+}
+
+func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 	return float32(mat.Dot(als.UserFactor.RowView(userIndex),
 		als.ItemFactor.RowView(itemIndex)))
 }
 
 // Fit the ALS model.
-func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
-	log.Info("fit ALS with hyper-parameters: "+
-		"n_factors = %v, n_epochs = %v, reg = %v, alpha = %v, init_mean = %v, init_stddev = %v",
-		als.nFactors, als.nEpochs, als.reg, als.alpha, als.initMean, als.initStdDev)
+func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig) Score {
+	config = config.LoadDefaultIfNil()
+	log.Infof("fit ALS with hyper-parameters: "+
+		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
+		als.nFactors, als.nEpochs, als.reg, als.initMean, als.initStdDev)
 	als.Init(trainSet)
 	// Create temporary matrix
 	temp1 := mat.NewDense(als.nFactors, als.nFactors, nil)
@@ -270,21 +279,21 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
 	}
 	regI := mat.NewDiagDense(als.nFactors, regs)
 	for ep := 1; ep <= als.nEpochs; ep++ {
-		// Recompute all user factors: x_u = (Y^T C^u Y + \lambda reg)^{-1} Y^T C^u p(u)
+		// Recompute all user factors: x_u = (Y^T C^userIndex Y + \lambda reg)^{-1} Y^T C^userIndex p(userIndex)
 		// Y^T Y
 		c.Mul(als.ItemFactor.T(), als.ItemFactor)
+		c.Scale(als.weight, c)
 		// X Y^T
 		p.Mul(als.UserFactor, als.ItemFactor.T())
-		for u := 0; u < trainSet.UserCount(); u++ {
+		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
 			a.Copy(c)
 			b := mat.NewVecDense(als.nFactors, nil)
-			for _, index := range trainSet.UserFeedback[u] {
+			for _, itemIndex := range trainSet.UserFeedback[userIndex] {
 				// Y^T (C^u-I) Y
-				w := als.weight(1)
-				temp1.Outer(w-1, als.ItemFactor.RowView(index), als.ItemFactor.RowView(index))
+				temp1.Outer(1, als.ItemFactor.RowView(itemIndex), als.ItemFactor.RowView(itemIndex))
 				a.Add(a, temp1)
 				// Y^T C^u p(u)
-				temp2.ScaleVec(w, als.ItemFactor.RowView(index))
+				temp2.ScaleVec(1+als.weight, als.ItemFactor.RowView(itemIndex))
 				b.AddVec(b, temp2)
 			}
 			a.Add(a, regI)
@@ -292,11 +301,12 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
 				log.Fatal(err)
 			}
 			temp2.MulVec(temp1, b)
-			als.UserFactor.SetRow(u, temp2.RawVector().Data)
+			als.UserFactor.SetRow(userIndex, temp2.RawVector().Data)
 		}
 		// Recompute all item factors: y_i = (X^T C^i X + \lambda reg)^{-1} X^T C^i p(i)
 		// X^T X
 		c.Mul(als.UserFactor.T(), als.UserFactor)
+		c.Scale(als.weight, c)
 		// X Y^T
 		p.Mul(als.UserFactor, als.ItemFactor.T())
 		for i := 0; i < trainSet.ItemCount(); i++ {
@@ -304,11 +314,10 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
 			b := mat.NewVecDense(als.nFactors, nil)
 			for _, index := range trainSet.ItemFeedback[i] {
 				// X^T (C^i-I) X
-				w := als.weight(1)
-				temp1.Outer(w-1, als.UserFactor.RowView(index), als.UserFactor.RowView(index))
+				temp1.Outer(1, als.UserFactor.RowView(index), als.UserFactor.RowView(index))
 				a.Add(a, temp1)
 				// X^T C^i p(i)
-				temp2.ScaleVec(w, als.UserFactor.RowView(index))
+				temp2.ScaleVec(1+als.weight, als.UserFactor.RowView(index))
 				b.AddVec(b, temp2)
 			}
 			a.Add(a, regI)
@@ -318,18 +327,15 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) {
 			temp2.MulVec(temp1, b)
 			als.ItemFactor.SetRow(i, temp2.RawVector().Data)
 		}
-		log.Info("epoch = %v/%v", ep+1, als.nEpochs)
 		// Cross validation
-		if ep%config.Verbose == 0 || ep == als.nEpochs {
+		if ep%config.Verbose == 0 {
 			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
-			log.Infof("NDCG@{}={}, Precision@{}={}, Recall@{}={}",
-				config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+			log.Infof("epoch %v/%v:NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
+				ep, als.nEpochs, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
 		}
 	}
-}
-
-func (als *ALS) weight(value float64) float64 {
-	return als.alpha*value + 1
+	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
 func (als *ALS) Init(trainSet *DataSet) {
@@ -339,22 +345,22 @@ func (als *ALS) Init(trainSet *DataSet) {
 	newItemFactor := mat.NewDense(trainSet.ItemCount(), als.nFactors,
 		als.rng.NormalVector64(trainSet.ItemCount()*als.nFactors, als.initMean, als.initStdDev))
 	// Relocate parameters
-	for _, userId := range trainSet.UserIndex.Names {
+	for _, userId := range trainSet.UserIndex.GetNames() {
 		oldIndex := als.UserIndex.ToNumber(userId)
 		newIndex := trainSet.UserIndex.ToNumber(userId)
-		if oldIndex != NotId {
+		if oldIndex != base.NotId {
 			newUserFactor.SetRow(newIndex, als.UserFactor.RawRowView(oldIndex))
 		}
 	}
-	for _, itemId := range trainSet.ItemIndex.Names {
+	for _, itemId := range trainSet.ItemIndex.GetNames() {
 		oldIndex := als.ItemIndex.ToNumber(itemId)
 		newIndex := trainSet.ItemIndex.ToNumber(itemId)
-		if oldIndex != NotId {
+		if oldIndex != base.NotId {
 			newItemFactor.SetRow(newIndex, als.ItemFactor.RawRowView(oldIndex))
 		}
 	}
 	// Initialize base
 	als.UserFactor = newUserFactor
 	als.ItemFactor = newItemFactor
-	als.Base.Init(trainSet)
+	als.BaseMatrixFactorization.Init(trainSet)
 }

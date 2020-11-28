@@ -10,7 +10,7 @@ import (
 
 // Parallel schedules and runs tasks in parallel. nTask is the number of tasks. nJob is
 // the number of executors. worker is the executed function which passed a range of task
-// IDs (begin, end).
+// Names (begin, end).
 func Parallel(nTask int, nJob int, worker func(i int) error) error {
 	var wg sync.WaitGroup
 	wg.Add(nJob)
@@ -66,7 +66,7 @@ func ParallelForSum(begin, end int, worker func(i int) float64) float64 {
 
 // ParallelMean schedules and runs tasks in parallel, then returns the mean of returned values.
 // nJob is the number of executors. worker is the executed function which passed a range of task
-// IDs (begin, end) and returns a double value.
+// Names (begin, end) and returns a double value.
 func ParallelMean(nTask int, nJob int, worker func(begin, end int) (sum float64)) float64 {
 	var wg sync.WaitGroup
 	wg.Add(nJob)

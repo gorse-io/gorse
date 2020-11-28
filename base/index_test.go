@@ -1,4 +1,4 @@
-package model
+package base
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -7,7 +7,7 @@ import (
 
 func TestIndex(t *testing.T) {
 	// Create a indexer
-	set := NewIndex()
+	set := NewMapIndex()
 	assert.Equal(t, set.Len(), 0)
 	// Add Names
 	set.Add("1")

@@ -11,12 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package model
+package base
 
-// Index manages the map between sparse Names and dense indices. A sparse ID is
+import (
+	"log"
+	"strconv"
+)
+
+type Index interface {
+	Len() int
+	Add(name string)
+	ToNumber(name string) int
+	ToName(index int) string
+	GetNames() []string
+}
+
+// MapIndex manages the map between sparse Names and dense indices. A sparse ID is
 // a user ID or item ID. The dense index is the internal user index or item index
 // optimized for faster parameter access and less memory usage.
-type Index struct {
+type MapIndex struct {
 	Numbers map[string]int // sparse ID -> dense index
 	Names   []string       // dense index -> sparse ID
 }
@@ -24,21 +37,24 @@ type Index struct {
 // NotId represents an ID doesn't exist.
 const NotId = -1
 
-// NewIndex creates a Index.
-func NewIndex() *Index {
-	set := new(Index)
+// NewMapIndex creates a MapIndex.
+func NewMapIndex() *MapIndex {
+	set := new(MapIndex)
 	set.Numbers = make(map[string]int)
 	set.Names = make([]string, 0)
 	return set
 }
 
 // Len returns the number of indexed Names.
-func (idx *Index) Len() int {
+func (idx *MapIndex) Len() int {
+	if idx == nil {
+		return 0
+	}
 	return len(idx.Names)
 }
 
 // Add adds a new ID to the indexer.
-func (idx *Index) Add(name string) {
+func (idx *MapIndex) Add(name string) {
 	if _, exist := idx.Numbers[name]; !exist {
 		idx.Numbers[name] = len(idx.Names)
 		idx.Names = append(idx.Names, name)
@@ -46,7 +62,10 @@ func (idx *Index) Add(name string) {
 }
 
 // ToNumber converts a sparse ID to a dense index.
-func (idx *Index) ToNumber(name string) int {
+func (idx *MapIndex) ToNumber(name string) int {
+	if idx == nil {
+		return NotId
+	}
 	if denseId, exist := idx.Numbers[name]; exist {
 		return denseId
 	}
@@ -54,6 +73,54 @@ func (idx *Index) ToNumber(name string) int {
 }
 
 // ToName converts a dense index to a sparse ID.
-func (idx *Index) ToName(index int) string {
+func (idx *MapIndex) ToName(index int) string {
 	return idx.Names[index]
+}
+
+func (idx *MapIndex) GetNames() []string {
+	return idx.Names
+}
+
+type DirectIndex struct {
+	Limit int
+}
+
+func NewDirectIndex() *DirectIndex {
+	return &DirectIndex{Limit: 0}
+}
+
+func (idx *DirectIndex) Len() int {
+	return idx.Limit
+}
+
+func (idx *DirectIndex) Add(s string) {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if i >= idx.Limit {
+		idx.Limit = i + 1
+	}
+}
+
+func (idx *DirectIndex) ToNumber(name string) int {
+	i, err := strconv.Atoi(name)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if i >= idx.Limit {
+		return NotId
+	}
+	return i
+}
+
+func (idx *DirectIndex) ToName(index int) string {
+	if index >= idx.Limit {
+		panic("index out of range")
+	}
+	return strconv.Itoa(index)
+}
+
+func (idx *DirectIndex) GetNames() []string {
+	return nil
 }
