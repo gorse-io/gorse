@@ -14,6 +14,8 @@
 package model
 
 import (
+	"github.com/BurntSushi/toml"
+	"github.com/zhenghaoz/gorse/config"
 	"log"
 	"reflect"
 )
@@ -30,13 +32,10 @@ const (
 	NEpochs     ParamName = "NEpochs"     // number of epochs
 	NFactors    ParamName = "NFactors"    // number of factors
 	RandomState ParamName = "RandomState" // random state (seed)
-	UseBias     ParamName = "UseBias"     // use bias
 	InitMean    ParamName = "InitMean"    // mean of gaussian initial parameter
 	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
-	Type        ParamName = "Type"        // type for KNN
 	UserBased   ParamName = "UserBased"   // user based if true. otherwise item based.
-	Similarity  ParamName = "Similarity"  // similarity metrics
-	Alpha       ParamName = "Alpha"       // alpha value, depend on context
+	Weight      ParamName = "Weight"      // alpha value, depend on context
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -147,3 +146,43 @@ func (parameters Params) GetString(name ParamName, _default string) string {
 	}
 	return _default
 }
+
+// Merge another group of hyper-parameters to current group of hyper-parameters.
+func (parameters Params) Merge(params Params) Params {
+	merged := make(Params)
+	for k, v := range parameters {
+		merged[k] = v
+	}
+	for k, v := range params {
+		merged[k] = v
+	}
+	return merged
+}
+
+func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params {
+	type ParamValues struct {
+		name  string
+		key   ParamName
+		value interface{}
+	}
+	values := []ParamValues{
+		{"lr", Lr, config.Params.Lr},
+		{"reg", Reg, config.Params.Reg},
+		{"n_epochs", NEpochs, config.Params.NEpochs},
+		{"n_factors", NFactors, config.Params.NFactors},
+		{"random_state", RandomState, config.Params.RandomState},
+		{"init_mean", InitMean, config.Params.InitMean},
+		{"init_std", InitStdDev, config.Params.InitStdDev},
+		{"alpha", Weight, config.Params.Weight},
+	}
+	params := Params{}
+	for _, v := range values {
+		if metaData.IsDefined("params", v.name) {
+			params[v.key] = v.value
+		}
+	}
+	return params
+}
+
+// ParameterGrid contains candidate for grid search.
+type ParameterGrid map[ParamName][]interface{}

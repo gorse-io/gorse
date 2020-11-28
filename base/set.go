@@ -29,3 +29,34 @@ func (s StringSet) Contain(v string) bool {
 	_, exist := s[v]
 	return exist
 }
+
+type Set map[int]interface{}
+
+func NewSet(a []int) Set {
+	set := make(map[int]interface{})
+	for _, s := range a {
+		set[s] = nil
+	}
+	return set
+}
+
+func (set Set) Contain(s int) bool {
+	_, exist := set[s]
+	return exist
+}
+
+func (set Set) Len() int {
+	return len(set)
+}
+
+func (set Set) Add(v int) {
+	set[v] = nil
+}
+
+func (set Set) Merge(sets ...Set) {
+	for _, s := range sets {
+		for v := range s {
+			set[v] = nil
+		}
+	}
+}

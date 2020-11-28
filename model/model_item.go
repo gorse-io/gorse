@@ -12,3 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package model
+
+import "github.com/zhenghaoz/gorse/config"
+
+type FISM struct {
+	BaseItemBased
+}
+
+func (fism *FISM) SetParams(params Params) {
+	panic("not implemented")
+}
+
+func (fism *FISM) GetParams() Params {
+	panic("not implemented")
+}
+
+func (fism *FISM) Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score {
+	panic("not implemented")
+}
+
+func (fism *FISM) Predict(supportItems []string, itemId string) float32 {
+	panic("not implemented")
+}
+
+func (fism *FISM) InternalPredict(supportItems []int, itemId int) float32 {
+	panic("not implemented")
+}
