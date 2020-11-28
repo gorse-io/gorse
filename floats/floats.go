@@ -13,6 +13,11 @@
 // limitations under the License.
 package floats
 
+import (
+	"github.com/chewxy/math32"
+	"sort"
+)
+
 // SubTo subtracts one vector by another and saves the result in dst: dst = a - b
 func SubTo(a, b, dst []float32) {
 	if len(dst) != len(b) || len(dst) != len(b) {
@@ -109,4 +114,112 @@ func Dot(a, b []float32) (ret float32) {
 		ret += a[i] * b[i]
 	}
 	return
+}
+
+func Min(x []float32) float32 {
+	if len(x) == 0 {
+		panic("floats: zero slice length")
+	}
+	min := x[0]
+	for _, v := range x[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func Max(x []float32) float32 {
+	if len(x) == 0 {
+		panic("floats: zero slice length")
+	}
+	max := x[0]
+	for _, v := range x[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func Sum(x []float32) float32 {
+	sum := float32(0)
+	for _, v := range x {
+		sum += v
+	}
+	return sum
+}
+
+func Mean(x []float32) float32 {
+	return Sum(x) / float32(len(x))
+}
+
+// StdDev returns the sample standard deviation.
+func StdDev(x []float32) float32 {
+	_, variance := MeanVariance(x)
+	return math32.Sqrt(variance)
+}
+
+// MeanVariance computes the sample mean and unbiased variance, where the mean and variance are
+//  \sum_i w_i * x_i / (sum_i w_i)
+//  \sum_i w_i (x_i - mean)^2 / (sum_i w_i - 1)
+// respectively.
+// If weights is nil then all of the weights are 1. If weights is not nil, then
+// len(x) must equal len(weights).
+// When weights sum to 1 or less, a biased variance estimator should be used.
+func MeanVariance(x []float32) (mean, variance float32) {
+	// This uses the corrected two-pass algorithm (1.7), from "Algorithms for computing
+	// the sample variance: Analysis and recommendations" by Chan, Tony F., Gene H. Golub,
+	// and Randall J. LeVeque.
+
+	// note that this will panic if the slice lengths do not match
+	mean = Mean(x)
+	var (
+		ss           float32
+		compensation float32
+	)
+	for _, v := range x {
+		d := v - mean
+		ss += d * d
+		compensation += d
+	}
+	variance = (ss - compensation*compensation/float32(len(x))) / float32(len(x)-1)
+	return
+}
+
+// argsort is a helper that implements sort.Interface, as used by
+// Argsort.
+type argsort struct {
+	s    []float32
+	inds []int
+}
+
+func (a argsort) Len() int {
+	return len(a.s)
+}
+
+func (a argsort) Less(i, j int) bool {
+	return a.s[i] < a.s[j]
+}
+
+func (a argsort) Swap(i, j int) {
+	a.s[i], a.s[j] = a.s[j], a.s[i]
+	a.inds[i], a.inds[j] = a.inds[j], a.inds[i]
+}
+
+// Argsort sorts the elements of dst while tracking their original order.
+// At the conclusion of Argsort, dst will contain the original elements of dst
+// but sorted in increasing order, and inds will contain the original position
+// of the elements in the slice such that dst[i] = origDst[inds[i]].
+// It panics if the lengths of dst and inds do not match.
+func Argsort(dst []float32, inds []int) {
+	if len(dst) != len(inds) {
+		panic("floats: length of inds does not match length of slice")
+	}
+	for i := range dst {
+		inds[i] = i
+	}
+
+	a := argsort{s: dst, inds: inds}
+	sort.Sort(a)
 }

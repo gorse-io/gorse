@@ -1,3 +1,16 @@
+// Copyright 2020 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package base
 
 import "math/rand"
@@ -12,28 +25,45 @@ func NewRandomGenerator(seed int64) RandomGenerator {
 	return RandomGenerator{rand.New(rand.NewSource(int64(seed)))}
 }
 
-// NewUniformVectorInt makes a vec filled with uniform random integers.
-func (rng RandomGenerator) NewUniformVectorInt(size, low, high int) []int {
-	ret := make([]int, size)
+// UniformVector makes a vec filled with uniform random floats,
+func (rng RandomGenerator) UniformVector(size int, low, high float32) []float32 {
+	ret := make([]float32, size)
 	scale := high - low
 	for i := 0; i < len(ret); i++ {
-		ret[i] = rng.Intn(scale) + low
-	}
-	return ret
-}
-
-// NewUniformVector makes a vec filled with uniform random floats,
-func (rng RandomGenerator) NewUniformVector(size int, low, high float64) []float64 {
-	ret := make([]float64, size)
-	scale := high - low
-	for i := 0; i < len(ret); i++ {
-		ret[i] = rng.Float64()*scale + low
+		ret[i] = rng.Float32()*scale + low
 	}
 	return ret
 }
 
 // NewNormalVector makes a vec filled with normal random floats.
-func (rng RandomGenerator) NewNormalVector(size int, mean, stdDev float64) []float64 {
+func (rng RandomGenerator) NewNormalVector(size int, mean, stdDev float32) []float32 {
+	ret := make([]float32, size)
+	for i := 0; i < len(ret); i++ {
+		ret[i] = float32(rng.NormFloat64())*stdDev + mean
+	}
+	return ret
+}
+
+// NormalMatrix makes a matrix filled with normal random floats.
+func (rng RandomGenerator) NormalMatrix(row, col int, mean, stdDev float32) [][]float32 {
+	ret := make([][]float32, row)
+	for i := range ret {
+		ret[i] = rng.NewNormalVector(col, mean, stdDev)
+	}
+	return ret
+}
+
+// UniformMatrix makes a matrix filled with uniform random floats.
+func (rng RandomGenerator) UniformMatrix(row, col int, low, high float32) [][]float32 {
+	ret := make([][]float32, row)
+	for i := range ret {
+		ret[i] = rng.UniformVector(col, low, high)
+	}
+	return ret
+}
+
+// NewNormalVector makes a vec filled with normal random floats.
+func (rng RandomGenerator) NormalVector64(size int, mean, stdDev float64) []float64 {
 	ret := make([]float64, size)
 	for i := 0; i < len(ret); i++ {
 		ret[i] = rng.NormFloat64()*stdDev + mean
@@ -41,20 +71,25 @@ func (rng RandomGenerator) NewNormalVector(size int, mean, stdDev float64) []flo
 	return ret
 }
 
-// NewNormalMatrix makes a matrix filled with normal random floats.
-func (rng RandomGenerator) NewNormalMatrix(row, col int, mean, stdDev float64) [][]float64 {
+// NormalMatrix64 makes a matrix filled with normal random floats.
+func (rng RandomGenerator) NormalMatrix64(row, col int, mean, stdDev float64) [][]float64 {
 	ret := make([][]float64, row)
 	for i := range ret {
-		ret[i] = rng.NewNormalVector(col, mean, stdDev)
+		ret[i] = rng.NormalVector64(col, mean, stdDev)
 	}
 	return ret
 }
 
-// NewUniformMatrix makes a matrix filled with uniform random floats.
-func (rng RandomGenerator) NewUniformMatrix(row, col int, low, high float64) [][]float64 {
-	ret := make([][]float64, row)
-	for i := range ret {
-		ret[i] = rng.NewUniformVector(col, low, high)
+func (rng RandomGenerator) Sample(high, n int, exclude ...Set) []int {
+	excludeSet := NewSet(nil)
+	excludeSet.Merge(exclude...)
+	sampled := make([]int, 0, n)
+	for len(sampled) < n {
+		v := rng.Intn(high)
+		if !excludeSet.Contain(v) {
+			sampled = append(sampled, v)
+			excludeSet.Add(v)
+		}
 	}
-	return ret
+	return sampled
 }
