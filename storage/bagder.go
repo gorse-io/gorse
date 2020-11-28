@@ -15,7 +15,7 @@ package storage
 
 import (
 	"encoding/json"
-	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2"
 	"math/bits"
 	"strconv"
 )
@@ -184,7 +184,7 @@ func (db *Badger) GetFeedback(cursor string, n int) (string, []Feedback, error) 
 	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixFeedback)); it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixFeedback)) && len(feedback) < n; it.Next() {
 			rawCursor = it.Item().Key()
 			item := it.Item()
 			err := item.Value(func(v []byte) error {
@@ -328,7 +328,7 @@ func (db *Badger) GetUsers(cursor string, n int) (string, []User, error) {
 	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixUser)); it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixUser)) && len(users) < n; it.Next() {
 			rawCursor = it.Item().Key()
 			userId := extractKey(it.Item().Key(), []byte(prefixUser))
 			users = append(users, User{UserId: userId})
@@ -458,18 +458,28 @@ func (db *Badger) GetItems(cursor string, n int) (string, []Item, error) {
 	return string(rawCursor), items, err
 }
 
-func (db *Badger) GetLabels() (labels []string, err error) {
-	err = db.db.View(func(txn *badger.Txn) error {
+func (db *Badger) GetLabels(cursor string, n int) (string, []string, error) {
+	labels := make([]string, 0)
+	rawCursor := []byte(cursor)
+	if len(cursor) == 0 {
+		rawCursor = []byte(prefixLabel)
+	}
+	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := []byte(prefixLabel)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixLabel)) && len(labels) < n; it.Next() {
+			rawCursor = it.Item().Key()
 			label := extractKey(it.Item().Key(), []byte(prefixLabel))
 			labels = append(labels, label)
 		}
+		if !it.ValidForPrefix([]byte(prefixItem)) {
+			rawCursor = nil
+		} else {
+			rawCursor = it.Item().Key()
+		}
 		return nil
 	})
-	return
+	return string(rawCursor), labels, err
 }
 
 // GetLabelItems list items with given label.
