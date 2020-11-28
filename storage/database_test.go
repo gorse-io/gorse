@@ -17,7 +17,18 @@ func getUsers(t *testing.T, db Database) []User {
 		assert.Nil(t, err)
 		users = append(users, data...)
 		if cursor == "" {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.LessOrEqual(t, len(data), 2)
+			}
 			return users
+		} else {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.Equal(t, 2, len(data))
+			}
 		}
 		t.Log(cursor)
 	}
@@ -33,7 +44,18 @@ func getItems(t *testing.T, db Database) []Item {
 		assert.Nil(t, err)
 		items = append(items, data...)
 		if cursor == "" {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.LessOrEqual(t, len(data), 2)
+			}
 			return items
+		} else {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.Equal(t, 2, len(data))
+			}
 		}
 		t.Log(cursor)
 	}
@@ -49,7 +71,45 @@ func getFeedback(t *testing.T, db Database) []Feedback {
 		assert.Nil(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.LessOrEqual(t, len(data), 2)
+			}
 			return feedback
+		} else {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.Equal(t, 2, len(data))
+			}
+		}
+		t.Log(cursor)
+	}
+}
+
+func getLabels(t *testing.T, db Database) []string {
+	labels := make([]string, 0)
+	var err error
+	var data []string
+	cursor := ""
+	for {
+		cursor, data, err = db.GetLabels(cursor, 2)
+		assert.Nil(t, err)
+		labels = append(labels, data...)
+		if cursor == "" {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.LessOrEqual(t, len(data), 2)
+			}
+			return labels
+		} else {
+			switch db.(type) {
+			case *Badger:
+				// TODO: SCAN "COUNT" has not been implemented in miniredis
+				assert.Equal(t, 2, len(data))
+			}
 		}
 		t.Log(cursor)
 	}
@@ -184,11 +244,8 @@ func testItems(t *testing.T, db Database) {
 		assert.Equal(t, item, ret)
 	}
 	// Get labels
-	if labels, err := db.GetLabels(); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Equal(t, []string{"a", "b"}, labels)
-	}
+	labels := getLabels(t, db)
+	assert.Equal(t, []string{"a", "b"}, labels)
 	// Get items by labels
 	labelAItems, err := db.GetLabelItems("a")
 	if err != nil {
