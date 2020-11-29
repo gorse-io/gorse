@@ -1,26 +1,23 @@
 # This section declares settings for the server.
 [server]
-host = "127.0.0.1"      # server host
-port = 8080             # server port
+host = "0.0.0.0"                # server host
+port = 8080                     # server port
+default_n = 10                  # defulat number of items on paging
 
 # This section declares setting for the database.
 [database]
-path = "database"       # database path
-
-# This section declares settings for recommendation.
-[recommend]
-model = "als"           # recommendation model for personal ranking
-top_n = 100             # the number of cached recommendations/neighbor/latest/popular items
-update_threshold = 10   # update recommendation when more than 10 recommendations are cosumed
-train_threshold = 100   # retrain model when more than 100 ratings are added
-check_period = 1        # check for update every one minute
-similarity = "feedback"  # similarity metric for neighbors
-fit_jobs = 1            # concurrent jobs for fitting
-predict_jobs = 1        # concurrent jobs for predict
-collecters = ["pop", "latest", "neighbor", "label_pop", "label_latest"]
+path = "redis://127.0.0.1:6398" # database path
 
 # This section declares hyperparameters for the recommendation model.
-[params]
-n_factors = 20          # the number of latent factors
-reg = 0.015             # regularization strength
-n_epochs = 10           # the number of learning epochs
+[model]
+
+[model.params]
+lr = 0.05                       # learning rate
+reg = 0.01                      # regularization strength
+n_epochs = 100                  # number of epochs
+n_factors = 10                  # number of factors
+random_state = 21               # random state (seed)
+use_bias = false                # use bias
+init_mean = 0.0                 # mean of gaussian initial parameter
+init_std = 0.001                # standard deviation of gaussian initial parameter
+weight = 1.0                    # alpha value, depend on context
