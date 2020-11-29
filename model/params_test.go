@@ -1,4 +1,17 @@
-package base
+// Copyright 2020 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+package model
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -10,7 +23,6 @@ func TestParams_Copy(t *testing.T) {
 	a := Params{
 		NFactors:    1,
 		Lr:          0.1,
-		Type:        Baseline,
 		RandomState: 0,
 		UserBased:   true,
 	}
@@ -18,40 +30,18 @@ func TestParams_Copy(t *testing.T) {
 	b := a.Copy()
 	b[NFactors] = 2
 	b[Lr] = 0.2
-	b[Type] = Basic
 	b[RandomState] = 1
 	b[UserBased] = false
 	// Check original parameters
 	assert.Equal(t, 1, a.GetInt(NFactors, -1))
 	assert.Equal(t, 0.1, a.GetFloat64(Lr, -0.1))
-	assert.Equal(t, Baseline, a.GetString(Type, ""))
 	assert.Equal(t, int64(0), a.GetInt64(RandomState, -1))
 	assert.Equal(t, true, a.GetBool(UserBased, false))
 	// Check copy parameters
 	assert.Equal(t, 2, b.GetInt(NFactors, -1))
 	assert.Equal(t, 0.2, b.GetFloat64(Lr, -0.1))
-	assert.Equal(t, Basic, b.GetString(Type, ""))
 	assert.Equal(t, int64(1), b.GetInt64(RandomState, -1))
 	assert.Equal(t, false, b.GetBool(UserBased, true))
-}
-
-func TestParams_Merge(t *testing.T) {
-	// Create a group of parameters
-	a := Params{
-		Lr:  0.1,
-		Reg: 0.2,
-	}
-	// Create another group of parameters
-	b := Params{
-		Reg:   0.3,
-		Alpha: 0.4,
-	}
-	// Merge
-	c := a.Merge(b)
-	// Check
-	assert.Equal(t, 0.1, c.GetFloat64(Lr, -1))
-	assert.Equal(t, 0.3, c.GetFloat64(Reg, -1))
-	assert.Equal(t, 0.4, c.GetFloat64(Alpha, -1))
 }
 
 func TestParams_GetBool(t *testing.T) {
@@ -104,16 +94,4 @@ func TestParams_GetInt64(t *testing.T) {
 	assert.Equal(t, int64(0), p.GetInt64(RandomState, -1))
 	p[RandomState] = "hello"
 	assert.Equal(t, int64(-1), p.GetInt64(RandomState, -1))
-}
-
-func TestParams_GetString(t *testing.T) {
-	p := Params{}
-	// Empty case
-	assert.Equal(t, Cosine, p.GetString(Similarity, Cosine))
-	// Normal case
-	p[Similarity] = MSD
-	assert.Equal(t, MSD, p.GetString(Similarity, Cosine))
-	// Wrong type case
-	p[Similarity] = 1
-	assert.Equal(t, Cosine, p.GetString(Similarity, Cosine))
 }

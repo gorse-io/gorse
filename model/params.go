@@ -1,6 +1,21 @@
-package base
+// Copyright 2020 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+package model
 
 import (
+	"github.com/BurntSushi/toml"
+	"github.com/zhenghaoz/gorse/config"
 	"log"
 	"reflect"
 )
@@ -12,49 +27,15 @@ type ParamName string
 
 // Predefined hyper-parameter names
 const (
-	Lr            ParamName = "Lr"            // learning rate
-	Reg           ParamName = "Reg"           // regularization strength
-	NEpochs       ParamName = "NEpochs"       // number of epochs
-	NFactors      ParamName = "NFactors"      // number of factors
-	RandomState   ParamName = "RandomState"   // random state (seed)
-	UseBias       ParamName = "UseBias"       // use bias
-	InitMean      ParamName = "InitMean"      // mean of gaussian initial parameter
-	InitStdDev    ParamName = "InitStdDev"    // standard deviation of gaussian initial parameter
-	InitLow       ParamName = "InitLow"       // lower bound of uniform initial parameter
-	InitHigh      ParamName = "InitHigh"      // upper bound of uniform initial parameter
-	NUserClusters ParamName = "NUserClusters" // number of user cluster
-	NItemClusters ParamName = "NItemClusters" // number of item cluster
-	Type          ParamName = "Type"          // type for KNN
-	UserBased     ParamName = "UserBased"     // user based if true. otherwise item based.
-	Similarity    ParamName = "Similarity"    // similarity metrics
-	K             ParamName = "K"             // number of neighbors
-	MinK          ParamName = "MinK"          // least number of neighbors
-	Optimizer     ParamName = "Optimizer"     // optimizer for optimization (SGD/ALS/BPR)
-	Shrinkage     ParamName = "Shrinkage"     // shrinkage strength of similarity
-	Alpha         ParamName = "Alpha"         // alpha value, depend on context
-)
-
-/* ParamString */
-
-// Predefined values for hyper-parameter Type.
-const (
-	Basic    string = "basic"    // Basic KNN
-	Centered string = "centered" // KNN with centered ratings
-	ZScore   string = "z_score"  // KNN with standardized ratings
-	Baseline string = "baseline" // KNN with baseline ratings
-)
-
-// Predefined values for hyper-parameter Optimizer.
-const (
-	SGDOptimizer string = "sgd" // Fit model (FM) with stochastic gradient descent.
-	BPROptimizer string = "bpr" // Fit model (FM) with bayesian personal ranking.
-)
-
-// Predefined values for hyper-parameter Similarity.
-const (
-	Pearson string = "pearson" // Pearson similarity
-	Cosine  string = "cosine"  // Cosine similarity
-	MSD     string = "msd"     // MSD similarity
+	Lr          ParamName = "Lr"          // learning rate
+	Reg         ParamName = "Reg"         // regularization strength
+	NEpochs     ParamName = "NEpochs"     // number of epochs
+	NFactors    ParamName = "NFactors"    // number of factors
+	RandomState ParamName = "RandomState" // random state (seed)
+	InitMean    ParamName = "InitMean"    // mean of gaussian initial parameter
+	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
+	UserBased   ParamName = "UserBased"   // user based if true. otherwise item based.
+	Weight      ParamName = "Weight"      // alpha value, depend on context
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -126,8 +107,26 @@ func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
 		switch val := val.(type) {
 		case float64:
 			return val
+		case float32:
+			return float64(val)
 		case int:
 			return float64(val)
+		default:
+			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+		}
+	}
+	return _default
+}
+
+func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
+	if val, exist := parameters[name]; exist {
+		switch val := val.(type) {
+		case float32:
+			return val
+		case float64:
+			return float32(val)
+		case int:
+			return float32(val)
 		default:
 			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
@@ -159,3 +158,31 @@ func (parameters Params) Merge(params Params) Params {
 	}
 	return merged
 }
+
+func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params {
+	type ParamValues struct {
+		name  string
+		key   ParamName
+		value interface{}
+	}
+	values := []ParamValues{
+		{"lr", Lr, config.Params.Lr},
+		{"reg", Reg, config.Params.Reg},
+		{"n_epochs", NEpochs, config.Params.NEpochs},
+		{"n_factors", NFactors, config.Params.NFactors},
+		{"random_state", RandomState, config.Params.RandomState},
+		{"init_mean", InitMean, config.Params.InitMean},
+		{"init_std", InitStdDev, config.Params.InitStdDev},
+		{"alpha", Weight, config.Params.Weight},
+	}
+	params := Params{}
+	for _, v := range values {
+		if metaData.IsDefined("params", v.name) {
+			params[v.key] = v.value
+		}
+	}
+	return params
+}
+
+// ParameterGrid contains candidate for grid search.
+type ParameterGrid map[ParamName][]interface{}

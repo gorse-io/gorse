@@ -14,9 +14,11 @@
 package storage
 
 import (
+	"database/sql"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
+	_ "github.com/proullon/ramsql/driver"
 	"strings"
 	"time"
 )
@@ -33,11 +35,16 @@ type User struct {
 	UserId string
 }
 
+// FeedbackKey identifies feedback.
+type FeedbackKey struct {
+	UserId string
+	ItemId string
+}
+
 // Feedback stores feedback.
 type Feedback struct {
 	UserId string
 	ItemId string
-	Rating float64
 }
 
 // RecommendedItem is the structure for a recommended item.
@@ -47,22 +54,23 @@ type RecommendedItem struct {
 }
 
 type Database interface {
+	Init() error
 	Close() error
 	// items
 	InsertItem(item Item) error
 	BatchInsertItem(items []Item) error
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
-	GetItems(n int, offset int) ([]Item, error)
+	GetItems(cursor string, n int) (string, []Item, error)
 	GetItemFeedback(itemId string) ([]Feedback, error)
 	// label
 	GetLabelItems(label string) ([]Item, error)
-	GetLabels() ([]string, error)
+	GetLabels(cursor string, n int) (string, []string, error)
 	// users
 	InsertUser(user User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
-	GetUsers() ([]User, error)
+	GetUsers(cursor string, n int) (string, []User, error)
 	GetUserFeedback(userId string) ([]Feedback, error)
 	InsertUserIgnore(userId string, items []string) error
 	GetUserIgnore(userId string) ([]string, error)
@@ -70,7 +78,7 @@ type Database interface {
 	// feedback
 	InsertFeedback(feedback Feedback) error
 	BatchInsertFeedback(feedback []Feedback) error
-	GetFeedback() ([]Feedback, error)
+	GetFeedback(cursor string, n int) (string, []Feedback, error)
 	// metadata
 	GetString(name string) (string, error)
 	SetString(name string, val string) error
@@ -89,6 +97,7 @@ type Database interface {
 
 const bagderPrefix = "badger://"
 const redisPrefix = "redis://"
+const ramSQLPrefix = "ramsql://"
 
 // Open a connection to a database.
 func Open(path string) (Database, error) {
@@ -103,7 +112,12 @@ func Open(path string) (Database, error) {
 	} else if strings.HasPrefix(path, redisPrefix) {
 		addr := path[len(redisPrefix):]
 		database := new(Redis)
-		if database.client = redis.NewClient(&redis.Options{Addr: addr}); err != nil {
+		database.client = redis.NewClient(&redis.Options{Addr: addr})
+		return database, nil
+	} else if strings.HasPrefix(path, ramSQLPrefix) {
+		name := path[len(redisPrefix):]
+		database := new(SQLDatabase)
+		if database.db, err = sql.Open("ramsql", name); err != nil {
 			return nil, err
 		}
 		return database, nil

@@ -15,7 +15,7 @@ package storage
 
 import (
 	"encoding/json"
-	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2"
 	"math/bits"
 	"strconv"
 )
@@ -62,19 +62,17 @@ type Badger struct {
 	db *badger.DB
 }
 
+func (db *Badger) Init() error {
+	return nil
+}
+
 // Close the connection to the database.
 func (db *Badger) Close() error {
 	return db.db.Close()
 }
 
-// FeedbackKey identifies feedback.
-type FeedbackKey struct {
-	UserId string
-	ItemId string
-}
-
-// insertFeedback inserts a feedback into the bucket.
-func insertFeedback(txn *badger.Txn, feedback Feedback) error {
+// txnInsertFeedback inserts a feedback into the bucket.
+func txnInsertFeedback(txn *badger.Txn, feedback Feedback) error {
 	// Marshal key
 	key, err := json.Marshal(FeedbackKey{feedback.UserId, feedback.ItemId})
 	if err != nil {
@@ -104,8 +102,8 @@ func insertFeedback(txn *badger.Txn, feedback Feedback) error {
 	return nil
 }
 
-// batchInsertFeedback inserts a feedback into the bucket within a batch write.
-func batchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
+// wbBatchInsertFeedback inserts a feedback into the bucket within a batch write.
+func wbBatchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
 	// Marshal key
 	key, err := json.Marshal(FeedbackKey{feedback.UserId, feedback.ItemId})
 	if err != nil {
@@ -135,11 +133,11 @@ func batchInsertFeedback(wb *badger.WriteBatch, feedback Feedback) error {
 	return nil
 }
 
-// insertFeedback inserts a feedback into the database. If the item doesn't exist, this item will be added.
+// txnInsertFeedback inserts a feedback into the database. If the item doesn't exist, this item will be added.
 func (db *Badger) InsertFeedback(feedback Feedback) error {
 	return db.db.Update(func(txn *badger.Txn) error {
 		// Insert feedback
-		if err := insertFeedback(txn, feedback); err != nil {
+		if err := txnInsertFeedback(txn, feedback); err != nil {
 			return err
 		}
 		// Insert item
@@ -152,32 +150,23 @@ func (db *Badger) InsertFeedback(feedback Feedback) error {
 
 // BatchInsertFeedback inserts multiple feedback into the database. If the item doesn't exist, this item will be added.
 func (db *Badger) BatchInsertFeedback(feedback []Feedback) error {
-	// Read items
-	items, err := db.GetItems(0, 0)
-	if err != nil {
-		return err
-	}
 	itemSet := make(map[string]interface{})
-	for _, item := range items {
-		itemSet[item.ItemId] = nil
-	}
 	// Write feedback
 	txn := db.db.NewWriteBatch()
 	for _, f := range feedback {
-		if err := batchInsertFeedback(txn, f); err != nil {
+		if err := wbBatchInsertFeedback(txn, f); err != nil {
 			return err
 		}
 		if _, exist := itemSet[f.ItemId]; !exist {
 			itemSet[f.ItemId] = nil
-			items = append(items, Item{ItemId: f.ItemId})
 		}
 	}
 	if err := txn.Flush(); err != nil {
 		return err
 	}
 	return db.db.Update(func(txn *badger.Txn) error {
-		for _, item := range items {
-			if err := insertItem(txn, item, false); err != nil {
+		for itemId := range itemSet {
+			if err := insertItem(txn, Item{ItemId: itemId}, false); err != nil {
 				return err
 			}
 		}
@@ -185,13 +174,18 @@ func (db *Badger) BatchInsertFeedback(feedback []Feedback) error {
 	})
 }
 
-// getFeedback returns all feedback in the database.
-func (db *Badger) GetFeedback() (feedback []Feedback, err error) {
-	err = db.db.View(func(txn *badger.Txn) error {
+// txnGetFeedback returns all feedback in the database.
+func (db *Badger) GetFeedback(cursor string, n int) (string, []Feedback, error) {
+	feedback := make([]Feedback, 0)
+	rawCursor := []byte(cursor)
+	if len(cursor) == 0 {
+		rawCursor = []byte(prefixFeedback)
+	}
+	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := []byte(prefixFeedback)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixFeedback)) && len(feedback) < n; it.Next() {
+			rawCursor = it.Item().Key()
 			item := it.Item()
 			err := item.Value(func(v []byte) error {
 				var f Feedback
@@ -205,12 +199,17 @@ func (db *Badger) GetFeedback() (feedback []Feedback, err error) {
 				return err
 			}
 		}
+		if !it.ValidForPrefix([]byte(prefixFeedback)) {
+			rawCursor = nil
+		} else {
+			rawCursor = it.Item().Key()
+		}
 		return nil
 	})
-	return
+	return string(rawCursor), feedback, err
 }
 
-func getFeedback(txn *badger.Txn, userId string, itemId string) (feedback Feedback, err error) {
+func txnGetFeedback(txn *badger.Txn, userId string, itemId string) (feedback Feedback, err error) {
 	feedbackKey := FeedbackKey{UserId: userId, ItemId: itemId}
 	key, err := json.Marshal(feedbackKey)
 	if err != nil {
@@ -234,7 +233,7 @@ func (db *Badger) GetUserFeedback(userId string) (feedback []Feedback, err error
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			k := it.Item().Key()
 			itemId := extractKey(k, []byte(prefixUserIndex), []byte(userId), []byte("/"))
-			f, err := getFeedback(txn, userId, itemId)
+			f, err := txnGetFeedback(txn, userId, itemId)
 			if err != nil {
 				return err
 			}
@@ -253,7 +252,7 @@ func (db *Badger) GetItemFeedback(itemId string) (feedback []Feedback, err error
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			k := it.Item().Key()
 			userId := extractKey(k, []byte(prefixItemIndex), []byte(itemId), []byte("/"))
-			f, err := getFeedback(txn, userId, itemId)
+			f, err := txnGetFeedback(txn, userId, itemId)
 			if err != nil {
 				return err
 			}
@@ -271,7 +270,7 @@ func (db *Badger) InsertUser(user User) error {
 	})
 }
 
-func deleteByPrefix(txn *badger.Txn, prefix []byte) error {
+func txnDeleteByPrefix(txn *badger.Txn, prefix []byte) error {
 	deleteKeys := func(keysForDelete [][]byte) error {
 		for _, key := range keysForDelete {
 			if err := txn.Delete(key); err != nil {
@@ -301,10 +300,10 @@ func (db *Badger) DeleteUser(userId string) error {
 		if err := txn.Delete(newKey([]byte(prefixUser), []byte(userId))); err != nil {
 			return err
 		}
-		if err := deleteByPrefix(txn, newKey([]byte(prefixUserIndex), []byte(userId))); err != nil {
+		if err := txnDeleteByPrefix(txn, newKey([]byte(prefixUserIndex), []byte(userId))); err != nil {
 			return err
 		}
-		return deleteByPrefix(txn, newKey([]byte(prefixIgnore), []byte(userId)))
+		return txnDeleteByPrefix(txn, newKey([]byte(prefixIgnore), []byte(userId)))
 	})
 }
 
@@ -320,21 +319,31 @@ func (db *Badger) GetUser(userId string) (user User, err error) {
 	return
 }
 
-func (db *Badger) GetUsers() (users []User, err error) {
-	err = db.db.View(func(txn *badger.Txn) error {
+func (db *Badger) GetUsers(cursor string, n int) (string, []User, error) {
+	users := make([]User, 0)
+	rawCursor := []byte(cursor)
+	if len(cursor) == 0 {
+		rawCursor = []byte(prefixUser)
+	}
+	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := []byte(prefixUser)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixUser)) && len(users) < n; it.Next() {
+			rawCursor = it.Item().Key()
 			userId := extractKey(it.Item().Key(), []byte(prefixUser))
 			users = append(users, User{UserId: userId})
 		}
+		if !it.ValidForPrefix([]byte(prefixUser)) {
+			rawCursor = nil
+		} else {
+			rawCursor = it.Item().Key()
+		}
 		return nil
 	})
-	return
+	return string(rawCursor), users, err
 }
 
-func insertLabel(txn *badger.Txn, label string) error {
+func txnInsertLabel(txn *badger.Txn, label string) error {
 	return txn.Set(newKey([]byte(prefixLabel), []byte(label)), nil)
 }
 
@@ -355,7 +364,7 @@ func insertItem(txn *badger.Txn, item Item, override bool) error {
 	}
 	// Write index
 	for _, tag := range item.Labels {
-		if err = insertLabel(txn, tag); err != nil {
+		if err = txnInsertLabel(txn, tag); err != nil {
 			return err
 		}
 		if err = txn.Set(newKey([]byte(prefixLabelIndex), []byte(tag), []byte("/"), []byte(itemId)), nil); err != nil {
@@ -384,7 +393,7 @@ func (db *Badger) BatchInsertItem(items []Item) error {
 	})
 }
 
-func getItem(txn *badger.Txn, itemId string) (item Item, err error) {
+func txnGetItem(txn *badger.Txn, itemId string) (item Item, err error) {
 	var it *badger.Item
 	it, err = txn.Get(newKey([]byte(prefixItem), []byte(itemId)))
 	if err != nil {
@@ -401,66 +410,76 @@ func (db *Badger) DeleteItem(itemId string) error {
 		if err := txn.Delete(newKey([]byte(prefixItem), []byte(itemId))); err != nil {
 			return err
 		}
-		return deleteByPrefix(txn, newKey([]byte(prefixItemIndex), []byte(itemId)))
+		return txnDeleteByPrefix(txn, newKey([]byte(prefixItemIndex), []byte(itemId)))
 	})
 }
 
-// getItem gets a item from database by item ID.
+// txnGetItem gets a item from database by item ID.
 func (db *Badger) GetItem(itemId string) (item Item, err error) {
 	err = db.db.View(func(txn *badger.Txn) error {
-		item, err = getItem(txn, itemId)
+		item, err = txnGetItem(txn, itemId)
 		return err
 	})
 	return
 }
 
 // GetItems returns all items in the dataset.
-func (db *Badger) GetItems(n int, offset int) ([]Item, error) {
-	if n == 0 {
-		n = (1<<bits.UintSize)/2 - 1
-	}
-	pos := 0
+func (db *Badger) GetItems(cursor string, n int) (string, []Item, error) {
 	items := make([]Item, 0)
+	rawCursor := []byte(cursor)
+	if len(cursor) == 0 {
+		rawCursor = []byte(prefixItem)
+	}
 	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := []byte(prefixItem)
-		for it.Seek(prefix); it.ValidForPrefix(prefix) && len(items) < n; it.Next() {
-			if pos < offset {
-				// Skip offset
-				pos += 1
-			} else {
-				// Read n
-				err := it.Item().Value(func(v []byte) error {
-					var item Item
-					if err := json.Unmarshal(v, &item); err != nil {
-						return err
-					}
-					items = append(items, item)
-					return nil
-				})
-				if err != nil {
+		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixItem)) && len(items) < n; it.Next() {
+			// Read n
+			rawCursor = it.Item().Key()
+			err := it.Item().Value(func(v []byte) error {
+				var item Item
+				if err := json.Unmarshal(v, &item); err != nil {
 					return err
 				}
+				items = append(items, item)
+				return nil
+			})
+			if err != nil {
+				return err
 			}
+		}
+		if !it.ValidForPrefix([]byte(prefixItem)) {
+			rawCursor = nil
+		} else {
+			rawCursor = it.Item().Key()
 		}
 		return nil
 	})
-	return items, err
+	return string(rawCursor), items, err
 }
 
-func (db *Badger) GetLabels() (labels []string, err error) {
-	err = db.db.View(func(txn *badger.Txn) error {
+func (db *Badger) GetLabels(cursor string, n int) (string, []string, error) {
+	labels := make([]string, 0)
+	rawCursor := []byte(cursor)
+	if len(cursor) == 0 {
+		rawCursor = []byte(prefixLabel)
+	}
+	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := []byte(prefixLabel)
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixLabel)) && len(labels) < n; it.Next() {
+			rawCursor = it.Item().Key()
 			label := extractKey(it.Item().Key(), []byte(prefixLabel))
 			labels = append(labels, label)
 		}
+		if !it.ValidForPrefix([]byte(prefixItem)) {
+			rawCursor = nil
+		} else {
+			rawCursor = it.Item().Key()
+		}
 		return nil
 	})
-	return
+	return string(rawCursor), labels, err
 }
 
 // GetLabelItems list items with given label.
@@ -473,7 +492,7 @@ func (db *Badger) GetLabelItems(label string) ([]Item, error) {
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			k := it.Item().Key()
 			itemId := extractKey(k, []byte(prefixLabelIndex), []byte(label), []byte("/"))
-			item, err := getItem(txn, itemId)
+			item, err := txnGetItem(txn, itemId)
 			if err != nil {
 				return err
 			}
@@ -484,7 +503,7 @@ func (db *Badger) GetLabelItems(label string) ([]Item, error) {
 	return items, err
 }
 
-func countPrefix(txn *badger.Txn, prefix []byte) (int, error) {
+func txnCountPrefix(txn *badger.Txn, prefix []byte) (int, error) {
 	count := 0
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
@@ -522,7 +541,7 @@ func (db *Badger) GetUserIgnore(userId string) (ignored []string, err error) {
 func (db *Badger) CountUserIgnore(userId string) (count int, err error) {
 	prefix := newKey([]byte(prefixIgnore), []byte(userId))
 	err = db.db.View(func(txn *badger.Txn) error {
-		count, err = countPrefix(txn, prefix)
+		count, err = txnCountPrefix(txn, prefix)
 		return nil
 	})
 	return
