@@ -423,13 +423,14 @@ func TestServer_List(t *testing.T) {
 		Get string
 	}
 	operators := []ListOperator{
-		{s.db.SetRecommend, "/user/0/recommend"},
+		{s.db.SetRecommend, "/user/0/recommend/cache"},
 		{s.db.SetLatest, "/latest/0"},
 		{s.db.SetPop, "/popular/0"},
 		{s.db.SetNeighbors, "/item/0/neighbors"},
 	}
 
 	for _, operator := range operators {
+		t.Log("testing", operator.Get)
 		// Put items
 		items := []storage.RecommendedItem{
 			{"0", 0.0},
@@ -452,7 +453,7 @@ func TestServer_List(t *testing.T) {
 			Handler(s.handler).
 			Get(operator.Get).
 			QueryParams(map[string]string{
-				"number": "3",
+				"n":      "3",
 				"offset": "0"}).
 			Expect(t).
 			Status(http.StatusOK).
@@ -462,7 +463,7 @@ func TestServer_List(t *testing.T) {
 			Handler(s.handler).
 			Get(operator.Get).
 			QueryParams(map[string]string{
-				"number": "3",
+				"n":      "3",
 				"offset": "1"}).
 			Expect(t).
 			Status(http.StatusOK).
@@ -473,7 +474,7 @@ func TestServer_List(t *testing.T) {
 			Handler(s.handler).
 			Get(operator.Get).
 			QueryParams(map[string]string{
-				"number": "0",
+				"n":      "0",
 				"offset": "0"}).
 			Expect(t).
 			Status(http.StatusOK).
