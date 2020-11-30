@@ -92,7 +92,7 @@ func loadTest(dataset *DataSet, path string) error {
 		positive = positive[1 : len(positive)-1]
 		fields = strings.Split(positive, ",")
 		userId, itemId := fields[0], fields[1]
-		dataset.Add(userId, itemId, true)
+		dataset.AddFeedback(userId, itemId, true)
 		dataset.SetNegatives(userId, negative)
 	}
 	return scanner.Err()
@@ -112,13 +112,13 @@ func loadTrain(path string) (*DataSet, error) {
 		line := scanner.Text()
 		fields := strings.Split(line, "\t")
 		userId, itemId := fields[0], fields[1]
-		dataset.Add(userId, itemId, true)
+		dataset.AddFeedback(userId, itemId, true)
 	}
 	return dataset, scanner.Err()
 }
 
-// loadDataFromBuiltIn loads a built-in Data set. Now support:
-func loadDataFromBuiltIn(dataSetName string) (*DataSet, *DataSet) {
+// LoadDataFromBuiltIn loads a built-in Data set. Now support:
+func LoadDataFromBuiltIn(dataSetName string) (*DataSet, *DataSet) {
 	// Extract Data set information
 	dataSet, exist := builtInDataSets[dataSetName]
 	if !exist {

@@ -16,10 +16,13 @@ package model
 import (
 	"bufio"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/storage"
 	"log"
 	"os"
 	"strings"
 )
+
+const batchSize = 1000
 
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
@@ -60,7 +63,23 @@ func NewDirectIndexDataset() *DataSet {
 	return dataset
 }
 
-func (dataset *DataSet) Add(userId, itemId string, insertUserItem bool) {
+func (dataset *DataSet) AddUser(userId string) {
+	dataset.UserIndex.Add(userId)
+	userIndex := dataset.UserIndex.ToNumber(userId)
+	for userIndex >= len(dataset.UserFeedback) {
+		dataset.UserFeedback = append(dataset.UserFeedback, make([]int, 0))
+	}
+}
+
+func (dataset *DataSet) AddItem(itemId string) {
+	dataset.ItemIndex.Add(itemId)
+	itemIndex := dataset.ItemIndex.ToNumber(itemId)
+	for itemIndex >= len(dataset.ItemFeedback) {
+		dataset.ItemFeedback = append(dataset.ItemFeedback, make([]int, 0))
+	}
+}
+
+func (dataset *DataSet) AddFeedback(userId, itemId string, insertUserItem bool) {
 	if insertUserItem {
 		dataset.UserIndex.Add(userId)
 	}
@@ -121,14 +140,14 @@ func createSliceOfSlice(n int) [][]int {
 	return x
 }
 
-func (dataset *DataSet) Split(numSample int, seed int64) (*DataSet, *DataSet) {
+func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet) {
 	trainSet, testSet := new(DataSet), new(DataSet)
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex
 	trainSet.ItemIndex, testSet.ItemIndex = dataset.ItemIndex, dataset.ItemIndex
 	trainSet.UserFeedback, testSet.UserFeedback = createSliceOfSlice(dataset.UserCount()), createSliceOfSlice(dataset.UserCount())
 	trainSet.ItemFeedback, testSet.ItemFeedback = createSliceOfSlice(dataset.ItemCount()), createSliceOfSlice(dataset.ItemCount())
 	rng := base.NewRandomGenerator(seed)
-	if numSample == dataset.UserCount() {
+	if numTestUsers == dataset.UserCount() {
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
 			k := rng.Intn(len(dataset.UserFeedback[userIndex]))
 			testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
@@ -145,7 +164,7 @@ func (dataset *DataSet) Split(numSample int, seed int64) (*DataSet, *DataSet) {
 			}
 		}
 	} else {
-		testUsers := rng.Sample(dataset.UserCount(), numSample)
+		testUsers := rng.Sample(dataset.UserCount(), numTestUsers)
 		for _, userIndex := range testUsers {
 			k := rng.Intn(len(dataset.UserFeedback[userIndex]))
 			testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
@@ -208,7 +227,56 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 		if len(fields) < 2 {
 			continue
 		}
-		dataset.Add(fields[0], fields[1], true)
+		dataset.AddFeedback(fields[0], fields[1], true)
 	}
 	return dataset
+}
+
+func LoadDataFromDatabase(database storage.Database) (*DataSet, error) {
+	dataset := NewMapIndexDataset()
+	cursor := ""
+	var err error
+	// pull users
+	for {
+		var users []storage.User
+		cursor, users, err = database.GetUsers(cursor, batchSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, user := range users {
+			dataset.AddUser(user.UserId)
+		}
+		if cursor == "" {
+			break
+		}
+	}
+	// pull items
+	for {
+		var items []storage.Item
+		cursor, items, err = database.GetItems(cursor, batchSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items {
+			dataset.AddItem(item.ItemId)
+		}
+		if cursor == "" {
+			break
+		}
+	}
+	// pull database
+	for {
+		var feedback []storage.Feedback
+		cursor, feedback, err = database.GetFeedback(cursor, batchSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range feedback {
+			dataset.AddFeedback(v.UserId, v.ItemId, false)
+		}
+		if cursor == "" {
+			break
+		}
+	}
+	return dataset, nil
 }

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestIndex(t *testing.T) {
+func TestMapIndex(t *testing.T) {
 	// Create a indexer
 	set := NewMapIndex()
 	assert.Equal(t, set.Len(), 0)

@@ -19,7 +19,7 @@ func assertEpsilon(t *testing.T, expect float32, actual float32) {
 // of the 26th international conference on world wide web. 2017.
 
 func TestBPR_MovieLens(t *testing.T) {
-	trainSet, testSet := loadDataFromBuiltIn("ml-1m")
+	trainSet, testSet := LoadDataFromBuiltIn("ml-1m")
 	model := NewBPR(Params{
 		NFactors:   8,
 		Reg:        0.01,
@@ -33,7 +33,7 @@ func TestBPR_MovieLens(t *testing.T) {
 }
 
 func TestBPR_Pinterest(t *testing.T) {
-	trainSet, testSet := loadDataFromBuiltIn("pinterest-20")
+	trainSet, testSet := LoadDataFromBuiltIn("pinterest-20")
 	model := NewBPR(Params{
 		NFactors:   8,
 		Reg:        0.005,
@@ -47,7 +47,7 @@ func TestBPR_Pinterest(t *testing.T) {
 }
 
 func TestALS_MovieLens(t *testing.T) {
-	trainSet, testSet := loadDataFromBuiltIn("ml-1m")
+	trainSet, testSet := LoadDataFromBuiltIn("ml-1m")
 	model := NewALS(Params{
 		NFactors: 8,
 		Reg:      0.015,
@@ -59,7 +59,7 @@ func TestALS_MovieLens(t *testing.T) {
 }
 
 func TestALS_Pinterest(t *testing.T) {
-	trainSet, testSet := loadDataFromBuiltIn("pinterest-20")
+	trainSet, testSet := LoadDataFromBuiltIn("pinterest-20")
 	model := NewALS(Params{
 		NFactors:   8,
 		Reg:        0.01,
