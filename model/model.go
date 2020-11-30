@@ -14,6 +14,7 @@
 package model
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 )
@@ -31,6 +32,8 @@ type Model interface {
 	SetParams(params Params)
 	// Get parameters.
 	GetParams() Params
+	// Get parameters grid
+	GetParamsGrid() ParamsGrid
 	// Fit a model with a train set and parameters.
 	Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score
 }
@@ -87,4 +90,15 @@ type BaseItemBased struct {
 
 func (model *BaseItemBased) Init(trainSet *DataSet) {
 	model.ItemIndex = trainSet.ItemIndex
+}
+
+func NewModel(name string, params Params) Model {
+	switch name {
+	case "als":
+		return NewALS(params)
+	case "bpr":
+		return NewBPR(params)
+	}
+	logrus.Fatal("unknown model %v", name)
+	return nil
 }

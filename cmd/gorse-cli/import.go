@@ -31,14 +31,14 @@ func importFeedback(csvFile string, sep string, header bool, fmt string, config 
 		log.Fatal(err)
 	}
 	length := info.Size()
-	// Open database
+	// Open file
 	file, err := os.Open(csvFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	// Open file
-	database, err := storage.Open(config.Database.URL)
+	// Open database
+	database, err := storage.Open(config.Database.Path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func importFeedback(csvFile string, sep string, header bool, fmt string, config 
 	for scanner.Scan() {
 		line := scanner.Text()
 		splits := strings.Split(line, sep)
-		splits = formatter(fmt, "ui", splits)
+		splits = format(fmt, "ui", splits)
 		if splits[0] == "" {
 			log.Fatal("invalid user id")
 		}
@@ -76,14 +76,14 @@ func importItems(csvFile string, sep string, labelSep string, header bool, fmt s
 		log.Fatal(err)
 	}
 	length := info.Size()
-	// Open database
+	// Open file
 	file, err := os.Open(csvFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	// Open file
-	database, err := storage.Open(config.Database.URL)
+	// Open database
+	database, err := storage.Open(config.Database.Path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func importItems(csvFile string, sep string, labelSep string, header bool, fmt s
 	for scanner.Scan() {
 		line := scanner.Text()
 		splits := strings.Split(line, sep)
-		splits = formatter(fmt, "itl", splits)
+		splits = format(fmt, "itl", splits)
 		if splits[0] == "" {
 			log.Fatal("invalid item id")
 		}
@@ -120,7 +120,7 @@ func importItems(csvFile string, sep string, labelSep string, header bool, fmt s
 	bar.Finish()
 }
 
-func formatter(inFmt string, outFmt string, s []string) []string {
+func format(inFmt string, outFmt string, s []string) []string {
 	if len(s) < len(inFmt) {
 		log.Fatalf("Expect %d fields, get %d", len(inFmt), len(s))
 	}
