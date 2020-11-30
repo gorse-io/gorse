@@ -27,7 +27,7 @@ var serverCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load config
 		configPath, _ := cmd.PersistentFlags().GetString("config")
-		conf, meta, err := config.LoadConfig(configPath)
+		conf, _, err := config.LoadConfig(configPath)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -38,16 +38,14 @@ var serverCommand = &cobra.Command{
 			conf.Server.Host, _ = cmd.PersistentFlags().GetString("host")
 		}
 		if cmd.PersistentFlags().Changed("database") {
-			conf.Database.URL, _ = cmd.PersistentFlags().GetString("database")
+			conf.Database.Path, _ = cmd.PersistentFlags().GetString("database")
 		}
 		// Start server
-		s := server.Server{
-			Config:   conf,
-			MetaData: &meta,
-		}
-		if s.DB, err = storage.Open(conf.Database.URL); err != nil {
+		db, err := storage.Open(conf.Database.Path)
+		if err != nil {
 			log.Fatal(err)
 		}
+		s := server.NewServer(db, &conf.Server)
 		s.Serve()
 	},
 }

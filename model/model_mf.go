@@ -69,6 +69,16 @@ func (bpr *BPR) SetParams(params Params) {
 	bpr.initStdDev = bpr.Params.GetFloat32(InitStdDev, 0.001)
 }
 
+func (bpr *BPR) GetParamsGrid() ParamsGrid {
+	return ParamsGrid{
+		NFactors:   []interface{}{8, 16, 32, 64},
+		Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		InitMean:   []interface{}{0},
+		InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+	}
+}
+
 // Predict by the BPR model.
 func (bpr *BPR) Predict(userId, itemId string) float32 {
 	// Convert sparse Names to dense Names
@@ -237,6 +247,16 @@ func (als *ALS) SetParams(params Params) {
 	als.initStdDev = als.Params.GetFloat64(InitStdDev, 0.1)
 	als.reg = als.Params.GetFloat64(Reg, 0.06)
 	als.weight = als.Params.GetFloat64(Weight, 0.001)
+}
+
+func (als *ALS) GetParamsGrid() ParamsGrid {
+	return ParamsGrid{
+		NFactors:   []interface{}{8, 16, 32, 64},
+		InitMean:   []interface{}{0},
+		InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		Weight:     []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+	}
 }
 
 // Predict by the ALS model.

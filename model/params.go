@@ -14,6 +14,7 @@
 package model
 
 import (
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/zhenghaoz/gorse/config"
 	"log"
@@ -159,6 +160,22 @@ func (parameters Params) Merge(params Params) Params {
 	return merged
 }
 
+func (parameters Params) ToString() string {
+	s := ""
+	for name, val := range parameters {
+		if len(s) == 0 {
+			s += "{"
+		} else {
+			s += ","
+		}
+		s += string(name)
+		s += ":"
+		s += fmt.Sprint(val)
+	}
+	s += "}"
+	return s
+}
+
 func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params {
 	type ParamValues struct {
 		name  string
@@ -166,14 +183,14 @@ func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params 
 		value interface{}
 	}
 	values := []ParamValues{
-		{"lr", Lr, config.Params.Lr},
-		{"reg", Reg, config.Params.Reg},
-		{"n_epochs", NEpochs, config.Params.NEpochs},
-		{"n_factors", NFactors, config.Params.NFactors},
-		{"random_state", RandomState, config.Params.RandomState},
-		{"init_mean", InitMean, config.Params.InitMean},
-		{"init_std", InitStdDev, config.Params.InitStdDev},
-		{"alpha", Weight, config.Params.Weight},
+		{"lr", Lr, config.Model.Params.Lr},
+		{"reg", Reg, config.Model.Params.Reg},
+		{"n_epochs", NEpochs, config.Model.Params.NEpochs},
+		{"n_factors", NFactors, config.Model.Params.NFactors},
+		{"random_state", RandomState, config.Model.Params.RandomState},
+		{"init_mean", InitMean, config.Model.Params.InitMean},
+		{"init_std", InitStdDev, config.Model.Params.InitStdDev},
+		{"alpha", Weight, config.Model.Params.Weight},
 	}
 	params := Params{}
 	for _, v := range values {
@@ -184,5 +201,17 @@ func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params 
 	return params
 }
 
-// ParameterGrid contains candidate for grid search.
-type ParameterGrid map[ParamName][]interface{}
+// ParamsGrid contains candidate for grid search.
+type ParamsGrid map[ParamName][]interface{}
+
+func (grid ParamsGrid) Len() int {
+	return len(grid)
+}
+
+func (grid ParamsGrid) FillIfNotExist(g ParamsGrid) {
+	for param, values := range g {
+		if _, exist := grid[param]; !exist {
+			grid[param] = values
+		}
+	}
+}

@@ -77,7 +77,7 @@ func TestUnzip(t *testing.T) {
 }
 
 func TestLoadDataFromBuiltIn(t *testing.T) {
-	//data := loadDataFromBuiltIn("filmtrust")
+	//data := LoadDataFromBuiltIn("filmtrust")
 	//assert.Equal(t, 35497, data.Count())
 }
 
