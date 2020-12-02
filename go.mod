@@ -11,6 +11,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/emicklei/go-restful v2.9.0+incompatible
 	github.com/go-redis/redis/v8 v8.4.0
+	github.com/hashicorp/memberlist v0.2.2
 	github.com/olekukonko/tablewriter v0.0.1
 	github.com/pkg/errors v0.8.1
 	github.com/proullon/ramsql v0.0.0-20181213202341-817cee58a244
