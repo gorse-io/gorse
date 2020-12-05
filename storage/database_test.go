@@ -13,7 +13,7 @@ func getUsers(t *testing.T, db Database) []User {
 	var data []User
 	cursor := ""
 	for {
-		cursor, data, err = db.GetUsers(cursor, 2)
+		cursor, data, err = db.GetUsers("", cursor, 2)
 		assert.Nil(t, err)
 		users = append(users, data...)
 		if cursor == "" {
@@ -30,7 +30,6 @@ func getUsers(t *testing.T, db Database) []User {
 				assert.Equal(t, 2, len(data))
 			}
 		}
-		t.Log(cursor)
 	}
 }
 
@@ -40,7 +39,7 @@ func getItems(t *testing.T, db Database) []Item {
 	var data []Item
 	cursor := ""
 	for {
-		cursor, data, err = db.GetItems(cursor, 2)
+		cursor, data, err = db.GetItems("", cursor, 2)
 		assert.Nil(t, err)
 		items = append(items, data...)
 		if cursor == "" {
@@ -57,7 +56,6 @@ func getItems(t *testing.T, db Database) []Item {
 				assert.Equal(t, 2, len(data))
 			}
 		}
-		t.Log(cursor)
 	}
 }
 
@@ -84,7 +82,6 @@ func getFeedback(t *testing.T, db Database) []Feedback {
 				assert.Equal(t, 2, len(data))
 			}
 		}
-		t.Log(cursor)
 	}
 }
 
@@ -94,7 +91,7 @@ func getLabels(t *testing.T, db Database) []string {
 	var data []string
 	cursor := ""
 	for {
-		cursor, data, err = db.GetLabels(cursor, 2)
+		cursor, data, err = db.GetLabels("", cursor, 2)
 		assert.Nil(t, err)
 		labels = append(labels, data...)
 		if cursor == "" {
@@ -428,4 +425,46 @@ func testDeleteItem(t *testing.T, db Database) {
 	} else {
 		assert.Equal(t, 0, len(ret))
 	}
+}
+
+func testPrefix(t *testing.T, db Database) {
+	// insert items
+	items := []Item{
+		{ItemId: "a1", Labels: []string{"a1"}},
+		{ItemId: "a2", Labels: []string{"a2"}},
+		{ItemId: "a3", Labels: []string{"a3"}},
+		{ItemId: "b1", Labels: []string{"b1"}},
+		{ItemId: "b2", Labels: []string{"b2"}},
+		{ItemId: "b3", Labels: []string{"b3"}},
+	}
+	err := db.BatchInsertItem(items)
+	assert.Nil(t, err)
+	// get items with prefix
+	cursor, retItems, err := db.GetItems("a", "", 10)
+	assert.Equal(t, 0, len(cursor))
+	assert.Equal(t, items[0:3], retItems)
+	assert.Nil(t, err)
+	// get labels with prefix
+	cursor, labels, err := db.GetLabels("a", "", 10)
+	assert.Equal(t, 0, len(cursor))
+	assert.Equal(t, []string{"a1", "a2", "a3"}, labels)
+	assert.Nil(t, err)
+	// insert users
+	users := []User{
+		{"a1"},
+		{"a2"},
+		{"a3"},
+		{"b1"},
+		{"b2"},
+		{"b3"},
+	}
+	for _, user := range users {
+		err = db.InsertUser(user)
+		assert.Nil(t, err)
+	}
+	// get users with prefix
+	cursor, retUsers, err := db.GetUsers("a", "", 10)
+	assert.Equal(t, 0, len(cursor))
+	assert.Equal(t, users[0:3], retUsers)
+	assert.Nil(t, err)
 }

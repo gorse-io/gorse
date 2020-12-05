@@ -85,7 +85,7 @@ func (redis *Redis) GetItem(itemId string) (Item, error) {
 	return item, err
 }
 
-func (redis *Redis) GetItems(cursor string, n int) (string, []Item, error) {
+func (redis *Redis) GetItems(prefix string, cursor string, n int) (string, []Item, error) {
 	var ctx = context.Background()
 	var err error
 	cursorNum := uint64(0)
@@ -98,7 +98,7 @@ func (redis *Redis) GetItems(cursor string, n int) (string, []Item, error) {
 	items := make([]Item, 0)
 	// scan * from zero util cursor is zero
 	var keys []string
-	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixItem+"*", int64(n)).Result()
+	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixItem+prefix+"*", int64(n)).Result()
 	if err != nil {
 		return "", nil, err
 	}
@@ -160,7 +160,7 @@ func (redis *Redis) GetLabelItems(label string) ([]Item, error) {
 	return items, err
 }
 
-func (redis *Redis) GetLabels(cursor string, n int) (string, []string, error) {
+func (redis *Redis) GetLabels(prefix string, cursor string, n int) (string, []string, error) {
 	var ctx = context.Background()
 	var err error
 	cursorNum := uint64(0)
@@ -172,7 +172,7 @@ func (redis *Redis) GetLabels(cursor string, n int) (string, []string, error) {
 	}
 	labels := make([]string, 0)
 	var keys []string
-	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixLabel+"*", int64(n)).Result()
+	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixLabel+prefix+"*", int64(n)).Result()
 	if err != nil {
 		return "", nil, err
 	}
@@ -225,7 +225,7 @@ func (redis *Redis) GetUser(userId string) (User, error) {
 	return user, err
 }
 
-func (redis *Redis) GetUsers(cursor string, n int) (string, []User, error) {
+func (redis *Redis) GetUsers(prefix string, cursor string, n int) (string, []User, error) {
 	var ctx = context.Background()
 	var err error
 	cursorNum := uint64(0)
@@ -237,7 +237,7 @@ func (redis *Redis) GetUsers(cursor string, n int) (string, []User, error) {
 	}
 	users := make([]User, 0)
 	var keys []string
-	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixUser+"*", int64(n)).Result()
+	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixUser+prefix+"*", int64(n)).Result()
 	if err != nil {
 		return "", nil, err
 	}
