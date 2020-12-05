@@ -87,3 +87,9 @@ func TestRedis_DeleteItem(t *testing.T) {
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
+
+func TestRedis_Prefix(t *testing.T) {
+	db := newMockRedis(t)
+	defer db.Close(t)
+	testPrefix(t, db.Database)
+}
