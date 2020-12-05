@@ -319,21 +319,22 @@ func (db *Badger) GetUser(userId string) (user User, err error) {
 	return
 }
 
-func (db *Badger) GetUsers(cursor string, n int) (string, []User, error) {
+func (db *Badger) GetUsers(prefix string, cursor string, n int) (string, []User, error) {
+	prefixBytes := newKey([]byte(prefixUser), []byte(prefix))
 	users := make([]User, 0)
 	rawCursor := []byte(cursor)
 	if len(cursor) == 0 {
-		rawCursor = []byte(prefixUser)
+		rawCursor = prefixBytes
 	}
 	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixUser)) && len(users) < n; it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix(prefixBytes) && len(users) < n; it.Next() {
 			rawCursor = it.Item().Key()
 			userId := extractKey(it.Item().Key(), []byte(prefixUser))
 			users = append(users, User{UserId: userId})
 		}
-		if !it.ValidForPrefix([]byte(prefixUser)) {
+		if !it.ValidForPrefix(prefixBytes) {
 			rawCursor = nil
 		} else {
 			rawCursor = it.Item().Key()
@@ -424,16 +425,17 @@ func (db *Badger) GetItem(itemId string) (item Item, err error) {
 }
 
 // GetItems returns all items in the dataset.
-func (db *Badger) GetItems(cursor string, n int) (string, []Item, error) {
+func (db *Badger) GetItems(prefix string, cursor string, n int) (string, []Item, error) {
+	prefixBytes := newKey([]byte(prefixItem), []byte(prefix))
 	items := make([]Item, 0)
 	rawCursor := []byte(cursor)
 	if len(cursor) == 0 {
-		rawCursor = []byte(prefixItem)
+		rawCursor = prefixBytes
 	}
 	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixItem)) && len(items) < n; it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix(prefixBytes) && len(items) < n; it.Next() {
 			// Read n
 			rawCursor = it.Item().Key()
 			err := it.Item().Value(func(v []byte) error {
@@ -448,7 +450,7 @@ func (db *Badger) GetItems(cursor string, n int) (string, []Item, error) {
 				return err
 			}
 		}
-		if !it.ValidForPrefix([]byte(prefixItem)) {
+		if !it.ValidForPrefix(prefixBytes) {
 			rawCursor = nil
 		} else {
 			rawCursor = it.Item().Key()
@@ -458,21 +460,22 @@ func (db *Badger) GetItems(cursor string, n int) (string, []Item, error) {
 	return string(rawCursor), items, err
 }
 
-func (db *Badger) GetLabels(cursor string, n int) (string, []string, error) {
+func (db *Badger) GetLabels(prefix string, cursor string, n int) (string, []string, error) {
+	prefixBytes := newKey([]byte(prefixLabel), []byte(prefix))
 	labels := make([]string, 0)
 	rawCursor := []byte(cursor)
 	if len(cursor) == 0 {
-		rawCursor = []byte(prefixLabel)
+		rawCursor = prefixBytes
 	}
 	err := db.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		for it.Seek(rawCursor); it.ValidForPrefix([]byte(prefixLabel)) && len(labels) < n; it.Next() {
+		for it.Seek(rawCursor); it.ValidForPrefix(prefixBytes) && len(labels) < n; it.Next() {
 			rawCursor = it.Item().Key()
 			label := extractKey(it.Item().Key(), []byte(prefixLabel))
 			labels = append(labels, label)
 		}
-		if !it.ValidForPrefix([]byte(prefixItem)) {
+		if !it.ValidForPrefix(prefixBytes) {
 			rawCursor = nil
 		} else {
 			rawCursor = it.Item().Key()

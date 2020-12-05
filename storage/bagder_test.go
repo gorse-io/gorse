@@ -92,3 +92,9 @@ func TestBadger_DeleteItem(t *testing.T) {
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
+
+func TestBadger_Prefix(t *testing.T) {
+	db := newMockBadger(t)
+	defer db.Close(t)
+	testPrefix(t, db.Database)
+}

@@ -84,3 +84,9 @@ func TestSQLDatabase_DeleteItem(t *testing.T) {
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
+
+func TestSQLDatabase_Prefix(t *testing.T) {
+	db := newMockSQLDatabase(t, "TestSQLDatabase_Prefix")
+	defer db.Close(t)
+	testPrefix(t, db.Database)
+}

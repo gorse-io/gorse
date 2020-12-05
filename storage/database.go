@@ -61,16 +61,16 @@ type Database interface {
 	BatchInsertItem(items []Item) error
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
-	GetItems(cursor string, n int) (string, []Item, error)
+	GetItems(prefix string, cursor string, n int) (string, []Item, error)
 	GetItemFeedback(itemId string) ([]Feedback, error)
 	// label
 	GetLabelItems(label string) ([]Item, error)
-	GetLabels(cursor string, n int) (string, []string, error)
+	GetLabels(prefix string, cursor string, n int) (string, []string, error)
 	// users
 	InsertUser(user User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
-	GetUsers(cursor string, n int) (string, []User, error)
+	GetUsers(prefix string, cursor string, n int) (string, []User, error)
 	GetUserFeedback(userId string) ([]Feedback, error)
 	InsertUserIgnore(userId string, items []string) error
 	GetUserIgnore(userId string) ([]string, error)
