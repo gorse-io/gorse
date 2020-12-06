@@ -36,7 +36,7 @@ func Evaluate(estimator Model, testSet *DataSet, trainSet *DataSet, n int, numCa
 		if targetSet.Len() > 0 {
 			// Sample negative samples
 			//userTrainSet := NewSet(trainSet.UserFeedback[userIndex])
-			negativeSample := testSet.Negatives[userIndex]
+			negativeSample := testSet.NegativeSample(trainSet, numCandidates)[userIndex]
 			candidates := make([]int, 0, targetSet.Len()+len(negativeSample))
 			candidates = append(candidates, testSet.UserFeedback[userIndex]...)
 			candidates = append(candidates, negativeSample...)

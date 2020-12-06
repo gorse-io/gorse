@@ -142,6 +142,22 @@ func createSliceOfSlice(n int) [][]int {
 	return x
 }
 
+func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [][]int {
+	if dataset.Negatives == nil {
+		rng := base.NewRandomGenerator(0)
+		dataset.Negatives = make([][]int, dataset.UserCount())
+		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
+			s1 := base.NewSet(dataset.UserFeedback[userIndex])
+			s2 := base.NewSet(excludeSet.UserFeedback[userIndex])
+			dataset.Negatives[userIndex] = rng.Sample(dataset.UserCount(), numCandidates, s1, s2)
+		}
+	}
+	return dataset.Negatives
+}
+
+// Split dataset by user-leave-one-out method. The argument `numTestUsers` determines the number of users in the test
+// set. If numTestUsers is equal or greater than the number of total users or numTestUsers <= 0, all users are presented
+// in the test set.
 func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet) {
 	trainSet, testSet := new(DataSet), new(DataSet)
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex
@@ -149,7 +165,7 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet.UserFeedback, testSet.UserFeedback = createSliceOfSlice(dataset.UserCount()), createSliceOfSlice(dataset.UserCount())
 	trainSet.ItemFeedback, testSet.ItemFeedback = createSliceOfSlice(dataset.ItemCount()), createSliceOfSlice(dataset.ItemCount())
 	rng := base.NewRandomGenerator(seed)
-	if numTestUsers == dataset.UserCount() {
+	if numTestUsers >= dataset.UserCount() || numTestUsers <= 0 {
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
 			k := rng.Intn(len(dataset.UserFeedback[userIndex]))
 			testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
@@ -175,6 +191,17 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 			testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]] = append(testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]], userIndex)
 			for i, itemIndex := range dataset.UserFeedback[userIndex] {
 				if i != k {
+					trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
+					trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
+					trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
+					trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
+				}
+			}
+		}
+		testUserSet := base.NewSet(testUsers)
+		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
+			if !testUserSet.Contain(userIndex) {
+				for _, itemIndex := range dataset.UserFeedback[userIndex] {
 					trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
 					trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
 					trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
@@ -271,7 +298,7 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, error) {
 	// pull users
 	for {
 		var users []storage.User
-		cursor, users, err = database.GetUsers(cursor, batchSize)
+		cursor, users, err = database.GetUsers("", cursor, batchSize)
 		if err != nil {
 			return nil, err
 		}
@@ -285,7 +312,7 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, error) {
 	// pull items
 	for {
 		var items []storage.Item
-		cursor, items, err = database.GetItems(cursor, batchSize)
+		cursor, items, err = database.GetItems("", cursor, batchSize)
 		if err != nil {
 			return nil, err
 		}

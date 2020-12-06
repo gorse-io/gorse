@@ -63,9 +63,6 @@ func (idx *MapIndex) Add(name string) {
 
 // ToNumber converts a sparse ID to a dense index.
 func (idx *MapIndex) ToNumber(name string) int {
-	if idx == nil {
-		return NotId
-	}
 	if denseId, exist := idx.Numbers[name]; exist {
 		return denseId
 	}

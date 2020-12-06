@@ -51,7 +51,7 @@ var serverCommand = &cobra.Command{
 }
 
 func init() {
-	serverCommand.PersistentFlags().StringP("config", "c", "/etc/gorse/config.toml", "Configuration file path.")
+	serverCommand.PersistentFlags().StringP("config", "c", "/etc/server.toml", "Configuration file path.")
 	serverCommand.PersistentFlags().Int("port", 8081, "Server port")
 	serverCommand.PersistentFlags().String("host", "127.0.0.1", "Server host")
 	serverCommand.PersistentFlags().String("database", "", "Database address")

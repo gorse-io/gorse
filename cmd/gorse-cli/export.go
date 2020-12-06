@@ -44,8 +44,11 @@ func exportFeedback(csvFile string, sep string, header bool, config *config.Conf
 		}
 	}
 	cursor := ""
+	count := 0
 	for {
-		cursor, feedback, err := database.GetFeedback(cursor, batchSize)
+		var feedback []storage.Feedback
+		var err error
+		cursor, feedback, err = database.GetFeedback(cursor, batchSize)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -54,7 +57,10 @@ func exportFeedback(csvFile string, sep string, header bool, config *config.Conf
 				log.Fatal(err)
 			}
 		}
+		count += len(feedback)
+		fmt.Printf("\rexport feedback %v", count)
 		if cursor == "" {
+			fmt.Println()
 			break
 		}
 	}
@@ -76,7 +82,7 @@ func exportItems(csvFile string, sep string, labelSep string, header bool, confi
 	// Export items
 	cursor := ""
 	for {
-		cursor, items, err := database.GetItems(cursor, batchSize)
+		cursor, items, err := database.GetItems("", cursor, batchSize)
 		if err != nil {
 			log.Fatal(err)
 		}
