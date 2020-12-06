@@ -291,16 +291,17 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 	return dataset
 }
 
-func LoadDataFromDatabase(database storage.Database) (*DataSet, error) {
+func LoadDataFromDatabase(database storage.Database) (*DataSet, []storage.Item, error) {
 	dataset := NewMapIndexDataset()
 	cursor := ""
 	var err error
+	allItems := make([]storage.Item, 0)
 	// pull users
 	for {
 		var users []storage.User
 		cursor, users, err = database.GetUsers("", cursor, batchSize)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, user := range users {
 			dataset.AddUser(user.UserId)
@@ -313,8 +314,9 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, error) {
 	for {
 		var items []storage.Item
 		cursor, items, err = database.GetItems("", cursor, batchSize)
+		allItems = append(allItems, items...)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, item := range items {
 			dataset.AddItem(item.ItemId)
@@ -328,7 +330,7 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, error) {
 		var feedback []storage.Feedback
 		cursor, feedback, err = database.GetFeedback(cursor, batchSize)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, v := range feedback {
 			dataset.AddFeedback(v.UserId, v.ItemId, false)
@@ -337,5 +339,5 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, error) {
 			break
 		}
 	}
-	return dataset, nil
+	return dataset, allItems, nil
 }

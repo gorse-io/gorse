@@ -13,40 +13,18 @@
 // limitations under the License.
 package leader
 
-import "unicode"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
-func stringToPath(s string) []int32 {
-	path := make([]int32, len(s))
-	for i, c := range s {
-		if !unicode.IsLetter(c) {
-			panic("unsupported name " + s)
-		} else if '0' <= c && c <= '9' {
-			path[i] = c - '0'
-		} else if 'a' <= c && c <= 'z' {
-
-		} else {
-
-		}
+func TestSplitter_Split(t *testing.T) {
+	s := NewSplitter()
+	parts := s.Split(5)
+	assert.Equal(t, 5, len(parts))
+	count := 0
+	for _, p := range parts {
+		count += len(p)
 	}
-}
-
-func pathToString() {
-
-}
-
-type TrieNode struct {
-	count    int
-	children []*TrieNode
-}
-
-type TrieSplitter struct {
-	root *TrieNode
-}
-
-func (s *TrieSplitter) Add(name string) {
-
-}
-
-func (s *TrieSplitter) Split(n int) [][]string {
-	return nil
+	assert.Equal(t, 26*2+10, count)
 }

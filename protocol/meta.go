@@ -39,8 +39,8 @@ func NewName(role string, port int, hostname string) string {
 	return string(data)
 }
 
-func ParseName(s string) (string, int, string, error) {
+func ParseName(s string) (Meta, error) {
 	var meta Meta
 	err := json.Unmarshal([]byte(s), &meta)
-	return meta.Role, meta.Port, meta.Name, err
+	return meta, err
 }

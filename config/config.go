@@ -64,12 +64,14 @@ type WorkerConfig struct {
 }
 
 type ModelConfig struct {
-	Model  string
-	Watch  int
-	Params ParamsConfig `toml:"params"`
-	Fit    FitConfig    `toml:"fit"`
-	Port   int
-	Host   string
+	Model           string
+	FitPeriod       int
+	BroadcastPeriod int
+	RetryPeriod     int
+	Params          ParamsConfig `toml:"params"`
+	Fit             FitConfig    `toml:"fit"`
+	Port            int
+	Host            string
 }
 
 func (config *ModelConfig) LoadDefaultIfNil() *ModelConfig {
