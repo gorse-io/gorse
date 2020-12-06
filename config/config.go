@@ -21,7 +21,7 @@ import (
 type Config struct {
 	Server   ServerConfig   `toml:"server"`
 	Database DatabaseConfig `toml:"database"`
-	Model    ModelConfig    `toml:"model"`
+	Leader   ModelConfig    `toml:"model"`
 }
 
 func (config *Config) LoadDefaultIfNil() *Config {
@@ -29,7 +29,7 @@ func (config *Config) LoadDefaultIfNil() *Config {
 		return &Config{
 			Server:   *(*ServerConfig)(nil).LoadDefaultIfNil(),
 			Database: *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
-			Model:    *(*ModelConfig)(nil).LoadDefaultIfNil(),
+			Leader:   *(*ModelConfig)(nil).LoadDefaultIfNil(),
 		}
 	}
 	return config
@@ -53,9 +53,23 @@ func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
 	return config
 }
 
+type WorkerConfig struct {
+	LeaderAddr string
+	Host       int
+	GossipPort int
+	RPCPort    int
+	Watch      int
+	CacheSize  int
+	Collectors []string
+}
+
 type ModelConfig struct {
+	Model  string
+	Watch  int
 	Params ParamsConfig `toml:"params"`
 	Fit    FitConfig    `toml:"fit"`
+	Port   int
+	Host   string
 }
 
 func (config *ModelConfig) LoadDefaultIfNil() *ModelConfig {
@@ -69,10 +83,11 @@ func (config *ModelConfig) LoadDefaultIfNil() *ModelConfig {
 }
 
 type FitConfig struct {
-	Jobs       int `toml:"n_jobs"`
-	Verbose    int `toml:"verbose"`
-	Candidates int `toml:"n_candidates"`
-	TopK       int `toml:"top_k"`
+	Jobs         int `toml:"n_jobs"`
+	Verbose      int `toml:"verbose"`
+	Candidates   int `toml:"n_candidates"`
+	TopK         int `toml:"top_k"`
+	NumTestUsers int
 }
 
 func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
@@ -135,16 +150,16 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	// Default fit config
 	defaultFitConfig := *(*FitConfig)(nil).LoadDefaultIfNil()
 	if !meta.IsDefined("model", "fit", "n_jobs") {
-		config.Model.Fit.Jobs = defaultFitConfig.Jobs
+		config.Leader.Fit.Jobs = defaultFitConfig.Jobs
 	}
 	if !meta.IsDefined("model", "fit", "verbose") {
-		config.Model.Fit.Verbose = defaultFitConfig.Verbose
+		config.Leader.Fit.Verbose = defaultFitConfig.Verbose
 	}
 	if !meta.IsDefined("model", "fit", "n_candidates") {
-		config.Model.Fit.Candidates = defaultFitConfig.Candidates
+		config.Leader.Fit.Candidates = defaultFitConfig.Candidates
 	}
 	if !meta.IsDefined("model", "fit", "top_k") {
-		config.Model.Fit.TopK = defaultFitConfig.TopK
+		config.Leader.Fit.TopK = defaultFitConfig.TopK
 	}
 }
 

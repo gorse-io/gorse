@@ -30,6 +30,10 @@ func (s StringSet) Contain(v string) bool {
 	return exist
 }
 
+func (s StringSet) Len() int {
+	return len(s)
+}
+
 type Set map[int]interface{}
 
 func NewSet(a []int) Set {

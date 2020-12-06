@@ -1,10 +1,11 @@
-package engine
+package leader
 
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/thanhpk/randstr"
 	"github.com/zhenghaoz/gorse/database"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/worker"
 	"log"
 	"math"
 	"os"
@@ -55,7 +56,7 @@ func TestRefreshPopItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Refresh
-	if err = RefreshPopItem(db, 3); err != nil {
+	if err = worker.UpdatePopItem(db, 3); err != nil {
 		t.Fatal(err)
 	}
 	// Check popular itemIds
@@ -119,7 +120,7 @@ func TestRefreshLatest(t *testing.T) {
 		}
 	}
 	// Update latest
-	if err = RefreshLatest(db, 3); err != nil {
+	if err = worker.RefreshLatest(db, 3); err != nil {
 		t.Fatal(err)
 	}
 	// Check popular items
@@ -169,12 +170,12 @@ func TestLabelCosine(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check
-	score, err := LabelCosine(db, "1", "2")
+	score, err := worker.LabelCosine(db, "1", "2")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0.0, score)
-	score, err = LabelCosine(db, "1", "3")
+	score, err = worker.LabelCosine(db, "1", "3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,12 +202,12 @@ func TestFeedbackCosine(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check
-	score, err := FeedbackCosine(db, "1", "2")
+	score, err := worker.FeedbackCosine(db, "1", "2")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0.0, score)
-	score, err = FeedbackCosine(db, "1", "3")
+	score, err = worker.FeedbackCosine(db, "1", "3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +239,7 @@ func TestRefreshNeighbors(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err = RefreshNeighbors(db, 5, runtime.NumCPU()); err != nil {
+	if err = worker.RefreshNeighbors(db, 5, runtime.NumCPU()); err != nil {
 		t.Fatal(err)
 	}
 	// Find N nearest neighbors
@@ -275,10 +276,10 @@ func TestRefreshRecommends(t *testing.T) {
 	}
 	ranker := model.NewItemPop(nil)
 	ranker.Fit(trainSet, nil)
-	if err = RefreshPopItem(db, 100); err != nil {
+	if err = worker.UpdatePopItem(db, 100); err != nil {
 		t.Fatal(err)
 	}
-	if err = RefreshRecommends(db, ranker, 10, runtime.NumCPU(), CollectPop); err != nil {
+	if err = worker.RefreshRecommends(db, ranker, 10, runtime.NumCPU(), worker.CollectPop); err != nil {
 		t.Fatal(err)
 	}
 	// Check result

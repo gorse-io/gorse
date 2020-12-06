@@ -17,24 +17,33 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 
 package protocol;
 
-service RouteGuide {
+service Worker {
 
-  rpc BroadcastModel(Model) returns (Response) {}
-  rpc BroadcastUserPartition(Partition) returns (Response) {}
-  rpc BroadcastItemPartition(Partition) returns (Response) {}
-  rpc BroadcastLabelPartition(Partition) returns (Response) {}
+  rpc BroadcastModel(Model) returns (WorkerResponse) {}
+  rpc BroadcastUserPartition(Partition) returns (WorkerResponse) {}
+  rpc BroadcastItemPartition(Partition) returns (WorkerResponse) {}
+  rpc BroadcastLabelPartition(Partition) returns (WorkerResponse) {}
+
+  rpc GetModelVersion(Model) returns (WorkerResponse) {}
+  rpc GetUserPartitionVersion(Partition) returns (WorkerResponse) {}
+  rpc GetItemPartitionVersion(Partition) returns (WorkerResponse) {}
+  rpc GetLabelPartitionVersion(Partition) returns (WorkerResponse) {}
 
 }
 
 message Model {
-  bytes model = 1;
+  int32 tag = 1;
+  int32 term = 2;
+  bytes model = 3;
 }
 
 message Partition {
-  string begin = 1;
-  string end = 2;
+  int32 tag = 1;
+  int32 term = 2;
+  repeated string prefixes = 3;
 }
 
-message Response {
-  string error = 1;
+message WorkerResponse {
+  int32 tag = 1;
+  int32 term = 2;
 }
