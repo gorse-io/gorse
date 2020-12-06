@@ -180,23 +180,34 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
+func (bpr *BPR) Clear() {
+	bpr.UserIndex = nil
+	bpr.ItemIndex = nil
+	bpr.UserFactor = nil
+	bpr.ItemFactor = nil
+}
+
 func (bpr *BPR) Init(trainSet *DataSet) {
 	// Initialize parameters
 	newUserFactor := bpr.rng.NormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
 	newItemFactor := bpr.rng.NormalMatrix(trainSet.ItemCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
 	// Relocate parameters
-	for _, userId := range trainSet.UserIndex.GetNames() {
-		oldIndex := bpr.UserIndex.ToNumber(userId)
-		newIndex := trainSet.UserIndex.ToNumber(userId)
-		if oldIndex != base.NotId {
-			newUserFactor[newIndex] = bpr.UserFactor[oldIndex]
+	if bpr.UserIndex != nil {
+		for _, userId := range trainSet.UserIndex.GetNames() {
+			oldIndex := bpr.UserIndex.ToNumber(userId)
+			newIndex := trainSet.UserIndex.ToNumber(userId)
+			if oldIndex != base.NotId {
+				newUserFactor[newIndex] = bpr.UserFactor[oldIndex]
+			}
 		}
 	}
-	for _, itemId := range trainSet.ItemIndex.GetNames() {
-		oldIndex := bpr.ItemIndex.ToNumber(itemId)
-		newIndex := trainSet.ItemIndex.ToNumber(itemId)
-		if oldIndex != base.NotId {
-			newItemFactor[newIndex] = bpr.ItemFactor[oldIndex]
+	if bpr.ItemIndex != nil {
+		for _, itemId := range trainSet.ItemIndex.GetNames() {
+			oldIndex := bpr.ItemIndex.ToNumber(itemId)
+			newIndex := trainSet.ItemIndex.ToNumber(itemId)
+			if oldIndex != base.NotId {
+				newItemFactor[newIndex] = bpr.ItemFactor[oldIndex]
+			}
 		}
 	}
 	// Initialize base
@@ -298,6 +309,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 		regs[i] = als.reg
 	}
 	regI := mat.NewDiagDense(als.nFactors, regs)
+	var fitErr error
 	for ep := 1; ep <= als.nEpochs; ep++ {
 		// Recompute all user factors: x_u = (Y^T C^userIndex Y + \lambda reg)^{-1} Y^T C^userIndex p(userIndex)
 		// Y^T Y
@@ -317,8 +329,8 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 				b.AddVec(b, temp2)
 			}
 			a.Add(a, regI)
-			if err := temp1.Inverse(a); err != nil {
-				log.Fatal(err)
+			if err := temp1.Inverse(a); err != nil && fitErr == nil {
+				fitErr = err
 			}
 			temp2.MulVec(temp1, b)
 			als.UserFactor.SetRow(userIndex, temp2.RawVector().Data)
@@ -341,11 +353,14 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 				b.AddVec(b, temp2)
 			}
 			a.Add(a, regI)
-			if err := temp1.Inverse(a); err != nil {
-				log.Fatal(err)
+			if err := temp1.Inverse(a); err != nil && fitErr == nil {
+				fitErr = err
 			}
 			temp2.MulVec(temp1, b)
 			als.ItemFactor.SetRow(i, temp2.RawVector().Data)
+		}
+		if fitErr != nil {
+			log.Error(fitErr)
 		}
 		// Cross validation
 		if ep%config.Verbose == 0 {
@@ -358,6 +373,13 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
+func (als *ALS) Clear() {
+	als.UserIndex = nil
+	als.ItemIndex = nil
+	als.ItemFactor = nil
+	als.UserFactor = nil
+}
+
 func (als *ALS) Init(trainSet *DataSet) {
 	// Initialize
 	newUserFactor := mat.NewDense(trainSet.UserCount(), als.nFactors,
@@ -365,18 +387,22 @@ func (als *ALS) Init(trainSet *DataSet) {
 	newItemFactor := mat.NewDense(trainSet.ItemCount(), als.nFactors,
 		als.rng.NormalVector64(trainSet.ItemCount()*als.nFactors, als.initMean, als.initStdDev))
 	// Relocate parameters
-	for _, userId := range trainSet.UserIndex.GetNames() {
-		oldIndex := als.UserIndex.ToNumber(userId)
-		newIndex := trainSet.UserIndex.ToNumber(userId)
-		if oldIndex != base.NotId {
-			newUserFactor.SetRow(newIndex, als.UserFactor.RawRowView(oldIndex))
+	if als.UserIndex != nil {
+		for _, userId := range trainSet.UserIndex.GetNames() {
+			oldIndex := als.UserIndex.ToNumber(userId)
+			newIndex := trainSet.UserIndex.ToNumber(userId)
+			if oldIndex != base.NotId {
+				newUserFactor.SetRow(newIndex, als.UserFactor.RawRowView(oldIndex))
+			}
 		}
 	}
-	for _, itemId := range trainSet.ItemIndex.GetNames() {
-		oldIndex := als.ItemIndex.ToNumber(itemId)
-		newIndex := trainSet.ItemIndex.ToNumber(itemId)
-		if oldIndex != base.NotId {
-			newItemFactor.SetRow(newIndex, als.ItemFactor.RawRowView(oldIndex))
+	if als.ItemIndex != nil {
+		for _, itemId := range trainSet.ItemIndex.GetNames() {
+			oldIndex := als.ItemIndex.ToNumber(itemId)
+			newIndex := trainSet.ItemIndex.ToNumber(itemId)
+			if oldIndex != base.NotId {
+				newItemFactor.SetRow(newIndex, als.ItemFactor.RawRowView(oldIndex))
+			}
 		}
 	}
 	// Initialize base

@@ -69,6 +69,7 @@ func init() {
 	testCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
 	testCommand.PersistentFlags().Int("jobs", 1, "Number of jobs for model fitting")
 	testCommand.PersistentFlags().Int("top-k", 10, "Length of recommendation list")
+	testCommand.PersistentFlags().Int("n-negatives", 100, "Number of negative samples")
 	testCommand.PersistentFlags().Int("n-test-users", 0, "Number of users for sampled test set")
 
 	// tune model

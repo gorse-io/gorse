@@ -161,11 +161,9 @@ func (parameters Params) Merge(params Params) Params {
 }
 
 func (parameters Params) ToString() string {
-	s := ""
+	s := "{"
 	for name, val := range parameters {
-		if len(s) == 0 {
-			s += "{"
-		} else {
+		if len(s) > 0 {
 			s += ","
 		}
 		s += string(name)
