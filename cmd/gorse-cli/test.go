@@ -133,15 +133,18 @@ func test(cmd *cobra.Command, args []string) {
 		}
 		defer database.Close()
 		// Load data
-		log.Infof("Load database %v", cfg.Database.Path)
+		log.Infof("Load data from %v", cfg.Database.Path)
 		data, err := model.LoadDataFromDatabase(database)
 		if err != nil {
 			log.Fatal(err)
 		}
+		log.Infof("data set: #user = %v, #item = %v, #feedback = %v", data.UserCount(), data.ItemCount(), data.Count())
 		numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
 		seed, _ := cmd.PersistentFlags().GetInt("random-state")
 		trainSet, testSet = data.Split(numTestUsers, int64(seed))
 	}
+	log.Infof("train set: #user = %v, #item = %v, #feedback = %v", trainSet.UserCount(), trainSet.ItemCount(), trainSet.Count())
+	log.Infof("test set: #user = %v, #item = %v, #feedback = %v", testSet.UserCount(), testSet.ItemCount(), testSet.Count())
 	// Load hyper-parameters
 	grid := parseParamFlags(cmd)
 	log.Printf("Load hyper-parameters grid: %v\n", grid)

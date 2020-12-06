@@ -65,6 +65,7 @@ func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGri
 			progress++
 			log.Infof("grid search %v/%v: %v", progress, count, params)
 			// Cross validate
+			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Merge(params))
 			score := estimator.Fit(trainSet, testSet, nil)
 			// Create GridSearch result
@@ -106,6 +107,7 @@ func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramG
 		}
 		// Cross validate
 		log.Infof("random search (%v/%v): %v", i, numTrials, params)
+		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Merge(params))
 		score := estimator.Fit(trainSet, testSet, nil)
 		results.Scores = append(results.Scores, score)
