@@ -17,8 +17,10 @@ import (
 	"bufio"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/storage"
+	"hash/fnv"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -193,6 +195,36 @@ func (dataset *DataSet) GetID(i int) (string, string) {
 // GetIndex gets the i-th record by <user index, item index, rating>.
 func (dataset *DataSet) GetIndex(i int) (int, int) {
 	return dataset.FeedbackUsers[i], dataset.FeedbackItems[i]
+}
+
+func (dataset *DataSet) Hash() (uint32, error) {
+	h := fnv.New32a()
+	// hashing users
+	for _, userId := range dataset.UserIndex.GetNames() {
+		_, err := h.Write([]byte(userId))
+		if err != nil {
+			return 0, err
+		}
+	}
+	// hashing items
+	for _, itemId := range dataset.ItemIndex.GetNames() {
+		_, err := h.Write([]byte(itemId))
+		if err != nil {
+			return 0, err
+		}
+	}
+	// hashing feedbacks
+	for i := range dataset.FeedbackItems {
+		_, err := h.Write([]byte(strconv.Itoa(dataset.FeedbackItems[i])))
+		if err != nil {
+			return 0, err
+		}
+		_, err = h.Write([]byte(strconv.Itoa(dataset.FeedbackUsers[i])))
+		if err != nil {
+			return 0, err
+		}
+	}
+	return h.Sum32(), nil
 }
 
 // LoadDataFromCSV loads Data from a CSV file. The CSV file should be:
