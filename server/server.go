@@ -468,7 +468,7 @@ func (s *Server) getUsers(request *restful.Request, response *restful.Response) 
 		return
 	}
 	// get all users
-	cursor, users, err := s.DB.GetUsers(cursor, n)
+	cursor, users, err := s.DB.GetUsers("", cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -572,7 +572,7 @@ func (s *Server) getItems(request *restful.Request, response *restful.Response) 
 		badRequest(response, err)
 		return
 	}
-	cursor, items, err := s.DB.GetItems(cursor, n)
+	cursor, items, err := s.DB.GetItems("", cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -670,7 +670,7 @@ func (s *Server) getLabels(request *restful.Request, response *restful.Response)
 		badRequest(response, err)
 		return
 	}
-	cursor, labels, err := s.DB.GetLabels(cursor, n)
+	cursor, labels, err := s.DB.GetLabels("", cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
