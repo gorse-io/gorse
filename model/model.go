@@ -36,6 +36,7 @@ type Model interface {
 	GetParamsGrid() ParamsGrid
 	// Fit a model with a train set and parameters.
 	Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score
+	Clear()
 }
 
 type MatrixFactorization interface {
