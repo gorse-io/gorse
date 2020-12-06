@@ -15,7 +15,11 @@ package leader
 
 import (
 	"github.com/BurntSushi/toml"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/hashicorp/memberlist"
+	"github.com/jinzhu/copier"
+	"github.com/sirupsen/logrus"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -38,6 +42,14 @@ type Leader struct {
 	model      model.Model
 	modelMutex sync.Mutex
 	dataHash   uint32
+
+	// user partition
+	usersSplitter *Splitter
+	userMutex     sync.Mutex
+
+	// item partition
+	itemSplitter *Splitter
+	itemMutex    sync.Mutex
 }
 
 func (l *Leader) Serve() {
@@ -57,7 +69,7 @@ func (l *Leader) Serve() {
 	for {
 
 		// download dataset
-		dataSet, err := model.LoadDataFromDatabase(l.db)
+		dataSet, items, err := model.LoadDataFromDatabase(l.db)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -68,7 +80,7 @@ func (l *Leader) Serve() {
 		l.modelMutex.Lock()
 		if dataHash == l.dataHash && l.model == nil {
 			l.modelMutex.Unlock()
-			time.Sleep(time.Minute * time.Duration(l.cfg.Leader.Watch))
+			time.Sleep(time.Minute * time.Duration(l.cfg.Leader.FitPeriod))
 			continue
 		}
 
@@ -82,58 +94,130 @@ func (l *Leader) Serve() {
 		l.model = nextModel
 		l.modelMutex.Unlock()
 
-		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.Watch))
+		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.FitPeriod))
 	}
-}
-
-func (l *Leader) Pull() {
-	// pull dataset
-	//
-	// pull labels
-	// pull users
-	// pull items
-	// pull feedback
 }
 
 func (l *Leader) Broadcast() {
-	//
+	for {
+
+		// check members
+		nodes := make([]protocol.Meta, 0)
+		for _, member := range l.members.Members() {
+			meta, err := protocol.ParseName(member.Name)
+			if err != nil {
+				logrus.Error(err)
+				time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
+				continue
+			}
+			nodes = append(nodes, meta)
+		}
+		if len(nodes) == 0 {
+			logrus.Error("no workers found")
+			time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
+			continue
+		}
+
+		// broadcast users
+		l.userMutex.Lock()
+		var userSplitter Splitter
+		err := copier.Copy(&userSplitter, l.usersSplitter)
+		if err != nil {
+			l.userMutex.Unlock()
+			logrus.Error(err)
+			time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
+			continue
+		}
+		l.userMutex.Unlock()
+		//userParts := userSplitter.Split(len(nodes))
+
+		// broadcast items
+		l.itemMutex.Lock()
+		var itemSplitter Splitter
+		err = copier.Copy(&itemSplitter, l.itemSplitter)
+		if err != nil {
+			l.itemMutex.Unlock()
+			logrus.Error(err)
+			time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
+			continue
+		}
+		l.itemMutex.Unlock()
+
+		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.BroadcastPeriod))
+	}
 }
 
-// UpdatePopItem updates popular items for the database.
-func (w *Worker) UpdatePopItem() error {
-	items, err := db.GetItems(0, 0)
-	if err != nil {
-		return err
+// SetPopItem updates popular items for the database.
+func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet, collectSize int) {
+	// create item map
+	itemMap := make(map[string]storage.Item)
+	for _, item := range items {
+		itemMap[item.ItemId] = item
 	}
-	pop := make([]float64, len(items))
-	for i, item := range items {
-		pop[i] = item.Popularity
+	// find pop items
+	count := make([]int, dataset.ItemCount())
+	for _, userIndex := range dataset.FeedbackItems {
+		count[userIndex]++
 	}
-	results := TopLabledItems(items, pop, collectSize)
-	for label, result := range results {
-		if err = db.SetPop(label, result); err != nil {
-			return err
+	popItems := make(map[string]*base.MaxHeap)
+	popItems[""] = base.NewMaxHeap(collectSize)
+	for _, itemIndex := range count {
+		itemId := dataset.ItemIndex.ToName(itemIndex)
+		item := itemMap[itemId]
+		popItems[""].Add(itemId, float32(item.Timestamp.Unix()))
+		for _, label := range item.Labels {
+			if _, exist := popItems[label]; !exist {
+				popItems[label] = base.NewMaxHeap(collectSize)
+			}
+			popItems[label].Add(item.ItemId, float32(item.Timestamp.Unix()))
 		}
 	}
-	return nil
+	result := make(map[string][]storage.RecommendedItem)
+	for label := range popItems {
+		elem, scores := popItems[label].ToSorted()
+		items := make([]storage.RecommendedItem, len(elem))
+		for i := range items {
+			items[i].ItemId = elem[i].(string)
+			items[i].Score = float64(scores[i])
+		}
+		result[label] = items
+	}
+	// write back
+	for label, items := range result {
+		if err := l.db.SetPop(label, items); err != nil {
+			logrus.Error(err)
+		}
+	}
 }
 
-// RefreshLatest updates latest items.
-func RefreshLatest(db *database.Database, collectSize int) error {
-	// update latest items
-	items, err := db.GetItems(0, 0)
-	if err != nil {
-		return err
-	}
-	timestamp := make([]float64, len(items))
-	for i, item := range items {
-		timestamp[i] = float64(item.Timestamp.Unix())
-	}
-	results := TopLabledItems(items, timestamp, collectSize)
-	for label, result := range results {
-		if err = db.SetLatest(label, result); err != nil {
-			return err
+// SetLatest updates latest items.
+func (l *Leader) SetLatest(items []storage.Item, collectSize int) {
+	// find latest items
+	latestItems := make(map[string]*base.MaxHeap)
+	latestItems[""] = base.NewMaxHeap(collectSize)
+	for _, item := range items {
+		latestItems[""].Add(item.ItemId, float32(item.Timestamp.Unix()))
+		for _, label := range item.Labels {
+			if _, exist := latestItems[label]; !exist {
+				latestItems[label] = base.NewMaxHeap(collectSize)
+			}
+			latestItems[label].Add(item.ItemId, float32(item.Timestamp.Unix()))
 		}
 	}
-	return nil
+	result := make(map[string][]storage.RecommendedItem)
+	for label := range latestItems {
+		elem, scores := latestItems[label].ToSorted()
+		items := make([]storage.RecommendedItem, len(elem))
+		for i := range items {
+			items[i].ItemId = elem[i].(string)
+			items[i].Score = float64(scores[i])
+		}
+		result[label] = items
+	}
+	// write back
+	for label, items := range result {
+		if err := l.db.SetLatest(label, items); err != nil {
+			logrus.Error(err)
+		}
+	}
 }

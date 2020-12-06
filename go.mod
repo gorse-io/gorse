@@ -13,6 +13,7 @@ require (
 	github.com/go-redis/redis/v8 v8.4.0
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/memberlist v0.2.2
+	github.com/jinzhu/copier v0.1.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.1
 	github.com/pkg/errors v0.8.1
 	github.com/proullon/ramsql v0.0.0-20181213202341-817cee58a244

@@ -18,11 +18,14 @@ import (
 	"context"
 	"encoding/gob"
 	"github.com/hashicorp/memberlist"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/storage"
 	"google.golang.org/genproto/googleapis/spanner/admin/database/v1"
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -31,6 +34,7 @@ type Worker struct {
 	protocol.UnimplementedWorkerServer
 	cfg     *config.WorkerConfig
 	members *memberlist.Memberlist
+	db      storage.Database
 
 	// recommender
 	model      model.Model
@@ -107,58 +111,58 @@ func (w *Worker) BroadcastLabelPartition(ctx context.Context, labelPartition *pr
 	return &protocol.Response{}, nil
 }
 
-func LabelCosine(db *database.Database, item1 string, item2 string) (float64, error) {
-	a, err := db.GetItem(item1)
-	if err != nil {
-		return 0, err
-	}
-	b, err := db.GetItem(item2)
-	if err != nil {
-		return 0, err
-	}
-	labelSet := make(map[string]interface{})
-	for _, label := range a.Labels {
-		labelSet[label] = nil
-	}
-	intersect := 0.0
-	for _, label := range b.Labels {
-		if _, ok := labelSet[label]; ok {
-			intersect++
-		}
-	}
-	if intersect == 0 {
-		return 0, nil
-	}
-	return intersect / math.Sqrt(float64(len(a.Labels))) / math.Sqrt(float64(len(b.Labels))), nil
-}
+//func LabelCosine(db *database.Database, item1 string, item2 string) (float64, error) {
+//	a, err := db.GetItem(item1)
+//	if err != nil {
+//		return 0, err
+//	}
+//	b, err := db.GetItem(item2)
+//	if err != nil {
+//		return 0, err
+//	}
+//	labelSet := make(map[string]interface{})
+//	for _, label := range a.Labels {
+//		labelSet[label] = nil
+//	}
+//	intersect := 0.0
+//	for _, label := range b.Labels {
+//		if _, ok := labelSet[label]; ok {
+//			intersect++
+//		}
+//	}
+//	if intersect == 0 {
+//		return 0, nil
+//	}
+//	return intersect / math.Sqrt(float64(len(a.Labels))) / math.Sqrt(float64(len(b.Labels))), nil
+//}
 
-func FeedbackCosine(db *database.Database, item1 string, item2 string) (float64, error) {
-	feedback1, err := db.GetFeedbackByItem(item1)
-	if err != nil {
-		return 0, err
-	}
-	feedback2, err := db.GetFeedbackByItem(item2)
-	if err != nil {
-		return 0, err
-	}
-	userSet := make(map[string]interface{})
-	for _, f := range feedback1 {
-		userSet[f.UserId] = nil
-	}
-	intersect := 0.0
-	for _, f := range feedback2 {
-		if _, ok := userSet[f.UserId]; ok {
-			intersect++
-		}
-	}
-	if intersect == 0 {
-		return 0, nil
-	}
-	return intersect / math.Sqrt(float64(len(feedback1))) / math.Sqrt(float64(len(feedback2))), nil
-}
+//func FeedbackCosine(db *database.Database, item1 string, item2 string) (float64, error) {
+//	feedback1, err := db.GetFeedbackByItem(item1)
+//	if err != nil {
+//		return 0, err
+//	}
+//	feedback2, err := db.GetFeedbackByItem(item2)
+//	if err != nil {
+//		return 0, err
+//	}
+//	userSet := make(map[string]interface{})
+//	for _, f := range feedback1 {
+//		userSet[f.UserId] = nil
+//	}
+//	intersect := 0.0
+//	for _, f := range feedback2 {
+//		if _, ok := userSet[f.UserId]; ok {
+//			intersect++
+//		}
+//	}
+//	if intersect == 0 {
+//		return 0, nil
+//	}
+//	return intersect / math.Sqrt(float64(len(feedback1))) / math.Sqrt(float64(len(feedback2))), nil
+//}
 
-// RefreshNeighbors updates neighbors for the database.
-func RefreshNeighbors(db *database.Database, collectSize int, numJobs int) error {
+// SetNeighbors updates neighbors for the database.
+func SetNeighbors(db *database.Database, collectSize int, numJobs int) error {
 	items1, err := db.GetItems(0, 0)
 	if err != nil {
 		return err
@@ -208,62 +212,25 @@ func RefreshNeighbors(db *database.Database, collectSize int, numJobs int) error
 	})
 }
 
-// TopItems finds top items by weights.
-func TopItems(itemId []database.Item, weight []float64, n int) (topItemId []database.Item, topWeight []float64) {
-	popItems := base.NewMaxHeap(n)
-	for i := range itemId {
-		popItems.Add(itemId[i], weight[i])
-	}
-	elem, scores := popItems.ToSorted()
-	recommends := make([]database.Item, len(elem))
-	for i := range recommends {
-		recommends[i] = elem[i].(database.Item)
-	}
-	return recommends, scores
-}
+//
+//// TopItems finds top items by weights.
+//func TopItems(itemId []database.Item, weight []float64, n int) (topItemId []database.Item, topWeight []float64) {
+//	popItems := base.NewMaxHeap(n)
+//	for i := range itemId {
+//		popItems.Add(itemId[i], weight[i])
+//	}
+//	elem, scores := popItems.ToSorted()
+//	recommends := make([]database.Item, len(elem))
+//	for i := range recommends {
+//		recommends[i] = elem[i].(database.Item)
+//	}
+//	return recommends, scores
+//}
 
-func TopLabledItems(items []database.Item, weight []float64, n int) map[string][]database.RecommendedItem {
-	popItems := make(map[string]*base.MaxHeap)
-	popItems[""] = base.NewMaxHeap(n)
-	for i, item := range items {
-		popItems[""].Add(items[i], weight[i])
-		for _, label := range item.Labels {
-			if _, exist := popItems[label]; !exist {
-				popItems[label] = base.NewMaxHeap(n)
-			}
-			popItems[label].Add(items[i], weight[i])
-		}
-	}
-	result := make(map[string][]database.RecommendedItem)
-	for label := range popItems {
-		elem, scores := popItems[label].ToSorted()
-		items := make([]database.RecommendedItem, len(elem))
-		for i := range items {
-			items[i].Item = elem[i].(database.Item)
-			items[i].Score = scores[i]
-		}
-		result[label] = items
-	}
-	return result
-}
-
-// RefreshRecommends updates personalized recommendations for the database.
-func RefreshRecommends(db *database.Database, ranker model.ModelInterface, n int, numJobs int, collectors ...Collector) error {
-	// Get users
-	users, err := db.GetUsers()
-	if err != nil {
-		return err
-	}
-	return base.Parallel(len(users), numJobs, func(i int) error {
-		userId := users[i]
-		// Check cache
-		recommends, err := db.GetRecommend(userId, 0, 0)
-		if err != nil {
-			return err
-		}
-		if len(recommends) >= n {
-			return nil
-		}
+// SetRecommends updates personalized recommendations for the database.
+func (w *Worker) SetRecommends(users []storage.User, collectors []string, collectSize int) error {
+	collector, err := NewCollector(w.db, collectSize)
+	for i, user := range users {
 		// Collect candidates
 		itemSet, err := Collect(db, userId, n, collectors...)
 		if err != nil {
@@ -285,5 +252,5 @@ func RefreshRecommends(db *database.Database, ranker model.ModelInterface, n int
 			return err
 		}
 		return nil
-	})
+	}
 }
