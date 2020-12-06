@@ -14,27 +14,126 @@
 package leader
 
 import (
-	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/hashicorp/memberlist"
+	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/storage"
+	"google.golang.org/genproto/googleapis/spanner/admin/database/v1"
+	"log"
+	"sync"
 	"time"
 )
 
 type Leader struct {
+	db   storage.Database
+	cfg  *config.Config
+	meta *toml.MetaData
+
+	workers      []protocol.WorkerClient
+	workersMutex sync.Mutex
+
+	members    *memberlist.Memberlist
+	model      model.Model
+	modelMutex sync.Mutex
+	dataHash   uint32
 }
 
 func (l *Leader) Serve() {
-	config := memberlist.DefaultLocalConfig()
-	config.BindPort = 8001
-	config.Name = "Leader"
-	list, err := memberlist.Create(config)
+
+	// start gossip
+	cfg := memberlist.DefaultLocalConfig()
+	cfg.BindAddr = l.cfg.Leader.Host
+	cfg.BindPort = l.cfg.Leader.Port
+	cfg.Name = protocol.NewName(protocol.LeaderNodePrefix, l.cfg.Leader.Port, cfg.Name)
+	var err error
+	l.members, err = memberlist.Create(cfg)
 	if err != nil {
-		panic("Failed to create memberlist: " + err.Error())
+		log.Fatal(err)
 	}
 
+	// main loop
 	for {
-		for _, member := range list.Members() {
-			fmt.Printf("Member: %s %s %v\n", member.Name, member.Addr, member.Port)
+
+		// download dataset
+		dataSet, err := model.LoadDataFromDatabase(l.db)
+		if err != nil {
+			log.Fatal(err)
 		}
-		time.Sleep(time.Second * 10)
+		dataHash, err := dataSet.Hash()
+		if err != nil {
+			log.Fatal(err)
+		}
+		l.modelMutex.Lock()
+		if dataHash == l.dataHash && l.model == nil {
+			l.modelMutex.Unlock()
+			time.Sleep(time.Minute * time.Duration(l.cfg.Leader.Watch))
+			continue
+		}
+
+		// training model
+		trainSet, testSet := dataSet.Split(l.cfg.Leader.Fit.NumTestUsers, 0)
+		nextModel := model.NewModel(l.cfg.Leader.Model, model.NewParamsFromConfig(l.cfg, l.meta))
+		nextModel.Fit(trainSet, testSet, &l.cfg.Leader.Fit)
+
+		// update model
+		l.modelMutex.Lock()
+		l.model = nextModel
+		l.modelMutex.Unlock()
+
+		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.Watch))
 	}
+}
+
+func (l *Leader) Pull() {
+	// pull dataset
+	//
+	// pull labels
+	// pull users
+	// pull items
+	// pull feedback
+}
+
+func (l *Leader) Broadcast() {
+	//
+}
+
+// UpdatePopItem updates popular items for the database.
+func (w *Worker) UpdatePopItem() error {
+	items, err := db.GetItems(0, 0)
+	if err != nil {
+		return err
+	}
+	pop := make([]float64, len(items))
+	for i, item := range items {
+		pop[i] = item.Popularity
+	}
+	results := TopLabledItems(items, pop, collectSize)
+	for label, result := range results {
+		if err = db.SetPop(label, result); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RefreshLatest updates latest items.
+func RefreshLatest(db *database.Database, collectSize int) error {
+	// update latest items
+	items, err := db.GetItems(0, 0)
+	if err != nil {
+		return err
+	}
+	timestamp := make([]float64, len(items))
+	for i, item := range items {
+		timestamp[i] = float64(item.Timestamp.Unix())
+	}
+	results := TopLabledItems(items, timestamp, collectSize)
+	for label, result := range results {
+		if err = db.SetLatest(label, result); err != nil {
+			return err
+		}
+	}
+	return nil
 }
