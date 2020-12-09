@@ -1,0 +1,6 @@
+[book]
+authors = ["Zhenghao Zhang"]
+language = "zh"
+multilingual = false
+src = "src/zh"
+title = "Gorse推荐系统"
