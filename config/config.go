@@ -19,17 +19,37 @@ import (
 
 // Config is the configuration for the engine.
 type Config struct {
+	Common   CommonConfig   `toml:"common"`
 	Server   ServerConfig   `toml:"server"`
 	Database DatabaseConfig `toml:"database"`
-	Leader   ModelConfig    `toml:"model"`
+	Leader   LeaderConfig   `toml:"leader"`
+	Worker   WorkerConfig   `toml:"worker"`
 }
 
 func (config *Config) LoadDefaultIfNil() *Config {
 	if config == nil {
 		return &Config{
+			Common:   *(*CommonConfig)(nil).LoadDefaultIfNil(),
 			Server:   *(*ServerConfig)(nil).LoadDefaultIfNil(),
 			Database: *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
-			Leader:   *(*ModelConfig)(nil).LoadDefaultIfNil(),
+			Leader:   *(*LeaderConfig)(nil).LoadDefaultIfNil(),
+		}
+	}
+	return config
+}
+
+type CommonConfig struct {
+	RetryInterval int `toml:"retry_interval"`
+	RetryLimit    int `toml:"retry_limit"`
+	CacheSize     int `toml:"cache_size"`
+}
+
+func (config *CommonConfig) LoadDefaultIfNil() *CommonConfig {
+	if config == nil {
+		return &CommonConfig{
+			RetryInterval: 1,
+			RetryLimit:    10,
+			CacheSize:     1000,
 		}
 	}
 	return config
@@ -54,31 +74,47 @@ func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
 }
 
 type WorkerConfig struct {
-	LeaderAddr string
-	Host       int
-	GossipPort int
-	RPCPort    int
-	Watch      int
-	CacheSize  int
-	Collectors []string
+	LeaderAddr      string `toml:"leader_addr"`
+	Host            string `toml:"host"`
+	GossipPort      int    `toml:"gossip_port"`
+	RPCPort         int    `toml:"rpc_port"`
+	PredictInterval int    `toml:"predict_interval"`
+
+	GossipInterval int `toml:"gossip_interval"`
 }
 
-type ModelConfig struct {
-	Model           string
-	FitPeriod       int
-	BroadcastPeriod int
-	RetryPeriod     int
-	Params          ParamsConfig `toml:"params"`
-	Fit             FitConfig    `toml:"fit"`
-	Port            int
-	Host            string
-}
-
-func (config *ModelConfig) LoadDefaultIfNil() *ModelConfig {
+func (config *WorkerConfig) LoadDefaultIfNil() *WorkerConfig {
 	if config == nil {
-		return &ModelConfig{
-			Params: ParamsConfig{},
-			Fit:    *(*FitConfig)(nil).LoadDefaultIfNil(),
+		return &WorkerConfig{
+			LeaderAddr:      "127.0.0.1:6384",
+			Host:            "127.0.0.1",
+			GossipPort:      6385,
+			RPCPort:         6386,
+			PredictInterval: 1,
+			GossipInterval:  1,
+		}
+	}
+	return config
+}
+
+type LeaderConfig struct {
+	Model             string       `toml:"model"`
+	FitInterval       int          `toml:"fit_interval"`
+	BroadcastInterval int          `toml:"broadcast_interval"`
+	Params            ParamsConfig `toml:"params"`
+	Fit               FitConfig    `toml:"fit"`
+	Port              int          `toml:"port"`
+	Host              string       `toml:"host"`
+}
+
+func (config *LeaderConfig) LoadDefaultIfNil() *LeaderConfig {
+	if config == nil {
+		return &LeaderConfig{
+			Model:             "als",
+			FitInterval:       1,
+			BroadcastInterval: 1,
+			Params:            ParamsConfig{},
+			Fit:               *(*FitConfig)(nil).LoadDefaultIfNil(),
 		}
 	}
 	return config
@@ -96,7 +132,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 	if config == nil {
 		return &FitConfig{
 			Jobs:       1,
-			Verbose:    1,
+			Verbose:    10,
 			Candidates: 100,
 			TopK:       10,
 		}
@@ -133,6 +169,14 @@ func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 
 // FillDefault fill default values for missing values.
 func (config *Config) FillDefault(meta toml.MetaData) {
+	// Default common
+	defaultCommonConfig := *(*CommonConfig)(nil).LoadDefaultIfNil()
+	if !meta.IsDefined("common", "retry_interval") {
+		config.Common.RetryInterval = defaultCommonConfig.RetryInterval
+	}
+	if !meta.IsDefined("common", "cache_size") {
+		config.Common.CacheSize = defaultCommonConfig.CacheSize
+	}
 	// Default server config
 	defaultServerConfig := *(*ServerConfig)(nil).LoadDefaultIfNil()
 	if !meta.IsDefined("server", "host") {
@@ -151,17 +195,45 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// Default fit config
 	defaultFitConfig := *(*FitConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("model", "fit", "n_jobs") {
+	if !meta.IsDefined("leader", "fit", "n_jobs") {
 		config.Leader.Fit.Jobs = defaultFitConfig.Jobs
 	}
-	if !meta.IsDefined("model", "fit", "verbose") {
+	if !meta.IsDefined("leader", "fit", "verbose") {
 		config.Leader.Fit.Verbose = defaultFitConfig.Verbose
 	}
-	if !meta.IsDefined("model", "fit", "n_candidates") {
+	if !meta.IsDefined("leader", "fit", "n_candidates") {
 		config.Leader.Fit.Candidates = defaultFitConfig.Candidates
 	}
-	if !meta.IsDefined("model", "fit", "top_k") {
+	if !meta.IsDefined("leader", "fit", "top_k") {
 		config.Leader.Fit.TopK = defaultFitConfig.TopK
+	}
+	// Default leader config
+	defaultLeaderConfig := *(*LeaderConfig)(nil).LoadDefaultIfNil()
+	if !meta.IsDefined("leader", "model") {
+		config.Leader.Model = defaultLeaderConfig.Model
+	}
+	if !meta.IsDefined("leader", "fit_interval") {
+		config.Leader.FitInterval = defaultLeaderConfig.FitInterval
+	}
+	if !meta.IsDefined("leader", "broadcast_interval") {
+		config.Leader.BroadcastInterval = defaultLeaderConfig.BroadcastInterval
+	}
+	// Default worker config
+	// 	LeaderAddr      string   `toml:"leader_addr"`
+	//	Host            string   `toml:"host"`
+	//	GossipPort      int      `toml:"gossip_port"`
+	//	RPCPort         int      `toml:"rpc_port"`
+	//	PredictInterval int      `toml:"predict_interval"`
+	//	RetryInterval   int      `toml:"retry_interval"`
+	//	GossipInterval  int      `toml:"gossip_interval"`
+	//	CacheSize       int      `toml:"cache_size"`
+	//	Collectors      []string `toml:"collectors"`
+	defaultWorkerConfig := *(*WorkerConfig)(nil).LoadDefaultIfNil()
+	if !meta.IsDefined("worker", "predict_interval") {
+		config.Worker.PredictInterval = defaultWorkerConfig.PredictInterval
+	}
+	if !meta.IsDefined("worker", "gossip_interval") {
+		config.Worker.GossipInterval = defaultWorkerConfig.GossipInterval
 	}
 }
 

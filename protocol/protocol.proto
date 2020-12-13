@@ -19,31 +19,30 @@ package protocol;
 
 service Worker {
 
-  rpc BroadcastModel(Model) returns (WorkerResponse) {}
-  rpc BroadcastUserPartition(Partition) returns (WorkerResponse) {}
-  rpc BroadcastItemPartition(Partition) returns (WorkerResponse) {}
-  rpc BroadcastLabelPartition(Partition) returns (WorkerResponse) {}
+  rpc BroadcastModel(Model) returns (Void) {}
+  rpc BroadcastUserPartition(Partition) returns (Void) {}
 
-  rpc GetModelVersion(Model) returns (WorkerResponse) {}
-  rpc GetUserPartitionVersion(Partition) returns (WorkerResponse) {}
-  rpc GetItemPartitionVersion(Partition) returns (WorkerResponse) {}
-  rpc GetLabelPartitionVersion(Partition) returns (WorkerResponse) {}
+  rpc GetModelVersion(Void) returns (Version) {}
+  rpc GetUserPartitionVersion(Void) returns (Version) {}
 
 }
 
 message Model {
-  int32 tag = 1;
-  int32 term = 2;
+  Version version = 1;
+  string name = 2;
   bytes model = 3;
 }
 
-message Partition {
-  int32 tag = 1;
-  int32 term = 2;
-  repeated string prefixes = 3;
+message Void {
+
 }
 
-message WorkerResponse {
+message Partition {
+  Version version = 1;
+  repeated string prefixes = 2;
+}
+
+message Version {
   int32 tag = 1;
   int32 term = 2;
 }

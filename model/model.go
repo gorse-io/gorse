@@ -14,7 +14,10 @@
 package model
 
 import (
-	"github.com/sirupsen/logrus"
+	"bufio"
+	"bytes"
+	"encoding/gob"
+	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 )
@@ -93,13 +96,42 @@ func (model *BaseItemBased) Init(trainSet *DataSet) {
 	model.ItemIndex = trainSet.ItemIndex
 }
 
-func NewModel(name string, params Params) Model {
+func NewModel(name string, params Params) (Model, error) {
 	switch name {
 	case "als":
-		return NewALS(params)
+		return NewALS(params), nil
 	case "bpr":
-		return NewBPR(params)
+		return NewBPR(params), nil
 	}
-	logrus.Fatal("unknown model %v", name)
-	return nil
+	return nil, fmt.Errorf("unknown model %v", name)
+}
+
+func EncodeModel(m Model) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	writer := bufio.NewWriter(buf)
+	encoder := gob.NewEncoder(writer)
+	if err := encoder.Encode(m); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func DecodeModel(name string, buf []byte) (Model, error) {
+	reader := bytes.NewReader(buf)
+	decoder := gob.NewDecoder(reader)
+	switch name {
+	case "als":
+		var als ALS
+		if err := decoder.Decode(&als); err != nil {
+			return nil, err
+		}
+		return &als, nil
+	case "bpr":
+		var bpr BPR
+		if err := decoder.Decode(&bpr); err != nil {
+			return nil, err
+		}
+		return &bpr, nil
+	}
+	return nil, fmt.Errorf("unknown model %v", name)
 }

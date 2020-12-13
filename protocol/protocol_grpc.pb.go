@@ -17,10 +17,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WorkerClient interface {
-	BroadcastModel(ctx context.Context, in *Model, opts ...grpc.CallOption) (*Response, error)
-	BroadcastUserPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Response, error)
-	BroadcastItemPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Response, error)
-	BroadcastLabelPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Response, error)
+	BroadcastModel(ctx context.Context, in *Model, opts ...grpc.CallOption) (*Void, error)
+	BroadcastUserPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Void, error)
+	GetModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error)
+	GetUserPartitionVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error)
 }
 
 type workerClient struct {
@@ -31,8 +31,8 @@ func NewWorkerClient(cc grpc.ClientConnInterface) WorkerClient {
 	return &workerClient{cc}
 }
 
-func (c *workerClient) BroadcastModel(ctx context.Context, in *Model, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
+func (c *workerClient) BroadcastModel(ctx context.Context, in *Model, opts ...grpc.CallOption) (*Void, error) {
+	out := new(Void)
 	err := c.cc.Invoke(ctx, "/protocol.Worker/BroadcastModel", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -40,8 +40,8 @@ func (c *workerClient) BroadcastModel(ctx context.Context, in *Model, opts ...gr
 	return out, nil
 }
 
-func (c *workerClient) BroadcastUserPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
+func (c *workerClient) BroadcastUserPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Void, error) {
+	out := new(Void)
 	err := c.cc.Invoke(ctx, "/protocol.Worker/BroadcastUserPartition", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -49,18 +49,18 @@ func (c *workerClient) BroadcastUserPartition(ctx context.Context, in *Partition
 	return out, nil
 }
 
-func (c *workerClient) BroadcastItemPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/protocol.Worker/BroadcastItemPartition", in, out, opts...)
+func (c *workerClient) GetModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error) {
+	out := new(Version)
+	err := c.cc.Invoke(ctx, "/protocol.Worker/GetModelVersion", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerClient) BroadcastLabelPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/protocol.Worker/BroadcastLabelPartition", in, out, opts...)
+func (c *workerClient) GetUserPartitionVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error) {
+	out := new(Version)
+	err := c.cc.Invoke(ctx, "/protocol.Worker/GetUserPartitionVersion", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,10 +71,10 @@ func (c *workerClient) BroadcastLabelPartition(ctx context.Context, in *Partitio
 // All implementations must embed UnimplementedWorkerServer
 // for forward compatibility
 type WorkerServer interface {
-	BroadcastModel(context.Context, *Model) (*Response, error)
-	BroadcastUserPartition(context.Context, *Partition) (*Response, error)
-	BroadcastItemPartition(context.Context, *Partition) (*Response, error)
-	BroadcastLabelPartition(context.Context, *Partition) (*Response, error)
+	BroadcastModel(context.Context, *Model) (*Void, error)
+	BroadcastUserPartition(context.Context, *Partition) (*Void, error)
+	GetModelVersion(context.Context, *Void) (*Version, error)
+	GetUserPartitionVersion(context.Context, *Void) (*Version, error)
 	mustEmbedUnimplementedWorkerServer()
 }
 
@@ -82,17 +82,17 @@ type WorkerServer interface {
 type UnimplementedWorkerServer struct {
 }
 
-func (UnimplementedWorkerServer) BroadcastModel(context.Context, *Model) (*Response, error) {
+func (UnimplementedWorkerServer) BroadcastModel(context.Context, *Model) (*Void, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BroadcastModel not implemented")
 }
-func (UnimplementedWorkerServer) BroadcastUserPartition(context.Context, *Partition) (*Response, error) {
+func (UnimplementedWorkerServer) BroadcastUserPartition(context.Context, *Partition) (*Void, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BroadcastUserPartition not implemented")
 }
-func (UnimplementedWorkerServer) BroadcastItemPartition(context.Context, *Partition) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BroadcastItemPartition not implemented")
+func (UnimplementedWorkerServer) GetModelVersion(context.Context, *Void) (*Version, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetModelVersion not implemented")
 }
-func (UnimplementedWorkerServer) BroadcastLabelPartition(context.Context, *Partition) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BroadcastLabelPartition not implemented")
+func (UnimplementedWorkerServer) GetUserPartitionVersion(context.Context, *Void) (*Version, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserPartitionVersion not implemented")
 }
 func (UnimplementedWorkerServer) mustEmbedUnimplementedWorkerServer() {}
 
@@ -143,38 +143,38 @@ func _Worker_BroadcastUserPartition_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Worker_BroadcastItemPartition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Partition)
+func _Worker_GetModelVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServer).BroadcastItemPartition(ctx, in)
+		return srv.(WorkerServer).GetModelVersion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Worker/BroadcastItemPartition",
+		FullMethod: "/protocol.Worker/GetModelVersion",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).BroadcastItemPartition(ctx, req.(*Partition))
+		return srv.(WorkerServer).GetModelVersion(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Worker_BroadcastLabelPartition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Partition)
+func _Worker_GetUserPartitionVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServer).BroadcastLabelPartition(ctx, in)
+		return srv.(WorkerServer).GetUserPartitionVersion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Worker/BroadcastLabelPartition",
+		FullMethod: "/protocol.Worker/GetUserPartitionVersion",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).BroadcastLabelPartition(ctx, req.(*Partition))
+		return srv.(WorkerServer).GetUserPartitionVersion(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -192,12 +192,12 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Worker_BroadcastUserPartition_Handler,
 		},
 		{
-			MethodName: "BroadcastItemPartition",
-			Handler:    _Worker_BroadcastItemPartition_Handler,
+			MethodName: "GetModelVersion",
+			Handler:    _Worker_GetModelVersion_Handler,
 		},
 		{
-			MethodName: "BroadcastLabelPartition",
-			Handler:    _Worker_BroadcastLabelPartition_Handler,
+			MethodName: "GetUserPartitionVersion",
+			Handler:    _Worker_GetUserPartitionVersion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

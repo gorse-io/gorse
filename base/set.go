@@ -53,8 +53,10 @@ func (set Set) Len() int {
 	return len(set)
 }
 
-func (set Set) Add(v int) {
-	set[v] = nil
+func (set Set) Add(values ...int) {
+	for _, v := range values {
+		set[v] = nil
+	}
 }
 
 func (set Set) Merge(sets ...Set) {

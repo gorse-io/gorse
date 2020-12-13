@@ -492,6 +492,10 @@ func (redis *Redis) GetRecommend(userId string, n int, offset int) ([]Recommende
 
 func (redis *Redis) SetList(prefix string, listId string, items []RecommendedItem) error {
 	var ctx = context.Background()
+	err := redis.client.Del(ctx, prefix+listId).Err()
+	if err != nil {
+		return err
+	}
 	for _, item := range items {
 		buf, err := json.Marshal(item)
 		if err != nil {
