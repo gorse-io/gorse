@@ -134,7 +134,7 @@ func test(cmd *cobra.Command, args []string) {
 		defer database.Close()
 		// Load data
 		log.Infof("Load data from %v", cfg.Database.Path)
-		data, err := model.LoadDataFromDatabase(database)
+		data, _, err := model.LoadDataFromDatabase(database)
 		if err != nil {
 			log.Fatal(err)
 		}

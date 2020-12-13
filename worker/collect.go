@@ -13,7 +13,7 @@
 package worker
 
 import (
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/storage"
 )
@@ -39,6 +39,7 @@ func NewCollector(db storage.Database, collectSize int) (*Collector, error) {
 }
 
 func (c *Collector) pullItems() error {
+	log.Infof("Worker: pull items")
 	c.items = make(map[string]storage.Item)
 	cursor := ""
 	for {
@@ -51,7 +52,11 @@ func (c *Collector) pullItems() error {
 		for _, item := range items {
 			c.items[item.ItemId] = item
 		}
+		if cursor == "" {
+			break
+		}
 	}
+	return nil
 }
 
 func (c *Collector) pullUserFeedback(userId string) ([]string, error) {
@@ -82,7 +87,7 @@ func (c *Collector) newCollectFunc(name string) CollectorFunc {
 	case "label_latest":
 		return c.CollectLabelLatest
 	default:
-		logrus.Error("no known collector %v", name)
+		log.Error("no known collector %v", name)
 		return c.CollectNothing
 	}
 }

@@ -14,243 +14,234 @@
 package worker
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
+	"fmt"
 	"github.com/hashicorp/memberlist"
+	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
-	"google.golang.org/genproto/googleapis/spanner/admin/database/v1"
-	"log"
-	"math"
+	"google.golang.org/grpc"
+	"math/rand"
+	"net"
 	"sync"
 	"time"
 )
 
 type Worker struct {
 	protocol.UnimplementedWorkerServer
-	cfg     *config.WorkerConfig
+	cfg     *config.Config
 	members *memberlist.Memberlist
 	db      storage.Database
 
 	// recommender
-	model      model.Model
-	modelMutex sync.Mutex
-
-	// user partition
-	userPartition *protocol.Partition
-	userMutex     sync.Mutex
+	model        model.Model
+	modelVersion *protocol.Version
+	modelMutex   sync.Mutex
 
 	// item partition
-	itemPartition *protocol.Partition
-	itemMutex     sync.Mutex
+	userPrefixes []string
+	userVersion  *protocol.Version
+	userMutex    sync.Mutex
+}
 
-	// label partition
-	labelPartition *protocol.Partition
-	labelMutex     sync.Mutex
+func NewWorker(db storage.Database, cfg *config.Config) *Worker {
+	return &Worker{
+		db:  db,
+		cfg: cfg,
+		// versions
+		modelVersion: &protocol.Version{Tag: rand.Int31()},
+		userVersion:  &protocol.Version{Tag: rand.Int31()},
+	}
 }
 
 func (w *Worker) Serve() {
+
+	// start gossip protocol
 	cfg := memberlist.DefaultLocalConfig()
-	cfg.Name = protocol.NewName(protocol.WorkerNodePrefix, w.cfg.RPCPort, cfg.Name)
-	cfg.BindPort = w.cfg.GossipPort
+	cfg.Name = protocol.NewName(protocol.WorkerNodePrefix, w.cfg.Worker.RPCPort, cfg.Name)
+	cfg.BindPort = w.cfg.Worker.GossipPort
 	var err error
 	w.members, err = memberlist.Create(cfg)
 	if err != nil {
-		log.Fatal("Failed to create memberlist: " + err.Error())
-	}
-	_, err = w.members.Join([]string{w.cfg.LeaderAddr})
-	if err != nil {
-		log.Fatal("Failed to join cluster: " + err.Error())
+		log.Fatal("Worker: failed to start gossip, " + err.Error())
 	}
 
+	go w.GossipServe()
+	go w.RPCServe()
+
 	for {
-		time.Sleep(time.Minute * time.Duration(w.cfg.Watch))
+
+		// check runnable
+		w.modelMutex.Lock()
+		if w.model == nil {
+			w.modelMutex.Unlock()
+			log.Infof("Worker: no model found, next round starts after %v minutes", w.cfg.Worker.PredictInterval)
+			time.Sleep(time.Minute * time.Duration(w.cfg.Worker.PredictInterval))
+			continue
+		}
+		w.modelMutex.Unlock()
+
+		w.userMutex.Lock()
+		if w.userPrefixes == nil {
+			w.userMutex.Unlock()
+			log.Infof("Worker: no user partition found, next round starts after %v minutes", w.cfg.Worker.PredictInterval)
+			time.Sleep(time.Minute * time.Duration(w.cfg.Worker.PredictInterval))
+			continue
+		}
+		w.userMutex.Unlock()
+
+		// download users
+		w.userMutex.Lock()
+		prefixes := w.userPrefixes
+		w.userMutex.Unlock()
+		users, err := w.GetUsers(prefixes)
+		if err != nil {
+			log.Error("Worker:", err)
+			time.Sleep(time.Minute * time.Duration(w.cfg.Common.RetryInterval))
+			continue
+		}
+
+		// Generate recommends
+		log.Infof("Worker: start to generate recommendations (%v)", len(users))
+		w.modelMutex.Lock()
+		m := w.model
+		w.modelMutex.Unlock()
+		if err := w.SetRecommends(m, users); err != nil {
+			log.Error("Worker:", err)
+			time.Sleep(time.Minute * time.Duration(w.cfg.Common.RetryInterval))
+			continue
+		}
+
+		log.Infof("Worker: complete predict, next round starts after %v minutes", w.cfg.Worker.PredictInterval)
+		time.Sleep(time.Minute * time.Duration(w.cfg.Worker.PredictInterval))
 	}
 }
 
-func (w *Worker) BroadcastModel(ctx context.Context, data *protocol.Model) (*protocol.Response, error) {
+func (w *Worker) GossipServe() {
+	for {
+		_, err := w.members.Join([]string{w.cfg.Worker.LeaderAddr})
+		if err != nil {
+			log.Errorf("Worker: failed to join cluster %v", w.cfg.Worker.LeaderAddr)
+		}
+		time.Sleep(time.Minute * time.Duration(w.cfg.Worker.GossipInterval))
+	}
+}
+
+func (w *Worker) RPCServe() {
+	log.Infof("Worker: start RPC server %v:%v", w.cfg.Worker.Host, w.cfg.Worker.RPCPort)
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", w.cfg.Worker.Host, w.cfg.Worker.RPCPort))
+	if err != nil {
+		log.Fatalf("Worker: failed to listen: %v", err)
+	}
+	var opts []grpc.ServerOption
+	grpcServer := grpc.NewServer(opts...)
+	protocol.RegisterWorkerServer(grpcServer, w)
+	if err = grpcServer.Serve(lis); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (w *Worker) BroadcastModel(ctx context.Context, data *protocol.Model) (*protocol.Void, error) {
+	log.Infof("Worker: receive new model (%v,%v)", data.Version.Tag, data.Version.Term)
 	// decode model
-	reader := bytes.NewReader(data.Model)
-	decoder := gob.NewDecoder(reader)
-	var m model.Model
-	if err := decoder.Decode(&m); err != nil {
+	m, err := model.DecodeModel(data.Name, data.Model)
+	if err != nil {
+		log.Error("Worker: ", err)
 		return nil, err
 	}
 	// replace model
 	w.modelMutex.Lock()
+	defer w.modelMutex.Unlock()
 	w.model = m
-	w.modelMutex.Unlock()
-	return &protocol.Response{}, nil
+	w.modelVersion = data.Version
+	return &protocol.Void{}, nil
 }
 
-func (w *Worker) BroadcastUserPartition(ctx context.Context, userPartition *protocol.Partition) (*protocol.Response, error) {
+func (w *Worker) BroadcastUserPartition(ctx context.Context, data *protocol.Partition) (*protocol.Void, error) {
+	log.Infof("Worker: receive new user partition (%v,%v,%v)", data.Version.Tag, data.Version.Term, data.Prefixes)
 	// update partition
 	w.userMutex.Lock()
-	w.userPartition = userPartition
-	w.userMutex.Unlock()
-	return &protocol.Response{}, nil
+	defer w.userMutex.Unlock()
+	w.userPrefixes = data.Prefixes
+	w.userVersion = data.Version
+	return &protocol.Void{}, nil
 }
 
-func (w *Worker) BroadcastItemPartition(ctx context.Context, itemPartition *protocol.Partition) (*protocol.Response, error) {
-	// update partition
-	w.itemMutex.Lock()
-	w.itemPartition = itemPartition
-	w.itemMutex.Unlock()
-	return &protocol.Response{}, nil
+func (w *Worker) GetModelVersion(context.Context, *protocol.Void) (*protocol.Version, error) {
+	log.Infof("Worker: request model version from leader")
+	w.modelMutex.Lock()
+	defer w.modelMutex.Unlock()
+	return w.modelVersion, nil
+}
+func (w *Worker) GetUserPartitionVersion(context.Context, *protocol.Void) (*protocol.Version, error) {
+	log.Infof("Worker: request user partition version from leader")
+	w.userMutex.Lock()
+	defer w.userMutex.Unlock()
+	return w.userVersion, nil
 }
 
-func (w *Worker) BroadcastLabelPartition(ctx context.Context, labelPartition *protocol.Partition) (*protocol.Response, error) {
-	// update partition
-	w.labelMutex.Lock()
-	w.labelPartition = labelPartition
-	w.labelMutex.Unlock()
-	return &protocol.Response{}, nil
+func (w *Worker) GetUsers(prefixes []string) ([]string, error) {
+	log.Infof("Worker: pull users within partition %v", prefixes)
+	users := make([]string, 0)
+	for _, prefix := range prefixes {
+		cursor := ""
+		var batch []storage.User
+		var err error
+		for {
+			cursor, batch, err = w.db.GetUsers(prefix, cursor, batchSize)
+			if err != nil {
+				return nil, err
+			}
+			for _, user := range batch {
+				users = append(users, user.UserId)
+			}
+			if cursor == "" {
+				break
+			}
+		}
+	}
+	return users, nil
 }
 
-//func LabelCosine(db *database.Database, item1 string, item2 string) (float64, error) {
-//	a, err := db.GetItem(item1)
-//	if err != nil {
-//		return 0, err
-//	}
-//	b, err := db.GetItem(item2)
-//	if err != nil {
-//		return 0, err
-//	}
-//	labelSet := make(map[string]interface{})
-//	for _, label := range a.Labels {
-//		labelSet[label] = nil
-//	}
-//	intersect := 0.0
-//	for _, label := range b.Labels {
-//		if _, ok := labelSet[label]; ok {
-//			intersect++
-//		}
-//	}
-//	if intersect == 0 {
-//		return 0, nil
-//	}
-//	return intersect / math.Sqrt(float64(len(a.Labels))) / math.Sqrt(float64(len(b.Labels))), nil
-//}
-
-//func FeedbackCosine(db *database.Database, item1 string, item2 string) (float64, error) {
-//	feedback1, err := db.GetFeedbackByItem(item1)
-//	if err != nil {
-//		return 0, err
-//	}
-//	feedback2, err := db.GetFeedbackByItem(item2)
-//	if err != nil {
-//		return 0, err
-//	}
-//	userSet := make(map[string]interface{})
-//	for _, f := range feedback1 {
-//		userSet[f.UserId] = nil
-//	}
-//	intersect := 0.0
-//	for _, f := range feedback2 {
-//		if _, ok := userSet[f.UserId]; ok {
-//			intersect++
-//		}
-//	}
-//	if intersect == 0 {
-//		return 0, nil
-//	}
-//	return intersect / math.Sqrt(float64(len(feedback1))) / math.Sqrt(float64(len(feedback2))), nil
-//}
-
-// SetNeighbors updates neighbors for the database.
-func SetNeighbors(db *database.Database, collectSize int, numJobs int) error {
-	items1, err := db.GetItems(0, 0)
+// SetRecommends updates personalized recommendations for the database.
+func (w *Worker) SetRecommends(m model.Model, users []string) error {
+	collector, err := NewCollector(w.db, w.cfg.Common.CacheSize)
 	if err != nil {
 		return err
 	}
-	return base.Parallel(len(items1), numJobs, func(i int) error {
-		item1 := items1[i]
-		// Collect candidates
-		itemSet := make(map[string]interface{})
-		feedback1, err := db.GetFeedbackByItem(item1.ItemId)
-		if err != nil {
-			return err
-		}
-		for _, f := range feedback1 {
-			items2, err := db.GetFeedbackByUser(f.UserId)
-			if err != nil {
-				return err
-			}
-			for _, item2 := range items2 {
-				itemSet[item2.ItemId] = nil
-			}
-		}
-		// Ranking
-		nearItems := base.NewMaxHeap(collectSize)
-		for item2 := range itemSet {
-			if item2 != item1.ItemId {
-				score, err := FeedbackCosine(db, item1.ItemId, item2)
-				if err != nil {
-					return err
-				}
-				nearItems.Add(item2, score)
-			}
-		}
-		elem, scores := nearItems.ToSorted()
-		recommends := make([]database.RecommendedItem, len(elem))
-		for i := range recommends {
-			itemId := elem[i].(string)
-			item, err := db.GetItem(itemId)
-			if err != nil {
-				return err
-			}
-			recommends[i] = database.RecommendedItem{Item: item, Score: scores[i]}
-		}
-		if err := db.SetNeighbors(item1.ItemId, recommends); err != nil {
-			return err
-		}
-		return nil
-	})
-}
-
-//
-//// TopItems finds top items by weights.
-//func TopItems(itemId []database.Item, weight []float64, n int) (topItemId []database.Item, topWeight []float64) {
-//	popItems := base.NewMaxHeap(n)
-//	for i := range itemId {
-//		popItems.Add(itemId[i], weight[i])
-//	}
-//	elem, scores := popItems.ToSorted()
-//	recommends := make([]database.Item, len(elem))
-//	for i := range recommends {
-//		recommends[i] = elem[i].(database.Item)
-//	}
-//	return recommends, scores
-//}
-
-// SetRecommends updates personalized recommendations for the database.
-func (w *Worker) SetRecommends(users []storage.User, collectors []string, collectSize int) error {
-	collector, err := NewCollector(w.db, collectSize)
 	for i, user := range users {
 		// Collect candidates
-		itemSet, err := Collect(db, userId, n, collectors...)
+		itemSet, err := collector.Collect(user, []string{"all"})
 		if err != nil {
 			return err
 		}
-		items := make([]database.Item, 0, len(itemSet))
-		ratings := make([]float64, 0, len(itemSet))
-		for _, item := range itemSet {
-			items = append(items, item.Item)
-			ratings = append(ratings, ranker.Predict(userId, item.ItemId))
+		recItems := base.NewMaxHeap(w.cfg.Common.CacheSize)
+		for item := range itemSet {
+			var score float32
+			switch m.(type) {
+			case model.MatrixFactorization:
+				score = m.(model.MatrixFactorization).Predict(user, item)
+			default:
+				return fmt.Errorf("not implement yet")
+			}
+			recItems.Add(item, score)
 		}
-		items, ratings = TopItems(items, ratings, n)
-		recommends = make([]database.RecommendedItem, len(items))
-		for i := range recommends {
-			recommends[i].Item = items[i]
-			recommends[i].Score = ratings[i]
+		elems, scores := recItems.ToSorted()
+		recommends := make([]storage.RecommendedItem, len(elems))
+		for i := range elems {
+			recommends[i].ItemId = elems[i].(string)
+			recommends[i].Score = float64(scores[i])
 		}
-		if err := db.SetRecommend(userId, recommends); err != nil {
+		if err := w.db.SetRecommend(user, recommends); err != nil {
 			return err
 		}
-		return nil
+		// verbose
+		if (i+1)%1000 == 0 {
+			log.Infof("Worker: generate recommendations (%v/%v)", i+1, len(users))
+		}
 	}
+	return nil
 }

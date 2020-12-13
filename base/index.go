@@ -14,6 +14,7 @@
 package base
 
 import (
+	"encoding/gob"
 	"log"
 	"strconv"
 )
@@ -24,6 +25,10 @@ type Index interface {
 	ToNumber(name string) int
 	ToName(index int) string
 	GetNames() []string
+}
+
+func init() {
+	gob.Register(&MapIndex{})
 }
 
 // MapIndex manages the map between sparse Names and dense indices. A sparse ID is
