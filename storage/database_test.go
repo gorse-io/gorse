@@ -336,14 +336,11 @@ func testList(t *testing.T, db Database) {
 			{"3", 0.3},
 			{"4", 0.4},
 		}
-		if err := operator.Set("0", items); err != nil {
-			t.Fatal(err)
-		}
+		err := operator.Set("0", items)
+		assert.Nil(t, err)
 		// Get items
 		totalItems, err := operator.Get("0", 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Nil(t, err)
 		assert.Equal(t, items, totalItems)
 		// Get n items
 		headItems, err := operator.Get("0", 3, 0)
@@ -353,9 +350,7 @@ func testList(t *testing.T, db Database) {
 		assert.Equal(t, items[:3], headItems)
 		// Get n items with offset
 		offsetItems, err := operator.Get("0", 3, 1)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Nil(t, err)
 		assert.Equal(t, items[1:4], offsetItems)
 		// Get empty
 		noItems, err := operator.Get("1", 0, 0)
@@ -363,6 +358,19 @@ func testList(t *testing.T, db Database) {
 			t.Fatal(err)
 		}
 		assert.Equal(t, 0, len(noItems))
+		// test overwrite
+		overwriteItems := []RecommendedItem{
+			{"10", 0.0},
+			{"11", 0.1},
+			{"12", 0.2},
+			{"13", 0.3},
+			{"14", 0.4},
+		}
+		err = operator.Set("0", overwriteItems)
+		assert.Nil(t, err)
+		totalItems, err = operator.Get("0", 0, 0)
+		assert.Nil(t, err)
+		assert.Equal(t, overwriteItems, totalItems)
 	}
 }
 

@@ -16,5 +16,6 @@ package leader
 import "testing"
 
 func TestSplit(t *testing.T) {
-
+	s := NewSplitter()
+	t.Log(s.Split(1))
 }

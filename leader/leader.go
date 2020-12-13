@@ -14,18 +14,25 @@
 package leader
 
 import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/gob"
+	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/chewxy/math32"
 	"github.com/hashicorp/memberlist"
 	"github.com/jinzhu/copier"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
-	"google.golang.org/genproto/googleapis/spanner/admin/database/v1"
-	"log"
+	"google.golang.org/grpc"
+	"math/rand"
+	"net"
+	"sort"
 	"sync"
 	"time"
 )
@@ -35,24 +42,42 @@ type Leader struct {
 	cfg  *config.Config
 	meta *toml.MetaData
 
-	workers      []protocol.WorkerClient
-	workersMutex sync.Mutex
+	// broadcast
+	members          *memberlist.Memberlist
+	startBroadcast   chan bool
+	broadcastStarted bool
 
-	members    *memberlist.Memberlist
-	model      model.Model
-	modelMutex sync.Mutex
-	dataHash   uint32
+	// recommender
+	model        model.Model
+	modelVersion *protocol.Version
+	modelMutex   sync.Mutex
+
+	// hash value for dataset
+	dataHash      uint32
+	dataHashMutex sync.Mutex
 
 	// user partition
 	usersSplitter *Splitter
+	userVersion   *protocol.Version
 	userMutex     sync.Mutex
+}
 
-	// item partition
-	itemSplitter *Splitter
-	itemMutex    sync.Mutex
+func NewLeader(db storage.Database, cfg *config.Config, meta *toml.MetaData) *Leader {
+	l := &Leader{
+		db:               db,
+		cfg:              cfg,
+		meta:             meta,
+		startBroadcast:   make(chan bool),
+		broadcastStarted: false,
+		// versions
+		modelVersion: &protocol.Version{Tag: rand.Int31()},
+		userVersion:  &protocol.Version{Tag: rand.Int31()},
+	}
+	return l
 }
 
 func (l *Leader) Serve() {
+	log.Infof("Leader: start gossip at %v:%v", l.cfg.Leader.Host, l.cfg.Leader.Port)
 
 	// start gossip
 	cfg := memberlist.DefaultLocalConfig()
@@ -62,93 +87,206 @@ func (l *Leader) Serve() {
 	var err error
 	l.members, err = memberlist.Create(cfg)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Leader:", err)
 	}
+
+	// start broadcast gorountine
+	go l.Broadcast()
 
 	// main loop
 	for {
 
 		// download dataset
+		log.Infof("Leader: load data from database")
 		dataSet, items, err := model.LoadDataFromDatabase(l.db)
 		if err != nil {
-			log.Fatal(err)
+			log.Error("Leader:", err)
+			time.Sleep(time.Minute * time.Duration(l.cfg.Common.RetryInterval))
+			continue
 		}
 		dataHash, err := dataSet.Hash()
 		if err != nil {
-			log.Fatal(err)
+			log.Error("Leader:", err)
+			time.Sleep(time.Minute * time.Duration(l.cfg.Common.RetryInterval))
+			continue
 		}
-		l.modelMutex.Lock()
-		if dataHash == l.dataHash && l.model == nil {
-			l.modelMutex.Unlock()
-			time.Sleep(time.Minute * time.Duration(l.cfg.Leader.FitPeriod))
+		l.dataHashMutex.Lock()
+		if dataHash == l.dataHash && l.model != nil {
+			l.dataHashMutex.Unlock()
+			log.Infof("Leader: dataset has no changes, next round starts after %v minutes", l.cfg.Leader.FitInterval)
+			time.Sleep(time.Minute * time.Duration(l.cfg.Leader.FitInterval))
+			continue
+		}
+		l.dataHash = dataHash
+		l.dataHashMutex.Unlock()
+
+		// find popular items
+		log.Info("Leader: update popular items")
+		if err := l.SetPopItem(items, dataSet); err != nil {
+			log.Error("Leader:", err)
+			time.Sleep(time.Minute * time.Duration(l.cfg.Common.RetryInterval))
 			continue
 		}
 
+		// find latest items
+		//log.Info("Leader: update latest items")
+		//if err := l.SetLatest(items); err != nil {
+		//	log.Error("Leader:", err)
+		//	time.Sleep(time.Minute * time.Duration(l.cfg.Leader.RetryInterval))
+		//	continue
+		//}
+
+		// find similar items
+		//log.Info("Leader: update similar items")
+		//if err := l.SetNeighbors(items, dataSet); err != nil {
+		//	log.Error("Leader:", err)
+		//	time.Sleep(time.Minute * time.Duration(l.cfg.Leader.RetryInterval))
+		//	continue
+		//}
+
 		// training model
+		log.Info("Leader: start to fit model")
 		trainSet, testSet := dataSet.Split(l.cfg.Leader.Fit.NumTestUsers, 0)
-		nextModel := model.NewModel(l.cfg.Leader.Model, model.NewParamsFromConfig(l.cfg, l.meta))
+		nextModel, err := model.NewModel(l.cfg.Leader.Model, model.NewParamsFromConfig(l.cfg, l.meta))
+		if err != nil {
+			log.Fatal("Leader: ", err)
+		}
 		nextModel.Fit(trainSet, testSet, &l.cfg.Leader.Fit)
 
 		// update model
 		l.modelMutex.Lock()
 		l.model = nextModel
+		l.modelVersion.Term++
 		l.modelMutex.Unlock()
 
-		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.FitPeriod))
+		// start broadcast
+		if !l.broadcastStarted {
+			l.broadcastStarted = true
+			l.startBroadcast <- true
+		}
+
+		log.Infof("Leader: complete fit, next round starts after %v minutes", l.cfg.Leader.FitInterval)
+		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.FitInterval))
 	}
 }
 
 func (l *Leader) Broadcast() {
+	_ = <-l.startBroadcast
+	log.Info("Leader: start to broadcast")
 	for {
 
 		// check members
-		nodes := make([]protocol.Meta, 0)
+		localNode := l.members.LocalNode()
+		nodes := make([]string, 0)
+		addresses := make([]net.IP, 0)
 		for _, member := range l.members.Members() {
-			meta, err := protocol.ParseName(member.Name)
-			if err != nil {
-				logrus.Error(err)
-				time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
-				continue
+			if member.Name != localNode.Name {
+				nodes = append(nodes, member.Name)
+				addresses = append(addresses, member.Addr)
 			}
-			nodes = append(nodes, meta)
 		}
 		if len(nodes) == 0 {
-			logrus.Error("no workers found")
-			time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
+			log.Error("Leader: no workers found")
+			time.Sleep(time.Minute * time.Duration(l.cfg.Common.RetryInterval))
 			continue
 		}
 
 		// broadcast users
 		l.userMutex.Lock()
-		var userSplitter Splitter
+		userSplitter := NewSplitter()
 		err := copier.Copy(&userSplitter, l.usersSplitter)
 		if err != nil {
 			l.userMutex.Unlock()
-			logrus.Error(err)
-			time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
+			log.Error(err)
+			time.Sleep(time.Second * time.Duration(l.cfg.Common.RetryInterval))
 			continue
 		}
 		l.userMutex.Unlock()
-		//userParts := userSplitter.Split(len(nodes))
+		log.Infof("Leader: split users to %v partitions", len(nodes))
+		userParts := userSplitter.Split(len(nodes))
 
-		// broadcast items
-		l.itemMutex.Lock()
-		var itemSplitter Splitter
-		err = copier.Copy(&itemSplitter, l.itemSplitter)
-		if err != nil {
-			l.itemMutex.Unlock()
-			logrus.Error(err)
-			time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryPeriod))
-			continue
+		sort.Strings(nodes)
+		for i, node := range nodes {
+			meta, err := protocol.ParseName(node)
+			if err != nil {
+				log.Error(err)
+				time.Sleep(time.Second * time.Duration(l.cfg.Common.RetryInterval))
+				continue
+			}
+			// create connection
+			conn, err := grpc.Dial(fmt.Sprintf("%v:%v", addresses[i], meta.Port), grpc.WithInsecure())
+			if err != nil {
+				log.Error(err)
+				time.Sleep(time.Second * time.Duration(l.cfg.Common.RetryInterval))
+				continue
+			}
+			defer conn.Close()
+			client := protocol.NewWorkerClient(conn)
+
+			// request model version
+			ctx := context.Background()
+			log.Infof("Leader: request model version from %v", node)
+			modelVersion, err := client.GetModelVersion(ctx, &protocol.Void{})
+			if err != nil {
+				log.Error("Leader: ", err)
+				time.Sleep(time.Second * time.Duration(l.cfg.Common.RetryInterval))
+				continue
+			}
+			// send model partition
+			if modelVersion.Tag != l.modelVersion.Tag || modelVersion.Term != l.modelVersion.Term {
+				log.Infof("Leader: send model to %v", node)
+				var buf bytes.Buffer
+				writer := bufio.NewWriter(&buf)
+				encoder := gob.NewEncoder(writer)
+				l.modelMutex.Lock()
+				if err = encoder.Encode(l.model); err != nil {
+					l.modelMutex.Unlock()
+					log.Error(err)
+					time.Sleep(time.Second * time.Duration(l.cfg.Common.RetryInterval))
+					continue
+				}
+				l.modelMutex.Unlock()
+				_, err = client.BroadcastModel(ctx, &protocol.Model{
+					Model:   buf.Bytes(),
+					Name:    l.cfg.Leader.Model,
+					Version: l.modelVersion,
+				})
+				if err != nil {
+					log.Error(err)
+					time.Sleep(time.Second * time.Duration(l.cfg.Common.RetryInterval))
+					continue
+				}
+			}
+
+			// request user version
+			//userVersion, err := client.GetUserPartitionVersion(ctx, &protocol.Void{})
+			//if err != nil {
+			//	log.Error(err)
+			//	time.Sleep(time.Second * time.Duration(l.cfg.Leader.RetryInterval))
+			//	continue
+			//}
+			// send model
+			//if userVersion.Tag != l.userVersion.Tag || userVersion.Term != l.userVersion.Term {
+			log.Infof("Leader: send user partition to %v", node)
+			_, err = client.BroadcastUserPartition(ctx, &protocol.Partition{
+				Version:  l.userVersion,
+				Prefixes: userParts[i],
+			})
+			if err != nil {
+				log.Error(err)
+				time.Sleep(time.Second * time.Duration(l.cfg.Common.RetryInterval))
+				continue
+			}
+			//}
 		}
-		l.itemMutex.Unlock()
 
-		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.BroadcastPeriod))
+		log.Infof("Leader: complete broadcast, next round starts after %v minute", l.cfg.Leader.BroadcastInterval)
+		time.Sleep(time.Minute * time.Duration(l.cfg.Leader.BroadcastInterval))
 	}
 }
 
 // SetPopItem updates popular items for the database.
-func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet, collectSize int) {
+func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet) error {
 	// create item map
 	itemMap := make(map[string]storage.Item)
 	for _, item := range items {
@@ -160,16 +298,16 @@ func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet, collec
 		count[userIndex]++
 	}
 	popItems := make(map[string]*base.MaxHeap)
-	popItems[""] = base.NewMaxHeap(collectSize)
-	for _, itemIndex := range count {
+	popItems[""] = base.NewMaxHeap(l.cfg.Common.CacheSize)
+	for itemIndex, _ := range count {
 		itemId := dataset.ItemIndex.ToName(itemIndex)
 		item := itemMap[itemId]
-		popItems[""].Add(itemId, float32(item.Timestamp.Unix()))
+		popItems[""].Add(itemId, float32(count[itemIndex]))
 		for _, label := range item.Labels {
 			if _, exist := popItems[label]; !exist {
-				popItems[label] = base.NewMaxHeap(collectSize)
+				popItems[label] = base.NewMaxHeap(l.cfg.Common.CacheSize)
 			}
-			popItems[label].Add(item.ItemId, float32(item.Timestamp.Unix()))
+			popItems[label].Add(item.ItemId, float32(count[itemIndex]))
 		}
 	}
 	result := make(map[string][]storage.RecommendedItem)
@@ -185,21 +323,22 @@ func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet, collec
 	// write back
 	for label, items := range result {
 		if err := l.db.SetPop(label, items); err != nil {
-			logrus.Error(err)
+			return err
 		}
 	}
+	return nil
 }
 
 // SetLatest updates latest items.
-func (l *Leader) SetLatest(items []storage.Item, collectSize int) {
+func (l *Leader) SetLatest(items []storage.Item) error {
 	// find latest items
 	latestItems := make(map[string]*base.MaxHeap)
-	latestItems[""] = base.NewMaxHeap(collectSize)
+	latestItems[""] = base.NewMaxHeap(l.cfg.Common.CacheSize)
 	for _, item := range items {
 		latestItems[""].Add(item.ItemId, float32(item.Timestamp.Unix()))
 		for _, label := range item.Labels {
 			if _, exist := latestItems[label]; !exist {
-				latestItems[label] = base.NewMaxHeap(collectSize)
+				latestItems[label] = base.NewMaxHeap(l.cfg.Common.CacheSize)
 			}
 			latestItems[label].Add(item.ItemId, float32(item.Timestamp.Unix()))
 		}
@@ -217,7 +356,54 @@ func (l *Leader) SetLatest(items []storage.Item, collectSize int) {
 	// write back
 	for label, items := range result {
 		if err := l.db.SetLatest(label, items); err != nil {
-			logrus.Error(err)
+			return err
 		}
 	}
+	return nil
+}
+
+// SetNeighbors updates neighbors for the database.
+func (l *Leader) SetNeighbors(items []storage.Item, dataset *model.DataSet) error {
+	// create item map
+	itemMap := make(map[string]storage.Item)
+	for _, item := range items {
+		itemMap[item.ItemId] = item
+	}
+	for i, users := range dataset.ItemFeedback {
+		// Collect candidates
+		itemSet := base.NewSet(nil)
+		for _, u := range users {
+			itemSet.Add(dataset.UserFeedback[u]...)
+		}
+		// Ranking
+		nearItems := base.NewMaxHeap(l.cfg.Common.CacheSize)
+		for j := range itemSet {
+			if j != i {
+				nearItems.Add(j, Cosine(dataset.ItemFeedback[i], dataset.ItemFeedback[j]))
+			}
+		}
+		elem, scores := nearItems.ToSorted()
+		recommends := make([]storage.RecommendedItem, len(elem))
+		for i := range recommends {
+			recommends[i] = storage.RecommendedItem{ItemId: dataset.ItemIndex.ToName(elem[i].(int)), Score: float64(scores[i])}
+		}
+		if err := l.db.SetNeighbors(dataset.ItemIndex.ToName(i), recommends); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func Cosine(a, b []int) float32 {
+	interSet := base.NewSet(a)
+	intersect := float32(0.0)
+	for _, i := range b {
+		if interSet.Contain(i) {
+			intersect++
+		}
+	}
+	if intersect == 0 {
+		return 0
+	}
+	return intersect / math32.Sqrt(float32(len(a))) / math32.Sqrt(float32(len(b)))
 }
