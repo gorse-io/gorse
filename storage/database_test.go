@@ -17,16 +17,12 @@ func getUsers(t *testing.T, db Database) []User {
 		assert.Nil(t, err)
 		users = append(users, data...)
 		if cursor == "" {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.LessOrEqual(t, len(data), 2)
 			}
 			return users
 		} else {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.Equal(t, 2, len(data))
 			}
 		}
@@ -43,16 +39,12 @@ func getItems(t *testing.T, db Database) []Item {
 		assert.Nil(t, err)
 		items = append(items, data...)
 		if cursor == "" {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.LessOrEqual(t, len(data), 2)
 			}
 			return items
 		} else {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.Equal(t, 2, len(data))
 			}
 		}
@@ -69,16 +61,12 @@ func getFeedback(t *testing.T, db Database) []Feedback {
 		assert.Nil(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.LessOrEqual(t, len(data), 2)
 			}
 			return feedback
 		} else {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.Equal(t, 2, len(data))
 			}
 		}
@@ -95,20 +83,15 @@ func getLabels(t *testing.T, db Database) []string {
 		assert.Nil(t, err)
 		labels = append(labels, data...)
 		if cursor == "" {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.LessOrEqual(t, len(data), 2)
 			}
 			return labels
 		} else {
-			switch db.(type) {
-			case *Badger:
-				// TODO: SCAN "COUNT" has not been implemented in miniredis
+			if _, ok := db.(*Redis); !ok {
 				assert.Equal(t, 2, len(data))
 			}
 		}
-		t.Log(cursor)
 	}
 }
 
@@ -149,19 +132,15 @@ func testFeedback(t *testing.T, db Database) {
 		{"3", "6"},
 		{"4", "8"},
 	}
-	if err := db.InsertFeedback(feedback[0]); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.BatchInsertFeedback(feedback[1:]); err != nil {
-		t.Fatal(err)
-	}
+	err := db.InsertFeedback(feedback[0])
+	assert.Nil(t, err)
+	err = db.BatchInsertFeedback(feedback[1:])
+	assert.Nil(t, err)
 	// idempotent
-	if err := db.InsertFeedback(feedback[0]); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.BatchInsertFeedback(feedback[1:]); err != nil {
-		t.Fatal(err)
-	}
+	err = db.InsertFeedback(feedback[0])
+	assert.Nil(t, err)
+	err = db.BatchInsertFeedback(feedback[1:])
+	assert.Nil(t, err)
 	// Get feedback
 	ret := getFeedback(t, db)
 	assert.Equal(t, feedback, ret)
@@ -178,16 +157,14 @@ func testFeedback(t *testing.T, db Database) {
 		assert.Equal(t, strconv.Itoa(i), user.UserId)
 	}
 	// Get ret by user
-	ret, err := db.GetUserFeedback("2")
+	ret, err = db.GetUserFeedback("2")
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
 	// Get ret by item
 	ret, err = db.GetItemFeedback("4")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
@@ -223,12 +200,10 @@ func testItems(t *testing.T, db Database) {
 		},
 	}
 	// Insert item
-	if err := db.InsertItem(items[0]); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.BatchInsertItem(items[1:]); err != nil {
-		t.Fatal(err)
-	}
+	err := db.InsertItem(items[0])
+	assert.Nil(t, err)
+	err = db.BatchInsertItem(items[1:])
+	assert.Nil(t, err)
 	// Get items
 	totalItems := getItems(t, db)
 	assert.Equal(t, items, totalItems)
@@ -245,22 +220,16 @@ func testItems(t *testing.T, db Database) {
 	assert.Equal(t, []string{"a", "b"}, labels)
 	// Get items by labels
 	labelAItems, err := db.GetLabelItems("a")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 	assert.Equal(t, items[:3], labelAItems)
 	labelBItems, err := db.GetLabelItems("b")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 	assert.Equal(t, items[2:], labelBItems)
 	// Delete item
-	if err := db.DeleteItem("0"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.GetItem("0"); err == nil {
-		t.Fatal("delete item failed")
-	}
+	err = db.DeleteItem("0")
+	assert.Nil(t, err)
+	_, err = db.GetItem("0")
+	assert.NotNil(t, err)
 }
 
 func testIgnore(t *testing.T, db Database) {
@@ -344,9 +313,7 @@ func testList(t *testing.T, db Database) {
 		assert.Equal(t, items, totalItems)
 		// Get n items
 		headItems, err := operator.Get("0", 3, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Nil(t, err)
 		assert.Equal(t, items[:3], headItems)
 		// Get n items with offset
 		offsetItems, err := operator.Get("0", 3, 1)
@@ -354,9 +321,7 @@ func testList(t *testing.T, db Database) {
 		assert.Equal(t, items[1:4], offsetItems)
 		// Get empty
 		noItems, err := operator.Get("1", 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Nil(t, err)
 		assert.Equal(t, 0, len(noItems))
 		// test overwrite
 		overwriteItems := []RecommendedItem{
