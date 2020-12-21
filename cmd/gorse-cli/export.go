@@ -39,7 +39,7 @@ func exportFeedback(csvFile string, sep string, header bool, config *config.Conf
 	defer file.Close()
 	// Export feedbacks
 	if header {
-		if _, err := file.WriteString(fmt.Sprint("user_id%vitem_id\n", sep)); err != nil {
+		if _, err := file.WriteString(fmt.Sprintf("user_id%vitem_id\n", sep)); err != nil {
 			log.Fatal(err)
 		}
 	}

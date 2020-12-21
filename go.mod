@@ -14,6 +14,7 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/memberlist v0.2.2
+	github.com/jinzhu/copier v0.1.0
 	github.com/olekukonko/tablewriter v0.0.1
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.7.0

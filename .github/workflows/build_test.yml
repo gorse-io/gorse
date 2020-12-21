@@ -11,17 +11,28 @@ on:
       - 'release-**'
 
 jobs:
-
   unit_test:
     name: Unit Test
     runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql
+        ports:
+          - 3306
+        env:
+          MYSQL_ROOT_PASSWORD: password
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
     steps:
     - name: Set up dataset
       run: |
         mkdir -p ~/.gorse/dataset
         mkdir -p ~/.gorse/download
-        wget https://cdn.sine-x.com/datasets/movielens/ml-100k.zip -P ~/.gorse/download
-        unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+        wget https://cdn.sine-x.com/datasets/ml-1m.zip -P ~/.gorse/download
+        wget https://cdn.sine-x.com/datasets/pinterest-20.zip -P ~/.gorse/download
+        unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
+        unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
 
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
@@ -39,17 +50,17 @@ jobs:
             curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
             dep ensure
         fi
-
-    - name: Install dependencies
-      run: |
-        python3 -m pip install --upgrade pip
-        pip3 install -r test/requirements.txt
         
     - name: Build
       run: go build -v ./...
 
     - name: Test
       run: go test -timeout 20m -v ./... -coverprofile=coverage.txt -covermode=atomic
+      env:
+        MYSQL_TEST_USER: root
+        MYSQL_TEST_PASS: password
+        MYSQL_TEST_PROT: tcp
+        MYSQL_TEST_ADDR: 127.0.0.1:${{ job.services.mysql.ports[3306] }}
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)

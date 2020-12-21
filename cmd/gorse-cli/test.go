@@ -104,7 +104,10 @@ func parseParam(text string, tp int) interface{} {
 
 func test(cmd *cobra.Command, args []string) {
 	modelName := args[0]
-	m := model.NewModel(modelName, nil)
+	m, err := model.NewModel(modelName, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Load data
 	var trainSet, testSet *model.DataSet
 	if cmd.PersistentFlags().Changed("load-builtin") {

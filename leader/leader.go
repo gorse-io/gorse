@@ -77,13 +77,13 @@ func NewLeader(db storage.Database, cfg *config.Config, meta *toml.MetaData) *Le
 }
 
 func (l *Leader) Serve() {
-	log.Infof("Leader: start gossip at %v:%v", l.cfg.Leader.Host, l.cfg.Leader.Port)
+	log.Infof("Leader: start gossip at %v:%v", l.cfg.Leader.Host, l.cfg.Leader.GossipPort)
 
 	// start gossip
 	cfg := memberlist.DefaultLocalConfig()
 	cfg.BindAddr = l.cfg.Leader.Host
-	cfg.BindPort = l.cfg.Leader.Port
-	cfg.Name = protocol.NewName(protocol.LeaderNodePrefix, l.cfg.Leader.Port, cfg.Name)
+	cfg.BindPort = l.cfg.Leader.GossipPort
+	cfg.Name = protocol.NewName(protocol.LeaderNodePrefix, l.cfg.Leader.GossipPort, cfg.Name)
 	var err error
 	l.members, err = memberlist.Create(cfg)
 	if err != nil {
