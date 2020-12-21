@@ -33,6 +33,7 @@ func (config *Config) LoadDefaultIfNil() *Config {
 			Server:   *(*ServerConfig)(nil).LoadDefaultIfNil(),
 			Database: *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
 			Leader:   *(*LeaderConfig)(nil).LoadDefaultIfNil(),
+			Worker:   *(*WorkerConfig)(nil).LoadDefaultIfNil(),
 		}
 	}
 	return config
@@ -79,8 +80,7 @@ type WorkerConfig struct {
 	GossipPort      int    `toml:"gossip_port"`
 	RPCPort         int    `toml:"rpc_port"`
 	PredictInterval int    `toml:"predict_interval"`
-
-	GossipInterval int `toml:"gossip_interval"`
+	GossipInterval  int    `toml:"gossip_interval"`
 }
 
 func (config *WorkerConfig) LoadDefaultIfNil() *WorkerConfig {
@@ -103,7 +103,7 @@ type LeaderConfig struct {
 	BroadcastInterval int          `toml:"broadcast_interval"`
 	Params            ParamsConfig `toml:"params"`
 	Fit               FitConfig    `toml:"fit"`
-	Port              int          `toml:"port"`
+	GossipPort        int          `toml:"gossip_port"`
 	Host              string       `toml:"host"`
 }
 
@@ -115,6 +115,8 @@ func (config *LeaderConfig) LoadDefaultIfNil() *LeaderConfig {
 			BroadcastInterval: 1,
 			Params:            ParamsConfig{},
 			Fit:               *(*FitConfig)(nil).LoadDefaultIfNil(),
+			GossipPort:        6384,
+			Host:              "127.0.0.1",
 		}
 	}
 	return config
@@ -125,7 +127,7 @@ type FitConfig struct {
 	Verbose      int `toml:"verbose"`
 	Candidates   int `toml:"n_candidates"`
 	TopK         int `toml:"top_k"`
-	NumTestUsers int
+	NumTestUsers int `toml:"num_test_users"`
 }
 
 func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
@@ -174,6 +176,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("common", "retry_interval") {
 		config.Common.RetryInterval = defaultCommonConfig.RetryInterval
 	}
+	if !meta.IsDefined("common", "retry_limit") {
+		config.Common.RetryLimit = defaultCommonConfig.RetryLimit
+	}
 	if !meta.IsDefined("common", "cache_size") {
 		config.Common.CacheSize = defaultCommonConfig.CacheSize
 	}
@@ -193,7 +198,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("database", "path") {
 		config.Database.Path = defaultDBConfig.Path
 	}
-	// Default fit config
+	// Default leader config
 	defaultFitConfig := *(*FitConfig)(nil).LoadDefaultIfNil()
 	if !meta.IsDefined("leader", "fit", "n_jobs") {
 		config.Leader.Fit.Jobs = defaultFitConfig.Jobs
@@ -207,7 +212,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("leader", "fit", "top_k") {
 		config.Leader.Fit.TopK = defaultFitConfig.TopK
 	}
-	// Default leader config
 	defaultLeaderConfig := *(*LeaderConfig)(nil).LoadDefaultIfNil()
 	if !meta.IsDefined("leader", "model") {
 		config.Leader.Model = defaultLeaderConfig.Model
@@ -218,22 +222,31 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("leader", "broadcast_interval") {
 		config.Leader.BroadcastInterval = defaultLeaderConfig.BroadcastInterval
 	}
+	if !meta.IsDefined("leader", "gossip_port") {
+		config.Leader.GossipPort = defaultLeaderConfig.GossipPort
+	}
+	if !meta.IsDefined("leader", "host") {
+		config.Leader.Host = defaultLeaderConfig.Host
+	}
 	// Default worker config
-	// 	LeaderAddr      string   `toml:"leader_addr"`
-	//	Host            string   `toml:"host"`
-	//	GossipPort      int      `toml:"gossip_port"`
-	//	RPCPort         int      `toml:"rpc_port"`
-	//	PredictInterval int      `toml:"predict_interval"`
-	//	RetryInterval   int      `toml:"retry_interval"`
-	//	GossipInterval  int      `toml:"gossip_interval"`
-	//	CacheSize       int      `toml:"cache_size"`
-	//	Collectors      []string `toml:"collectors"`
 	defaultWorkerConfig := *(*WorkerConfig)(nil).LoadDefaultIfNil()
+	if !meta.IsDefined("worker", "leader_addr") {
+		config.Worker.LeaderAddr = defaultWorkerConfig.LeaderAddr
+	}
+	if !meta.IsDefined("worker", "host") {
+		config.Worker.Host = defaultWorkerConfig.Host
+	}
+	if !meta.IsDefined("worker", "rpc_port") {
+		config.Worker.RPCPort = defaultWorkerConfig.RPCPort
+	}
 	if !meta.IsDefined("worker", "predict_interval") {
 		config.Worker.PredictInterval = defaultWorkerConfig.PredictInterval
 	}
 	if !meta.IsDefined("worker", "gossip_interval") {
 		config.Worker.GossipInterval = defaultWorkerConfig.GossipInterval
+	}
+	if !meta.IsDefined("worker", "gossip_port") {
+		config.Worker.GossipPort = defaultWorkerConfig.GossipPort
 	}
 }
 

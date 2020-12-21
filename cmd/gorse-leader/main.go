@@ -33,7 +33,7 @@ var leaderCommand = &cobra.Command{
 			log.Fatal(err)
 		}
 		if cmd.PersistentFlags().Changed("port") {
-			conf.Leader.Port, _ = cmd.PersistentFlags().GetInt("port")
+			conf.Leader.GossipPort, _ = cmd.PersistentFlags().GetInt("port")
 		}
 		if cmd.PersistentFlags().Changed("host") {
 			conf.Leader.Host, _ = cmd.PersistentFlags().GetString("host")

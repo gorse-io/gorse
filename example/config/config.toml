@@ -9,9 +9,9 @@ default_n = 10                  # defulat number of items on paging
 path = "redis://127.0.0.1:6398" # database path
 
 # This section declares hyperparameters for the recommendation model.
-[model]
+[leader]
 
-[model.params]
+[leader.params]
 lr = 0.05                       # learning rate
 reg = 0.01                      # regularization strength
 n_epochs = 100                  # number of epochs

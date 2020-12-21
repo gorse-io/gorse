@@ -87,7 +87,7 @@ func (c *Collector) newCollectFunc(name string) CollectorFunc {
 	case "label_latest":
 		return c.CollectLabelLatest
 	default:
-		log.Error("no known collector %v", name)
+		log.Errorf("no known collector %v", name)
 		return c.CollectNothing
 	}
 }
