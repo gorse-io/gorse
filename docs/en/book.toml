@@ -1,0 +1,6 @@
+[book]
+authors = ["Zhenghao Zhang"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Gorse Recommender System Engine"
