@@ -1,0 +1,31 @@
+name: doc
+
+on:
+  push:
+    branches:
+      - 'release-**'
+  pull_request:
+    branches:
+      - 'release-**'
+
+jobs:
+  doc:
+    name: Document
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+           mdbook-version: 'latest'
+
+      - run: |
+          mdbook build docs/en -d ../book/en
+          mdbook build docs/zh -d ../book/zh
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/book

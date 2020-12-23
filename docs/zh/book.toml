@@ -2,5 +2,5 @@
 authors = ["Zhenghao Zhang"]
 language = "zh"
 multilingual = false
-src = "src/zh"
+src = "src"
 title = "Gorse推荐系统"

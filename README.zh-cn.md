@@ -4,40 +4,50 @@
 
 <img width=160 src="https://img.sine-x.com/gorse.png"/>
 
-| 持续集成 | 持续集成 (AVX2) | 测试覆盖率 | 代码报告 | 代码文档 | 使用文档 | 演示 |
-|---|---|---|---|---|---|---|
-| [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/1)](https://travis-ci.org/zhenghaoz/gorse) | [![Build Status](https://travis-matrix-badges.herokuapp.com/repos/zhenghaoz/gorse/branches/master/2)](https://travis-ci.org/zhenghaoz/gorse) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)  | [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse) | [![Documentation Status](https://readthedocs.org/projects/gorse/badge/?version=latest)](https://gorse.readthedocs.io/en/latest/?badge=latest) | [![Website](https://img.shields.io/website-up-down-green-red/https/steamlens.gorse.io.svg)](https://steamlens.gorse.io) |
+| 持续集成 | 测试覆盖率 | 代码报告 | Go文档                                                       | 文档 |
+|---|---|---|---|---|
+| [![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)  | [![Go Reference](https://pkg.go.dev/badge/github.com/zhenghaoz/gorse.svg)](https://pkg.go.dev/github.com/zhenghaoz/gorse) | [![Documentation Status](https://readthedocs.org/projects/gorse/badge/?version=latest)](https://gorse.readthedocs.io/en/latest/?badge=latest) |
 
-`gorse` 是一个使用 Go 语言实现的、基于协同过滤算法的推荐系统后端。
+`gorse` 是一个使用 Go 语言实现的推荐系统服务，系统整体架构如下：
 
-本项目旨在于在小规模推荐任务下，提供一个高效的、易用的、编程语言无关的协同过滤推荐系统微服务。我们可以直接使用它构建一个简易的推荐系统，或者根据它生成的候选物品来构建更加精细的推荐服务。项目的主要特点如下：
+<img width=540 src="https://img.sine-x.com/arch.png"/>
 
-- 实现了7个评分模型和4个排序模型。
-- 支持数据加载、数据分割、模型训练、模型评估和参数搜索。
-- 提供了数据导入导出工具、模型评估工具，以及最重要的 RESTful 推荐系统服务端。
-- 使用SIMD加速向量计算，利用多线程加速数据处理过程。
+本项目以数据库为中心，构建出多节点分布式推荐系统，节点由主节点（Leader）、工作节点（Worker）和服务节点（Server）三种角色组成。
 
-可以访问以下页面获取更多信息:
+- **主节点**主要负责模型训练和用户划分。主节点定时拉取数据训练出召回模型和排序模型，分发给服务节点以及工作节点，已经将用户分组分发给召回模型进行候选物品生成。
 
-- 访问 [GoDoc](https://godoc.org/github.com/zhenghaoz/gorse) 查看代码的详细文档。
-- 访问 [ReadTheDocs](https://gorse.readthedocs.io/) 查看教程、示例和使用指南。
-- 访问 [SteamLens](https://github.com/zhenghaoz/SteamLens) 查看一个推荐Steam游戏的示例推荐系统。
+- **工作节点**负责召回工作。工作节点使用召回模型（协同过滤）为每个用户生成候选物品，每个节点负责不同用户的候选物品生成。
+
+- **服务节点**负责对外服务和实时排序。它实现了推荐系统的RESTful API，能够处理数据读写任务。最重要的是，在收到推荐请求的时候，使用CTR模型或者人工规则对候选物品进行排序。
+
+除了以上的主要功能之外，系统还实现了以下的优化：
+
+- [x] 提供用户友好的模型调参工具
+- [x] 支持模型增量训练，加快模型收敛速度
+- [ ] 支持SIMD和多线程训练，充分利用处理器性能
 
 ## 安装
 
-使用项目之前，需要首先按照 Go 编译器，然后使用 `go get` 安装
+可以以以下的不同方式安装
 
-```bash
+- 从[Release](https://github.com/zhenghaoz/gorse/releases)下载预编译的二进制可执行文件。
+- 从DockerHub获取镜像
+
+| 镜像         | 编译状态 |
+| ------------ | -------- |
+| gorse-server |          |
+| gorse-leader |          |
+| gorse-worker |          |
+
+- 从源码编译
+
+需要首先安装Go 编译器，然后使用 `go get` 安装
+
+```
 $ go get github.com/zhenghaoz/gorse/...
 ```
 
-项目代码会被自动下载到本地，命令行程序 `gorse` 被安装在 $GOBIN 路径指定的文件夹中。
-
-如果运行机器的 CPU 支持 AVX2 和 FMA3 指令集, 建议使用 `avx2` 标签编译项目以加速向量计算。不过，由于向量计算并不是性能瓶颈，所以加速的效果也是有限的。
-
-```bash
-$ go get -tags='avx2' github.com/zhenghaoz/gorse/...
-```
+项目代码会被自动下载到本地， `gorse-cli` 、`gorse-leader`、`gorse-worker`和`gorse-server`四个程序被安装在` $GOBIN` 路径指定的文件夹中。
 
 ## 使用
 
@@ -133,16 +143,15 @@ $ curl 127.0.0.1:8080/recommends/1?number=5
 
 其中，`"ItemId"` 为物品的ID，`"Score"` 是推荐模型生成的用于排序的分数。关于服务程序的更多 API 的使用方法，可以查看 Wiki 中的 [RESTful APIs](https://github.com/zhenghaoz/gorse/wiki/RESTful-APIs) 这一节。
 
-## 推荐模型
+## 模型
 
-- 在MovieLens 100K上对排序模型进行交叉验证 [[源代码](https://github.com/zhenghaoz/gorse/blob/master/example/benchmark_ranking/main.go)].
+- **召回模型**
 
-| 模型    | [Precision@10](mailto:Precision%4010) | [Recall@10](mailto:Recall%4010) | [MAP@10](mailto:MAP%4010) | [NDCG@10](mailto:NDCG%4010) | [MRR@10](mailto:MRR%4010) | 用时    |
-| ------- | ------------------------------------- | ------------------------------- | ------------------------- | --------------------------- | ------------------------- | ------- |
-| ItemPop | 0.19081                               | 0.11584                         | 0.05364                   | 0.21785                     | 0.40991                   | 0:00:03 |
-| KNN     | 0.28584                               | 0.19328                         | 0.11358                   | 0.34746                     | 0.57766                   | 0:00:41 |
-| BPR     | 0.32083                               | 0.20906                         | 0.11848                   | 0.37643                     | 0.59818                   | 0:00:13 |
-| ALS    | 0.34727                               | 0.23665                         | 0.14550                   | 0.41614                     | 0.65439                   | 0:00:14 |
+
+
+- **排序模型**
+
+
 
 ## 开发人员
 
@@ -160,7 +169,7 @@ $ curl 127.0.0.1:8080/recommends/1?number=5
 
 ## 缺陷
 
-本项目存在一些缺陷，它的应用场景也是非常有限的：
+本项目存在一些缺陷，需要在后续迭代中解决：
 
-- **无扩展**: 只能在单机上运行，因此也就无法处理大数据。
-- **无特征**: 只使用用户和物品之间的交互记录进行推荐，无法利用用户特征或者物品特征。
+- **单机模型**：目前支持数据并行，但是要求模型能够被单机训练和使用。
+- **线上评估**：没有A/B测试和相关的在线推荐效果评估流程。
