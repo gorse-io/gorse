@@ -1,4 +1,4 @@
-name: doc
+name: docs
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
       - 'release-**'
 
 jobs:
-  doc:
-    name: Document
+  docs:
+    name: Documents
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
