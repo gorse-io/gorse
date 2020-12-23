@@ -35,9 +35,10 @@
 
 | 镜像         | 编译状态 |
 | ------------ | -------- |
-| gorse-server |          |
-| gorse-leader |          |
-| gorse-worker |          |
+| gorse-leader | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-leader)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-leader) |
+| gorse-server | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-server)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-server) |
+| gorse-worker | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-worker)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-worker) |
+| gorse-cli | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-cli)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-cli) |
 
 - 从源码编译
 
