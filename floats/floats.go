@@ -18,6 +18,12 @@ import (
 	"sort"
 )
 
+func Zeros(x []float32) {
+	for i := range x {
+		x[i] = 0
+	}
+}
+
 // SubTo subtracts one vector by another and saves the result in dst: dst = a - b
 func SubTo(a, b, dst []float32) {
 	if len(dst) != len(b) || len(dst) != len(b) {

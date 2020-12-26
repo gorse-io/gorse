@@ -12,7 +12,7 @@ const (
 
 var fitConfig = &config.FitConfig{
 	Jobs:         1,
-	Verbose:      10,
+	Verbose:      1,
 	Candidates:   100,
 	TopK:         10,
 	NumTestUsers: 0,
@@ -85,9 +85,17 @@ func TestALS_Pinterest(t *testing.T) {
 // Engineering 30.12 (2018): 2354-2366.
 
 func TestFISM_MovieLens(t *testing.T) {
-	// TODO: not implemented
+	trainSet, testSet := LoadDataFromBuiltIn("ml-1m")
+	model := NewFISM(Params{
+		NEpochs: 100,
+	})
+	score := model.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, 0.52, score.NDCG)
 }
 
 func TestFISM_Pinterest(t *testing.T) {
-	// TODO: not implemented
+	trainSet, testSet := LoadDataFromBuiltIn("pinterest-20")
+	model := NewFISM(Params{})
+	score := model.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, 0.52, score.NDCG)
 }
