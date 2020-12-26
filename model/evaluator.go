@@ -44,7 +44,9 @@ func Evaluate(estimator Model, testSet *DataSet, trainSet *DataSet, n int, numCa
 			var rankList []int
 			switch estimator.(type) {
 			case MatrixFactorization:
-				rankList, _ = Rank(estimator.(MatrixFactorization), userIndex, candidates, n)
+				rankList, _ = RankMatrixFactorization(estimator.(MatrixFactorization), userIndex, candidates, n)
+			case ItemBased:
+				rankList, _ = RankItemBased(estimator.(ItemBased), trainSet.UserFeedback[userIndex], candidates, n)
 			default:
 				panic("unsupported algorithm")
 			}
@@ -144,12 +146,26 @@ func MRR(targetSet base.Set, rankList []int) float32 {
 	return 0
 }
 
-// Rank gets the ranking
-func Rank(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
+// RankMatrixFactorization gets the ranking
+func RankMatrixFactorization(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
 	// Get top-n list
 	itemsHeap := base.NewMaxHeap(topN)
 	for _, itemId := range candidates {
 		itemsHeap.Add(itemId, model.InternalPredict(userId, itemId))
+	}
+	elem, scores := itemsHeap.ToSorted()
+	recommends := make([]int, len(elem))
+	for i := range recommends {
+		recommends[i] = elem[i].(int)
+	}
+	return recommends, scores
+}
+
+func RankItemBased(model ItemBased, supportItems []int, candidates []int, topN int) ([]int, []float32) {
+	// Get top-n list
+	itemsHeap := base.NewMaxHeap(topN)
+	for _, itemId := range candidates {
+		itemsHeap.Add(itemId, model.InternalPredict(supportItems, itemId))
 	}
 	elem, scores := itemsHeap.ToSorted()
 	recommends := make([]int, len(elem))

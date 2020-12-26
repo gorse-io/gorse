@@ -102,6 +102,8 @@ func NewModel(name string, params Params) (Model, error) {
 		return NewALS(params), nil
 	case "bpr":
 		return NewBPR(params), nil
+	case "fism":
+		return NewFISM(params), nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
@@ -132,6 +134,12 @@ func DecodeModel(name string, buf []byte) (Model, error) {
 			return nil, err
 		}
 		return &bpr, nil
+	case "fism":
+		var f FISM
+		if err := decoder.Decode(&f); err != nil {
+			return nil, err
+		}
+		return &f, nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
