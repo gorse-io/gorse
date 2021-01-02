@@ -257,7 +257,7 @@ func (als *ALS) SetParams(params Params) {
 	als.initMean = als.Params.GetFloat64(InitMean, 0)
 	als.initStdDev = als.Params.GetFloat64(InitStdDev, 0.1)
 	als.reg = als.Params.GetFloat64(Reg, 0.06)
-	als.weight = als.Params.GetFloat64(Weight, 0.001)
+	als.weight = als.Params.GetFloat64(NegWeight, 0.001)
 }
 
 func (als *ALS) GetParamsGrid() ParamsGrid {
@@ -266,7 +266,7 @@ func (als *ALS) GetParamsGrid() ParamsGrid {
 		InitMean:   []interface{}{0},
 		InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		Weight:     []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		NegWeight:  []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 	}
 }
 

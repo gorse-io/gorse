@@ -50,7 +50,7 @@ var testParamFlags = []paramFlag{
 	{intFlag, model.NFactors, "n-factors", "Number of factors"},
 	{float64Flag, model.InitMean, "init-mean", "Mean of gaussian initial parameters"},
 	{float64Flag, model.InitStdDev, "init-std", "Standard deviation of gaussian initial parameters"},
-	{float64Flag, model.Weight, "weight", "Weight of negative samples in ALS."},
+	{float64Flag, model.NegWeight, "neg-weight", "Weight of negative samples in ALS."},
 }
 
 func parseParamFlags(cmd *cobra.Command) model.ParamsGrid {

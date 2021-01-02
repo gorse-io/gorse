@@ -35,8 +35,7 @@ const (
 	RandomState ParamName = "RandomState" // random state (seed)
 	InitMean    ParamName = "InitMean"    // mean of gaussian initial parameter
 	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
-	UserBased   ParamName = "UserBased"   // user based if true. otherwise item based.
-	Weight      ParamName = "Weight"      // alpha value, depend on context
+	NegWeight   ParamName = "NegWeight"   // weight for negative samples in ALS
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -188,7 +187,7 @@ func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params 
 		{"random_state", RandomState, config.Leader.Params.RandomState},
 		{"init_mean", InitMean, config.Leader.Params.InitMean},
 		{"init_std", InitStdDev, config.Leader.Params.InitStdDev},
-		{"alpha", Weight, config.Leader.Params.Weight},
+		{"neg_weight", NegWeight, config.Leader.Params.Weight},
 	}
 	params := Params{}
 	for _, v := range values {
