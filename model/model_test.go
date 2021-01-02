@@ -58,10 +58,10 @@ func TestBPR_Pinterest(t *testing.T) {
 func TestALS_MovieLens(t *testing.T) {
 	trainSet, testSet := LoadDataFromBuiltIn("ml-1m")
 	model := NewALS(Params{
-		NFactors: 8,
-		Reg:      0.015,
-		NEpochs:  10,
-		Weight:   0.05,
+		NFactors:  8,
+		Reg:       0.015,
+		NEpochs:   10,
+		NegWeight: 0.05,
 	})
 	score := model.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.36, score.NDCG)
@@ -74,28 +74,8 @@ func TestALS_Pinterest(t *testing.T) {
 		Reg:        0.01,
 		NEpochs:    10,
 		InitStdDev: 0.01,
-		Weight:     0.001,
+		NegWeight:  0.001,
 	})
-	score := model.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.52, score.NDCG)
-}
-
-// He, Xiangnan, et al. "Nais: Neural attentive item similarity model
-// for recommendation." IEEE Transactions on Knowledge and Data
-// Engineering 30.12 (2018): 2354-2366.
-
-func TestFISM_MovieLens(t *testing.T) {
-	trainSet, testSet := LoadDataFromBuiltIn("ml-1m")
-	model := NewFISM(Params{
-		NEpochs: 100,
-	})
-	score := model.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.52, score.NDCG)
-}
-
-func TestFISM_Pinterest(t *testing.T) {
-	trainSet, testSet := LoadDataFromBuiltIn("pinterest-20")
-	model := NewFISM(Params{})
 	score := model.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.52, score.NDCG)
 }
