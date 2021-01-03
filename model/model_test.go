@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/config"
+	"runtime"
 	"testing"
 )
 
@@ -11,7 +12,7 @@ const (
 )
 
 var fitConfig = &config.FitConfig{
-	Jobs:         1,
+	Jobs:         runtime.NumCPU(),
 	Verbose:      1,
 	Candidates:   100,
 	TopK:         10,

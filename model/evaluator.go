@@ -25,12 +25,15 @@ import (
 type Metric func(targetSet base.Set, rankList []int) float32
 
 // Evaluate evaluates a model in top-n tasks.
-func Evaluate(estimator Model, testSet *DataSet, trainSet *DataSet, n int, numCandidates int, scorers ...Metric) []float32 {
-	sum := make([]float32, len(scorers))
-	count := float32(0.0)
+func Evaluate(estimator Model, testSet *DataSet, trainSet *DataSet, topK int, numCandidates int, nJobs int, scorers ...Metric) []float32 {
+	partSum := make([][]float32, nJobs)
+	partCount := make([]float32, nJobs)
+	for i := 0; i < nJobs; i++ {
+		partSum[i] = make([]float32, len(scorers))
+	}
 	//rng := NewRandomGenerator(0)
 	// For all UserFeedback
-	for userIndex := 0; userIndex < testSet.UserCount(); userIndex++ {
+	_ = base.Parallel(trainSet.UserCount(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
 		targetSet := base.NewSet(testSet.UserFeedback[userIndex])
 		if targetSet.Len() > 0 {
@@ -44,16 +47,24 @@ func Evaluate(estimator Model, testSet *DataSet, trainSet *DataSet, n int, numCa
 			var rankList []int
 			switch estimator.(type) {
 			case MatrixFactorization:
-				rankList, _ = RankMatrixFactorization(estimator.(MatrixFactorization), userIndex, candidates, n)
+				rankList, _ = RankMatrixFactorization(estimator.(MatrixFactorization), userIndex, candidates, topK)
 			default:
 				panic("unsupported algorithm")
 			}
-			count++
+			partCount[workerId]++
 			for i, metric := range scorers {
-				sum[i] += metric(targetSet, rankList)
+				partSum[workerId][i] += metric(targetSet, rankList)
 			}
 		}
+		return nil
+	})
+	sum := make([]float32, len(scorers))
+	for i := 0; i < nJobs; i++ {
+		for j := range partSum[i] {
+			sum[j] += partSum[i][j]
+		}
 	}
+	count := floats.Sum(partCount)
 	floats.MulConst(sum, 1/count)
 	return sum
 }

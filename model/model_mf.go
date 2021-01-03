@@ -113,10 +113,18 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 		bpr.nFactors, bpr.nEpochs, bpr.lr, bpr.reg, bpr.initMean, bpr.initStdDev)
 	bpr.Init(trainSet)
 	// Create buffers
-	temp := make([]float32, bpr.nFactors)
-	userFactor := make([]float32, bpr.nFactors)
-	positiveItemFactor := make([]float32, bpr.nFactors)
-	negativeItemFactor := make([]float32, bpr.nFactors)
+	temp := make([][]float32, config.Jobs)
+	userFactor := make([][]float32, config.Jobs)
+	positiveItemFactor := make([][]float32, config.Jobs)
+	negativeItemFactor := make([][]float32, config.Jobs)
+	rng := make([]base.RandomGenerator, config.Jobs)
+	for i := 0; i < config.Jobs; i++ {
+		temp[i] = make([]float32, bpr.nFactors)
+		userFactor[i] = make([]float32, bpr.nFactors)
+		positiveItemFactor[i] = make([]float32, bpr.nFactors)
+		negativeItemFactor[i] = make([]float32, bpr.nFactors)
+		rng[i] = base.NewRandomGenerator(bpr.rng.Int63())
+	}
 	// Convert array to hashmap
 	userFeedback := make([]map[int]interface{}, trainSet.UserCount())
 	for u := range userFeedback {
@@ -130,21 +138,21 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 		fitStart := time.Now()
 		// Training epoch
 		cost := float32(0.0)
-		for i := 0; i < trainSet.Count(); i++ {
+		_ = base.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex, ratingCount int
 			for {
-				userIndex = bpr.rng.Intn(trainSet.UserCount())
+				userIndex = rng[workerId].Intn(trainSet.UserCount())
 				ratingCount = len(trainSet.UserFeedback[userIndex])
 				if ratingCount > 0 {
 					break
 				}
 			}
-			posIndex := trainSet.UserFeedback[userIndex][bpr.rng.Intn(ratingCount)]
+			posIndex := trainSet.UserFeedback[userIndex][rng[workerId].Intn(ratingCount)]
 			// Select a negative sample
 			negIndex := -1
 			for {
-				temp := bpr.rng.Intn(trainSet.ItemCount())
+				temp := rng[workerId].Intn(trainSet.ItemCount())
 				if _, exist := userFeedback[userIndex][temp]; !exist {
 					negIndex = temp
 					break
@@ -154,34 +162,35 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 			cost += math32.Log(1 + math32.Exp(-diff))
 			grad := math32.Exp(-diff) / (1.0 + math32.Exp(-diff))
 			// Pairwise update
-			copy(userFactor, bpr.UserFactor[userIndex])
-			copy(positiveItemFactor, bpr.ItemFactor[posIndex])
-			copy(negativeItemFactor, bpr.ItemFactor[negIndex])
+			copy(userFactor[workerId], bpr.UserFactor[userIndex])
+			copy(positiveItemFactor[workerId], bpr.ItemFactor[posIndex])
+			copy(negativeItemFactor[workerId], bpr.ItemFactor[negIndex])
 			// Update positive item latent factor: +w_u
-			floats.MulConstTo(userFactor, grad, temp)
-			floats.MulConstAddTo(positiveItemFactor, -bpr.reg, temp)
-			floats.MulConstAddTo(temp, bpr.lr, bpr.ItemFactor[posIndex])
+			floats.MulConstTo(userFactor[workerId], grad, temp[workerId])
+			floats.MulConstAddTo(positiveItemFactor[workerId], -bpr.reg, temp[workerId])
+			floats.MulConstAddTo(temp[workerId], bpr.lr, bpr.ItemFactor[posIndex])
 			// Update negative item latent factor: -w_u
-			floats.MulConstTo(userFactor, -grad, temp)
-			floats.MulConstAddTo(negativeItemFactor, -bpr.reg, temp)
-			floats.MulConstAddTo(temp, bpr.lr, bpr.ItemFactor[negIndex])
+			floats.MulConstTo(userFactor[workerId], -grad, temp[workerId])
+			floats.MulConstAddTo(negativeItemFactor[workerId], -bpr.reg, temp[workerId])
+			floats.MulConstAddTo(temp[workerId], bpr.lr, bpr.ItemFactor[negIndex])
 			// Update user latent factor: h_i-h_j
-			floats.SubTo(positiveItemFactor, negativeItemFactor, temp)
-			floats.MulConst(temp, grad)
-			floats.MulConstAddTo(userFactor, -bpr.reg, temp)
-			floats.MulConstAddTo(temp, bpr.lr, bpr.UserFactor[userIndex])
-		}
+			floats.SubTo(positiveItemFactor[workerId], negativeItemFactor[workerId], temp[workerId])
+			floats.MulConst(temp[workerId], grad)
+			floats.MulConstAddTo(userFactor[workerId], -bpr.reg, temp[workerId])
+			floats.MulConstAddTo(temp[workerId], bpr.lr, bpr.UserFactor[userIndex])
+			return nil
+		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
 		if epoch%config.Verbose == 0 {
 			evalStart := time.Now()
-			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
 			log.Infof("epoch %v/%v [fit=%v, eval=%v]: loss=%v, NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
 				epoch, bpr.nEpochs, fitTime, evalTime, cost, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
 		}
 	}
-	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
@@ -303,82 +312,82 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 		als.nFactors, als.nEpochs, als.reg, als.initMean, als.initStdDev)
 	als.Init(trainSet)
 	// Create temporary matrix
-	temp1 := mat.NewDense(als.nFactors, als.nFactors, nil)
-	temp2 := mat.NewVecDense(als.nFactors, nil)
-	a := mat.NewDense(als.nFactors, als.nFactors, nil)
+	temp1 := make([]*mat.Dense, config.Jobs)
+	temp2 := make([]*mat.VecDense, config.Jobs)
+	a := make([]*mat.Dense, config.Jobs)
+	for i := 0; i < config.Jobs; i++ {
+		temp1[i] = mat.NewDense(als.nFactors, als.nFactors, nil)
+		temp2[i] = mat.NewVecDense(als.nFactors, nil)
+		a[i] = mat.NewDense(als.nFactors, als.nFactors, nil)
+	}
 	c := mat.NewDense(als.nFactors, als.nFactors, nil)
-	p := mat.NewDense(trainSet.UserCount(), trainSet.ItemCount(), nil)
 	// Create regularization matrix
 	regs := make([]float64, als.nFactors)
 	for i := range regs {
 		regs[i] = als.reg
 	}
 	regI := mat.NewDiagDense(als.nFactors, regs)
-	var fitErr error
 	for ep := 1; ep <= als.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Recompute all user factors: x_u = (Y^T C^userIndex Y + \lambda reg)^{-1} Y^T C^userIndex p(userIndex)
 		// Y^T Y
 		c.Mul(als.ItemFactor.T(), als.ItemFactor)
 		c.Scale(als.weight, c)
-		// X Y^T
-		p.Mul(als.UserFactor, als.ItemFactor.T())
-		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
-			a.Copy(c)
+		err := base.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
+			a[workerId].Copy(c)
 			b := mat.NewVecDense(als.nFactors, nil)
 			for _, itemIndex := range trainSet.UserFeedback[userIndex] {
 				// Y^T (C^u-I) Y
-				temp1.Outer(1, als.ItemFactor.RowView(itemIndex), als.ItemFactor.RowView(itemIndex))
-				a.Add(a, temp1)
+				temp1[workerId].Outer(1, als.ItemFactor.RowView(itemIndex), als.ItemFactor.RowView(itemIndex))
+				a[workerId].Add(a[workerId], temp1[workerId])
 				// Y^T C^u p(u)
-				temp2.ScaleVec(1+als.weight, als.ItemFactor.RowView(itemIndex))
-				b.AddVec(b, temp2)
+				temp2[workerId].ScaleVec(1+als.weight, als.ItemFactor.RowView(itemIndex))
+				b.AddVec(b, temp2[workerId])
 			}
-			a.Add(a, regI)
-			if err := temp1.Inverse(a); err != nil && fitErr == nil {
-				fitErr = err
-			}
-			temp2.MulVec(temp1, b)
-			als.UserFactor.SetRow(userIndex, temp2.RawVector().Data)
+			a[workerId].Add(a[workerId], regI)
+			err := temp1[workerId].Inverse(a[workerId])
+			temp2[workerId].MulVec(temp1[workerId], b)
+			als.UserFactor.SetRow(userIndex, temp2[workerId].RawVector().Data)
+			return err
+		})
+		if err != nil {
+			log.Error("als: ", err)
 		}
 		// Recompute all item factors: y_i = (X^T C^i X + \lambda reg)^{-1} X^T C^i p(i)
 		// X^T X
 		c.Mul(als.UserFactor.T(), als.UserFactor)
 		c.Scale(als.weight, c)
-		// X Y^T
-		p.Mul(als.UserFactor, als.ItemFactor.T())
-		for i := 0; i < trainSet.ItemCount(); i++ {
-			a.Copy(c)
+		err = base.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
+			a[workerId].Copy(c)
 			b := mat.NewVecDense(als.nFactors, nil)
-			for _, index := range trainSet.ItemFeedback[i] {
+			for _, index := range trainSet.ItemFeedback[itemIndex] {
 				// X^T (C^i-I) X
-				temp1.Outer(1, als.UserFactor.RowView(index), als.UserFactor.RowView(index))
-				a.Add(a, temp1)
+				temp1[workerId].Outer(1, als.UserFactor.RowView(index), als.UserFactor.RowView(index))
+				a[workerId].Add(a[workerId], temp1[workerId])
 				// X^T C^i p(i)
-				temp2.ScaleVec(1+als.weight, als.UserFactor.RowView(index))
-				b.AddVec(b, temp2)
+				temp2[workerId].ScaleVec(1+als.weight, als.UserFactor.RowView(index))
+				b.AddVec(b, temp2[workerId])
 			}
-			a.Add(a, regI)
-			if err := temp1.Inverse(a); err != nil && fitErr == nil {
-				fitErr = err
-			}
-			temp2.MulVec(temp1, b)
-			als.ItemFactor.SetRow(i, temp2.RawVector().Data)
-		}
-		if fitErr != nil {
-			log.Error(fitErr)
+			a[workerId].Add(a[workerId], regI)
+			err := temp1[workerId].Inverse(a[workerId])
+			temp2[workerId].MulVec(temp1[workerId], b)
+			als.ItemFactor.SetRow(itemIndex, temp2[workerId].RawVector().Data)
+			return err
+		})
+		if err != nil {
+			log.Error("als: ", err)
 		}
 		fitTime := time.Since(fitStart)
 		// Cross validation
 		if ep%config.Verbose == 0 {
 			evalStart := time.Now()
-			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
 			log.Infof("epoch %v/%v [fit=%v, eval=%v]: NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
 				ep, als.nEpochs, fitTime, evalTime, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
 		}
 	}
-	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
@@ -519,20 +528,22 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 
 func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	log.Infof("fit ALS with hyper-parameters: "+
+	log.Infof("fit CCD with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
 		ccd.nFactors, ccd.nEpochs, ccd.reg, ccd.initMean, ccd.initStdDev)
 	ccd.Init(trainSet)
-	// for (u,i) \in R do   \hat_r_{ui} <- p^T_u q_i
-	r := base.NewMatrix32(trainSet.UserCount(), trainSet.ItemCount())
-	for i := 0; i < trainSet.Count(); i++ {
-		userIndex, itemIndex := trainSet.GetIndex(i)
-		r[userIndex][itemIndex] = ccd.InternalPredict(userIndex, itemIndex)
-	}
 	// Create temporary matrix
 	s := base.NewMatrix32(ccd.nFactors, ccd.nFactors)
-	userRes := make([]float32, trainSet.UserCount())
-	itemRes := make([]float32, trainSet.ItemCount())
+	userPredictions := make([][]float32, config.Jobs)
+	itemPredictions := make([][]float32, config.Jobs)
+	userRes := make([][]float32, config.Jobs)
+	itemRes := make([][]float32, config.Jobs)
+	for i := 0; i < config.Jobs; i++ {
+		userPredictions[i] = make([]float32, trainSet.ItemCount())
+		itemPredictions[i] = make([]float32, trainSet.UserCount())
+		userRes[i] = make([]float32, trainSet.ItemCount())
+		itemRes[i] = make([]float32, trainSet.UserCount())
+	}
 	for ep := 1; ep <= ccd.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Update user factors
@@ -545,17 +556,20 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 				}
 			}
 		}
-		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
+		_ = base.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
+			userFeedback := trainSet.UserFeedback[userIndex]
+			for _, i := range userFeedback {
+				userPredictions[workerId][i] = ccd.InternalPredict(userIndex, i)
+			}
 			for f := 0; f < ccd.nFactors; f++ {
-				userFeedback := trainSet.UserFeedback[userIndex]
 				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}
 				for _, i := range userFeedback {
-					itemRes[i] = r[userIndex][i] - ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
+					userRes[workerId][i] = userPredictions[workerId][i] - ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
 				}
 				// p_{uf} <-
 				a, b, c := float32(0), float32(0), float32(0)
 				for _, i := range userFeedback {
-					a += (1 - (1-ccd.weight)*itemRes[i]) * ccd.ItemFactor[i][f]
+					a += (1 - (1-ccd.weight)*userRes[workerId][i]) * ccd.ItemFactor[i][f]
 					c += (1 - ccd.weight) * ccd.ItemFactor[i][f] * ccd.ItemFactor[i][f]
 				}
 				for k := 0; k < ccd.nFactors; k++ {
@@ -566,10 +580,11 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 				ccd.UserFactor[userIndex][f] = (a - b) / (c + ccd.weight*s[f][f] + ccd.reg)
 				// for itemIndex \in R_u do   \hat_{r}_{ui} <- \hat_{r}^f_{ui} - p_{uf]q_{if}
 				for _, i := range userFeedback {
-					r[userIndex][i] = itemRes[i] + ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
+					userPredictions[workerId][i] = userRes[workerId][i] + ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
 				}
 			}
-		}
+			return nil
+		})
 		// Update item factors
 		// S^p <- P^T P
 		floats.MatZero(s)
@@ -580,17 +595,20 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 				}
 			}
 		}
-		for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
+		_ = base.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
+			itemFeedback := trainSet.ItemFeedback[itemIndex]
+			for _, u := range itemFeedback {
+				itemPredictions[workerId][u] = ccd.InternalPredict(u, itemIndex)
+			}
 			for f := 0; f < ccd.nFactors; f++ {
-				itemFeedback := trainSet.ItemFeedback[itemIndex]
 				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}
 				for _, u := range itemFeedback {
-					userRes[u] = r[u][itemIndex] - ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
+					itemRes[workerId][u] = itemPredictions[workerId][u] - ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
 				}
 				// q_{if} <-
 				a, b, c := float32(0), float32(0), float32(0)
 				for _, u := range itemFeedback {
-					a += (1 - (1-ccd.weight)*userRes[u]) * ccd.UserFactor[u][f]
+					a += (1 - (1-ccd.weight)*itemRes[workerId][u]) * ccd.UserFactor[u][f]
 					c += (1 - ccd.weight) * ccd.UserFactor[u][f] * ccd.UserFactor[u][f]
 				}
 				for k := 0; k < ccd.nFactors; k++ {
@@ -601,20 +619,21 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 				ccd.ItemFactor[itemIndex][f] = (a - b) / (c + ccd.weight*s[f][f] + ccd.reg)
 				// for itemIndex \in R_u do   \hat_{r}_{ui} <- \hat_{r}^f_{ui} - p_{uf]q_{if}
 				for _, u := range itemFeedback {
-					r[u][itemIndex] = userRes[u] + ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
+					itemPredictions[workerId][u] = itemRes[workerId][u] + ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
 				}
 			}
-		}
+			return nil
+		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
 		if ep%config.Verbose == 0 {
 			evalStart := time.Now()
-			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
 			log.Infof("epoch %v/%v [fit=%v, eval=%v]: NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
 				ep, ccd.nEpochs, fitTime, evalTime, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
 		}
 	}
-	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
