@@ -20,6 +20,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/floats"
 	"gonum.org/v1/gonum/mat"
+	"time"
 )
 
 // BPR means Bayesian Personal Ranking, is a pairwise learning algorithm for matrix factorization
@@ -126,6 +127,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 	}
 	// Training
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
+		fitStart := time.Now()
 		// Training epoch
 		cost := float32(0.0)
 		for i := 0; i < trainSet.Count(); i++ {
@@ -169,11 +171,14 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 			floats.MulConstAddTo(userFactor, -bpr.reg, temp)
 			floats.MulConstAddTo(temp, bpr.lr, bpr.UserFactor[userIndex])
 		}
+		fitTime := time.Since(fitStart)
 		// Cross validation
 		if epoch%config.Verbose == 0 {
+			evalStart := time.Now()
 			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
-			log.Infof("epoch %v/%v: loss=%v, NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
-				epoch, bpr.nEpochs, cost, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+			evalTime := time.Since(evalStart)
+			log.Infof("epoch %v/%v [fit=%v, eval=%v]: loss=%v, NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
+				epoch, bpr.nEpochs, fitTime, evalTime, cost, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
 		}
 	}
 	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
@@ -311,6 +316,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 	regI := mat.NewDiagDense(als.nFactors, regs)
 	var fitErr error
 	for ep := 1; ep <= als.nEpochs; ep++ {
+		fitStart := time.Now()
 		// Recompute all user factors: x_u = (Y^T C^userIndex Y + \lambda reg)^{-1} Y^T C^userIndex p(userIndex)
 		// Y^T Y
 		c.Mul(als.ItemFactor.T(), als.ItemFactor)
@@ -362,11 +368,14 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 		if fitErr != nil {
 			log.Error(fitErr)
 		}
+		fitTime := time.Since(fitStart)
 		// Cross validation
 		if ep%config.Verbose == 0 {
+			evalStart := time.Now()
 			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
-			log.Infof("epoch %v/%v:NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
-				ep, als.nEpochs, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+			evalTime := time.Since(evalStart)
+			log.Infof("epoch %v/%v [fit=%v, eval=%v]: NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
+				ep, als.nEpochs, fitTime, evalTime, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
 		}
 	}
 	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
@@ -409,4 +418,203 @@ func (als *ALS) Init(trainSet *DataSet) {
 	als.UserFactor = newUserFactor
 	als.ItemFactor = newItemFactor
 	als.BaseMatrixFactorization.Init(trainSet)
+}
+
+type CCD struct {
+	BaseMatrixFactorization
+	// Model parameters
+	UserFactor [][]float32
+	ItemFactor [][]float32
+	// Hyper parameters
+	nFactors   int
+	nEpochs    int
+	reg        float32
+	initMean   float32
+	initStdDev float32
+	weight     float32
+}
+
+// NewCCD creates a eALS model.
+func NewCCD(params Params) *CCD {
+	fast := new(CCD)
+	fast.SetParams(params)
+	return fast
+}
+
+// SetParams sets hyper-parameters for the ALS model.
+func (ccd *CCD) SetParams(params Params) {
+	ccd.BaseMatrixFactorization.SetParams(params)
+	ccd.nFactors = ccd.Params.GetInt(NFactors, 15)
+	ccd.nEpochs = ccd.Params.GetInt(NEpochs, 50)
+	ccd.initMean = ccd.Params.GetFloat32(InitMean, 0)
+	ccd.initStdDev = ccd.Params.GetFloat32(InitStdDev, 0.1)
+	ccd.reg = ccd.Params.GetFloat32(Reg, 0.06)
+	ccd.weight = ccd.Params.GetFloat32(NegWeight, 0.001)
+}
+
+func (ccd *CCD) GetParamsGrid() ParamsGrid {
+	return ParamsGrid{
+		NFactors:   []interface{}{8, 16, 32, 64},
+		InitMean:   []interface{}{0},
+		InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		NegWeight:  []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+	}
+}
+
+// Predict by the ALS model.
+func (ccd *CCD) Predict(userId, itemId string) float32 {
+	userIndex := ccd.UserIndex.ToNumber(userId)
+	itemIndex := ccd.ItemIndex.ToNumber(itemId)
+	if userIndex == base.NotId {
+		log.Info("unknown user:", userId)
+		return 0
+	}
+	if itemIndex == base.NotId {
+		log.Info("unknown item:", itemId)
+		return 0
+	}
+	return ccd.InternalPredict(userIndex, itemIndex)
+}
+
+func (ccd *CCD) InternalPredict(userIndex, itemIndex int) float32 {
+	return floats.Dot(ccd.UserFactor[userIndex], ccd.ItemFactor[itemIndex])
+}
+
+func (ccd *CCD) Clear() {
+	ccd.UserIndex = nil
+	ccd.ItemIndex = nil
+	ccd.ItemFactor = nil
+	ccd.UserFactor = nil
+}
+
+func (ccd *CCD) Init(trainSet *DataSet) {
+	// Initialize
+	newUserFactor := ccd.rng.NormalMatrix(trainSet.UserCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
+	newItemFactor := ccd.rng.NormalMatrix(trainSet.ItemCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
+	// Relocate parameters
+	if ccd.UserIndex != nil {
+		for _, userId := range trainSet.UserIndex.GetNames() {
+			oldIndex := ccd.UserIndex.ToNumber(userId)
+			newIndex := trainSet.UserIndex.ToNumber(userId)
+			if oldIndex != base.NotId {
+				newUserFactor[newIndex] = ccd.UserFactor[oldIndex]
+			}
+		}
+	}
+	if ccd.ItemIndex != nil {
+		for _, itemId := range trainSet.ItemIndex.GetNames() {
+			oldIndex := ccd.ItemIndex.ToNumber(itemId)
+			newIndex := trainSet.ItemIndex.ToNumber(itemId)
+			if oldIndex != base.NotId {
+				newItemFactor[newIndex] = ccd.ItemFactor[oldIndex]
+			}
+		}
+	}
+	// Initialize base
+	ccd.UserFactor = newUserFactor
+	ccd.ItemFactor = newItemFactor
+	ccd.BaseMatrixFactorization.Init(trainSet)
+}
+
+func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig) Score {
+	config = config.LoadDefaultIfNil()
+	log.Infof("fit ALS with hyper-parameters: "+
+		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
+		ccd.nFactors, ccd.nEpochs, ccd.reg, ccd.initMean, ccd.initStdDev)
+	ccd.Init(trainSet)
+	// for (u,i) \in R do   \hat_r_{ui} <- p^T_u q_i
+	r := base.NewMatrix32(trainSet.UserCount(), trainSet.ItemCount())
+	for i := 0; i < trainSet.Count(); i++ {
+		userIndex, itemIndex := trainSet.GetIndex(i)
+		r[userIndex][itemIndex] = ccd.InternalPredict(userIndex, itemIndex)
+	}
+	// Create temporary matrix
+	s := base.NewMatrix32(ccd.nFactors, ccd.nFactors)
+	userRes := make([]float32, trainSet.UserCount())
+	itemRes := make([]float32, trainSet.ItemCount())
+	for ep := 1; ep <= ccd.nEpochs; ep++ {
+		fitStart := time.Now()
+		// Update user factors
+		// S^q <- \sum^N_{itemIndex=1} c_i q_i q_i^T
+		floats.MatZero(s)
+		for i := 0; i < ccd.nFactors; i++ {
+			for j := 0; j < ccd.nFactors; j++ {
+				for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
+					s[i][j] += ccd.ItemFactor[itemIndex][i] * ccd.ItemFactor[itemIndex][j]
+				}
+			}
+		}
+		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
+			for f := 0; f < ccd.nFactors; f++ {
+				userFeedback := trainSet.UserFeedback[userIndex]
+				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}
+				for _, i := range userFeedback {
+					itemRes[i] = r[userIndex][i] - ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
+				}
+				// p_{uf} <-
+				a, b, c := float32(0), float32(0), float32(0)
+				for _, i := range userFeedback {
+					a += (1 - (1-ccd.weight)*itemRes[i]) * ccd.ItemFactor[i][f]
+					c += (1 - ccd.weight) * ccd.ItemFactor[i][f] * ccd.ItemFactor[i][f]
+				}
+				for k := 0; k < ccd.nFactors; k++ {
+					if k != f {
+						b += ccd.weight * ccd.UserFactor[userIndex][k] * s[k][f]
+					}
+				}
+				ccd.UserFactor[userIndex][f] = (a - b) / (c + ccd.weight*s[f][f] + ccd.reg)
+				// for itemIndex \in R_u do   \hat_{r}_{ui} <- \hat_{r}^f_{ui} - p_{uf]q_{if}
+				for _, i := range userFeedback {
+					r[userIndex][i] = itemRes[i] + ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
+				}
+			}
+		}
+		// Update item factors
+		// S^p <- P^T P
+		floats.MatZero(s)
+		for i := 0; i < ccd.nFactors; i++ {
+			for j := 0; j < ccd.nFactors; j++ {
+				for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
+					s[i][j] += ccd.UserFactor[userIndex][i] * ccd.UserFactor[userIndex][j]
+				}
+			}
+		}
+		for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
+			for f := 0; f < ccd.nFactors; f++ {
+				itemFeedback := trainSet.ItemFeedback[itemIndex]
+				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}
+				for _, u := range itemFeedback {
+					userRes[u] = r[u][itemIndex] - ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
+				}
+				// q_{if} <-
+				a, b, c := float32(0), float32(0), float32(0)
+				for _, u := range itemFeedback {
+					a += (1 - (1-ccd.weight)*userRes[u]) * ccd.UserFactor[u][f]
+					c += (1 - ccd.weight) * ccd.UserFactor[u][f] * ccd.UserFactor[u][f]
+				}
+				for k := 0; k < ccd.nFactors; k++ {
+					if k != f {
+						b += ccd.weight * ccd.ItemFactor[itemIndex][k] * s[k][f]
+					}
+				}
+				ccd.ItemFactor[itemIndex][f] = (a - b) / (c + ccd.weight*s[f][f] + ccd.reg)
+				// for itemIndex \in R_u do   \hat_{r}_{ui} <- \hat_{r}^f_{ui} - p_{uf]q_{if}
+				for _, u := range itemFeedback {
+					r[u][itemIndex] = userRes[u] + ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
+				}
+			}
+		}
+		fitTime := time.Since(fitStart)
+		// Cross validation
+		if ep%config.Verbose == 0 {
+			evalStart := time.Now()
+			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+			evalTime := time.Since(evalStart)
+			log.Infof("epoch %v/%v [fit=%v, eval=%v]: NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
+				ep, ccd.nEpochs, fitTime, evalTime, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+		}
+	}
+	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, NDCG, Precision, Recall)
+	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }

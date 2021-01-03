@@ -18,9 +18,11 @@ import (
 	"sort"
 )
 
-func Zeros(x []float32) {
+func MatZero(x [][]float32) {
 	for i := range x {
-		x[i] = 0
+		for j := range x[i] {
+			x[i][j] = 0
+		}
 	}
 }
 

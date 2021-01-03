@@ -26,3 +26,11 @@ func NewMatrix(row, col int) [][]float64 {
 	}
 	return ret
 }
+
+func NewMatrix32(row, col int) [][]float32 {
+	ret := make([][]float32, row)
+	for i := range ret {
+		ret[i] = make([]float32, col)
+	}
+	return ret
+}

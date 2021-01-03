@@ -148,11 +148,17 @@ $ curl 127.0.0.1:8080/recommends/1?number=5
 
 - **召回模型**
 
-
+| 模型 | 论文                                                         |
+| ---- | ------------------------------------------------------------ |
+| ALS  | Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." *2008 Eighth IEEE International Conference on Data Mining*. Ieee, 2008. |
+| BPR  | Rendle, Steffen, et al. "BPR: Bayesian personalized ranking from implicit feedback." arXiv preprint arXiv:1205.2618 (2012). |
+| CCD | He, Xiangnan, et al. "Fast matrix factorization for online recommendation with implicit feedback." Proceedings of the 39th International ACM SIGIR conference on Research and Development in Information Retrieval. 2016. |
 
 - **排序模型**
 
-
+| 模型 | 论文 |
+| - | - |
+| FM | Rendle, Steffen. "Factorization machines." *2010 IEEE International Conference on Data Mining*. IEEE, 2010. |
 
 ## 开发人员
 

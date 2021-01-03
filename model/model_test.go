@@ -79,3 +79,28 @@ func TestALS_Pinterest(t *testing.T) {
 	score := model.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.52, score.NDCG)
 }
+
+func TestCCD_MovieLens(t *testing.T) {
+	trainSet, testSet := LoadDataFromBuiltIn("ml-1m")
+	model := NewCCD(Params{
+		NFactors:  8,
+		Reg:       0.015,
+		NEpochs:   30,
+		NegWeight: 0.05,
+	})
+	score := model.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, 0.36, score.NDCG)
+}
+
+func TestCCD_Pinterest(t *testing.T) {
+	trainSet, testSet := LoadDataFromBuiltIn("pinterest-20")
+	model := NewCCD(Params{
+		NFactors:   8,
+		Reg:        0.01,
+		NEpochs:    20,
+		InitStdDev: 0.01,
+		NegWeight:  0.001,
+	})
+	score := model.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, 0.52, score.NDCG)
+}
