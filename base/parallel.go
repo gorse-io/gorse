@@ -11,26 +11,56 @@ import (
 // Parallel schedules and runs tasks in parallel. nTask is the number of tasks. nJob is
 // the number of executors. worker is the executed function which passed a range of task
 // Names (begin, end).
-func Parallel(nTask int, nJob int, worker func(i int) error) error {
-	var wg sync.WaitGroup
-	wg.Add(nJob)
-	errs := make([]error, nJob)
-	for j := 0; j < nJob; j++ {
-		go func(jobId int) {
-			defer wg.Done()
-			begin := nTask * jobId / nJob
-			end := nTask * (jobId + 1) / nJob
-			for i := begin; i < end; i++ {
-				if errs[jobId] = worker(i); errs[jobId] != nil {
-					return
-				}
+func Parallel(nJobs int, nWorkers int, worker func(workerId, jobId int) error) error {
+	if nWorkers == 1 {
+		for i := 0; i < nJobs; i++ {
+			if err := worker(0, i); err != nil {
+				return err
 			}
-		}(j)
-	}
-	wg.Wait()
-	for _, err := range errs {
-		if err != nil {
-			return err
+		}
+	} else {
+		const chanSize = 64
+		const chanEOF = -1
+		c := make(chan int, chanSize)
+		// producer
+		go func() {
+			// send jobs
+			for i := 0; i < nJobs; i++ {
+				c <- i
+			}
+			// send EOF
+			for i := 0; i < nWorkers; i++ {
+				c <- chanEOF
+			}
+		}()
+		// consumer
+		var wg sync.WaitGroup
+		wg.Add(nWorkers)
+		errs := make([]error, nJobs)
+		for j := 0; j < nWorkers; j++ {
+			// start workers
+			go func(workerId int) {
+				defer wg.Done()
+				for {
+					// read job
+					jobId := <-c
+					if jobId == chanEOF {
+						return
+					}
+					// run job
+					if err := worker(workerId, jobId); err != nil {
+						errs[jobId] = err
+						return
+					}
+				}
+			}(j)
+		}
+		wg.Wait()
+		// check errors
+		for _, err := range errs {
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
