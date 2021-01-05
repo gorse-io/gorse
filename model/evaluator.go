@@ -158,14 +158,14 @@ func MRR(targetSet base.Set, rankList []int) float32 {
 // RankMatrixFactorization gets the ranking
 func RankMatrixFactorization(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
 	// Get top-n list
-	itemsHeap := base.NewMaxHeap(topN)
+	itemsHeap := base.NewTopKFilter(topN)
 	for _, itemId := range candidates {
-		itemsHeap.Add(itemId, model.InternalPredict(userId, itemId))
+		itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
 	}
-	elem, scores := itemsHeap.ToSorted()
+	elem, scores := itemsHeap.PopAll()
 	recommends := make([]int, len(elem))
 	for i := range recommends {
-		recommends[i] = elem[i].(int)
+		recommends[i] = elem[i]
 	}
 	return recommends, scores
 }

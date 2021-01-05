@@ -90,7 +90,7 @@ func (l *Leader) Serve() {
 		log.Fatal("Leader:", err)
 	}
 
-	// start broadcast gorountine
+	// start broadcast goroutine
 	go l.Broadcast()
 
 	// main loop
@@ -297,25 +297,25 @@ func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet) error 
 	for _, userIndex := range dataset.FeedbackItems {
 		count[userIndex]++
 	}
-	popItems := make(map[string]*base.MaxHeap)
-	popItems[""] = base.NewMaxHeap(l.cfg.Common.CacheSize)
-	for itemIndex, _ := range count {
+	popItems := make(map[string]*base.TopKStringFilter)
+	popItems[""] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
+	for itemIndex := range count {
 		itemId := dataset.ItemIndex.ToName(itemIndex)
 		item := itemMap[itemId]
-		popItems[""].Add(itemId, float32(count[itemIndex]))
+		popItems[""].Push(itemId, float32(count[itemIndex]))
 		for _, label := range item.Labels {
 			if _, exist := popItems[label]; !exist {
-				popItems[label] = base.NewMaxHeap(l.cfg.Common.CacheSize)
+				popItems[label] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
 			}
-			popItems[label].Add(item.ItemId, float32(count[itemIndex]))
+			popItems[label].Push(item.ItemId, float32(count[itemIndex]))
 		}
 	}
 	result := make(map[string][]storage.RecommendedItem)
 	for label := range popItems {
-		elem, scores := popItems[label].ToSorted()
+		elem, scores := popItems[label].PopAll()
 		items := make([]storage.RecommendedItem, len(elem))
 		for i := range items {
-			items[i].ItemId = elem[i].(string)
+			items[i].ItemId = elem[i]
 			items[i].Score = float64(scores[i])
 		}
 		result[label] = items
@@ -332,23 +332,23 @@ func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet) error 
 // SetLatest updates latest items.
 func (l *Leader) SetLatest(items []storage.Item) error {
 	// find latest items
-	latestItems := make(map[string]*base.MaxHeap)
-	latestItems[""] = base.NewMaxHeap(l.cfg.Common.CacheSize)
+	latestItems := make(map[string]*base.TopKStringFilter)
+	latestItems[""] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
 	for _, item := range items {
-		latestItems[""].Add(item.ItemId, float32(item.Timestamp.Unix()))
+		latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
 		for _, label := range item.Labels {
 			if _, exist := latestItems[label]; !exist {
-				latestItems[label] = base.NewMaxHeap(l.cfg.Common.CacheSize)
+				latestItems[label] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
 			}
-			latestItems[label].Add(item.ItemId, float32(item.Timestamp.Unix()))
+			latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
 		}
 	}
 	result := make(map[string][]storage.RecommendedItem)
 	for label := range latestItems {
-		elem, scores := latestItems[label].ToSorted()
+		elem, scores := latestItems[label].PopAll()
 		items := make([]storage.RecommendedItem, len(elem))
 		for i := range items {
-			items[i].ItemId = elem[i].(string)
+			items[i].ItemId = elem[i]
 			items[i].Score = float64(scores[i])
 		}
 		result[label] = items
@@ -376,16 +376,16 @@ func (l *Leader) SetNeighbors(items []storage.Item, dataset *model.DataSet) erro
 			itemSet.Add(dataset.UserFeedback[u]...)
 		}
 		// Ranking
-		nearItems := base.NewMaxHeap(l.cfg.Common.CacheSize)
+		nearItems := base.NewTopKFilter(l.cfg.Common.CacheSize)
 		for j := range itemSet {
 			if j != i {
-				nearItems.Add(j, Cosine(dataset.ItemFeedback[i], dataset.ItemFeedback[j]))
+				nearItems.Push(j, Cosine(dataset.ItemFeedback[i], dataset.ItemFeedback[j]))
 			}
 		}
-		elem, scores := nearItems.ToSorted()
+		elem, scores := nearItems.PopAll()
 		recommends := make([]storage.RecommendedItem, len(elem))
 		for i := range recommends {
-			recommends[i] = storage.RecommendedItem{ItemId: dataset.ItemIndex.ToName(elem[i].(int)), Score: float64(scores[i])}
+			recommends[i] = storage.RecommendedItem{ItemId: dataset.ItemIndex.ToName(elem[i]), Score: float64(scores[i])}
 		}
 		if err := l.db.SetNeighbors(dataset.ItemIndex.ToName(i), recommends); err != nil {
 			return err
