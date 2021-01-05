@@ -218,7 +218,7 @@ func (w *Worker) SetRecommends(m model.Model, users []string) error {
 		if err != nil {
 			return err
 		}
-		recItems := base.NewMaxHeap(w.cfg.Common.CacheSize)
+		recItems := base.NewTopKStringFilter(w.cfg.Common.CacheSize)
 		for item := range itemSet {
 			var score float32
 			switch m.(type) {
@@ -227,12 +227,12 @@ func (w *Worker) SetRecommends(m model.Model, users []string) error {
 			default:
 				return fmt.Errorf("not implement yet")
 			}
-			recItems.Add(item, score)
+			recItems.Push(item, score)
 		}
-		elems, scores := recItems.ToSorted()
+		elems, scores := recItems.PopAll()
 		recommends := make([]storage.RecommendedItem, len(elems))
 		for i := range elems {
-			recommends[i].ItemId = elems[i].(string)
+			recommends[i].ItemId = elems[i]
 			recommends[i].Score = float64(scores[i])
 		}
 		if err := w.db.SetRecommend(user, recommends); err != nil {
