@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/match"
 	"log"
 )
 
@@ -186,7 +186,7 @@ var exportFeedbackCommand = &cobra.Command{
 		csvFile := args[0]
 		sep, _ := cmd.PersistentFlags().GetString("sep")
 		header, _ := cmd.PersistentFlags().GetBool("header")
-		config, _, err := config.LoadConfig(model.GorseDir + "/cli.toml")
+		config, _, err := config.LoadConfig(match.GorseDir + "/cli.toml")
 		if err != nil {
 			log.Fatal(err)
 		}

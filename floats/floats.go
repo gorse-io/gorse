@@ -26,6 +26,12 @@ func MatZero(x [][]float32) {
 	}
 }
 
+func Zero(a []float32) {
+	for i := range a {
+		a[i] = 0
+	}
+}
+
 // SubTo subtracts one vector by another and saves the result in dst: dst = a - b
 func SubTo(a, b, dst []float32) {
 	if len(dst) != len(b) || len(dst) != len(b) {
@@ -43,6 +49,21 @@ func Add(dst, s []float32) {
 	}
 	for i := range dst {
 		dst[i] += s[i]
+	}
+}
+
+func AddConstTo(a []float32, c float32, dst []float32) {
+	if len(dst) != len(a) {
+		panic("floats: slice lengths do not match")
+	}
+	for i := range dst {
+		dst[i] = a[i] + c
+	}
+}
+
+func Sqrt(dst []float32) {
+	for i := range dst {
+		dst[i] = math32.Sqrt(dst[i])
 	}
 }
 

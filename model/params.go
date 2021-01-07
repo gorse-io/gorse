@@ -14,10 +14,10 @@
 package model
 
 import (
-	"fmt"
+	"encoding/json"
 	"github.com/BurntSushi/toml"
+	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/config"
-	"log"
 	"reflect"
 )
 
@@ -35,7 +35,7 @@ const (
 	RandomState ParamName = "RandomState" // random state (seed)
 	InitMean    ParamName = "InitMean"    // mean of gaussian initial parameter
 	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
-	NegWeight   ParamName = "NegWeight"   // weight for negative samples in ALS
+	Weight      ParamName = "Weight"      // weight for negative samples in ALS
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -65,7 +65,7 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 		case int:
 			return val
 		default:
-			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			log.Errorf("Params.GetInt: expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default
@@ -81,7 +81,7 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 		case int:
 			return int64(val)
 		default:
-			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			log.Printf("Params.GetInt64: expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default
@@ -94,25 +94,7 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 		case bool:
 			return val
 		default:
-			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
-		}
-	}
-	return _default
-}
-
-// GetFloat64 gets a float parameter by name. Returns _default if not exists or type doesn't match. The
-// type will be converted if given int.
-func (parameters Params) GetFloat64(name ParamName, _default float64) float64 {
-	if val, exist := parameters[name]; exist {
-		switch val := val.(type) {
-		case float64:
-			return val
-		case float32:
-			return float64(val)
-		case int:
-			return float64(val)
-		default:
-			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			log.Errorf("Params.GetBool expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default
@@ -128,7 +110,7 @@ func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 		case int:
 			return float32(val)
 		default:
-			log.Printf("Expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			log.Errorf("Params.GetFloat32 expect %v to be int, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default
@@ -141,14 +123,13 @@ func (parameters Params) GetString(name ParamName, _default string) string {
 		case string:
 			return val
 		default:
-			log.Printf("Expect %v to be string, but get %v", name, reflect.TypeOf(name))
+			log.Errorf("Params.GetString: expect %v to be string, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default
 }
 
-// Merge another group of hyper-parameters to current group of hyper-parameters.
-func (parameters Params) Merge(params Params) Params {
+func (parameters Params) Overwrite(params Params) Params {
 	merged := make(Params)
 	for k, v := range parameters {
 		merged[k] = v
@@ -160,17 +141,11 @@ func (parameters Params) Merge(params Params) Params {
 }
 
 func (parameters Params) ToString() string {
-	s := "{"
-	for name, val := range parameters {
-		if len(s) > 0 {
-			s += ","
-		}
-		s += string(name)
-		s += ":"
-		s += fmt.Sprint(val)
+	b, err := json.Marshal(parameters)
+	if err != nil {
+		log.Fatal("Params.ToString: ", err)
 	}
-	s += "}"
-	return s
+	return string(b)
 }
 
 func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params {
@@ -187,7 +162,7 @@ func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params 
 		{"random_state", RandomState, config.Leader.Params.RandomState},
 		{"init_mean", InitMean, config.Leader.Params.InitMean},
 		{"init_std", InitStdDev, config.Leader.Params.InitStdDev},
-		{"neg_weight", NegWeight, config.Leader.Params.Weight},
+		{"weight", Weight, config.Leader.Params.Weight},
 	}
 	params := Params{}
 	for _, v := range values {
@@ -205,8 +180,8 @@ func (grid ParamsGrid) Len() int {
 	return len(grid)
 }
 
-func (grid ParamsGrid) FillIfNotExist(g ParamsGrid) {
-	for param, values := range g {
+func (grid ParamsGrid) Fill(_default ParamsGrid) {
+	for param, values := range _default {
 		if _, exist := grid[param]; !exist {
 			grid[param] = values
 		}

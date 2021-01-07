@@ -124,5 +124,5 @@ func (idx *DirectIndex) ToName(index int) string {
 }
 
 func (idx *DirectIndex) GetNames() []string {
-	return nil
+	panic("not implemented")
 }

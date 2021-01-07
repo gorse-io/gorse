@@ -12,3 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package model
+
+import (
+	"os"
+	"testing"
+)
+
+func TestUnzip(t *testing.T) {
+	// Download
+	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", os.TempDir())
+	if err != nil {
+		t.Fatal("download file failed ", err)
+	}
+	// Extract files
+	fileNames, err := unzip(zipName, DataSetDir)
+	// Check
+	if err != nil {
+		t.Fatal("unzip file failed ", err)
+	}
+	if len(fileNames) != 24 {
+		t.Fatal("Number of file doesn't match")
+	}
+}

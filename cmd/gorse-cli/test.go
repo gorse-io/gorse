@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/match"
 	"github.com/zhenghaoz/gorse/storage"
 	"os"
 	"strconv"
@@ -104,16 +105,16 @@ func parseParam(text string, tp int) interface{} {
 
 func test(cmd *cobra.Command, args []string) {
 	modelName := args[0]
-	m, err := model.NewModel(modelName, nil)
+	m, err := match.NewModel(modelName, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Load data
-	var trainSet, testSet *model.DataSet
+	var trainSet, testSet *match.DataSet
 	if cmd.PersistentFlags().Changed("load-builtin") {
 		name, _ := cmd.PersistentFlags().GetString("load-builtin")
 		log.Infof("Load built-in dataset %s\n", name)
-		trainSet, testSet = model.LoadDataFromBuiltIn(name)
+		trainSet, testSet = match.LoadDataFromBuiltIn(name)
 	} else if cmd.PersistentFlags().Changed("load-csv") {
 		name, _ := cmd.PersistentFlags().GetString("load-csv")
 		sep, _ := cmd.PersistentFlags().GetString("csv-sep")
@@ -121,11 +122,11 @@ func test(cmd *cobra.Command, args []string) {
 		numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
 		seed, _ := cmd.PersistentFlags().GetInt("random-state")
 		log.Infof("Load csv file %v", name)
-		data := model.LoadDataFromCSV(name, sep, header)
+		data := match.LoadDataFromCSV(name, sep, header)
 		trainSet, testSet = data.Split(numTestUsers, int64(seed))
 	} else {
 		// Load config
-		cfg, _, err := config.LoadConfig(model.GorseDir + "/cli.toml")
+		cfg, _, err := config.LoadConfig(match.GorseDir + "/cli.toml")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -137,7 +138,7 @@ func test(cmd *cobra.Command, args []string) {
 		defer database.Close()
 		// Load data
 		log.Infof("Load data from %v", cfg.Database.Path)
-		data, _, err := model.LoadDataFromDatabase(database)
+		data, _, err := match.LoadDataFromDatabase(database)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -159,13 +160,13 @@ func test(cmd *cobra.Command, args []string) {
 	fitConfig.Candidates, _ = cmd.PersistentFlags().GetInt("n-negatives")
 	// Cross validation
 	start := time.Now()
-	var result *model.ParamsSearchResult
+	var result *match.ParamsSearchResult
 	if grid.Len() == 0 {
-		result = model.NewParamsSearchResult()
+		result = match.NewParamsSearchResult()
 		score := m.Fit(trainSet, testSet, fitConfig)
 		result.AddScore(nil, score)
 	} else {
-		a := model.GridSearchCV(m, trainSet, testSet, grid, 0)
+		a := match.GridSearchCV(m, trainSet, testSet, grid, 0)
 		result = &a
 	}
 	elapsed := time.Since(start)

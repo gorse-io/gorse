@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package model
+package match
 
 import (
 	"github.com/chewxy/math32"
@@ -25,32 +25,27 @@ import (
 type Metric func(targetSet base.Set, rankList []int) float32
 
 // Evaluate evaluates a model in top-n tasks.
-func Evaluate(estimator Model, testSet *DataSet, trainSet *DataSet, topK int, numCandidates int, nJobs int, scorers ...Metric) []float32 {
+func Evaluate(estimator MatrixFactorization, testSet *DataSet, trainSet *DataSet, topK int, numCandidates int, nJobs int, scorers ...Metric) []float32 {
 	partSum := make([][]float32, nJobs)
 	partCount := make([]float32, nJobs)
 	for i := 0; i < nJobs; i++ {
 		partSum[i] = make([]float32, len(scorers))
 	}
-	//rng := NewRandomGenerator(0)
+	//Rng := NewRandomGenerator(0)
 	// For all UserFeedback
-	_ = base.Parallel(trainSet.UserCount(), nJobs, func(workerId, userIndex int) error {
+	negatives := testSet.NegativeSample(trainSet, numCandidates)
+	_ = base.Parallel(testSet.UserCount(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
-		targetSet := base.NewSet(testSet.UserFeedback[userIndex])
+		targetSet := base.NewSet(testSet.UserFeedback[userIndex]...)
 		if targetSet.Len() > 0 {
 			// Sample negative samples
 			//userTrainSet := NewSet(trainSet.UserFeedback[userIndex])
-			negativeSample := testSet.NegativeSample(trainSet, numCandidates)[userIndex]
+			negativeSample := negatives[userIndex]
 			candidates := make([]int, 0, targetSet.Len()+len(negativeSample))
 			candidates = append(candidates, testSet.UserFeedback[userIndex]...)
 			candidates = append(candidates, negativeSample...)
 			// Find top-n ItemFeedback in predictions
-			var rankList []int
-			switch estimator.(type) {
-			case MatrixFactorization:
-				rankList, _ = RankMatrixFactorization(estimator.(MatrixFactorization), userIndex, candidates, topK)
-			default:
-				panic("unsupported algorithm")
-			}
+			rankList, _ := Rank(estimator.(MatrixFactorization), userIndex, candidates, topK)
 			partCount[workerId]++
 			for i, metric := range scorers {
 				partSum[workerId][i] += metric(targetSet, rankList)
@@ -155,8 +150,8 @@ func MRR(targetSet base.Set, rankList []int) float32 {
 	return 0
 }
 
-// RankMatrixFactorization gets the ranking
-func RankMatrixFactorization(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
+// Rank gets the ranking
+func Rank(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
 	// Get top-n list
 	itemsHeap := base.NewTopKFilter(topN)
 	for _, itemId := range candidates {

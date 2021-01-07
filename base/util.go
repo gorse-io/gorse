@@ -5,7 +5,7 @@ import (
 )
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.
-func Max(a []int) int {
+func Max(a ...int) int {
 	if len(a) == 0 {
 		log.Panicf("Can't get the maximum from empty vec")
 	}

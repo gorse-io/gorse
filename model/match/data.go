@@ -11,16 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package model
+package match
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage"
-	"hash/fnv"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -143,13 +143,13 @@ func createSliceOfSlice(n int) [][]int {
 }
 
 func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [][]int {
-	if dataset.Negatives == nil {
+	if len(dataset.Negatives) == 0 {
 		rng := base.NewRandomGenerator(0)
 		dataset.Negatives = make([][]int, dataset.UserCount())
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			s1 := base.NewSet(dataset.UserFeedback[userIndex])
-			s2 := base.NewSet(excludeSet.UserFeedback[userIndex])
-			dataset.Negatives[userIndex] = rng.Sample(dataset.UserCount(), numCandidates, s1, s2)
+			s1 := base.NewSet(dataset.UserFeedback[userIndex]...)
+			s2 := base.NewSet(excludeSet.UserFeedback[userIndex]...)
+			dataset.Negatives[userIndex] = rng.Sample(dataset.ItemCount(), numCandidates, s1, s2)
 		}
 	}
 	return dataset.Negatives
@@ -198,7 +198,7 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 				}
 			}
 		}
-		testUserSet := base.NewSet(testUsers)
+		testUserSet := base.NewSet(testUsers...)
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
 			if !testUserSet.Contain(userIndex) {
 				for _, itemIndex := range dataset.UserFeedback[userIndex] {
@@ -213,45 +213,9 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	return trainSet, testSet
 }
 
-// GetID the i-th record by <user ID, item ID, rating>.
-func (dataset *DataSet) GetID(i int) (string, string) {
-	userIndex, itemIndex := dataset.GetIndex(i)
-	return dataset.UserIndex.ToName(userIndex), dataset.ItemIndex.ToName(itemIndex)
-}
-
 // GetIndex gets the i-th record by <user index, item index, rating>.
 func (dataset *DataSet) GetIndex(i int) (int, int) {
 	return dataset.FeedbackUsers[i], dataset.FeedbackItems[i]
-}
-
-func (dataset *DataSet) Hash() (uint32, error) {
-	h := fnv.New32a()
-	// hashing users
-	for _, userId := range dataset.UserIndex.GetNames() {
-		_, err := h.Write([]byte(userId))
-		if err != nil {
-			return 0, err
-		}
-	}
-	// hashing items
-	for _, itemId := range dataset.ItemIndex.GetNames() {
-		_, err := h.Write([]byte(itemId))
-		if err != nil {
-			return 0, err
-		}
-	}
-	// hashing feedbacks
-	for i := range dataset.FeedbackItems {
-		_, err := h.Write([]byte(strconv.Itoa(dataset.FeedbackItems[i])))
-		if err != nil {
-			return 0, err
-		}
-		_, err = h.Write([]byte(strconv.Itoa(dataset.FeedbackUsers[i])))
-		if err != nil {
-			return 0, err
-		}
-	}
-	return h.Sum32(), nil
 }
 
 // LoadDataFromCSV loads Data from a CSV file. The CSV file should be:
@@ -340,4 +304,70 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, []storage.Item, 
 		}
 	}
 	return dataset, allItems, nil
+}
+
+func loadTest(dataset *DataSet, path string) error {
+	// Open
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	// Read lines
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, "\t")
+		positive, negative := fields[0], fields[1:]
+		if positive[0] != '(' || positive[len(positive)-1] != ')' {
+			return fmt.Errorf("wrong foramt: %v", line)
+		}
+		positive = positive[1 : len(positive)-1]
+		fields = strings.Split(positive, ",")
+		userId, itemId := fields[0], fields[1]
+		dataset.AddFeedback(userId, itemId, true)
+		dataset.SetNegatives(userId, negative)
+	}
+	return scanner.Err()
+}
+
+func loadTrain(path string) (*DataSet, error) {
+	// Open
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	// Read lines
+	scanner := bufio.NewScanner(file)
+	dataset := NewDirectIndexDataset()
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, "\t")
+		userId, itemId := fields[0], fields[1]
+		dataset.AddFeedback(userId, itemId, true)
+	}
+	return dataset, scanner.Err()
+}
+
+// LoadDataFromBuiltIn loads a built-in Data set. Now support:
+func LoadDataFromBuiltIn(dataSetName string) (*DataSet, *DataSet, error) {
+	// Extract Data set information
+	trainFilePath, testFilePath, err := model.LocateBuiltInDataset(dataSetName, model.FormatNCF)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Load dataset
+	trainSet, err := loadTrain(trainFilePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	testSet := NewDirectIndexDataset()
+	testSet.UserIndex = trainSet.UserIndex
+	testSet.ItemIndex = trainSet.ItemIndex
+	err = loadTest(testSet, testFilePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	return trainSet, testSet, nil
 }
