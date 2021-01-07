@@ -14,7 +14,9 @@
 package model
 
 import (
+	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/config"
 	"testing"
 )
 
@@ -32,26 +34,31 @@ func TestParams_Copy(t *testing.T) {
 	b[RandomState] = 1
 	// Check original parameters
 	assert.Equal(t, 1, a.GetInt(NFactors, -1))
-	assert.Equal(t, 0.1, a.GetFloat64(Lr, -0.1))
+	assert.Equal(t, float32(0.1), a.GetFloat32(Lr, -0.1))
 	assert.Equal(t, int64(0), a.GetInt64(RandomState, -1))
 	// Check copy parameters
 	assert.Equal(t, 2, b.GetInt(NFactors, -1))
-	assert.Equal(t, 0.2, b.GetFloat64(Lr, -0.1))
+	assert.Equal(t, float32(0.2), b.GetFloat32(Lr, -0.1))
 	assert.Equal(t, int64(1), b.GetInt64(RandomState, -1))
 }
 
-func TestParams_GetFloat64(t *testing.T) {
+func TestParams_GetFloat32(t *testing.T) {
 	p := Params{}
 	// Empty case
-	assert.Equal(t, 0.1, p.GetFloat64(Lr, 0.1))
+	assert.Equal(t, float32(0.1), p.GetFloat32(Lr, 0.1))
 	// Normal case
-	p[Lr] = 1.0
-	assert.Equal(t, 1.0, p.GetFloat64(Lr, 0.1))
+	p[Lr] = float32(1.0)
+	assert.Equal(t, float32(1.0), p.GetFloat32(Lr, 0.1))
+	// Convertible case
+	p[Lr] = 2.0
+	assert.Equal(t, float32(2.0), p.GetFloat32(Lr, 0.1))
+	p[Lr] = int(3)
+	assert.Equal(t, float32(3.0), p.GetFloat32(Lr, 0.1))
 	// Wrong type case
 	p[Lr] = 1
-	assert.Equal(t, 1.0, p.GetFloat64(Lr, 0.1))
+	assert.Equal(t, float32(1.0), p.GetFloat32(Lr, 0.1))
 	p[Lr] = "hello"
-	assert.Equal(t, 0.1, p.GetFloat64(Lr, 0.1))
+	assert.Equal(t, float32(0.1), p.GetFloat32(Lr, 0.1))
 }
 
 func TestParams_GetInt(t *testing.T) {
@@ -78,4 +85,69 @@ func TestParams_GetInt64(t *testing.T) {
 	assert.Equal(t, int64(0), p.GetInt64(RandomState, -1))
 	p[RandomState] = "hello"
 	assert.Equal(t, int64(-1), p.GetInt64(RandomState, -1))
+}
+
+func TestParams_GetBool(t *testing.T) {
+	p := Params{}
+	// Empty case
+	assert.Equal(t, false, p.GetBool(UseLogit, false))
+	// Normal case
+	p[UseLogit] = true
+	assert.Equal(t, true, p.GetBool(UseLogit, false))
+	// Wrong type case
+	p[UseLogit] = 0
+	assert.Equal(t, false, p.GetBool(UseLogit, false))
+	p[UseLogit] = "hello"
+	assert.Equal(t, false, p.GetBool(UseLogit, false))
+}
+
+func TestParams_GetString(t *testing.T) {
+	p := Params{}
+	// Empty case
+	assert.Equal(t, "default", p.GetString(Task, "default"))
+	// Normal case
+	p[Task] = "hello"
+	assert.Equal(t, "hello", p.GetString(Task, "default"))
+	// Wrong type case
+	p[Task] = 0
+	assert.Equal(t, "default", p.GetString(Task, "default"))
+	p[Task] = false
+	assert.Equal(t, "default", p.GetString(Task, "default"))
+}
+
+func TestParams_Overwrite(t *testing.T) {
+	a := Params{
+		NFactors: 10,
+		Lr:       0.5,
+	}
+	b := Params{
+		NEpochs:  100,
+		NFactors: 20,
+	}
+	c := a.Overwrite(b)
+	assert.Equal(t, 20, c[NFactors])
+	assert.Equal(t, 0.5, c[Lr])
+	assert.Equal(t, 100, c[NEpochs])
+}
+
+func TestNewParamsFromConfig(t *testing.T) {
+	// empty
+	conf := &config.Config{}
+	meta := &toml.MetaData{}
+	p := NewParamsFromConfig(conf, meta)
+	assert.Empty(t, p)
+}
+
+func TestParamsGrid(t *testing.T) {
+	paramsGrid := ParamsGrid{
+		UseLogit: []interface{}{false},
+		Task:     []interface{}{TaskClassification},
+	}
+	assert.Equal(t, 2, paramsGrid.Len())
+	paramsGrid.Fill(ParamsGrid{
+		NFactors: []interface{}{1, 3, 0},
+		Lr:       []interface{}{1.0, 7.0, 8.0},
+	})
+	assert.Equal(t, []interface{}{1, 3, 0}, paramsGrid[NFactors])
+	assert.Equal(t, []interface{}{1.0, 7.0, 8.0}, paramsGrid[Lr])
 }

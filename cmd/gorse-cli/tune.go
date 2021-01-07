@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/match"
 	"github.com/zhenghaoz/gorse/storage"
 	"log"
 	"os"
@@ -32,10 +33,10 @@ func tune(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 	// Load data
-	var trainSet, testSet *model.DataSet
+	var trainSet, testSet *match.DataSet
 	if cmd.PersistentFlags().Changed("load-builtin") {
 		name, _ := cmd.PersistentFlags().GetString("load-builtin")
-		trainSet, testSet = model.LoadDataFromBuiltIn(name)
+		trainSet, testSet = match.LoadDataFromBuiltIn(name)
 		log.Printf("Load built-in dataset %s\n", name)
 	} else if cmd.PersistentFlags().Changed("load-csv") {
 		name, _ := cmd.PersistentFlags().GetString("load-csv")
@@ -43,7 +44,7 @@ func tune(cmd *cobra.Command, args []string) {
 		header, _ := cmd.PersistentFlags().GetBool("csv-header")
 		numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
 		seed, _ := cmd.PersistentFlags().GetInt("random-state")
-		data := model.LoadDataFromCSV(name, sep, header)
+		data := match.LoadDataFromCSV(name, sep, header)
 		trainSet, testSet = data.Split(numTestUsers, int64(seed))
 	} else {
 		log.Println("Load default dataset ml-100k")
@@ -59,7 +60,7 @@ func tune(cmd *cobra.Command, args []string) {
 		}
 		defer database.Close()
 		// Load data
-		data, _, err := model.LoadDataFromDatabase(database)
+		data, _, err := match.LoadDataFromDatabase(database)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -80,7 +81,7 @@ func tune(cmd *cobra.Command, args []string) {
 	start := time.Now()
 	grid.FillIfNotExist(m.GetParamsGrid())
 	log.Printf("Tune hyper-parameters on: %v\n", grid)
-	result := model.RandomSearchCV(m, trainSet, testSet, grid, 10, 0)
+	result := match.RandomSearchCV(m, trainSet, testSet, grid, 10, 0)
 	elapsed := time.Since(start)
 	// Render table
 	table := tablewriter.NewWriter(os.Stdout)

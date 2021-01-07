@@ -27,6 +27,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/match"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
 	"google.golang.org/grpc"
@@ -98,7 +99,7 @@ func (l *Leader) Serve() {
 
 		// download dataset
 		log.Infof("Leader: load data from database")
-		dataSet, items, err := model.LoadDataFromDatabase(l.db)
+		dataSet, items, err := match.LoadDataFromDatabase(l.db)
 		if err != nil {
 			log.Error("Leader:", err)
 			time.Sleep(time.Minute * time.Duration(l.cfg.Common.RetryInterval))
@@ -286,7 +287,7 @@ func (l *Leader) Broadcast() {
 }
 
 // SetPopItem updates popular items for the database.
-func (l *Leader) SetPopItem(items []storage.Item, dataset *model.DataSet) error {
+func (l *Leader) SetPopItem(items []storage.Item, dataset *match.DataSet) error {
 	// create item map
 	itemMap := make(map[string]storage.Item)
 	for _, item := range items {
@@ -363,7 +364,7 @@ func (l *Leader) SetLatest(items []storage.Item) error {
 }
 
 // SetNeighbors updates neighbors for the database.
-func (l *Leader) SetNeighbors(items []storage.Item, dataset *model.DataSet) error {
+func (l *Leader) SetNeighbors(items []storage.Item, dataset *match.DataSet) error {
 	// create item map
 	itemMap := make(map[string]storage.Item)
 	for _, item := range items {

@@ -15,10 +15,9 @@ package model
 
 import (
 	"archive/zip"
-	"bufio"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/user"
@@ -26,11 +25,20 @@ import (
 	"strings"
 )
 
+type DatasetFormat int
+
+const (
+	FormatUnknown DatasetFormat = iota
+	FormatNCF
+	FormatLibFM
+)
+
 // Built-in Data set
 type _BuiltInDataSet struct {
 	downloadURL string
 	trainFile   string
 	testFile    string
+	format      DatasetFormat
 }
 
 var builtInDataSets = map[string]_BuiltInDataSet{
@@ -38,11 +46,25 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		downloadURL: "https://cdn.sine-x.com/datasets/pinterest-20.zip",
 		trainFile:   "pinterest-20/train.txt",
 		testFile:    "pinterest-20/test.txt",
+		format:      FormatNCF,
 	},
 	"ml-1m": {
 		downloadURL: "https://cdn.sine-x.com/datasets/ml-1m.zip",
 		trainFile:   "ml-1m/train.txt",
 		testFile:    "ml-1m/test.txt",
+		format:      FormatNCF,
+	},
+	"ml-tag": {
+		downloadURL: "https://cdn.sine-x.com/datasets/ml-tag.zip",
+		trainFile:   "ml-tag/train.libfm",
+		testFile:    "ml-tag/test.libfm",
+		format:      FormatLibFM,
+	},
+	"frappe": {
+		downloadURL: "https://cdn.sine-x.com/datasets/frappe.zip",
+		trainFile:   "frappe/train.libfm",
+		testFile:    "frappe/test.libfm",
+		format:      FormatLibFM,
 	},
 }
 
@@ -56,8 +78,7 @@ var (
 func init() {
 	usr, err := user.Current()
 	if err != nil {
-		log.Fatal("Error while init() file built_in.go in package core "+
-			"see https://github.com/zhenghaoz/gorse/issues/3", err)
+		log.Fatal("built_in.init: ", err)
 	}
 
 	GorseDir = usr.HomeDir + "/.gorse"
@@ -66,90 +87,37 @@ func init() {
 
 	// create all folders
 	if err = os.MkdirAll(DataSetDir, os.ModePerm); err != nil {
-		panic(err)
+		log.Fatal("built_in.init: ", err)
 	}
 	if err = os.MkdirAll(TempDir, os.ModePerm); err != nil {
-		panic(err)
+		log.Fatal("built_in.init: ", err)
 	}
 }
 
-func loadTest(dataset *DataSet, path string) error {
-	// Open
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	// Read lines
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Split(line, "\t")
-		positive, negative := fields[0], fields[1:]
-		if positive[0] != '(' || positive[len(positive)-1] != ')' {
-			return fmt.Errorf("wrong foramt: %v", line)
-		}
-		positive = positive[1 : len(positive)-1]
-		fields = strings.Split(positive, ",")
-		userId, itemId := fields[0], fields[1]
-		dataset.AddFeedback(userId, itemId, true)
-		dataset.SetNegatives(userId, negative)
-	}
-	return scanner.Err()
-}
-
-func loadTrain(path string) (*DataSet, error) {
-	// Open
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	// Read lines
-	scanner := bufio.NewScanner(file)
-	dataset := NewDirectIndexDataset()
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Split(line, "\t")
-		userId, itemId := fields[0], fields[1]
-		dataset.AddFeedback(userId, itemId, true)
-	}
-	return dataset, scanner.Err()
-}
-
-// LoadDataFromBuiltIn loads a built-in Data set. Now support:
-func LoadDataFromBuiltIn(dataSetName string) (*DataSet, *DataSet) {
+func LocateBuiltInDataset(name string, format DatasetFormat) (string, string, error) {
 	// Extract Data set information
-	dataSet, exist := builtInDataSets[dataSetName]
+	dataSet, exist := builtInDataSets[name]
 	if !exist {
-		log.Fatal("no such Data set ", dataSetName)
+		return "", "", fmt.Errorf("no such dataset %v", name)
 	}
-	dataFileName := filepath.Join(DataSetDir, dataSet.trainFile)
+	if dataSet.format != format {
+		return "", "", fmt.Errorf("format not matchs %v != %v", format, dataSet.format)
+	}
 	// Download if not exists
-	if _, err := os.Stat(dataFileName); os.IsNotExist(err) {
+	trainFilePah := filepath.Join(DataSetDir, dataSet.trainFile)
+	testFilePath := filepath.Join(DataSetDir, dataSet.testFile)
+	if _, err := os.Stat(trainFilePah); os.IsNotExist(err) {
 		zipFileName, _ := downloadFromUrl(dataSet.downloadURL, TempDir)
 		if _, err := unzip(zipFileName, DataSetDir); err != nil {
-			panic(err)
+			return "", "", err
 		}
 	}
-	// Load dataset
-	trainSet, err := loadTrain(filepath.Join(DataSetDir, dataSet.trainFile))
-	if err != nil {
-		log.Fatal(err)
-	}
-	testSet := NewDirectIndexDataset()
-	testSet.UserIndex = trainSet.UserIndex
-	testSet.ItemIndex = trainSet.ItemIndex
-	err = loadTest(testSet, filepath.Join(DataSetDir, dataSet.testFile))
-	if err != nil {
-		log.Fatal(err)
-	}
-	return trainSet, testSet
+	return trainFilePah, testFilePath, nil
 }
 
 // downloadFromUrl downloads file from URL.
 func downloadFromUrl(src string, dst string) (string, error) {
-	fmt.Printf("Download dataset from %s\n", src)
+	log.Infof("Download dataset from %s\n", src)
 	// Extract file name
 	tokens := strings.Split(src, "/")
 	fileName := filepath.Join(dst, tokens[len(tokens)-1])
@@ -159,21 +127,21 @@ func downloadFromUrl(src string, dst string) (string, error) {
 	}
 	output, err := os.Create(fileName)
 	if err != nil {
-		log.Println("Error while creating", fileName, "-", err)
+		log.Error("downloadFromUrl: error while creating", fileName, "-", err)
 		return fileName, err
 	}
 	defer output.Close()
 	// Download file
 	response, err := http.Get(src)
 	if err != nil {
-		log.Println("Error while downloading", src, "-", err)
+		log.Error("downloadFromUrl: error while downloading", src, "-", err)
 		return fileName, err
 	}
 	defer response.Body.Close()
 	// Save file
 	_, err = io.Copy(output, response.Body)
 	if err != nil {
-		log.Println("Error while downloading", src, "-", err)
+		log.Error("downloadFromUrl: error while downloading", src, "-", err)
 		return fileName, err
 	}
 	return fileName, nil
@@ -181,7 +149,6 @@ func downloadFromUrl(src string, dst string) (string, error) {
 
 // unzip zip file.
 func unzip(src string, dst string) ([]string, error) {
-	log.Printf("Unzip dataset %s\n", src)
 	var fileNames []string
 	// Open zip file
 	r, err := zip.OpenReader(src)
