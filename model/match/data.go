@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/storage"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"log"
 	"os"
 	"strings"
@@ -255,15 +255,15 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 	return dataset
 }
 
-func LoadDataFromDatabase(database storage.Database) (*DataSet, []storage.Item, error) {
+func LoadDataFromDatabase(database data.Database) (*DataSet, []data.Item, error) {
 	dataset := NewMapIndexDataset()
 	cursor := ""
 	var err error
-	allItems := make([]storage.Item, 0)
+	allItems := make([]data.Item, 0)
 	// pull users
 	for {
-		var users []storage.User
-		cursor, users, err = database.GetUsers("", cursor, batchSize)
+		var users []data.User
+		cursor, users, err = database.GetUsers(cursor, batchSize)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -276,8 +276,8 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, []storage.Item, 
 	}
 	// pull items
 	for {
-		var items []storage.Item
-		cursor, items, err = database.GetItems("", cursor, batchSize)
+		var items []data.Item
+		cursor, items, err = database.GetItems(cursor, batchSize)
 		allItems = append(allItems, items...)
 		if err != nil {
 			return nil, nil, err
@@ -291,8 +291,8 @@ func LoadDataFromDatabase(database storage.Database) (*DataSet, []storage.Item, 
 	}
 	// pull database
 	for {
-		var feedback []storage.Feedback
-		cursor, feedback, err = database.GetFeedback(cursor, batchSize)
+		var feedback []data.Feedback
+		cursor, feedback, err = database.GetFeedback("", cursor, batchSize)
 		if err != nil {
 			return nil, nil, err
 		}

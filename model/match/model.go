@@ -172,16 +172,12 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 		bpr.nFactors, bpr.nEpochs, bpr.lr, bpr.reg, bpr.initMean, bpr.initStdDev)
 	bpr.Init(trainSet)
 	// Create buffers
-	temp := make([][]float32, config.Jobs)
-	userFactor := make([][]float32, config.Jobs)
-	positiveItemFactor := make([][]float32, config.Jobs)
-	negativeItemFactor := make([][]float32, config.Jobs)
+	temp := base.NewMatrix32(config.Jobs, bpr.nFactors)
+	userFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
+	positiveItemFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
+	negativeItemFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
 	rng := make([]base.RandomGenerator, config.Jobs)
 	for i := 0; i < config.Jobs; i++ {
-		temp[i] = make([]float32, bpr.nFactors)
-		userFactor[i] = make([]float32, bpr.nFactors)
-		positiveItemFactor[i] = make([]float32, bpr.nFactors)
-		negativeItemFactor[i] = make([]float32, bpr.nFactors)
 		rng[i] = base.NewRandomGenerator(bpr.Rng.Int63())
 	}
 	// Convert array to hashmap
