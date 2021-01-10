@@ -22,7 +22,7 @@ RUN mkdir -p $GOPATH/src/github.com/siddontang && \
     bash dev.sh && make && \
     mv ./bin/ledis* $GOPATH/bin/
 
-RUN cp $GOPATH/src/github.com/siddontang/etc/ledis.conf /etc/ledis.conf
+RUN cp $GOPATH/src/github.com/siddontang/ledisdb/etc/ledis.conf /etc/ledis.conf
 
 EXPOSE 6380
 
