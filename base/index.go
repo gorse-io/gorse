@@ -15,7 +15,7 @@ package base
 
 import (
 	"encoding/gob"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"strconv"
 )
 
@@ -98,7 +98,7 @@ func (idx *DirectIndex) Len() int {
 func (idx *DirectIndex) Add(s string) {
 	i, err := strconv.Atoi(s)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("DirectIndex.Add: ", err)
 	}
 	if i >= idx.Limit {
 		idx.Limit = i + 1
@@ -108,7 +108,7 @@ func (idx *DirectIndex) Add(s string) {
 func (idx *DirectIndex) ToNumber(name string) int {
 	i, err := strconv.Atoi(name)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("DirectIndex.ToNumber: ", err)
 	}
 	if i >= idx.Limit {
 		return NotId
@@ -118,11 +118,15 @@ func (idx *DirectIndex) ToNumber(name string) int {
 
 func (idx *DirectIndex) ToName(index int) string {
 	if index >= idx.Limit {
-		panic("index out of range")
+		log.Fatal("DirectIndex.ToName: index out of range")
 	}
 	return strconv.Itoa(index)
 }
 
 func (idx *DirectIndex) GetNames() []string {
-	panic("not implemented")
+	names := make([]string, idx.Limit)
+	for i := range names {
+		names[i] = strconv.Itoa(i)
+	}
+	return names
 }

@@ -1,8 +1,19 @@
+// Copyright 2020 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package base
 
 import (
-	"gonum.org/v1/gonum/floats"
-	"gonum.org/v1/gonum/stat"
 	"sync"
 )
 
@@ -66,52 +77,58 @@ func Parallel(nJobs int, nWorkers int, worker func(workerId, jobId int) error) e
 	return nil
 }
 
-// ParallelFor runs for loop in parallel.
-func ParallelFor(begin, end int, worker func(i int)) {
-	var wg sync.WaitGroup
-	wg.Add(end - begin)
-	for j := begin; j < end; j++ {
-		go func(i int) {
-			worker(i)
-			wg.Done()
-		}(j)
-	}
-	wg.Wait()
+type batchJob struct {
+	beginId int
+	endId   int
 }
 
-// ParallelForSum runs for loop in parallel.
-func ParallelForSum(begin, end int, worker func(i int) float64) float64 {
-	retValues := make([]float64, end-begin)
-	var wg sync.WaitGroup
-	wg.Add(end - begin)
-	for j := begin; j < end; j++ {
-		go func(i int) {
-			retValues[i] = worker(i)
-			wg.Done()
-		}(j)
+func BatchParallel(nJobs int, nWorkers int, batchSize int, worker func(workerId, beginJobId, endJobId int) error) error {
+	if nWorkers == 1 {
+		return worker(0, 0, nJobs)
+	} else {
+		const chanSize = 64
+		const chanEOF = -1
+		c := make(chan batchJob, chanSize)
+		// producer
+		go func() {
+			// send jobs
+			for i := 0; i < nJobs; i += batchSize {
+				c <- batchJob{beginId: i, endId: Min(i+batchSize, nJobs)}
+			}
+			// send EOF
+			for i := 0; i < nWorkers; i++ {
+				c <- batchJob{beginId: chanEOF, endId: chanEOF}
+			}
+		}()
+		// consumer
+		var wg sync.WaitGroup
+		wg.Add(nWorkers)
+		errs := make([]error, nJobs)
+		for j := 0; j < nWorkers; j++ {
+			// start workers
+			go func(workerId int) {
+				defer wg.Done()
+				for {
+					// read job
+					job := <-c
+					if job.beginId == chanEOF {
+						return
+					}
+					// run job
+					if err := worker(workerId, job.beginId, job.endId); err != nil {
+						errs[job.beginId] = err
+						return
+					}
+				}
+			}(j)
+		}
+		wg.Wait()
+		// check errors
+		for _, err := range errs {
+			if err != nil {
+				return err
+			}
+		}
 	}
-	wg.Wait()
-	return floats.Sum(retValues)
-}
-
-// ParallelMean schedules and runs tasks in parallel, then returns the mean of returned values.
-// nJob is the number of executors. worker is the executed function which passed a range of task
-// Names (begin, end) and returns a double value.
-func ParallelMean(nTask int, nJob int, worker func(begin, end int) (sum float64)) float64 {
-	var wg sync.WaitGroup
-	wg.Add(nJob)
-	results := make([]float64, nJob)
-	weights := make([]float64, nJob)
-	for j := 0; j < nJob; j++ {
-		go func(jobId int) {
-			begin := nTask * jobId / nJob
-			end := nTask * (jobId + 1) / nJob
-			size := end - begin
-			results[jobId] = worker(begin, end) / float64(size)
-			weights[jobId] = float64(size) / float64(nTask)
-			wg.Done()
-		}(j)
-	}
-	wg.Wait()
-	return stat.Mean(results, weights)
+	return nil
 }

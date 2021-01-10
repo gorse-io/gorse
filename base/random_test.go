@@ -17,6 +17,8 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/floats"
+	"gonum.org/v1/gonum/stat"
+	"math"
 	"testing"
 )
 
@@ -34,4 +36,22 @@ func TestRandomGenerator_MakeUniformMatrix(t *testing.T) {
 	vec := rng.UniformMatrix(1, 1000, 1, 2)[0]
 	assert.False(t, floats.Min(vec) < 1)
 	assert.False(t, floats.Max(vec) > 2)
+}
+
+func TestRandomGenerator_MakeNormalMatrix64(t *testing.T) {
+	rng := NewRandomGenerator(0)
+	vec := rng.NormalMatrix64(1, 1000, 1, 2)[0]
+	assert.False(t, math.Abs(stat.Mean(vec, nil)-1) > randomEpsilon)
+	assert.False(t, math.Abs(stat.StdDev(vec, nil)-2) > randomEpsilon)
+}
+
+func TestRandomGenerator_Sample(t *testing.T) {
+	excludeSet := NewSet(0, 1, 2, 3, 4)
+	rng := NewRandomGenerator(0)
+	for i := 1; i <= 10; i++ {
+		sampled := rng.Sample(10, i, excludeSet)
+		for j := range sampled {
+			assert.False(t, excludeSet.Contain(sampled[j]))
+		}
+	}
 }

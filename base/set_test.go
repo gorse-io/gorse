@@ -12,3 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package base
+
+import (
+	"github.com/stretchr/testify/assert"
+	"strconv"
+	"testing"
+)
+
+func TestSet(t *testing.T) {
+	nums := make([]int, 100)
+	for i := range nums {
+		nums[i] = i
+	}
+	s := NewSet(nums[:10]...)
+	s.Add(nums[10:]...)
+	assert.Equal(t, len(nums), s.Len())
+	for i := range nums {
+		assert.True(t, s.Contain(i))
+	}
+	assert.False(t, s.Contain(s.Len()))
+}
+
+func TestStringSet(t *testing.T) {
+	nums := make([]string, 100)
+	for i := range nums {
+		nums[i] = strconv.Itoa(i)
+	}
+	s := NewStringSet(nums[:10]...)
+	s.Add(nums[10:]...)
+	assert.Equal(t, len(nums), s.Len())
+	for i := range nums {
+		assert.True(t, s.Contain(strconv.Itoa(i)))
+	}
+	assert.False(t, s.Contain(strconv.Itoa(s.Len())))
+}
