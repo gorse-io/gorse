@@ -15,8 +15,10 @@ package base
 
 type StringSet map[string]interface{}
 
-func NewStringSet() StringSet {
-	return make(map[string]interface{})
+func NewStringSet(a ...string) StringSet {
+	s := StringSet(make(map[string]interface{}))
+	s.Add(a...)
+	return s
 }
 
 func (s StringSet) Add(a ...string) {
@@ -36,7 +38,7 @@ func (s StringSet) Len() int {
 
 type Set map[int]interface{}
 
-func NewSet(a []int) Set {
+func NewSet(a ...int) Set {
 	set := make(map[int]interface{})
 	for _, s := range a {
 		set[s] = nil

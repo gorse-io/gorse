@@ -13,7 +13,9 @@
 // limitations under the License.
 package base
 
-import "math/rand"
+import (
+	"math/rand"
+)
 
 // RandomGenerator is the random generator for gorse.
 type RandomGenerator struct {
@@ -81,14 +83,23 @@ func (rng RandomGenerator) NormalMatrix64(row, col int, mean, stdDev float64) []
 }
 
 func (rng RandomGenerator) Sample(high, n int, exclude ...Set) []int {
-	excludeSet := NewSet(nil)
+	excludeSet := NewSet()
 	excludeSet.Merge(exclude...)
 	sampled := make([]int, 0, n)
-	for len(sampled) < n {
-		v := rng.Intn(high)
-		if !excludeSet.Contain(v) {
-			sampled = append(sampled, v)
-			excludeSet.Add(v)
+	if n >= high-excludeSet.Len() {
+		for i := 0; i < high; i++ {
+			if !excludeSet.Contain(i) {
+				sampled = append(sampled, i)
+				excludeSet.Add(i)
+			}
+		}
+	} else {
+		for len(sampled) < n {
+			v := rng.Intn(high)
+			if !excludeSet.Contain(v) {
+				sampled = append(sampled, v)
+				excludeSet.Add(v)
+			}
 		}
 	}
 	return sampled

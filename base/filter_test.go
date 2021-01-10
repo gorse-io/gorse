@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-func TestMaxHeap(t *testing.T) {
+func TestTopKFilter(t *testing.T) {
 	// Test a adjacent vec
 	a := NewTopKFilter(3)
 	a.Push(10, 2)
@@ -39,5 +39,29 @@ func TestMaxHeap(t *testing.T) {
 	a.Push(32, 9)
 	elem, scores = a.PopAll()
 	assert.Equal(t, []int{12, 32, 20}, elem)
+	assert.Equal(t, []float32{10, 9, 8}, scores)
+}
+
+func TestTopKStringFilter(t *testing.T) {
+	// Test a adjacent vec
+	a := NewTopKStringFilter(3)
+	a.Push("10", 2)
+	a.Push("20", 8)
+	a.Push("30", 1)
+	elem, scores := a.PopAll()
+	assert.Equal(t, []string{"20", "10", "30"}, elem)
+	assert.Equal(t, []float32{8, 2, 1}, scores)
+	// Test a full adjacent vec
+	a = NewTopKStringFilter(3)
+	a.Push("10", 2)
+	a.Push("20", 8)
+	a.Push("30", 1)
+	a.Push("40", 2)
+	a.Push("50", 5)
+	a.Push("12", 10)
+	a.Push("67", 7)
+	a.Push("32", 9)
+	elem, scores = a.PopAll()
+	assert.Equal(t, []string{"12", "32", "20"}, elem)
 	assert.Equal(t, []float32{10, 9, 8}, scores)
 }
