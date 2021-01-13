@@ -7,7 +7,7 @@ require (
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/spf13/cobra v0.0.7
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/thanhpk/randstr v1.0.4
 	go.etcd.io/bbolt v1.3.5
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
