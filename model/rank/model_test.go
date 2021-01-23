@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
-	"runtime"
 	"testing"
 )
 
@@ -33,7 +32,7 @@ func assertEpsilon(t *testing.T, expect float32, actual float32) {
 }
 
 var fitConfig = &config.FitConfig{
-	Jobs:    runtime.NumCPU(),
+	Jobs:    1,
 	Verbose: 1,
 }
 
@@ -88,7 +87,7 @@ func TestFM_Regression_Frappe(t *testing.T) {
 		model.Reg:        0.0001,
 	})
 	score := m.Fit(train, test, fitConfig)
-	assertEpsilon(t, 0.523564, score.RMSE)
+	assertEpsilon(t, 0.494435, score.RMSE)
 }
 
 func TestFM_Regression_MovieLens(t *testing.T) {

@@ -146,43 +146,46 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *config.FitConfig)
 		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
 		fm.nFactors, fm.nEpochs, fm.lr, fm.reg, fm.initMean, fm.initStdDev)
 	fm.Init(trainSet)
-	temp := make([]float32, fm.nFactors)
-	vGrad := make([]float32, fm.nFactors)
+	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
+	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
-		for i := 0; i < trainSet.Len(); i++ {
-			labels, target := trainSet.Get(i)
-			prediction := fm.internalPredict(labels)
-			var grad float32
-			switch fm.Task {
-			case FMRegression:
-				fm.MinTarget = math32.Min(fm.MinTarget, target)
-				fm.MaxTarget = math32.Max(fm.MaxTarget, target)
-				grad = prediction - target
-				cost += grad * grad / 2
-			case FMClassification:
-				grad = -target * (1 - 1/(1+math32.Exp(-target*prediction)))
-			default:
-				log.Fatal("FM.Fit: unknown task ", fm.Task)
+		_ = base.BatchParallel(trainSet.Len(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
+			for i := beginJobId; i < endJobId; i++ {
+				labels, target := trainSet.Get(i)
+				prediction := fm.internalPredict(labels)
+				var grad float32
+				switch fm.Task {
+				case FMRegression:
+					fm.MinTarget = math32.Min(fm.MinTarget, target)
+					fm.MaxTarget = math32.Max(fm.MaxTarget, target)
+					grad = prediction - target
+					cost += grad * grad / 2
+				case FMClassification:
+					grad = -target * (1 - 1/(1+math32.Exp(-target*prediction)))
+				default:
+					log.Fatal("FM.Fit: unknown task ", fm.Task)
+				}
+				// \sum^n_{j=1}v_j,fx_j
+				floats.Zero(temp[workerId])
+				for _, j := range labels {
+					floats.Add(temp[workerId], fm.V[j])
+				}
+				// Update w_0
+				fm.B -= fm.lr * grad
+				for _, i := range labels {
+					// Update w_i
+					fm.W[i] -= fm.lr * grad
+					// Update v_{i,f}
+					floats.SubTo(temp[workerId], fm.V[i], vGrad[workerId])
+					floats.MulConst(vGrad[workerId], grad)
+					floats.MulConstAddTo(fm.V[i], fm.reg, vGrad[workerId])
+					floats.MulConstAddTo(vGrad[workerId], -fm.lr, fm.V[i])
+				}
 			}
-			// \sum^n_{j=1}v_j,fx_j
-			floats.Zero(temp)
-			for _, j := range labels {
-				floats.Add(temp, fm.V[j])
-			}
-			// Update w_0
-			fm.B -= fm.lr * grad
-			for _, i := range labels {
-				// Update w_i
-				fm.W[i] -= fm.lr * grad
-				// Update v_{i,f}
-				floats.SubTo(temp, fm.V[i], vGrad)
-				floats.MulConst(vGrad, grad)
-				floats.MulConstAddTo(fm.V[i], fm.reg, vGrad)
-				floats.MulConstAddTo(vGrad, -fm.lr, fm.V[i])
-			}
-		}
+			return nil
+		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
 		if epoch%config.Verbose == 0 {
