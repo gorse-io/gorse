@@ -24,6 +24,14 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
+      mongo:
+        image: mongo
+        ports:
+          - 27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+
     steps:
     - name: Set up dataset
       run: |
@@ -61,10 +69,10 @@ jobs:
     - name: Test
       run: go test -timeout 20m -v ./... -coverprofile=coverage.txt -covermode=atomic
       env:
-        MYSQL_TEST_USER: root
-        MYSQL_TEST_PASS: password
-        MYSQL_TEST_PROT: tcp
-        MYSQL_TEST_ADDR: 127.0.0.1:${{ job.services.mysql.ports[3306] }}
+        # MySQL
+        MYSQL_URI: mysql://root:paswword@127.0.0.1:${{ job.services.mysql.ports[3306] }}
+        # MongoDB
+        MONGO_URI: mongodb://root:password@127.0.0.1:${{ job.services.mysql.ports[27017] }}
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)

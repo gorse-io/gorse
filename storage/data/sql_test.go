@@ -11,22 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package storage
+package data
 
 import (
 	"database/sql"
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 )
 
 var (
-	user    string
-	pass    string
-	prot    string
-	addr    string
-	netAddr string
+	sqlUri string
 )
 
 func init() {
@@ -37,11 +32,7 @@ func init() {
 		}
 		return defaultValue
 	}
-	user = env("MYSQL_TEST_USER", "root")
-	pass = env("MYSQL_TEST_PASS", "")
-	prot = env("MYSQL_TEST_PROT", "tcp")
-	addr = env("MYSQL_TEST_ADDR", "127.0.0.1:3306")
-	netAddr = fmt.Sprintf("%s(%s)", prot, addr)
+	sqlUri = env("MYSQL_URI", "mysql://root@tcp(127.0.0.1:3306)/")
 }
 
 type testSQLDatabase struct {
@@ -65,7 +56,7 @@ func newTestSQLDatabase(t *testing.T, dbName string) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(fmt.Sprintf("mysql://%s:%s@%s/?timeout=30s&parseTime=true", user, pass, netAddr))
+	database.Database, err = Open(sqlUri + "?timeout=30s&parseTime=true")
 	assert.Nil(t, err)
 	dbName = "gorse_" + dbName
 	databaseComm := database.GetComm(t)
@@ -74,7 +65,7 @@ func newTestSQLDatabase(t *testing.T, dbName string) *testSQLDatabase {
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.Nil(t, err)
 	// connect database
-	database.Database, err = Open(fmt.Sprintf("mysql://%s:%s@%s/%s?timeout=30s&parseTime=true", user, pass, netAddr, dbName))
+	database.Database, err = Open(sqlUri + dbName + "?timeout=30s&parseTime=true")
 	assert.Nil(t, err)
 	// create schema
 	err = database.Init()
@@ -100,24 +91,6 @@ func TestSQLDatabase_Item(t *testing.T) {
 	testItems(t, db.Database)
 }
 
-func TestSQLDatabase_Ignore(t *testing.T) {
-	db := newTestSQLDatabase(t, "TestSQLDatabase_Ignore")
-	defer db.Close(t)
-	testIgnore(t, db.Database)
-}
-
-func TestSQLDatabase_Meta(t *testing.T) {
-	db := newTestSQLDatabase(t, "TestSQLDatabase_Meta")
-	defer db.Close(t)
-	testMeta(t, db.Database)
-}
-
-func TestSQLDatabase_List(t *testing.T) {
-	db := newTestSQLDatabase(t, "TestSQLDatabase_List")
-	defer db.Close(t)
-	testList(t, db.Database)
-}
-
 func TestSQLDatabase_DeleteUser(t *testing.T) {
 	db := newTestSQLDatabase(t, "TestSQLDatabase_DeleteUser")
 	defer db.Close(t)
@@ -128,10 +101,4 @@ func TestSQLDatabase_DeleteItem(t *testing.T) {
 	db := newTestSQLDatabase(t, "TestSQLDatabase_DeleteItem")
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
-}
-
-func TestSQLDatabase_Prefix(t *testing.T) {
-	db := newTestSQLDatabase(t, "TestSQLDatabase_Prefix")
-	defer db.Close(t)
-	testPrefix(t, db.Database)
 }

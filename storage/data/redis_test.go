@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package storage
+package data
 
 import (
 	"github.com/alicebob/miniredis/v2"
@@ -58,24 +58,6 @@ func TestRedis_Item(t *testing.T) {
 	testItems(t, db.Database)
 }
 
-func TestRedis_Ignore(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testIgnore(t, db.Database)
-}
-
-func TestRedis_Meta(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testMeta(t, db.Database)
-}
-
-func TestRedis_List(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testList(t, db.Database)
-}
-
 func TestRedis_DeleteUser(t *testing.T) {
 	db := newMockRedis(t)
 	defer db.Close(t)
@@ -86,10 +68,4 @@ func TestRedis_DeleteItem(t *testing.T) {
 	db := newMockRedis(t)
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
-}
-
-func TestRedis_Prefix(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testPrefix(t, db.Database)
 }
