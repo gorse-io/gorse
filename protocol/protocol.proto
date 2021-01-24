@@ -17,32 +17,21 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 
 package protocol;
 
-service Worker {
+service Master {
 
-  rpc BroadcastModel(Model) returns (Void) {}
-  rpc BroadcastUserPartition(Partition) returns (Void) {}
-
-  rpc GetModelVersion(Void) returns (Version) {}
-  rpc GetUserPartitionVersion(Void) returns (Version) {}
+  rpc GetLatestRankerVersion(Void) returns (Model) {}
+  rpc GetLatestMatcherVersion(Void) returns (Model) {}
+  rpc GetLatestRanker(Void) returns (Model) {}
+  rpc GetLatestMatcher(Void) returns (Model) {}
 
 }
 
 message Model {
-  Version version = 1;
+  int64 version = 1;
   string name = 2;
   bytes model = 3;
 }
 
 message Void {
 
-}
-
-message Partition {
-  Version version = 1;
-  repeated string prefixes = 2;
-}
-
-message Version {
-  int32 tag = 1;
-  int32 term = 2;
 }
