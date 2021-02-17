@@ -259,7 +259,7 @@ func (db *SQLDatabase) GetUserFeedback(feedbackType, userId string) ([]Feedback,
 	return feedbacks, nil
 }
 
-func (db *SQLDatabase) InsertFeedback(feedback Feedback) error {
+func (db *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
 	txn, err := db.db.Begin()
 	if err != nil {
 		return err
@@ -270,22 +270,28 @@ func (db *SQLDatabase) InsertFeedback(feedback Feedback) error {
 		txn.Rollback()
 		return err
 	}
-	_, err = txn.Exec("INSERT IGNORE users(user_id) VALUES (?)", feedback.UserId)
-	if err != nil {
-		txn.Rollback()
-		return err
+	// insert users
+	if insertUser {
+		_, err = txn.Exec("INSERT IGNORE users(user_id) VALUES (?)", feedback.UserId)
+		if err != nil {
+			txn.Rollback()
+			return err
+		}
 	}
-	_, err = txn.Exec("INSERT IGNORE items(item_id) VALUES (?)", feedback.ItemId)
-	if err != nil {
-		txn.Rollback()
-		return err
+	// insert items
+	if insertItem {
+		_, err = txn.Exec("INSERT IGNORE items(item_id) VALUES (?)", feedback.ItemId)
+		if err != nil {
+			txn.Rollback()
+			return err
+		}
 	}
 	return txn.Commit()
 }
 
-func (db *SQLDatabase) BatchInsertFeedback(feedback []Feedback) error {
+func (db *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error {
 	for _, f := range feedback {
-		if err := db.InsertFeedback(f); err != nil {
+		if err := db.InsertFeedback(f, insertUser, insertItem); err != nil {
 			return err
 		}
 	}

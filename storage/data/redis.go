@@ -330,7 +330,7 @@ func parseItemIndexKey(key string) (itemId, tp string) {
 	return fields[1], fields[3]
 }
 
-func (redis *Redis) InsertFeedback(feedback Feedback) error {
+func (redis *Redis) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
 	var ctx = context.Background()
 	val, err := json.Marshal(feedback)
 	if err != nil {
@@ -342,29 +342,33 @@ func (redis *Redis) InsertFeedback(feedback Feedback) error {
 		return err
 	}
 	// insert user
-	if exist, err := redis.client.Exists(ctx, prefixUser+feedback.UserId).Result(); err != nil {
-		return err
-	} else if exist == 0 {
-		user := User{UserId: feedback.UserId}
-		data, err := json.Marshal(user)
-		if err != nil {
+	if insertUser {
+		if exist, err := redis.client.Exists(ctx, prefixUser+feedback.UserId).Result(); err != nil {
 			return err
-		}
-		if err = redis.client.Set(ctx, prefixUser+feedback.UserId, data, 0).Err(); err != nil {
-			return err
+		} else if exist == 0 {
+			user := User{UserId: feedback.UserId}
+			data, err := json.Marshal(user)
+			if err != nil {
+				return err
+			}
+			if err = redis.client.Set(ctx, prefixUser+feedback.UserId, data, 0).Err(); err != nil {
+				return err
+			}
 		}
 	}
 	// Insert item
-	if exist, err := redis.client.Exists(ctx, prefixItem+feedback.ItemId).Result(); err != nil {
-		return err
-	} else if exist == 0 {
-		item := Item{ItemId: feedback.ItemId}
-		data, err := json.Marshal(item)
-		if err != nil {
+	if insertItem {
+		if exist, err := redis.client.Exists(ctx, prefixItem+feedback.ItemId).Result(); err != nil {
 			return err
-		}
-		if err = redis.client.Set(ctx, prefixItem+feedback.ItemId, data, 0).Err(); err != nil {
-			return err
+		} else if exist == 0 {
+			item := Item{ItemId: feedback.ItemId}
+			data, err := json.Marshal(item)
+			if err != nil {
+				return err
+			}
+			if err = redis.client.Set(ctx, prefixItem+feedback.ItemId, data, 0).Err(); err != nil {
+				return err
+			}
 		}
 	}
 	// insert user index
@@ -378,9 +382,9 @@ func (redis *Redis) InsertFeedback(feedback Feedback) error {
 	return nil
 }
 
-func (redis *Redis) BatchInsertFeedback(feedback []Feedback) error {
+func (redis *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error {
 	for _, temp := range feedback {
-		if err := redis.InsertFeedback(temp); err != nil {
+		if err := redis.InsertFeedback(temp, insertUser, insertItem); err != nil {
 			return err
 		}
 	}

@@ -194,7 +194,7 @@ func (db *MongoDB) GetUserFeedback(feedbackType, userId string) ([]Feedback, err
 	return feedbacks, nil
 }
 
-func (db *MongoDB) InsertFeedback(feedback Feedback) error {
+func (db *MongoDB) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
 	ctx := context.Background()
 	opt := options.Update()
 	opt.SetUpsert(true)
@@ -205,20 +205,27 @@ func (db *MongoDB) InsertFeedback(feedback Feedback) error {
 		return err
 	}
 	// insert user
-	c = db.client.Database(db.dbName).Collection("users")
-	_, err = c.UpdateOne(ctx, bson.M{"_id": feedback.UserId}, bson.M{"$set": bson.M{"_id": feedback.UserId}}, opt)
-	if err != nil {
-		return err
+	if insertUser {
+		c = db.client.Database(db.dbName).Collection("users")
+		_, err = c.UpdateOne(ctx, bson.M{"_id": feedback.UserId}, bson.M{"$set": bson.M{"_id": feedback.UserId}}, opt)
+		if err != nil {
+			return err
+		}
 	}
 	// insert item
-	c = db.client.Database(db.dbName).Collection("items")
-	_, err = c.UpdateOne(ctx, bson.M{"_id": feedback.ItemId}, bson.M{"$set": bson.M{"_id": feedback.ItemId}}, opt)
-	return err
+	if insertItem {
+		c = db.client.Database(db.dbName).Collection("items")
+		_, err = c.UpdateOne(ctx, bson.M{"_id": feedback.ItemId}, bson.M{"$set": bson.M{"_id": feedback.ItemId}}, opt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (db *MongoDB) BatchInsertFeedback(feedback []Feedback) error {
+func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error {
 	for _, f := range feedback {
-		if err := db.InsertFeedback(f); err != nil {
+		if err := db.InsertFeedback(f, insertUser, insertItem); err != nil {
 			return err
 		}
 	}
