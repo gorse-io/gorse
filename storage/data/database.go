@@ -80,8 +80,8 @@ type Database interface {
 	GetUsers(cursor string, n int) (string, []User, error)
 	GetUserFeedback(feedbackType, userId string) ([]Feedback, error)
 	// feedback
-	InsertFeedback(feedback Feedback) error
-	BatchInsertFeedback(feedback []Feedback) error
+	InsertFeedback(feedback Feedback, insertUser, insertItem bool) error
+	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
 	GetFeedback(feedbackType, cursor string, n int) (string, []Feedback, error)
 }
 

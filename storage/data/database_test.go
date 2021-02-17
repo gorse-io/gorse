@@ -116,17 +116,17 @@ func testFeedback(t *testing.T, db Database) {
 		{FeedbackKey{"click", "3", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey{"click", "4", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 	}
-	err = db.InsertFeedback(feedback[0])
+	err = db.InsertFeedback(feedback[0], true, true)
 	assert.Nil(t, err)
-	err = db.BatchInsertFeedback(feedback[1:])
+	err = db.BatchInsertFeedback(feedback[1:], true, true)
 	assert.Nil(t, err)
 	// idempotent
-	err = db.InsertFeedback(feedback[0])
+	err = db.InsertFeedback(feedback[0], true, true)
 	assert.Nil(t, err)
-	err = db.BatchInsertFeedback(feedback[1:])
+	err = db.BatchInsertFeedback(feedback[1:], true, true)
 	assert.Nil(t, err)
 	// other type
-	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{"like", "0", "2"}})
+	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{"like", "0", "2"}}, true, true)
 	assert.Nil(t, err)
 	// Get feedback
 	ret := getFeedback(t, db)
@@ -226,7 +226,7 @@ func testDeleteUser(t *testing.T, db Database) {
 		{FeedbackKey{"click", "0", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey{"click", "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 	}
-	if err := db.BatchInsertFeedback(feedback); err != nil {
+	if err := db.BatchInsertFeedback(feedback, true, true); err != nil {
 		t.Fatal(err)
 	}
 	// Delete user
@@ -257,7 +257,7 @@ func testDeleteItem(t *testing.T, db Database) {
 		{FeedbackKey{"click", "3", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey{"click", "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 	}
-	if err := db.BatchInsertFeedback(feedbacks); err != nil {
+	if err := db.BatchInsertFeedback(feedbacks, true, true); err != nil {
 		t.Fatal(err)
 	}
 	// Delete item
