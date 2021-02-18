@@ -21,12 +21,32 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/match"
-	"github.com/zhenghaoz/gorse/storage"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
+
+func init() {
+	cliCommand.AddCommand(testCommand)
+	testCommand.PersistentFlags().String("feedback-type", "", "Set feedback type.")
+	testCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
+	testCommand.PersistentFlags().String("load-csv", "", "load data from CSV file")
+	testCommand.PersistentFlags().String("load-database", "", "load data from built-in")
+	testCommand.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
+	testCommand.PersistentFlags().String("csv-format", "", "load CSV file with header")
+	testCommand.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
+	for _, paramFlag := range testParamFlags {
+		testCommand.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
+	}
+	testCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
+	testCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
+	testCommand.PersistentFlags().Int("top-k", 10, "Length of recommendation list")
+	testCommand.PersistentFlags().Int("n-negatives", 100, "Number of negative samples")
+	testCommand.PersistentFlags().Int("n-test-users", 0, "Number of users for sampled test set")
+}
 
 /* Models */
 
@@ -51,7 +71,7 @@ var testParamFlags = []paramFlag{
 	{intFlag, model.NFactors, "n-factors", "Number of factors"},
 	{float64Flag, model.InitMean, "init-mean", "Mean of gaussian initial parameters"},
 	{float64Flag, model.InitStdDev, "init-std", "Standard deviation of gaussian initial parameters"},
-	{float64Flag, model.NegWeight, "neg-weight", "Weight of negative samples in ALS."},
+	{float64Flag, model.Weight, "neg-weight", "Weight of negative samples in ALS."},
 }
 
 func parseParamFlags(cmd *cobra.Command) model.ParamsGrid {
@@ -60,7 +80,7 @@ func parseParamFlags(cmd *cobra.Command) model.ParamsGrid {
 		if cmd.PersistentFlags().Changed(paramFlag.Name) {
 			text, err := cmd.PersistentFlags().GetString(paramFlag.Name)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatalf("cli: failed to get arguments (%v)", err)
 			}
 			grid[paramFlag.Key] = parseParamList(text, paramFlag.Type)
 		}
@@ -70,7 +90,7 @@ func parseParamFlags(cmd *cobra.Command) model.ParamsGrid {
 
 func parseParamList(text string, tp int) []interface{} {
 	if len(text) == 0 {
-		log.Fatal("empty string")
+		log.Fatal("cli: empty string for param list")
 	}
 	if text[0] == '[' && text[len(text)-1] == ']' {
 		text = text[1 : len(text)-1]
@@ -88,101 +108,108 @@ func parseParam(text string, tp int) interface{} {
 	case intFlag:
 		i, err := strconv.Atoi(text)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("cli: failed to parse param (%v)", err)
 		}
 		return i
 	case float64Flag:
 		f, err := strconv.ParseFloat(text, 64)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("cli: failed to parse param (%v)", err)
 		}
 		return f
 	default:
-		log.Fatal("unknown parameter type", tp)
+		log.Fatal("cli: unknown parameter type", tp)
 		return nil
 	}
 }
 
-func test(cmd *cobra.Command, args []string) {
-	modelName := args[0]
-	m, err := match.NewModel(modelName, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Load data
-	var trainSet, testSet *match.DataSet
-	if cmd.PersistentFlags().Changed("load-builtin") {
-		name, _ := cmd.PersistentFlags().GetString("load-builtin")
-		log.Infof("Load built-in dataset %s\n", name)
-		trainSet, testSet = match.LoadDataFromBuiltIn(name)
-	} else if cmd.PersistentFlags().Changed("load-csv") {
-		name, _ := cmd.PersistentFlags().GetString("load-csv")
-		sep, _ := cmd.PersistentFlags().GetString("csv-sep")
-		header, _ := cmd.PersistentFlags().GetBool("csv-header")
-		numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
-		seed, _ := cmd.PersistentFlags().GetInt("random-state")
-		log.Infof("Load csv file %v", name)
-		data := match.LoadDataFromCSV(name, sep, header)
-		trainSet, testSet = data.Split(numTestUsers, int64(seed))
-	} else {
-		// Load config
-		cfg, _, err := config.LoadConfig(match.GorseDir + "/cli.toml")
+var testCommand = &cobra.Command{
+	Use:   "test",
+	Short: "Test recommendation model by user-leave-one-out",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		modelName := args[0]
+		m, err := match.NewModel(modelName, nil)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("cli: falied to create model (%v)", modelName)
 		}
-		// Open database
-		database, err := storage.Open(cfg.Database.Path)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer database.Close()
 		// Load data
-		log.Infof("Load data from %v", cfg.Database.Path)
-		data, _, err := match.LoadDataFromDatabase(database)
-		if err != nil {
-			log.Fatal(err)
+		var trainSet, testSet *match.DataSet
+		if cmd.PersistentFlags().Changed("load-builtin") {
+			name, _ := cmd.PersistentFlags().GetString("load-builtin")
+			log.Infof("Load built-in dataset %s\n", name)
+			trainSet, testSet, err = match.LoadDataFromBuiltIn(name)
+			if err != nil {
+				log.Fatal("cli: ", err)
+			}
+		} else if cmd.PersistentFlags().Changed("load-csv") {
+			name, _ := cmd.PersistentFlags().GetString("load-csv")
+			sep, _ := cmd.PersistentFlags().GetString("csv-sep")
+			header, _ := cmd.PersistentFlags().GetBool("csv-header")
+			numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
+			seed, _ := cmd.PersistentFlags().GetInt("random-state")
+			log.Infof("Load csv file %v", name)
+			data := match.LoadDataFromCSV(name, sep, header)
+			trainSet, testSet = data.Split(numTestUsers, int64(seed))
+		} else {
+			feedbackType, _ := cmd.PersistentFlags().GetString("feedback-type")
+			numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
+			seed, _ := cmd.PersistentFlags().GetInt("random-state")
+			// Open database
+			database, err := data.Open(globalConfig.Database.DataStore)
+			if err != nil {
+				log.Fatalf("cli: failed to connect database (%v)", err)
+			}
+			defer database.Close()
+			// Load data
+			log.Infof("Load data from database")
+			data, _, err := match.LoadDataFromDatabase(database, feedbackType)
+			if err != nil {
+				log.Fatalf("cli: failed to load data from database (%v)", err)
+			}
+			if data.Count() == 0 {
+				log.Fatalf("cli: empty dataset")
+			}
+			log.Infof("data set: #user = %v, #item = %v, #feedback = %v", data.UserCount(), data.ItemCount(), data.Count())
+			trainSet, testSet = data.Split(numTestUsers, int64(seed))
 		}
-		log.Infof("data set: #user = %v, #item = %v, #feedback = %v", data.UserCount(), data.ItemCount(), data.Count())
-		numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
-		seed, _ := cmd.PersistentFlags().GetInt("random-state")
-		trainSet, testSet = data.Split(numTestUsers, int64(seed))
-	}
-	log.Infof("train set: #user = %v, #item = %v, #feedback = %v", trainSet.UserCount(), trainSet.ItemCount(), trainSet.Count())
-	log.Infof("test set: #user = %v, #item = %v, #feedback = %v", testSet.UserCount(), testSet.ItemCount(), testSet.Count())
-	// Load hyper-parameters
-	grid := parseParamFlags(cmd)
-	log.Printf("Load hyper-parameters grid: %v\n", grid)
-	// Load runtime options
-	fitConfig := &config.FitConfig{}
-	fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
-	fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
-	fitConfig.TopK, _ = cmd.PersistentFlags().GetInt("top-k")
-	fitConfig.Candidates, _ = cmd.PersistentFlags().GetInt("n-negatives")
-	// Cross validation
-	start := time.Now()
-	var result *match.ParamsSearchResult
-	if grid.Len() == 0 {
-		result = match.NewParamsSearchResult()
-		score := m.Fit(trainSet, testSet, fitConfig)
-		result.AddScore(nil, score)
-	} else {
-		a := match.GridSearchCV(m, trainSet, testSet, grid, 0)
-		result = &a
-	}
-	elapsed := time.Since(start)
-	// Render table
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"#", "NDCG@10", "Precision@10", "Recall@10", "Params"})
-	for i := range result.Params {
-		score := result.Scores[i]
-		table.Append([]string{
-			fmt.Sprintf("%v", i),
-			fmt.Sprintf("%v", score.NDCG),
-			fmt.Sprintf("%v", score.Precision),
-			fmt.Sprintf("%v", score.Recall),
-			fmt.Sprintf("%v", result.Params[i].ToString()),
-		})
-	}
-	table.Render()
-	log.Printf("Complete cross validation (%v)\n", elapsed)
+		log.Infof("train set: #user = %v, #item = %v, #feedback = %v", trainSet.UserCount(), trainSet.ItemCount(), trainSet.Count())
+		log.Infof("test set: #user = %v, #item = %v, #feedback = %v", testSet.UserCount(), testSet.ItemCount(), testSet.Count())
+		// Load hyper-parameters
+		grid := parseParamFlags(cmd)
+		log.Printf("Load hyper-parameters grid: %v\n", grid)
+		// Load runtime options
+		fitConfig := &config.FitConfig{}
+		fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
+		fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
+		fitConfig.TopK, _ = cmd.PersistentFlags().GetInt("top-k")
+		fitConfig.Candidates, _ = cmd.PersistentFlags().GetInt("n-negatives")
+		// Cross validation
+		start := time.Now()
+		var result *match.ParamsSearchResult
+		if grid.Len() == 0 {
+			result = match.NewParamsSearchResult()
+			score := m.Fit(trainSet, testSet, fitConfig)
+			result.AddScore(nil, score)
+		} else {
+			a := match.GridSearchCV(m, trainSet, testSet, grid, 0, fitConfig)
+			result = &a
+		}
+		elapsed := time.Since(start)
+		// Render table
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"#", "NDCG@10", "Precision@10", "Recall@10", "Params"})
+		for i := range result.Params {
+			score := result.Scores[i]
+			table.Append([]string{
+				fmt.Sprintf("%v", i),
+				fmt.Sprintf("%v", score.NDCG),
+				fmt.Sprintf("%v", score.Precision),
+				fmt.Sprintf("%v", score.Recall),
+				fmt.Sprintf("%v", result.Params[i].ToString()),
+			})
+		}
+		table.Render()
+		log.Printf("Complete cross validation (%v)\n", elapsed)
+	},
 }

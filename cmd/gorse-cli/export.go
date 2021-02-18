@@ -15,74 +15,126 @@ package main
 
 import (
 	"fmt"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage"
-	"log"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"os"
 	"strings"
 )
 
-const batchSize = 1000
+func init() {
+	cliCommand.AddCommand(exportCommand)
+	// export feedback
+	exportCommand.AddCommand(exportFeedbackCommand)
+	exportFeedbackCommand.PersistentFlags().StringP("type", "t", "", "Set feedback type.")
+	exportFeedbackCommand.PersistentFlags().IntP("batch-size", "b", 1024, "Batch size of reading data.")
+	exportFeedbackCommand.PersistentFlags().StringP("sep", "s", ",", "Separator for csv file.")
+	exportFeedbackCommand.PersistentFlags().BoolP("header", "H", false, "Print header.")
+	// export items
+	exportCommand.AddCommand(exportItemCommand)
+	exportItemCommand.PersistentFlags().IntP("batch-size", "b", 1024, "Batch size of reading data.")
+	exportItemCommand.PersistentFlags().StringP("sep", "s", ",", "Separator for csv file.")
+	exportItemCommand.PersistentFlags().BoolP("header", "H", false, "Print header.")
+	exportItemCommand.PersistentFlags().StringP("label-sep", "l", "|", "Separator for labels")
+}
 
-func exportFeedback(csvFile string, sep string, header bool, config *config.Config) {
+var exportCommand = &cobra.Command{
+	Use:   "export",
+	Short: "Export data from gorse",
+}
+
+var exportItemCommand = &cobra.Command{
+	Use:   "items CSV_FILE",
+	Short: "Export items from gorse into csv file",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		csvFile := args[0]
+		sep, _ := cmd.PersistentFlags().GetString("sep")
+		header, _ := cmd.PersistentFlags().GetBool("header")
+		labelSep, _ := cmd.PersistentFlags().GetString("label-sep")
+		batchSize, _ := cmd.PersistentFlags().GetInt("batch-size")
+		exportItems(csvFile, sep, labelSep, header, batchSize)
+	},
+}
+
+var exportFeedbackCommand = &cobra.Command{
+	Use:   "feedback CSV_FILE",
+	Short: "Export feedback from gorse into csv file",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		// Read ags and flags
+		csvFile := args[0]
+		sep, _ := cmd.PersistentFlags().GetString("sep")
+		header, _ := cmd.PersistentFlags().GetBool("header")
+		batchSize, _ := cmd.PersistentFlags().GetInt("batch-size")
+		feedbackType, _ := cmd.PersistentFlags().GetString("type")
+		exportFeedback(csvFile, feedbackType, sep, header, batchSize)
+	},
+}
+
+func exportFeedback(csvFile, feedbackType string, sep string, printHeader bool, batchSize int) {
 	// Open database
-	database, err := storage.Open(config.Database.Path)
+	database, err := data.Open(globalConfig.Database.DataStore)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("cli: failed to connect database (%v)", err)
 	}
 	defer database.Close()
 	// Open file
 	file, err := os.Create(csvFile)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("cli: failed to create file (%v)", err)
 	}
 	defer file.Close()
 	// Export feedbacks
-	if header {
-		if _, err := file.WriteString(fmt.Sprintf("user_id%vitem_id\n", sep)); err != nil {
-			log.Fatal(err)
+	if printHeader {
+		if _, err := file.WriteString(fmt.Sprintf("user_id%vitem_id%vtime_stamp\n",
+			sep, sep)); err != nil {
+			log.Fatalf("cli: failed to write file (%v)", err)
 		}
 	}
 	cursor := ""
-	count := 0
 	for {
-		var feedback []storage.Feedback
+		var feedback []data.Feedback
 		var err error
-		cursor, feedback, err = database.GetFeedback(cursor, batchSize)
+		cursor, feedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
 		if err != nil {
 			log.Fatal(err)
 		}
 		for _, v := range feedback {
-			if _, err = file.WriteString(fmt.Sprintf("%v%v%v\n", v.UserId, sep, v.ItemId)); err != nil {
+			if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v\n", v.UserId, sep, v.ItemId, sep, v.Timestamp)); err != nil {
 				log.Fatal(err)
 			}
 		}
-		count += len(feedback)
-		fmt.Printf("\rexport feedback %v", count)
 		if cursor == "" {
-			fmt.Println()
 			break
 		}
 	}
 }
 
-func exportItems(csvFile string, sep string, labelSep string, header bool, config *config.Config) {
+func exportItems(csvFile string, sep string, labelSep string, printHeader bool, batchSize int) {
 	// Open database
-	database, err := storage.Open(config.Database.Path)
+	database, err := data.Open(globalConfig.Database.DataStore)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("cli: failed to connect database (%v)", err)
 	}
 	defer database.Close()
 	// Open file
 	file, err := os.Create(csvFile)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("cli: failed to create file (%v)", err)
 	}
 	defer file.Close()
+	// Print header
+	if printHeader {
+		if _, err = file.WriteString(fmt.Sprintf("item_id%vtime_stamp%vlabels", sep, sep)); err != nil {
+			log.Fatalf("cli: failed to write file (%v)", err)
+		}
+	}
 	// Export items
 	cursor := ""
 	for {
-		cursor, items, err := database.GetItems("", cursor, batchSize)
+		var items []data.Item
+		cursor, items, err = database.GetItems(cursor, batchSize)
 		if err != nil {
 			log.Fatal(err)
 		}
