@@ -14,27 +14,74 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/araddon/dateparse"
-	"github.com/emicklei/go-restful"
-	"github.com/zhenghaoz/gorse/base"
+	restfulspec "github.com/emicklei/go-restful-openapi/v2"
+	restful "github.com/emicklei/go-restful/v3"
+	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage"
-	"log"
+	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/zhenghaoz/gorse/storage/data"
+	"google.golang.org/grpc"
 	"net/http"
 	"strconv"
 )
 
 type Server struct {
-	DB     storage.Database
-	Config *config.ServerConfig
+	CacheStore cache.Database
+	DataStore  data.Database
+	Config     *config.Config
+	MasterHost string
+	MasterPort int
+	ServerHost string
+	ServerPort int
 }
 
-func NewServer(db storage.Database, config *config.ServerConfig) *Server {
+func NewServer(masterHost string, masterPort int, serverHost string, serverPort int) *Server {
 	return &Server{
-		DB:     db,
-		Config: config.LoadDefaultIfNil(),
+		MasterHost: masterHost,
+		MasterPort: masterPort,
+		ServerHost: serverHost,
+		ServerPort: serverPort,
 	}
+}
+
+func (s *Server) Serve() {
+	// connect to master
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.MasterHost, s.MasterPort), grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("cli: failed to connect master (%v)", err)
+	}
+	masterClient := protocol.NewMasterClient(conn)
+
+	// load master config
+	masterCfgJson, err := masterClient.GetConfig(context.Background(), &protocol.Void{})
+	if err != nil {
+		log.Fatalf("server: failed to load master config (%v)", err)
+	}
+	err = json.Unmarshal([]byte(masterCfgJson.Json), &s.Config)
+	if err != nil {
+		log.Fatalf("server: failed to parse master config (%v)", err)
+	}
+
+	// register restful APIs
+	ws := s.CreateWebService()
+	restful.DefaultContainer.Add(ws)
+
+	// register swagger UI
+	specConfig := restfulspec.Config{
+		WebServices: restful.RegisteredWebServices(),
+		APIPath:     "/apidocs.json",
+	}
+	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(specConfig))
+	swaggerFile = fmt.Sprintf("http://%s:%d/apidocs.json", s.ServerHost, s.ServerPort)
+	http.HandleFunc(apiDocsPath, handler)
+
+	log.Printf("start gorse server at %v\n", fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort), nil))
 }
 
 func (s *Server) CreateWebService() *restful.WebService {
@@ -42,146 +89,108 @@ func (s *Server) CreateWebService() *restful.WebService {
 	ws := new(restful.WebService)
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 
-	// Post user
-	ws.Route(ws.POST("/user").To(s.postUser).
-		Doc("post user").
-		Reads(storage.User{}))
+	/* Interactions with data store */
+
+	// Insert a user
+	ws.Route(ws.POST("/user").To(s.insertUser).
+		Doc("Insert a user.").
+		Reads(data.User{}))
 	// Get a user
 	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
-		Doc("get a user").
+		Doc("Get a user.").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Writes(storage.User{}))
-	// Post users
-	ws.Route(ws.POST("/users").To(s.postUsers).
-		Doc("").
-		Reads([]storage.User{}))
+		Writes(data.User{}))
+	// Insert users
+	ws.Route(ws.POST("/users").To(s.insertUsers).
+		Doc("Insert users.").
+		Reads([]data.User{}))
 	// Get users
 	ws.Route(ws.GET("/users").To(s.getUsers).
-		Doc("get users").
+		Doc("Get users.").
+		Param(ws.QueryParameter("cursor", "cursor of iteration").DataType("string")).
 		Writes(UserIterator{}))
 	// Delete a user
 	ws.Route(ws.DELETE("/user/{user-id}").To(s.deleteUser).
-		Doc("delete a user").
+		Doc("Delete a user.").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(Success{}))
-	// Get feedback by user-id
-	ws.Route(ws.GET("/user/{user-id}/feedback").To(s.getFeedbackByUser).
-		Doc("get feedback by user-id").
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Writes([]storage.Feedback{}))
-	// Get ignorance by user-id
-	ws.Route(ws.GET("/user/{user-id}/ignore").To(s.getIgnoreByUser).
-		Doc("get ignorance by user-id").
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Writes([]string{}))
-	// Get recommends by user-id
-	ws.Route(ws.GET("/user/{user-id}/recommend/cache").To(s.getRecommendCache).
-		Doc("get the top list for a user").
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Param(ws.FormParameter("n", "the number of recommendations").DataType("int")).
-		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]storage.RecommendedItem{}))
 
-	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
-		Doc("consume the top list for a user").
-		Param(ws.FormParameter("n", "the number of recommendations").DataType("int")).
-		Writes([]storage.RecommendedItem{}))
-
-	// Get popular items
-	ws.Route(ws.GET("/popular").To(s.getPopular).
-		Doc("get popular items").
-		Param(ws.FormParameter("n", "the number of popular items").DataType("int")).
-		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]storage.RecommendedItem{}))
-	ws.Route(ws.GET("/popular/{label}").To(s.getPopularByLabel).
-		Doc("get popular items by label").
-		Param(ws.FormParameter("n", "the number of popular items").DataType("int")).
-		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]storage.RecommendedItem{}))
-
-	// Get latest items
-	ws.Route(ws.GET("/latest").To(s.getLatest).
-		Doc("get latest items").
-		Param(ws.FormParameter("n", "the number of latest items").DataType("int")).
-		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]storage.RecommendedItem{}))
-	ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
-		Doc("get latest items").
-		Param(ws.FormParameter("n", "the number of latest items").DataType("int")).
-		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]storage.RecommendedItem{}))
-
-	// Post item
-	ws.Route(ws.POST("/item").To(s.postItem).
-		Doc("post an item").
+	// Insert an item
+	ws.Route(ws.POST("/item").To(s.insertItem).
+		Doc("Insert an item.").
 		Reads(Item{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
-		Doc("get items").
+		Doc("Get items.").
 		Param(ws.FormParameter("n", "the number of neighbors").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
 		Writes(ItemIterator{}))
 	// Get item
 	ws.Route(ws.GET("/item/{item-id}").To(s.getItem).
-		Doc("get a item").
+		Doc("Get a item.").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
-		Writes(storage.Item{}))
-	// Post items
-	ws.Route(ws.POST("/items").To(s.postItems).
-		Doc("post items").
+		Writes(data.Item{}))
+	// Insert items
+	ws.Route(ws.POST("/items").To(s.insertItems).
+		Doc("Insert items.").
 		Reads([]Item{}))
 	// Delete item
 	ws.Route(ws.DELETE("/item/{item-id}").To(s.deleteItem).
-		Doc("delete a item").
+		Doc("Delete a item.").
 		Param(ws.PathParameter("item-id", "identified of the item").DataType("string")).
 		Writes(Success{}))
 
+	// Insert feedback
+	ws.Route(ws.POST("/feedback").To(s.insertFeedback).
+		Doc("Insert feedback.").
+		Reads(data.Feedback{}))
+	// Get feedback
+	ws.Route(ws.GET("/feedback").To(s.getFeedback).
+		Doc("Get feedback.").
+		Writes(FeedbackIterator{}))
+	// Get feedback by user id
+	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getFeedbackByUser).
+		Doc("Get feedback by user id.").
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Writes([]data.Feedback{}))
 	// Get feedback by item-id
-	ws.Route(ws.GET("/item/{item-id}/feedback").To(s.getFeedbackByItem).
-		Doc("get feedback by item-id").
+	ws.Route(ws.GET("/item/{item-id}/feedback/{feedback-type}").To(s.getFeedbackByItem).
+		Doc("Get feedback by item id").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
-		Writes([]storage.RecommendedItem{}))
+		Param(ws.PathParameter("feedback-type", "feedback type").DataType("strung")).
+		Writes([]string{}))
+
+	/* Interaction with cache store */
+
+	// Get matched items by user id
+	ws.Route(ws.GET("/user/{user-id}/match").To(s.getRecommendCache).
+		Doc("get the top list for a user").
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.FormParameter("n", "the number of recommendations").DataType("int")).
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
+		Writes([]string{}))
+	// Get popular items
+	ws.Route(ws.GET("/popular").To(s.getPopular).
+		Doc("get popular items").
+		Param(ws.FormParameter("n", "the number of popular items").DataType("int")).
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
+		Writes([]string{}))
+	// Get latest items
+	ws.Route(ws.GET("/latest").To(s.getLatest).
+		Doc("get latest items").
+		Param(ws.FormParameter("n", "the number of latest items").DataType("int")).
+		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
+		Writes([]string{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors").To(s.getNeighbors).
 		Doc("get neighbors of a item").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.FormParameter("n", "the number of neighbors").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
-		Writes([]storage.RecommendedItem{}))
+		Writes([]string{}))
 
-	// Get items by label
-	ws.Route(ws.GET("/label/{label}/items").To(s.getItemsByLabel).
-		Doc("get items by label").
-		Param(ws.PathParameter("label", "label").DataType("string")).
-		Writes([]storage.Item{}))
-
-	// Get labels
-	ws.Route(ws.GET("/labels").To(s.getLabels).
-		Doc("get labels").
-		Writes(LabelIterator{}))
-
-	// Post feedback
-	ws.Route(ws.POST("/feedback").To(s.postFeedback).
-		Doc("put feedback").
-		Reads(storage.Feedback{}))
-	// Get feedback
-	ws.Route(ws.GET("/feedback").To(s.getFeedback).
-		Doc("get feedback").
-		Writes(FeedbackIterator{}))
-
-	// Insert Ignore
-	ws.Route(ws.POST("/user/{user-id}/ignore").
-		To(s.postIgnore).
-		Doc("insert ignore").
-		Reads(Success{}))
 	return ws
-}
-
-func (s *Server) Serve() {
-	ws := s.CreateWebService()
-	restful.DefaultContainer.Add(ws)
-	log.Printf("start gorse server at %v\n", fmt.Sprintf("%s:%d", s.Config.Host, s.Config.Port))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.Config.Host, s.Config.Port), nil))
 }
 
 func parseInt(request *restful.Request, name string, fallback int) (value int, err error) {
@@ -207,29 +216,7 @@ func (s *Server) getPopular(request *restful.Request, response *restful.Response
 		return
 	}
 	// Get the popular list
-	items, err := s.DB.GetPop("", n, offset)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	// Send result
-	ok(response, items)
-}
-
-func (s *Server) getPopularByLabel(request *restful.Request, response *restful.Response) {
-	label := request.PathParameter("label")
-	var n, offset int
-	var err error
-	if n, err = parseInt(request, "n", 10); err != nil {
-		badRequest(response, err)
-		return
-	}
-	if offset, err = parseInt(request, "offset", 0); err != nil {
-		badRequest(response, err)
-		return
-	}
-	// Get the popular list
-	items, err := s.DB.GetPop(label, n, offset)
+	items, err := s.CacheStore.GetList(cache.PopularItems, "", n, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -250,29 +237,7 @@ func (s *Server) getLatest(request *restful.Request, response *restful.Response)
 		return
 	}
 	// Get the popular list
-	items, err := s.DB.GetLatest("", n, offset)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	// Send result
-	ok(response, items)
-}
-
-func (s *Server) getLabelLatest(request *restful.Request, response *restful.Response) {
-	label := request.PathParameter("label")
-	var n, offset int
-	var err error
-	if n, err = parseInt(request, "n", 10); err != nil {
-		badRequest(response, err)
-		return
-	}
-	if offset, err = parseInt(request, "offset", 0); err != nil {
-		badRequest(response, err)
-		return
-	}
-	// Get the popular list
-	items, err := s.DB.GetLatest(label, n, offset)
+	items, err := s.CacheStore.GetList(cache.LatestItems, "", n, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -283,9 +248,9 @@ func (s *Server) getLabelLatest(request *restful.Request, response *restful.Resp
 
 // get feedback by item-id
 func (s *Server) getFeedbackByItem(request *restful.Request, response *restful.Response) {
+	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
-
-	feedback, err := s.DB.GetItemFeedback(itemId)
+	feedback, err := s.DataStore.GetItemFeedback(feedbackType, itemId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -309,7 +274,7 @@ func (s *Server) getNeighbors(request *restful.Request, response *restful.Respon
 		return
 	}
 	// Get recommended items
-	items, err := s.DB.GetNeighbors(itemId, n, offset)
+	items, err := s.CacheStore.GetList(cache.SimilarItems, itemId, n, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -334,7 +299,7 @@ func (s *Server) getRecommendCache(request *restful.Request, response *restful.R
 		return
 	}
 	// Get recommended items
-	items, err := s.DB.GetRecommend(userId, n, offset)
+	items, err := s.CacheStore.GetList(cache.MatchedItems, userId, n, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -343,62 +308,62 @@ func (s *Server) getRecommendCache(request *restful.Request, response *restful.R
 	ok(response, items)
 }
 
-func (s *Server) getRecommend(request *restful.Request, response *restful.Response) {
-	userId := request.PathParameter("user-id")
-	n, err := parseInt(request, "n", s.Config.DefaultN)
-	if err != nil {
-		badRequest(response, err)
-		return
-	}
-	consume, err := parseInt(request, "consume", 0)
-	if err != nil {
-		badRequest(response, err)
-		return
-	}
-	// load ignore and feedback
-	ignoreSet := base.NewStringSet()
-	ignore, err := s.DB.GetUserIgnore(userId)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	ignoreSet.Add(ignore...)
-	feedback, err := s.DB.GetUserFeedback(userId)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	for _, f := range feedback {
-		ignoreSet.Add(f.ItemId)
-	}
-	// load recommend cache
-	recommend, err := s.DB.GetRecommend(userId, 0, 0)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	result := make([]storage.RecommendedItem, 0)
-	for _, item := range recommend {
-		if !ignoreSet.Contain(item.ItemId) {
-			result = append(result, item)
-		}
-	}
-	if len(result) > n {
-		result = result[:n]
-	}
-	// consume
-	if consume != 0 {
-		incIgnores := make([]string, 0, len(result))
-		for _, item := range result {
-			incIgnores = append(incIgnores, item.ItemId)
-		}
-		if err := s.DB.InsertUserIgnore(userId, incIgnores); err != nil {
-			internalServerError(response, err)
-			return
-		}
-	}
-	ok(response, result)
-}
+//func (s *Server) getRecommend(request *restful.Request, response *restful.Response) {
+//	userId := request.PathParameter("user-id")
+//	n, err := parseInt(request, "n", s.Config.DefaultN)
+//	if err != nil {
+//		badRequest(response, err)
+//		return
+//	}
+//	consume, err := parseInt(request, "consume", 0)
+//	if err != nil {
+//		badRequest(response, err)
+//		return
+//	}
+//	// load ignore and feedback
+//	ignoreSet := base.NewStringSet()
+//	ignore, err := s.DB.GetUserIgnore(userId)
+//	if err != nil {
+//		internalServerError(response, err)
+//		return
+//	}
+//	ignoreSet.Add(ignore...)
+//	feedback, err := s.DB.GetUserFeedback(userId)
+//	if err != nil {
+//		internalServerError(response, err)
+//		return
+//	}
+//	for _, f := range feedback {
+//		ignoreSet.Add(f.ItemId)
+//	}
+//	// load recommend cache
+//	recommend, err := s.DB.GetRecommend(userId, 0, 0)
+//	if err != nil {
+//		internalServerError(response, err)
+//		return
+//	}
+//	result := make([]storage.RecommendedItem, 0)
+//	for _, item := range recommend {
+//		if !ignoreSet.Contain(item.ItemId) {
+//			result = append(result, item)
+//		}
+//	}
+//	if len(result) > n {
+//		result = result[:n]
+//	}
+//	// consume
+//	if consume != 0 {
+//		incIgnores := make([]string, 0, len(result))
+//		for _, item := range result {
+//			incIgnores = append(incIgnores, item.ItemId)
+//		}
+//		if err := s.DB.InsertUserIgnore(userId, incIgnores); err != nil {
+//			internalServerError(response, err)
+//			return
+//		}
+//	}
+//	ok(response, result)
+//}
 
 type Item struct {
 	ItemId    string
@@ -410,14 +375,14 @@ type Success struct {
 	RowAffected int
 }
 
-func (s *Server) postUser(request *restful.Request, response *restful.Response) {
-	temp := storage.User{}
+func (s *Server) insertUser(request *restful.Request, response *restful.Response) {
+	temp := data.User{}
 	// get userInfo from request and put into temp
 	if err := request.ReadEntity(&temp); err != nil {
 		badRequest(response, err)
 		return
 	}
-	if err := s.DB.InsertUser(temp); err != nil {
+	if err := s.DataStore.InsertUser(temp); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -428,7 +393,7 @@ func (s *Server) getUser(request *restful.Request, response *restful.Response) {
 	// get user id
 	userId := request.PathParameter("user-id")
 	// get user
-	user, err := s.DB.GetUser(userId)
+	user, err := s.DataStore.GetUser(userId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -436,8 +401,8 @@ func (s *Server) getUser(request *restful.Request, response *restful.Response) {
 	ok(response, user)
 }
 
-func (s *Server) postUsers(request *restful.Request, response *restful.Response) {
-	temp := new([]storage.User)
+func (s *Server) insertUsers(request *restful.Request, response *restful.Response) {
+	temp := new([]data.User)
 	// get param from request and put into temp
 	if err := request.ReadEntity(temp); err != nil {
 		badRequest(response, err)
@@ -446,7 +411,7 @@ func (s *Server) postUsers(request *restful.Request, response *restful.Response)
 	var count int
 	// range temp and achieve user
 	for _, user := range *temp {
-		if err := s.DB.InsertUser(user); err != nil {
+		if err := s.DataStore.InsertUser(user); err != nil {
 			internalServerError(response, err)
 			return
 		}
@@ -457,18 +422,18 @@ func (s *Server) postUsers(request *restful.Request, response *restful.Response)
 
 type UserIterator struct {
 	Cursor string
-	Users  []storage.User
+	Users  []data.User
 }
 
 func (s *Server) getUsers(request *restful.Request, response *restful.Response) {
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.DefaultN)
+	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
 	// get all users
-	cursor, users, err := s.DB.GetUsers("", cursor, n)
+	cursor, users, err := s.DataStore.GetUsers(cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -480,7 +445,7 @@ func (s *Server) getUsers(request *restful.Request, response *restful.Response) 
 func (s *Server) deleteUser(request *restful.Request, response *restful.Response) {
 	// get user-id and put into temp
 	userId := request.PathParameter("user-id")
-	if err := s.DB.DeleteUser(userId); err != nil {
+	if err := s.DataStore.DeleteUser(userId); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -489,9 +454,9 @@ func (s *Server) deleteUser(request *restful.Request, response *restful.Response
 
 // get feedback by user-id
 func (s *Server) getFeedbackByUser(request *restful.Request, response *restful.Response) {
+	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-
-	feedback, err := s.DB.GetUserFeedback(userId)
+	feedback, err := s.DataStore.GetUserFeedback(feedbackType, userId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -499,19 +464,8 @@ func (s *Server) getFeedbackByUser(request *restful.Request, response *restful.R
 	ok(response, feedback)
 }
 
-// get ignorance by user-id
-func (s *Server) getIgnoreByUser(request *restful.Request, response *restful.Response) {
-	userId := request.PathParameter("user-id")
-	ignore, err := s.DB.GetUserIgnore(userId)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	ok(response, ignore)
-}
-
 // putItems puts items into the database.
-func (s *Server) postItems(request *restful.Request, response *restful.Response) {
+func (s *Server) insertItems(request *restful.Request, response *restful.Response) {
 	// Add ratings
 	temp := new([]Item)
 	if err := request.ReadEntity(temp); err != nil {
@@ -520,7 +474,7 @@ func (s *Server) postItems(request *restful.Request, response *restful.Response)
 	}
 	// Parse timestamp
 	var err error
-	items := make([]storage.Item, len(*temp))
+	items := make([]data.Item, len(*temp))
 	for i, v := range *temp {
 		items[i].ItemId = v.ItemId
 		items[i].Timestamp, err = dateparse.ParseAny(v.Timestamp)
@@ -538,7 +492,7 @@ func (s *Server) postItems(request *restful.Request, response *restful.Response)
 	// Insert items
 	var count int
 	for _, item := range items {
-		err = s.DB.InsertItem(storage.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
+		err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
 		count++
 		if err != nil {
 			internalServerError(response, err)
@@ -547,13 +501,13 @@ func (s *Server) postItems(request *restful.Request, response *restful.Response)
 	}
 	ok(response, Success{RowAffected: count})
 }
-func (s *Server) postItem(request *restful.Request, response *restful.Response) {
-	temp := new(storage.Item)
+func (s *Server) insertItem(request *restful.Request, response *restful.Response) {
+	temp := new(data.Item)
 	if err := request.ReadEntity(temp); err != nil {
 		badRequest(response, err)
 		return
 	}
-	if err := s.DB.InsertItem(*temp); err != nil {
+	if err := s.DataStore.InsertItem(*temp); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -562,17 +516,17 @@ func (s *Server) postItem(request *restful.Request, response *restful.Response) 
 
 type ItemIterator struct {
 	Cursor string
-	Items  []storage.Item
+	Items  []data.Item
 }
 
 func (s *Server) getItems(request *restful.Request, response *restful.Response) {
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.DefaultN)
+	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	cursor, items, err := s.DB.GetItems("", cursor, n)
+	cursor, items, err := s.DataStore.GetItems(cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -584,7 +538,7 @@ func (s *Server) getItem(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get item
-	item, err := s.DB.GetItem(itemId)
+	item, err := s.DataStore.GetItem(itemId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -594,8 +548,7 @@ func (s *Server) getItem(request *restful.Request, response *restful.Response) {
 
 func (s *Server) deleteItem(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-
-	if err := s.DB.DeleteItem(itemId); err != nil {
+	if err := s.DataStore.DeleteItem(itemId); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -603,9 +556,9 @@ func (s *Server) deleteItem(request *restful.Request, response *restful.Response
 }
 
 // putFeedback puts new ratings into the database.
-func (s *Server) postFeedback(request *restful.Request, response *restful.Response) {
+func (s *Server) insertFeedback(request *restful.Request, response *restful.Response) {
 	// Add ratings
-	ratings := new([]storage.Feedback)
+	ratings := new([]data.Feedback)
 	if err := request.ReadEntity(ratings); err != nil {
 		badRequest(response, err)
 		return
@@ -614,7 +567,9 @@ func (s *Server) postFeedback(request *restful.Request, response *restful.Respon
 	// Insert feedback
 	var count int
 	for _, feedback := range *ratings {
-		err = s.DB.InsertFeedback(feedback)
+		err = s.DataStore.InsertFeedback(feedback,
+			s.Config.Common.AutoInsertUser,
+			s.Config.Common.AutoInsertItem)
 		count++
 		if err != nil {
 			internalServerError(response, err)
@@ -626,19 +581,20 @@ func (s *Server) postFeedback(request *restful.Request, response *restful.Respon
 
 type FeedbackIterator struct {
 	Cursor   string
-	Feedback []storage.Feedback
+	Feedback []data.Feedback
 }
 
 // Get feedback
 func (s *Server) getFeedback(request *restful.Request, response *restful.Response) {
 	// Parse parameters
+	feedbackType := request.QueryParameter("feedback-type")
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.DefaultN)
+	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DB.GetFeedback(cursor, n)
+	cursor, feedback, err := s.DataStore.GetFeedback(feedbackType, cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -646,67 +602,23 @@ func (s *Server) getFeedback(request *restful.Request, response *restful.Respons
 	ok(response, FeedbackIterator{Cursor: cursor, Feedback: feedback})
 }
 
-func (s *Server) getItemsByLabel(request *restful.Request, response *restful.Response) {
-	// Get label
-	label := request.PathParameter("label")
-	// Get item
-	items, err := s.DB.GetLabelItems(label)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	ok(response, items)
-}
-
-type LabelIterator struct {
-	Cursor string
-	Labels []string
-}
-
-func (s *Server) getLabels(request *restful.Request, response *restful.Response) {
-	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.DefaultN)
-	if err != nil {
-		badRequest(response, err)
-		return
-	}
-	cursor, labels, err := s.DB.GetLabels("", cursor, n)
-	if err != nil {
-		internalServerError(response, err)
-		return
-	}
-	ok(response, LabelIterator{Cursor: cursor, Labels: labels})
-}
-
-func (s *Server) postIgnore(request *restful.Request, response *restful.Response) {
-	userId := request.PathParameter("user-id")
-	items := new([]string)
-	if err := request.ReadEntity(items); err != nil {
-		badRequest(response, err)
-	}
-	if err := s.DB.InsertUserIgnore(userId, *items); err != nil {
-		internalServerError(response, err)
-	}
-	ok(response, Success{RowAffected: 1})
-}
-
 func badRequest(response *restful.Response, err error) {
-	log.Println(err)
+	log.Error("server:", err)
 	if err = response.WriteError(400, err); err != nil {
-		log.Println(err)
+		log.Error("server:", err)
 	}
 }
 
 func internalServerError(response *restful.Response, err error) {
-	log.Println(err)
+	log.Error("server:", err)
 	if err = response.WriteError(500, err); err != nil {
-		log.Println(err)
+		log.Error("server:", err)
 	}
 }
 
 // json sends the content as JSON to the client.
 func ok(response *restful.Response, content interface{}) {
 	if err := response.WriteAsJson(content); err != nil {
-		log.Println(err)
+		log.Error("server:", err)
 	}
 }

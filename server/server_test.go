@@ -15,34 +15,45 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
-	"github.com/thanhpk/randstr"
-	"github.com/zhenghaoz/gorse/storage"
+	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"net/http"
-	"os"
-	"path"
 	"testing"
 	"time"
 )
 
 type mockServer struct {
-	db      storage.Database
-	handler *restful.Container
+	dataStoreServer  *miniredis.Miniredis
+	cacheStoreServer *miniredis.Miniredis
+	dataStoreClient  data.Database
+	cacheStoreClient cache.Database
+	handler          *restful.Container
 }
 
 func newMockServer(t *testing.T) *mockServer {
 	s := new(mockServer)
-	// create data folder
-	dir := path.Join(os.TempDir(), randstr.String(16))
-	err := os.Mkdir(dir, 0777)
+	// create mock redis server
+	var err error
+	s.dataStoreServer, err = miniredis.Run()
+	assert.Nil(t, err)
+	s.cacheStoreServer, err = miniredis.Run()
 	assert.Nil(t, err)
 	// open database
-	s.db, err = storage.Open("badger://" + dir)
+	s.dataStoreClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
+	assert.Nil(t, err)
+	s.cacheStoreClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.Nil(t, err)
 	// create server
-	server := NewServer(s.db, nil)
+	server := &Server{
+		DataStore:  s.dataStoreClient,
+		CacheStore: s.cacheStoreClient,
+		Config:     (*config.Config)(nil).LoadDefaultIfNil(),
+	}
 	ws := server.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
@@ -51,7 +62,7 @@ func newMockServer(t *testing.T) *mockServer {
 }
 
 func (s *mockServer) Close(t *testing.T) {
-	err := s.db.Close()
+	err := s.dataStoreClient.Close()
 	assert.Nil(t, err)
 }
 
@@ -64,7 +75,7 @@ func marshal(t *testing.T, v interface{}) string {
 func TestServer_Users(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
-	users := []storage.User{
+	users := []data.User{
 		{UserId: "0"},
 		{UserId: "1"},
 		{UserId: "2"},
@@ -110,34 +121,6 @@ func TestServer_Users(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/users").
-		QueryParams(map[string]string{
-			"cursor": "",
-			"n":      "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, UserIterator{
-			Cursor: "user/3",
-			Users:  users[:3],
-		})).
-		End()
-	apitest.New().
-		Handler(s.handler).
-		Get("/users").
-		QueryParams(map[string]string{
-			"cursor": "user/3",
-			"n":      "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, UserIterator{
-			Cursor: "",
-			Users:  users[3:],
-		})).
-		End()
-	apitest.New().
-		Handler(s.handler).
 		Delete("/user/0").
 		Expect(t).
 		Status(http.StatusOK).
@@ -155,7 +138,7 @@ func TestServer_Items(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// Items
-	items := []storage.Item{
+	items := []data.Item{
 		{
 			ItemId:    "0",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
@@ -215,62 +198,6 @@ func TestServer_Items(t *testing.T) {
 			Items:  items,
 		})).
 		End()
-	// get items[0:3]
-	apitest.New().
-		Handler(s.handler).
-		Get("/items").
-		QueryParams(map[string]string{
-			"cursor": "",
-			"n":      "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, ItemIterator{
-			Cursor: "item/6",
-			Items:  items[:3],
-		})).
-		End()
-	// get items[3:4]
-	apitest.New().
-		Handler(s.handler).
-		Get("/items").
-		QueryParams(map[string]string{
-			"cursor": "item/6",
-			"n":      "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, ItemIterator{
-			Cursor: "",
-			Items:  items[3:],
-		})).
-		End()
-	//get labels
-	apitest.New().
-		Handler(s.handler).
-		Get("/labels").
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, LabelIterator{
-			Cursor: "",
-			Labels: []string{"a", "b"},
-		})).
-		End()
-	// get items by label
-	apitest.New().
-		Handler(s.handler).
-		Get("/label/a/items").
-		Expect(t).
-		Status(http.StatusOK).
-		Body(`[{"ItemId": "0","Timestamp": "1996-03-15T00:00:00Z","Labels": ["a"]}, {"ItemId": "2", "Timestamp": "1996-03-15T00:00:00Z", "Labels": ["a"]},{"ItemId": "4", "Timestamp": "1996-03-15T00:00:00Z","Labels":["a","b"]}]`).
-		End()
-	apitest.New().
-		Handler(s.handler).
-		Get("/label/b/items").
-		Expect(t).
-		Status(http.StatusOK).
-		Body(`[{"ItemId": "4", "Timestamp": "1996-03-15T00:00:00Z","Labels":["a","b"]}, {"ItemId": "6","Timestamp": "1996-03-15T00:00:00Z","Labels":["b"]},{"ItemId": "8", "Timestamp": "1996-03-15T00:00:00Z", "Labels":["b"]}]`).
-		End()
 	// delete item
 	apitest.New().
 		Handler(s.handler).
@@ -292,12 +219,12 @@ func TestServer_Feedback(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// Insert ret
-	feedback := []storage.Feedback{
-		{"0", "0"},
-		{"1", "2"},
-		{"2", "4"},
-		{"3", "6"},
-		{"4", "8"},
+	feedback := []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "3", ItemId: "6"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "4", ItemId: "8"}},
 	}
 	//BatchInsertFeedback
 	apitest.New().
@@ -359,7 +286,7 @@ func TestServer_Feedback(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, ItemIterator{
 			Cursor: "",
-			Items: []storage.Item{
+			Items: []data.Item{
 				{ItemId: "0"},
 				{ItemId: "2"},
 				{ItemId: "4"},
@@ -375,7 +302,12 @@ func TestServer_Feedback(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, UserIterator{
 			Cursor: "",
-			Users:  []storage.User{{"0"}, {"1"}, {"2"}, {"3"}, {"4"}},
+			Users: []data.User{
+				{UserId: "0"},
+				{UserId: "1"},
+				{UserId: "2"},
+				{UserId: "3"},
+				{UserId: "4"}},
 		})).
 		End()
 	apitest.New().
@@ -394,52 +326,25 @@ func TestServer_Feedback(t *testing.T) {
 		End()
 }
 
-func TestServer_Ignore(t *testing.T) {
-	s := newMockServer(t)
-	defer s.Close(t)
-	// Insert ignore
-	apitest.New().
-		Handler(s.handler).
-		Post("/user/0/ignore").
-		JSON([]string{"0", "1", "2", "3", "4", "5"}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(`{"RowAffected": 1}`).
-		End()
-	apitest.New().
-		Handler(s.handler).
-		Get("/user/0/ignore").
-		Expect(t).
-		Status(http.StatusOK).
-		Body(`["0","1","2","3","4","5"]`).
-		End()
-}
-
 func TestServer_List(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
-		Set func(label string, items []storage.RecommendedItem) error
-		Get string
+		Prefix string
+		Label  string
+		Get    string
 	}
 	operators := []ListOperator{
-		{s.db.SetRecommend, "/user/0/recommend/cache"},
-		{s.db.SetLatest, "/latest/0"},
-		{s.db.SetPop, "/popular/0"},
-		{s.db.SetNeighbors, "/item/0/neighbors"},
+		{cache.MatchedItems, "0", "/user/0/match"},
+		{cache.LatestItems, "", "/latest/"},
+		{cache.PopularItems, "", "/popular/"},
+		{cache.SimilarItems, "0", "/item/0/neighbors"},
 	}
 
 	for _, operator := range operators {
-		t.Log("testing", operator.Get)
 		// Put items
-		items := []storage.RecommendedItem{
-			{"0", 0.0},
-			{"1", 0.1},
-			{"2", 0.2},
-			{"3", 0.3},
-			{"4", 0.4},
-		}
-		if err := operator.Set("0", items); err != nil {
+		items := []string{"0", "1", "2", "3", "4"}
+		if err := s.cacheStoreClient.SetList(operator.Prefix, operator.Label, items); err != nil {
 			t.Fatal(err)
 		}
 		apitest.New().
@@ -447,7 +352,7 @@ func TestServer_List(t *testing.T) {
 			Get(operator.Get).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(`[{"ItemId": "0", "Score":0.0}, {"ItemId": "1", "Score":0.1}, {"ItemId": "2", "Score":0.2}, {"ItemId": "3", "Score":0.3}, {"ItemId": "4", "Score":0.4}]`).
+			Body(`["0", "1", "2", "3", "4"]`).
 			End()
 		apitest.New().
 			Handler(s.handler).
@@ -457,7 +362,7 @@ func TestServer_List(t *testing.T) {
 				"offset": "0"}).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(`[{"ItemId": "0", "Score":0.0}, {"ItemId": "1", "Score":0.1}, {"ItemId": "2", "Score":0.2}]`).
+			Body(`["0", "1", "2"]`).
 			End()
 		apitest.New().
 			Handler(s.handler).
@@ -467,7 +372,7 @@ func TestServer_List(t *testing.T) {
 				"offset": "1"}).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(`[{"ItemId": "1", "Score":0.1}, {"ItemId": "2", "Score":0.2}, {"ItemId": "3", "Score":0.3}]`).
+			Body(`["1", "2", "3"]`).
 			End()
 		// get empty
 		apitest.New().
@@ -483,72 +388,72 @@ func TestServer_List(t *testing.T) {
 	}
 }
 
-func TestServer_GetRecommends(t *testing.T) {
-	s := newMockServer(t)
-	defer s.Close(t)
-	// Put recommends
-	items := []storage.RecommendedItem{
-		{"0", 0.0},
-		{"1", 0.1},
-		{"2", 0.2},
-		{"3", 0.3},
-		{"4", 0.4},
-		{"5", 0.5},
-		{"6", 0.6},
-		{"7", 0.7},
-		{"8", 0.8},
-		{"9", 0.9},
-	}
-	err := s.db.SetRecommend("0", items)
-	assert.Nil(t, err)
-	// Put feedback
-	apitest.New().
-		Handler(s.handler).
-		Post("/feedback").
-		JSON([]storage.Feedback{
-			{UserId: "0", ItemId: "0"},
-			{UserId: "0", ItemId: "1"},
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		End()
-	apitest.New().
-		Handler(s.handler).
-		Post("/user/0/ignore").
-		JSON([]string{"2", "3"}).
-		Expect(t).
-		Status(http.StatusOK).
-		End()
-	apitest.New().
-		Handler(s.handler).
-		Get("/recommend/0").
-		QueryParams(map[string]string{
-			"n": "4",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, items[4:8])).
-		End()
-	// Consume
-	apitest.New().
-		Handler(s.handler).
-		Get("/recommend/0").
-		QueryParams(map[string]string{
-			"n":       "4",
-			"consume": "1",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, items[4:8])).
-		End()
-	apitest.New().
-		Handler(s.handler).
-		Get("/recommend/0").
-		QueryParams(map[string]string{
-			"n": "4",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(marshal(t, items[8:])).
-		End()
-}
+//func TestServer_GetRecommends(t *testing.T) {
+//	s := newMockServer(t)
+//	defer s.Close(t)
+//	// Put recommends
+//	items := []storage.RecommendedItem{
+//		{"0", 0.0},
+//		{"1", 0.1},
+//		{"2", 0.2},
+//		{"3", 0.3},
+//		{"4", 0.4},
+//		{"5", 0.5},
+//		{"6", 0.6},
+//		{"7", 0.7},
+//		{"8", 0.8},
+//		{"9", 0.9},
+//	}
+//	err := s.dataStoreClient.SetRecommend("0", items)
+//	assert.Nil(t, err)
+//	// Put feedback
+//	apitest.New().
+//		Handler(s.handler).
+//		Post("/feedback").
+//		JSON([]storage.Feedback{
+//			{UserId: "0", ItemId: "0"},
+//			{UserId: "0", ItemId: "1"},
+//		}).
+//		Expect(t).
+//		Status(http.StatusOK).
+//		End()
+//	apitest.New().
+//		Handler(s.handler).
+//		Post("/user/0/ignore").
+//		JSON([]string{"2", "3"}).
+//		Expect(t).
+//		Status(http.StatusOK).
+//		End()
+//	apitest.New().
+//		Handler(s.handler).
+//		Get("/recommend/0").
+//		QueryParams(map[string]string{
+//			"n": "4",
+//		}).
+//		Expect(t).
+//		Status(http.StatusOK).
+//		Body(marshal(t, items[4:8])).
+//		End()
+//	// Consume
+//	apitest.New().
+//		Handler(s.handler).
+//		Get("/recommend/0").
+//		QueryParams(map[string]string{
+//			"n":       "4",
+//			"consume": "1",
+//		}).
+//		Expect(t).
+//		Status(http.StatusOK).
+//		Body(marshal(t, items[4:8])).
+//		End()
+//	apitest.New().
+//		Handler(s.handler).
+//		Get("/recommend/0").
+//		QueryParams(map[string]string{
+//			"n": "4",
+//		}).
+//		Expect(t).
+//		Status(http.StatusOK).
+//		Body(marshal(t, items[8:])).
+//		End()
+//}
