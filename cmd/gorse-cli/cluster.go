@@ -14,9 +14,11 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"github.com/olekukonko/tablewriter"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/protocol"
 	"os"
 )
 
@@ -28,13 +30,20 @@ var clusterCommand = &cobra.Command{
 	Use:   "cluster",
 	Short: "Get cluster information.",
 	Run: func(cmd *cobra.Command, args []string) {
+		cluster, err := masterClient.GetCluster(context.Background(), &protocol.Void{})
+		if err != nil {
+			log.Fatalf("cli: failed to get cluster information (%v)", err)
+		}
 		// show cluster
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"role", "address"})
-		table.Append([]string{
-			fmt.Sprint("master"),
-			fmt.Sprintf("%v:%v", globalConfig.Master.Host, globalConfig.Master.Port),
-		})
+		table.Append([]string{"master", cluster.Master})
+		for _, addr := range cluster.Servers {
+			table.Append([]string{"server", addr})
+		}
+		for _, addr := range cluster.Workers {
+			table.Append([]string{"worker", addr})
+		}
 		table.Render()
 	},
 }

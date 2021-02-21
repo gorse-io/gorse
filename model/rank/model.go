@@ -44,11 +44,11 @@ func (b *BaseFactorizationMachine) Init(trainSet *Dataset) {
 	b.Index = trainSet.UnifiedIndex
 }
 
-type FMTask int
+type FMTask string
 
 const (
-	FMClassification FMTask = iota
-	FMRegression
+	FMClassification FMTask = "c"
+	FMRegression     FMTask = "r"
 )
 
 type FM struct {
@@ -145,13 +145,14 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *config.FitConfig)
 	log.Infof("fit FM with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
 		fm.nFactors, fm.nEpochs, fm.lr, fm.reg, fm.initMean, fm.initStdDev)
+	log.Infof("       with option: n_jobs = %v", config.Jobs)
 	fm.Init(trainSet)
 	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
-		_ = base.BatchParallel(trainSet.Len(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
+		_ = base.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				labels, target := trainSet.Get(i)
 				prediction := fm.internalPredict(labels)

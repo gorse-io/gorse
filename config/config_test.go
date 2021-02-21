@@ -31,7 +31,7 @@ func TestLoadConfig(t *testing.T) {
 	// server configuration
 	assert.Equal(t, "0.0.0.0", config.Server.Host)
 	assert.Equal(t, 8080, config.Server.Port)
-	assert.Equal(t, 10, config.Server.DefaultN)
+	assert.Equal(t, 10, config.Server.DefaultReturnNumber)
 
 	// worker configuration
 	assert.Equal(t, "127.0.0.1:9000", config.Worker.LeaderAddr)
@@ -42,30 +42,30 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 2, config.Worker.GossipInterval)
 
 	// database configuration
-	assert.Equal(t, "redis://127.0.0.1:6398", config.Database.Path)
+	assert.Equal(t, "redis://127.0.0.1:6398", config.Database.DataStore)
 
 	// leader configuration
-	assert.Equal(t, 9000, config.Leader.GossipPort)
-	assert.Equal(t, "127.0.0.1", config.Leader.Host)
-	assert.Equal(t, "als", config.Leader.Model)
-	assert.Equal(t, 60, config.Leader.FitInterval)
-	assert.Equal(t, 3, config.Leader.BroadcastInterval)
+	assert.Equal(t, 9000, config.Master.Port)
+	assert.Equal(t, "127.0.0.1", config.Master.Host)
+	assert.Equal(t, "als", config.Master.Model)
+	assert.Equal(t, 60, config.Master.FitInterval)
+	assert.Equal(t, 3, config.Master.BroadcastInterval)
 	// params
-	assert.Equal(t, 0.05, config.Leader.Params.Lr)
-	assert.Equal(t, 0.01, config.Leader.Params.Reg)
-	assert.Equal(t, 100, config.Leader.Params.NEpochs)
-	assert.Equal(t, 10, config.Leader.Params.NFactors)
-	assert.Equal(t, 21, config.Leader.Params.RandomState)
-	assert.Equal(t, false, config.Leader.Params.UseBias)
-	assert.Equal(t, 0.0, config.Leader.Params.InitMean)
-	assert.Equal(t, 0.001, config.Leader.Params.InitStdDev)
-	assert.Equal(t, 1.0, config.Leader.Params.Weight)
+	assert.Equal(t, 0.05, config.Master.Params.Lr)
+	assert.Equal(t, 0.01, config.Master.Params.Reg)
+	assert.Equal(t, 100, config.Master.Params.NEpochs)
+	assert.Equal(t, 10, config.Master.Params.NFactors)
+	assert.Equal(t, 21, config.Master.Params.RandomState)
+	assert.Equal(t, false, config.Master.Params.UseBias)
+	assert.Equal(t, 0.0, config.Master.Params.InitMean)
+	assert.Equal(t, 0.001, config.Master.Params.InitStdDev)
+	assert.Equal(t, 1.0, config.Master.Params.Weight)
 	// fit
-	assert.Equal(t, 4, config.Leader.Fit.Jobs)
-	assert.Equal(t, 10, config.Leader.Fit.Verbose)
-	assert.Equal(t, 100, config.Leader.Fit.Candidates)
-	assert.Equal(t, 10, config.Leader.Fit.TopK)
-	assert.Equal(t, 10000, config.Leader.Fit.NumTestUsers)
+	assert.Equal(t, 4, config.Master.Fit.Jobs)
+	assert.Equal(t, 10, config.Master.Fit.Verbose)
+	assert.Equal(t, 100, config.Master.Fit.Candidates)
+	assert.Equal(t, 10, config.Master.Fit.TopK)
+	assert.Equal(t, 10000, config.Master.Fit.NumTestUsers)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

@@ -28,26 +28,41 @@ import (
 
 func init() {
 	cliCommand.AddCommand(tuneCommand)
-	tuneCommand.PersistentFlags().String("feedback-type", "", "Set feedback type.")
-	tuneCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
-	tuneCommand.PersistentFlags().String("load-csv", "", "load data from CSV file")
-	tuneCommand.PersistentFlags().String("load-database", "", "load data from built-in")
-	tuneCommand.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
-	tuneCommand.PersistentFlags().String("csv-format", "", "load CSV file with header")
-	tuneCommand.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
-	for _, paramFlag := range testParamFlags {
-		tuneCommand.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
+	// test match model
+	tuneCommand.AddCommand(tuneMatchCommand)
+	tuneMatchCommand.PersistentFlags().String("feedback-type", "", "Set feedback type.")
+	tuneMatchCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
+	tuneMatchCommand.PersistentFlags().String("load-csv", "", "load data from CSV file")
+	tuneMatchCommand.PersistentFlags().String("load-database", "", "load data from built-in")
+	tuneMatchCommand.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
+	tuneMatchCommand.PersistentFlags().String("csv-format", "", "load CSV file with header")
+	tuneMatchCommand.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
+	tuneMatchCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
+	tuneMatchCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
+	tuneMatchCommand.PersistentFlags().Int("top-k", 10, "Length of recommendation list")
+	tuneMatchCommand.PersistentFlags().Int("n-negatives", 100, "Number of users for sampled test set")
+	tuneMatchCommand.PersistentFlags().Int("n-test-users", 0, "Number of users for sampled test set")
+	for _, paramFlag := range matchParamFlags {
+		tuneMatchCommand.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
 	}
-	tuneCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
-	tuneCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
-	tuneCommand.PersistentFlags().Int("top-k", 10, "Length of recommendation list")
-	tuneCommand.PersistentFlags().Int("n-negatives", 100, "Number of users for sampled test set")
-	tuneCommand.PersistentFlags().Int("n-test-users", 0, "Number of users for sampled test set")
+	// test rank model
+	testCommand.AddCommand(tuneRankCommand)
+	tuneRankCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
+	tuneRankCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
+	tuneRankCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
+	for _, paramFlag := range rankParamFlags {
+		tuneRankCommand.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
+	}
 }
 
 var tuneCommand = &cobra.Command{
 	Use:   "tune",
-	Short: "Tune recommendation model by random search",
+	Short: "Tune recommendation model.",
+}
+
+var tuneMatchCommand = &cobra.Command{
+	Use:   "match",
+	Short: "Tune match model by random search",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		modelName := args[0]
@@ -126,5 +141,14 @@ var tuneCommand = &cobra.Command{
 		}
 		table.Render()
 		log.Printf("Complete cross validation (%v)\n", elapsed)
+	},
+}
+
+var tuneRankCommand = &cobra.Command{
+	Use:   "rank",
+	Short: "Tune rank model by random search.",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+
 	},
 }

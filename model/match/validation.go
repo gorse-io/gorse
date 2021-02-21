@@ -16,6 +16,7 @@ package match
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 )
 
@@ -46,7 +47,8 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid, seed int64) ParamsSearchResult {
+func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
+	seed int64, fitConfig *config.FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
 	count := 1
@@ -68,7 +70,7 @@ func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *Dat
 			// Cross validate
 			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Overwrite(params))
-			score := estimator.Fit(trainSet, testSet, nil)
+			score := estimator.Fit(trainSet, testSet, fitConfig)
 			// Create GridSearch result
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
@@ -93,7 +95,7 @@ func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *Dat
 
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
-	numTrials int, seed int64) ParamsSearchResult {
+	numTrials int, seed int64, fitConfig *config.FitConfig) ParamsSearchResult {
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
 		Scores: make([]Score, 0, numTrials),
@@ -110,7 +112,7 @@ func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *D
 		log.Infof("random search (%v/%v): %v", i, numTrials, params)
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
-		score := estimator.Fit(trainSet, testSet, nil)
+		score := estimator.Fit(trainSet, testSet, fitConfig)
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
 		if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {

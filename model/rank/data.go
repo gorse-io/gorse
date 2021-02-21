@@ -18,10 +18,13 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"os"
 	"strconv"
 	"strings"
 )
+
+const batchSize = 1024
 
 type Dataset struct {
 	UnifiedIndex   UnifiedIndex
@@ -32,7 +35,19 @@ type Dataset struct {
 	UserItemLabels [][]int
 }
 
-func (dataset *Dataset) Len() int {
+func (dataset *Dataset) UserCount() int {
+	return dataset.UnifiedIndex.CountUsers()
+}
+
+func (dataset *Dataset) ItemCount() int {
+	return dataset.UnifiedIndex.CountItems()
+}
+
+func (dataset *Dataset) LabelCount() int {
+	return dataset.UnifiedIndex.CountLabels()
+}
+
+func (dataset *Dataset) Count() int {
 	return len(dataset.FeedbackTarget)
 }
 
@@ -120,4 +135,92 @@ func LoadDataFromBuiltIn(name string) (train *Dataset, test *Dataset, err error)
 	train.UnifiedIndex = unifiedIndex
 	test.UnifiedIndex = unifiedIndex
 	return
+}
+
+func LoadDataFromDatabase(database data.Database, feedbackType string) (*Dataset, error) {
+	unifiedIndex := NewUnifiedMapIndexBuilder()
+	cursor := ""
+	var err error
+	users := make([]data.User, 0)
+	items := make([]data.Item, 0)
+	//feedback := make([]data.Feedback, 0)
+	// pull users
+	for {
+		var batchUsers []data.User
+		cursor, batchUsers, err = database.GetUsers(cursor, batchSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, user := range batchUsers {
+			users = append(users, user)
+			unifiedIndex.AddUser(user.UserId)
+			for _, label := range user.Labels {
+				unifiedIndex.AddLabel(label)
+			}
+		}
+		if cursor == "" {
+			break
+		}
+	}
+	// pull items
+	for {
+		var batchItems []data.Item
+		cursor, batchItems, err = database.GetItems(cursor, batchSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range batchItems {
+			items = append(items, item)
+			unifiedIndex.AddItem(item.ItemId)
+			for _, label := range item.Labels {
+				unifiedIndex.AddLabel(label)
+			}
+		}
+		if cursor == "" {
+			break
+		}
+	}
+	// create dataset
+	dataSet := &Dataset{
+		UnifiedIndex:   unifiedIndex.Build(),
+		FeedbackUsers:  make([]int, 0),
+		FeedbackItems:  make([]int, 0),
+		FeedbackTarget: make([]float32, 0),
+	}
+	// insert users
+	dataSet.UserItemLabels = make([][]int, dataSet.UnifiedIndex.CountItems()+dataSet.UnifiedIndex.CountUsers())
+	for _, user := range users {
+		userId := dataSet.UnifiedIndex.EncodeUser(user.UserId)
+		dataSet.UserItemLabels[userId] = make([]int, len(user.Labels))
+		for i := range user.Labels {
+			dataSet.UserItemLabels[userId][i] = dataSet.UnifiedIndex.EncodeLabel(user.Labels[i])
+		}
+	}
+	// insert items
+	for _, item := range items {
+		itemId := dataSet.UnifiedIndex.EncodeItem(item.ItemId)
+		dataSet.UserItemLabels[itemId] = make([]int, len(item.Labels))
+		for i := range item.Labels {
+			dataSet.UserItemLabels[itemId][i] = dataSet.UnifiedIndex.EncodeLabel(item.Labels[i])
+		}
+	}
+	// insert feedback
+	for {
+		var batchFeedback []data.Feedback
+		cursor, batchFeedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range batchFeedback {
+			userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
+			itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
+			dataSet.FeedbackUsers = append(dataSet.FeedbackUsers, userId)
+			dataSet.FeedbackItems = append(dataSet.FeedbackItems, itemId)
+			dataSet.FeedbackTarget = append(dataSet.FeedbackTarget, 1)
+		}
+		if cursor == "" {
+			break
+		}
+	}
+	return dataSet, nil
 }

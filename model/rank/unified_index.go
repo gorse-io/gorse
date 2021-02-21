@@ -33,6 +33,9 @@ type UnifiedIndex interface {
 	GetUsers() []string
 	GetItems() []string
 	GetLabels() []string
+	CountUsers() int
+	CountItems() int
+	CountLabels() int
 }
 
 type UnifiedMapIndexBuilder struct {
@@ -111,6 +114,18 @@ func (unified *UnifiedMapIndex) GetLabels() []string {
 	return unified.LabelIndex.GetNames()
 }
 
+func (unified *UnifiedMapIndex) CountUsers() int {
+	return unified.UserIndex.Len()
+}
+
+func (unified *UnifiedMapIndex) CountItems() int {
+	return unified.ItemIndex.Len()
+}
+
+func (unified *UnifiedMapIndex) CountLabels() int {
+	return unified.LabelIndex.Len()
+}
+
 type UnifiedDirectIndex struct {
 	N int
 }
@@ -144,5 +159,17 @@ func (unified *UnifiedDirectIndex) GetItems() []string {
 }
 
 func (unified *UnifiedDirectIndex) GetLabels() []string {
+	panic("not implemented")
+}
+
+func (unified *UnifiedDirectIndex) CountUsers() int {
+	panic("not implemented")
+}
+
+func (unified *UnifiedDirectIndex) CountItems() int {
+	panic("not implemented")
+}
+
+func (unified *UnifiedDirectIndex) CountLabels() int {
 	panic("not implemented")
 }

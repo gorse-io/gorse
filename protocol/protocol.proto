@@ -19,11 +19,24 @@ package protocol;
 
 service Master {
 
-  rpc GetLatestRankerVersion(Void) returns (Model) {}
-  rpc GetLatestMatcherVersion(Void) returns (Model) {}
-  rpc GetLatestRanker(Void) returns (Model) {}
-  rpc GetLatestMatcher(Void) returns (Model) {}
+  /* config distribute */
+  rpc GetConfig(Void) returns (Config) {}
 
+  /* model distribute */
+  rpc GetRankModelVersion(Void) returns (Model) {}
+  rpc GetMatchModelVersion(Void) returns (Model) {}
+  rpc GetRankModel(Void) returns (Model) {}
+  rpc GetMatchModel(Void) returns (Model) {}
+
+  /* cluster management */
+  rpc GetCluster(Void) returns (Cluster) {}
+  rpc RegisterServer(Void) returns (Void) {}
+  rpc RegisterWorker(Void) returns (Void) {}
+
+}
+
+message Config {
+  string json = 1;
 }
 
 message Model {
@@ -32,6 +45,15 @@ message Model {
   bytes model = 3;
 }
 
-message Void {
+message Void {}
 
+message Node {
+  string host = 1;
+  int64 port = 2;
+}
+
+message Cluster {
+  string master = 1;
+  repeated string servers = 2;
+  repeated string workers = 3;
 }

@@ -20,9 +20,10 @@ import (
 // Config is the configuration for the engine.
 type Config struct {
 	Common   CommonConfig   `toml:"common"`
+	Rank     RankConfig     `toml:"rank"`
 	Server   ServerConfig   `toml:"server"`
 	Database DatabaseConfig `toml:"database"`
-	Leader   LeaderConfig   `toml:"leader"`
+	Master   MasterConfig   `toml:"master"`
 	Worker   WorkerConfig   `toml:"worker"`
 }
 
@@ -32,14 +33,27 @@ func (config *Config) LoadDefaultIfNil() *Config {
 			Common:   *(*CommonConfig)(nil).LoadDefaultIfNil(),
 			Server:   *(*ServerConfig)(nil).LoadDefaultIfNil(),
 			Database: *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
-			Leader:   *(*LeaderConfig)(nil).LoadDefaultIfNil(),
+			Master:   *(*MasterConfig)(nil).LoadDefaultIfNil(),
 			Worker:   *(*WorkerConfig)(nil).LoadDefaultIfNil(),
 		}
 	}
 	return config
 }
 
+type RankConfig struct {
+	NegativeValue float32 `toml:"negative_value"`
+}
+
 type CommonConfig struct {
+	// insert new users while inserting feedback
+	AutoInsertUser bool `toml:"auto_insert_user"`
+	// insert new items while inserting feedback
+	AutoInsertItem bool `toml:"auto_insert_item"`
+	// cluster meta timeout (second)
+	ClusterMetaTimeout int `toml:"cluster_meta_timeout"`
+
+	MatchFeedbackType string `toml:"match_feedback_type"`
+
 	RetryInterval int `toml:"retry_interval"`
 	RetryLimit    int `toml:"retry_limit"`
 	CacheSize     int `toml:"cache_size"`
@@ -58,17 +72,13 @@ func (config *CommonConfig) LoadDefaultIfNil() *CommonConfig {
 
 // ServerConfig is the configuration for the cmd.
 type ServerConfig struct {
-	Host     string `toml:"host"`
-	Port     int    `toml:"port"`
-	DefaultN int    `toml:"default_n"`
+	DefaultReturnNumber int `toml:"default_n"`
 }
 
 func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
 	if config == nil {
 		return &ServerConfig{
-			Host:     "127.0.0.1",
-			Port:     6381,
-			DefaultN: 100,
+			DefaultReturnNumber: 100,
 		}
 	}
 	return config
@@ -97,25 +107,25 @@ func (config *WorkerConfig) LoadDefaultIfNil() *WorkerConfig {
 	return config
 }
 
-type LeaderConfig struct {
+type MasterConfig struct {
 	Model             string       `toml:"model"`
 	FitInterval       int          `toml:"fit_interval"`
 	BroadcastInterval int          `toml:"broadcast_interval"`
 	Params            ParamsConfig `toml:"params"`
 	Fit               FitConfig    `toml:"fit"`
-	GossipPort        int          `toml:"gossip_port"`
+	Port              int          `toml:"port"`
 	Host              string       `toml:"host"`
 }
 
-func (config *LeaderConfig) LoadDefaultIfNil() *LeaderConfig {
+func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 	if config == nil {
-		return &LeaderConfig{
+		return &MasterConfig{
 			Model:             "als",
 			FitInterval:       1,
 			BroadcastInterval: 1,
 			Params:            ParamsConfig{},
 			Fit:               *(*FitConfig)(nil).LoadDefaultIfNil(),
-			GossipPort:        6384,
+			Port:              6384,
 			Host:              "127.0.0.1",
 		}
 	}
@@ -157,13 +167,14 @@ type ParamsConfig struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	Path string `toml:"path"`
+	DataStore  string `toml:"data_store"`
+	CacheStore string `toml:"cache_store"`
 }
 
 func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 	if config == nil {
 		return &DatabaseConfig{
-			Path: "badger://~/.gorse/data/",
+			DataStore: "badger://~/.gorse/data/",
 		}
 	}
 	return config
@@ -184,49 +195,43 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// Default server config
 	defaultServerConfig := *(*ServerConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("server", "host") {
-		config.Server.Host = defaultServerConfig.Host
-	}
-	if !meta.IsDefined("server", "port") {
-		config.Server.Port = defaultServerConfig.Port
-	}
 	if !meta.IsDefined("server", "default_n") {
-		config.Server.DefaultN = defaultServerConfig.DefaultN
+		config.Server.DefaultReturnNumber = defaultServerConfig.DefaultReturnNumber
 	}
 	// Default database config
 	defaultDBConfig := *(*DatabaseConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("database", "path") {
-		config.Database.Path = defaultDBConfig.Path
+	if !meta.IsDefined("database", "data_store") {
+		config.Database.DataStore = defaultDBConfig.DataStore
 	}
-	// Default leader config
+	// Default master config
 	defaultFitConfig := *(*FitConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("leader", "fit", "n_jobs") {
-		config.Leader.Fit.Jobs = defaultFitConfig.Jobs
+	if !meta.IsDefined("master", "fit", "n_jobs") {
+		config.Master.Fit.Jobs = defaultFitConfig.Jobs
 	}
-	if !meta.IsDefined("leader", "fit", "verbose") {
-		config.Leader.Fit.Verbose = defaultFitConfig.Verbose
+	if !meta.IsDefined("master", "fit", "verbose") {
+		config.Master.Fit.Verbose = defaultFitConfig.Verbose
 	}
-	if !meta.IsDefined("leader", "fit", "n_candidates") {
-		config.Leader.Fit.Candidates = defaultFitConfig.Candidates
+	if !meta.IsDefined("master", "fit", "n_candidates") {
+		config.Master.Fit.Candidates = defaultFitConfig.Candidates
 	}
-	if !meta.IsDefined("leader", "fit", "top_k") {
-		config.Leader.Fit.TopK = defaultFitConfig.TopK
+	if !meta.IsDefined("master", "fit", "top_k") {
+		config.Master.Fit.TopK = defaultFitConfig.TopK
 	}
-	defaultLeaderConfig := *(*LeaderConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("leader", "model") {
-		config.Leader.Model = defaultLeaderConfig.Model
+	defaultLeaderConfig := *(*MasterConfig)(nil).LoadDefaultIfNil()
+	if !meta.IsDefined("master", "model") {
+		config.Master.Model = defaultLeaderConfig.Model
 	}
 	if !meta.IsDefined("leader", "fit_interval") {
-		config.Leader.FitInterval = defaultLeaderConfig.FitInterval
+		config.Master.FitInterval = defaultLeaderConfig.FitInterval
 	}
 	if !meta.IsDefined("leader", "broadcast_interval") {
-		config.Leader.BroadcastInterval = defaultLeaderConfig.BroadcastInterval
+		config.Master.BroadcastInterval = defaultLeaderConfig.BroadcastInterval
 	}
-	if !meta.IsDefined("leader", "gossip_port") {
-		config.Leader.GossipPort = defaultLeaderConfig.GossipPort
+	if !meta.IsDefined("master", "port") {
+		config.Master.Port = defaultLeaderConfig.Port
 	}
-	if !meta.IsDefined("leader", "host") {
-		config.Leader.Host = defaultLeaderConfig.Host
+	if !meta.IsDefined("master", "host") {
+		config.Master.Host = defaultLeaderConfig.Host
 	}
 	// Default worker config
 	defaultWorkerConfig := *(*WorkerConfig)(nil).LoadDefaultIfNil()

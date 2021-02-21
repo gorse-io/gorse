@@ -21,6 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/match"
+	"github.com/zhenghaoz/gorse/model/rank"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"os"
 	"runtime"
@@ -31,21 +32,30 @@ import (
 
 func init() {
 	cliCommand.AddCommand(testCommand)
-	testCommand.PersistentFlags().String("feedback-type", "", "Set feedback type.")
-	testCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
-	testCommand.PersistentFlags().String("load-csv", "", "load data from CSV file")
-	testCommand.PersistentFlags().String("load-database", "", "load data from built-in")
-	testCommand.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
-	testCommand.PersistentFlags().String("csv-format", "", "load CSV file with header")
-	testCommand.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
-	for _, paramFlag := range testParamFlags {
-		testCommand.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
+	// test match model
+	testCommand.AddCommand(testMatchCommand)
+	testMatchCommand.PersistentFlags().String("feedback-type", "", "Set feedback type.")
+	testMatchCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
+	testMatchCommand.PersistentFlags().String("load-csv", "", "load data from CSV file")
+	testMatchCommand.PersistentFlags().String("csv-sep", "\t", "load CSV file with separator")
+	testMatchCommand.PersistentFlags().String("csv-format", "", "load CSV file with header")
+	testMatchCommand.PersistentFlags().Bool("csv-header", false, "load CSV file with header")
+	testMatchCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
+	testMatchCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
+	testMatchCommand.PersistentFlags().Int("top-k", 10, "Length of recommendation list")
+	testMatchCommand.PersistentFlags().Int("n-negatives", 100, "Number of negative samples")
+	testMatchCommand.PersistentFlags().Int("n-test-users", 0, "Number of users for sampled test set")
+	for _, paramFlag := range matchParamFlags {
+		testMatchCommand.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
 	}
-	testCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
-	testCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
-	testCommand.PersistentFlags().Int("top-k", 10, "Length of recommendation list")
-	testCommand.PersistentFlags().Int("n-negatives", 100, "Number of negative samples")
-	testCommand.PersistentFlags().Int("n-test-users", 0, "Number of users for sampled test set")
+	// test rank model
+	testCommand.AddCommand(testRankCommand)
+	testRankCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
+	testRankCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
+	testRankCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
+	for _, paramFlag := range rankParamFlags {
+		testRankCommand.PersistentFlags().String(paramFlag.Name, "", paramFlag.Help)
+	}
 }
 
 /* Models */
@@ -64,7 +74,7 @@ type paramFlag struct {
 	Help string
 }
 
-var testParamFlags = []paramFlag{
+var matchParamFlags = []paramFlag{
 	{float64Flag, model.Lr, "lr", "Learning rate"},
 	{float64Flag, model.Reg, "reg", "Regularization strength"},
 	{intFlag, model.NEpochs, "n-epochs", "Number of epochs"},
@@ -74,9 +84,18 @@ var testParamFlags = []paramFlag{
 	{float64Flag, model.Weight, "neg-weight", "Weight of negative samples in ALS."},
 }
 
+var rankParamFlags = []paramFlag{
+	{float64Flag, model.Lr, "lr", "Learning rate"},
+	{float64Flag, model.Reg, "reg", "Regularization strength"},
+	{intFlag, model.NEpochs, "n-epochs", "Number of epochs"},
+	{intFlag, model.NFactors, "n-factors", "Number of factors"},
+	{float64Flag, model.InitMean, "init-mean", "Mean of gaussian initial parameters"},
+	{float64Flag, model.InitStdDev, "init-std", "Standard deviation of gaussian initial parameters"},
+}
+
 func parseParamFlags(cmd *cobra.Command) model.ParamsGrid {
 	grid := make(model.ParamsGrid)
-	for _, paramFlag := range testParamFlags {
+	for _, paramFlag := range matchParamFlags {
 		if cmd.PersistentFlags().Changed(paramFlag.Name) {
 			text, err := cmd.PersistentFlags().GetString(paramFlag.Name)
 			if err != nil {
@@ -125,7 +144,12 @@ func parseParam(text string, tp int) interface{} {
 
 var testCommand = &cobra.Command{
 	Use:   "test",
-	Short: "Test recommendation model by user-leave-one-out",
+	Short: "Test recommendation model.",
+}
+
+var testMatchCommand = &cobra.Command{
+	Use:   "match",
+	Short: "Test match model by user-leave-one-out",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		modelName := args[0]
@@ -211,5 +235,54 @@ var testCommand = &cobra.Command{
 		}
 		table.Render()
 		log.Printf("Complete cross validation (%v)\n", elapsed)
+	},
+}
+
+var testRankCommand = &cobra.Command{
+	Use:   "rank",
+	Short: "Test rank model.",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		// load dataset
+		feedbackType, _ := cmd.PersistentFlags().GetString("feedback-type")
+		//numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
+		//seed, _ := cmd.PersistentFlags().GetInt("random-state")
+		// Open database
+		database, err := data.Open(globalConfig.Database.DataStore)
+		if err != nil {
+			log.Fatalf("cli: failed to connect database (%v)", err)
+		}
+		defer database.Close()
+		// Load data
+		var trainSet, testSet *rank.Dataset
+		if cmd.PersistentFlags().Changed("load-builtin") {
+			name, _ := cmd.PersistentFlags().GetString("load-builtin")
+			log.Infof("Load built-in dataset %s\n", name)
+			trainSet, testSet, err = rank.LoadDataFromBuiltIn(name)
+			if err != nil {
+				log.Fatal("cli: ", err)
+			}
+		} else {
+			log.Infof("Load data from database")
+			dataSet, err := rank.LoadDataFromDatabase(database, feedbackType)
+			if err != nil {
+				log.Fatalf("cli: failed to load data from database (%v)", err)
+			}
+			if dataSet.Count() == 0 {
+				log.Fatalf("cli: empty dataset")
+			}
+			log.Infof("data set: #user = %v, #item = %v, #label = %v, #feedback = %v",
+				dataSet.UserCount(), dataSet.ItemCount(), dataSet.LabelCount(), dataSet.Count())
+			//trainSet, testSet = data.Split(numTestUsers, int64(seed))
+		}
+		m := rank.NewFM(rank.FMRegression, model.Params{
+			model.InitStdDev: 0.01,
+			model.NFactors:   8,
+			model.NEpochs:    20,
+			model.Lr:         0.01,
+			model.Reg:        0.0001,
+		})
+		score := m.Fit(trainSet, testSet, nil)
+		fmt.Println(score)
 	},
 }

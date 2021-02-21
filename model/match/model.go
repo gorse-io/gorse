@@ -365,6 +365,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 	log.Infof("fit ALS with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
 		als.nFactors, als.nEpochs, als.reg, als.initMean, als.initStdDev)
+	log.Infof("        with options: n_jobs = %v, candidates = %v", config.Jobs, config.Candidates)
 	als.Init(trainSet)
 	// Create temporary matrix
 	temp1 := make([]*mat.Dense, config.Jobs)
