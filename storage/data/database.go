@@ -26,6 +26,11 @@ import (
 	"time"
 )
 
+const (
+	ErrUserNotExist = "user not exist"
+	ErrItemNotExist = "item not exist"
+)
+
 // Item stores meta data about item.
 type Item struct {
 	ItemId    string `bson:"_id"`

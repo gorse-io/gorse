@@ -20,23 +20,23 @@ import (
 func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset, trainSet *Dataset) float32 {
 	sum := float32(0)
 	// For all UserFeedback
-	for i := 0; i < testSet.Len(); i++ {
+	for i := 0; i < testSet.Count(); i++ {
 		labels, target := testSet.Get(i)
 		prediction := estimator.InternalPredict(labels)
 		sum += (target - prediction) * (target - prediction)
 	}
-	return math32.Sqrt(sum / float32(testSet.Len()))
+	return math32.Sqrt(sum / float32(testSet.Count()))
 }
 
 func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset, trainSet *Dataset) float32 {
 	correct := float32(0)
 	// For all UserFeedback
-	for i := 0; i < testSet.Len(); i++ {
+	for i := 0; i < testSet.Count(); i++ {
 		labels, target := testSet.Get(i)
 		prediction := estimator.InternalPredict(labels)
 		if target*prediction > 0 {
 			correct++
 		}
 	}
-	return correct / float32(testSet.Len())
+	return correct / float32(testSet.Count())
 }

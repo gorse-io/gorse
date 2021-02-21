@@ -167,34 +167,38 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	rng := base.NewRandomGenerator(seed)
 	if numTestUsers >= dataset.UserCount() || numTestUsers <= 0 {
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			k := rng.Intn(len(dataset.UserFeedback[userIndex]))
-			testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
-			testSet.FeedbackItems = append(testSet.FeedbackItems, dataset.UserFeedback[userIndex][k])
-			testSet.UserFeedback[userIndex] = append(testSet.UserFeedback[userIndex], dataset.UserFeedback[userIndex][k])
-			testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]] = append(testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]], userIndex)
-			for i, itemIndex := range dataset.UserFeedback[userIndex] {
-				if i != k {
-					trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
-					trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
-					trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
-					trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
+			if len(dataset.UserFeedback[userIndex]) > 0 {
+				k := rng.Intn(len(dataset.UserFeedback[userIndex]))
+				testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
+				testSet.FeedbackItems = append(testSet.FeedbackItems, dataset.UserFeedback[userIndex][k])
+				testSet.UserFeedback[userIndex] = append(testSet.UserFeedback[userIndex], dataset.UserFeedback[userIndex][k])
+				testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]] = append(testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]], userIndex)
+				for i, itemIndex := range dataset.UserFeedback[userIndex] {
+					if i != k {
+						trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
+						trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
+						trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
+						trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
+					}
 				}
 			}
 		}
 	} else {
 		testUsers := rng.Sample(dataset.UserCount(), numTestUsers)
 		for _, userIndex := range testUsers {
-			k := rng.Intn(len(dataset.UserFeedback[userIndex]))
-			testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
-			testSet.FeedbackItems = append(testSet.FeedbackItems, dataset.UserFeedback[userIndex][k])
-			testSet.UserFeedback[userIndex] = append(testSet.UserFeedback[userIndex], dataset.UserFeedback[userIndex][k])
-			testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]] = append(testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]], userIndex)
-			for i, itemIndex := range dataset.UserFeedback[userIndex] {
-				if i != k {
-					trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
-					trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
-					trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
-					trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
+			if len(dataset.UserFeedback[userIndex]) > 0 {
+				k := rng.Intn(len(dataset.UserFeedback[userIndex]))
+				testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
+				testSet.FeedbackItems = append(testSet.FeedbackItems, dataset.UserFeedback[userIndex][k])
+				testSet.UserFeedback[userIndex] = append(testSet.UserFeedback[userIndex], dataset.UserFeedback[userIndex][k])
+				testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]] = append(testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]], userIndex)
+				for i, itemIndex := range dataset.UserFeedback[userIndex] {
+					if i != k {
+						trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
+						trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
+						trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
+						trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
+					}
 				}
 			}
 		}
@@ -255,7 +259,7 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 	return dataset
 }
 
-func LoadDataFromDatabase(database data.Database) (*DataSet, []data.Item, error) {
+func LoadDataFromDatabase(database data.Database, feedbackType string) (*DataSet, []data.Item, error) {
 	dataset := NewMapIndexDataset()
 	cursor := ""
 	var err error
@@ -292,7 +296,7 @@ func LoadDataFromDatabase(database data.Database) (*DataSet, []data.Item, error)
 	// pull database
 	for {
 		var feedback []data.Feedback
-		cursor, feedback, err = database.GetFeedback("", cursor, batchSize)
+		cursor, feedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
 		if err != nil {
 			return nil, nil, err
 		}

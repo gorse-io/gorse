@@ -43,7 +43,7 @@ func (filter *TopKFilter) Less(i, j int) bool {
 }
 
 // Push pushes the element x onto the heap.
-// The complexity is O(log n) where n = h.Len().
+// The complexity is O(log n) where n = h.Count().
 func (filter *TopKFilter) Push(item int, weight float32) {
 	filter.items = append(filter.items, weightedItem{item, weight})
 	filter.up(filter.Len() - 1)
@@ -53,7 +53,7 @@ func (filter *TopKFilter) Push(item int, weight float32) {
 }
 
 // Pop removes and returns the minimum element (according to Less) from the heap.
-// The complexity is O(log n) where n = h.Len().
+// The complexity is O(log n) where n = h.Count().
 // Pop is equivalent to Remove(h, 0).
 func (filter *TopKFilter) pop() (int, float32) {
 	n := filter.Len() - 1
@@ -134,7 +134,7 @@ func (filter *TopKStringFilter) Less(i, j int) bool {
 }
 
 // Push pushes the element x onto the heap.
-// The complexity is O(log n) where n = h.Len().
+// The complexity is O(log n) where n = h.Count().
 func (filter *TopKStringFilter) Push(item string, weight float32) {
 	filter.items = append(filter.items, weightedString{item, weight})
 	filter.up(filter.Len() - 1)
@@ -144,7 +144,7 @@ func (filter *TopKStringFilter) Push(item string, weight float32) {
 }
 
 // Pop removes and returns the minimum element (according to Less) from the heap.
-// The complexity is O(log n) where n = h.Len().
+// The complexity is O(log n) where n = h.Count().
 // Pop is equivalent to Remove(h, 0).
 func (filter *TopKStringFilter) pop() (string, float32) {
 	n := filter.Len() - 1

@@ -28,16 +28,18 @@ import (
 	"google.golang.org/grpc"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type Server struct {
-	CacheStore cache.Database
-	DataStore  data.Database
-	Config     *config.Config
-	MasterHost string
-	MasterPort int
-	ServerHost string
-	ServerPort int
+	CacheStore   cache.Database
+	DataStore    data.Database
+	Config       *config.Config
+	MasterClient protocol.MasterClient
+	MasterHost   string
+	MasterPort   int
+	ServerHost   string
+	ServerPort   int
 }
 
 func NewServer(masterHost string, masterPort int, serverHost string, serverPort int) *Server {
@@ -53,12 +55,12 @@ func (s *Server) Serve() {
 	// connect to master
 	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.MasterHost, s.MasterPort), grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("cli: failed to connect master (%v)", err)
+		log.Fatalf("server: failed to connect master (%v)", err)
 	}
-	masterClient := protocol.NewMasterClient(conn)
+	s.MasterClient = protocol.NewMasterClient(conn)
 
 	// load master config
-	masterCfgJson, err := masterClient.GetConfig(context.Background(), &protocol.Void{})
+	masterCfgJson, err := s.MasterClient.GetConfig(context.Background(), &protocol.Void{})
 	if err != nil {
 		log.Fatalf("server: failed to load master config (%v)", err)
 	}
@@ -66,6 +68,9 @@ func (s *Server) Serve() {
 	if err != nil {
 		log.Fatalf("server: failed to parse master config (%v)", err)
 	}
+
+	// register to master
+	go s.Register()
 
 	// register restful APIs
 	ws := s.CreateWebService()
@@ -82,6 +87,15 @@ func (s *Server) Serve() {
 
 	log.Printf("start gorse server at %v\n", fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort), nil))
+}
+
+func (s *Server) Register() {
+	for {
+		if _, err := s.MasterClient.RegisterServer(context.Background(), &protocol.Void{}); err != nil {
+			log.Fatal("server:", err)
+		}
+		time.Sleep(time.Duration(s.Config.Common.ClusterMetaTimeout/2) * time.Second)
+	}
 }
 
 func (s *Server) CreateWebService() *restful.WebService {

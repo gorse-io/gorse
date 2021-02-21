@@ -1,0 +1,58 @@
+# This section declares settings for the server.
+[common]
+cache_size = 1000
+retry_limit = 10
+retry_interval = 1
+# insert new users while inserting feedback
+auto_insert_user = true
+# insert new items while inserting feedback
+auto_insert_item = false
+# cluster meta timeout (second)
+cluster_meta_timeout = 60
+
+# This section declares setting for the database.
+[database]
+# database for caching (support Redis only)
+cache_store = "redis://127.0.0.1:6398"
+# database for persist data (support MySQL/MongoDB/Redis)
+data_store = "mysql://root@tcp(127.0.0.1:3306)/gitrec?parseTime=true"
+
+# This section declares settings for the server.
+[server]
+host = "0.0.0.0"                # server host
+port = 8080                     # server port
+default_n = 10                  # defulat number of items on paging
+
+[worker]
+leader_addr = "127.0.0.1:9000"
+host = "127.0.0.1"
+gossip_port = 9001
+rpc_port = 9002
+predict_interval = 10
+gossip_interval = 2
+
+# This section declares hyperparameters for the recommendation model.
+[leader]
+model = "als"
+fit_interval = 60
+broadcast_interval = 3
+gossip_port = 9000
+host = "127.0.0.1"
+
+[leader.params]
+lr = 0.05                       # learning rate
+reg = 0.01                      # regularization strength
+n_epochs = 100                  # number of epochs
+n_factors = 10                  # number of factors
+random_state = 21               # random state (seed)
+use_bias = false                # use bias
+init_mean = 0.0                 # mean of gaussian initial parameter
+init_std = 0.001                # standard deviation of gaussian initial parameter
+weight = 1.0                    # alpha value, depend on context
+
+[leader.fit]
+n_jobs = 4
+verbose = 10
+n_candidates = 100
+top_k = 10
+num_test_users = 10000

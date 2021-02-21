@@ -155,14 +155,14 @@ func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params 
 		value interface{}
 	}
 	values := []ParamValues{
-		{"lr", Lr, config.Leader.Params.Lr},
-		{"reg", Reg, config.Leader.Params.Reg},
-		{"n_epochs", NEpochs, config.Leader.Params.NEpochs},
-		{"n_factors", NFactors, config.Leader.Params.NFactors},
-		{"random_state", RandomState, config.Leader.Params.RandomState},
-		{"init_mean", InitMean, config.Leader.Params.InitMean},
-		{"init_std", InitStdDev, config.Leader.Params.InitStdDev},
-		{"weight", Weight, config.Leader.Params.Weight},
+		{"lr", Lr, config.Master.Params.Lr},
+		{"reg", Reg, config.Master.Params.Reg},
+		{"n_epochs", NEpochs, config.Master.Params.NEpochs},
+		{"n_factors", NFactors, config.Master.Params.NFactors},
+		{"random_state", RandomState, config.Master.Params.RandomState},
+		{"init_mean", InitMean, config.Master.Params.InitMean},
+		{"init_std", InitStdDev, config.Master.Params.InitStdDev},
+		{"weight", Weight, config.Master.Params.Weight},
 	}
 	params := Params{}
 	for _, v := range values {

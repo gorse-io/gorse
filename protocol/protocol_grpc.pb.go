@@ -13,191 +13,339 @@ import (
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion7
 
-// WorkerClient is the client API for Worker service.
+// MasterClient is the client API for Master service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type WorkerClient interface {
-	BroadcastModel(ctx context.Context, in *Model, opts ...grpc.CallOption) (*Void, error)
-	BroadcastUserPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Void, error)
-	GetModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error)
-	GetUserPartitionVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error)
+type MasterClient interface {
+	// config distribute
+	GetConfig(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Config, error)
+	// model distribute
+	GetRankModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
+	GetMatchModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
+	GetRankModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
+	GetMatchModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
+	GetCluster(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Cluster, error)
+	RegisterServer(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error)
+	RegisterWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error)
 }
 
-type workerClient struct {
+type masterClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewWorkerClient(cc grpc.ClientConnInterface) WorkerClient {
-	return &workerClient{cc}
+func NewMasterClient(cc grpc.ClientConnInterface) MasterClient {
+	return &masterClient{cc}
 }
 
-func (c *workerClient) BroadcastModel(ctx context.Context, in *Model, opts ...grpc.CallOption) (*Void, error) {
+func (c *masterClient) GetConfig(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Config, error) {
+	out := new(Config)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterClient) GetRankModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
+	out := new(Model)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetRankModelVersion", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterClient) GetMatchModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
+	out := new(Model)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetMatchModelVersion", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterClient) GetRankModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
+	out := new(Model)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetRankModel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterClient) GetMatchModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
+	out := new(Model)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetMatchModel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterClient) GetCluster(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Cluster, error) {
+	out := new(Cluster)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetCluster", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *masterClient) RegisterServer(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
 	out := new(Void)
-	err := c.cc.Invoke(ctx, "/protocol.Worker/BroadcastModel", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/protocol.Master/RegisterServer", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerClient) BroadcastUserPartition(ctx context.Context, in *Partition, opts ...grpc.CallOption) (*Void, error) {
+func (c *masterClient) RegisterWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
 	out := new(Void)
-	err := c.cc.Invoke(ctx, "/protocol.Worker/BroadcastUserPartition", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/protocol.Master/RegisterWorker", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerClient) GetModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error) {
-	out := new(Version)
-	err := c.cc.Invoke(ctx, "/protocol.Worker/GetModelVersion", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *workerClient) GetUserPartitionVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Version, error) {
-	out := new(Version)
-	err := c.cc.Invoke(ctx, "/protocol.Worker/GetUserPartitionVersion", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// WorkerServer is the server API for Worker service.
-// All implementations must embed UnimplementedWorkerServer
+// MasterServer is the server API for Master service.
+// All implementations must embed UnimplementedMasterServer
 // for forward compatibility
-type WorkerServer interface {
-	BroadcastModel(context.Context, *Model) (*Void, error)
-	BroadcastUserPartition(context.Context, *Partition) (*Void, error)
-	GetModelVersion(context.Context, *Void) (*Version, error)
-	GetUserPartitionVersion(context.Context, *Void) (*Version, error)
-	mustEmbedUnimplementedWorkerServer()
+type MasterServer interface {
+	// config distribute
+	GetConfig(context.Context, *Void) (*Config, error)
+	// model distribute
+	GetRankModelVersion(context.Context, *Void) (*Model, error)
+	GetMatchModelVersion(context.Context, *Void) (*Model, error)
+	GetRankModel(context.Context, *Void) (*Model, error)
+	GetMatchModel(context.Context, *Void) (*Model, error)
+	GetCluster(context.Context, *Void) (*Cluster, error)
+	RegisterServer(context.Context, *Void) (*Void, error)
+	RegisterWorker(context.Context, *Void) (*Void, error)
+	mustEmbedUnimplementedMasterServer()
 }
 
-// UnimplementedWorkerServer must be embedded to have forward compatible implementations.
-type UnimplementedWorkerServer struct {
+// UnimplementedMasterServer must be embedded to have forward compatible implementations.
+type UnimplementedMasterServer struct {
 }
 
-func (UnimplementedWorkerServer) BroadcastModel(context.Context, *Model) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BroadcastModel not implemented")
+func (UnimplementedMasterServer) GetConfig(context.Context, *Void) (*Config, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
 }
-func (UnimplementedWorkerServer) BroadcastUserPartition(context.Context, *Partition) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BroadcastUserPartition not implemented")
+func (UnimplementedMasterServer) GetRankModelVersion(context.Context, *Void) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRankModelVersion not implemented")
 }
-func (UnimplementedWorkerServer) GetModelVersion(context.Context, *Void) (*Version, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetModelVersion not implemented")
+func (UnimplementedMasterServer) GetMatchModelVersion(context.Context, *Void) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMatchModelVersion not implemented")
 }
-func (UnimplementedWorkerServer) GetUserPartitionVersion(context.Context, *Void) (*Version, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetUserPartitionVersion not implemented")
+func (UnimplementedMasterServer) GetRankModel(context.Context, *Void) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRankModel not implemented")
 }
-func (UnimplementedWorkerServer) mustEmbedUnimplementedWorkerServer() {}
+func (UnimplementedMasterServer) GetMatchModel(context.Context, *Void) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMatchModel not implemented")
+}
+func (UnimplementedMasterServer) GetCluster(context.Context, *Void) (*Cluster, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCluster not implemented")
+}
+func (UnimplementedMasterServer) RegisterServer(context.Context, *Void) (*Void, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterServer not implemented")
+}
+func (UnimplementedMasterServer) RegisterWorker(context.Context, *Void) (*Void, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterWorker not implemented")
+}
+func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
 
-// UnsafeWorkerServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to WorkerServer will
+// UnsafeMasterServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to MasterServer will
 // result in compilation errors.
-type UnsafeWorkerServer interface {
-	mustEmbedUnimplementedWorkerServer()
+type UnsafeMasterServer interface {
+	mustEmbedUnimplementedMasterServer()
 }
 
-func RegisterWorkerServer(s grpc.ServiceRegistrar, srv WorkerServer) {
-	s.RegisterService(&_Worker_serviceDesc, srv)
+func RegisterMasterServer(s grpc.ServiceRegistrar, srv MasterServer) {
+	s.RegisterService(&_Master_serviceDesc, srv)
 }
 
-func _Worker_BroadcastModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Model)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkerServer).BroadcastModel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Worker/BroadcastModel",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).BroadcastModel(ctx, req.(*Model))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Worker_BroadcastUserPartition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Partition)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkerServer).BroadcastUserPartition(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Worker/BroadcastUserPartition",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).BroadcastUserPartition(ctx, req.(*Partition))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Worker_GetModelVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Master_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Void)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServer).GetModelVersion(ctx, in)
+		return srv.(MasterServer).GetConfig(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Worker/GetModelVersion",
+		FullMethod: "/protocol.Master/GetConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).GetModelVersion(ctx, req.(*Void))
+		return srv.(MasterServer).GetConfig(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Worker_GetUserPartitionVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Master_GetRankModelVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Void)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServer).GetUserPartitionVersion(ctx, in)
+		return srv.(MasterServer).GetRankModelVersion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Worker/GetUserPartitionVersion",
+		FullMethod: "/protocol.Master/GetRankModelVersion",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).GetUserPartitionVersion(ctx, req.(*Void))
+		return srv.(MasterServer).GetRankModelVersion(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _Worker_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "protocol.Worker",
-	HandlerType: (*WorkerServer)(nil),
+func _Master_GetMatchModelVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).GetMatchModelVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Master/GetMatchModelVersion",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).GetMatchModelVersion(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Master_GetRankModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).GetRankModel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Master/GetRankModel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).GetRankModel(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Master_GetMatchModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).GetMatchModel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Master/GetMatchModel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).GetMatchModel(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Master_GetCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).GetCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Master/GetCluster",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).GetCluster(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Master_RegisterServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).RegisterServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Master/RegisterServer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).RegisterServer(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Master_RegisterWorker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).RegisterWorker(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Master/RegisterWorker",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).RegisterWorker(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _Master_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "protocol.Master",
+	HandlerType: (*MasterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "BroadcastModel",
-			Handler:    _Worker_BroadcastModel_Handler,
+			MethodName: "GetConfig",
+			Handler:    _Master_GetConfig_Handler,
 		},
 		{
-			MethodName: "BroadcastUserPartition",
-			Handler:    _Worker_BroadcastUserPartition_Handler,
+			MethodName: "GetRankModelVersion",
+			Handler:    _Master_GetRankModelVersion_Handler,
 		},
 		{
-			MethodName: "GetModelVersion",
-			Handler:    _Worker_GetModelVersion_Handler,
+			MethodName: "GetMatchModelVersion",
+			Handler:    _Master_GetMatchModelVersion_Handler,
 		},
 		{
-			MethodName: "GetUserPartitionVersion",
-			Handler:    _Worker_GetUserPartitionVersion_Handler,
+			MethodName: "GetRankModel",
+			Handler:    _Master_GetRankModel_Handler,
+		},
+		{
+			MethodName: "GetMatchModel",
+			Handler:    _Master_GetMatchModel_Handler,
+		},
+		{
+			MethodName: "GetCluster",
+			Handler:    _Master_GetCluster_Handler,
+		},
+		{
+			MethodName: "RegisterServer",
+			Handler:    _Master_RegisterServer_Handler,
+		},
+		{
+			MethodName: "RegisterWorker",
+			Handler:    _Master_RegisterWorker_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

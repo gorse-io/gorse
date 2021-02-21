@@ -19,6 +19,13 @@ import (
 	"strings"
 )
 
+const (
+	PopularItems = "popular_items"
+	LatestItems  = "latest_items"
+	SimilarItems = "similar_items"
+	MatchedItems = "matched_items"
+)
+
 type Database interface {
 	Close() error
 	SetList(prefix, name string, items []string) error
