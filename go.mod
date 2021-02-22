@@ -5,7 +5,7 @@ require (
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/emicklei/go-restful v2.15.0+incompatible
 	github.com/json-iterator/go v1.1.10 // indirect
-	github.com/olekukonko/tablewriter v0.0.4
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/spf13/cobra v0.0.7
 	github.com/stretchr/testify v1.7.0
 	github.com/thanhpk/randstr v1.0.4
