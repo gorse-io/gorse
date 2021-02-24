@@ -72,7 +72,7 @@ jobs:
         # MySQL
         MYSQL_URI: mysql://root:paswword@127.0.0.1:${{ job.services.mysql.ports[3306] }}
         # MongoDB
-        MONGO_URI: mongodb://root:password@127.0.0.1:${{ job.services.mysql.ports[27017] }}
+        MONGO_URI: mongodb://root:password@127.0.0.1:${{ job.services.mongo.ports[27017] }}
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
