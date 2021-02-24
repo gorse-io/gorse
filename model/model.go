@@ -34,7 +34,7 @@ type Model interface {
 // ID sets, random generator and fitting options are managed the BaseModel model.
 type BaseModel struct {
 	Params    Params               // Hyper-parameters
-	Rng       base.RandomGenerator // Random generator
+	rng       base.RandomGenerator // Random generator
 	randState int64                // Random seed
 }
 
@@ -42,10 +42,14 @@ type BaseModel struct {
 func (model *BaseModel) SetParams(params Params) {
 	model.Params = params
 	model.randState = model.Params.GetInt64(RandomState, 0)
-	model.Rng = base.NewRandomGenerator(model.randState)
+	model.rng = base.NewRandomGenerator(model.randState)
 }
 
 // GetParams returns all hyper-parameters.
 func (model *BaseModel) GetParams() Params {
 	return model.Params
+}
+
+func (model *BaseModel) GetRandomGenerator() base.RandomGenerator {
+	return model.rng
 }

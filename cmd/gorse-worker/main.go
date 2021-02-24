@@ -17,6 +17,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/worker"
+	"runtime"
 )
 
 var workerCommand = &cobra.Command{
@@ -25,8 +26,9 @@ var workerCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
+		workingJobs, _ := cmd.PersistentFlags().GetInt("jobs")
 		// create worker
-		w := worker.NewWorker(masterHost, masterPort)
+		w := worker.NewWorker(masterHost, masterPort, workingJobs)
 		w.Serve()
 	},
 }
@@ -34,6 +36,7 @@ var workerCommand = &cobra.Command{
 func init() {
 	workerCommand.PersistentFlags().String("master-host", "127.0.0.1", "Master host.")
 	workerCommand.PersistentFlags().Int("master-port", 6384, "Master port.")
+	workerCommand.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of working jobs.")
 }
 
 func main() {

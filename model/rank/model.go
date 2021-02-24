@@ -220,7 +220,7 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *config.FitConfig)
 }
 
 func (fm *FM) Init(trainSet *Dataset) {
-	newV := fm.Rng.NormalMatrix(trainSet.UnifiedIndex.Len(), fm.nFactors, fm.initMean, fm.initStdDev)
+	newV := fm.GetRandomGenerator().NormalMatrix(trainSet.UnifiedIndex.Len(), fm.nFactors, fm.initMean, fm.initStdDev)
 	newW := make([]float32, trainSet.UnifiedIndex.Len())
 	// Relocate parameters
 	if fm.Index != nil {

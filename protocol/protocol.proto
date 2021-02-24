@@ -53,7 +53,8 @@ message Node {
 }
 
 message Cluster {
-  string master = 1;
-  repeated string servers = 2;
-  repeated string workers = 3;
+  string me = 1;
+  string master = 2;
+  repeated string servers = 3;
+  repeated string workers = 4;
 }

@@ -29,6 +29,10 @@ type MatrixFactorization interface {
 	Predict(userId, itemId string) float32
 	// InternalPredict
 	InternalPredict(userId, itemId int) float32
+	// GetUserIndex returns user index.
+	GetUserIndex() base.Index
+	// GetItemIndex returns item index.
+	GetItemIndex() base.Index
 }
 
 type BaseMatrixFactorization struct {
@@ -40,6 +44,26 @@ type BaseMatrixFactorization struct {
 func (model *BaseMatrixFactorization) Init(trainSet *DataSet) {
 	model.UserIndex = trainSet.UserIndex
 	model.ItemIndex = trainSet.ItemIndex
+}
+
+func (model *BaseMatrixFactorization) Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score {
+	panic("not implemented")
+}
+
+func (model *BaseMatrixFactorization) Predict(userId, itemId string) float32 {
+	panic("not implemented")
+}
+
+func (model *BaseMatrixFactorization) InternalPredict(userId, itemId int) float32 {
+	panic("not implemented")
+}
+
+func (model *BaseMatrixFactorization) GetUserIndex() base.Index {
+	return model.UserIndex
+}
+
+func (model *BaseMatrixFactorization) GetItemIndex() base.Index {
+	return model.ItemIndex
 }
 
 func NewModel(name string, params model.Params) (MatrixFactorization, error) {
@@ -178,7 +202,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig
 	negativeItemFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
 	rng := make([]base.RandomGenerator, config.Jobs)
 	for i := 0; i < config.Jobs; i++ {
-		rng[i] = base.NewRandomGenerator(bpr.Rng.Int63())
+		rng[i] = base.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
 	}
 	// Convert array to hashmap
 	userFeedback := make([]map[int]interface{}, trainSet.UserCount())
@@ -258,8 +282,8 @@ func (bpr *BPR) Clear() {
 
 func (bpr *BPR) Init(trainSet *DataSet) {
 	// Initialize parameters
-	newUserFactor := bpr.Rng.NormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
-	newItemFactor := bpr.Rng.NormalMatrix(trainSet.ItemCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
+	newUserFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
+	newItemFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.ItemCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
 	// Relocate parameters
 	if bpr.UserIndex != nil {
 		for _, userId := range trainSet.UserIndex.GetNames() {
@@ -457,9 +481,9 @@ func (als *ALS) Clear() {
 func (als *ALS) Init(trainSet *DataSet) {
 	// Initialize
 	newUserFactor := mat.NewDense(trainSet.UserCount(), als.nFactors,
-		als.Rng.NormalVector64(trainSet.UserCount()*als.nFactors, als.initMean, als.initStdDev))
+		als.GetRandomGenerator().NormalVector64(trainSet.UserCount()*als.nFactors, als.initMean, als.initStdDev))
 	newItemFactor := mat.NewDense(trainSet.ItemCount(), als.nFactors,
-		als.Rng.NormalVector64(trainSet.ItemCount()*als.nFactors, als.initMean, als.initStdDev))
+		als.GetRandomGenerator().NormalVector64(trainSet.ItemCount()*als.nFactors, als.initMean, als.initStdDev))
 	// Relocate parameters
 	if als.UserIndex != nil {
 		for _, userId := range trainSet.UserIndex.GetNames() {
@@ -555,8 +579,8 @@ func (ccd *CCD) Clear() {
 
 func (ccd *CCD) Init(trainSet *DataSet) {
 	// Initialize
-	newUserFactor := ccd.Rng.NormalMatrix(trainSet.UserCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
-	newItemFactor := ccd.Rng.NormalMatrix(trainSet.ItemCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
+	newUserFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.UserCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
+	newItemFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.ItemCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
 	// Relocate parameters
 	if ccd.UserIndex != nil {
 		for _, userId := range trainSet.UserIndex.GetNames() {

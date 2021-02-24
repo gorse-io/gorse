@@ -24,6 +24,14 @@ const (
 	LatestItems  = "latest_items"
 	SimilarItems = "similar_items"
 	MatchedItems = "matched_items"
+
+	GlobalMeta              = "global_meta"
+	LastUpdatePopularTime   = "last_update_popular_time"
+	LastUpdateLatestTime    = "last_update_latest_time"
+	LastUpdateSimilarTime   = "last_update_similar_time"
+	LastRenewMatchModelTime = "last_renew_match_model_time"
+	LatestMatchModelTerm    = "latest_match_model_term"
+	LatestDatasetHash       = "latest_dataset_hash"
 )
 
 type Database interface {

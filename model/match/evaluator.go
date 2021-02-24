@@ -31,7 +31,7 @@ func Evaluate(estimator MatrixFactorization, testSet *DataSet, trainSet *DataSet
 	for i := 0; i < nJobs; i++ {
 		partSum[i] = make([]float32, len(scorers))
 	}
-	//Rng := NewRandomGenerator(0)
+	//rng := NewRandomGenerator(0)
 	// For all UserFeedback
 	negatives := testSet.NegativeSample(trainSet, numCandidates)
 	_ = base.Parallel(testSet.UserCount(), nJobs, func(workerId, userIndex int) error {
