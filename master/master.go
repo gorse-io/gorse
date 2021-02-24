@@ -20,6 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/ReneKroon/ttlcache/v2"
 	log "github.com/sirupsen/logrus"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/match"
@@ -29,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -56,9 +58,9 @@ type Master struct {
 	cacheStore cache.Database
 
 	// match model
-	matchModel match.MatrixFactorization
-	matchTerm  int
-	matchMutex sync.Mutex
+	matchModel        match.MatrixFactorization
+	matchModelVersion int
+	matchModelMutex   sync.Mutex
 
 	// rank model
 	rankModel rank.FactorizationMachine
@@ -68,9 +70,10 @@ type Master struct {
 
 func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
 	l := &Master{
-		nodesMap: make(map[string]string),
-		cfg:      cfg,
-		meta:     meta,
+		nodesMap:          make(map[string]string),
+		cfg:               cfg,
+		meta:              meta,
+		matchModelVersion: rand.Int(),
 	}
 	return l
 }
@@ -100,8 +103,8 @@ func (m *Master) Serve() {
 		log.Fatalf("master: failed to connect cache database (%v)", err)
 	}
 
-	// start model fit loop
-	//go m.FitLoop()
+	// start loop
+	go m.Loop()
 
 	// start rpc server
 	log.Infof("master: start rpc server %v:%v", m.cfg.Master.Host, m.cfg.Master.Port)
@@ -145,11 +148,14 @@ func (m *Master) RegisterWorker(ctx context.Context, _ *protocol.Void) (*protoco
 	return &protocol.Void{}, nil
 }
 
-func (m *Master) GetCluster(context.Context, *protocol.Void) (*protocol.Cluster, error) {
+func (m *Master) GetCluster(ctx context.Context, _ *protocol.Void) (*protocol.Cluster, error) {
 	cluster := &protocol.Cluster{
 		Workers: make([]string, 0),
 		Servers: make([]string, 0),
 	}
+	// add me
+	p, _ := peer.FromContext(ctx)
+	cluster.Me = p.Addr.String()
 	// add master
 	cluster.Master = fmt.Sprintf("%s:%d", m.cfg.Master.Host, m.cfg.Master.Port)
 	// add servers/workers
@@ -168,6 +174,38 @@ func (m *Master) GetCluster(context.Context, *protocol.Void) (*protocol.Cluster,
 	return cluster, nil
 }
 
+func (m *Master) GetMatchModelVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.matchModelMutex.Lock()
+	defer m.matchModelMutex.Unlock()
+	// skip empty model
+	if m.matchModel == nil {
+		return &protocol.Model{Version: 0}, nil
+	}
+	return &protocol.Model{
+		Name:    m.cfg.Master.Model,
+		Version: int64(m.matchModelVersion),
+	}, nil
+}
+
+func (m *Master) GetMatchModel(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.matchModelMutex.Lock()
+	defer m.matchModelMutex.Unlock()
+	// skip empty model
+	if m.matchModel == nil {
+		return &protocol.Model{Version: 0}, nil
+	}
+	// encode model
+	modelData, err := match.EncodeModel(m.matchModel)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.Model{
+		Name:    m.cfg.Master.Model,
+		Version: int64(m.matchModelVersion),
+		Model:   modelData,
+	}, nil
+}
+
 func (m *Master) NodeUp(key string, value interface{}) {
 	nodeType := value.(string)
 	log.Infof("master: %s (%s) up", nodeType, key)
@@ -184,211 +222,169 @@ func (m *Master) NodeDown(key string, value interface{}) {
 	delete(m.nodesMap, key)
 }
 
-func (m *Master) FitLoop() {
-	//for {
-
+func (m *Master) Loop() {
 	// download dataset
 	log.Infof("master: load data from database")
-	dataSet, _, err := match.LoadDataFromDatabase(m.dataStore, m.cfg.Common.MatchFeedbackType)
+	dataSet, items, err := match.LoadDataFromDatabase(m.dataStore, m.cfg.Common.MatchFeedbackType)
 	if err != nil {
 		log.Fatal("master: ", err)
 	}
 	log.Infof("master: data loaded (#user = %v, #item = %v, #feedback = %v)",
 		dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count())
-	//		dataHash, err := dataSet.Hash()
-	//		if err != nil {
-	//			log.Error("Master:", err)
-	//			time.Sleep(time.Minute * time.Duration(l.cfg.Common.RetryInterval))
-	//			continue
-	//		}
-	//		l.dataHashMutex.Lock()
-	//		if dataHash == l.dataHash && l.model != nil {
-	//			l.dataHashMutex.Unlock()
-	//			log.Infof("Master: dataset has no changes, next round starts after %v minutes", l.cfg.Master.FitInterval)
-	//			time.Sleep(time.Minute * time.Duration(l.cfg.Master.FitInterval))
-	//			continue
-	//		}
-	//		l.dataHash = dataHash
-	//		l.dataHashMutex.Unlock()
-	//
-	// find popular items
-	//log.Info("Master: update popular items")
-	//if err := m.SetPopItem(items, dataSet); err != nil {
-	//	log.Error("Master:", err)
-	//	time.Sleep(time.Minute * time.Duration(l.cfg.Common.RetryInterval))
-	//	continue
-	//}
 
-	// find latest items
-	//log.Info("master: collect latest items")
-	//if err := l.SetLatest(items); err != nil {
-	//
-	//}
+	// collect popular items
+	log.Info("master: collect popular items")
+	if err = m.CollectPopItem(items, dataSet); err != nil {
+		log.Errorf("master: failed to collect popular items (%v)", err)
+	}
+	log.Info("master: completed collect popular items")
 
-	//		// find similar items
-	//		//log.Info("Master: update similar items")
-	//		//if err := l.SetNeighbors(items, dataSet); err != nil {
-	//		//	log.Error("Master:", err)
-	//		//	time.Sleep(time.Minute * time.Duration(l.cfg.Master.RetryInterval))
-	//		//	continue
-	//		//}
+	// collect latest items
+	log.Info("master: collect latest items")
+	if err = m.CollectLatest(items); err != nil {
+		log.Errorf("master: failed to collect latest items (%v)", err)
+	}
+	log.Info("master: completed collect latest items")
 
+	// collect similar items
+	log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Fit.Jobs)
+	if err = m.CollectSimilar(items, dataSet); err != nil {
+		log.Errorf("master: failed to collect similar items (%v)", err)
+	}
+	log.Info("master: completed collect similar items")
+
+	log.Infof("master: fit match model (n_jobs = %v)", m.cfg.Master.Fit.Jobs)
+	if err = m.RenewMatchModel(dataSet); err != nil {
+		log.Errorf("master: failed to fit match model (%v)", err)
+	}
+	log.Infof("master: completed fit match model")
+}
+
+func (m *Master) RenewMatchModel(dataSet *match.DataSet) error {
 	// training match model
-	log.Info("master: start to fit match model")
 	trainSet, testSet := dataSet.Split(m.cfg.Master.Fit.NumTestUsers, 0)
 	nextModel, err := match.NewModel(m.cfg.Master.Model, model.NewParamsFromConfig(m.cfg, m.meta))
 	if err != nil {
-		log.Fatal("master: ", err)
+		return err
 	}
 	nextModel.Fit(trainSet, testSet, &m.cfg.Master.Fit)
 
 	// update match model
-	m.matchMutex.Lock()
+	m.matchModelMutex.Lock()
 	m.matchModel = nextModel
-	m.matchTerm++
-	m.matchMutex.Unlock()
+	m.matchModelVersion++
+	m.matchModelMutex.Unlock()
+
+	if err = m.cacheStore.SetString(cache.GlobalMeta, cache.LastRenewMatchModelTime, time.Now().String()); err != nil {
+		return err
+	}
+	return m.cacheStore.SetInt(cache.GlobalMeta, cache.LatestMatchModelTerm, m.matchModelVersion)
 }
 
-//
-//func (l *Master) Serve() {
-//	log.Infof("Master: start gossip at %v:%v", l.cfg.Master.Host, l.cfg.Master.Port)
-//
-//	// start gossip
-//	cfg := memberlist.DefaultLocalConfig()
-//	cfg.BindAddr = l.cfg.Master.Host
-//	cfg.BindPort = l.cfg.Master.Port
-//	cfg.Name = protocol.NewName(protocol.LeaderNodePrefix, l.cfg.Master.Port, cfg.Name)
-//	var err error
-//	l.members, err = memberlist.Create(cfg)
-//	if err != nil {
-//		log.Fatal("Master:", err)
-//	}
-//
-//	// start broadcast goroutine
-//	go l.Broadcast()
-//
+// CollectPopItem updates popular items for the database.
+func (m *Master) CollectPopItem(items []data.Item, dataset *match.DataSet) error {
+	// create item map
+	itemMap := make(map[string]data.Item)
+	for _, item := range items {
+		itemMap[item.ItemId] = item
+	}
+	// collect pop items
+	count := make([]int, dataset.ItemCount())
+	for _, userIndex := range dataset.FeedbackItems {
+		count[userIndex]++
+	}
+	popItems := base.NewTopKStringFilter(m.cfg.Common.CacheSize)
+	for itemIndex := range count {
+		itemId := dataset.ItemIndex.ToName(itemIndex)
+		popItems.Push(itemId, float32(count[itemIndex]))
+	}
+	result, _ := popItems.PopAll()
+	// write back
+	if err := m.cacheStore.SetList(cache.PopularItems, "", result); err != nil {
+		return err
+	}
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, time.Now().String())
+}
 
-//}
-//
-//// SetPopItem updates popular items for the database.
-//func (l *Master) SetPopItem(items []storage.Item, dataset *match.DataSet) error {
-//	// create item map
-//	itemMap := make(map[string]storage.Item)
-//	for _, item := range items {
-//		itemMap[item.ItemId] = item
-//	}
-//	// find pop items
-//	count := make([]int, dataset.ItemCount())
-//	for _, userIndex := range dataset.FeedbackItems {
-//		count[userIndex]++
-//	}
-//	popItems := make(map[string]*base.TopKStringFilter)
-//	popItems[""] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
-//	for itemIndex := range count {
-//		itemId := dataset.ItemIndex.ToName(itemIndex)
-//		item := itemMap[itemId]
-//		popItems[""].Push(itemId, float32(count[itemIndex]))
-//		for _, label := range item.Labels {
-//			if _, exist := popItems[label]; !exist {
-//				popItems[label] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
-//			}
-//			popItems[label].Push(item.ItemId, float32(count[itemIndex]))
-//		}
-//	}
-//	result := make(map[string][]storage.RecommendedItem)
-//	for label := range popItems {
-//		elem, scores := popItems[label].PopAll()
-//		items := make([]storage.RecommendedItem, len(elem))
-//		for i := range items {
-//			items[i].ItemId = elem[i]
-//			items[i].Score = float64(scores[i])
-//		}
-//		result[label] = items
-//	}
-//	// write back
-//	for label, items := range result {
-//		if err := l.db.SetPop(label, items); err != nil {
-//			return err
-//		}
-//	}
-//	return nil
-//}
+// CollectLatest updates latest items.
+func (m *Master) CollectLatest(items []data.Item) error {
+	// find latest items
+	latestItems := base.NewTopKStringFilter(m.cfg.Common.CacheSize)
+	for _, item := range items {
+		latestItems.Push(item.ItemId, float32(item.Timestamp.Unix()))
+	}
+	result, _ := latestItems.PopAll()
+	if err := m.cacheStore.SetList(cache.LatestItems, "", result); err != nil {
+		return err
+	}
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, time.Now().String())
+}
 
-// SetLatest updates latest items.
-//func (l *Master) SetLatest(items []data.Item) error {
-//	// find latest items
-//	latestItems := make(map[string]*base.TopKStringFilter)
-//	latestItems[""] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
-//	for _, item := range items {
-//		latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
-//		for _, label := range item.Labels {
-//			if _, exist := latestItems[label]; !exist {
-//				latestItems[label] = base.NewTopKStringFilter(l.cfg.Common.CacheSize)
-//			}
-//			latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
-//		}
-//	}
-//	result := make(map[string][]storage.RecommendedItem)
-//	for label := range latestItems {
-//		elem, scores := latestItems[label].PopAll()
-//		items := make([]storage.RecommendedItem, len(elem))
-//		for i := range items {
-//			items[i].ItemId = elem[i]
-//			items[i].Score = float64(scores[i])
-//		}
-//		result[label] = items
-//	}
-//	// write back
-//	for label, items := range result {
-//		if err := l.db.SetLatest(label, items); err != nil {
-//			return err
-//		}
-//	}
-//	return nil
-//}
+// CollectSimilar updates neighbors for the database.
+func (m *Master) CollectSimilar(items []data.Item, dataset *match.DataSet) error {
+	// create item map
+	itemMap := make(map[string]data.Item)
+	for _, item := range items {
+		itemMap[item.ItemId] = item
+	}
+	// create progress tracker
+	completed := make(chan []interface{}, 1000)
+	go func() {
+		completedCount := 0
+		ticker := time.NewTicker(time.Second)
+		for {
+			select {
+			case _, ok := <-completed:
+				if !ok {
+					return
+				}
+				completedCount++
+			case _ = <-ticker.C:
+				log.Infof("master: update similar items (%v/%v)", completedCount, dataset.ItemCount())
+			}
+		}
+	}()
+	if err := base.Parallel(dataset.ItemCount(), m.cfg.Master.Fit.Jobs, func(workerId, jobId int) error {
+		users := dataset.ItemFeedback[jobId]
+		// Collect candidates
+		itemSet := base.NewSet()
+		for _, u := range users {
+			itemSet.Add(dataset.UserFeedback[u]...)
+		}
+		// Ranking
+		nearItems := base.NewTopKFilter(m.cfg.Common.CacheSize)
+		for j := range itemSet {
+			if j != jobId {
+				nearItems.Push(j, Dot(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j]))
+			}
+		}
+		elem, _ := nearItems.PopAll()
+		recommends := make([]string, len(elem))
+		for i := range recommends {
+			recommends[i] = dataset.ItemIndex.ToName(elem[i])
+		}
+		if err := m.cacheStore.SetList(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), recommends); err != nil {
+			return err
+		}
+		completed <- nil
+		return nil
+	}); err != nil {
+		return err
+	}
+	close(completed)
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateSimilarTime, time.Now().String())
+}
 
-//// SetNeighbors updates neighbors for the database.
-//func (l *Master) SetNeighbors(items []storage.Item, dataset *match.DataSet) error {
-//	// create item map
-//	itemMap := make(map[string]storage.Item)
-//	for _, item := range items {
-//		itemMap[item.ItemId] = item
-//	}
-//	for i, users := range dataset.ItemFeedback {
-//		// Collect candidates
-//		itemSet := base.NewSet(nil)
-//		for _, u := range users {
-//			itemSet.Add(dataset.UserFeedback[u]...)
-//		}
-//		// Ranking
-//		nearItems := base.NewTopKFilter(l.cfg.Common.CacheSize)
-//		for j := range itemSet {
-//			if j != i {
-//				nearItems.Push(j, Cosine(dataset.ItemFeedback[i], dataset.ItemFeedback[j]))
-//			}
-//		}
-//		elem, scores := nearItems.PopAll()
-//		recommends := make([]storage.RecommendedItem, len(elem))
-//		for i := range recommends {
-//			recommends[i] = storage.RecommendedItem{ItemId: dataset.ItemIndex.ToName(elem[i]), Score: float64(scores[i])}
-//		}
-//		if err := l.db.SetNeighbors(dataset.ItemIndex.ToName(i), recommends); err != nil {
-//			return err
-//		}
-//	}
-//	return nil
-//}
-//
-//func Cosine(a, b []int) float32 {
-//	interSet := base.NewSet(a)
-//	intersect := float32(0.0)
-//	for _, i := range b {
-//		if interSet.Contain(i) {
-//			intersect++
-//		}
-//	}
-//	if intersect == 0 {
-//		return 0
-//	}
-//	return intersect / math32.Sqrt(float32(len(a))) / math32.Sqrt(float32(len(b)))
-//}
+func Dot(a, b []int) float32 {
+	interSet := base.NewSet(a...)
+	intersect := float32(0.0)
+	for _, i := range b {
+		if interSet.Contain(i) {
+			intersect++
+		}
+	}
+	if intersect == 0 {
+		return 0
+	}
+	return intersect // math32.Sqrt(float32(len(a))) / math32.Sqrt(float32(len(b)))
+}

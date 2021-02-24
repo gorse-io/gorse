@@ -13,7 +13,7 @@ cluster_meta_timeout = 60
 # This section declares setting for the database.
 [database]
 # database for caching (support Redis only)
-cache_store = "redis://127.0.0.1:6398"
+cache_store = "redis://192.168.199.246:6379"
 # database for persist data (support MySQL/MongoDB/Redis)
 data_store = "mysql://root@tcp(127.0.0.1:3306)/gitrec?parseTime=true"
 
@@ -50,7 +50,7 @@ init_mean = 0.0                 # mean of gaussian initial parameter
 init_std = 0.001                # standard deviation of gaussian initial parameter
 weight = 1.0                    # alpha value, depend on context
 
-[leader.fit]
+[master.fit]
 n_jobs = 4
 verbose = 10
 n_candidates = 100

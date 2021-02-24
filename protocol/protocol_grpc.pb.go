@@ -24,6 +24,7 @@ type MasterClient interface {
 	GetMatchModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
 	GetRankModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
 	GetMatchModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
+	// cluster management
 	GetCluster(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Cluster, error)
 	RegisterServer(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error)
 	RegisterWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error)
@@ -120,6 +121,7 @@ type MasterServer interface {
 	GetMatchModelVersion(context.Context, *Void) (*Model, error)
 	GetRankModel(context.Context, *Void) (*Model, error)
 	GetMatchModel(context.Context, *Void) (*Model, error)
+	// cluster management
 	GetCluster(context.Context, *Void) (*Cluster, error)
 	RegisterServer(context.Context, *Void) (*Void, error)
 	RegisterWorker(context.Context, *Void) (*Void, error)
