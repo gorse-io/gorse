@@ -1,6 +1,0 @@
-[book]
-authors = ["Zhenghao Zhang"]
-language = "zh"
-multilingual = false
-src = "src"
-title = "Gorse推荐系统"
