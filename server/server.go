@@ -21,13 +21,16 @@ import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	restful "github.com/emicklei/go-restful/v3"
 	log "github.com/sirupsen/logrus"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model/rank"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -36,10 +39,15 @@ type Server struct {
 	DataStore    data.Database
 	Config       *config.Config
 	MasterClient protocol.MasterClient
-	MasterHost   string
-	MasterPort   int
-	ServerHost   string
-	ServerPort   int
+
+	RankModel        rank.FactorizationMachine
+	RankModelMutex   sync.RWMutex
+	RankModelVersion int64
+
+	MasterHost string
+	MasterPort int
+	ServerHost string
+	ServerPort int
 }
 
 func NewServer(masterHost string, masterPort int, serverHost string, serverPort int) *Server {
@@ -69,8 +77,20 @@ func (s *Server) Serve() {
 		log.Fatalf("server: failed to parse master config (%v)", err)
 	}
 
+	// connect to data store
+	if s.DataStore, err = data.Open(s.Config.Database.DataStore); err != nil {
+		log.Fatalf("server: failed to connect data store (%v)", err)
+	}
+
+	// connect to cache store
+	if s.CacheStore, err = cache.Open(s.Config.Database.CacheStore); err != nil {
+		log.Fatalf("server: failed to connect cache store (%v)", err)
+	}
+
 	// register to master
 	go s.Register()
+
+	s.Sync()
 
 	// register restful APIs
 	ws := s.CreateWebService()
@@ -87,6 +107,34 @@ func (s *Server) Serve() {
 
 	log.Printf("start gorse server at %v\n", fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort), nil))
+}
+
+func (s *Server) Sync() {
+	ctx := context.Background()
+
+	// pull model version
+	log.Infof("server: check model version")
+	modelVersion, err := s.MasterClient.GetRankModelVersion(ctx, &protocol.Void{})
+	if err != nil {
+		log.Fatal("server: failed to check model version (%v)", err)
+	}
+
+	// pull model
+	if modelVersion.Version != s.RankModelVersion {
+		log.Infof("server: sync model")
+		modelData, err := s.MasterClient.GetRankModel(ctx, &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9))
+		if err != nil {
+			log.Fatal("server: failed to sync model (%v)", err)
+		}
+		nextModel, err := rank.DecodeModel(modelData.Model)
+		if err != nil {
+			log.Fatal("server: failed to decode model (%v)", err)
+		}
+		s.RankModelMutex.Lock()
+		defer s.RankModelMutex.Unlock()
+		s.RankModel = nextModel
+		s.RankModelVersion = modelData.Version
+	}
 }
 
 func (s *Server) Register() {
@@ -203,6 +251,13 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.FormParameter("n", "the number of neighbors").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
 		Writes([]string{}))
+
+	/* Online recommendation */
+
+	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend)).
+		Doc("Get recommendation for user.").
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.FormParameter("n", "the number of neighbors").DataType("int"))
 
 	return ws
 }
@@ -322,62 +377,71 @@ func (s *Server) getRecommendCache(request *restful.Request, response *restful.R
 	ok(response, items)
 }
 
-//func (s *Server) getRecommend(request *restful.Request, response *restful.Response) {
-//	userId := request.PathParameter("user-id")
-//	n, err := parseInt(request, "n", s.Config.DefaultN)
-//	if err != nil {
-//		badRequest(response, err)
-//		return
-//	}
-//	consume, err := parseInt(request, "consume", 0)
-//	if err != nil {
-//		badRequest(response, err)
-//		return
-//	}
-//	// load ignore and feedback
-//	ignoreSet := base.NewStringSet()
-//	ignore, err := s.DB.GetUserIgnore(userId)
-//	if err != nil {
-//		internalServerError(response, err)
-//		return
-//	}
-//	ignoreSet.Add(ignore...)
-//	feedback, err := s.DB.GetUserFeedback(userId)
-//	if err != nil {
-//		internalServerError(response, err)
-//		return
-//	}
-//	for _, f := range feedback {
-//		ignoreSet.Add(f.ItemId)
-//	}
-//	// load recommend cache
-//	recommend, err := s.DB.GetRecommend(userId, 0, 0)
-//	if err != nil {
-//		internalServerError(response, err)
-//		return
-//	}
-//	result := make([]storage.RecommendedItem, 0)
-//	for _, item := range recommend {
-//		if !ignoreSet.Contain(item.ItemId) {
-//			result = append(result, item)
-//		}
-//	}
-//	if len(result) > n {
-//		result = result[:n]
-//	}
-//	// consume
-//	if consume != 0 {
-//		incIgnores := make([]string, 0, len(result))
-//		for _, item := range result {
-//			incIgnores = append(incIgnores, item.ItemId)
-//		}
-//		if err := s.DB.InsertUserIgnore(userId, incIgnores); err != nil {
-//			internalServerError(response, err)
-//			return
-//		}
-//	}
-//	ok(response, result)
-//}
+func (s *Server) getRecommend(request *restful.Request, response *restful.Response) {
+	start := time.Now()
+	userId := request.PathParameter("user-id")
+	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
+	if err != nil {
+		badRequest(response, err)
+		return
+	}
+	// load feedback
+	userFeedback, err := s.DataStore.GetUserFeedback("", userId)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
+	excludeSet := base.NewStringSet()
+	for _, feedback := range userFeedback {
+		excludeSet.Add(feedback.ItemId)
+	}
+	// load popular
+	candidateItems := make([]string, 0)
+	popularItems, err := s.CacheStore.GetList(cache.PopularItems, "", s.Config.Online.NumPopular, 0)
+	for _, itemId := range popularItems {
+		if !excludeSet.Contain(itemId) {
+			candidateItems = append(candidateItems, itemId)
+			excludeSet.Add(itemId)
+		}
+	}
+	// load latest
+	latestItems, err := s.CacheStore.GetList(cache.LatestItems, "", s.Config.Online.NumLatest, 0)
+	for _, itemId := range latestItems {
+		if !excludeSet.Contain(itemId) {
+			candidateItems = append(candidateItems, itemId)
+			excludeSet.Add(itemId)
+		}
+	}
+	// load matched
+	matchedItems, err := s.CacheStore.GetList(cache.MatchedItems, userId, s.Config.Online.NumMatch, 0)
+	for _, itemId := range matchedItems {
+		if !excludeSet.Contain(itemId) {
+			candidateItems = append(candidateItems, itemId)
+			excludeSet.Add(itemId)
+		}
+	}
+	log.Infof("server: recommend from (#candidate = %v)", len(candidateItems))
+	// collect item features
+	candidateFeaturedItems := make([]data.Item, len(candidateItems))
+	for i, itemId := range candidateItems {
+		candidateFeaturedItems[i], err = s.DataStore.GetItem(itemId)
+		if err != nil {
+			internalServerError(response, err)
+		}
+	}
+	// online predict
+	recItems := base.NewTopKStringFilter(n)
+	for _, item := range candidateFeaturedItems {
+		s.RankModelMutex.RLock()
+		m := s.RankModel
+		s.RankModelMutex.RUnlock()
+		recItems.Push(item.ItemId, m.Predict(userId, item.ItemId, item.Labels))
+	}
+	result, _ := recItems.PopAll()
+	spent := time.Since(start)
+	log.Infof("server: complete recommendation (time = %v)", spent)
+	ok(response, result)
+}
 
 type Item struct {
 	ItemId    string

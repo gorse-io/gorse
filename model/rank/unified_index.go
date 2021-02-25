@@ -14,6 +14,7 @@
 package rank
 
 import (
+	"encoding/gob"
 	"github.com/zhenghaoz/gorse/base"
 )
 
@@ -24,6 +25,10 @@ const (
 	EntityItem
 	EntityLabel
 )
+
+func init() {
+	gob.Register(&UnifiedMapIndex{})
+}
 
 type UnifiedIndex interface {
 	Len() int

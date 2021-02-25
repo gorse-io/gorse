@@ -15,6 +15,7 @@ package base
 
 import (
 	"log"
+	"time"
 )
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.
@@ -50,4 +51,16 @@ func NewMatrix32(row, col int) [][]float32 {
 		ret[i] = make([]float32, col)
 	}
 	return ret
+}
+
+func NewMatrixInt(row, col int) [][]int {
+	ret := make([][]int, row)
+	for i := range ret {
+		ret[i] = make([]int, col)
+	}
+	return ret
+}
+
+func Now() string {
+	return time.Now().Format("2006-01-02 3:4:5")
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -27,12 +28,15 @@ import (
 const batchSize = 1024
 
 type Dataset struct {
+	// users/items/features
 	UnifiedIndex   UnifiedIndex
-	FeedbackUsers  []int
-	FeedbackItems  []int
-	FeedbackLabels [][]int
-	FeedbackTarget []float32
 	UserItemLabels [][]int
+	FeedbackInputs [][]int
+	FeedbackTarget []float32
+	// used for negative sampling
+	PositiveCount      int
+	UserFeedbackItems  [][]int
+	UserFeedbackTarget [][]float32
 }
 
 func (dataset *Dataset) UserCount() int {
@@ -52,26 +56,7 @@ func (dataset *Dataset) Count() int {
 }
 
 func (dataset *Dataset) Get(i int) ([]int, float32) {
-	x := make([]int, 0)
-	if dataset.FeedbackUsers != nil {
-		// append user id
-		userIndex := dataset.FeedbackUsers[i]
-		x = append(x, userIndex)
-		// append user labels
-		if dataset.UserItemLabels != nil {
-			x = append(x, dataset.UserItemLabels[userIndex]...)
-		}
-	}
-	if dataset.FeedbackItems != nil {
-		// append item id
-		itemIndex := dataset.FeedbackItems[i]
-		x = append(x, itemIndex)
-		// append item labels
-		if dataset.UserItemLabels != nil {
-			x = append(x, dataset.UserItemLabels[itemIndex]...)
-		}
-	}
-	return append(x, dataset.FeedbackLabels[i]...), dataset.FeedbackTarget[i]
+	return dataset.FeedbackInputs[i], dataset.FeedbackTarget[i]
 }
 
 func LoadLibFMFile(path string) (labels [][]int, targets []float32, maxLabel int, err error) {
@@ -125,10 +110,10 @@ func LoadDataFromBuiltIn(name string) (train *Dataset, test *Dataset, err error)
 	}
 	train, test = &Dataset{}, &Dataset{}
 	trainMaxLabel, testMaxLabel := 0, 0
-	if train.FeedbackLabels, train.FeedbackTarget, trainMaxLabel, err = LoadLibFMFile(trainFilePath); err != nil {
+	if train.FeedbackInputs, train.FeedbackTarget, trainMaxLabel, err = LoadLibFMFile(trainFilePath); err != nil {
 		return nil, nil, err
 	}
-	if test.FeedbackLabels, test.FeedbackTarget, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
+	if test.FeedbackInputs, test.FeedbackTarget, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
 		return nil, nil, err
 	}
 	unifiedIndex := NewUnifiedDirectIndex(base.Max(trainMaxLabel, testMaxLabel) + 1)
@@ -143,7 +128,6 @@ func LoadDataFromDatabase(database data.Database, feedbackType string) (*Dataset
 	var err error
 	users := make([]data.User, 0)
 	items := make([]data.Item, 0)
-	//feedback := make([]data.Feedback, 0)
 	// pull users
 	for {
 		var batchUsers []data.User
@@ -183,8 +167,6 @@ func LoadDataFromDatabase(database data.Database, feedbackType string) (*Dataset
 	// create dataset
 	dataSet := &Dataset{
 		UnifiedIndex:   unifiedIndex.Build(),
-		FeedbackUsers:  make([]int, 0),
-		FeedbackItems:  make([]int, 0),
 		FeedbackTarget: make([]float32, 0),
 	}
 	// insert users
@@ -205,6 +187,8 @@ func LoadDataFromDatabase(database data.Database, feedbackType string) (*Dataset
 		}
 	}
 	// insert feedback
+	dataSet.UserFeedbackItems = base.NewMatrixInt(dataSet.UnifiedIndex.CountUsers(), 0)
+	dataSet.UserFeedbackTarget = base.NewMatrix32(dataSet.UnifiedIndex.CountUsers(), 0)
 	for {
 		var batchFeedback []data.Feedback
 		cursor, batchFeedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
@@ -213,14 +197,101 @@ func LoadDataFromDatabase(database data.Database, feedbackType string) (*Dataset
 		}
 		for _, v := range batchFeedback {
 			userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
+			if userId == base.NotId {
+				log.Warnf("user (%v) not found", v.UserId)
+				continue
+			}
 			itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
-			dataSet.FeedbackUsers = append(dataSet.FeedbackUsers, userId)
-			dataSet.FeedbackItems = append(dataSet.FeedbackItems, itemId)
-			dataSet.FeedbackTarget = append(dataSet.FeedbackTarget, 1)
+			if itemId == base.NotId {
+				log.Warnf("item (%v) not found", v.ItemId)
+				continue
+			}
+			dataSet.PositiveCount++
+			dataSet.UserFeedbackItems[userId] = append(dataSet.UserFeedbackItems[userId], itemId)
+			dataSet.UserFeedbackTarget[userId] = append(dataSet.UserFeedbackTarget[userId], 1)
 		}
 		if cursor == "" {
 			break
 		}
 	}
 	return dataSet, nil
+}
+
+func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
+	// create train/test dataset
+	trainSet := &Dataset{
+		UnifiedIndex:       dataset.UnifiedIndex,
+		UserItemLabels:     dataset.UserItemLabels,
+		UserFeedbackItems:  base.NewMatrixInt(dataset.UserCount(), 0),
+		UserFeedbackTarget: base.NewMatrix32(dataset.UserCount(), 0),
+	}
+	testSet := &Dataset{
+		UnifiedIndex:       dataset.UnifiedIndex,
+		UserItemLabels:     dataset.UserItemLabels,
+		UserFeedbackItems:  base.NewMatrixInt(dataset.UserCount(), 0),
+		UserFeedbackTarget: base.NewMatrix32(dataset.UserCount(), 0),
+	}
+	// split by random
+	numTestSize := int(float32(dataset.PositiveCount) * ratio)
+	rng := base.NewRandomGenerator(seed)
+	sampledIndex := base.NewSet(rng.Sample(0, dataset.PositiveCount, numTestSize)...)
+	cursor := 0
+	for userId, items := range dataset.UserFeedbackItems {
+		for i, itemId := range items {
+			if sampledIndex.Contain(cursor) {
+				// add samples into test set
+				testSet.PositiveCount++
+				testSet.UserFeedbackItems[userId] = append(testSet.UserFeedbackItems[userId], itemId)
+				testSet.UserFeedbackTarget[userId] = append(testSet.UserFeedbackTarget[userId], dataset.UserFeedbackTarget[userId][i])
+			} else {
+				// add samples into train set
+				trainSet.PositiveCount++
+				trainSet.UserFeedbackItems[userId] = append(trainSet.UserFeedbackItems[userId], itemId)
+				trainSet.UserFeedbackTarget[userId] = append(trainSet.UserFeedbackTarget[userId], dataset.UserFeedbackTarget[userId][i])
+			}
+			cursor++
+		}
+	}
+	return trainSet, testSet
+}
+
+func (dataset *Dataset) NegativeSample(numNegatives int, trainSet *Dataset, seed int64) {
+	if dataset.UserFeedbackItems != nil {
+		rng := base.NewRandomGenerator(seed)
+		// reset samples
+		dataset.FeedbackInputs = make([][]int, 0)
+		dataset.FeedbackTarget = make([]float32, 0)
+		for userId, items := range dataset.UserFeedbackItems {
+			// fill positive items
+			for i, itemId := range items {
+				x := make([]int, 0, 2+len(dataset.UserItemLabels[userId])+len(dataset.UserItemLabels[itemId]))
+				x = append(x, userId)
+				x = append(x, itemId)
+				x = append(x, dataset.UserItemLabels[userId]...)
+				x = append(x, dataset.UserItemLabels[itemId]...)
+				dataset.FeedbackInputs = append(dataset.FeedbackInputs, x)
+				dataset.FeedbackTarget = append(dataset.FeedbackTarget, dataset.UserFeedbackTarget[userId][i])
+			}
+			// fill negative samples
+			posSet := base.NewSet(items...)
+			if trainSet != nil {
+				posSet.Add(trainSet.UserFeedbackItems[userId]...)
+			}
+			sampled := rng.Sample(dataset.UserCount(), dataset.ItemCount()+dataset.UserCount(), numNegatives*len(items), posSet)
+			for _, negItemId := range sampled {
+				x := make([]int, 0, 2+len(dataset.UserItemLabels[userId])+len(dataset.UserItemLabels[negItemId]))
+				x = append(x, userId)
+				x = append(x, negItemId)
+				x = append(x, dataset.UserItemLabels[userId]...)
+				x = append(x, dataset.UserItemLabels[negItemId]...)
+				dataset.FeedbackInputs = append(dataset.FeedbackInputs, x)
+				dataset.FeedbackTarget = append(dataset.FeedbackTarget, -1)
+			}
+		}
+		// shuffle samples
+		rand.Shuffle(len(dataset.FeedbackInputs), func(i, j int) {
+			dataset.FeedbackInputs[i], dataset.FeedbackInputs[j] = dataset.FeedbackInputs[j], dataset.FeedbackInputs[i]
+			dataset.FeedbackTarget[i], dataset.FeedbackTarget[j] = dataset.FeedbackTarget[j], dataset.FeedbackTarget[i]
+		})
+	}
 }

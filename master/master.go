@@ -63,9 +63,9 @@ type Master struct {
 	matchModelMutex   sync.Mutex
 
 	// rank model
-	rankModel rank.FactorizationMachine
-	rankTerm  int
-	rankMutex sync.Mutex
+	rankModel        rank.FactorizationMachine
+	rankModelVersion int
+	rankModelMutex   sync.Mutex
 }
 
 func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
@@ -74,6 +74,7 @@ func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
 		cfg:               cfg,
 		meta:              meta,
 		matchModelVersion: rand.Int(),
+		rankModelVersion:  rand.Int(),
 	}
 	return l
 }
@@ -206,6 +207,34 @@ func (m *Master) GetMatchModel(context.Context, *protocol.Void) (*protocol.Model
 	}, nil
 }
 
+func (m *Master) GetRankModelVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.rankModelMutex.Lock()
+	defer m.rankModelMutex.Unlock()
+	// skip empty model
+	if m.rankModel == nil {
+		return &protocol.Model{Version: 0}, nil
+	}
+	return &protocol.Model{Version: int64(m.rankModelVersion)}, nil
+}
+
+func (m *Master) GetRankModel(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.rankModelMutex.Lock()
+	defer m.rankModelMutex.Unlock()
+	// skip empty model
+	if m.rankModel == nil {
+		return &protocol.Model{Version: 0}, nil
+	}
+	// encode model
+	modelData, err := rank.EncodeModel(m.rankModel)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.Model{
+		Version: int64(m.rankModelVersion),
+		Model:   modelData,
+	}, nil
+}
+
 func (m *Master) NodeUp(key string, value interface{}) {
 	nodeType := value.(string)
 	log.Infof("master: %s (%s) up", nodeType, key)
@@ -223,6 +252,15 @@ func (m *Master) NodeDown(key string, value interface{}) {
 }
 
 func (m *Master) Loop() {
+	// pull dataset for rank
+	rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Common.RankFeedbackType)
+	if err != nil {
+		log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
+	}
+	if err = m.RenewRankModel(rankDataSet); err != nil {
+		log.Fatalf("master: failed to renew ranking model (%v)", err)
+	}
+
 	// download dataset
 	log.Infof("master: load data from database")
 	dataSet, items, err := match.LoadDataFromDatabase(m.dataStore, m.cfg.Common.MatchFeedbackType)
@@ -260,6 +298,23 @@ func (m *Master) Loop() {
 	log.Infof("master: completed fit match model")
 }
 
+func (m *Master) RenewRankModel(dataSet *rank.Dataset) error {
+	trainSet, testSet := dataSet.Split(0.2, 0)
+	testSet.NegativeSample(1, trainSet, 0)
+	nextModel := rank.NewFM(rank.FMRegression, nil)
+	nextModel.Fit(trainSet, testSet, nil)
+
+	m.rankModelMutex.Lock()
+	m.rankModel = nextModel
+	m.rankModelVersion++
+	m.rankModelMutex.Unlock()
+
+	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.LastRenewRankModelTime, base.Now()); err != nil {
+		return err
+	}
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestRankModelVersion, fmt.Sprintf("%x", m.rankModelVersion))
+}
+
 func (m *Master) RenewMatchModel(dataSet *match.DataSet) error {
 	// training match model
 	trainSet, testSet := dataSet.Split(m.cfg.Master.Fit.NumTestUsers, 0)
@@ -275,10 +330,10 @@ func (m *Master) RenewMatchModel(dataSet *match.DataSet) error {
 	m.matchModelVersion++
 	m.matchModelMutex.Unlock()
 
-	if err = m.cacheStore.SetString(cache.GlobalMeta, cache.LastRenewMatchModelTime, time.Now().String()); err != nil {
+	if err = m.cacheStore.SetString(cache.GlobalMeta, cache.LastRenewMatchModelTime, base.Now()); err != nil {
 		return err
 	}
-	return m.cacheStore.SetInt(cache.GlobalMeta, cache.LatestMatchModelTerm, m.matchModelVersion)
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestMatchModelVersion, fmt.Sprintf("%x", m.matchModelVersion))
 }
 
 // CollectPopItem updates popular items for the database.
@@ -303,7 +358,7 @@ func (m *Master) CollectPopItem(items []data.Item, dataset *match.DataSet) error
 	if err := m.cacheStore.SetList(cache.PopularItems, "", result); err != nil {
 		return err
 	}
-	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, time.Now().String())
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, base.Now())
 }
 
 // CollectLatest updates latest items.
@@ -317,7 +372,7 @@ func (m *Master) CollectLatest(items []data.Item) error {
 	if err := m.cacheStore.SetList(cache.LatestItems, "", result); err != nil {
 		return err
 	}
-	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, time.Now().String())
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, base.Now())
 }
 
 // CollectSimilar updates neighbors for the database.
@@ -372,7 +427,7 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *match.DataSet) error
 		return err
 	}
 	close(completed)
-	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateSimilarTime, time.Now().String())
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateSimilarTime, base.Now())
 }
 
 func Dot(a, b []int) float32 {

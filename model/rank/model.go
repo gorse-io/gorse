@@ -14,6 +14,9 @@
 package rank
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/gob"
 	"github.com/chewxy/math32"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
@@ -142,14 +145,16 @@ func (fm *FM) InternalPredict(x []int) float32 {
 
 func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *config.FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	log.Infof("fit FM with hyper-parameters: "+
+	log.Infof("fit FM(%v): train set size (positive) = %v, test set size = %v", fm.Task, trainSet.PositiveCount, testSet.Count())
+	log.Infof("hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
 		fm.nFactors, fm.nEpochs, fm.lr, fm.reg, fm.initMean, fm.initStdDev)
-	log.Infof("       with option: n_jobs = %v", config.Jobs)
+	log.Infof("option: n_jobs = %v", config.Jobs)
 	fm.Init(trainSet)
 	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
+		trainSet.NegativeSample(1, nil, fm.GetRandomGenerator().Int63())
 		fitStart := time.Now()
 		cost := float32(0)
 		_ = base.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
@@ -257,4 +262,24 @@ func (fm *FM) Init(trainSet *Dataset) {
 	fm.V = newV
 	fm.W = newW
 	fm.BaseFactorizationMachine.Init(trainSet)
+}
+
+func EncodeModel(m FactorizationMachine) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	writer := bufio.NewWriter(buf)
+	encoder := gob.NewEncoder(writer)
+	if err := encoder.Encode(m); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func DecodeModel(buf []byte) (FactorizationMachine, error) {
+	reader := bytes.NewReader(buf)
+	decoder := gob.NewDecoder(reader)
+	var fm FM
+	if err := decoder.Decode(&fm); err != nil {
+		return nil, err
+	}
+	return &fm, nil
 }

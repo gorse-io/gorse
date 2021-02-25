@@ -30,7 +30,9 @@ const (
 	LastUpdateLatestTime    = "last_update_latest_time"
 	LastUpdateSimilarTime   = "last_update_similar_time"
 	LastRenewMatchModelTime = "last_renew_match_model_time"
-	LatestMatchModelTerm    = "latest_match_model_term"
+	LastRenewRankModelTime  = "last_renew_rank_model_time"
+	LatestMatchModelVersion = "latest_match_model_version"
+	LatestRankModelVersion  = "latest_rank_model_version"
 	LatestDatasetHash       = "latest_dataset_hash"
 )
 
