@@ -50,6 +50,8 @@ func init() {
 	}
 	// test rank model
 	testCommand.AddCommand(testRankCommand)
+	testRankCommand.PersistentFlags().Int64("seed", 0, "Rand seed.")
+	testRankCommand.PersistentFlags().Float32("test-ratio", 0.2, "Test ratio.")
 	testRankCommand.PersistentFlags().String("load-builtin", "", "load data from built-in")
 	testRankCommand.PersistentFlags().Int("verbose", 1, "Verbose period")
 	testRankCommand.PersistentFlags().Int("jobs", runtime.NumCPU(), "Number of jobs for model fitting")
@@ -263,26 +265,31 @@ var testRankCommand = &cobra.Command{
 				log.Fatal("cli: ", err)
 			}
 		} else {
+			seed, _ := cmd.PersistentFlags().GetInt64("seed")
+			testRatio, _ := cmd.PersistentFlags().GetFloat32("test-ratio")
 			log.Infof("Load data from database")
 			dataSet, err := rank.LoadDataFromDatabase(database, feedbackType)
 			if err != nil {
 				log.Fatalf("cli: failed to load data from database (%v)", err)
 			}
-			if dataSet.Count() == 0 {
+			if dataSet.PositiveCount == 0 {
 				log.Fatalf("cli: empty dataset")
 			}
-			log.Infof("data set: #user = %v, #item = %v, #label = %v, #feedback = %v",
-				dataSet.UserCount(), dataSet.ItemCount(), dataSet.LabelCount(), dataSet.Count())
-			//trainSet, testSet = data.Split(numTestUsers, int64(seed))
+			log.Infof("data set: #user = %v, #item = %v, #positive = %v",
+				dataSet.UserCount(), dataSet.ItemCount(), dataSet.PositiveCount)
+			trainSet, testSet = dataSet.Split(testRatio, seed)
+			testSet.NegativeSample(1, trainSet, 0)
 		}
+		log.Infof("train set: #user = %v, #item = %v, #positive = %v", trainSet.UserCount(), trainSet.ItemCount(), trainSet.PositiveCount)
+		log.Infof("test set: #user = %v, #item = %v, #positive = %v", testSet.UserCount(), testSet.ItemCount(), testSet.PositiveCount)
 		m := rank.NewFM(rank.FMRegression, model.Params{
 			model.InitStdDev: 0.01,
 			model.NFactors:   8,
-			model.NEpochs:    20,
+			model.NEpochs:    10,
 			model.Lr:         0.01,
 			model.Reg:        0.0001,
 		})
-		score := m.Fit(trainSet, testSet, nil)
+		score := m.Fit(trainSet, testSet, &config.FitConfig{Verbose: 1, Jobs: 1})
 		fmt.Println(score)
 	},
 }

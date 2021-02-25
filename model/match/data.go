@@ -149,7 +149,7 @@ func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
 			s1 := base.NewSet(dataset.UserFeedback[userIndex]...)
 			s2 := base.NewSet(excludeSet.UserFeedback[userIndex]...)
-			dataset.Negatives[userIndex] = rng.Sample(dataset.ItemCount(), numCandidates, s1, s2)
+			dataset.Negatives[userIndex] = rng.Sample(0, dataset.ItemCount(), numCandidates, s1, s2)
 		}
 	}
 	return dataset.Negatives
@@ -184,7 +184,7 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 			}
 		}
 	} else {
-		testUsers := rng.Sample(dataset.UserCount(), numTestUsers)
+		testUsers := rng.Sample(0, dataset.UserCount(), numTestUsers)
 		for _, userIndex := range testUsers {
 			if len(dataset.UserFeedback[userIndex]) > 0 {
 				k := rng.Intn(len(dataset.UserFeedback[userIndex]))

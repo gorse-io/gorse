@@ -20,7 +20,7 @@ import (
 // Config is the configuration for the engine.
 type Config struct {
 	Common   CommonConfig   `toml:"common"`
-	Rank     RankConfig     `toml:"rank"`
+	Online   OnlineConfig   `toml:"online"`
 	Server   ServerConfig   `toml:"server"`
 	Database DatabaseConfig `toml:"database"`
 	Master   MasterConfig   `toml:"master"`
@@ -40,8 +40,12 @@ func (config *Config) LoadDefaultIfNil() *Config {
 	return config
 }
 
-type RankConfig struct {
+type OnlineConfig struct {
 	NegativeValue float32 `toml:"negative_value"`
+
+	NumPopular int `toml:"num_popular"`
+	NumLatest  int `toml:"num_latest"`
+	NumMatch   int `toml:"num_match"`
 }
 
 type CommonConfig struct {
@@ -53,6 +57,7 @@ type CommonConfig struct {
 	ClusterMetaTimeout int `toml:"cluster_meta_timeout"`
 
 	MatchFeedbackType string `toml:"match_feedback_type"`
+	RankFeedbackType  string
 
 	RetryInterval int `toml:"retry_interval"`
 	RetryLimit    int `toml:"retry_limit"`
@@ -252,6 +257,16 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("worker", "gossip_port") {
 		config.Worker.GossipPort = defaultWorkerConfig.GossipPort
+	}
+	// Default online config
+	if !meta.IsDefined("online", "num_latest") {
+		config.Online.NumLatest = 250
+	}
+	if !meta.IsDefined("online", "num_popular") {
+		config.Online.NumPopular = 250
+	}
+	if !meta.IsDefined("online", "num_match") {
+		config.Online.NumMatch = 500
 	}
 }
 

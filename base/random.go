@@ -82,12 +82,13 @@ func (rng RandomGenerator) NormalMatrix64(row, col int, mean, stdDev float64) []
 	return ret
 }
 
-func (rng RandomGenerator) Sample(high, n int, exclude ...Set) []int {
+func (rng RandomGenerator) Sample(low, high, n int, exclude ...Set) []int {
+	intervalLength := high - low
 	excludeSet := NewSet()
 	excludeSet.Merge(exclude...)
 	sampled := make([]int, 0, n)
-	if n >= high-excludeSet.Len() {
-		for i := 0; i < high; i++ {
+	if n >= intervalLength-excludeSet.Len() {
+		for i := low; i < high; i++ {
 			if !excludeSet.Contain(i) {
 				sampled = append(sampled, i)
 				excludeSet.Add(i)
@@ -95,7 +96,7 @@ func (rng RandomGenerator) Sample(high, n int, exclude ...Set) []int {
 		}
 	} else {
 		for len(sampled) < n {
-			v := rng.Intn(high)
+			v := rng.Intn(intervalLength) + low
 			if !excludeSet.Contain(v) {
 				sampled = append(sampled, v)
 				excludeSet.Add(v)
