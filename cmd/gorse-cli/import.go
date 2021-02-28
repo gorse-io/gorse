@@ -48,7 +48,7 @@ func init() {
 
 var importCommand = &cobra.Command{
 	Use:   "import",
-	Short: "Import data into database.",
+	Short: "import data",
 }
 
 var importItemCommand = &cobra.Command{
@@ -253,7 +253,7 @@ func previewImportFeedback(csvFile string, feedbackType string, sep string, hasH
 	table.Render()
 
 	fmt.Printf("Import feedback into database (type = %v, auto_insert_user = %v, auto_insert_item = %v) [Y/n] ",
-		feedbackType, globalConfig.Common.AutoInsertUser, globalConfig.Common.AutoInsertItem)
+		feedbackType, globalConfig.Database.AutoInsertUser, globalConfig.Database.AutoInsertItem)
 	reader := bufio.NewReader(os.Stdin)
 	text, _ := reader.ReadString('\n')
 	if strings.HasPrefix(strings.ToUpper(text), "N") {
@@ -303,7 +303,7 @@ func importFeedback(csvFile, feedbackType string, sep string, hasHeader bool, fm
 		if err != nil {
 			log.Fatalf("cli: failed to parse datetime at line %v (%v)", lineCount, err)
 		}
-		err := database.InsertFeedback(feedback, globalConfig.Common.AutoInsertUser, globalConfig.Common.AutoInsertItem)
+		err = database.InsertFeedback(feedback, globalConfig.Database.AutoInsertUser, globalConfig.Database.AutoInsertItem)
 		if err != nil {
 			log.Fatal(err)
 		}

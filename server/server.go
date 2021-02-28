@@ -142,7 +142,7 @@ func (s *Server) Register() {
 		if _, err := s.MasterClient.RegisterServer(context.Background(), &protocol.Void{}); err != nil {
 			log.Fatal("server:", err)
 		}
-		time.Sleep(time.Duration(s.Config.Common.ClusterMetaTimeout/2) * time.Second)
+		time.Sleep(time.Duration(s.Config.Database.ClusterMetaTimeout/2) * time.Second)
 	}
 }
 
@@ -252,7 +252,7 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
 		Writes([]string{}))
 
-	/* Online recommendation */
+	/* Rank recommendation */
 
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend)).
 		Doc("Get recommendation for user.").
@@ -397,7 +397,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	// load popular
 	candidateItems := make([]string, 0)
-	popularItems, err := s.CacheStore.GetList(cache.PopularItems, "", s.Config.Online.NumPopular, 0)
+	popularItems, err := s.CacheStore.GetList(cache.PopularItems, "", s.Config.Popular.NumPopular, 0)
 	for _, itemId := range popularItems {
 		if !excludeSet.Contain(itemId) {
 			candidateItems = append(candidateItems, itemId)
@@ -405,7 +405,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 		}
 	}
 	// load latest
-	latestItems, err := s.CacheStore.GetList(cache.LatestItems, "", s.Config.Online.NumLatest, 0)
+	latestItems, err := s.CacheStore.GetList(cache.LatestItems, "", s.Config.Latest.NumLatest, 0)
 	for _, itemId := range latestItems {
 		if !excludeSet.Contain(itemId) {
 			candidateItems = append(candidateItems, itemId)
@@ -413,7 +413,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 		}
 	}
 	// load matched
-	matchedItems, err := s.CacheStore.GetList(cache.MatchedItems, userId, s.Config.Online.NumMatch, 0)
+	matchedItems, err := s.CacheStore.GetList(cache.MatchedItems, userId, s.Config.CF.NumCF, 0)
 	for _, itemId := range matchedItems {
 		if !excludeSet.Contain(itemId) {
 			candidateItems = append(candidateItems, itemId)
@@ -646,8 +646,8 @@ func (s *Server) insertFeedback(request *restful.Request, response *restful.Resp
 	var count int
 	for _, feedback := range *ratings {
 		err = s.DataStore.InsertFeedback(feedback,
-			s.Config.Common.AutoInsertUser,
-			s.Config.Common.AutoInsertItem)
+			s.Config.Database.AutoInsertUser,
+			s.Config.Database.AutoInsertItem)
 		count++
 		if err != nil {
 			internalServerError(response, err)

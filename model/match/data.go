@@ -259,7 +259,7 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 	return dataset
 }
 
-func LoadDataFromDatabase(database data.Database, feedbackType string) (*DataSet, []data.Item, error) {
+func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*DataSet, []data.Item, error) {
 	dataset := NewMapIndexDataset()
 	cursor := ""
 	var err error
@@ -296,7 +296,7 @@ func LoadDataFromDatabase(database data.Database, feedbackType string) (*DataSet
 	// pull database
 	for {
 		var feedback []data.Feedback
-		cursor, feedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+		cursor, feedback, err = database.GetFeedback(feedbackTypes[0], cursor, batchSize)
 		if err != nil {
 			return nil, nil, err
 		}

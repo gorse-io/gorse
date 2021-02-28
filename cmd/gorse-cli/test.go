@@ -18,7 +18,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/match"
 	"github.com/zhenghaoz/gorse/model/rank"
@@ -83,7 +82,7 @@ var matchParamFlags = []paramFlag{
 	{intFlag, model.NFactors, "n-factors", "Number of factors"},
 	{float64Flag, model.InitMean, "init-mean", "Mean of gaussian initial parameters"},
 	{float64Flag, model.InitStdDev, "init-std", "Standard deviation of gaussian initial parameters"},
-	{float64Flag, model.Weight, "neg-weight", "Weight of negative samples in ALS."},
+	{float64Flag, model.Alpha, "neg-weight", "Alpha of negative samples in ALS."},
 }
 
 var rankParamFlags = []paramFlag{
@@ -146,7 +145,7 @@ func parseParam(text string, tp int) interface{} {
 
 var testCommand = &cobra.Command{
 	Use:   "test",
-	Short: "Test recommendation model.",
+	Short: "test recommendation model",
 }
 
 var testMatchCommand = &cobra.Command{
@@ -189,7 +188,7 @@ var testMatchCommand = &cobra.Command{
 			defer database.Close()
 			// Load data
 			log.Infof("Load data from database")
-			data, _, err := match.LoadDataFromDatabase(database, feedbackType)
+			data, _, err := match.LoadDataFromDatabase(database, []string{feedbackType})
 			if err != nil {
 				log.Fatalf("cli: failed to load data from database (%v)", err)
 			}
@@ -205,7 +204,7 @@ var testMatchCommand = &cobra.Command{
 		grid := parseParamFlags(cmd)
 		log.Printf("Load hyper-parameters grid: %v\n", grid)
 		// Load runtime options
-		fitConfig := &config.FitConfig{}
+		fitConfig := &match.FitConfig{}
 		fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
 		fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
 		fitConfig.TopK, _ = cmd.PersistentFlags().GetInt("top-k")
@@ -243,18 +242,8 @@ var testMatchCommand = &cobra.Command{
 var testRankCommand = &cobra.Command{
 	Use:   "rank",
 	Short: "Test rank model.",
-	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// load dataset
-		feedbackType, _ := cmd.PersistentFlags().GetString("feedback-type")
-		//numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
-		//seed, _ := cmd.PersistentFlags().GetInt("random-state")
-		// Open database
-		database, err := data.Open(globalConfig.Database.DataStore)
-		if err != nil {
-			log.Fatalf("cli: failed to connect database (%v)", err)
-		}
-		defer database.Close()
+		var err error
 		// Load data
 		var trainSet, testSet *rank.Dataset
 		if cmd.PersistentFlags().Changed("load-builtin") {
@@ -265,10 +254,18 @@ var testRankCommand = &cobra.Command{
 				log.Fatal("cli: ", err)
 			}
 		} else {
+			// load dataset
+			feedbackType, _ := cmd.PersistentFlags().GetString("feedback-type")
+			// Open database
+			database, err := data.Open(globalConfig.Database.DataStore)
+			if err != nil {
+				log.Fatalf("cli: failed to connect database (%v)", err)
+			}
+			defer database.Close()
 			seed, _ := cmd.PersistentFlags().GetInt64("seed")
 			testRatio, _ := cmd.PersistentFlags().GetFloat32("test-ratio")
 			log.Infof("Load data from database")
-			dataSet, err := rank.LoadDataFromDatabase(database, feedbackType)
+			dataSet, err := rank.LoadDataFromDatabase(database, []string{feedbackType})
 			if err != nil {
 				log.Fatalf("cli: failed to load data from database (%v)", err)
 			}
@@ -282,14 +279,38 @@ var testRankCommand = &cobra.Command{
 		}
 		log.Infof("train set: #user = %v, #item = %v, #positive = %v", trainSet.UserCount(), trainSet.ItemCount(), trainSet.PositiveCount)
 		log.Infof("test set: #user = %v, #item = %v, #positive = %v", testSet.UserCount(), testSet.ItemCount(), testSet.PositiveCount)
-		m := rank.NewFM(rank.FMRegression, model.Params{
-			model.InitStdDev: 0.01,
-			model.NFactors:   8,
-			model.NEpochs:    10,
-			model.Lr:         0.01,
-			model.Reg:        0.0001,
-		})
-		score := m.Fit(trainSet, testSet, &config.FitConfig{Verbose: 1, Jobs: 1})
-		fmt.Println(score)
+		// Load hyper-parameters
+		grid := parseParamFlags(cmd)
+		log.Printf("Load hyper-parameters grid: %v\n", grid)
+		// Load runtime options
+		fitConfig := &rank.FitConfig{}
+		fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
+		fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
+		// Cross validation
+		start := time.Now()
+		m := rank.NewFM(rank.FMRegression, nil)
+		var result *rank.ParamsSearchResult
+		if grid.Len() == 0 {
+			result = rank.NewParamsSearchResult()
+			score := m.Fit(trainSet, testSet, fitConfig)
+			result.AddScore(nil, score)
+		} else {
+			a := rank.GridSearchCV(m, trainSet, testSet, grid, 0, fitConfig)
+			result = &a
+		}
+		elapsed := time.Since(start)
+		// Render table
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader([]string{"#", result.BestScore.GetName(), "Params"})
+		for i := range result.Params {
+			score := result.Scores[i]
+			table.Append([]string{
+				fmt.Sprintf("%v", i),
+				fmt.Sprintf("%v", score.GetValue()),
+				fmt.Sprintf("%v", result.Params[i].ToString()),
+			})
+		}
+		table.Render()
+		log.Printf("Complete cross validation (%v)\n", elapsed)
 	},
 }

@@ -15,9 +15,7 @@ package model
 
 import (
 	"encoding/json"
-	"github.com/BurntSushi/toml"
 	log "github.com/sirupsen/logrus"
-	"github.com/zhenghaoz/gorse/config"
 	"reflect"
 )
 
@@ -35,7 +33,7 @@ const (
 	RandomState ParamName = "RandomState" // random state (seed)
 	InitMean    ParamName = "InitMean"    // mean of gaussian initial parameter
 	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
-	Weight      ParamName = "Weight"      // weight for negative samples in ALS
+	Alpha       ParamName = "Alpha"       // weight for negative samples in ALS
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -146,31 +144,6 @@ func (parameters Params) ToString() string {
 		log.Fatal("Params.ToString: ", err)
 	}
 	return string(b)
-}
-
-func NewParamsFromConfig(config *config.Config, metaData *toml.MetaData) Params {
-	type ParamValues struct {
-		name  string
-		key   ParamName
-		value interface{}
-	}
-	values := []ParamValues{
-		{"lr", Lr, config.Master.Params.Lr},
-		{"reg", Reg, config.Master.Params.Reg},
-		{"n_epochs", NEpochs, config.Master.Params.NEpochs},
-		{"n_factors", NFactors, config.Master.Params.NFactors},
-		{"random_state", RandomState, config.Master.Params.RandomState},
-		{"init_mean", InitMean, config.Master.Params.InitMean},
-		{"init_std", InitStdDev, config.Master.Params.InitStdDev},
-		{"weight", Weight, config.Master.Params.Weight},
-	}
-	params := Params{}
-	for _, v := range values {
-		if metaData.IsDefined("params", v.name) {
-			params[v.key] = v.value
-		}
-	}
-	return params
 }
 
 // ParamsGrid contains candidate for grid search.

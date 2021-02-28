@@ -15,7 +15,7 @@ package match
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"testing"
 )
@@ -24,7 +24,15 @@ type mockMatrixFactorizationForSearch struct {
 	model.BaseModel
 }
 
-func (m *mockMatrixFactorizationForSearch) Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score {
+func (m *mockMatrixFactorizationForSearch) GetUserIndex() base.Index {
+	panic("don't call me")
+}
+
+func (m *mockMatrixFactorizationForSearch) GetItemIndex() base.Index {
+	panic("don't call me")
+}
+
+func (m *mockMatrixFactorizationForSearch) Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.NEpochs, 0.0)
@@ -55,7 +63,7 @@ func (m *mockMatrixFactorizationForSearch) GetParamsGrid() model.ParamsGrid {
 
 func TestGridSearchCV(t *testing.T) {
 	m := &mockMatrixFactorizationForSearch{}
-	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0)
+	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0, nil)
 	assert.Equal(t, float32(12), r.BestScore.NDCG)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
@@ -66,7 +74,7 @@ func TestGridSearchCV(t *testing.T) {
 
 func TestRandomSearchCV(t *testing.T) {
 	m := &mockMatrixFactorizationForSearch{}
-	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 100, 0)
+	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 100, 0, nil)
 	assert.Equal(t, float32(12), r.BestScore.NDCG)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,

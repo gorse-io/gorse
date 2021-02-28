@@ -27,7 +27,7 @@ func init() {
 
 var statusCommand = &cobra.Command{
 	Use:   "status",
-	Short: "Check the status of recommender system",
+	Short: "status of recommender system",
 	Run: func(cmd *cobra.Command, args []string) {
 		// connect to cache store
 		cacheStore, err := cache.Open(globalConfig.Database.CacheStore)

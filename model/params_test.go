@@ -14,9 +14,7 @@
 package model
 
 import (
-	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
 	"testing"
 )
 
@@ -87,34 +85,6 @@ func TestParams_GetInt64(t *testing.T) {
 	assert.Equal(t, int64(-1), p.GetInt64(RandomState, -1))
 }
 
-func TestParams_GetBool(t *testing.T) {
-	p := Params{}
-	// Empty case
-	assert.Equal(t, false, p.GetBool(UseLogit, false))
-	// Normal case
-	p[UseLogit] = true
-	assert.Equal(t, true, p.GetBool(UseLogit, false))
-	// Wrong type case
-	p[UseLogit] = 0
-	assert.Equal(t, false, p.GetBool(UseLogit, false))
-	p[UseLogit] = "hello"
-	assert.Equal(t, false, p.GetBool(UseLogit, false))
-}
-
-func TestParams_GetString(t *testing.T) {
-	p := Params{}
-	// Empty case
-	assert.Equal(t, "default", p.GetString(Task, "default"))
-	// Normal case
-	p[Task] = "hello"
-	assert.Equal(t, "hello", p.GetString(Task, "default"))
-	// Wrong type case
-	p[Task] = 0
-	assert.Equal(t, "default", p.GetString(Task, "default"))
-	p[Task] = false
-	assert.Equal(t, "default", p.GetString(Task, "default"))
-}
-
 func TestParams_Overwrite(t *testing.T) {
 	a := Params{
 		NFactors: 10,
@@ -128,26 +98,4 @@ func TestParams_Overwrite(t *testing.T) {
 	assert.Equal(t, 20, c[NFactors])
 	assert.Equal(t, 0.5, c[Lr])
 	assert.Equal(t, 100, c[NEpochs])
-}
-
-func TestNewParamsFromConfig(t *testing.T) {
-	// empty
-	conf := &config.Config{}
-	meta := &toml.MetaData{}
-	p := NewParamsFromConfig(conf, meta)
-	assert.Empty(t, p)
-}
-
-func TestParamsGrid(t *testing.T) {
-	paramsGrid := ParamsGrid{
-		UseLogit: []interface{}{false},
-		Task:     []interface{}{TaskClassification},
-	}
-	assert.Equal(t, 2, paramsGrid.Len())
-	paramsGrid.Fill(ParamsGrid{
-		NFactors: []interface{}{1, 3, 0},
-		Lr:       []interface{}{1.0, 7.0, 8.0},
-	})
-	assert.Equal(t, []interface{}{1, 3, 0}, paramsGrid[NFactors])
-	assert.Equal(t, []interface{}{1.0, 7.0, 8.0}, paramsGrid[Lr])
 }

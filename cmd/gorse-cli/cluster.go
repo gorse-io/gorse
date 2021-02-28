@@ -28,7 +28,7 @@ func init() {
 
 var clusterCommand = &cobra.Command{
 	Use:   "cluster",
-	Short: "Get cluster information.",
+	Short: "cluster information",
 	Run: func(cmd *cobra.Command, args []string) {
 		cluster, err := masterClient.GetCluster(context.Background(), &protocol.Void{})
 		if err != nil {

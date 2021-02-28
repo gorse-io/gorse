@@ -8,7 +8,6 @@ import (
 	"github.com/chewxy/math32"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"gonum.org/v1/gonum/mat"
@@ -21,10 +20,29 @@ type Score struct {
 	Recall    float32
 }
 
+type FitConfig struct {
+	Jobs       int
+	Verbose    int
+	Candidates int
+	TopK       int
+}
+
+func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
+	if config == nil {
+		return &FitConfig{
+			Jobs:       1,
+			Verbose:    10,
+			Candidates: 100,
+			TopK:       10,
+		}
+	}
+	return config
+}
+
 type MatrixFactorization interface {
 	model.Model
 	// Fit a model with a train set and parameters.
-	Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score
+	Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId string) float32
 	// InternalPredict
@@ -46,7 +64,7 @@ func (model *BaseMatrixFactorization) Init(trainSet *DataSet) {
 	model.ItemIndex = trainSet.ItemIndex
 }
 
-func (model *BaseMatrixFactorization) Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score {
+func (model *BaseMatrixFactorization) Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score {
 	panic("not implemented")
 }
 
@@ -189,7 +207,7 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 }
 
 // Fit the BPR model.
-func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig) Score {
+func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Infof("fit BPR with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
@@ -350,7 +368,7 @@ func (als *ALS) SetParams(params model.Params) {
 	als.initMean = float64(als.Params.GetFloat32(model.InitMean, 0))
 	als.initStdDev = float64(als.Params.GetFloat32(model.InitStdDev, 0.1))
 	als.reg = float64(als.Params.GetFloat32(model.Reg, 0.06))
-	als.weight = float64(als.Params.GetFloat32(model.Weight, 0.001))
+	als.weight = float64(als.Params.GetFloat32(model.Alpha, 0.001))
 }
 
 func (als *ALS) GetParamsGrid() model.ParamsGrid {
@@ -359,7 +377,7 @@ func (als *ALS) GetParamsGrid() model.ParamsGrid {
 		model.InitMean:   []interface{}{0},
 		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Weight:     []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		model.Alpha:      []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 	}
 }
 
@@ -384,7 +402,7 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 }
 
 // Fit the ALS model.
-func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig) Score {
+func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Infof("fit ALS with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
@@ -538,7 +556,7 @@ func (ccd *CCD) SetParams(params model.Params) {
 	ccd.initMean = ccd.Params.GetFloat32(model.InitMean, 0)
 	ccd.initStdDev = ccd.Params.GetFloat32(model.InitStdDev, 0.1)
 	ccd.reg = ccd.Params.GetFloat32(model.Reg, 0.06)
-	ccd.weight = ccd.Params.GetFloat32(model.Weight, 0.001)
+	ccd.weight = ccd.Params.GetFloat32(model.Alpha, 0.001)
 }
 
 func (ccd *CCD) GetParamsGrid() model.ParamsGrid {
@@ -547,7 +565,7 @@ func (ccd *CCD) GetParamsGrid() model.ParamsGrid {
 		model.InitMean:   []interface{}{0},
 		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Weight:     []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		model.Alpha:      []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 	}
 }
 
@@ -606,7 +624,7 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 	ccd.BaseMatrixFactorization.Init(trainSet)
 }
 
-func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *config.FitConfig) Score {
+func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Infof("fit CCD with hyper-parameters: "+
 		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
