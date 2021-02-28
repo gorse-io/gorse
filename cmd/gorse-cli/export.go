@@ -40,7 +40,7 @@ func init() {
 
 var exportCommand = &cobra.Command{
 	Use:   "export",
-	Short: "Export data from gorse",
+	Short: "export data",
 }
 
 var exportItemCommand = &cobra.Command{

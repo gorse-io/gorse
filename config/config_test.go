@@ -20,52 +20,68 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	config, _, err := LoadConfig("../test/config/config.toml")
+	config, _, err := LoadConfig("../config/config.toml.template")
 	assert.Nil(t, err)
 
-	// common configuration
-	assert.Equal(t, 1000, config.Common.CacheSize)
-	assert.Equal(t, 10, config.Common.RetryLimit)
-	assert.Equal(t, 1, config.Common.RetryInterval)
+	// database configuration
+	assert.Equal(t, "redis://192.168.199.246:6379", config.Database.CacheStore)
+	assert.Equal(t, "mysql://root@tcp(127.0.0.1:3306)/gitrec?parseTime=true", config.Database.DataStore)
+	assert.Equal(t, true, config.Database.AutoInsertUser)
+	assert.Equal(t, false, config.Database.AutoInsertItem)
+	assert.Equal(t, 60, config.Database.ClusterMetaTimeout)
+
+	// latest configuration
+	assert.Equal(t, 98, config.Latest.NumLatest)
+	assert.Equal(t, 10, config.Latest.UpdatePeriod)
+
+	// popular configuration
+	assert.Equal(t, 99, config.Popular.NumPopular)
+	assert.Equal(t, 1442, config.Popular.UpdatePeriod)
+	assert.Equal(t, 360, config.Popular.TimeWindow)
+
+	// cf config
+	assert.Equal(t, 799, config.CF.NumCF)
+	assert.Equal(t, "ccd", config.CF.CFModel)
+	assert.Equal(t, 1441, config.CF.UpdatePeriod)
+
+	assert.Equal(t, 0.05, config.CF.Lr)
+	assert.Equal(t, 0.01, config.CF.Reg)
+	assert.Equal(t, 100, config.CF.NEpochs)
+	assert.Equal(t, 10, config.CF.NFactors)
+	assert.Equal(t, 21, config.CF.RandomState)
+	assert.Equal(t, false, config.CF.UseBias)
+	assert.Equal(t, 0.0, config.CF.InitMean)
+	assert.Equal(t, 0.001, config.CF.InitStdDev)
+	assert.Equal(t, 1.0, config.CF.Alpha)
+
+	assert.Equal(t, 4, config.CF.FitJobs)
+	assert.Equal(t, 10, config.CF.Verbose)
+	assert.Equal(t, 100, config.CF.Candidates)
+	assert.Equal(t, 10, config.CF.TopK)
+	assert.Equal(t, 10000, config.CF.NumTestUsers)
+
+	// rank config
+	assert.Equal(t, "r", config.Rank.Task)
+
+	assert.Equal(t, 0.05, config.Rank.Lr)
+	assert.Equal(t, 0.01, config.Rank.Reg)
+	assert.Equal(t, 100, config.Rank.NEpochs)
+	assert.Equal(t, 10, config.Rank.NFactors)
+	assert.Equal(t, 21, config.Rank.RandomState)
+	assert.Equal(t, false, config.Rank.UseBias)
+	assert.Equal(t, 0.0, config.Rank.InitMean)
+	assert.Equal(t, 0.001, config.Rank.InitStdDev)
+
+	assert.Equal(t, 4, config.Rank.FitJobs)
+	assert.Equal(t, 10, config.Rank.Verbose)
+
+	// master configuration
+	assert.Equal(t, 8086, config.Master.Port)
+	assert.Equal(t, "127.0.0.1", config.Master.Host)
+	assert.Equal(t, 4, config.Master.Jobs)
 
 	// server configuration
-	assert.Equal(t, "0.0.0.0", config.Server.Host)
-	assert.Equal(t, 8080, config.Server.Port)
 	assert.Equal(t, 10, config.Server.DefaultReturnNumber)
-
-	// worker configuration
-	assert.Equal(t, "127.0.0.1:9000", config.Worker.LeaderAddr)
-	assert.Equal(t, "127.0.0.1", config.Worker.Host)
-	assert.Equal(t, 9001, config.Worker.GossipPort)
-	assert.Equal(t, 9002, config.Worker.RPCPort)
-	assert.Equal(t, 10, config.Worker.PredictInterval)
-	assert.Equal(t, 2, config.Worker.GossipInterval)
-
-	// database configuration
-	assert.Equal(t, "redis://127.0.0.1:6398", config.Database.DataStore)
-
-	// leader configuration
-	assert.Equal(t, 9000, config.Master.Port)
-	assert.Equal(t, "127.0.0.1", config.Master.Host)
-	assert.Equal(t, "als", config.Master.Model)
-	assert.Equal(t, 60, config.Master.FitInterval)
-	assert.Equal(t, 3, config.Master.BroadcastInterval)
-	// params
-	assert.Equal(t, 0.05, config.Master.Params.Lr)
-	assert.Equal(t, 0.01, config.Master.Params.Reg)
-	assert.Equal(t, 100, config.Master.Params.NEpochs)
-	assert.Equal(t, 10, config.Master.Params.NFactors)
-	assert.Equal(t, 21, config.Master.Params.RandomState)
-	assert.Equal(t, false, config.Master.Params.UseBias)
-	assert.Equal(t, 0.0, config.Master.Params.InitMean)
-	assert.Equal(t, 0.001, config.Master.Params.InitStdDev)
-	assert.Equal(t, 1.0, config.Master.Params.Weight)
-	// fit
-	assert.Equal(t, 4, config.Master.Fit.Jobs)
-	assert.Equal(t, 10, config.Master.Fit.Verbose)
-	assert.Equal(t, 100, config.Master.Fit.Candidates)
-	assert.Equal(t, 10, config.Master.Fit.TopK)
-	assert.Equal(t, 10000, config.Master.Fit.NumTestUsers)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

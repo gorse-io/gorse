@@ -59,7 +59,7 @@ func (w *Worker) Register() {
 		if _, err := w.MasterClient.RegisterWorker(context.Background(), &protocol.Void{}); err != nil {
 			log.Fatal("worker:", err)
 		}
-		time.Sleep(time.Duration(w.cfg.Common.ClusterMetaTimeout/2) * time.Second)
+		time.Sleep(time.Duration(w.cfg.Database.ClusterMetaTimeout/2) * time.Second)
 	}
 }
 
@@ -161,7 +161,7 @@ func (w *Worker) GenerateMatchItems(m match.MatrixFactorization, users []string)
 		for _, feedback := range historyFeedback {
 			historySet.Add(feedback.ItemId)
 		}
-		recItems := base.NewTopKStringFilter(w.cfg.Common.CacheSize)
+		recItems := base.NewTopKStringFilter(w.cfg.Similar.NumSimilar)
 		for _, item := range items {
 			if !historySet.Contain(item) {
 				recItems.Push(item, m.Predict(user, item))

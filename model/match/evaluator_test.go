@@ -17,7 +17,6 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"strconv"
 	"testing"
@@ -73,7 +72,15 @@ type mockMatrixFactorizationForEval struct {
 	negative []base.Set
 }
 
-func (m *mockMatrixFactorizationForEval) Fit(trainSet *DataSet, validateSet *DataSet, config *config.FitConfig) Score {
+func (m *mockMatrixFactorizationForEval) GetUserIndex() base.Index {
+	panic("don't call me")
+}
+
+func (m *mockMatrixFactorizationForEval) GetItemIndex() base.Index {
+	panic("don't call me")
+}
+
+func (m *mockMatrixFactorizationForEval) Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score {
 	panic("don't call me")
 }
 

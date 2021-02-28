@@ -20,22 +20,80 @@ import (
 	"github.com/chewxy/math32"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"time"
 )
 
 type Score struct {
+	Task      FMTask
 	RMSE      float32
 	Precision float32
 }
 
+func (score Score) GetName() string {
+	switch score.Task {
+	case FMRegression:
+		return "RMSE"
+	case FMClassification:
+		return "Precision"
+	default:
+		panic("unknown task type")
+	}
+}
+
+func (score Score) GetValue() float32 {
+	switch score.Task {
+	case FMRegression:
+		return score.RMSE
+	case FMClassification:
+		return score.Precision
+	default:
+		panic("unknown task type")
+	}
+}
+
+func (score Score) BetterThan(s Score) bool {
+	if s.Task == "" && score.Task != "" {
+		return true
+	} else if s.Task != "" && score.Task == "" {
+		return false
+	}
+	if score.Task != s.Task {
+		panic("task type doesn't match")
+	}
+	switch score.Task {
+	case FMRegression:
+		return score.RMSE < score.RMSE
+	case FMClassification:
+		return score.Precision > score.Precision
+	default:
+		panic("unknown task type")
+	}
+}
+
+type FitConfig struct {
+	Jobs    int
+	Verbose int
+}
+
+func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
+	if config == nil {
+		return &FitConfig{
+			Jobs:    1,
+			Verbose: 10,
+		}
+	}
+	return config
+}
+
 type FactorizationMachine interface {
+	model.Model
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId string, labels []string) float32
 	// InternalPredict
 	InternalPredict(x []int) float32
+	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 }
 
 type BaseFactorizationMachine struct {
@@ -70,6 +128,16 @@ type FM struct {
 	reg        float32
 	initMean   float32
 	initStdDev float32
+}
+
+func (fm *FM) GetParamsGrid() model.ParamsGrid {
+	return model.ParamsGrid{
+		model.NFactors:   []interface{}{8, 16, 32, 64, 128},
+		model.Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+		model.InitMean:   []interface{}{0},
+		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+	}
 }
 
 func NewFM(task FMTask, params model.Params) *FM {
@@ -143,7 +211,7 @@ func (fm *FM) InternalPredict(x []int) float32 {
 	return pred
 }
 
-func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *config.FitConfig) Score {
+func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Infof("fit FM(%v): train set size (positive) = %v, test set size = %v", fm.Task, trainSet.PositiveCount, testSet.Count())
 	log.Infof("hyper-parameters: "+
@@ -195,33 +263,36 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *config.FitConfig)
 		fitTime := time.Since(fitStart)
 		// Cross validation
 		if epoch%config.Verbose == 0 {
+			evalStart := time.Now()
+			var score Score
 			switch fm.Task {
 			case FMRegression:
-				evalStart := time.Now()
-				rmse := EvaluateRegression(fm, testSet, trainSet)
-				evalTime := time.Since(evalStart)
-				log.Infof("epoch %v/%v [fit=%v, eval=%v]: loss=%v, RMSE=%v",
-					epoch, fm.nEpochs, fitTime, evalTime, cost, rmse)
+				score = EvaluateRegression(fm, testSet)
 			case FMClassification:
-				evalStart := time.Now()
-				precision := EvaluateClassification(fm, testSet, trainSet)
-				evalTime := time.Since(evalStart)
-				log.Infof("epoch %v/%v [fit=%v, eval=%v]: loss=%v, Precision=%v",
-					epoch, fm.nEpochs, fitTime, evalTime, cost, precision)
+				score = EvaluateClassification(fm, testSet)
 			default:
 				log.Fatal("FM.Fit: unknown task ", fm.Task)
 			}
+			evalTime := time.Since(evalStart)
+			log.Infof("epoch %v/%v [fit=%v, eval=%v]: loss=%v, %v=%v",
+				epoch, fm.nEpochs, fitTime, evalTime, cost, score.GetName(), score.GetValue())
 		}
 	}
 	switch fm.Task {
 	case FMRegression:
-		return Score{RMSE: EvaluateRegression(fm, testSet, trainSet)}
+		return EvaluateRegression(fm, testSet)
 	case FMClassification:
-		return Score{Precision: EvaluateClassification(fm, testSet, trainSet)}
+		return EvaluateClassification(fm, testSet)
 	default:
 		log.Fatal("FM.Fit: unknown task ", fm.Task)
 		return Score{}
 	}
+}
+
+func (fm *FM) Clear() {
+	fm.V = nil
+	fm.W = nil
+	fm.Index = nil
 }
 
 func (fm *FM) Init(trainSet *Dataset) {

@@ -16,7 +16,6 @@ package rank
 import (
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"testing"
 )
@@ -31,7 +30,7 @@ func assertEpsilon(t *testing.T, expect float32, actual float32) {
 	}
 }
 
-var fitConfig = &config.FitConfig{
+var fitConfig = &FitConfig{
 	Jobs:    1,
 	Verbose: 1,
 }

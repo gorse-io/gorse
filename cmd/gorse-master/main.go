@@ -24,7 +24,7 @@ import (
 
 var masterCommand = &cobra.Command{
 	Use:   "gorse-master",
-	Short: "The master node of gorse recommender system",
+	Short: "The master node of gorse recommender system.",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Show version
 		if showVersion, _ := cmd.PersistentFlags().GetBool("version"); showVersion {
@@ -44,8 +44,10 @@ var masterCommand = &cobra.Command{
 }
 
 func init() {
-	masterCommand.PersistentFlags().StringP("config", "c", "/etc/gorse.toml", "Configuration file path.")
-	masterCommand.PersistentFlags().BoolP("version", "v", false, "Version name.")
+	masterCommand.PersistentFlags().StringP("config", "c", "/etc/gorse.toml", "configuration file path")
+	masterCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
+	masterCommand.PersistentFlags().Int("port", 8086, "port of master node")
+	masterCommand.PersistentFlags().String("host", "127.0.0.1", "host of master node")
 }
 
 func main() {

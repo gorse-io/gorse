@@ -23,7 +23,7 @@ import (
 
 var serverCommand = &cobra.Command{
 	Use:   "gorse-server",
-	Short: "The server node of gorse recommender system",
+	Short: "The server node of gorse recommender system.",
 	Run: func(cmd *cobra.Command, args []string) {
 		// show version
 		showVersion, _ := cmd.PersistentFlags().GetBool("version")
@@ -42,11 +42,11 @@ var serverCommand = &cobra.Command{
 }
 
 func init() {
-	serverCommand.PersistentFlags().BoolP("version", "v", false, "Show version.")
-	serverCommand.PersistentFlags().Int("master-port", 6384, "Master port.")
-	serverCommand.PersistentFlags().String("master--host", "127.0.0.1", "Master host.")
-	serverCommand.PersistentFlags().Int("port", 6385, "Server port.")
-	serverCommand.PersistentFlags().String("host", "127.0.0.1", "Server host.")
+	serverCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
+	serverCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
+	serverCommand.PersistentFlags().String("master--host", "127.0.0.1", "host of master node")
+	serverCommand.PersistentFlags().Int("port", 8087, "port of server node")
+	serverCommand.PersistentFlags().String("host", "127.0.0.1", "host of server node")
 }
 
 func main() {

@@ -19,7 +19,6 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -122,7 +121,7 @@ func LoadDataFromBuiltIn(name string) (train *Dataset, test *Dataset, err error)
 	return
 }
 
-func LoadDataFromDatabase(database data.Database, feedbackType string) (*Dataset, error) {
+func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Dataset, error) {
 	unifiedIndex := NewUnifiedMapIndexBuilder()
 	cursor := ""
 	var err error
@@ -191,7 +190,7 @@ func LoadDataFromDatabase(database data.Database, feedbackType string) (*Dataset
 	dataSet.UserFeedbackTarget = base.NewMatrix32(dataSet.UnifiedIndex.CountUsers(), 0)
 	for {
 		var batchFeedback []data.Feedback
-		cursor, batchFeedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+		cursor, batchFeedback, err = database.GetFeedback(feedbackTypes[0], cursor, batchSize)
 		if err != nil {
 			return nil, err
 		}
@@ -289,7 +288,7 @@ func (dataset *Dataset) NegativeSample(numNegatives int, trainSet *Dataset, seed
 			}
 		}
 		// shuffle samples
-		rand.Shuffle(len(dataset.FeedbackInputs), func(i, j int) {
+		rng.Shuffle(len(dataset.FeedbackInputs), func(i, j int) {
 			dataset.FeedbackInputs[i], dataset.FeedbackInputs[j] = dataset.FeedbackInputs[j], dataset.FeedbackInputs[i]
 			dataset.FeedbackTarget[i], dataset.FeedbackTarget[j] = dataset.FeedbackTarget[j], dataset.FeedbackTarget[i]
 		})

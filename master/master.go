@@ -22,7 +22,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/match"
 	"github.com/zhenghaoz/gorse/model/rank"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -86,7 +85,7 @@ func (m *Master) Serve() {
 	m.ttlCache.SetExpirationCallback(m.NodeDown)
 	m.ttlCache.SetNewItemCallback(m.NodeUp)
 	if err := m.ttlCache.SetTTL(
-		time.Duration(m.cfg.Common.ClusterMetaTimeout) * time.Second,
+		time.Duration(m.cfg.Database.ClusterMetaTimeout) * time.Second,
 	); err != nil {
 		log.Error("master:", err)
 	}
@@ -183,7 +182,7 @@ func (m *Master) GetMatchModelVersion(context.Context, *protocol.Void) (*protoco
 		return &protocol.Model{Version: 0}, nil
 	}
 	return &protocol.Model{
-		Name:    m.cfg.Master.Model,
+		Name:    m.cfg.CF.CFModel,
 		Version: int64(m.matchModelVersion),
 	}, nil
 }
@@ -201,7 +200,7 @@ func (m *Master) GetMatchModel(context.Context, *protocol.Void) (*protocol.Model
 		return nil, err
 	}
 	return &protocol.Model{
-		Name:    m.cfg.Master.Model,
+		Name:    m.cfg.CF.CFModel,
 		Version: int64(m.matchModelVersion),
 		Model:   modelData,
 	}, nil
@@ -253,7 +252,7 @@ func (m *Master) NodeDown(key string, value interface{}) {
 
 func (m *Master) Loop() {
 	// pull dataset for rank
-	rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Common.RankFeedbackType)
+	rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Rank.FeedbackTypes)
 	if err != nil {
 		log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
 	}
@@ -263,7 +262,7 @@ func (m *Master) Loop() {
 
 	// download dataset
 	log.Infof("master: load data from database")
-	dataSet, items, err := match.LoadDataFromDatabase(m.dataStore, m.cfg.Common.MatchFeedbackType)
+	dataSet, items, err := match.LoadDataFromDatabase(m.dataStore, m.cfg.CF.FeedbackTypes)
 	if err != nil {
 		log.Fatal("master: ", err)
 	}
@@ -285,14 +284,14 @@ func (m *Master) Loop() {
 	log.Info("master: completed collect latest items")
 
 	// collect similar items
-	log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Fit.Jobs)
+	log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Jobs)
 	if err = m.CollectSimilar(items, dataSet); err != nil {
 		log.Errorf("master: failed to collect similar items (%v)", err)
 	}
 	log.Info("master: completed collect similar items")
 
-	log.Infof("master: fit match model (n_jobs = %v)", m.cfg.Master.Fit.Jobs)
-	if err = m.RenewMatchModel(dataSet); err != nil {
+	log.Infof("master: fit match model (n_jobs = %v)", m.cfg.Master.Jobs)
+	if err = m.RenewCFModel(dataSet); err != nil {
 		log.Errorf("master: failed to fit match model (%v)", err)
 	}
 	log.Infof("master: completed fit match model")
@@ -315,14 +314,14 @@ func (m *Master) RenewRankModel(dataSet *rank.Dataset) error {
 	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestRankModelVersion, fmt.Sprintf("%x", m.rankModelVersion))
 }
 
-func (m *Master) RenewMatchModel(dataSet *match.DataSet) error {
+func (m *Master) RenewCFModel(dataSet *match.DataSet) error {
 	// training match model
-	trainSet, testSet := dataSet.Split(m.cfg.Master.Fit.NumTestUsers, 0)
-	nextModel, err := match.NewModel(m.cfg.Master.Model, model.NewParamsFromConfig(m.cfg, m.meta))
+	trainSet, testSet := dataSet.Split(m.cfg.CF.NumTestUsers, 0)
+	nextModel, err := match.NewModel(m.cfg.CF.CFModel, m.cfg.CF.GetParams(m.meta))
 	if err != nil {
 		return err
 	}
-	nextModel.Fit(trainSet, testSet, &m.cfg.Master.Fit)
+	nextModel.Fit(trainSet, testSet, m.cfg.CF.GetFitConfig())
 
 	// update match model
 	m.matchModelMutex.Lock()
@@ -348,7 +347,7 @@ func (m *Master) CollectPopItem(items []data.Item, dataset *match.DataSet) error
 	for _, userIndex := range dataset.FeedbackItems {
 		count[userIndex]++
 	}
-	popItems := base.NewTopKStringFilter(m.cfg.Common.CacheSize)
+	popItems := base.NewTopKStringFilter(m.cfg.Popular.NumPopular)
 	for itemIndex := range count {
 		itemId := dataset.ItemIndex.ToName(itemIndex)
 		popItems.Push(itemId, float32(count[itemIndex]))
@@ -364,7 +363,7 @@ func (m *Master) CollectPopItem(items []data.Item, dataset *match.DataSet) error
 // CollectLatest updates latest items.
 func (m *Master) CollectLatest(items []data.Item) error {
 	// find latest items
-	latestItems := base.NewTopKStringFilter(m.cfg.Common.CacheSize)
+	latestItems := base.NewTopKStringFilter(m.cfg.Latest.NumLatest)
 	for _, item := range items {
 		latestItems.Push(item.ItemId, float32(item.Timestamp.Unix()))
 	}
@@ -399,7 +398,7 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *match.DataSet) error
 			}
 		}
 	}()
-	if err := base.Parallel(dataset.ItemCount(), m.cfg.Master.Fit.Jobs, func(workerId, jobId int) error {
+	if err := base.Parallel(dataset.ItemCount(), m.cfg.CF.FitJobs, func(workerId, jobId int) error {
 		users := dataset.ItemFeedback[jobId]
 		// Collect candidates
 		itemSet := base.NewSet()
@@ -407,7 +406,7 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *match.DataSet) error
 			itemSet.Add(dataset.UserFeedback[u]...)
 		}
 		// Ranking
-		nearItems := base.NewTopKFilter(m.cfg.Common.CacheSize)
+		nearItems := base.NewTopKFilter(m.cfg.Similar.NumSimilar)
 		for j := range itemSet {
 			if j != jobId {
 				nearItems.Push(j, Dot(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j]))

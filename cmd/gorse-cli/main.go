@@ -66,12 +66,12 @@ func main() {
 
 var cliCommand = &cobra.Command{
 	Use:   "gorse-cli",
-	Short: "CLI for gorse recommender system",
+	Short: "CLI for gorse recommender system.",
 }
 
 var versionCommand = &cobra.Command{
 	Use:   "version",
-	Short: "Check the version of gorse",
+	Short: "gorse version",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(version.VersionName)
 	},

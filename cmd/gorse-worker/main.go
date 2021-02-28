@@ -22,7 +22,7 @@ import (
 
 var workerCommand = &cobra.Command{
 	Use:   "gorse-worker",
-	Short: "The worker node of gorse recommender system",
+	Short: "The worker node of gorse recommender system.",
 	Run: func(cmd *cobra.Command, args []string) {
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
@@ -34,9 +34,9 @@ var workerCommand = &cobra.Command{
 }
 
 func init() {
-	workerCommand.PersistentFlags().String("master-host", "127.0.0.1", "Master host.")
-	workerCommand.PersistentFlags().Int("master-port", 6384, "Master port.")
-	workerCommand.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of working jobs.")
+	workerCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
+	workerCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
+	workerCommand.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "number of working jobs.")
 }
 
 func main() {

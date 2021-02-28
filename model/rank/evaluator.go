@@ -17,7 +17,7 @@ import (
 	"github.com/chewxy/math32"
 )
 
-func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset, trainSet *Dataset) float32 {
+func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score {
 	sum := float32(0)
 	// For all UserFeedback
 	for i := 0; i < testSet.Count(); i++ {
@@ -25,10 +25,13 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset, trainS
 		prediction := estimator.InternalPredict(labels)
 		sum += (target - prediction) * (target - prediction)
 	}
-	return math32.Sqrt(sum / float32(testSet.Count()))
+	return Score{
+		Task: FMRegression,
+		RMSE: math32.Sqrt(sum / float32(testSet.Count())),
+	}
 }
 
-func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset, trainSet *Dataset) float32 {
+func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Score {
 	correct := float32(0)
 	// For all UserFeedback
 	for i := 0; i < testSet.Count(); i++ {
@@ -38,5 +41,8 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset, tr
 			correct++
 		}
 	}
-	return correct / float32(testSet.Count())
+	return Score{
+		Task:      FMClassification,
+		Precision: correct / float32(testSet.Count()),
+	}
 }

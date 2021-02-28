@@ -3,7 +3,6 @@ package match
 import (
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"runtime"
 	"testing"
@@ -13,12 +12,11 @@ const (
 	epsilon = 0.008
 )
 
-var fitConfig = &config.FitConfig{
-	Jobs:         runtime.NumCPU(),
-	Verbose:      1,
-	Candidates:   100,
-	TopK:         10,
-	NumTestUsers: 0,
+var fitConfig = &FitConfig{
+	Jobs:       runtime.NumCPU(),
+	Verbose:    1,
+	Candidates: 100,
+	TopK:       10,
 }
 
 func assertEpsilon(t *testing.T, expect float32, actual float32) {
@@ -80,7 +78,7 @@ func TestALS_MovieLens(t *testing.T) {
 		model.NFactors: 8,
 		model.Reg:      0.015,
 		model.NEpochs:  10,
-		model.Weight:   0.05,
+		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.36, score.NDCG)
@@ -107,7 +105,7 @@ func TestALS_Pinterest(t *testing.T) {
 		model.Reg:        0.01,
 		model.NEpochs:    10,
 		model.InitStdDev: 0.01,
-		model.Weight:     0.001,
+		model.Alpha:      0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.52, score.NDCG)
@@ -120,7 +118,7 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.NFactors: 8,
 		model.Reg:      0.015,
 		model.NEpochs:  30,
-		model.Weight:   0.05,
+		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.36, score.NDCG)
@@ -147,7 +145,7 @@ func TestCCD_Pinterest(t *testing.T) {
 		model.Reg:        0.01,
 		model.NEpochs:    20,
 		model.InitStdDev: 0.01,
-		model.Weight:     0.001,
+		model.Alpha:      0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.52, score.NDCG)
