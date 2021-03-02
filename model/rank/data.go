@@ -15,13 +15,14 @@ package rank
 
 import (
 	"bufio"
+	"os"
+	"strconv"
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"os"
-	"strconv"
-	"strings"
 )
 
 const batchSize = 1024
@@ -266,8 +267,7 @@ func (dataset *Dataset) NegativeSample(numNegatives int, trainSet *Dataset, seed
 			// fill positive items
 			for i, itemId := range items {
 				x := make([]int, 0, 2+len(dataset.UserItemLabels[userId])+len(dataset.UserItemLabels[itemId]))
-				x = append(x, userId)
-				x = append(x, itemId)
+				x = append(x, userId, itemId)
 				x = append(x, dataset.UserItemLabels[userId]...)
 				x = append(x, dataset.UserItemLabels[itemId]...)
 				dataset.FeedbackInputs = append(dataset.FeedbackInputs, x)
@@ -281,8 +281,7 @@ func (dataset *Dataset) NegativeSample(numNegatives int, trainSet *Dataset, seed
 			sampled := rng.Sample(dataset.UserCount(), dataset.ItemCount()+dataset.UserCount(), numNegatives*len(items), posSet)
 			for _, negItemId := range sampled {
 				x := make([]int, 0, 2+len(dataset.UserItemLabels[userId])+len(dataset.UserItemLabels[negItemId]))
-				x = append(x, userId)
-				x = append(x, negItemId)
+				x = append(x, userId, negItemId)
 				x = append(x, dataset.UserItemLabels[userId]...)
 				x = append(x, dataset.UserItemLabels[negItemId]...)
 				dataset.FeedbackInputs = append(dataset.FeedbackInputs, x)

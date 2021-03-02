@@ -17,6 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/hashicorp/memberlist"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
@@ -26,7 +28,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
-	"time"
 )
 
 type Worker struct {
@@ -163,7 +164,7 @@ func (w *Worker) GenerateMatchItems(m cf.MatrixFactorization, users []string) {
 					return
 				}
 				completedCount++
-			case _ = <-ticker.C:
+			case <-ticker.C:
 				log.Infof("worker: generate match items (%v/%v)", completedCount, len(users))
 			}
 		}

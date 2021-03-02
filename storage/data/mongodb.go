@@ -15,6 +15,7 @@ package data
 
 import (
 	"context"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -238,7 +239,7 @@ func (db *MongoDB) GetFeedback(feedbackType, cursor string, n int) (string, []Fe
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	var filter bson.M
-	if len(cursor) == 0 {
+	if cursor == "" {
 		filter = bson.M{
 			"_id.feedbacktype": bson.M{"$eq": feedbackType},
 		}
