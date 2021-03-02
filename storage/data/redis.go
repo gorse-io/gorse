@@ -300,6 +300,9 @@ func (redis *Redis) getFeedback(tp, userId, itemId string) (Feedback, error) {
 	feedbackKey := FeedbackKey{FeedbackType: tp, UserId: userId, ItemId: itemId}
 	// get feedback by feedbackKey
 	val, err := redis.client.Get(ctx, createFeedbackKey(feedbackKey)).Result()
+	if err != nil {
+		return Feedback{}, err
+	}
 	var feedback Feedback
 	err = json.Unmarshal([]byte(val), &feedback)
 	if err != nil {

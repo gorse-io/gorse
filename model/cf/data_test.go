@@ -56,7 +56,7 @@ func md5Sum(fileName string) string {
 }
 
 func TestLoadDataFromCSV(t *testing.T) {
-	data := LoadDataFromCSV("../../test/csv/feedback.csv", ",", true)
+	data := LoadDataFromCSV("../../misc/csv/feedback.csv", ",", true)
 	assert.Equal(t, 5, data.Count())
 	for i := 0; i < data.Count(); i++ {
 		userIndex, itemIndex := data.GetIndex(i)

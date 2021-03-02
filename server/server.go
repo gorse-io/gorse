@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
-	restful "github.com/emicklei/go-restful/v3"
+	"github.com/emicklei/go-restful/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -117,7 +117,7 @@ func (s *Server) Sync() {
 		log.Infof("server: check model version")
 		modelVersion, err := s.MasterClient.GetRankModelVersion(ctx, &protocol.Void{})
 		if err != nil {
-			log.Fatal("server: failed to check model version (%v)", err)
+			log.Fatalf("server: failed to check model version (%v)", err)
 		}
 
 		// pull model
@@ -125,16 +125,16 @@ func (s *Server) Sync() {
 			log.Infof("server: sync model")
 			modelData, err := s.MasterClient.GetRankModel(ctx, &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9))
 			if err != nil {
-				log.Fatal("server: failed to sync model (%v)", err)
+				log.Fatalf("server: failed to sync model (%v)", err)
 			}
 			nextModel, err := rank.DecodeModel(modelData.Model)
 			if err != nil {
-				log.Fatal("server: failed to decode model (%v)", err)
+				log.Fatalf("server: failed to decode model (%v)", err)
 			}
 			s.RankModelMutex.Lock()
-			defer s.RankModelMutex.Unlock()
 			s.RankModel = nextModel
 			s.RankModelVersion = modelData.Version
+			s.RankModelMutex.Unlock()
 			log.Infof("server: complete sync model")
 		}
 
@@ -217,16 +217,24 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Doc("Get feedback.").
 		Writes(FeedbackIterator{}))
 	// Get feedback by user id
-	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getFeedbackByUser).
-		Doc("Get feedback by user id.").
+	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByUser).
+		Doc("Get feedback by user id with feedback type.").
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
 		Writes([]data.Feedback{}))
+	ws.Route(ws.GET("/user/{user-id}/feedback/").To(s.getFeedbackByUser).
+		Doc("Get feedback by user id.").
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Writes([]data.Feedback{}))
 	// Get feedback by item-id
-	ws.Route(ws.GET("/item/{item-id}/feedback/{feedback-type}").To(s.getFeedbackByItem).
-		Doc("Get feedback by item id").
+	ws.Route(ws.GET("/item/{item-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByItem).
+		Doc("Get feedback by item id with feedback type.").
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("strung")).
+		Writes([]string{}))
+	ws.Route(ws.GET("/item/{item-id}/feedback/").To(s.getFeedbackByItem).
+		Doc("Get feedback by item id.").
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Writes([]string{}))
 
 	/* Interaction with cache store */
@@ -321,11 +329,22 @@ func (s *Server) getLatest(request *restful.Request, response *restful.Response)
 	ok(response, items)
 }
 
-// get feedback by item-id
-func (s *Server) getFeedbackByItem(request *restful.Request, response *restful.Response) {
+// get feedback by item-id with feedback type
+func (s *Server) getTypedFeedbackByItem(request *restful.Request, response *restful.Response) {
 	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
 	feedback, err := s.DataStore.GetItemFeedback(feedbackType, itemId)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
+	ok(response, feedback)
+}
+
+// get feedback by item-id
+func (s *Server) getFeedbackByItem(request *restful.Request, response *restful.Response) {
+	itemId := request.PathParameter("item-id")
+	feedback, err := s.DataStore.GetItemFeedback("", itemId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -404,6 +423,10 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	// load popular
 	candidateItems := make([]string, 0)
 	popularItems, err := s.CacheStore.GetList(cache.PopularItems, "", s.Config.Popular.NumPopular, 0)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
 	for _, itemId := range popularItems {
 		if !excludeSet.Contain(itemId) {
 			candidateItems = append(candidateItems, itemId)
@@ -412,6 +435,10 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	// load latest
 	latestItems, err := s.CacheStore.GetList(cache.LatestItems, "", s.Config.Latest.NumLatest, 0)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
 	for _, itemId := range latestItems {
 		if !excludeSet.Contain(itemId) {
 			candidateItems = append(candidateItems, itemId)
@@ -420,6 +447,10 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	// load matched
 	matchedItems, err := s.CacheStore.GetList(cache.MatchedItems, userId, s.Config.CF.NumCF, 0)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
 	for _, itemId := range matchedItems {
 		if !excludeSet.Contain(itemId) {
 			candidateItems = append(candidateItems, itemId)
@@ -536,11 +567,22 @@ func (s *Server) deleteUser(request *restful.Request, response *restful.Response
 	ok(response, Success{RowAffected: 1})
 }
 
-// get feedback by user-id
-func (s *Server) getFeedbackByUser(request *restful.Request, response *restful.Response) {
+// get feedback by user-id with feedback type
+func (s *Server) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	feedback, err := s.DataStore.GetUserFeedback(feedbackType, userId)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
+	ok(response, feedback)
+}
+
+// get feedback by user-id
+func (s *Server) getFeedbackByUser(request *restful.Request, response *restful.Response) {
+	userId := request.PathParameter("user-id")
+	feedback, err := s.DataStore.GetUserFeedback("", userId)
 	if err != nil {
 		internalServerError(response, err)
 		return
