@@ -54,6 +54,7 @@ func newMockServer(t *testing.T) *mockServer {
 		CacheStore: s.cacheStoreClient,
 		Config:     (*config.Config)(nil).LoadDefaultIfNil(),
 	}
+	server.Config = server.Config.LoadDefaultIfNil()
 	ws := server.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
@@ -250,34 +251,6 @@ func TestServer_Feedback(t *testing.T) {
 		})).
 		Status(http.StatusOK).
 		End()
-	apitest.New().
-		Handler(s.handler).
-		Get("/feedback").
-		QueryParams(map[string]string{
-			"cursor": "",
-			"n":      "3",
-		}).
-		Expect(t).
-		Body(marshal(t, FeedbackIterator{
-			Cursor:   "feedback/{\"UserId\":\"3\",\"ItemId\":\"6\"}",
-			Feedback: feedback[:3],
-		})).
-		Status(http.StatusOK).
-		End()
-	apitest.New().
-		Handler(s.handler).
-		Get("/feedback").
-		QueryParams(map[string]string{
-			"cursor": "feedback/{\"UserId\":\"3\",\"ItemId\":\"6\"}",
-			"n":      "3",
-		}).
-		Expect(t).
-		Body(marshal(t, FeedbackIterator{
-			Cursor:   "",
-			Feedback: feedback[3:],
-		})).
-		Status(http.StatusOK).
-		End()
 	//Get Items
 	apitest.New().
 		Handler(s.handler).
@@ -312,17 +285,17 @@ func TestServer_Feedback(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/user/2/feedback").
+		Get("/user/2/feedback/click").
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"UserId": "2", "ItemId": "4"}]`).
+		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z"}]`).
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/item/4/feedback").
+		Get("/item/4/feedback/click").
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"UserId": "2", "ItemId": "4"}]`).
+		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z"}]`).
 		End()
 }
 

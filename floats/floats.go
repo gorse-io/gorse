@@ -34,7 +34,7 @@ func Zero(a []float32) {
 
 // SubTo subtracts one vector by another and saves the result in dst: dst = a - b
 func SubTo(a, b, dst []float32) {
-	if len(dst) != len(b) || len(dst) != len(b) {
+	if len(dst) != len(b) || len(a) != len(b) {
 		panic("floats: slice lengths do not match")
 	}
 	for i := range dst {

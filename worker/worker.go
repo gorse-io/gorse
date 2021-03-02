@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/memberlist"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -32,7 +31,6 @@ import (
 
 type Worker struct {
 	cfg        *config.Config
-	members    *memberlist.Memberlist
 	cacheStore cache.Database
 	dataStore  data.Database
 

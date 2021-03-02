@@ -62,6 +62,9 @@ func (db *MongoDB) DeleteItem(itemId string) error {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("items")
 	_, err := c.DeleteOne(ctx, bson.M{"_id": itemId})
+	if err != nil {
+		return err
+	}
 	c = db.client.Database(db.dbName).Collection("feedback")
 	_, err = c.DeleteMany(ctx, bson.M{
 		"_id.itemid": bson.M{"$eq": itemId},
@@ -134,6 +137,9 @@ func (db *MongoDB) DeleteUser(userId string) error {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("users")
 	_, err := c.DeleteOne(ctx, bson.M{"_id": userId})
+	if err != nil {
+		return err
+	}
 	c = db.client.Database(db.dbName).Collection("feedback")
 	_, err = c.DeleteMany(ctx, bson.M{
 		"_id.userid": bson.M{"$eq": userId},

@@ -64,9 +64,9 @@ func (score Score) BetterThan(s Score) bool {
 	}
 	switch score.Task {
 	case FMRegression:
-		return score.RMSE < score.RMSE
+		return score.RMSE < s.RMSE
 	case FMClassification:
-		return score.Precision > score.Precision
+		return score.Precision > s.Precision
 	default:
 		panic("unknown task type")
 	}
