@@ -16,7 +16,7 @@ package server
 import (
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/emicklei/go-restful"
+	restful "github.com/emicklei/go-restful/v3"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"

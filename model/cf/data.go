@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package match
+package cf
 
 import (
 	"bufio"
@@ -294,17 +294,19 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		}
 	}
 	// pull database
-	for {
-		var feedback []data.Feedback
-		cursor, feedback, err = database.GetFeedback(feedbackTypes[0], cursor, batchSize)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, v := range feedback {
-			dataset.AddFeedback(v.UserId, v.ItemId, false)
-		}
-		if cursor == "" {
-			break
+	for _, feedbackType := range feedbackTypes {
+		for {
+			var feedback []data.Feedback
+			cursor, feedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, v := range feedback {
+				dataset.AddFeedback(v.UserId, v.ItemId, false)
+			}
+			if cursor == "" {
+				break
+			}
 		}
 	}
 	return dataset, allItems, nil

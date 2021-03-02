@@ -89,8 +89,8 @@ func (s *Server) Serve() {
 
 	// register to master
 	go s.Register()
-
-	s.Sync()
+	// pull model
+	go s.Sync()
 
 	// register restful APIs
 	ws := s.CreateWebService()
@@ -110,30 +110,36 @@ func (s *Server) Serve() {
 }
 
 func (s *Server) Sync() {
-	ctx := context.Background()
+	for {
+		ctx := context.Background()
 
-	// pull model version
-	log.Infof("server: check model version")
-	modelVersion, err := s.MasterClient.GetRankModelVersion(ctx, &protocol.Void{})
-	if err != nil {
-		log.Fatal("server: failed to check model version (%v)", err)
-	}
+		// pull model version
+		log.Infof("server: check model version")
+		modelVersion, err := s.MasterClient.GetRankModelVersion(ctx, &protocol.Void{})
+		if err != nil {
+			log.Fatal("server: failed to check model version (%v)", err)
+		}
 
-	// pull model
-	if modelVersion.Version != s.RankModelVersion {
-		log.Infof("server: sync model")
-		modelData, err := s.MasterClient.GetRankModel(ctx, &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9))
-		if err != nil {
-			log.Fatal("server: failed to sync model (%v)", err)
+		// pull model
+		if modelVersion.Version != s.RankModelVersion {
+			log.Infof("server: sync model")
+			modelData, err := s.MasterClient.GetRankModel(ctx, &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9))
+			if err != nil {
+				log.Fatal("server: failed to sync model (%v)", err)
+			}
+			nextModel, err := rank.DecodeModel(modelData.Model)
+			if err != nil {
+				log.Fatal("server: failed to decode model (%v)", err)
+			}
+			s.RankModelMutex.Lock()
+			defer s.RankModelMutex.Unlock()
+			s.RankModel = nextModel
+			s.RankModelVersion = modelData.Version
+			log.Infof("server: complete sync model")
 		}
-		nextModel, err := rank.DecodeModel(modelData.Model)
-		if err != nil {
-			log.Fatal("server: failed to decode model (%v)", err)
-		}
-		s.RankModelMutex.Lock()
-		defer s.RankModelMutex.Unlock()
-		s.RankModel = nextModel
-		s.RankModelVersion = modelData.Version
+
+		// sleep
+		time.Sleep(time.Minute)
 	}
 }
 
@@ -380,7 +386,7 @@ func (s *Server) getRecommendCache(request *restful.Request, response *restful.R
 func (s *Server) getRecommend(request *restful.Request, response *restful.Response) {
 	start := time.Now()
 	userId := request.PathParameter("user-id")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
+	n, err := parseInt(request, "n", 0)
 	if err != nil {
 		badRequest(response, err)
 		return
@@ -505,7 +511,7 @@ type UserIterator struct {
 
 func (s *Server) getUsers(request *restful.Request, response *restful.Response) {
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
+	n, err := parseInt(request, "n", 0)
 	if err != nil {
 		badRequest(response, err)
 		return
@@ -599,7 +605,7 @@ type ItemIterator struct {
 
 func (s *Server) getItems(request *restful.Request, response *restful.Response) {
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
+	n, err := parseInt(request, "n", 0)
 	if err != nil {
 		badRequest(response, err)
 		return
@@ -667,7 +673,7 @@ func (s *Server) getFeedback(request *restful.Request, response *restful.Respons
 	// Parse parameters
 	feedbackType := request.QueryParameter("feedback-type")
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultReturnNumber)
+	n, err := parseInt(request, "n", 0)
 	if err != nil {
 		badRequest(response, err)
 		return

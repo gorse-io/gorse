@@ -1,63 +1,68 @@
 # This section declares setting for the database.
 [database]
 # database for caching (support Redis only)
-cache_store = "redis://192.168.199.246:6379"
+cache_store = "redis://localhost:6379"
 # database for persist data (support MySQL/MongoDB/Redis)
-data_store = "mysql://root@tcp(127.0.0.1:3306)/gitrec?parseTime=true"
+data_store = "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true"
 # insert new users while inserting feedback
 auto_insert_user = true
 # insert new items while inserting feedback
 auto_insert_item = false
 # cluster meta timeout (second)
-cluster_meta_timeout = 60
+cluster_meta_timeout = 30
 
+# This section declares setting for cached latest items.
 [latest]
-num_latest = 98
-update_period = 10
+n_latest = 500          # number of cached latest items
+update_period = 30      # update period for latest items in minutes
 
+# This section declares setting for cached popular items.
 [popular]
-num_popular = 99
-update_period = 1442
-time_window = 360
+n_popular = 500         # number of cached popular items
+update_period = 120     # update period for popular items in minutes
+time_window = 360       # time window of cached popular items in days
 
+# This section declares setting for cached similar items.
+[similar]
+n_similar = 500         # number of cached similar items
+update_period = 120     # update period for similar items in minutes
+
+# This section declares setting for collabortive filatering model.
 [cf]
-num_cf = 799
-cf_model = "ccd"
-update_period = 1441
-lr = 0.05                       # learning rate
-reg = 0.01                      # regularization strength
-n_epochs = 100                  # number of epochs
-n_factors = 10                  # number of factors
-random_state = 21               # random state (seed)
-init_mean = 0.0                 # mean of gaussian initial parameter
-init_std = 0.001                # standard deviation of gaussian initial parameter
-alpha = 1.0                     # alpha value, depend on context
-fit_jobs = 4                    # number of fit jobs
-verbose = 10                    # verbose period
-n_candidates = 100              # number of candidates for test
-top_k = 10                      # evaluate top k recommendations
-n_test_users = 10000            # number of users in test set
+n_cf = 1000             # number of cached CF items
+cf_model = "als"        # collabortive filatering model
+fit_period = 60         # fit period for similar items in minutes
+predict_period = 60     # prediction period for similar items in minutes
+lr = 0.05               # learning rate
+reg = 0.01              # regularization strength
+n_epochs = 100          # number of epochs
+n_factors = 10          # number of factors
+random_state = 21       # random state (seed)
+init_mean = 0.0         # mean of gaussian initial parameter
+init_std = 0.001        # standard deviation of gaussian initial parameter
+alpha = 1.0             # alpha value, depend on context
+fit_jobs = 4            # number of fit jobs
+verbose = 10            # verbose period
+n_candidates = 100      # number of candidates for test
+top_k = 10              # evaluate top k recommendations
+n_test_users = 10000    # number of users in test set
 
+# This section declares setting for rank model (factorization machines).
 [rank]
-task = "r"
-lr = 0.05                       # learning rate
-reg = 0.01                      # regularization strength
-n_epochs = 100                  # number of epochs
-n_factors = 10                  # number of factors
-random_state = 21               # random state (seed)
-init_mean = 0.0                 # mean of gaussian initial parameter
-init_std = 0.001                # standard deviation of gaussian initial parameter
-fit_jobs = 4                    # number of fit jobs
-verbose = 10                    # verbose period
+fit_period = 60         # fit period for similar items in minutes
+task = "r"              # task type for ranking (r - regression, c - classification)
+lr = 0.05               # learning rate
+reg = 0.01              # regularization strength
+n_epochs = 100          # number of epochs
+n_factors = 10          # number of factors
+random_state = 21       # random state (seed)
+init_mean = 0.0         # mean of gaussian initial parameter
+init_std = 0.001        # standard deviation of gaussian initial parameter
+fit_jobs = 4            # number of fit jobs
+verbose = 10            # verbose period
 
 # This section declares hyperparameters for the recommendation model.
 [master]
-port = 8086
-host = "127.0.0.1"
-jobs = 4
-
-# This section declares settings for the server.
-[server]
-host = "0.0.0.0"                # server host
-port = 8080                     # server port
-default_n = 10                  # defulat number of items on paging
+port = 8086             # master port
+host = "127.0.0.1"      # master host
+jobs = 4                # working jobs

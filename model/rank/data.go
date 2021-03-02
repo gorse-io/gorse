@@ -188,29 +188,31 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	// insert feedback
 	dataSet.UserFeedbackItems = base.NewMatrixInt(dataSet.UnifiedIndex.CountUsers(), 0)
 	dataSet.UserFeedbackTarget = base.NewMatrix32(dataSet.UnifiedIndex.CountUsers(), 0)
-	for {
-		var batchFeedback []data.Feedback
-		cursor, batchFeedback, err = database.GetFeedback(feedbackTypes[0], cursor, batchSize)
-		if err != nil {
-			return nil, err
-		}
-		for _, v := range batchFeedback {
-			userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
-			if userId == base.NotId {
-				log.Warnf("user (%v) not found", v.UserId)
-				continue
+	for _, feedbackType := range feedbackTypes {
+		for {
+			var batchFeedback []data.Feedback
+			cursor, batchFeedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+			if err != nil {
+				return nil, err
 			}
-			itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
-			if itemId == base.NotId {
-				log.Warnf("item (%v) not found", v.ItemId)
-				continue
+			for _, v := range batchFeedback {
+				userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
+				if userId == base.NotId {
+					log.Warnf("user (%v) not found", v.UserId)
+					continue
+				}
+				itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
+				if itemId == base.NotId {
+					log.Warnf("item (%v) not found", v.ItemId)
+					continue
+				}
+				dataSet.PositiveCount++
+				dataSet.UserFeedbackItems[userId] = append(dataSet.UserFeedbackItems[userId], itemId)
+				dataSet.UserFeedbackTarget[userId] = append(dataSet.UserFeedbackTarget[userId], 1)
 			}
-			dataSet.PositiveCount++
-			dataSet.UserFeedbackItems[userId] = append(dataSet.UserFeedbackItems[userId], itemId)
-			dataSet.UserFeedbackTarget[userId] = append(dataSet.UserFeedbackTarget[userId], 1)
-		}
-		if cursor == "" {
-			break
+			if cursor == "" {
+				break
+			}
 		}
 	}
 	return dataSet, nil

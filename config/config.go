@@ -16,7 +16,7 @@ package config
 import (
 	"github.com/BurntSushi/toml"
 	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/model/match"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/rank"
 )
 
@@ -25,13 +25,12 @@ type Config struct {
 	// database
 	Database DatabaseConfig `toml:"database"`
 	// strategies
-	Similar SimilarConfig
+	Similar SimilarConfig `toml:"similar"`
 	Latest  LatestConfig  `toml:"latest"`
 	Popular PopularConfig `toml:"popular"`
 	CF      CFConfig      `toml:"cf"`
 	Rank    RankConfig    `toml:"rank"`
 	// nodes
-	Server ServerConfig `toml:"server"`
 	Master MasterConfig `toml:"master"`
 }
 
@@ -39,11 +38,11 @@ func (config *Config) LoadDefaultIfNil() *Config {
 	if config == nil {
 		return &Config{
 			Database: *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
+			Similar:  *(*SimilarConfig)(nil).LoadDefaultIfNil(),
 			Latest:   *(*LatestConfig)(nil).LoadDefaultIfNil(),
 			Popular:  *(*PopularConfig)(nil).LoadDefaultIfNil(),
 			CF:       *(*CFConfig)(nil).LoadDefaultIfNil(),
 			Rank:     *(*RankConfig)(nil).LoadDefaultIfNil(),
-			Server:   *(*ServerConfig)(nil).LoadDefaultIfNil(),
 			Master:   *(*MasterConfig)(nil).LoadDefaultIfNil(),
 		}
 	}
@@ -51,11 +50,22 @@ func (config *Config) LoadDefaultIfNil() *Config {
 }
 
 type SimilarConfig struct {
-	NumSimilar int
+	NumSimilar   int `toml:"n_similar"`
+	UpdatePeriod int `toml:"update_period"`
+}
+
+func (c *SimilarConfig) LoadDefaultIfNil() *SimilarConfig {
+	if c == nil {
+		return &SimilarConfig{
+			NumSimilar:   100,
+			UpdatePeriod: 60,
+		}
+	}
+	return c
 }
 
 type LatestConfig struct {
-	NumLatest    int `toml:"num_latest"`
+	NumLatest    int `toml:"n_latest"`
 	UpdatePeriod int `toml:"update_period"`
 }
 
@@ -70,7 +80,7 @@ func (c *LatestConfig) LoadDefaultIfNil() *LatestConfig {
 }
 
 type PopularConfig struct {
-	NumPopular   int `toml:"num_popular"`
+	NumPopular   int `toml:"n_popular"`
 	UpdatePeriod int `toml:"update_period"`
 	TimeWindow   int `toml:"time_window"`
 }
@@ -88,9 +98,10 @@ func (c *PopularConfig) LoadDefaultIfNil() *PopularConfig {
 
 /* CFConfig is configuration for collaborative filtering model */
 type CFConfig struct {
-	NumCF         int      `toml:"num_cf"`
+	NumCF         int      `toml:"n_cf"`
 	CFModel       string   `toml:"cf_model"`
-	UpdatePeriod  int      `toml:"update_period"`
+	FitPeriod     int      `toml:"fit_period"`
+	PredictPeriod int      `toml:"predict_period"`
 	FeedbackTypes []string `toml:"feedback_types"`
 	// Hyper-parameters
 	Lr          float64 `toml:"lr"`           // learning rate
@@ -113,20 +124,22 @@ type CFConfig struct {
 func (c *CFConfig) LoadDefaultIfNil() *CFConfig {
 	if c == nil {
 		return &CFConfig{
-			NumCF:        800,
-			CFModel:      "als",
-			UpdatePeriod: 1440,
-			FitJobs:      1,
-			Verbose:      10,
-			Candidates:   100,
-			TopK:         10,
+			FeedbackTypes: []string{""},
+			NumCF:         800,
+			CFModel:       "als",
+			PredictPeriod: 60,
+			FitPeriod:     1440,
+			FitJobs:       1,
+			Verbose:       10,
+			Candidates:    100,
+			TopK:          10,
 		}
 	}
 	return c
 }
 
-func (c *CFConfig) GetFitConfig() *match.FitConfig {
-	return &match.FitConfig{
+func (c *CFConfig) GetFitConfig() *cf.FitConfig {
+	return &cf.FitConfig{
 		Jobs:       c.FitJobs,
 		Verbose:    c.Verbose,
 		Candidates: c.Candidates,
@@ -163,6 +176,7 @@ func (c *CFConfig) GetParams(metaData *toml.MetaData) model.Params {
 type RankConfig struct {
 	Task          string   `toml:"task"`
 	FeedbackTypes []string `toml:"feedback_types"`
+	FitPeriod     int      `toml:"fit_period"`
 	// fit config
 	FitJobs int `toml:"fit_jobs"`
 	Verbose int `toml:"verbose"`
@@ -180,9 +194,11 @@ type RankConfig struct {
 func (c *RankConfig) LoadDefaultIfNil() *RankConfig {
 	if c == nil {
 		return &RankConfig{
-			Task:    "r",
-			FitJobs: 1,
-			Verbose: 10,
+			FeedbackTypes: []string{""},
+			FitPeriod:     60,
+			Task:          "r",
+			FitJobs:       1,
+			Verbose:       10,
 		}
 	}
 	return c
@@ -217,43 +233,6 @@ func (c *RankConfig) GetParams(metaData *toml.MetaData) model.Params {
 		}
 	}
 	return params
-}
-
-// ServerConfig is the configuration for the server.
-type ServerConfig struct {
-	DefaultReturnNumber int `toml:"default_n"`
-}
-
-func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
-	if config == nil {
-		return &ServerConfig{
-			DefaultReturnNumber: 100,
-		}
-	}
-	return config
-}
-
-type WorkerConfig struct {
-	LeaderAddr      string `toml:"leader_addr"`
-	Host            string `toml:"host"`
-	GossipPort      int    `toml:"gossip_port"`
-	RPCPort         int    `toml:"rpc_port"`
-	PredictInterval int    `toml:"predict_interval"`
-	GossipInterval  int    `toml:"gossip_interval"`
-}
-
-func (config *WorkerConfig) LoadDefaultIfNil() *WorkerConfig {
-	if config == nil {
-		return &WorkerConfig{
-			LeaderAddr:      "127.0.0.1:6384",
-			Host:            "127.0.0.1",
-			GossipPort:      6385,
-			RPCPort:         6386,
-			PredictInterval: 1,
-			GossipInterval:  1,
-		}
-	}
-	return config
 }
 
 // MasterConfig is the configuration for the master.
@@ -320,9 +299,17 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("database", "cluster_meta_timeout") {
 		config.Database.ClusterMetaTimeout = defaultDBConfig.ClusterMetaTimeout
 	}
+	// Default similar config
+	defaultSimilarConfig := *(*SimilarConfig)(nil).LoadDefaultIfNil()
+	if !meta.IsDefined("similar", "n_similar") {
+		config.Similar.NumSimilar = defaultSimilarConfig.NumSimilar
+	}
+	if !meta.IsDefined("similar", "update_period") {
+		config.Similar.UpdatePeriod = defaultSimilarConfig.UpdatePeriod
+	}
 	// Default latest config
 	defaultLatestConfig := *(*LatestConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("latest", "num_latest") {
+	if !meta.IsDefined("latest", "n_latest") {
 		config.Latest.NumLatest = defaultLatestConfig.NumLatest
 	}
 	if !meta.IsDefined("latest", "update_period") {
@@ -330,7 +317,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// Default popular config
 	defaultPopularConfig := *(*PopularConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("popular", "num_popular") {
+	if !meta.IsDefined("popular", "n_popular") {
 		config.Popular.NumPopular = defaultPopularConfig.NumPopular
 	}
 	if !meta.IsDefined("popular", "update_period") {
@@ -341,14 +328,20 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// default CF config
 	defaultCFConfig := *(*CFConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("cf", "num_cf") {
+	if !meta.IsDefined("cf", "feedback_type") {
+		config.CF.FeedbackTypes = defaultCFConfig.FeedbackTypes
+	}
+	if !meta.IsDefined("cf", "n_cf") {
 		config.CF.NumCF = defaultCFConfig.NumCF
 	}
 	if !meta.IsDefined("cf", "cf_model") {
 		config.CF.CFModel = defaultCFConfig.CFModel
 	}
-	if !meta.IsDefined("cf", "update_period") {
-		config.CF.UpdatePeriod = defaultCFConfig.UpdatePeriod
+	if !meta.IsDefined("cf", "predict_period") {
+		config.CF.PredictPeriod = defaultCFConfig.PredictPeriod
+	}
+	if !meta.IsDefined("cf", "fit_period") {
+		config.CF.FitPeriod = defaultCFConfig.FitPeriod
 	}
 	if !meta.IsDefined("cf", "fit_jobs") {
 		config.CF.FitJobs = defaultCFConfig.FitJobs
@@ -367,6 +360,12 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// default rank config
 	defaultRankConfig := *(*RankConfig)(nil).LoadDefaultIfNil()
+	if !meta.IsDefined("rank", "feedback_type") {
+		config.Rank.FeedbackTypes = defaultRankConfig.FeedbackTypes
+	}
+	if !meta.IsDefined("rank", "fit_period") {
+		config.Rank.FitPeriod = defaultRankConfig.FitPeriod
+	}
 	if !meta.IsDefined("rank", "task") {
 		config.Rank.Task = defaultRankConfig.Task
 	}
@@ -375,11 +374,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("rank", "verbose") {
 		config.Rank.Verbose = defaultRankConfig.Verbose
-	}
-	// Default server config
-	defaultServerConfig := *(*ServerConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("server", "default_n") {
-		config.Server.DefaultReturnNumber = defaultServerConfig.DefaultReturnNumber
 	}
 	// Default master config
 	defaultMasterConfig := *(*MasterConfig)(nil).LoadDefaultIfNil()

@@ -62,5 +62,28 @@ func NewMatrixInt(row, col int) [][]int {
 }
 
 func Now() string {
-	return time.Now().Format("2006-01-02 3:4:5")
+	return time.Now().Format("2006-01-02T15:04:05Z07:00")
+}
+
+func GCD(a ...int) int {
+	// euclidean
+	gcdEuclidean := func(a, b int) int {
+		for a != b {
+			if a > b {
+				a -= b
+			} else {
+				b -= a
+			}
+		}
+		return a
+	}
+	// greatest common divisor
+	if len(a) == 0 {
+		panic("never pass empty array")
+	}
+	divisor := a[0]
+	for _, b := range a[1:] {
+		divisor = gcdEuclidean(divisor, b)
+	}
+	return divisor
 }
