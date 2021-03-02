@@ -23,7 +23,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/cobra v0.0.7
-	github.com/steinfletcher/apitest v1.4.16
+	github.com/steinfletcher/apitest v1.5.2
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.4.4
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
