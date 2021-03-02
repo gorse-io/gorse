@@ -6,7 +6,6 @@ RUN mkdir -p $GOPATH/src/github.com/zhenghaoz && \
     cd $GOPATH/src/github.com/zhenghaoz && \
     git clone https://github.com/zhenghaoz/gorse.git && \
     cd gorse && \
-    git checkout release-0.2 && \
     cd cmd/gorse-master && \
     go build . && \
     mv gorse-master $GOPATH/bin/
