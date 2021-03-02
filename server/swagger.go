@@ -15,16 +15,17 @@ package server
 
 import (
 	"fmt"
-	"github.com/haxii/go-swagger-ui/static"
-	jsoniter "github.com/json-iterator/go"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/haxii/go-swagger-ui/static"
+	jsoniter "github.com/json-iterator/go"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -39,7 +40,7 @@ var swaggerFile string
 
 func serveLocalFile(localFilePath string, w http.ResponseWriter, r *http.Request) {
 	newHost := r.URL.Query().Get("host")
-	if len(newHost) == 0 {
+	if newHost == "" {
 		http.ServeFile(w, r, localFilePath)
 		return
 	}
@@ -99,7 +100,7 @@ func serveLocalFile(localFilePath string, w http.ResponseWriter, r *http.Request
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	source := r.URL.Path[len(apiDocsPath):]
-	if len(source) == 0 {
+	if source == "" {
 		source = "index.html"
 	}
 

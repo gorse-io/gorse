@@ -17,6 +17,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/araddon/dateparse"
@@ -30,10 +35,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
-	"math/rand"
-	"net"
-	"sync"
-	"time"
 )
 
 const (
@@ -440,7 +441,7 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) error {
 					return
 				}
 				completedCount++
-			case _ = <-ticker.C:
+			case <-ticker.C:
 				log.Infof("master: update similar items (%v/%v)", completedCount, dataset.ItemCount())
 			}
 		}

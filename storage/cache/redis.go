@@ -15,8 +15,9 @@ package cache
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
 	"strconv"
+
+	"github.com/go-redis/redis/v8"
 )
 
 type Redis struct {
@@ -60,9 +61,7 @@ func (redis *Redis) GetList(prefix, name string, n int, offset int) ([]string, e
 		return nil, err
 	}
 
-	for _, itemId := range data {
-		res = append(res, itemId)
-	}
+	res = append(res, data...)
 	return res, err
 }
 

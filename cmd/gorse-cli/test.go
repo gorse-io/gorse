@@ -15,6 +15,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -22,11 +28,6 @@ import (
 	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/rank"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"os"
-	"runtime"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func init() {
@@ -110,7 +111,7 @@ func parseParamFlags(cmd *cobra.Command) model.ParamsGrid {
 }
 
 func parseParamList(text string, tp int) []interface{} {
-	if len(text) == 0 {
+	if text == "" {
 		log.Fatal("cli: empty string for param list")
 	}
 	if text[0] == '[' && text[len(text)-1] == ']' {
