@@ -19,10 +19,11 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/araddon/dateparse"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/match"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/rank"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -57,7 +58,7 @@ type Master struct {
 	cacheStore cache.Database
 
 	// match model
-	matchModel        match.MatrixFactorization
+	cfModel           cf.MatrixFactorization
 	matchModelVersion int
 	matchModelMutex   sync.Mutex
 
@@ -178,7 +179,7 @@ func (m *Master) GetMatchModelVersion(context.Context, *protocol.Void) (*protoco
 	m.matchModelMutex.Lock()
 	defer m.matchModelMutex.Unlock()
 	// skip empty model
-	if m.matchModel == nil {
+	if m.cfModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
 	return &protocol.Model{
@@ -191,11 +192,11 @@ func (m *Master) GetMatchModel(context.Context, *protocol.Void) (*protocol.Model
 	m.matchModelMutex.Lock()
 	defer m.matchModelMutex.Unlock()
 	// skip empty model
-	if m.matchModel == nil {
+	if m.cfModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
-	modelData, err := match.EncodeModel(m.matchModel)
+	modelData, err := cf.EncodeModel(m.cfModel)
 	if err != nil {
 		return nil, err
 	}
@@ -251,56 +252,89 @@ func (m *Master) NodeDown(key string, value interface{}) {
 }
 
 func (m *Master) Loop() {
-	// pull dataset for rank
-	rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Rank.FeedbackTypes)
-	if err != nil {
-		log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
-	}
-	if err = m.RenewRankModel(rankDataSet); err != nil {
-		log.Fatalf("master: failed to renew ranking model (%v)", err)
-	}
+	// calculate loop period
+	loopPeriod := base.GCD(
+		m.cfg.CF.FitPeriod,
+		m.cfg.Rank.FitPeriod,
+		m.cfg.Similar.UpdatePeriod,
+		m.cfg.Popular.UpdatePeriod,
+		m.cfg.Latest.UpdatePeriod)
+	log.Infof("master: start loop (period = %v min)", loopPeriod)
 
-	// download dataset
-	log.Infof("master: load data from database")
-	dataSet, items, err := match.LoadDataFromDatabase(m.dataStore, m.cfg.CF.FeedbackTypes)
-	if err != nil {
-		log.Fatal("master: ", err)
-	}
-	log.Infof("master: data loaded (#user = %v, #item = %v, #feedback = %v)",
-		dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count())
+	for {
+		// check stale
+		isPopItemStale := m.IsStale(cache.LastUpdatePopularTime, m.cfg.Popular.UpdatePeriod)
+		isLatestStale := m.IsStale(cache.LastUpdateLatestTime, m.cfg.Latest.UpdatePeriod)
+		isSimilarStale := m.IsStale(cache.LastUpdateSimilarTime, m.cfg.Similar.UpdatePeriod)
+		isRankModelStale := m.IsStale(cache.LastFitRankModelTime, m.cfg.Rank.FitPeriod)
+		isCFModelStale := m.IsStale(cache.LastFitCFModelTime, m.cfg.CF.FitPeriod)
 
-	// collect popular items
-	log.Info("master: collect popular items")
-	if err = m.CollectPopItem(items, dataSet); err != nil {
-		log.Errorf("master: failed to collect popular items (%v)", err)
-	}
-	log.Info("master: completed collect popular items")
+		// pull dataset for rank
+		if isRankModelStale || m.rankModel == nil {
+			rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Rank.FeedbackTypes)
+			if err != nil {
+				log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
+			}
+			if err = m.FitRankModel(rankDataSet); err != nil {
+				log.Fatalf("master: failed to renew ranking model (%v)", err)
+			}
+		}
 
-	// collect latest items
-	log.Info("master: collect latest items")
-	if err = m.CollectLatest(items); err != nil {
-		log.Errorf("master: failed to collect latest items (%v)", err)
-	}
-	log.Info("master: completed collect latest items")
+		if isCFModelStale || isLatestStale || isPopItemStale || isSimilarStale || m.cfModel == nil {
+			// download dataset
+			log.Infof("master: load data from database")
+			dataSet, items, err := cf.LoadDataFromDatabase(m.dataStore, m.cfg.CF.FeedbackTypes)
+			if err != nil {
+				log.Fatal("master: ", err)
+			}
+			log.Infof("master: data loaded (#user = %v, #item = %v, #feedback = %v)",
+				dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count())
 
-	// collect similar items
-	log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Jobs)
-	if err = m.CollectSimilar(items, dataSet); err != nil {
-		log.Errorf("master: failed to collect similar items (%v)", err)
-	}
-	log.Info("master: completed collect similar items")
+			// collect popular items
+			if isPopItemStale {
+				log.Info("master: collect popular items")
+				if err = m.CollectPopItem(items, dataSet); err != nil {
+					log.Errorf("master: failed to collect popular items (%v)", err)
+				}
+				log.Info("master: completed collect popular items")
+			}
 
-	log.Infof("master: fit match model (n_jobs = %v)", m.cfg.Master.Jobs)
-	if err = m.RenewCFModel(dataSet); err != nil {
-		log.Errorf("master: failed to fit match model (%v)", err)
+			// collect latest items
+			if isLatestStale {
+				log.Info("master: collect latest items")
+				if err = m.CollectLatest(items); err != nil {
+					log.Errorf("master: failed to collect latest items (%v)", err)
+				}
+				log.Info("master: completed collect latest items")
+			}
+
+			// collect similar items
+			if isSimilarStale {
+				log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Jobs)
+				if err = m.CollectSimilar(items, dataSet); err != nil {
+					log.Errorf("master: failed to collect similar items (%v)", err)
+				}
+				log.Info("master: completed collect similar items")
+			}
+
+			if isCFModelStale || m.cfModel == nil {
+				log.Infof("master: fit cf model (n_jobs = %v)", m.cfg.Master.Jobs)
+				if err = m.FitCFModel(dataSet); err != nil {
+					log.Errorf("master: failed to fit cf model (%v)", err)
+				}
+				log.Infof("master: completed fit cf model")
+			}
+		}
+
+		// sleep
+		time.Sleep(time.Duration(loopPeriod) * time.Minute)
 	}
-	log.Infof("master: completed fit match model")
 }
 
-func (m *Master) RenewRankModel(dataSet *rank.Dataset) error {
+func (m *Master) FitRankModel(dataSet *rank.Dataset) error {
 	trainSet, testSet := dataSet.Split(0.2, 0)
 	testSet.NegativeSample(1, trainSet, 0)
-	nextModel := rank.NewFM(rank.FMRegression, nil)
+	nextModel := rank.NewFM(rank.FMTask(m.cfg.Rank.Task), nil)
 	nextModel.Fit(trainSet, testSet, nil)
 
 	m.rankModelMutex.Lock()
@@ -308,16 +342,16 @@ func (m *Master) RenewRankModel(dataSet *rank.Dataset) error {
 	m.rankModelVersion++
 	m.rankModelMutex.Unlock()
 
-	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.LastRenewRankModelTime, base.Now()); err != nil {
+	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.LastFitRankModelTime, base.Now()); err != nil {
 		return err
 	}
 	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestRankModelVersion, fmt.Sprintf("%x", m.rankModelVersion))
 }
 
-func (m *Master) RenewCFModel(dataSet *match.DataSet) error {
+func (m *Master) FitCFModel(dataSet *cf.DataSet) error {
 	// training match model
 	trainSet, testSet := dataSet.Split(m.cfg.CF.NumTestUsers, 0)
-	nextModel, err := match.NewModel(m.cfg.CF.CFModel, m.cfg.CF.GetParams(m.meta))
+	nextModel, err := cf.NewModel(m.cfg.CF.CFModel, m.cfg.CF.GetParams(m.meta))
 	if err != nil {
 		return err
 	}
@@ -325,18 +359,31 @@ func (m *Master) RenewCFModel(dataSet *match.DataSet) error {
 
 	// update match model
 	m.matchModelMutex.Lock()
-	m.matchModel = nextModel
+	m.cfModel = nextModel
 	m.matchModelVersion++
 	m.matchModelMutex.Unlock()
 
-	if err = m.cacheStore.SetString(cache.GlobalMeta, cache.LastRenewMatchModelTime, base.Now()); err != nil {
+	if err = m.cacheStore.SetString(cache.GlobalMeta, cache.LastFitCFModelTime, base.Now()); err != nil {
 		return err
 	}
-	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestMatchModelVersion, fmt.Sprintf("%x", m.matchModelVersion))
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestCFModelVersion, fmt.Sprintf("%x", m.matchModelVersion))
+}
+
+func (m *Master) IsStale(dateTimeField string, timeLimit int) bool {
+	updateTimeText, err := m.cacheStore.GetString(cache.GlobalMeta, dateTimeField)
+	if err != nil {
+		log.Fatal("master:", err)
+	}
+	updateTime, err := dateparse.ParseAny(updateTimeText)
+	if err != nil {
+		log.Error("master: ", err)
+		return true
+	}
+	return time.Since(updateTime).Minutes() > float64(timeLimit)
 }
 
 // CollectPopItem updates popular items for the database.
-func (m *Master) CollectPopItem(items []data.Item, dataset *match.DataSet) error {
+func (m *Master) CollectPopItem(items []data.Item, dataset *cf.DataSet) error {
 	// create item map
 	itemMap := make(map[string]data.Item)
 	for _, item := range items {
@@ -375,7 +422,7 @@ func (m *Master) CollectLatest(items []data.Item) error {
 }
 
 // CollectSimilar updates neighbors for the database.
-func (m *Master) CollectSimilar(items []data.Item, dataset *match.DataSet) error {
+func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) error {
 	// create item map
 	itemMap := make(map[string]data.Item)
 	for _, item := range items {

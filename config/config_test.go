@@ -24,25 +24,30 @@ func TestLoadConfig(t *testing.T) {
 	assert.Nil(t, err)
 
 	// database configuration
-	assert.Equal(t, "redis://192.168.199.246:6379", config.Database.CacheStore)
-	assert.Equal(t, "mysql://root@tcp(127.0.0.1:3306)/gitrec?parseTime=true", config.Database.DataStore)
+	assert.Equal(t, "redis://localhost:6379", config.Database.CacheStore)
+	assert.Equal(t, "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true", config.Database.DataStore)
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
-	assert.Equal(t, 60, config.Database.ClusterMetaTimeout)
+	assert.Equal(t, 30, config.Database.ClusterMetaTimeout)
+
+	// similar configuration
+	assert.Equal(t, 500, config.Similar.NumSimilar)
+	assert.Equal(t, 120, config.Similar.UpdatePeriod)
 
 	// latest configuration
-	assert.Equal(t, 98, config.Latest.NumLatest)
-	assert.Equal(t, 10, config.Latest.UpdatePeriod)
+	assert.Equal(t, 500, config.Latest.NumLatest)
+	assert.Equal(t, 30, config.Latest.UpdatePeriod)
 
 	// popular configuration
-	assert.Equal(t, 99, config.Popular.NumPopular)
-	assert.Equal(t, 1442, config.Popular.UpdatePeriod)
+	assert.Equal(t, 500, config.Popular.NumPopular)
+	assert.Equal(t, 120, config.Popular.UpdatePeriod)
 	assert.Equal(t, 360, config.Popular.TimeWindow)
 
 	// cf config
-	assert.Equal(t, 799, config.CF.NumCF)
-	assert.Equal(t, "ccd", config.CF.CFModel)
-	assert.Equal(t, 1441, config.CF.UpdatePeriod)
+	assert.Equal(t, 1000, config.CF.NumCF)
+	assert.Equal(t, "als", config.CF.CFModel)
+	assert.Equal(t, 60, config.CF.FitPeriod)
+	assert.Equal(t, 60, config.CF.PredictPeriod)
 
 	assert.Equal(t, 0.05, config.CF.Lr)
 	assert.Equal(t, 0.01, config.CF.Reg)
@@ -61,6 +66,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 10000, config.CF.NumTestUsers)
 
 	// rank config
+	assert.Equal(t, 60, config.Rank.FitPeriod)
 	assert.Equal(t, "r", config.Rank.Task)
 
 	assert.Equal(t, 0.05, config.Rank.Lr)
@@ -79,9 +85,6 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "127.0.0.1", config.Master.Host)
 	assert.Equal(t, 4, config.Master.Jobs)
-
-	// server configuration
-	assert.Equal(t, 10, config.Server.DefaultReturnNumber)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

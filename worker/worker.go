@@ -21,7 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/match"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -43,7 +43,7 @@ type Worker struct {
 	// match model
 	Jobs              int
 	MatchModelVersion int64
-	MatchModel        match.MatrixFactorization
+	MatchModel        cf.MatrixFactorization
 }
 
 func NewWorker(masterHost string, masterPort int, jobs int) *Worker {
@@ -60,6 +60,37 @@ func (w *Worker) Register() {
 			log.Fatal("worker:", err)
 		}
 		time.Sleep(time.Duration(w.cfg.Database.ClusterMetaTimeout/2) * time.Second)
+	}
+}
+
+func (w *Worker) Sync() {
+	for {
+		// pull model version
+		log.Info("worker: pull model version from master")
+		matchModel, err := w.MasterClient.GetMatchModelVersion(context.Background(), &protocol.Void{})
+		if err != nil {
+			log.Errorf("worker: failed to pull model version (%v)", err)
+		}
+
+		// pull model
+		if matchModel.Version != w.MatchModelVersion {
+			log.Infof("worker: found new model version (%x)", matchModel.Version)
+			// pull model
+			matchModel, err = w.MasterClient.GetMatchModel(context.Background(), &protocol.Void{},
+				grpc.MaxCallRecvMsgSize(10e9))
+			if err != nil {
+				log.Errorf("worker: failed to pull model (%v)", err)
+			}
+		}
+
+		w.MatchModel, err = cf.DecodeModel(matchModel.Name, matchModel.Model)
+		w.MatchModelVersion = matchModel.Version
+		if err != nil {
+			log.Errorf("worker: failed to decode model (%v)", err)
+		}
+
+		// sleep
+		time.Sleep(time.Minute)
 	}
 }
 
@@ -94,41 +125,29 @@ func (w *Worker) Serve() {
 
 	// register to master
 	go w.Register()
+	// sync model
+	go w.Sync()
 
-	// pull model version
-	log.Info("worker: pull model version from master")
-	matchModel, err := w.MasterClient.GetMatchModelVersion(context.Background(), &protocol.Void{})
-	if err != nil {
-		log.Errorf("worker: failed to pull model version (%v)", err)
-	}
+	for {
+		if w.MatchModel != nil {
+			// get cluster
+			cluster, err := w.MasterClient.GetCluster(context.Background(), &protocol.Void{})
+			if err != nil {
+				log.Errorf("worker: failed to get cluster info (%v)", err)
+			}
 
-	// pull model
-	if matchModel.Version != w.MatchModelVersion {
-		log.Infof("worker: found new model version (%x)", matchModel.Version)
-		// pull model
-		matchModel, err = w.MasterClient.GetMatchModel(context.Background(), &protocol.Void{},
-			grpc.MaxCallRecvMsgSize(10e9))
-		if err != nil {
-			log.Errorf("worker: failed to pull model (%v)", err)
+			workingUsers := Split(w.MatchModel.GetUserIndex(), cluster.Workers, cluster.Me)
+			w.GenerateMatchItems(w.MatchModel, workingUsers)
+
+			// sleep
+			time.Sleep(time.Duration(w.cfg.CF.PredictPeriod) * time.Minute)
+		} else {
+			time.Sleep(time.Minute)
 		}
 	}
-
-	// get cluster
-	cluster, err := w.MasterClient.GetCluster(context.Background(), &protocol.Void{})
-	if err != nil {
-		log.Errorf("worker: failed to get cluster info (%v)", err)
-	}
-
-	w.MatchModel, err = match.DecodeModel(matchModel.Name, matchModel.Model)
-	if err != nil {
-		log.Errorf("worker: failed to decode model (%v)", err)
-	}
-	workingUsers := Split(w.MatchModel.GetUserIndex(), cluster.Workers, cluster.Me)
-	w.GenerateMatchItems(w.MatchModel, workingUsers)
-
 }
 
-func (w *Worker) GenerateMatchItems(m match.MatrixFactorization, users []string) {
+func (w *Worker) GenerateMatchItems(m cf.MatrixFactorization, users []string) {
 	// get items
 	items := m.GetItemIndex().GetNames()
 	log.Infof("worker: generate match items for %v users among %v items (n_jobs = %v)", len(users), len(items), w.Jobs)

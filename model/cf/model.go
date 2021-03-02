@@ -1,4 +1,4 @@
-package match
+package cf
 
 import (
 	"bufio"
@@ -90,6 +90,8 @@ func NewModel(name string, params model.Params) (MatrixFactorization, error) {
 		return NewALS(params), nil
 	case "bpr":
 		return NewBPR(params), nil
+	case "ccd":
+		return NewCCD(params), nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }

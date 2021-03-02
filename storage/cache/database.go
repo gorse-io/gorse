@@ -25,15 +25,14 @@ const (
 	SimilarItems = "similar_items"
 	MatchedItems = "matched_items"
 
-	GlobalMeta              = "global_meta"
-	LastUpdatePopularTime   = "last_update_popular_time"
-	LastUpdateLatestTime    = "last_update_latest_time"
-	LastUpdateSimilarTime   = "last_update_similar_time"
-	LastRenewMatchModelTime = "last_renew_match_model_time"
-	LastRenewRankModelTime  = "last_renew_rank_model_time"
-	LatestMatchModelVersion = "latest_match_model_version"
-	LatestRankModelVersion  = "latest_rank_model_version"
-	LatestDatasetHash       = "latest_dataset_hash"
+	GlobalMeta             = "global_meta"
+	LastUpdatePopularTime  = "last_update_popular_time"
+	LastUpdateLatestTime   = "last_update_latest_time"
+	LastUpdateSimilarTime  = "last_update_similar_time"
+	LastFitCFModelTime     = "last_fit_match_model_time"
+	LastFitRankModelTime   = "last_fit_rank_model_time"
+	LatestCFModelVersion   = "latest_match_model_version"
+	LatestRankModelVersion = "latest_rank_model_version"
 )
 
 type Database interface {

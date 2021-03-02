@@ -39,9 +39,9 @@ var statusCommand = &cobra.Command{
 			cache.LastUpdatePopularTime,
 			cache.LastUpdateLatestTime,
 			cache.LastUpdateSimilarTime,
-			cache.LastRenewMatchModelTime,
-			cache.LastRenewRankModelTime,
-			cache.LatestMatchModelVersion,
+			cache.LastFitCFModelTime,
+			cache.LastFitRankModelTime,
+			cache.LatestCFModelVersion,
 			cache.LatestRankModelVersion,
 		}
 		table := tablewriter.NewWriter(os.Stdout)
