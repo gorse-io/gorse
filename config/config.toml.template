@@ -8,8 +8,6 @@ data_store = "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true"
 auto_insert_user = true
 # insert new items while inserting feedback
 auto_insert_item = false
-# cluster meta timeout (second)
-cluster_meta_timeout = 30
 
 # This section declares setting for cached latest items.
 [latest]
@@ -63,6 +61,7 @@ verbose = 10            # verbose period
 
 # This section declares hyperparameters for the recommendation model.
 [master]
-port = 8086             # master port
-host = "127.0.0.1"      # master host
-jobs = 4                # working jobs
+port = 8086                 # master port
+host = "127.0.0.1"          # master host
+jobs = 4                    # working jobs
+cluster_meta_timeout = 30   # cluster meta timeout (second)

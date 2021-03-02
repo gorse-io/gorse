@@ -59,7 +59,7 @@ func (w *Worker) Register() {
 		if _, err := w.MasterClient.RegisterWorker(context.Background(), &protocol.Void{}); err != nil {
 			log.Fatal("worker:", err)
 		}
-		time.Sleep(time.Duration(w.cfg.Database.ClusterMetaTimeout/2) * time.Second)
+		time.Sleep(time.Duration(w.cfg.Master.ClusterMetaTimeout/2) * time.Second)
 	}
 }
 

@@ -148,7 +148,7 @@ func (s *Server) Register() {
 		if _, err := s.MasterClient.RegisterServer(context.Background(), &protocol.Void{}); err != nil {
 			log.Fatal("server:", err)
 		}
-		time.Sleep(time.Duration(s.Config.Database.ClusterMetaTimeout/2) * time.Second)
+		time.Sleep(time.Duration(s.Config.Master.ClusterMetaTimeout/2) * time.Second)
 	}
 }
 
