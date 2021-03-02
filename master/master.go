@@ -86,7 +86,7 @@ func (m *Master) Serve() {
 	m.ttlCache.SetExpirationCallback(m.NodeDown)
 	m.ttlCache.SetNewItemCallback(m.NodeUp)
 	if err := m.ttlCache.SetTTL(
-		time.Duration(m.cfg.Database.ClusterMetaTimeout) * time.Second,
+		time.Duration(m.cfg.Master.ClusterMetaTimeout) * time.Second,
 	); err != nil {
 		log.Error("master:", err)
 	}

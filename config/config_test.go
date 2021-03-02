@@ -28,7 +28,6 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true", config.Database.DataStore)
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
-	assert.Equal(t, 30, config.Database.ClusterMetaTimeout)
 
 	// similar configuration
 	assert.Equal(t, 500, config.Similar.NumSimilar)
@@ -85,6 +84,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "127.0.0.1", config.Master.Host)
 	assert.Equal(t, 4, config.Master.Jobs)
+	assert.Equal(t, 30, config.Master.ClusterMetaTimeout)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

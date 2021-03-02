@@ -237,17 +237,19 @@ func (c *RankConfig) GetParams(metaData *toml.MetaData) model.Params {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port int    `toml:"port"`
-	Host string `toml:"host"`
-	Jobs int    `toml:"jobs"`
+	Port               int    `toml:"port"`
+	Host               string `toml:"host"`
+	Jobs               int    `toml:"jobs"`
+	ClusterMetaTimeout int    `toml:"cluster_meta_timeout"`
 }
 
 func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 	if config == nil {
 		return &MasterConfig{
-			Port: 8086,
-			Host: "127.0.0.1",
-			Jobs: 2,
+			Port:               8086,
+			Host:               "127.0.0.1",
+			Jobs:               2,
+			ClusterMetaTimeout: 60,
 		}
 	}
 	return config
@@ -263,18 +265,15 @@ type DatabaseConfig struct {
 	AutoInsertUser bool `toml:"auto_insert_user"`
 	// insert new items while inserting feedback
 	AutoInsertItem bool `toml:"auto_insert_item"`
-	// cluster meta timeout (second)
-	ClusterMetaTimeout int `toml:"cluster_meta_timeout"`
 }
 
 func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 	if config == nil {
 		return &DatabaseConfig{
-			CacheStore:         "redis://127.0.0.1:6379",
-			DataStore:          "mysql://root@tcp(127.0.0.1:3306)/gorse",
-			AutoInsertUser:     true,
-			AutoInsertItem:     true,
-			ClusterMetaTimeout: 60,
+			CacheStore:     "redis://127.0.0.1:6379",
+			DataStore:      "mysql://root@tcp(127.0.0.1:3306)/gorse",
+			AutoInsertUser: true,
+			AutoInsertItem: true,
 		}
 	}
 	return config
@@ -295,9 +294,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("database", "auto_insert_item") {
 		config.Database.AutoInsertItem = defaultDBConfig.AutoInsertItem
-	}
-	if !meta.IsDefined("database", "cluster_meta_timeout") {
-		config.Database.ClusterMetaTimeout = defaultDBConfig.ClusterMetaTimeout
 	}
 	// Default similar config
 	defaultSimilarConfig := *(*SimilarConfig)(nil).LoadDefaultIfNil()
@@ -385,6 +381,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("master", "jobs") {
 		config.Master.Jobs = defaultMasterConfig.Jobs
+	}
+	if !meta.IsDefined("master", "cluster_meta_timeout") {
+		config.Master.ClusterMetaTimeout = defaultMasterConfig.ClusterMetaTimeout
 	}
 }
 
