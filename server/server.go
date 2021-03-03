@@ -114,7 +114,7 @@ func (s *Server) Sync() {
 		ctx := context.Background()
 
 		// pull model version
-		log.Infof("server: check model version")
+		log.Debug("server: check model version")
 		modelVersion, err := s.MasterClient.GetRankModelVersion(ctx, &protocol.Void{})
 		if err != nil {
 			log.Fatalf("server: failed to check model version (%v)", err)
@@ -162,78 +162,94 @@ func (s *Server) CreateWebService() *restful.WebService {
 	// Insert a user
 	ws.Route(ws.POST("/user").To(s.insertUser).
 		Doc("Insert a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Reads(data.User{}))
 	// Get a user
 	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
 		Doc("Get a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(data.User{}))
 	// Insert users
 	ws.Route(ws.POST("/users").To(s.insertUsers).
 		Doc("Insert users.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Reads([]data.User{}))
 	// Get users
 	ws.Route(ws.GET("/users").To(s.getUsers).
 		Doc("Get users.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.QueryParameter("cursor", "cursor of iteration").DataType("string")).
 		Writes(UserIterator{}))
 	// Delete a user
 	ws.Route(ws.DELETE("/user/{user-id}").To(s.deleteUser).
 		Doc("Delete a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(Success{}))
 
 	// Insert an item
 	ws.Route(ws.POST("/item").To(s.insertItem).
 		Doc("Insert an item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Reads(Item{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
 		Doc("Get items.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.FormParameter("n", "the number of neighbors").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
 		Writes(ItemIterator{}))
 	// Get item
 	ws.Route(ws.GET("/item/{item-id}").To(s.getItem).
 		Doc("Get a item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
 		Writes(data.Item{}))
 	// Insert items
 	ws.Route(ws.POST("/items").To(s.insertItems).
 		Doc("Insert items.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Reads([]Item{}))
 	// Delete item
 	ws.Route(ws.DELETE("/item/{item-id}").To(s.deleteItem).
 		Doc("Delete a item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.PathParameter("item-id", "identified of the item").DataType("string")).
 		Writes(Success{}))
 
 	// Insert feedback
 	ws.Route(ws.POST("/feedback").To(s.insertFeedback).
 		Doc("Insert feedback.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Reads(data.Feedback{}))
 	// Get feedback
 	ws.Route(ws.GET("/feedback").To(s.getFeedback).
 		Doc("Get feedback.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Writes(FeedbackIterator{}))
 	// Get feedback by user id
 	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByUser).
 		Doc("Get feedback by user id with feedback type.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/user/{user-id}/feedback/").To(s.getFeedbackByUser).
 		Doc("Get feedback by user id.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes([]data.Feedback{}))
 	// Get feedback by item-id
 	ws.Route(ws.GET("/item/{item-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByItem).
 		Doc("Get feedback by item id with feedback type.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("strung")).
 		Writes([]string{}))
 	ws.Route(ws.GET("/item/{item-id}/feedback/").To(s.getFeedbackByItem).
 		Doc("Get feedback by item id.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Writes([]string{}))
 
@@ -242,6 +258,7 @@ func (s *Server) CreateWebService() *restful.WebService {
 	// Get matched items by user id
 	ws.Route(ws.GET("/user/{user-id}/match").To(s.getRecommendCache).
 		Doc("get the top list for a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.FormParameter("n", "the number of recommendations").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
@@ -249,18 +266,21 @@ func (s *Server) CreateWebService() *restful.WebService {
 	// Get popular items
 	ws.Route(ws.GET("/popular").To(s.getPopular).
 		Doc("get popular items").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.FormParameter("n", "the number of popular items").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
 		Writes([]string{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("get latest items").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.FormParameter("n", "the number of latest items").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
 		Writes([]string{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors").To(s.getNeighbors).
 		Doc("get neighbors of a item").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.FormParameter("n", "the number of neighbors").DataType("int")).
 		Param(ws.FormParameter("offset", "the offset of list").DataType("int")).
@@ -268,10 +288,11 @@ func (s *Server) CreateWebService() *restful.WebService {
 
 	/* Rank recommendation */
 
-	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend)).
+	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
 		Doc("Get recommendation for user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Param(ws.FormParameter("n", "the number of neighbors").DataType("int"))
+		Param(ws.FormParameter("n", "the number of neighbors").DataType("int")))
 
 	return ws
 }
