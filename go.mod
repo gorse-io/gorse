@@ -9,7 +9,7 @@ require (
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/cheggaaa/pb/v3 v3.0.5
 	github.com/chewxy/math32 v1.0.6
-	github.com/emicklei/go-restful v2.9.0+incompatible
+	github.com/emicklei/go-restful v2.15.0+incompatible
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.4.0
 	github.com/go-redis/redis/v8 v8.6.0
