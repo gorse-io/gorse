@@ -373,7 +373,10 @@ func (m *Master) FitCFModel(dataSet *cf.DataSet) error {
 func (m *Master) IsStale(dateTimeField string, timeLimit int) bool {
 	updateTimeText, err := m.cacheStore.GetString(cache.GlobalMeta, dateTimeField)
 	if err != nil {
-		log.Fatal("master:", err)
+		if err.Error() == "redis: nil" {
+			return true
+		}
+		log.Fatalf("master: failed to get timestamp (%v)", err)
 	}
 	updateTime, err := dateparse.ParseAny(updateTimeText)
 	if err != nil {

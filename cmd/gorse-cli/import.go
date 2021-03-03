@@ -34,7 +34,7 @@ func init() {
 	importItemCommand.PersistentFlags().StringP("sep", "s", ",", "Separator for csv file.")
 	importItemCommand.PersistentFlags().BoolP("header", "H", false, "Skip first line of csv file.")
 	importItemCommand.PersistentFlags().StringP("label-sep", "l", "|", "Separator for labels")
-	importItemCommand.PersistentFlags().StringP("format", "f", "itu", "Columns of csv file "+
+	importItemCommand.PersistentFlags().StringP("format", "f", "itl", "Columns of csv file "+
 		"(u - user, i - item, t - timestamp, l - labels, _ - meaningless).")
 	// import feedback
 	importCommand.AddCommand(importItemCommand)
@@ -252,7 +252,7 @@ func previewImportFeedback(csvFile string, feedbackType string, sep string, hasH
 	}
 	table.Render()
 
-	fmt.Printf("Import feedback into database (type = %v, auto_insert_user = %v, auto_insert_item = %v) [Y/n] ",
+	fmt.Printf("Import feedback into database (type = \"%v\", auto_insert_user = %v, auto_insert_item = %v) [Y/n] ",
 		feedbackType, globalConfig.Database.AutoInsertUser, globalConfig.Database.AutoInsertItem)
 	reader := bufio.NewReader(os.Stdin)
 	text, _ := reader.ReadString('\n')
