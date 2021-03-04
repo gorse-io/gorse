@@ -35,7 +35,8 @@ func TestParallel(t *testing.T) {
 	})
 	workersSet := NewSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.Equal(t, 4, workersSet.Len())
+	assert.GreaterOrEqual(t, 4, workersSet.Len())
+	assert.Less(t, 1, workersSet.Len())
 	// single thread
 	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
 		b[jobId] = a[jobId]
@@ -65,7 +66,8 @@ func TestBatchParallel(t *testing.T) {
 	})
 	workersSet := NewSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.Equal(t, 4, workersSet.Len())
+	assert.GreaterOrEqual(t, 4, workersSet.Len())
+	assert.Less(t, 1, workersSet.Len())
 	// single thread
 	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
 		b[jobId] = a[jobId]
