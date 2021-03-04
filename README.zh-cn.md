@@ -2,163 +2,37 @@
 
 # gorse: Go Recommender System Engine
 
-<img width=160 src="https://img.sine-x.com/gorse.png"/>
+<img width=160 src="https://gorse.io/zh/docs/img/gorse.png"/>
 
 | 持续集成 | 测试覆盖率 | 代码报告 | Go文档                                                       | 文档 |
 |---|---|---|---|---|
-| [![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)  | [![Go Reference](https://pkg.go.dev/badge/github.com/zhenghaoz/gorse.svg)](https://pkg.go.dev/github.com/zhenghaoz/gorse) | [![Documentation Status](https://github.com/zhenghaoz/gorse/workflows/docs/badge.svg)](https://zhenghaoz.com/gorse/zh/) |
+| [![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)  | [![Go Reference](https://pkg.go.dev/badge/github.com/zhenghaoz/gorse.svg)](https://pkg.go.dev/github.com/zhenghaoz/gorse) | [![Build Docs](https://github.com/gorse-io/gorse-io.github.io/actions/workflows/build_docs.yml/badge.svg)](https://gorse.io/zh/docs/) |
 
-`gorse` 是一个使用 Go 语言实现的推荐系统服务，系统整体架构如下：
+*Gorse*是一个Go语言编写的开源推荐系统。Gorse希望成为一个具有普适性开源推荐系统，可以方便地引入到各种各样的在线服务中。 将物品、用户和它们之间的交互反馈数据导入到Gorse中，系统将自动训练模型，为每个用户实时生成推荐。项目特点如下：
 
-<img width=540 src="https://img.sine-x.com/arch.png"/>
+- 支持多路召回（最新、热门、基于矩阵分解的协同过滤）和基于FM的个性化排序。
+- 单机训练，分布式预测，能够在推荐预测阶段实现水平扩展。
+- 提供RESTful接口，用于数据的增删改查和推荐结果的获取。
+- 提供CLI工具，用于数据导入导出、模型调参、集群状态检查。
 
-本项目以数据库为中心，构建出多节点分布式推荐系统，节点由主节点（Leader）、工作节点（Worker）和服务节点（Server）三种角色组成。
+## 使用指南
 
-- **主节点**主要负责模型训练和用户划分。主节点定时拉取数据训练出召回模型和排序模型，分发给服务节点以及工作节点，已经将用户分组分发给召回模型进行候选物品生成。
+- [快速上手](https://gorse.io/zh/docs/chapter_2.html)
+- [配置项介绍](https://gorse.io/zh/docs/ch02-01-config.html)
+- [命令行介绍](https://gorse.io/zh/docs/ch02-02-command.html)
+- [RESTful接口介绍](https://gorse.io/zh/docs/ch02-03-api.html)
 
-- **工作节点**负责召回工作。工作节点使用召回模型（协同过滤）为每个用户生成候选物品，每个节点负责不同用户的候选物品生成。
+## [推荐原理](https://gorse.io/zh/docs/ch01-01-principle.html)
 
-- **服务节点**负责对外服务和实时排序。它实现了推荐系统的RESTful API，能够处理数据读写任务。最重要的是，在收到推荐请求的时候，使用CTR模型或者人工规则对候选物品进行排序。
+Gorse推荐物品的过程由**召回**和**排序**两个阶段构成。召回阶段从全体物品中寻找出一个候选物品集合用于后续排序。由于物品的数量庞大，推荐系统无法完成对全体物品进行排序的计算量，因此召回阶段主要使用一些简单的策略或者模型去搜集候选物品。目前，系统已经实现了“最近热门物品”、“最新物品”和“协同过滤”三种召回方式。排序阶段将召回物品去掉重复物品和历史物品之后进行排序，排序阶段会结合物品和用户的特征进行推荐，通过更加精准。
 
-除了以上的主要功能之外，系统还实现了以下的优化：
+<img width=210 src="https://gorse.io/zh/docs/img/dataflow.png"/>
 
-- [x] 提供用户友好的模型调参工具
-- [x] 支持模型增量训练，加快模型收敛速度
-- [ ] 支持SIMD和多线程训练，充分利用处理器性能
+## [系统架构](https://gorse.io/zh/docs/ch01-02-architect.html)
 
-## 安装
+Gorse是一个单机训练分布式预测的推荐系统。Gorse将数据存储在MySQL或者MongoDB中，中间数据缓存在Redis中。集群又一个主节点、多个工作节点和服务节点构成。主节点负责排序模型训练、协同过滤模型训练、非个性化物品召回、配置管理和成员管理。服务节点负责暴露系统的HTTP接口，以及负责在线实时推荐。工作节点负责为每个用户进行个性化召回——目前仅支持协同过滤召回。另外，运维人员可以通过CLI进行模型调参、数据导入导出和系统状态查看。
 
-可以以以下的不同方式安装
-
-- 从[Release](https://github.com/zhenghaoz/gorse/releases)下载预编译的二进制可执行文件。
-- 从DockerHub获取镜像
-
-| 镜像         | 编译状态 |
-| ------------ | -------- |
-| gorse-leader | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-leader)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-leader) |
-| gorse-server | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-server)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-server) |
-| gorse-worker | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-worker)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-worker) |
-| gorse-cli | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-cli)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-cli) |
-
-- 从源码编译
-
-需要首先安装Go 编译器，然后使用 `go get` 安装
-
-```
-$ go get github.com/zhenghaoz/gorse/...
-```
-
-项目代码会被自动下载到本地， `gorse-cli` 、`gorse-leader`、`gorse-worker`和`gorse-server`四个程序被安装在` $GOBIN` 路径指定的文件夹中。
-
-## 使用
-
-```
-gorse is an offline recommender system backend based on collaborative filtering written in Go.
-
-Usage:
-  gorse [flags]
-  gorse [command]
-
-Available Commands:
-  export-feedback Export feedback to CSV
-  export-items    Export items to CSV
-  help            Help about any command
-  import-feedback Import feedback from CSV
-  import-items    Import items from CSV
-  serve           Start a recommender sever
-  test            Test a model by cross validation
-  version         Check the version
-
-Flags:
-  -h, --help   help for gorse
-
-Use "gorse [command] --help" for more information about a command.
-```
-
-### 评估推荐模型
-
-*gorse*提供了评估模型的工具。可以运行 `gorse test -h` 获取访问 [在线文档](https://gorse.readthedocs.io/en/latest/usage/cross_validation.html) 来查看它的用法。例如我们可以评估一下BPR算法：
-
-```bash
-$ gorse test bpr --splitter k-fold --load-csv u.data --csv-sep $'\t' --eval-precision --eval-recall --eval-ndcg --eval-map --eval-mrr --n-negative 0
-...
-+--------------+----------+----------+----------+----------+----------+----------------------+
-|              |  FOLD 1  |  FOLD 2  |  FOLD 3  |  FOLD 4  |  FOLD 5  |         MEAN         |
-+--------------+----------+----------+----------+----------+----------+----------------------+
-| Precision@10 | 0.321041 | 0.327128 | 0.321951 | 0.318664 | 0.317197 | 0.321196(±0.005931)  |
-| Recall@10    | 0.212509 | 0.213825 | 0.213336 | 0.206255 | 0.210764 | 0.211338(±0.005083)  |
-| NDCG@10      | 0.380665 | 0.385125 | 0.380003 | 0.369115 | 0.375538 | 0.378089(±0.008974)  |
-| MAP@10       | 0.122098 | 0.123345 | 0.119723 | 0.116305 | 0.119468 | 0.120188(±0.003883)  |
-| MRR@10       | 0.605354 | 0.601110 | 0.600359 | 0.577333 | 0.599930 | 0.596817(±0.019484)  |
-+--------------+----------+----------+----------+----------+----------+----------------------+
-```
-
-示例中的 `u.data` 是 [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) 数据集中的用户-电影评分数据表， `u.item` 是 [MovieLens 100K](https://grouplens.org/datasets/movielens/100k/) 数据集中的物品数据表。有关命令行工具的使用，可见 Wiki 中的 [CLI-Tools](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools)。
-
-### 搭建推荐服务器
-
-使用本项目构建一下推荐系统服务是相当容易的。
-
-- **第一步**: 导入反馈和物品
-
-```bash
-$ gorse import-feedback ~/.gorse/gorse.db u.data --sep $'\t' --timestamp 2
-$ gorse import-items ~/.gorse/gorse.db u.item --sep '|'
-```
-
-程序将反馈数据 `u.data` 和物品数据 `u.item` 导入到数据库文件 `~/.gorse/gorse.db`， 底层存储使用了 BoltDB，因此 `~/.gorse/gorse.db` 其实就是 BoltDB 的数据库文件。
-
-- **第二步**: 启动服务程序
-
-```bash
-$ gorse serve -c config.toml
-```
-
-程序会加载配置文件 [config.toml](https://github.com/zhenghaoz/gorse/blob/master/example/file_config/config.toml) 之后启动一个推荐系统服务。之后，我们需要等待一段时间让推荐系统生成推荐给用户的候选物品列表以及物品的相似物品列表。配置文件的写法可以参考 Wiki 中的 [Configuration](https://github.com/zhenghaoz/gorse/wiki/Configuration)，配置文件中还设置了模型的参数，为了能够达到模型最佳效果，建议使用 [模型测试工具](https://github.com/zhenghaoz/gorse/wiki/CLI-Tools#cross-validation-tool) 验证模型推荐性能。
-
-- **第三步**: 获取推荐结果
-
-```bash
-$ curl 127.0.0.1:8080/recommends/1?number=5
-```
-
-该命令从服务器请求获取 5 个推荐给 1 号用户的物品，返回的结果有可能是：
-
-```
-[
-    {
-        "ItemId": "919",
-        "Popularity": 96,
-        "Timestamp": "1995-01-01T00:00:00Z",
-        "Score": 1
-    },
-    {
-        "ItemId": "474",
-        "Popularity": 194,
-        "Timestamp": "1963-01-01T00:00:00Z",
-        "Score": 0.9486470268850127
-    },
-    ...
-]
-```
-
-其中，`"ItemId"` 为物品的ID，`"Score"` 是推荐模型生成的用于排序的分数。关于服务程序的更多 API 的使用方法，可以查看 Wiki 中的 [RESTful APIs](https://github.com/zhenghaoz/gorse/wiki/RESTful-APIs) 这一节。
-
-## 模型
-
-- **召回模型**
-
-| 模型 | 论文                                                         |
-| ---- | ------------------------------------------------------------ |
-| ALS  | Hu, Yifan, Yehuda Koren, and Chris Volinsky. "Collaborative filtering for implicit feedback datasets." *2008 Eighth IEEE International Conference on Data Mining*. Ieee, 2008. |
-| BPR  | Rendle, Steffen, et al. "BPR: Bayesian personalized ranking from implicit feedback." arXiv preprint arXiv:1205.2618 (2012). |
-| CCD | He, Xiangnan, et al. "Fast matrix factorization for online recommendation with implicit feedback." Proceedings of the 39th International ACM SIGIR conference on Research and Development in Information Retrieval. 2016. |
-
-- **排序模型**
-
-| 模型 | 论文 |
-| - | - |
-| FM | Rendle, Steffen. "Factorization machines." *2010 IEEE International Conference on Data Mining*. IEEE, 2010. |
+<img width=480 src="https://gorse.io/zh/docs/img/arch.png"/>
 
 ## 开发人员
 
@@ -176,9 +50,3 @@ $ curl 127.0.0.1:8080/recommends/1?number=5
 - [Nicolas Hug's Surprise](https://github.com/NicolasHug/Surprise)
 - [Golang Samples's gopher-vector](https://github.com/golang-samples/gopher-vector)
 
-## 缺陷
-
-本项目存在一些缺陷，需要在后续迭代中解决：
-
-- **单机模型**：目前支持数据并行，但是要求模型能够被单机训练和使用。
-- **线上评估**：没有A/B测试和相关的在线推荐效果评估流程。
