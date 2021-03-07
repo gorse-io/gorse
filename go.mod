@@ -24,7 +24,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.4.6
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
-	google.golang.org/grpc v1.34.0
+	google.golang.org/grpc v1.36.0
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/yaml.v2 v2.4.0
 )
