@@ -16,7 +16,7 @@ package server
 import (
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
-	restful "github.com/emicklei/go-restful/v3"
+	"github.com/emicklei/go-restful/v3"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 )
+
+const apiKey = "test_api_key"
 
 type mockServer struct {
 	dataStoreServer  *miniredis.Miniredis
@@ -54,7 +56,7 @@ func newMockServer(t *testing.T) *mockServer {
 		CacheStore: s.cacheStoreClient,
 		Config:     (*config.Config)(nil).LoadDefaultIfNil(),
 	}
-	server.Config = server.Config.LoadDefaultIfNil()
+	server.Config.Server.APIKey = apiKey
 	ws := server.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
@@ -86,6 +88,7 @@ func TestServer_Users(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Post("/user").
+		Header("X-API-Key", apiKey).
 		JSON(users[0]).
 		Expect(t).
 		Status(http.StatusOK).
@@ -94,6 +97,7 @@ func TestServer_Users(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/user/0").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, users[0])).
@@ -101,6 +105,7 @@ func TestServer_Users(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Post("/users").
+		Header("X-API-Key", apiKey).
 		JSON(users[1:]).
 		Expect(t).
 		Status(http.StatusOK).
@@ -109,6 +114,7 @@ func TestServer_Users(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/users").
+		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"cursor": "",
 			"n":      "100",
@@ -123,6 +129,7 @@ func TestServer_Users(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Delete("/user/0").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
@@ -130,6 +137,7 @@ func TestServer_Users(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/user/0").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusInternalServerError).
 		End()
@@ -170,6 +178,7 @@ func TestServer_Items(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Post("/item").
+		Header("X-API-Key", apiKey).
 		JSON(items[0]).
 		Expect(t).
 		Status(http.StatusOK).
@@ -179,6 +188,7 @@ func TestServer_Items(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Post("/items").
+		Header("X-API-Key", apiKey).
 		JSON(items[1:]).
 		Expect(t).
 		Status(http.StatusOK).
@@ -188,6 +198,7 @@ func TestServer_Items(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/items").
+		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"cursor": "",
 			"n":      "100",
@@ -203,6 +214,7 @@ func TestServer_Items(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Delete("/item/0").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
@@ -211,6 +223,7 @@ func TestServer_Items(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/item/0").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusInternalServerError).
 		End()
@@ -231,6 +244,7 @@ func TestServer_Feedback(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Post("/feedback").
+		Header("X-API-Key", apiKey).
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
@@ -240,6 +254,7 @@ func TestServer_Feedback(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/feedback").
+		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"cursor": "",
 			"n":      "100",
@@ -255,6 +270,7 @@ func TestServer_Feedback(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/items").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, ItemIterator{
@@ -271,6 +287,7 @@ func TestServer_Feedback(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/users").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, UserIterator{
@@ -286,6 +303,7 @@ func TestServer_Feedback(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/user/2/feedback/click").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z"}]`).
@@ -293,6 +311,7 @@ func TestServer_Feedback(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/item/4/feedback/click").
+		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z"}]`).
@@ -323,6 +342,7 @@ func TestServer_List(t *testing.T) {
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
+			Header("X-API-Key", apiKey).
 			Expect(t).
 			Status(http.StatusOK).
 			Body(`["0", "1", "2", "3", "4"]`).
@@ -330,6 +350,7 @@ func TestServer_List(t *testing.T) {
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
+			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
 				"n":      "3",
 				"offset": "0"}).
@@ -340,6 +361,7 @@ func TestServer_List(t *testing.T) {
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
+			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
 				"n":      "3",
 				"offset": "1"}).
@@ -351,6 +373,7 @@ func TestServer_List(t *testing.T) {
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
+			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
 				"n":      "0",
 				"offset": "0"}).

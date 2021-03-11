@@ -65,3 +65,6 @@ port = 8086                 # master port
 host = "127.0.0.1"          # master host
 jobs = 4                    # working jobs
 cluster_meta_timeout = 30   # cluster meta timeout (second)
+
+[server]
+api_key = "p@ssword"    # secret key for RESTful APIs (SSL required)
