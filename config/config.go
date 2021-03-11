@@ -32,6 +32,7 @@ type Config struct {
 	Rank    RankConfig    `toml:"rank"`
 	// nodes
 	Master MasterConfig `toml:"master"`
+	Server ServerConfig `toml:"server"`
 }
 
 func (config *Config) LoadDefaultIfNil() *Config {
@@ -253,6 +254,10 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 		}
 	}
 	return config
+}
+
+type ServerConfig struct {
+	APIKey string `toml:"api_key"`
 }
 
 // DatabaseConfig is the configuration for the database.
