@@ -36,12 +36,14 @@ type Item struct {
 	ItemId    string `bson:"_id"`
 	Timestamp time.Time
 	Labels    []string
+	Comment   string
 }
 
 // User stores meta data about user.
 type User struct {
-	UserId string `bson:"_id"`
-	Labels []string
+	UserId  string `bson:"_id"`
+	Labels  []string
+	Comment string
 }
 
 // FeedbackKey identifies feedback.
@@ -66,6 +68,7 @@ func (k *FeedbackKey) ToString() (string, error) {
 type Feedback struct {
 	FeedbackKey `bson:"_id"`
 	Timestamp   time.Time
+	Comment     string
 }
 
 type Database interface {
