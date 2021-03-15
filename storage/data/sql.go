@@ -30,6 +30,7 @@ func (d *SQLDatabase) Init() error {
 		"item_id varchar(256) NOT NULL," +
 		"time_stamp timestamp NOT NULL," +
 		"labels json NOT NULL," +
+		"comment TEXT NOT NULL," +
 		"PRIMARY KEY(item_id)" +
 		")"); err != nil {
 		return err
@@ -37,6 +38,7 @@ func (d *SQLDatabase) Init() error {
 	if _, err := d.db.Exec("CREATE TABLE IF NOT EXISTS users (" +
 		"user_id varchar(256) NOT NULL," +
 		"labels json NOT NULL," +
+		"comment TEXT NOT NULL," +
 		"PRIMARY KEY (user_id)" +
 		")"); err != nil {
 		return err
@@ -46,6 +48,7 @@ func (d *SQLDatabase) Init() error {
 		"user_id varchar(256) NOT NULL," +
 		"item_id varchar(256) NOT NULL," +
 		"time_stamp timestamp NOT NULL," +
+		"comment TEXT NOT NULL," +
 		"PRIMARY KEY(feedback_type, user_id, item_id)" +
 		")"); err != nil {
 		return err
@@ -66,8 +69,8 @@ func (d *SQLDatabase) InsertItem(item Item) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.db.Exec("INSERT IGNORE items(item_id, time_stamp, labels) VALUES (?, ?, ?)",
-		item.ItemId, item.Timestamp, labels)
+	_, err = d.db.Exec("INSERT IGNORE items(item_id, time_stamp, labels, `comment`) VALUES (?, ?, ?, ?)",
+		item.ItemId, item.Timestamp, labels, item.Comment)
 	return err
 }
 
@@ -99,7 +102,7 @@ func (d *SQLDatabase) DeleteItem(itemId string) error {
 }
 
 func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
-	result, err := d.db.Query("SELECT item_id, time_stamp, labels FROM items WHERE item_id = ?", itemId)
+	result, err := d.db.Query("SELECT item_id, time_stamp, labels, `comment` FROM items WHERE item_id = ?", itemId)
 	if err != nil {
 		return Item{}, err
 	}
@@ -107,7 +110,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	if result.Next() {
 		var item Item
 		var labels string
-		if err := result.Scan(&item.ItemId, &item.Timestamp, &labels); err != nil {
+		if err := result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
 			return Item{}, err
 		}
 		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
@@ -119,7 +122,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 }
 
 func (d *SQLDatabase) GetItems(cursor string, n int) (string, []Item, error) {
-	result, err := d.db.Query("SELECT item_id, time_stamp, labels FROM items "+
+	result, err := d.db.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
 		"WHERE item_id >= ? LIMIT ?", cursor, n+1)
 	if err != nil {
 		return "", nil, err
@@ -129,7 +132,7 @@ func (d *SQLDatabase) GetItems(cursor string, n int) (string, []Item, error) {
 	for result.Next() {
 		var item Item
 		var labels string
-		if err := result.Scan(&item.ItemId, &item.Timestamp, &labels); err != nil {
+		if err := result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
 			return "", nil, err
 		}
 		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
@@ -164,7 +167,7 @@ func (d *SQLDatabase) InsertUser(user User) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.db.Exec("INSERT users(user_id, labels) VALUES (?, ?)", user.UserId, labels)
+	_, err = d.db.Exec("INSERT users(user_id, labels, `comment`) VALUES (?, ?, ?)", user.UserId, labels, user.Comment)
 	return err
 }
 
@@ -187,7 +190,7 @@ func (d *SQLDatabase) DeleteUser(userId string) error {
 }
 
 func (d *SQLDatabase) GetUser(userId string) (User, error) {
-	result, err := d.db.Query("SELECT user_id, labels FROM users WHERE user_id = ?", userId)
+	result, err := d.db.Query("SELECT user_id, labels, `comment` FROM users WHERE user_id = ?", userId)
 	if err != nil {
 		return User{}, err
 	}
@@ -195,7 +198,7 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 	if result.Next() {
 		var user User
 		var labels string
-		if err := result.Scan(&user.UserId, &labels); err != nil {
+		if err := result.Scan(&user.UserId, &labels, &user.Comment); err != nil {
 			return User{}, err
 		}
 		if err := json.Unmarshal([]byte(labels), &user.Labels); err != nil {
@@ -207,7 +210,7 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 }
 
 func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
-	result, err := d.db.Query("SELECT user_id, labels FROM users "+
+	result, err := d.db.Query("SELECT user_id, labels, `comment` FROM users "+
 		"WHERE user_id >= ? LIMIT ?", cursor, n+1)
 	if err != nil {
 		return "", nil, err
@@ -217,7 +220,7 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	for result.Next() {
 		var user User
 		var labels string
-		if err := result.Scan(&user.UserId, &labels); err != nil {
+		if err := result.Scan(&user.UserId, &labels, &user.Comment); err != nil {
 			return "", nil, err
 		}
 		if err := json.Unmarshal([]byte(labels), &user.Labels); err != nil {
@@ -232,14 +235,15 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 }
 
 func (d *SQLDatabase) GetUserFeedback(feedbackType, userId string) ([]Feedback, error) {
-	result, err := d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp FROM feedback WHERE user_id = ?", userId)
+	result, err := d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` "+
+		"FROM feedback WHERE user_id = ?", userId)
 	if err != nil {
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
 	for result.Next() {
 		var feedback Feedback
-		if err := result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp); err != nil {
+		if err := result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
 			return nil, err
 		}
 		feedbacks = append(feedbacks, feedback)
@@ -277,8 +281,8 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 		}
 	}
 	// insert feedback
-	_, err := d.db.Exec("INSERT IGNORE feedback(feedback_type, user_id, item_id, time_stamp) VALUES (?,?,?,?)",
-		feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp)
+	_, err := d.db.Exec("INSERT IGNORE feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES (?,?,?,?,?)",
+		feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment)
 	return err
 }
 
@@ -298,7 +302,7 @@ func (d *SQLDatabase) GetFeedback(feedbackType, cursor string, n int) (string, [
 			return "", nil, err
 		}
 	}
-	result, err := d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp FROM feedback "+
+	result, err := d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
 		"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? LIMIT ?", feedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
 	if err != nil {
 		return "", nil, err
@@ -306,7 +310,7 @@ func (d *SQLDatabase) GetFeedback(feedbackType, cursor string, n int) (string, [
 	feedbacks := make([]Feedback, 0)
 	for result.Next() {
 		var feedback Feedback
-		if err := result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp); err != nil {
+		if err := result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
 			return "", nil, err
 		}
 		feedbacks = append(feedbacks, feedback)

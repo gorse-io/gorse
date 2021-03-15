@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"strconv"
@@ -77,7 +78,11 @@ func getFeedback(t *testing.T, db Database) []Feedback {
 func testUsers(t *testing.T, db Database) {
 	// Insert users
 	for i := 0; i < 10; i++ {
-		if err := db.InsertUser(User{UserId: strconv.Itoa(i), Labels: []string{strconv.Itoa(i + 100)}}); err != nil {
+		if err := db.InsertUser(User{
+			UserId:  strconv.Itoa(i),
+			Labels:  []string{strconv.Itoa(i + 100)},
+			Comment: fmt.Sprintf("comment %d", i),
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -87,6 +92,7 @@ func testUsers(t *testing.T, db Database) {
 	for i, user := range users {
 		assert.Equal(t, strconv.Itoa(i), user.UserId)
 		assert.Equal(t, []string{strconv.Itoa(i + 100)}, user.Labels)
+		assert.Equal(t, fmt.Sprintf("comment %d", i), user.Comment)
 	}
 	// Get this user
 	if user, err := db.GetUser("0"); err != nil {
@@ -103,18 +109,18 @@ func testUsers(t *testing.T, db Database) {
 
 func testFeedback(t *testing.T, db Database) {
 	// users that already exists
-	err := db.InsertUser(User{"0", []string{"a"}})
+	err := db.InsertUser(User{"0", []string{"a"}, "comment"})
 	assert.Nil(t, err)
 	// items that already exists
 	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}})
 	assert.Nil(t, err)
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "1", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "3", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "4", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "1", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "3", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "4", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err = db.InsertFeedback(feedback[0], true, true)
 	assert.Nil(t, err)
@@ -146,7 +152,7 @@ func testFeedback(t *testing.T, db Database) {
 	// check users that already exists
 	user, err := db.GetUser("0")
 	assert.Nil(t, err)
-	assert.Equal(t, User{"0", []string{"a"}}, user)
+	assert.Equal(t, User{"0", []string{"a"}, "comment"}, user)
 	// check items that already exists
 	item, err := db.GetItem("0")
 	assert.Nil(t, err)
@@ -172,26 +178,31 @@ func testItems(t *testing.T, db Database) {
 			ItemId:    "0",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a"},
+			Comment:   "comment 0",
 		},
 		{
 			ItemId:    "2",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a"},
+			Comment:   "comment 2",
 		},
 		{
 			ItemId:    "4",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a", "b"},
+			Comment:   "comment 4",
 		},
 		{
 			ItemId:    "6",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"b"},
+			Comment:   "comment 6",
 		},
 		{
 			ItemId:    "8",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"b"},
+			Comment:   "comment 8",
 		},
 	}
 	// Insert item
@@ -220,11 +231,11 @@ func testItems(t *testing.T, db Database) {
 func testDeleteUser(t *testing.T, db Database) {
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "0", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "0", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "0", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "0", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "0", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "0", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	if err := db.BatchInsertFeedback(feedback, true, true); err != nil {
 		t.Fatal(err)
@@ -251,11 +262,11 @@ func testDeleteUser(t *testing.T, db Database) {
 func testDeleteItem(t *testing.T, db Database) {
 	// Insert ret
 	feedbacks := []Feedback{
-		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "1", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "2", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "3", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey{"click", "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "1", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "2", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "3", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"click", "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	if err := db.BatchInsertFeedback(feedbacks, true, true); err != nil {
 		t.Fatal(err)
