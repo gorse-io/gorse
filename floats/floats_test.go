@@ -18,6 +18,34 @@ import (
 	"testing"
 )
 
+func TestMatZero(t *testing.T) {
+	a := [][]float32{
+		{3, 2, 5, 6, 0, 0},
+		{1, 2, 3, 4, 5, 6},
+	}
+	MatZero(a)
+	assert.Equal(t, [][]float32{
+		{0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0},
+	}, a)
+}
+
+func TestZero(t *testing.T) {
+	a := []float32{3, 2, 5, 6, 0, 0}
+	Zero(a)
+	assert.Equal(t, []float32{0, 0, 0, 0, 0, 0}, a)
+}
+
+func TestMin(t *testing.T) {
+	a := []float32{3, 2, 5, 6, 0, 0}
+	assert.Equal(t, float32(0), Min(a))
+}
+
+func TestMax(t *testing.T) {
+	a := []float32{3, 2, 5, 6, 0, 0}
+	assert.Equal(t, float32(6), Max(a))
+}
+
 func TestAdd(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
 	b := []float32{5, 6, 7, 8}
@@ -89,4 +117,19 @@ func TestDot(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	assert.Equal(t, float32(770), Dot(a, b))
+}
+
+func TestSum(t *testing.T) {
+	a := []float32{3, 2, 5, 6, 0, 0}
+	assert.Equal(t, float32(16), Sum(a))
+}
+
+func TestMean(t *testing.T) {
+	a := []float32{3, 2, 5, 6, 0, 0, 0, 0}
+	assert.Equal(t, float32(2), Mean(a))
+}
+
+func TestStdDev(t *testing.T) {
+	a := []float32{1, 3, 5}
+	assert.Equal(t, float32(2), StdDev(a))
 }
