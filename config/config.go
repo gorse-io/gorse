@@ -51,8 +51,9 @@ func (config *Config) LoadDefaultIfNil() *Config {
 }
 
 type SimilarConfig struct {
-	NumSimilar   int `toml:"n_similar"`
-	UpdatePeriod int `toml:"update_period"`
+	FeedbackTypes []string `toml:"feedback_types"`
+	NumSimilar    int      `toml:"n_similar"`
+	UpdatePeriod  int      `toml:"update_period"`
 }
 
 func (c *SimilarConfig) LoadDefaultIfNil() *SimilarConfig {
@@ -81,9 +82,10 @@ func (c *LatestConfig) LoadDefaultIfNil() *LatestConfig {
 }
 
 type PopularConfig struct {
-	NumPopular   int `toml:"n_popular"`
-	UpdatePeriod int `toml:"update_period"`
-	TimeWindow   int `toml:"time_window"`
+	NumPopular    int      `toml:"n_popular"`
+	UpdatePeriod  int      `toml:"update_period"`
+	TimeWindow    int      `toml:"time_window"`
+	FeedbackTypes []string `toml:"feedback_types"`
 }
 
 func (c *PopularConfig) LoadDefaultIfNil() *PopularConfig {
@@ -125,7 +127,6 @@ type CFConfig struct {
 func (c *CFConfig) LoadDefaultIfNil() *CFConfig {
 	if c == nil {
 		return &CFConfig{
-			FeedbackTypes: []string{""},
 			NumCF:         800,
 			CFModel:       "als",
 			PredictPeriod: 60,
@@ -195,11 +196,10 @@ type RankConfig struct {
 func (c *RankConfig) LoadDefaultIfNil() *RankConfig {
 	if c == nil {
 		return &RankConfig{
-			FeedbackTypes: []string{""},
-			FitPeriod:     60,
-			Task:          "r",
-			FitJobs:       1,
-			Verbose:       10,
+			FitPeriod: 60,
+			Task:      "r",
+			FitJobs:   1,
+			Verbose:   10,
 		}
 	}
 	return c
@@ -329,9 +329,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// default CF config
 	defaultCFConfig := *(*CFConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("cf", "feedback_type") {
-		config.CF.FeedbackTypes = defaultCFConfig.FeedbackTypes
-	}
 	if !meta.IsDefined("cf", "n_cf") {
 		config.CF.NumCF = defaultCFConfig.NumCF
 	}
@@ -361,9 +358,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// default rank config
 	defaultRankConfig := *(*RankConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("rank", "feedback_type") {
-		config.Rank.FeedbackTypes = defaultRankConfig.FeedbackTypes
-	}
 	if !meta.IsDefined("rank", "fit_period") {
 		config.Rank.FitPeriod = defaultRankConfig.FitPeriod
 	}

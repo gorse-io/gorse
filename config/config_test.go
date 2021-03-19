@@ -20,7 +20,7 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	config, _, err := LoadConfig("../config/config.toml.template")
+	config, _, err := LoadConfig("../misc/config_test/config.toml")
 	assert.Nil(t, err)
 
 	// database configuration
@@ -30,6 +30,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, false, config.Database.AutoInsertItem)
 
 	// similar configuration
+	assert.Equal(t, []string{"watch"}, config.Similar.FeedbackTypes)
 	assert.Equal(t, 500, config.Similar.NumSimilar)
 	assert.Equal(t, 120, config.Similar.UpdatePeriod)
 
@@ -38,11 +39,13 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 30, config.Latest.UpdatePeriod)
 
 	// popular configuration
+	assert.Equal(t, []string{"click"}, config.Popular.FeedbackTypes)
 	assert.Equal(t, 500, config.Popular.NumPopular)
 	assert.Equal(t, 120, config.Popular.UpdatePeriod)
 	assert.Equal(t, 360, config.Popular.TimeWindow)
 
 	// cf config
+	assert.Equal(t, []string{"click", "watch"}, config.CF.FeedbackTypes)
 	assert.Equal(t, 1000, config.CF.NumCF)
 	assert.Equal(t, "als", config.CF.CFModel)
 	assert.Equal(t, 60, config.CF.FitPeriod)
@@ -65,6 +68,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 10000, config.CF.NumTestUsers)
 
 	// rank config
+	assert.Equal(t, []string{"click", "likes"}, config.Rank.FeedbackTypes)
 	assert.Equal(t, 60, config.Rank.FitPeriod)
 	assert.Equal(t, "r", config.Rank.Task)
 
