@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	epsilon = 0.008
+	epsilon = 0.01
 )
 
 var fitConfig = &FitConfig{

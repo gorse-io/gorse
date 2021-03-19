@@ -167,7 +167,7 @@ func (fm *FM) Predict(userId, itemId string, labels []string) float32 {
 		x = append(x, itemIndex)
 	}
 	for _, label := range labels {
-		if labelIndex := fm.Index.EncodeLabel(label); labelIndex != base.NotId {
+		if labelIndex := fm.Index.EncodeContextLabel(label); labelIndex != base.NotId {
 			x = append(x, labelIndex)
 		}
 	}
@@ -319,9 +319,9 @@ func (fm *FM) Init(trainSet *Dataset) {
 			}
 		}
 		// labels
-		for _, label := range trainSet.UnifiedIndex.GetLabels() {
-			oldIndex := fm.Index.EncodeLabel(label)
-			newIndex := trainSet.UnifiedIndex.EncodeLabel(label)
+		for _, label := range trainSet.UnifiedIndex.GetContextLabels() {
+			oldIndex := fm.Index.EncodeContextLabel(label)
+			newIndex := trainSet.UnifiedIndex.EncodeContextLabel(label)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]

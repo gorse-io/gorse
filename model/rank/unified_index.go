@@ -18,14 +18,6 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 )
 
-type EntityType int
-
-const (
-	EntityUser EntityType = iota
-	EntityItem
-	EntityLabel
-)
-
 func init() {
 	gob.Register(&UnifiedMapIndex{})
 }
@@ -34,26 +26,38 @@ type UnifiedIndex interface {
 	Len() int
 	EncodeUser(userId string) int
 	EncodeItem(itemId string) int
-	EncodeLabel(label string) int
+	EncodeUserLabel(userLabel string) int
+	EncodeItemLabel(itemLabel string) int
+	EncodeContextLabel(ctxLabel string) int
 	GetUsers() []string
 	GetItems() []string
-	GetLabels() []string
+	GetUserLabels() []string
+	GetItemLabels() []string
+	GetContextLabels() []string
 	CountUsers() int
 	CountItems() int
-	CountLabels() int
+	CountUserLabels() int
+	CountItemLabels() int
+	CountContextLabels() int
 }
 
+// UnifiedMapIndexBuilder is the id -> index mapper for factorization machines.
+// The division of id is: | user | item | user label | item label | context label |
 type UnifiedMapIndexBuilder struct {
-	UserIndex  base.Index
-	ItemIndex  base.Index
-	LabelIndex base.Index
+	UserIndex      base.Index
+	ItemIndex      base.Index
+	UserLabelIndex base.Index
+	ItemLabelIndex base.Index
+	CtxLabelIndex  base.Index
 }
 
 func NewUnifiedMapIndexBuilder() *UnifiedMapIndexBuilder {
 	return &UnifiedMapIndexBuilder{
-		UserIndex:  base.NewMapIndex(),
-		ItemIndex:  base.NewMapIndex(),
-		LabelIndex: base.NewMapIndex(),
+		UserIndex:      base.NewMapIndex(),
+		ItemIndex:      base.NewMapIndex(),
+		UserLabelIndex: base.NewMapIndex(),
+		ItemLabelIndex: base.NewMapIndex(),
+		CtxLabelIndex:  base.NewMapIndex(),
 	}
 }
 
@@ -65,26 +69,64 @@ func (builder *UnifiedMapIndexBuilder) AddItem(itemId string) {
 	builder.ItemIndex.Add(itemId)
 }
 
-func (builder *UnifiedMapIndexBuilder) AddLabel(label string) {
-	builder.LabelIndex.Add(label)
+func (builder *UnifiedMapIndexBuilder) AddUserLabel(userLabel string) {
+	builder.UserLabelIndex.Add(userLabel)
+}
+
+func (builder *UnifiedMapIndexBuilder) AddItemLabel(itemLabel string) {
+	builder.ItemLabelIndex.Add(itemLabel)
+}
+
+func (builder *UnifiedMapIndexBuilder) AddCtxLabel(ctxLabel string) {
+	builder.CtxLabelIndex.Add(ctxLabel)
 }
 
 func (builder *UnifiedMapIndexBuilder) Build() UnifiedIndex {
 	return &UnifiedMapIndex{
-		UserIndex:  builder.UserIndex,
-		ItemIndex:  builder.ItemIndex,
-		LabelIndex: builder.LabelIndex,
+		UserIndex:      builder.UserIndex,
+		ItemIndex:      builder.ItemIndex,
+		UserLabelIndex: builder.UserLabelIndex,
+		ItemLabelIndex: builder.ItemLabelIndex,
+		CtxLabelIndex:  builder.CtxLabelIndex,
 	}
 }
 
 type UnifiedMapIndex struct {
-	UserIndex  base.Index
-	ItemIndex  base.Index
-	LabelIndex base.Index
+	UserIndex      base.Index
+	ItemIndex      base.Index
+	UserLabelIndex base.Index
+	ItemLabelIndex base.Index
+	CtxLabelIndex  base.Index
+}
+
+func (unified *UnifiedMapIndex) GetUserLabels() []string {
+	return unified.UserLabelIndex.GetNames()
+}
+
+func (unified *UnifiedMapIndex) GetItemLabels() []string {
+	return unified.ItemLabelIndex.GetNames()
+}
+
+func (unified *UnifiedMapIndex) GetContextLabels() []string {
+	return unified.CtxLabelIndex.GetNames()
+}
+
+func (unified *UnifiedMapIndex) CountUserLabels() int {
+	return unified.UserLabelIndex.Len()
+}
+
+func (unified *UnifiedMapIndex) CountItemLabels() int {
+	return unified.ItemLabelIndex.Len()
+}
+
+func (unified *UnifiedMapIndex) CountContextLabels() int {
+	return unified.CtxLabelIndex.Len()
 }
 
 func (unified *UnifiedMapIndex) Len() int {
-	return unified.UserIndex.Len() + unified.ItemIndex.Len() + unified.LabelIndex.Len()
+	return unified.UserIndex.Len() + unified.ItemIndex.Len() +
+		unified.UserLabelIndex.Len() + unified.ItemLabelIndex.Len() +
+		unified.CtxLabelIndex.Len()
 }
 
 func (unified *UnifiedMapIndex) EncodeUser(userId string) int {
@@ -99,12 +141,29 @@ func (unified *UnifiedMapIndex) EncodeItem(itemId string) int {
 	return itemIndex
 }
 
-func (unified *UnifiedMapIndex) EncodeLabel(label string) int {
-	labelIndex := unified.LabelIndex.ToNumber(label)
-	if labelIndex != base.NotId {
-		labelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len()
+func (unified *UnifiedMapIndex) EncodeUserLabel(userLabel string) int {
+	userLabelIndex := unified.UserLabelIndex.ToNumber(userLabel)
+	if userLabelIndex != base.NotId {
+		userLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len()
 	}
-	return labelIndex
+	return userLabelIndex
+}
+
+func (unified *UnifiedMapIndex) EncodeItemLabel(itemLabel string) int {
+	itemLabelIndex := unified.ItemLabelIndex.ToNumber(itemLabel)
+	if itemLabelIndex != base.NotId {
+		itemLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len() + unified.UserLabelIndex.Len()
+	}
+	return itemLabelIndex
+}
+
+func (unified *UnifiedMapIndex) EncodeContextLabel(label string) int {
+	ctxLabelIndex := unified.CtxLabelIndex.ToNumber(label)
+	if ctxLabelIndex != base.NotId {
+		ctxLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len() +
+			unified.UserLabelIndex.Len() + unified.ItemLabelIndex.Len()
+	}
+	return ctxLabelIndex
 }
 
 func (unified *UnifiedMapIndex) GetUsers() []string {
@@ -115,10 +174,6 @@ func (unified *UnifiedMapIndex) GetItems() []string {
 	return unified.ItemIndex.GetNames()
 }
 
-func (unified *UnifiedMapIndex) GetLabels() []string {
-	return unified.LabelIndex.GetNames()
-}
-
 func (unified *UnifiedMapIndex) CountUsers() int {
 	return unified.UserIndex.Len()
 }
@@ -127,12 +182,40 @@ func (unified *UnifiedMapIndex) CountItems() int {
 	return unified.ItemIndex.Len()
 }
 
-func (unified *UnifiedMapIndex) CountLabels() int {
-	return unified.LabelIndex.Len()
-}
-
 type UnifiedDirectIndex struct {
 	N int
+}
+
+func (unified *UnifiedDirectIndex) EncodeUserLabel(userLabel string) int {
+	panic("implement me")
+}
+
+func (unified *UnifiedDirectIndex) EncodeItemLabel(itemLabel string) int {
+	panic("implement me")
+}
+
+func (unified *UnifiedDirectIndex) GetUserLabels() []string {
+	panic("implement me")
+}
+
+func (unified *UnifiedDirectIndex) GetItemLabels() []string {
+	panic("implement me")
+}
+
+func (unified *UnifiedDirectIndex) GetContextLabels() []string {
+	panic("implement me")
+}
+
+func (unified *UnifiedDirectIndex) CountUserLabels() int {
+	panic("implement me")
+}
+
+func (unified *UnifiedDirectIndex) CountItemLabels() int {
+	panic("implement me")
+}
+
+func (unified *UnifiedDirectIndex) CountContextLabels() int {
+	panic("implement me")
 }
 
 func NewUnifiedDirectIndex(n int) UnifiedIndex {
@@ -151,7 +234,7 @@ func (unified *UnifiedDirectIndex) EncodeItem(itemId string) int {
 	panic("not implemented")
 }
 
-func (unified *UnifiedDirectIndex) EncodeLabel(label string) int {
+func (unified *UnifiedDirectIndex) EncodeContextLabel(label string) int {
 	panic("not implemented")
 }
 
@@ -163,18 +246,10 @@ func (unified *UnifiedDirectIndex) GetItems() []string {
 	panic("not implemented")
 }
 
-func (unified *UnifiedDirectIndex) GetLabels() []string {
-	panic("not implemented")
-}
-
 func (unified *UnifiedDirectIndex) CountUsers() int {
 	panic("not implemented")
 }
 
 func (unified *UnifiedDirectIndex) CountItems() int {
-	panic("not implemented")
-}
-
-func (unified *UnifiedDirectIndex) CountLabels() int {
 	panic("not implemented")
 }

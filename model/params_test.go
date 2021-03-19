@@ -99,3 +99,15 @@ func TestParams_Overwrite(t *testing.T) {
 	assert.Equal(t, 0.5, c[Lr])
 	assert.Equal(t, 100, c[NEpochs])
 }
+
+func TestParamsGrid(t *testing.T) {
+	grid := ParamsGrid{}
+	grid["a"] = []interface{}{0, 1}
+	defaultGrid := ParamsGrid{}
+	defaultGrid["a"] = []interface{}{2, 3}
+	defaultGrid["b"] = []interface{}{4, 5}
+	assert.Equal(t, 1, grid.Len())
+	grid.Fill(defaultGrid)
+	assert.Equal(t, []interface{}{0, 1}, grid["a"])
+	assert.Equal(t, []interface{}{4, 5}, grid["b"])
+}
