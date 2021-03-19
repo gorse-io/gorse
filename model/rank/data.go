@@ -48,7 +48,7 @@ func (dataset *Dataset) ItemCount() int {
 }
 
 func (dataset *Dataset) LabelCount() int {
-	return dataset.UnifiedIndex.CountLabels()
+	return dataset.UnifiedIndex.CountContextLabels()
 }
 
 func (dataset *Dataset) Count() int {
@@ -139,7 +139,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 			users = append(users, user)
 			unifiedIndex.AddUser(user.UserId)
 			for _, label := range user.Labels {
-				unifiedIndex.AddLabel(label)
+				unifiedIndex.AddUserLabel(label)
 			}
 		}
 		if cursor == "" {
@@ -157,7 +157,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 			items = append(items, item)
 			unifiedIndex.AddItem(item.ItemId)
 			for _, label := range item.Labels {
-				unifiedIndex.AddLabel(label)
+				unifiedIndex.AddItemLabel(label)
 			}
 		}
 		if cursor == "" {
@@ -175,7 +175,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		userId := dataSet.UnifiedIndex.EncodeUser(user.UserId)
 		dataSet.UserItemLabels[userId] = make([]int, len(user.Labels))
 		for i := range user.Labels {
-			dataSet.UserItemLabels[userId][i] = dataSet.UnifiedIndex.EncodeLabel(user.Labels[i])
+			dataSet.UserItemLabels[userId][i] = dataSet.UnifiedIndex.EncodeUserLabel(user.Labels[i])
 		}
 	}
 	// insert items
@@ -183,7 +183,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		itemId := dataSet.UnifiedIndex.EncodeItem(item.ItemId)
 		dataSet.UserItemLabels[itemId] = make([]int, len(item.Labels))
 		for i := range item.Labels {
-			dataSet.UserItemLabels[itemId][i] = dataSet.UnifiedIndex.EncodeLabel(item.Labels[i])
+			dataSet.UserItemLabels[itemId][i] = dataSet.UnifiedIndex.EncodeItemLabel(item.Labels[i])
 		}
 	}
 	// insert feedback

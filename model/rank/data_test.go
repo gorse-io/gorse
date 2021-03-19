@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2021 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,60 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package cf
+package rank
 
 import (
-	"crypto/md5"
 	"fmt"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"io"
-	"log"
-	"os"
-	"strconv"
 	"testing"
 )
 
-func TestNewMapIndexDataset(t *testing.T) {
-	dataSet := NewMapIndexDataset()
-	for i := 0; i < 4; i++ {
-		for j := i; j < 5; j++ {
-			dataSet.AddFeedback(strconv.Itoa(i), strconv.Itoa(j), true)
-		}
-	}
-	assert.Equal(t, 14, dataSet.Count())
-	assert.Equal(t, 4, dataSet.UserCount())
-	assert.Equal(t, 5, dataSet.ItemCount())
-	dataSet.AddUser("10")
-	dataSet.AddItem("10")
-	assert.Equal(t, 5, dataSet.UserCount())
-	assert.Equal(t, 6, dataSet.ItemCount())
-}
-
-func md5Sum(fileName string) string {
-	// Open file
-	f, err := os.Open(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-	// Generate check sum
-	h := md5.New()
-	if _, err := io.Copy(h, f); err != nil {
-		log.Fatal(err)
-	}
-	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-func TestLoadDataFromCSV(t *testing.T) {
-	data := LoadDataFromCSV("../../misc/csv/feedback.csv", ",", true)
-	assert.Equal(t, 5, data.Count())
-	for i := 0; i < data.Count(); i++ {
-		userIndex, itemIndex := data.GetIndex(i)
-		assert.Equal(t, i, userIndex)
-		assert.Equal(t, i, itemIndex)
-	}
+func TestLoadDataFromBuiltIn(t *testing.T) {
+	train, test, err := LoadDataFromBuiltIn("frappe")
+	assert.Nil(t, err)
+	assert.Equal(t, 202027, train.Count())
+	assert.Equal(t, 28860, test.Count())
 }
 
 type mockDatastore struct {
@@ -92,21 +53,29 @@ func TestLoadDataFromDatabase(t *testing.T) {
 	// create database
 	database := newMockDatastore(t)
 	defer database.Close(t)
-	numUsers, numItems := 3, 5
+	numUsers, numTotalItems, numUsedItems, numUserLabels, numItemLabels := 3, 100, 7, 11, 15
 	for i := 0; i < numUsers; i++ {
 		err := database.InsertUser(data.User{
 			UserId: fmt.Sprintf("user%v", i),
+			Labels: []string{
+				fmt.Sprintf("user_label%v", i%numUserLabels),
+				fmt.Sprintf("user_label%v", (i*2)%numUserLabels),
+			},
 		})
 		assert.Nil(t, err)
 	}
-	for i := 0; i < numItems; i++ {
+	for i := 0; i < numTotalItems; i++ {
 		err := database.InsertItem(data.Item{
 			ItemId: fmt.Sprintf("item%v", i),
+			Labels: []string{
+				fmt.Sprintf("item_label%v", i%numItemLabels),
+				fmt.Sprintf("item_label%v", (i*2)%numItemLabels),
+			},
 		})
 		assert.Nil(t, err)
 	}
 	for i := 0; i < numUsers; i++ {
-		for j := i + 1; j < numItems; j++ {
+		for j := i + 1; j < numUsedItems; j++ {
 			err := database.InsertFeedback(data.Feedback{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       fmt.Sprintf("user%v", i),
@@ -118,23 +87,20 @@ func TestLoadDataFromDatabase(t *testing.T) {
 		}
 	}
 	// load data
-	dataset, _, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"})
+	dataset, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"})
 	assert.Nil(t, err)
-	assert.Equal(t, 9, dataset.Count())
+	assert.Equal(t, 15, dataset.PositiveCount)
+	assert.Equal(t, numUsers, dataset.UserCount())
+	assert.Equal(t, numTotalItems, dataset.ItemCount())
 	// split
-	train, test := dataset.Split(0, 0)
+	train, test := dataset.Split(0.2, 0)
 	assert.Equal(t, numUsers, train.UserCount())
-	assert.Equal(t, numItems, train.ItemCount())
-	assert.Equal(t, 9-numUsers, train.Count())
+	assert.Equal(t, numTotalItems, train.ItemCount())
+	assert.Equal(t, 12, train.PositiveCount)
 	assert.Equal(t, numUsers, test.UserCount())
-	assert.Equal(t, numItems, test.ItemCount())
-	assert.Equal(t, numUsers, test.Count())
-	// part split
-	train2, test2 := dataset.Split(2, 0)
-	assert.Equal(t, numUsers, train2.UserCount())
-	assert.Equal(t, numItems, train2.ItemCount())
-	assert.Equal(t, 7, train2.Count())
-	assert.Equal(t, numUsers, test2.UserCount())
-	assert.Equal(t, numItems, test2.ItemCount())
-	assert.Equal(t, 2, test2.Count())
+	assert.Equal(t, numTotalItems, test.ItemCount())
+	assert.Equal(t, 3, test.PositiveCount)
+	// negative sample
+	train.NegativeSample(2, nil, 0)
+	assert.Equal(t, 36, train.Count())
 }

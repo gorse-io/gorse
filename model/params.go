@@ -85,19 +85,6 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 	return _default
 }
 
-// GetBool gets a bool parameter by name. Returns _default if not exists or type doesn't match.
-func (parameters Params) GetBool(name ParamName, _default bool) bool {
-	if val, exist := parameters[name]; exist {
-		switch val := val.(type) {
-		case bool:
-			return val
-		default:
-			log.Errorf("Params.GetBool expect %v to be int, but get %v", name, reflect.TypeOf(name))
-		}
-	}
-	return _default
-}
-
 func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 	if val, exist := parameters[name]; exist {
 		switch val := val.(type) {
@@ -109,19 +96,6 @@ func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 			return float32(val)
 		default:
 			log.Errorf("Params.GetFloat32 expect %v to be int, but get %v", name, reflect.TypeOf(name))
-		}
-	}
-	return _default
-}
-
-// GetString gets a string parameter. Returns _default if not exists or type doesn't match.
-func (parameters Params) GetString(name ParamName, _default string) string {
-	if val, exist := parameters[name]; exist {
-		switch val := val.(type) {
-		case string:
-			return val
-		default:
-			log.Errorf("Params.GetString: expect %v to be string, but get %v", name, reflect.TypeOf(name))
 		}
 	}
 	return _default

@@ -16,6 +16,7 @@ package model
 import (
 	"github.com/stretchr/testify/assert"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -28,4 +29,11 @@ func TestUnzip(t *testing.T) {
 	// Check
 	assert.Nil(t, err, "unzip file failed ")
 	assert.Equal(t, 3, len(fileNames), "Number of file doesn't match")
+}
+
+func TestLocateBuiltInDataset(t *testing.T) {
+	trainFilePath, testFilePath, err := LocateBuiltInDataset("ml-1m", FormatNCF)
+	assert.Nil(t, err)
+	assert.Equal(t, filepath.Join(DataSetDir, "ml-1m", "train.txt"), trainFilePath)
+	assert.Equal(t, filepath.Join(DataSetDir, "ml-1m", "test.txt"), testFilePath)
 }
