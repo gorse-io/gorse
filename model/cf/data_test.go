@@ -58,10 +58,10 @@ func md5Sum(fileName string) string {
 }
 
 func TestLoadDataFromCSV(t *testing.T) {
-	data := LoadDataFromCSV("../../misc/csv/feedback.csv", ",", true)
-	assert.Equal(t, 5, data.Count())
-	for i := 0; i < data.Count(); i++ {
-		userIndex, itemIndex := data.GetIndex(i)
+	dataset := LoadDataFromCSV("../../misc/csv_test/feedback.csv", ",", true)
+	assert.Equal(t, 5, dataset.Count())
+	for i := 0; i < dataset.Count(); i++ {
+		userIndex, itemIndex := dataset.GetIndex(i)
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, i, itemIndex)
 	}
