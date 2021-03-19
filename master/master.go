@@ -98,6 +98,9 @@ func (m *Master) Serve() {
 	if err != nil {
 		log.Fatalf("master: failed to connect data database (%v)", err)
 	}
+	if err = m.dataStore.Init(); err != nil {
+		log.Fatalf("master: failed to init database ")
+	}
 
 	// connect cache database
 	m.cacheStore, err = cache.Open(m.cfg.Database.CacheStore)
@@ -276,7 +279,9 @@ func (m *Master) Loop() {
 			if err != nil {
 				log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
 			}
-			if err = m.FitRankModel(rankDataSet); err != nil {
+			if rankDataSet.PositiveCount == 0 {
+				log.Info("master: empty dataset")
+			} else if err = m.FitRankModel(rankDataSet); err != nil {
 				log.Fatalf("master: failed to renew ranking model (%v)", err)
 			}
 		}
@@ -288,42 +293,46 @@ func (m *Master) Loop() {
 			if err != nil {
 				log.Fatal("master: ", err)
 			}
-			log.Infof("master: data loaded (#user = %v, #item = %v, #feedback = %v)",
-				dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count())
+			if dataSet.Count() == 0 {
+				log.Info("master: empty dataset")
+			} else {
+				log.Infof("master: data loaded (#user = %v, #item = %v, #feedback = %v)",
+					dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count())
 
-			// collect popular items
-			if isPopItemStale {
-				log.Info("master: collect popular items")
-				if err = m.CollectPopItem(items, dataSet); err != nil {
-					log.Errorf("master: failed to collect popular items (%v)", err)
+				// collect popular items
+				if isPopItemStale {
+					log.Info("master: collect popular items")
+					if err = m.CollectPopItem(items, dataSet); err != nil {
+						log.Errorf("master: failed to collect popular items (%v)", err)
+					}
+					log.Info("master: completed collect popular items")
 				}
-				log.Info("master: completed collect popular items")
-			}
 
-			// collect latest items
-			if isLatestStale {
-				log.Info("master: collect latest items")
-				if err = m.CollectLatest(items); err != nil {
-					log.Errorf("master: failed to collect latest items (%v)", err)
+				// collect latest items
+				if isLatestStale {
+					log.Info("master: collect latest items")
+					if err = m.CollectLatest(items); err != nil {
+						log.Errorf("master: failed to collect latest items (%v)", err)
+					}
+					log.Info("master: completed collect latest items")
 				}
-				log.Info("master: completed collect latest items")
-			}
 
-			// collect similar items
-			if isSimilarStale {
-				log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Jobs)
-				if err = m.CollectSimilar(items, dataSet); err != nil {
-					log.Errorf("master: failed to collect similar items (%v)", err)
+				// collect similar items
+				if isSimilarStale {
+					log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Jobs)
+					if err = m.CollectSimilar(items, dataSet); err != nil {
+						log.Errorf("master: failed to collect similar items (%v)", err)
+					}
+					log.Info("master: completed collect similar items")
 				}
-				log.Info("master: completed collect similar items")
-			}
 
-			if isCFModelStale || m.cfModel == nil {
-				log.Infof("master: fit cf model (n_jobs = %v)", m.cfg.Master.Jobs)
-				if err = m.FitCFModel(dataSet); err != nil {
-					log.Errorf("master: failed to fit cf model (%v)", err)
+				if isCFModelStale || m.cfModel == nil {
+					log.Infof("master: fit cf model (n_jobs = %v)", m.cfg.Master.Jobs)
+					if err = m.FitCFModel(dataSet); err != nil {
+						log.Errorf("master: failed to fit cf model (%v)", err)
+					}
+					log.Infof("master: completed fit cf model")
 				}
-				log.Infof("master: completed fit cf model")
 			}
 		}
 
