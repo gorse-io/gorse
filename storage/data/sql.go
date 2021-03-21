@@ -38,6 +38,7 @@ func (d *SQLDatabase) Init() error {
 	if _, err := d.db.Exec("CREATE TABLE IF NOT EXISTS users (" +
 		"user_id varchar(256) NOT NULL," +
 		"labels json NOT NULL," +
+		"subscribe json NOT NULL," +
 		"comment TEXT NOT NULL," +
 		"PRIMARY KEY (user_id)" +
 		")"); err != nil {
@@ -167,7 +168,12 @@ func (d *SQLDatabase) InsertUser(user User) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.db.Exec("INSERT users(user_id, labels, `comment`) VALUES (?, ?, ?)", user.UserId, labels, user.Comment)
+	subscribe, err := json.Marshal(user.Subscribe)
+	if err != nil {
+		return err
+	}
+	_, err = d.db.Exec("INSERT users(user_id, labels, subscribe, `comment`) VALUES (?, ?, ?, ?)",
+		user.UserId, labels, subscribe, user.Comment)
 	return err
 }
 
@@ -190,7 +196,7 @@ func (d *SQLDatabase) DeleteUser(userId string) error {
 }
 
 func (d *SQLDatabase) GetUser(userId string) (User, error) {
-	result, err := d.db.Query("SELECT user_id, labels, `comment` FROM users WHERE user_id = ?", userId)
+	result, err := d.db.Query("SELECT user_id, labels, subscribe, `comment` FROM users WHERE user_id = ?", userId)
 	if err != nil {
 		return User{}, err
 	}
@@ -198,10 +204,14 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 	if result.Next() {
 		var user User
 		var labels string
-		if err := result.Scan(&user.UserId, &labels, &user.Comment); err != nil {
+		var subscribe string
+		if err := result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
 			return User{}, err
 		}
 		if err := json.Unmarshal([]byte(labels), &user.Labels); err != nil {
+			return User{}, err
+		}
+		if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
 			return User{}, err
 		}
 		return user, nil
@@ -210,7 +220,7 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 }
 
 func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
-	result, err := d.db.Query("SELECT user_id, labels, `comment` FROM users "+
+	result, err := d.db.Query("SELECT user_id, labels, subscribe, `comment` FROM users "+
 		"WHERE user_id >= ? LIMIT ?", cursor, n+1)
 	if err != nil {
 		return "", nil, err
@@ -220,10 +230,14 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	for result.Next() {
 		var user User
 		var labels string
-		if err := result.Scan(&user.UserId, &labels, &user.Comment); err != nil {
+		var subscribe string
+		if err := result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
 			return "", nil, err
 		}
 		if err := json.Unmarshal([]byte(labels), &user.Labels); err != nil {
+			return "", nil, err
+		}
+		if err := json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
 			return "", nil, err
 		}
 		users = append(users, user)
