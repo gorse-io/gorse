@@ -109,7 +109,7 @@ func testUsers(t *testing.T, db Database) {
 
 func testFeedback(t *testing.T, db Database) {
 	// users that already exists
-	err := db.InsertUser(User{"0", []string{"a"}, "comment"})
+	err := db.InsertUser(User{"0", []string{"a"}, []string{"x"}, "comment"})
 	assert.Nil(t, err)
 	// items that already exists
 	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}})
@@ -152,7 +152,7 @@ func testFeedback(t *testing.T, db Database) {
 	// check users that already exists
 	user, err := db.GetUser("0")
 	assert.Nil(t, err)
-	assert.Equal(t, User{"0", []string{"a"}, "comment"}, user)
+	assert.Equal(t, User{"0", []string{"a"}, []string{"x"}, "comment"}, user)
 	// check items that already exists
 	item, err := db.GetItem("0")
 	assert.Nil(t, err)

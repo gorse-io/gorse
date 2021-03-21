@@ -41,9 +41,10 @@ type Item struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId  string `bson:"_id"`
-	Labels  []string
-	Comment string
+	UserId    string `bson:"_id"`
+	Labels    []string
+	Subscribe []string
+	Comment   string
 }
 
 // FeedbackKey identifies feedback.
