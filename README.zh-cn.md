@@ -4,9 +4,13 @@
 
 <img width=160 src="https://gorse.io/zh/docs/img/gorse.png"/>
 
-| 持续集成 | 测试覆盖率 | 代码报告 | Go文档                                                       | 文档 |
-|---|---|---|---|---|
-| [![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild) | [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse) | [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)  | [![Go Reference](https://pkg.go.dev/badge/github.com/zhenghaoz/gorse.svg)](https://pkg.go.dev/github.com/zhenghaoz/gorse) | [![Build Docs](https://github.com/gorse-io/gorse-io.github.io/actions/workflows/build_docs.yml/badge.svg)](https://gorse.io/zh/docs/) |
+[![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild)
+[![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse)
+[![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
+[![Go Reference](https://pkg.go.dev/badge/github.com/zhenghaoz/gorse.svg)](https://pkg.go.dev/github.com/zhenghaoz/gorse)
+[![Build Docs](https://github.com/gorse-io/gorse-io.github.io/actions/workflows/build_docs.yml/badge.svg)](https://gorse.io/zh/docs/)
+[![Gitter](https://badges.gitter.im/gorse-io/gorse.svg)](https://gitter.im/gorse-io/gorse?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+<a target="_blank" href="https://qm.qq.com/cgi-bin/qm/qr?k=lOERnxfAM2U2rj4C9Htv9T68SLIXg6uk&jump_from=webapi"><img border="0" src="https://pub.idqqimg.com/wpa/images/group.png" alt="Gorse推荐系统交流群" title="Gorse推荐系统交流群"></a>
 
 *Gorse*是一个Go语言编写的开源推荐系统。Gorse希望成为一个具有普适性开源推荐系统，可以方便地引入到各种各样的在线服务中。 将物品、用户和它们之间的交互反馈数据导入到Gorse中，系统将自动训练模型，为每个用户实时生成推荐。项目特点如下：
 
