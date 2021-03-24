@@ -20,10 +20,11 @@ import (
 )
 
 const (
-	PopularItems = "popular_items"
-	LatestItems  = "latest_items"
-	SimilarItems = "similar_items"
-	MatchedItems = "matched_items"
+	PopularItems       = "popular_items"
+	LatestItems        = "latest_items"
+	SimilarItems       = "similar_items"
+	CollaborativeItems = "collaborative_items"
+	SubscribeItems     = "subscribe_items"
 
 	GlobalMeta             = "global_meta"
 	LastUpdatePopularTime  = "last_update_popular_time"
