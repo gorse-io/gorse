@@ -24,7 +24,7 @@ require (
 	github.com/stretchr/objx v0.1.1 // indirect
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.5.0
-	go.uber.org/zap v1.10.0
+	go.uber.org/zap v1.16.0
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
 	google.golang.org/grpc v1.36.0
 	google.golang.org/protobuf v1.26.0
