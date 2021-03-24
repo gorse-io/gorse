@@ -33,7 +33,7 @@ const (
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId    string `bson:"_id"`
+	ItemId    string
 	Timestamp time.Time
 	Labels    []string
 	Comment   string
@@ -41,7 +41,7 @@ type Item struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string `bson:"_id"`
+	UserId    string
 	Labels    []string
 	Subscribe []string
 	Comment   string
@@ -67,9 +67,9 @@ func (k *FeedbackKey) ToString() (string, error) {
 
 // Feedback stores feedback.
 type Feedback struct {
-	FeedbackKey `bson:"_id"`
-	Timestamp   time.Time
-	Comment     string
+	FeedbackKey
+	Timestamp time.Time
+	Comment   string
 }
 
 type Database interface {
@@ -81,17 +81,17 @@ type Database interface {
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
 	GetItems(cursor string, n int) (string, []Item, error)
-	GetItemFeedback(feedbackType, itemId string) ([]Feedback, error)
+	GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error)
 	// users
 	InsertUser(user User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
 	GetUsers(cursor string, n int) (string, []User, error)
-	GetUserFeedback(feedbackType, userId string) ([]Feedback, error)
+	GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error)
 	// feedback
 	InsertFeedback(feedback Feedback, insertUser, insertItem bool) error
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
-	GetFeedback(feedbackType, cursor string, n int) (string, []Feedback, error)
+	GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error)
 }
 
 const mySQLPrefix = "mysql://"
