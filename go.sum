@@ -277,6 +277,7 @@ github.com/spf13/pflag v1.0.3/go.mod h1:DYY7MBk1bdzusC3SYhjObp+wFpr4gzcvqqNjLnIn
 github.com/spf13/viper v1.4.0/go.mod h1:PTJ7Z/lr49W6bUbkmS1V3by4uWynFiR9p7+dSq/yZzE=
 github.com/steinfletcher/apitest v1.5.2 h1:o5R0km8ZI6xooSDwsHdDCD9OpEXda7CJeQwyoSrJmPM=
 github.com/steinfletcher/apitest v1.5.2/go.mod h1:TrZemFOZ1yNgKoAeAsth3Z3vEavTloE1hP/U2PSd3w0=
+github.com/steinfletcher/apitest v1.5.3/go.mod h1:TrZemFOZ1yNgKoAeAsth3Z3vEavTloE1hP/U2PSd3w0=
 github.com/stretchr/objx v0.1.0 h1:4G4v2dO3VZwixGIRoQ5Lfboy6nUhCyYzaqnIAPPhYs4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
