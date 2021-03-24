@@ -25,12 +25,11 @@ type Config struct {
 	// database
 	Database DatabaseConfig `toml:"database"`
 	// strategies
-	Similar       SimilarConfig `toml:"similar"`
-	Latest        LatestConfig  `toml:"latest"`
-	Popular       PopularConfig `toml:"popular"`
-	Collaborative CFConfig      `toml:"cf"`
-	Rank          RankConfig    `toml:"rank"`
-	Subscribe     SubscribeConfig
+	Similar SimilarConfig `toml:"similar"`
+	Latest  LatestConfig  `toml:"latest"`
+	Popular PopularConfig `toml:"popular"`
+	CF      CFConfig      `toml:"cf"`
+	Rank    RankConfig    `toml:"rank"`
 	// nodes
 	Master MasterConfig `toml:"master"`
 	Server ServerConfig `toml:"server"`
@@ -39,21 +38,16 @@ type Config struct {
 func (config *Config) LoadDefaultIfNil() *Config {
 	if config == nil {
 		return &Config{
-			Database:      *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
-			Similar:       *(*SimilarConfig)(nil).LoadDefaultIfNil(),
-			Latest:        *(*LatestConfig)(nil).LoadDefaultIfNil(),
-			Popular:       *(*PopularConfig)(nil).LoadDefaultIfNil(),
-			Collaborative: *(*CFConfig)(nil).LoadDefaultIfNil(),
-			Rank:          *(*RankConfig)(nil).LoadDefaultIfNil(),
-			Master:        *(*MasterConfig)(nil).LoadDefaultIfNil(),
+			Database: *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
+			Similar:  *(*SimilarConfig)(nil).LoadDefaultIfNil(),
+			Latest:   *(*LatestConfig)(nil).LoadDefaultIfNil(),
+			Popular:  *(*PopularConfig)(nil).LoadDefaultIfNil(),
+			CF:       *(*CFConfig)(nil).LoadDefaultIfNil(),
+			Rank:     *(*RankConfig)(nil).LoadDefaultIfNil(),
+			Master:   *(*MasterConfig)(nil).LoadDefaultIfNil(),
 		}
 	}
 	return config
-}
-
-type SubscribeConfig struct {
-	ImplicitSubscribe bool `toml:"implicit_subscribe"`
-	NumTopLabels      int  `toml:"num_top_labels"`
 }
 
 type SimilarConfig struct {
@@ -105,10 +99,11 @@ func (c *PopularConfig) LoadDefaultIfNil() *PopularConfig {
 
 /* CFConfig is configuration for collaborative filtering model */
 type CFConfig struct {
-	NumCollaborative int    `toml:"n_collabortive"`
-	CFModel          string `toml:"cf_model"`
-	FitPeriod        int    `toml:"fit_period"`
-	PredictPeriod    int    `toml:"predict_period"`
+	NumCF         int      `toml:"n_cf"`
+	CFModel       string   `toml:"cf_model"`
+	FitPeriod     int      `toml:"fit_period"`
+	PredictPeriod int      `toml:"predict_period"`
+	FeedbackTypes []string `toml:"feedback_types"`
 	// Hyper-parameters
 	Lr          float64 `toml:"lr"`           // learning rate
 	Reg         float64 `toml:"reg"`          // regularization strength
@@ -130,14 +125,14 @@ type CFConfig struct {
 func (c *CFConfig) LoadDefaultIfNil() *CFConfig {
 	if c == nil {
 		return &CFConfig{
-			NumCollaborative: 800,
-			CFModel:          "als",
-			PredictPeriod:    60,
-			FitPeriod:        1440,
-			FitJobs:          1,
-			Verbose:          10,
-			Candidates:       100,
-			TopK:             10,
+			NumCF:         800,
+			CFModel:       "als",
+			PredictPeriod: 60,
+			FitPeriod:     1440,
+			FitJobs:       1,
+			Verbose:       10,
+			Candidates:    100,
+			TopK:          10,
 		}
 	}
 	return c
@@ -179,12 +174,12 @@ func (c *CFConfig) GetParams(metaData *toml.MetaData) model.Params {
 
 /* RankConfig is configuration for rank model */
 type RankConfig struct {
-	Task      string `toml:"task"`
-	FitPeriod int    `toml:"fit_period"`
+	Task          string   `toml:"task"`
+	FeedbackTypes []string `toml:"feedback_types"`
+	FitPeriod     int      `toml:"fit_period"`
 	// fit config
-	FitJobs    int     `toml:"fit_jobs"`
-	Verbose    int     `toml:"verbose"`
-	SplitRatio float32 `toml:"split_ratio"`
+	FitJobs int `toml:"fit_jobs"`
+	Verbose int `toml:"verbose"`
 	// Hyper-parameters
 	Lr          float64 `toml:"lr"`           // learning rate
 	Reg         float64 `toml:"reg"`          // regularization strength
@@ -243,7 +238,7 @@ func (c *RankConfig) GetParams(metaData *toml.MetaData) model.Params {
 type MasterConfig struct {
 	Port               int    `toml:"port"`
 	Host               string `toml:"host"`
-	Jobs               int    `toml:"n_jobs"`
+	Jobs               int    `toml:"jobs"`
 	ClusterMetaTimeout int    `toml:"cluster_meta_timeout"`
 }
 
@@ -266,12 +261,12 @@ type ServerConfig struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore         string   `toml:"data_store"`           // database for data store
-	CacheStore        string   `toml:"cache_store"`          // database for cache store
-	AutoInsertUser    bool     `toml:"auto_insert_user"`     // insert new users while inserting feedback
-	AutoInsertItem    bool     `toml:"auto_insert_item"`     // insert new items while inserting feedback
-	MatchFeedbackType []string `toml:"match_feedback_types"` // feedback type of matching
-	RankFeedbackType  []string `toml:"rank_feedback_types"`  // feedback type of ranking
+	DataStore         string   `toml:"data_store"`          // database for data store
+	CacheStore        string   `toml:"cache_store"`         // database for cache store
+	AutoInsertUser    bool     `toml:"auto_insert_user"`    // insert new users while inserting feedback
+	AutoInsertItem    bool     `toml:"auto_insert_item"`    // insert new items while inserting feedback
+	MatchFeedbackType []string `toml:"match_feedback_type"` // feedback type of matching
+	RankFeedbackType  []string `toml:"rank_feedback_type"`  // feedback type of ranking
 }
 
 func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
@@ -329,34 +324,34 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("popular", "time_window") {
 		config.Popular.TimeWindow = defaultPopularConfig.TimeWindow
 	}
-	// default Collaborative config
+	// default CF config
 	defaultCFConfig := *(*CFConfig)(nil).LoadDefaultIfNil()
 	if !meta.IsDefined("cf", "n_cf") {
-		config.Collaborative.NumCollaborative = defaultCFConfig.NumCollaborative
+		config.CF.NumCF = defaultCFConfig.NumCF
 	}
 	if !meta.IsDefined("cf", "cf_model") {
-		config.Collaborative.CFModel = defaultCFConfig.CFModel
+		config.CF.CFModel = defaultCFConfig.CFModel
 	}
 	if !meta.IsDefined("cf", "predict_period") {
-		config.Collaborative.PredictPeriod = defaultCFConfig.PredictPeriod
+		config.CF.PredictPeriod = defaultCFConfig.PredictPeriod
 	}
 	if !meta.IsDefined("cf", "fit_period") {
-		config.Collaborative.FitPeriod = defaultCFConfig.FitPeriod
+		config.CF.FitPeriod = defaultCFConfig.FitPeriod
 	}
 	if !meta.IsDefined("cf", "fit_jobs") {
-		config.Collaborative.FitJobs = defaultCFConfig.FitJobs
+		config.CF.FitJobs = defaultCFConfig.FitJobs
 	}
 	if !meta.IsDefined("cf", "verbose") {
-		config.Collaborative.Verbose = defaultCFConfig.Verbose
+		config.CF.Verbose = defaultCFConfig.Verbose
 	}
 	if !meta.IsDefined("cf", "n_candidates") {
-		config.Collaborative.Candidates = defaultCFConfig.Candidates
+		config.CF.Candidates = defaultCFConfig.Candidates
 	}
 	if !meta.IsDefined("cf", "top_k") {
-		config.Collaborative.TopK = defaultCFConfig.TopK
+		config.CF.TopK = defaultCFConfig.TopK
 	}
 	if !meta.IsDefined("cf", "n_test_users") {
-		config.Collaborative.NumTestUsers = defaultCFConfig.NumTestUsers
+		config.CF.NumTestUsers = defaultCFConfig.NumTestUsers
 	}
 	// default rank config
 	defaultRankConfig := *(*RankConfig)(nil).LoadDefaultIfNil()

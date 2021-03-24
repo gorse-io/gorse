@@ -67,10 +67,10 @@ var statusCommand = &cobra.Command{
 			cache.CollectPopularTime,
 			cache.CollectLatestTime,
 			cache.CollectSimilarTime,
-			cache.FitMatrixFactorizationTime,
-			cache.FitFactorizationMachineTime,
-			cache.MatrixFactorizationVersion,
-			cache.FactorizationMachineVersion,
+			cache.LastFitCFModelTime,
+			cache.LastFitRankModelTime,
+			cache.LatestCFModelVersion,
+			cache.LatestRankModelVersion,
 		}
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"status", "value"})
