@@ -14,13 +14,9 @@
 package master
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"math/rand"
 	"net"
 	"sync"
@@ -50,9 +46,9 @@ type Master struct {
 	protocol.UnimplementedMasterServer
 
 	// cluster meta cache
-	ttlCache       *ttlcache.Cache
-	nodesInfo      map[string]string
-	nodesInfoMutex sync.Mutex
+	ttlCache   *ttlcache.Cache
+	nodesMap   map[string]string
+	nodesMutex sync.Mutex
 
 	// configuration
 	cfg  *config.Config
@@ -62,30 +58,24 @@ type Master struct {
 	dataStore  data.Database
 	cacheStore cache.Database
 
-	// users index
-	userIndex   base.Index
-	userVersion int
-	userMutex   sync.Mutex
+	// match model
+	cfModel           cf.MatrixFactorization
+	matchModelVersion int
+	matchModelMutex   sync.Mutex
 
-	// matrix factorization
-	mfModel   cf.MatrixFactorization
-	mfVersion int
-	mfMutex   sync.Mutex
-
-	// factorization machine
-	fmModel   rank.FactorizationMachine
-	fmVersion int
-	fmMutex   sync.Mutex
+	// rank model
+	rankModel        rank.FactorizationMachine
+	rankModelVersion int
+	rankModelMutex   sync.Mutex
 }
 
 func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
 	l := &Master{
-		nodesInfo:   make(map[string]string),
-		cfg:         cfg,
-		meta:        meta,
-		mfVersion:   rand.Int(),
-		fmVersion:   rand.Int(),
-		userVersion: rand.Int(),
+		nodesMap:          make(map[string]string),
+		cfg:               cfg,
+		meta:              meta,
+		matchModelVersion: rand.Int(),
+		rankModelVersion:  rand.Int(),
 	}
 	return l
 }
@@ -94,8 +84,8 @@ func (m *Master) Serve() {
 
 	// create cluster meta cache
 	m.ttlCache = ttlcache.NewCache()
-	m.ttlCache.SetExpirationCallback(m.nodeDown)
-	m.ttlCache.SetNewItemCallback(m.nodeUp)
+	m.ttlCache.SetExpirationCallback(m.NodeDown)
+	m.ttlCache.SetNewItemCallback(m.NodeUp)
 	if err := m.ttlCache.SetTTL(
 		time.Duration(m.cfg.Master.ClusterMetaTimeout) * time.Second,
 	); err != nil {
@@ -174,9 +164,9 @@ func (m *Master) GetCluster(ctx context.Context, _ *protocol.Void) (*protocol.Cl
 	// add master
 	cluster.Master = fmt.Sprintf("%s:%d", m.cfg.Master.Host, m.cfg.Master.Port)
 	// add servers/workers
-	m.nodesInfoMutex.Lock()
-	defer m.nodesInfoMutex.Unlock()
-	for addr, nodeType := range m.nodesInfo {
+	m.nodesMutex.Lock()
+	defer m.nodesMutex.Unlock()
+	for addr, nodeType := range m.nodesMap {
 		switch nodeType {
 		case WorkerNode:
 			cluster.Workers = append(cluster.Workers, addr)
@@ -189,113 +179,80 @@ func (m *Master) GetCluster(ctx context.Context, _ *protocol.Void) (*protocol.Cl
 	return cluster, nil
 }
 
-func (m *Master) GetCollaborativeFilteringModelVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
-	m.mfMutex.Lock()
-	defer m.mfMutex.Unlock()
+func (m *Master) GetMatchModelVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.matchModelMutex.Lock()
+	defer m.matchModelMutex.Unlock()
 	// skip empty model
-	if m.mfModel == nil {
+	if m.cfModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
 	return &protocol.Model{
-		Name:    m.cfg.Collaborative.CFModel,
-		Version: int64(m.mfVersion),
+		Name:    m.cfg.CF.CFModel,
+		Version: int64(m.matchModelVersion),
 	}, nil
 }
 
-func (m *Master) GetCollaborativeFilteringModel(context.Context, *protocol.Void) (*protocol.Model, error) {
-	m.mfMutex.Lock()
-	defer m.mfMutex.Unlock()
+func (m *Master) GetMatchModel(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.matchModelMutex.Lock()
+	defer m.matchModelMutex.Unlock()
 	// skip empty model
-	if m.mfModel == nil {
+	if m.cfModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
-	modelData, err := cf.EncodeModel(m.mfModel)
+	modelData, err := cf.EncodeModel(m.cfModel)
 	if err != nil {
 		return nil, err
 	}
 	return &protocol.Model{
-		Name:    m.cfg.Collaborative.CFModel,
-		Version: int64(m.mfVersion),
+		Name:    m.cfg.CF.CFModel,
+		Version: int64(m.matchModelVersion),
 		Model:   modelData,
 	}, nil
 }
 
-func (m *Master) GetFactorizationMachineVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
-	m.fmMutex.Lock()
-	defer m.fmMutex.Unlock()
+func (m *Master) GetRankModelVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.rankModelMutex.Lock()
+	defer m.rankModelMutex.Unlock()
 	// skip empty model
-	if m.fmModel == nil {
+	if m.rankModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
-	return &protocol.Model{Version: int64(m.fmVersion)}, nil
+	return &protocol.Model{Version: int64(m.rankModelVersion)}, nil
 }
 
-func (m *Master) GetFactorizationMachine(context.Context, *protocol.Void) (*protocol.Model, error) {
-	m.fmMutex.Lock()
-	defer m.fmMutex.Unlock()
+func (m *Master) GetRankModel(context.Context, *protocol.Void) (*protocol.Model, error) {
+	m.rankModelMutex.Lock()
+	defer m.rankModelMutex.Unlock()
 	// skip empty model
-	if m.fmModel == nil {
+	if m.rankModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
-	modelData, err := rank.EncodeModel(m.fmModel)
+	modelData, err := rank.EncodeModel(m.rankModel)
 	if err != nil {
 		return nil, err
 	}
 	return &protocol.Model{
-		Version: int64(m.fmVersion),
+		Version: int64(m.rankModelVersion),
 		Model:   modelData,
 	}, nil
 }
 
-func (m *Master) GetUserIndexVersion(context.Context, *protocol.Void) (*protocol.Users, error) {
-	m.userMutex.Lock()
-	defer m.userMutex.Unlock()
-	if m.userIndex == nil {
-		return &protocol.Users{Version: 0}, nil
-	}
-	return &protocol.Users{Version: int64(m.fmVersion)}, nil
-}
-
-func (m *Master) GetUserIndex(context.Context, *protocol.Void) (*protocol.Users, error) {
-	m.userMutex.Lock()
-	defer m.userMutex.Unlock()
-	// skip empty model
-	if m.userIndex == nil {
-		return &protocol.Users{Version: 0}, nil
-	}
-	// encode index
-	buf := bytes.NewBuffer(nil)
-	writer := bufio.NewWriter(buf)
-	encoder := gob.NewEncoder(writer)
-	if err := encoder.Encode(m.userIndex); err != nil {
-		return nil, err
-	}
-	return &protocol.Users{
-		Version: int64(m.fmVersion),
-		Users:   buf.Bytes(),
-	}, nil
-}
-
-func (m *Master) nodeUp(key string, value interface{}) {
+func (m *Master) NodeUp(key string, value interface{}) {
 	nodeType := value.(string)
-	base.Logger().Info("node up",
-		zap.String("node_id", key),
-		zap.String("node_type", nodeType))
-	m.nodesInfoMutex.Lock()
-	defer m.nodesInfoMutex.Unlock()
-	m.nodesInfo[key] = nodeType
+	log.Infof("master: %s (%s) up", nodeType, key)
+	m.nodesMutex.Lock()
+	defer m.nodesMutex.Unlock()
+	m.nodesMap[key] = nodeType
 }
 
-func (m *Master) nodeDown(key string, value interface{}) {
+func (m *Master) NodeDown(key string, value interface{}) {
 	nodeType := value.(string)
-	base.Logger().Info("node down",
-		zap.String("node_id", key),
-		zap.String("node_type", nodeType))
-	m.nodesInfoMutex.Lock()
-	defer m.nodesInfoMutex.Unlock()
-	delete(m.nodesInfo, key)
+	log.Infof("master: %s (%s) down", nodeType, key)
+	m.nodesMutex.Lock()
+	defer m.nodesMutex.Unlock()
+	delete(m.nodesMap, key)
 }
 
 func (m *Master) Loop() {
@@ -303,7 +260,7 @@ func (m *Master) Loop() {
 
 	// calculate loop period
 	loopPeriod := base.GCD(
-		m.cfg.Collaborative.FitPeriod,
+		m.cfg.CF.FitPeriod,
 		m.cfg.Rank.FitPeriod,
 		m.cfg.Similar.UpdatePeriod,
 		m.cfg.Popular.UpdatePeriod,
@@ -315,27 +272,26 @@ func (m *Master) Loop() {
 		isPopItemStale := m.IsStale(cache.CollectPopularTime, m.cfg.Popular.UpdatePeriod)
 		isLatestStale := m.IsStale(cache.CollectLatestTime, m.cfg.Latest.UpdatePeriod)
 		isSimilarStale := m.IsStale(cache.CollectSimilarTime, m.cfg.Similar.UpdatePeriod)
-		isRankModelStale := m.IsStale(cache.FitFactorizationMachineTime, m.cfg.Rank.FitPeriod)
-		isCFModelStale := m.IsStale(cache.FitMatrixFactorizationTime, m.cfg.Collaborative.FitPeriod)
+		isRankModelStale := m.IsStale(cache.LastFitRankModelTime, m.cfg.Rank.FitPeriod)
+		isCFModelStale := m.IsStale(cache.LastFitCFModelTime, m.cfg.CF.FitPeriod)
 
 		// pull dataset for rank
-		if isRankModelStale || m.fmModel == nil {
-			base.Logger().Info("load dataset for ranking task", zap.Strings("feedback_types", m.cfg.Database.RankFeedbackType))
-			rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Database.RankFeedbackType)
+		if isRankModelStale || m.rankModel == nil {
+			rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Rank.FeedbackTypes)
 			if err != nil {
 				log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
 			}
 			if rankDataSet.PositiveCount == 0 {
-				log.Infof("master: empty dataset (feedback_type = %v)", m.cfg.Database.RankFeedbackType)
-			} else {
-				m.FitFactorizationMachine(rankDataSet)
+				log.Infof("master: empty dataset (feedback_type = %v)", m.cfg.Rank.FeedbackTypes)
+			} else if err = m.FitRankModel(rankDataSet); err != nil {
+				log.Fatalf("master: failed to renew ranking model (%v)", err)
 			}
 		}
 
-		if isCFModelStale || isLatestStale || isPopItemStale || isSimilarStale || m.mfModel == nil {
+		if isCFModelStale || isLatestStale || isPopItemStale || isSimilarStale || m.cfModel == nil {
 			// download dataset
-			base.Logger().Info("load dataset for matching task", zap.Strings("feedback_types", m.cfg.Database.MatchFeedbackType))
-			dataSet, items, feedbacks, err := cf.LoadDataFromDatabase(m.dataStore, m.cfg.Database.MatchFeedbackType)
+			log.Infof("master: load data from database")
+			dataSet, items, feedbacks, err := cf.LoadDataFromDatabase(m.dataStore, m.cfg.CF.FeedbackTypes)
 			if err != nil {
 				log.Fatal("master: ", err)
 			}
@@ -344,25 +300,28 @@ func (m *Master) Loop() {
 			} else {
 				log.Infof("master: data loaded (#user = %v, #item = %v, #feedback = %v)",
 					dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count())
-				// update user index
-				m.userMutex.Lock()
-				m.userIndex = dataSet.UserIndex
-				m.userVersion++
-				m.userMutex.Unlock()
+
 				// collect popular items
 				if isPopItemStale {
 					m.CollectPopItem(items, feedbacks)
 				}
+
 				// collect latest items
 				if isLatestStale {
 					m.CollectLatest(items)
 				}
+
 				// collect similar items
 				if isSimilarStale {
 					m.CollectSimilar(items, dataSet)
 				}
-				if isCFModelStale || m.mfModel == nil {
-					m.FitMatrixFactorization(dataSet)
+
+				if isCFModelStale || m.cfModel == nil {
+					log.Infof("master: fit cf model (n_jobs = %v)", m.cfg.Master.Jobs)
+					if err = m.FitCFModel(dataSet); err != nil {
+						log.Errorf("master: failed to fit cf model (%v)", err)
+					}
+					log.Infof("master: completed fit cf model")
 				}
 			}
 		}
@@ -372,51 +331,42 @@ func (m *Master) Loop() {
 	}
 }
 
-func (m *Master) FitFactorizationMachine(dataSet *rank.Dataset) {
-	base.Logger().Info("fit factorization machine",
-		zap.Float32("split_ratio", m.cfg.Rank.SplitRatio))
-	trainSet, testSet := dataSet.Split(m.cfg.Rank.SplitRatio, 0)
+func (m *Master) FitRankModel(dataSet *rank.Dataset) error {
+	trainSet, testSet := dataSet.Split(0.2, 0)
 	testSet.NegativeSample(1, trainSet, 0)
-	fmModel := rank.NewFM(rank.FMTask(m.cfg.Rank.Task), nil)
-	fmModel.Fit(trainSet, testSet, nil)
+	nextModel := rank.NewFM(rank.FMTask(m.cfg.Rank.Task), nil)
+	nextModel.Fit(trainSet, testSet, nil)
 
-	m.fmMutex.Lock()
-	m.fmModel = fmModel
-	m.fmVersion++
-	m.fmMutex.Unlock()
+	m.rankModelMutex.Lock()
+	m.rankModel = nextModel
+	m.rankModelVersion++
+	m.rankModelMutex.Unlock()
 
-	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.FitFactorizationMachineTime, base.Now()); err != nil {
-		log.Infof("master: failed to write meta (%v)", err)
+	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.LastFitRankModelTime, base.Now()); err != nil {
+		return err
 	}
-	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.FactorizationMachineVersion, fmt.Sprintf("%x", m.fmVersion)); err != nil {
-		log.Infof("master: failed to write meta (%v)", err)
-	}
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestRankModelVersion, fmt.Sprintf("%x", m.rankModelVersion))
 }
 
-func (m *Master) FitMatrixFactorization(dataSet *cf.DataSet) {
-	if m.cfg.Collaborative.NumCollaborative > 0 {
-		log.Infof("master: fit matrix factorization (n_jobs = %v)", m.cfg.Master.Jobs)
-		// training match model
-		trainSet, testSet := dataSet.Split(m.cfg.Collaborative.NumTestUsers, 0)
-		mfModel, err := cf.NewModel(m.cfg.Collaborative.CFModel, m.cfg.Collaborative.GetParams(m.meta))
-		if err != nil {
-			log.Infof("master: failed to fit matrix factorization (%v)", err)
-		}
-		mfModel.Fit(trainSet, testSet, m.cfg.Collaborative.GetFitConfig())
-
-		// update match model
-		m.mfMutex.Lock()
-		m.mfModel = mfModel
-		m.mfVersion++
-		m.mfMutex.Unlock()
-
-		if err = m.cacheStore.SetString(cache.GlobalMeta, cache.FitMatrixFactorizationTime, base.Now()); err != nil {
-			log.Infof("master: failed to write meta (%v)", err)
-		}
-		if err = m.cacheStore.SetString(cache.GlobalMeta, cache.MatrixFactorizationVersion, fmt.Sprintf("%x", m.mfVersion)); err != nil {
-			log.Infof("master: failed to write meta (%v)", err)
-		}
+func (m *Master) FitCFModel(dataSet *cf.DataSet) error {
+	// training match model
+	trainSet, testSet := dataSet.Split(m.cfg.CF.NumTestUsers, 0)
+	nextModel, err := cf.NewModel(m.cfg.CF.CFModel, m.cfg.CF.GetParams(m.meta))
+	if err != nil {
+		return err
 	}
+	nextModel.Fit(trainSet, testSet, m.cfg.CF.GetFitConfig())
+
+	// update match model
+	m.matchModelMutex.Lock()
+	m.cfModel = nextModel
+	m.matchModelVersion++
+	m.matchModelMutex.Unlock()
+
+	if err = m.cacheStore.SetString(cache.GlobalMeta, cache.LastFitCFModelTime, base.Now()); err != nil {
+		return err
+	}
+	return m.cacheStore.SetString(cache.GlobalMeta, cache.LatestCFModelVersion, fmt.Sprintf("%x", m.matchModelVersion))
 }
 
 func (m *Master) IsStale(dateTimeField string, timeLimit int) bool {
