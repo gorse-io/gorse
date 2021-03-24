@@ -51,9 +51,8 @@ func (config *Config) LoadDefaultIfNil() *Config {
 }
 
 type SimilarConfig struct {
-	FeedbackTypes []string `toml:"feedback_types"`
-	NumSimilar    int      `toml:"n_similar"`
-	UpdatePeriod  int      `toml:"update_period"`
+	NumSimilar   int `toml:"n_similar"`
+	UpdatePeriod int `toml:"update_period"`
 }
 
 func (c *SimilarConfig) LoadDefaultIfNil() *SimilarConfig {
@@ -82,10 +81,9 @@ func (c *LatestConfig) LoadDefaultIfNil() *LatestConfig {
 }
 
 type PopularConfig struct {
-	NumPopular    int      `toml:"n_popular"`
-	UpdatePeriod  int      `toml:"update_period"`
-	TimeWindow    int      `toml:"time_window"`
-	FeedbackTypes []string `toml:"feedback_types"`
+	NumPopular   int `toml:"n_popular"`
+	UpdatePeriod int `toml:"update_period"`
+	TimeWindow   int `toml:"time_window"`
 }
 
 func (c *PopularConfig) LoadDefaultIfNil() *PopularConfig {
@@ -257,19 +255,18 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 }
 
 type ServerConfig struct {
-	APIKey string `toml:"api_key"`
+	APIKey   string `toml:"api_key"`
+	DefaultN int    `toml:"default_n"`
 }
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	// database for data store
-	DataStore string `toml:"data_store"`
-	// database for cache store
-	CacheStore string `toml:"cache_store"`
-	// insert new users while inserting feedback
-	AutoInsertUser bool `toml:"auto_insert_user"`
-	// insert new items while inserting feedback
-	AutoInsertItem bool `toml:"auto_insert_item"`
+	DataStore         string   `toml:"data_store"`          // database for data store
+	CacheStore        string   `toml:"cache_store"`         // database for cache store
+	AutoInsertUser    bool     `toml:"auto_insert_user"`    // insert new users while inserting feedback
+	AutoInsertItem    bool     `toml:"auto_insert_item"`    // insert new items while inserting feedback
+	MatchFeedbackType []string `toml:"match_feedback_type"` // feedback type of matching
+	RankFeedbackType  []string `toml:"rank_feedback_type"`  // feedback type of ranking
 }
 
 func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {

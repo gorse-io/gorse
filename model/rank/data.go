@@ -192,7 +192,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	for _, feedbackType := range feedbackTypes {
 		for {
 			var batchFeedback []data.Feedback
-			cursor, batchFeedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+			cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
 			if err != nil {
 				return nil, err
 			}

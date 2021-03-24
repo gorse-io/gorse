@@ -189,7 +189,7 @@ func (w *Worker) GenerateMatchItems(m cf.MatrixFactorization, users []string) {
 			}
 		}
 		elems, _ := recItems.PopAll()
-		if err := w.cacheStore.SetList(cache.MatchedItems, user, elems); err != nil {
+		if err := w.cacheStore.SetList(cache.CollaborativeItems, user, elems); err != nil {
 			log.Fatalf("worker: failed to push matched items (%v)", err)
 		}
 		completed <- nil

@@ -27,9 +27,9 @@ const (
 	SubscribeItems     = "subscribe_items"
 
 	GlobalMeta             = "global_meta"
-	LastUpdatePopularTime  = "last_update_popular_time"
-	LastUpdateLatestTime   = "last_update_latest_time"
-	LastUpdateSimilarTime  = "last_update_similar_time"
+	CollectPopularTime     = "last_update_popular_time"
+	CollectLatestTime      = "last_update_latest_time"
+	CollectSimilarTime     = "last_update_similar_time"
 	LastFitCFModelTime     = "last_fit_match_model_time"
 	LastFitRankModelTime   = "last_fit_rank_model_time"
 	LatestCFModelVersion   = "latest_match_model_version"

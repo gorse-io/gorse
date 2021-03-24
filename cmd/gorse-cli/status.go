@@ -64,9 +64,9 @@ var statusCommand = &cobra.Command{
 		}
 		// show status
 		status := []string{
-			cache.LastUpdatePopularTime,
-			cache.LastUpdateLatestTime,
-			cache.LastUpdateSimilarTime,
+			cache.CollectPopularTime,
+			cache.CollectLatestTime,
+			cache.CollectSimilarTime,
 			cache.LastFitCFModelTime,
 			cache.LastFitRankModelTime,
 			cache.LatestCFModelVersion,

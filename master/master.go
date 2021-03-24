@@ -269,9 +269,9 @@ func (m *Master) Loop() {
 
 	for {
 		// check stale
-		isPopItemStale := m.IsStale(cache.LastUpdatePopularTime, m.cfg.Popular.UpdatePeriod)
-		isLatestStale := m.IsStale(cache.LastUpdateLatestTime, m.cfg.Latest.UpdatePeriod)
-		isSimilarStale := m.IsStale(cache.LastUpdateSimilarTime, m.cfg.Similar.UpdatePeriod)
+		isPopItemStale := m.IsStale(cache.CollectPopularTime, m.cfg.Popular.UpdatePeriod)
+		isLatestStale := m.IsStale(cache.CollectLatestTime, m.cfg.Latest.UpdatePeriod)
+		isSimilarStale := m.IsStale(cache.CollectSimilarTime, m.cfg.Similar.UpdatePeriod)
 		isRankModelStale := m.IsStale(cache.LastFitRankModelTime, m.cfg.Rank.FitPeriod)
 		isCFModelStale := m.IsStale(cache.LastFitCFModelTime, m.cfg.CF.FitPeriod)
 
@@ -282,7 +282,7 @@ func (m *Master) Loop() {
 				log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
 			}
 			if rankDataSet.PositiveCount == 0 {
-				log.Info("master: empty dataset")
+				log.Infof("master: empty dataset (feedback_type = %v)", m.cfg.Rank.FeedbackTypes)
 			} else if err = m.FitRankModel(rankDataSet); err != nil {
 				log.Fatalf("master: failed to renew ranking model (%v)", err)
 			}
@@ -291,7 +291,7 @@ func (m *Master) Loop() {
 		if isCFModelStale || isLatestStale || isPopItemStale || isSimilarStale || m.cfModel == nil {
 			// download dataset
 			log.Infof("master: load data from database")
-			dataSet, items, err := cf.LoadDataFromDatabase(m.dataStore, m.cfg.CF.FeedbackTypes)
+			dataSet, items, feedbacks, err := cf.LoadDataFromDatabase(m.dataStore, m.cfg.CF.FeedbackTypes)
 			if err != nil {
 				log.Fatal("master: ", err)
 			}
@@ -303,29 +303,17 @@ func (m *Master) Loop() {
 
 				// collect popular items
 				if isPopItemStale {
-					log.Info("master: collect popular items")
-					if err = m.CollectPopItem(items, dataSet); err != nil {
-						log.Errorf("master: failed to collect popular items (%v)", err)
-					}
-					log.Info("master: completed collect popular items")
+					m.CollectPopItem(items, feedbacks)
 				}
 
 				// collect latest items
 				if isLatestStale {
-					log.Info("master: collect latest items")
-					if err = m.CollectLatest(items); err != nil {
-						log.Errorf("master: failed to collect latest items (%v)", err)
-					}
-					log.Info("master: completed collect latest items")
+					m.CollectLatest(items)
 				}
 
 				// collect similar items
 				if isSimilarStale {
-					log.Infof("master: collect similar items (n_jobs = %v)", m.cfg.Master.Jobs)
-					if err = m.CollectSimilar(items, dataSet); err != nil {
-						log.Errorf("master: failed to collect similar items (%v)", err)
-					}
-					log.Info("master: completed collect similar items")
+					m.CollectSimilar(items, dataSet)
 				}
 
 				if isCFModelStale || m.cfModel == nil {
@@ -398,99 +386,130 @@ func (m *Master) IsStale(dateTimeField string, timeLimit int) bool {
 }
 
 // CollectPopItem updates popular items for the database.
-func (m *Master) CollectPopItem(items []data.Item, dataset *cf.DataSet) error {
-	// create item map
-	itemMap := make(map[string]data.Item)
-	for _, item := range items {
-		itemMap[item.ItemId] = item
+func (m *Master) CollectPopItem(items []data.Item, feedback []data.Feedback) {
+	if m.cfg.Popular.NumPopular > 0 {
+		log.Info("master: collect popular items")
+		// create item mapping
+		itemMap := make(map[string]data.Item)
+		for _, item := range items {
+			itemMap[item.ItemId] = item
+		}
+		// count feedback
+		timeWindowLimit := time.Now().AddDate(0, 0, -m.cfg.Popular.TimeWindow)
+		count := make(map[string]int)
+		for _, fb := range feedback {
+			if fb.Timestamp.After(timeWindowLimit) {
+				count[fb.ItemId]++
+			}
+		}
+		// collect pop items
+		popItems := make(map[string]*base.TopKStringFilter)
+		popItems[""] = base.NewTopKStringFilter(m.cfg.Popular.NumPopular)
+		for itemId, f := range count {
+			popItems[""].Push(itemId, float32(f))
+			item := itemMap[itemId]
+			for _, label := range item.Labels {
+				if _, exists := popItems[label]; !exists {
+					popItems[label] = base.NewTopKStringFilter(m.cfg.Popular.NumPopular)
+				}
+				popItems[label].Push(itemId, float32(f))
+			}
+		}
+		// write back
+		for label, topItems := range popItems {
+			result, _ := topItems.PopAll()
+			if err := m.cacheStore.SetList(cache.PopularItems, label, result); err != nil {
+				log.Errorf("master: failed to cache popular items (%v)", err)
+			}
+		}
+		if err := m.cacheStore.SetString(cache.GlobalMeta, cache.CollectPopularTime, base.Now()); err != nil {
+			log.Errorf("master: failed to cache popular items (%v)", err)
+		}
 	}
-	// collect pop items
-	count := make([]int, dataset.ItemCount())
-	for _, userIndex := range dataset.FeedbackItems {
-		count[userIndex]++
-	}
-	popItems := base.NewTopKStringFilter(m.cfg.Popular.NumPopular)
-	for itemIndex := range count {
-		itemId := dataset.ItemIndex.ToName(itemIndex)
-		popItems.Push(itemId, float32(count[itemIndex]))
-	}
-	result, _ := popItems.PopAll()
-	// write back
-	if err := m.cacheStore.SetList(cache.PopularItems, "", result); err != nil {
-		return err
-	}
-	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, base.Now())
 }
 
 // CollectLatest updates latest items.
-func (m *Master) CollectLatest(items []data.Item) error {
-	// find latest items
-	latestItems := base.NewTopKStringFilter(m.cfg.Latest.NumLatest)
-	for _, item := range items {
-		latestItems.Push(item.ItemId, float32(item.Timestamp.Unix()))
+func (m *Master) CollectLatest(items []data.Item) {
+	if m.cfg.Latest.NumLatest > 0 {
+		log.Info("master: collect latest items")
+		var err error
+		latestItems := make(map[string]*base.TopKStringFilter)
+		latestItems[""] = base.NewTopKStringFilter(m.cfg.Latest.NumLatest)
+		// find latest items
+		for _, item := range items {
+			latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
+			for _, label := range item.Labels {
+				if _, exist := latestItems[label]; !exist {
+					latestItems[label] = base.NewTopKStringFilter(m.cfg.Latest.NumLatest)
+				}
+				latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
+			}
+		}
+		for label, topItems := range latestItems {
+			result, _ := topItems.PopAll()
+			if err = m.cacheStore.SetList(cache.LatestItems, label, result); err != nil {
+				log.Errorf("master: failed to cache latest items (%v)", err)
+			}
+		}
+		if err = m.cacheStore.SetString(cache.GlobalMeta, cache.CollectLatestTime, base.Now()); err != nil {
+			log.Errorf("master: failed to cache latest items (%v)", err)
+		}
 	}
-	result, _ := latestItems.PopAll()
-	if err := m.cacheStore.SetList(cache.LatestItems, "", result); err != nil {
-		return err
-	}
-	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, base.Now())
 }
 
 // CollectSimilar updates neighbors for the database.
-func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) error {
-	// create item map
-	itemMap := make(map[string]data.Item)
-	for _, item := range items {
-		itemMap[item.ItemId] = item
-	}
-	// create progress tracker
-	completed := make(chan []interface{}, 1000)
-	go func() {
-		defer base.CheckPanic()
-
-		completedCount := 0
-		ticker := time.NewTicker(time.Second)
-		for {
-			select {
-			case _, ok := <-completed:
-				if !ok {
-					return
+func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) {
+	if m.cfg.Similar.NumSimilar > 0 {
+		log.Info("master: collect similar items")
+		// create progress tracker
+		completed := make(chan []interface{}, 1000)
+		go func() {
+			completedCount := 0
+			ticker := time.NewTicker(time.Second)
+			for {
+				select {
+				case _, ok := <-completed:
+					if !ok {
+						return
+					}
+					completedCount++
+				case <-ticker.C:
+					log.Infof("master: collect similar items (%v/%v)", completedCount, dataset.ItemCount())
 				}
-				completedCount++
-			case <-ticker.C:
-				log.Infof("master: update similar items (%v/%v)", completedCount, dataset.ItemCount())
 			}
-		}
-	}()
-	if err := base.Parallel(dataset.ItemCount(), m.cfg.CF.FitJobs, func(workerId, jobId int) error {
-		users := dataset.ItemFeedback[jobId]
-		// Collect candidates
-		itemSet := base.NewSet()
-		for _, u := range users {
-			itemSet.Add(dataset.UserFeedback[u]...)
-		}
-		// Ranking
-		nearItems := base.NewTopKFilter(m.cfg.Similar.NumSimilar)
-		for j := range itemSet {
-			if j != jobId {
-				nearItems.Push(j, Dot(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j]))
+		}()
+		if err := base.Parallel(dataset.ItemCount(), m.cfg.Master.Jobs, func(workerId, jobId int) error {
+			users := dataset.ItemFeedback[jobId]
+			// Collect candidates
+			itemSet := base.NewSet()
+			for _, u := range users {
+				itemSet.Add(dataset.UserFeedback[u]...)
 			}
+			// Ranking
+			nearItems := base.NewTopKFilter(m.cfg.Similar.NumSimilar)
+			for j := range itemSet {
+				if j != jobId {
+					nearItems.Push(j, Dot(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j]))
+				}
+			}
+			elem, _ := nearItems.PopAll()
+			recommends := make([]string, len(elem))
+			for i := range recommends {
+				recommends[i] = dataset.ItemIndex.ToName(elem[i])
+			}
+			if err := m.cacheStore.SetList(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), recommends); err != nil {
+				return err
+			}
+			completed <- nil
+			return nil
+		}); err != nil {
+			log.Errorf("master: failed to cache similar items (%v)", err)
 		}
-		elem, _ := nearItems.PopAll()
-		recommends := make([]string, len(elem))
-		for i := range recommends {
-			recommends[i] = dataset.ItemIndex.ToName(elem[i])
+		close(completed)
+		if err := m.cacheStore.SetString(cache.GlobalMeta, cache.CollectSimilarTime, base.Now()); err != nil {
+			log.Errorf("master: failed to cache similar items (%v)", err)
 		}
-		if err := m.cacheStore.SetList(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), recommends); err != nil {
-			return err
-		}
-		completed <- nil
-		return nil
-	}); err != nil {
-		return err
 	}
-	close(completed)
-	return m.cacheStore.SetString(cache.GlobalMeta, cache.LastUpdateSimilarTime, base.Now())
 }
 
 func Dot(a, b []int) float32 {
