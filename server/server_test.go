@@ -327,13 +327,17 @@ func TestServer_List(t *testing.T) {
 		Get    string
 	}
 	operators := []ListOperator{
-		{cache.MatchedItems, "0", "/user/0/match"},
+		{cache.CollaborativeItems, "0", "/collaborative/0"},
+		{cache.SubscribeItems, "0", "/subscribe/0"},
 		{cache.LatestItems, "", "/latest/"},
+		{cache.LatestItems, "0", "/latest/0"},
 		{cache.PopularItems, "", "/popular/"},
-		{cache.SimilarItems, "0", "/item/0/neighbors"},
+		{cache.PopularItems, "0", "/popular/0"},
+		{cache.SimilarItems, "0", "/neighbors/0"},
 	}
 
 	for _, operator := range operators {
+		t.Logf("test RESTful API: %v", operator.Get)
 		// Put items
 		items := []string{"0", "1", "2", "3", "4"}
 		if err := s.cacheStoreClient.SetList(operator.Prefix, operator.Label, items); err != nil {
