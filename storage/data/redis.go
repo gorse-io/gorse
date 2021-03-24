@@ -22,13 +22,9 @@ import (
 )
 
 const (
-	// Source data
-	prefixLabelIndex = "index/label/" // prefix for label index
-	prefixItemIndex  = "index/item/"  // prefix for item index
-	prefixUserIndex  = "index/user/"  // prefix for user index
-	prefixItem       = "item/"        // prefix for items
-	prefixUser       = "user/"        // prefix for users
-	prefixFeedback   = "feedback/"    // prefix for feedback
+	prefixItem     = "item/"     // prefix for items
+	prefixUser     = "user/"     // prefix for users
+	prefixFeedback = "feedback/" // prefix for feedback
 )
 
 type Redis struct {
@@ -53,13 +49,6 @@ func (redis *Redis) InsertItem(item Item) error {
 	if err = redis.client.Set(ctx, prefixItem+item.ItemId, data, 0).Err(); err != nil {
 		return err
 	}
-	// write index
-	for _, label := range item.Labels {
-		// inset label index
-		if err = redis.client.SAdd(ctx, prefixLabelIndex+label, item.ItemId).Err(); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -72,35 +61,18 @@ func (redis *Redis) BatchInsertItem(items []Item) error {
 	return nil
 }
 
-func (redis *Redis) DeleteItem(itemId string) error {
-	var ctx = context.Background()
-	// remove user
-	if err := redis.client.Del(ctx, prefixItem+itemId).Err(); err != nil {
-		return err
-	}
-	// remove feedback
+func (redis *Redis) ForFeedback(ctx context.Context, action func(key, thisFeedbackType, thisUserId, thisItemId string) error) error {
 	cursor := uint64(0)
 	var err error
 	var keys []string
 	for {
-		keys, cursor, err = redis.client.Scan(ctx, cursor, prefixItemIndex+itemId+"*", 0).Result()
+		keys, cursor, err = redis.client.Scan(ctx, cursor, prefixFeedback+"*", 0).Result()
 		if err != nil {
 			return err
 		}
 		for _, key := range keys {
-			_, tp := parseItemIndexKey(key)
-			// remove feedbacks
-			userIds, err := redis.client.SMembers(ctx, createItemIndexKey(tp, itemId)).Result()
-			if err != nil {
-				return err
-			}
-			for _, userId := range userIds {
-				if err = redis.client.Del(ctx, createFeedbackKey(FeedbackKey{tp, userId, itemId})).Err(); err != nil {
-					return err
-				}
-			}
-			// remove index
-			if err = redis.client.Del(ctx, createItemIndexKey(tp, itemId)).Err(); err != nil {
+			thisFeedbackType, thisUserId, thisItemId := parseFeedbackKey(key)
+			if err = action(key, thisFeedbackType, thisUserId, thisItemId); err != nil {
 				return err
 			}
 		}
@@ -109,6 +81,22 @@ func (redis *Redis) DeleteItem(itemId string) error {
 		}
 	}
 	return nil
+}
+
+func (redis *Redis) DeleteItem(itemId string) error {
+	var ctx = context.Background()
+	// remove user
+	if err := redis.client.Del(ctx, prefixItem+itemId).Err(); err != nil {
+		return err
+	}
+	// remove feedback
+	return redis.ForFeedback(ctx, func(key, _, _, thisItemId string) error {
+		if thisItemId == itemId {
+			// remove feedbacks
+			return redis.client.Del(ctx, key).Err()
+		}
+		return nil
+	})
 }
 
 func (redis *Redis) GetItem(itemId string) (Item, error) {
@@ -159,21 +147,19 @@ func (redis *Redis) GetItems(cursor string, n int) (string, []Item, error) {
 	return cursor, items, nil
 }
 
-func (redis *Redis) GetItemFeedback(feedbackType, itemId string) ([]Feedback, error) {
+func (redis *Redis) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
-	userIds, err := redis.client.SMembers(ctx, createItemIndexKey(feedbackType, itemId)).Result()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, userId := range userIds {
-		val, err := redis.getFeedback(feedbackType, userId, itemId)
-		if err != nil {
-			return nil, err
+	err := redis.ForFeedback(ctx, func(key, thisFeedbackType, _, thisItemId string) error {
+		if itemId == thisItemId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+			val, err := redis.getFeedback(key)
+			if err != nil {
+				return err
+			}
+			feedback = append(feedback, val)
 		}
-		feedback = append(feedback, val)
-	}
+		return nil
+	})
 	return feedback, err
 }
 
@@ -193,36 +179,12 @@ func (redis *Redis) DeleteUser(userId string) error {
 		return err
 	}
 	// remove feedback
-	cursor := uint64(0)
-	var err error
-	var keys []string
-	for {
-		keys, cursor, err = redis.client.Scan(ctx, cursor, prefixUserIndex+userId+"*", 0).Result()
-		if err != nil {
-			return err
+	return redis.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
+		if thisUserId == userId {
+			return redis.client.Del(ctx, key).Err()
 		}
-		for _, key := range keys {
-			_, tp := parseUserIndexKey(key)
-			// remove feedbacks
-			itemIds, err := redis.client.SMembers(ctx, createUserIndexKey(tp, userId)).Result()
-			if err != nil {
-				return err
-			}
-			for _, itemId := range itemIds {
-				if err = redis.client.Del(ctx, createFeedbackKey(FeedbackKey{tp, userId, itemId})).Err(); err != nil {
-					return err
-				}
-			}
-			// remove index
-			if err = redis.client.Del(ctx, createUserIndexKey(tp, userId)).Err(); err != nil {
-				return err
-			}
-		}
-		if cursor == 0 {
-			break
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (redis *Redis) GetUser(userId string) (User, error) {
@@ -275,31 +237,28 @@ func (redis *Redis) GetUsers(cursor string, n int) (string, []User, error) {
 	return cursor, users, nil
 }
 
-func (redis *Redis) GetUserFeedback(feedbackType, userId string) ([]Feedback, error) {
+func (redis *Redis) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 
 	// get itemId list by userId
-	itemIds, err := redis.client.SMembers(ctx, createUserIndexKey(feedbackType, userId)).Result()
-	if err != nil {
-		return nil, err
-	}
-	// get feedback by itemId and userId
-	for _, itemId := range itemIds {
-		val, err := redis.getFeedback(feedbackType, userId, itemId)
-		if err != nil {
-			return nil, err
+	err := redis.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
+		if thisUserId == userId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+			val, err := redis.getFeedback(key)
+			if err != nil {
+				return err
+			}
+			feedback = append(feedback, val)
 		}
-		feedback = append(feedback, val)
-	}
+		return nil
+	})
 	return feedback, err
 }
 
-func (redis *Redis) getFeedback(tp, userId, itemId string) (Feedback, error) {
+func (redis *Redis) getFeedback(key string) (Feedback, error) {
 	var ctx = context.Background()
-	feedbackKey := FeedbackKey{FeedbackType: tp, UserId: userId, ItemId: itemId}
 	// get feedback by feedbackKey
-	val, err := redis.client.Get(ctx, createFeedbackKey(feedbackKey)).Result()
+	val, err := redis.client.Get(ctx, key).Result()
 	if err != nil {
 		return Feedback{}, err
 	}
@@ -315,22 +274,9 @@ func createFeedbackKey(key FeedbackKey) string {
 	return prefixFeedback + key.FeedbackType + "/" + key.UserId + "/" + key.ItemId
 }
 
-func createUserIndexKey(tp, userId string) string {
-	return prefixUserIndex + userId + "/" + tp
-}
-
-func createItemIndexKey(tp, itemId string) string {
-	return prefixItemIndex + itemId + "/" + tp
-}
-
-func parseUserIndexKey(key string) (userId, tp string) {
+func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
 	fields := strings.Split(key, "/")
-	return fields[1], fields[3]
-}
-
-func parseItemIndexKey(key string) (itemId, tp string) {
-	fields := strings.Split(key, "/")
-	return fields[1], fields[3]
+	return fields[1], fields[2], fields[3]
 }
 
 func (redis *Redis) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
@@ -374,14 +320,6 @@ func (redis *Redis) InsertFeedback(feedback Feedback, insertUser, insertItem boo
 			}
 		}
 	}
-	// insert user index
-	if err = redis.client.SAdd(ctx, createUserIndexKey(feedback.FeedbackType, feedback.UserId), feedback.ItemId).Err(); err != nil {
-		return err
-	}
-	// insert item index
-	if err = redis.client.SAdd(ctx, createItemIndexKey(feedback.FeedbackType, feedback.ItemId), feedback.UserId).Err(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -394,7 +332,7 @@ func (redis *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertI
 	return nil
 }
 
-func (redis *Redis) GetFeedback(feedbackType, cursor string, n int) (string, []Feedback, error) {
+func (redis *Redis) GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error) {
 	var ctx = context.Background()
 	var err error
 	cursorNum := uint64(0)
@@ -406,7 +344,11 @@ func (redis *Redis) GetFeedback(feedbackType, cursor string, n int) (string, []F
 	}
 	feedback := make([]Feedback, 0)
 	var keys []string
-	keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixFeedback+feedbackType+"*", int64(n)).Result()
+	if feedbackType != nil {
+		keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixFeedback+*feedbackType+"*", int64(n)).Result()
+	} else {
+		keys, cursorNum, err = redis.client.Scan(ctx, cursorNum, prefixFeedback+"*", int64(n)).Result()
+	}
 	if err != nil {
 		return "", nil, err
 	}

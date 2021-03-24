@@ -70,8 +70,9 @@ func (d *SQLDatabase) InsertItem(item Item) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.db.Exec("INSERT IGNORE items(item_id, time_stamp, labels, `comment`) VALUES (?, ?, ?, ?)",
-		item.ItemId, item.Timestamp, labels, item.Comment)
+	_, err = d.db.Exec("INSERT items(item_id, time_stamp, labels, `comment`) VALUES (?, ?, ?, ?) "+
+		"ON DUPLICATE KEY UPDATE time_stamp = ?, labels = ?, `comment` = ?",
+		item.ItemId, item.Timestamp, labels, item.Comment, item.Timestamp, labels, item.Comment)
 	return err
 }
 
@@ -124,7 +125,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 
 func (d *SQLDatabase) GetItems(cursor string, n int) (string, []Item, error) {
 	result, err := d.db.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
-		"WHERE item_id >= ? LIMIT ?", cursor, n+1)
+		"WHERE item_id >= ? ORDER BY item_id LIMIT ?", cursor, n+1)
 	if err != nil {
 		return "", nil, err
 	}
@@ -147,15 +148,23 @@ func (d *SQLDatabase) GetItems(cursor string, n int) (string, []Item, error) {
 	return "", items, nil
 }
 
-func (d *SQLDatabase) GetItemFeedback(feedbackType, itemId string) ([]Feedback, error) {
-	result, err := d.db.Query("SELECT user_id, item_id FROM feedback WHERE item_id = ?", itemId)
+func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
+	var result *sql.Rows
+	var err error
+	if feedbackType != nil {
+		result, err = d.db.Query("SELECT user_id, item_id, feedback_type FROM feedback "+
+			"WHERE item_id = ? AND feedback_type = ?",
+			itemId, *feedbackType)
+	} else {
+		result, err = d.db.Query("SELECT user_id, item_id, feedback_type FROM feedback WHERE item_id = ?", itemId)
+	}
 	if err != nil {
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
 	for result.Next() {
 		var feedback Feedback
-		if err := result.Scan(&feedback.UserId, &feedback.ItemId); err != nil {
+		if err := result.Scan(&feedback.UserId, &feedback.ItemId, &feedback.FeedbackType); err != nil {
 			return nil, err
 		}
 		feedbacks = append(feedbacks, feedback)
@@ -172,8 +181,9 @@ func (d *SQLDatabase) InsertUser(user User) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.db.Exec("INSERT users(user_id, labels, subscribe, `comment`) VALUES (?, ?, ?, ?)",
-		user.UserId, labels, subscribe, user.Comment)
+	_, err = d.db.Exec("INSERT users(user_id, labels, subscribe, `comment`) VALUES (?, ?, ?, ?) "+
+		"ON DUPLICATE KEY UPDATE labels = ?, subscribe = ?, `comment` = ?",
+		user.UserId, labels, subscribe, user.Comment, labels, subscribe, user.Comment)
 	return err
 }
 
@@ -221,7 +231,7 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 
 func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	result, err := d.db.Query("SELECT user_id, labels, subscribe, `comment` FROM users "+
-		"WHERE user_id >= ? LIMIT ?", cursor, n+1)
+		"WHERE user_id >= ? ORDER BY user_id LIMIT ?", cursor, n+1)
 	if err != nil {
 		return "", nil, err
 	}
@@ -248,9 +258,16 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	return "", users, nil
 }
 
-func (d *SQLDatabase) GetUserFeedback(feedbackType, userId string) ([]Feedback, error) {
-	result, err := d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` "+
-		"FROM feedback WHERE user_id = ?", userId)
+func (d *SQLDatabase) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
+	var result *sql.Rows
+	var err error
+	if feedbackType != nil {
+		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` "+
+			"FROM feedback WHERE user_id = ? AND feedback_type = ?", userId, *feedbackType)
+	} else {
+		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` "+
+			"FROM feedback WHERE user_id = ?", userId)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -295,8 +312,9 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 		}
 	}
 	// insert feedback
-	_, err := d.db.Exec("INSERT IGNORE feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES (?,?,?,?,?)",
-		feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment)
+	_, err := d.db.Exec("INSERT feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES (?,?,?,?,?) "+
+		"ON DUPLICATE KEY UPDATE time_stamp = ?, `comment` = ?",
+		feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment, feedback.Timestamp, feedback.Comment)
 	return err
 }
 
@@ -309,15 +327,24 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 	return nil
 }
 
-func (d *SQLDatabase) GetFeedback(feedbackType, cursor string, n int) (string, []Feedback, error) {
+func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error) {
 	var cursorKey FeedbackKey
 	if cursor != "" {
 		if err := json.Unmarshal([]byte(cursor), &cursorKey); err != nil {
 			return "", nil, err
 		}
 	}
-	result, err := d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-		"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? LIMIT ?", feedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+	var result *sql.Rows
+	var err error
+	if feedbackType != nil {
+		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+			"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
+			*feedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+	} else {
+		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+			"WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
+			cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+	}
 	if err != nil {
 		return "", nil, err
 	}
@@ -330,7 +357,7 @@ func (d *SQLDatabase) GetFeedback(feedbackType, cursor string, n int) (string, [
 		feedbacks = append(feedbacks, feedback)
 	}
 	if len(feedbacks) == n+1 {
-		nextCursorKey := feedbacks[len(feedbacks)-1]
+		nextCursorKey := feedbacks[len(feedbacks)-1].FeedbackKey
 		nextCursor, err := json.Marshal(nextCursorKey)
 		if err != nil {
 			return "", nil, err

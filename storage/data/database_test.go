@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+var positiveFeedbackType = "positiveFeedbackType"
+var negativeFeedbackType = "negativeFeedbackType"
+
 func getUsers(t *testing.T, db Database) []User {
 	users := make([]User, 0)
 	var err error
@@ -53,13 +56,13 @@ func getItems(t *testing.T, db Database) []Item {
 	}
 }
 
-func getFeedback(t *testing.T, db Database) []Feedback {
+func getFeedback(t *testing.T, db Database, feedbackType *string) []Feedback {
 	feedback := make([]Feedback, 0)
 	var err error
 	var data []Feedback
 	cursor := ""
 	for {
-		cursor, data, err = db.GetFeedback("click", cursor, 2)
+		cursor, data, err = db.GetFeedback(cursor, 2, feedbackType)
 		assert.Nil(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
@@ -77,7 +80,7 @@ func getFeedback(t *testing.T, db Database) []Feedback {
 
 func testUsers(t *testing.T, db Database) {
 	// Insert users
-	for i := 0; i < 10; i++ {
+	for i := 9; i >= 0; i-- {
 		if err := db.InsertUser(User{
 			UserId:  strconv.Itoa(i),
 			Labels:  []string{strconv.Itoa(i + 100)},
@@ -105,6 +108,12 @@ func testUsers(t *testing.T, db Database) {
 	assert.Nil(t, err)
 	_, err = db.GetUser("0")
 	assert.NotNil(t, err)
+	// test override
+	err = db.InsertUser(User{UserId: "1", Comment: "override"})
+	assert.Nil(t, err)
+	user, err := db.GetUser("1")
+	assert.Nil(t, err)
+	assert.Equal(t, "override", user.Comment)
 }
 
 func testFeedback(t *testing.T, db Database) {
@@ -116,27 +125,26 @@ func testFeedback(t *testing.T, db Database) {
 	assert.Nil(t, err)
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "1", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "3", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "4", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "1", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "3", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "4", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
-	err = db.InsertFeedback(feedback[0], true, true)
-	assert.Nil(t, err)
 	err = db.BatchInsertFeedback(feedback[1:], true, true)
 	assert.Nil(t, err)
-	// idempotent
 	err = db.InsertFeedback(feedback[0], true, true)
-	assert.Nil(t, err)
-	err = db.BatchInsertFeedback(feedback[1:], true, true)
 	assert.Nil(t, err)
 	// other type
-	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{"like", "0", "2"}}, true, true)
+	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}, true, true)
+	assert.Nil(t, err)
+	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{negativeFeedbackType, "2", "4"}}, true, true)
 	assert.Nil(t, err)
 	// Get feedback
-	ret := getFeedback(t, db)
+	ret := getFeedback(t, db, &positiveFeedbackType)
 	assert.Equal(t, feedback, ret)
+	ret = getFeedback(t, db, nil)
+	assert.Equal(t, len(feedback)+2, len(ret))
 	// Get items
 	items := getItems(t, db)
 	assert.Equal(t, 5, len(items))
@@ -157,18 +165,36 @@ func testFeedback(t *testing.T, db Database) {
 	item, err := db.GetItem("0")
 	assert.Nil(t, err)
 	assert.Equal(t, Item{ItemId: "0", Labels: []string{"b"}}, item)
-	// Get ret by user
-	ret, err = db.GetUserFeedback("click", "2")
+	// Get typed feedback by user
+	ret, err = db.GetUserFeedback("2", &positiveFeedbackType)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
-	// Get ret by item
-	ret, err = db.GetItemFeedback("click", "4")
+	// Get all feedback by user
+	ret, err = db.GetUserFeedback("2", nil)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(ret))
+	// Get typed feedback by item
+	ret, err = db.GetItemFeedback("4", &positiveFeedbackType)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
+	// Get all feedback by item
+	ret, err = db.GetItemFeedback("4", nil)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(ret))
+	// test override
+	err = db.InsertFeedback(Feedback{
+		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "0"},
+		Comment:     "override",
+	}, true, true)
+	assert.Nil(t, err)
+	ret, err = db.GetUserFeedback("0", &positiveFeedbackType)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(ret))
+	assert.Equal(t, "override", ret[0].Comment)
 }
 
 func testItems(t *testing.T, db Database) {
@@ -206,9 +232,9 @@ func testItems(t *testing.T, db Database) {
 		},
 	}
 	// Insert item
-	err := db.InsertItem(items[0])
+	err := db.BatchInsertItem(items[1:])
 	assert.Nil(t, err)
-	err = db.BatchInsertItem(items[1:])
+	err = db.InsertItem(items[0])
 	assert.Nil(t, err)
 	// Get items
 	totalItems := getItems(t, db)
@@ -226,16 +252,22 @@ func testItems(t *testing.T, db Database) {
 	assert.Nil(t, err)
 	_, err = db.GetItem("0")
 	assert.NotNil(t, err)
+	// test override
+	err = db.InsertItem(Item{ItemId: "2", Comment: "override"})
+	assert.Nil(t, err)
+	item, err := db.GetItem("2")
+	assert.Nil(t, err)
+	assert.Equal(t, "override", item.Comment)
 }
 
 func testDeleteUser(t *testing.T, db Database) {
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "0", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "0", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "0", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	if err := db.BatchInsertFeedback(feedback, true, true); err != nil {
 		t.Fatal(err)
@@ -247,12 +279,12 @@ func testDeleteUser(t *testing.T, db Database) {
 	if _, err := db.GetUser("0"); err == nil {
 		t.Fatal("failed to delete user")
 	}
-	if ret, err := db.GetUserFeedback("click", "0"); err != nil {
+	if ret, err := db.GetUserFeedback("0", &positiveFeedbackType); err != nil {
 		t.Fatal(err)
 	} else {
 		assert.Equal(t, 0, len(ret))
 	}
-	if _, ret, err := db.GetFeedback("click", "", 100); err != nil {
+	if _, ret, err := db.GetFeedback("", 100, &positiveFeedbackType); err != nil {
 		t.Fatal(err)
 	} else {
 		assert.Empty(t, ret)
@@ -262,11 +294,11 @@ func testDeleteUser(t *testing.T, db Database) {
 func testDeleteItem(t *testing.T, db Database) {
 	// Insert ret
 	feedbacks := []Feedback{
-		{FeedbackKey{"click", "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "1", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "2", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "3", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"click", "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "1", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "2", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "3", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	if err := db.BatchInsertFeedback(feedbacks, true, true); err != nil {
 		t.Fatal(err)
@@ -278,12 +310,12 @@ func testDeleteItem(t *testing.T, db Database) {
 	if _, err := db.GetItem("0"); err == nil {
 		t.Fatal("failed to delete item")
 	}
-	if ret, err := db.GetItemFeedback("click", "0"); err != nil {
+	if ret, err := db.GetItemFeedback("0", &positiveFeedbackType); err != nil {
 		t.Fatal(err)
 	} else {
 		assert.Equal(t, 0, len(ret))
 	}
-	if _, ret, err := db.GetFeedback("click", "", 100); err != nil {
+	if _, ret, err := db.GetFeedback("", 100, &positiveFeedbackType); err != nil {
 		log.Fatal(err)
 	} else {
 		assert.Empty(t, ret)
