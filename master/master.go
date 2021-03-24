@@ -256,6 +256,8 @@ func (m *Master) NodeDown(key string, value interface{}) {
 }
 
 func (m *Master) Loop() {
+	defer base.CheckPanic()
+
 	// calculate loop period
 	loopPeriod := base.GCD(
 		m.cfg.CF.FitPeriod,
@@ -444,6 +446,8 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) error {
 	// create progress tracker
 	completed := make(chan []interface{}, 1000)
 	go func() {
+		defer base.CheckPanic()
+
 		completedCount := 0
 		ticker := time.NewTicker(time.Second)
 		for {

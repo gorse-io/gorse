@@ -54,6 +54,7 @@ func NewWorker(masterHost string, masterPort int, jobs int) *Worker {
 }
 
 func (w *Worker) Register() {
+	defer base.CheckPanic()
 	for {
 		if _, err := w.MasterClient.RegisterWorker(context.Background(), &protocol.Void{}); err != nil {
 			log.Fatal("worker:", err)
@@ -63,6 +64,7 @@ func (w *Worker) Register() {
 }
 
 func (w *Worker) Sync() {
+	defer base.CheckPanic()
 	for {
 		// pull model version
 		log.Info("worker: pull model version from master")
@@ -153,6 +155,7 @@ func (w *Worker) GenerateMatchItems(m cf.MatrixFactorization, users []string) {
 	// progress tracker
 	completed := make(chan interface{})
 	go func() {
+		defer base.CheckPanic()
 		completedCount := 0
 		ticker := time.NewTicker(time.Second)
 		for {
