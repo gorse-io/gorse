@@ -259,17 +259,18 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 	return dataset
 }
 
-func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*DataSet, []data.Item, error) {
+func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*DataSet, []data.Item, []data.Feedback, error) {
 	dataset := NewMapIndexDataset()
 	cursor := ""
 	var err error
 	allItems := make([]data.Item, 0)
+	allFeedback := make([]data.Feedback, 0)
 	// pull users
 	for {
 		var users []data.User
 		cursor, users, err = database.GetUsers(cursor, batchSize)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, user := range users {
 			dataset.AddUser(user.UserId)
@@ -284,7 +285,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		cursor, items, err = database.GetItems(cursor, batchSize)
 		allItems = append(allItems, items...)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, item := range items {
 			dataset.AddItem(item.ItemId)
@@ -297,19 +298,20 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	for _, feedbackType := range feedbackTypes {
 		for {
 			var feedback []data.Feedback
-			cursor, feedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+			cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			for _, v := range feedback {
 				dataset.AddFeedback(v.UserId, v.ItemId, false)
+				allFeedback = append(allFeedback, v)
 			}
 			if cursor == "" {
 				break
 			}
 		}
 	}
-	return dataset, allItems, nil
+	return dataset, allItems, allFeedback, nil
 }
 
 func loadTest(dataset *DataSet, path string) error {
