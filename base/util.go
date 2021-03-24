@@ -14,8 +14,11 @@
 package base
 
 import (
+	"go.uber.org/zap"
 	"log"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.
@@ -86,4 +89,10 @@ func GCD(a ...int) int {
 		divisor = gcdEuclidean(divisor, b)
 	}
 	return divisor
+}
+
+func CheckPanic() {
+	if r := recover(); r != nil {
+		logrus.Error("panic recovered ", zap.Any("panic", r))
+	}
 }

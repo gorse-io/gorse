@@ -110,6 +110,7 @@ func (s *Server) Serve() {
 }
 
 func (s *Server) Sync() {
+	defer base.CheckPanic()
 	for {
 		ctx := context.Background()
 
@@ -144,6 +145,7 @@ func (s *Server) Sync() {
 }
 
 func (s *Server) Register() {
+	defer base.CheckPanic()
 	for {
 		if _, err := s.MasterClient.RegisterServer(context.Background(), &protocol.Void{}); err != nil {
 			log.Fatal("server:", err)
