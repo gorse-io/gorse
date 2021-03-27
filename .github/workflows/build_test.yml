@@ -37,10 +37,10 @@ jobs:
       run: |
         mkdir -p ~/.gorse/dataset
         mkdir -p ~/.gorse/download
-        wget https://cdn.sine-x.com/datasets/ml-1m.zip -P ~/.gorse/download
-        wget https://cdn.sine-x.com/datasets/pinterest-20.zip -P ~/.gorse/download
-        wget https://cdn.sine-x.com/datasets/frappe.zip -P ~/.gorse/download
-        wget https://cdn.sine-x.com/datasets/ml-tag.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/ml-1m.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
         unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
