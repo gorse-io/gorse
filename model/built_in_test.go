@@ -20,17 +20,11 @@ import (
 
 func TestUnzip(t *testing.T) {
 	// Download
-	zipName, err := downloadFromUrl("https://cdn.sine-x.com/datasets/movielens/ml-100k.zip", os.TempDir())
-	if err != nil {
-		t.Fatal("download file failed ", err)
-	}
+	zipName, err := downloadFromUrl("https://cdn.gorse.io/datasets/frappe.zip", os.TempDir())
+	assert.Nil(t, err, "download file failed ")
 	// Extract files
 	fileNames, err := unzip(zipName, DataSetDir)
 	// Check
-	if err != nil {
-		t.Fatal("unzip file failed ", err)
-	}
-	if len(fileNames) != 24 {
-		t.Fatal("Number of file doesn't match")
-	}
+	assert.Nil(t, err, "unzip file failed ")
+	assert.Equal(t, 3, len(fileNames), "Number of file doesn't match")
 }
