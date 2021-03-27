@@ -15,16 +15,27 @@ package base
 
 import (
 	"go.uber.org/zap"
-	"log"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
+
+var logger *zap.Logger
+
+func init() {
+	logger, _ = zap.NewProduction()
+}
+
+func Logger() *zap.Logger {
+	return logger
+}
+
+func SetLogger(_logger *zap.Logger) {
+	logger = _logger
+}
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.
 func Max(a ...int) int {
 	if len(a) == 0 {
-		log.Panicf("Can't get the maximum from empty vec")
+		panic("can't get the maximum from empty vec")
 	}
 	maximum := a[0]
 	for _, m := range a {
@@ -37,7 +48,7 @@ func Max(a ...int) int {
 
 func Min(a ...int) int {
 	if len(a) == 0 {
-		log.Panicf("Can't get the minimum from empty vec")
+		panic("can't get the minimum from empty vec")
 	}
 	minimum := a[0]
 	for _, m := range a {
@@ -93,6 +104,6 @@ func GCD(a ...int) int {
 
 func CheckPanic() {
 	if r := recover(); r != nil {
-		logrus.Error("panic recovered ", zap.Any("panic", r))
+		Logger().Error("panic recovered", zap.Any("panic", r))
 	}
 }
