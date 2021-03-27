@@ -28,7 +28,7 @@ var serverCommand = &cobra.Command{
 		// show version
 		showVersion, _ := cmd.PersistentFlags().GetBool("version")
 		if showVersion {
-			fmt.Println(version.VersionName)
+			fmt.Println(version.Name)
 			return
 		}
 		// start server

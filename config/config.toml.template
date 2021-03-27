@@ -8,26 +8,28 @@ data_store = "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true"
 auto_insert_user = true
 # insert new items while inserting feedback
 auto_insert_item = false
+match_feedback_types = ["star"]
+rank_feedback_types = ["star"]
 
 # This section declares setting for cached latest items.
 [latest]
-n_latest = 500          # number of cached latest items
-update_period = 30      # update period for latest items in minutes
+n_latest = 100          # number of cached latest items
+update_period = 10      # update period for latest items in minutes
 
 # This section declares setting for cached popular items.
 [popular]
-n_popular = 500         # number of cached popular items
-update_period = 120     # update period for popular items in minutes
+n_popular = 100         # number of cached popular items
+update_period = 30      # update period for popular items in minutes
 time_window = 360       # time window of cached popular items in days
 
 # This section declares setting for cached similar items.
 [similar]
-n_similar = 500         # number of cached similar items
+n_similar = 100         # number of cached similar items
 update_period = 120     # update period for similar items in minutes
 
 # This section declares setting for collabortive filatering model.
-[cf]
-n_cf = 1000             # number of cached CF items
+[collabortive]
+n_collabortive = 100    # number of cached CF items
 cf_model = "als"        # collabortive filatering model
 fit_period = 60         # fit period for similar items in minutes
 predict_period = 60     # prediction period for similar items in minutes
@@ -58,6 +60,7 @@ init_mean = 0.0         # mean of gaussian initial parameter
 init_std = 0.001        # standard deviation of gaussian initial parameter
 fit_jobs = 4            # number of fit jobs
 verbose = 10            # verbose period
+split_ratio = 0.2
 
 # This section declares hyperparameters for the recommendation model.
 [master]
@@ -67,4 +70,4 @@ jobs = 4                    # working jobs
 cluster_meta_timeout = 30   # cluster meta timeout (second)
 
 [server]
-api_key = "p@ssword"    # secret key for RESTful APIs (SSL required)
+default_n = 100

@@ -23,10 +23,12 @@ service Master {
   rpc GetConfig(Void) returns (Config) {}
 
   /* model distribute */
-  rpc GetRankModelVersion(Void) returns (Model) {}
-  rpc GetMatchModelVersion(Void) returns (Model) {}
-  rpc GetRankModel(Void) returns (Model) {}
-  rpc GetMatchModel(Void) returns (Model) {}
+  rpc GetUserIndexVersion(Void) returns(Users) {}
+  rpc GetFactorizationMachineVersion(Void) returns (Model) {}
+  rpc GetCollaborativeFilteringModelVersion(Void) returns (Model) {}
+  rpc GetUserIndex(Void) returns(Users) {}
+  rpc GetFactorizationMachine(Void) returns (Model) {}
+  rpc GetCollaborativeFilteringModel(Void) returns (Model) {}
 
   /* cluster management */
   rpc GetCluster(Void) returns (Cluster) {}
@@ -37,6 +39,11 @@ service Master {
 
 message Config {
   string json = 1;
+}
+
+message Users {
+  int64 version = 1;
+  bytes users = 2;
 }
 
 message Model {

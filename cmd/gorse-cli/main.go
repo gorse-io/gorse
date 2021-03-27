@@ -73,6 +73,6 @@ var versionCommand = &cobra.Command{
 	Use:   "version",
 	Short: "gorse version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(version.VersionName)
+		fmt.Println(version.Name)
 	},
 }

@@ -28,7 +28,7 @@ var masterCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Show version
 		if showVersion, _ := cmd.PersistentFlags().GetBool("version"); showVersion {
-			fmt.Println(version.VersionName)
+			fmt.Println(version.Name)
 			return
 		}
 		// Start master

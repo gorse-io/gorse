@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/zhenghaoz/gorse/base"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"strings"
@@ -118,7 +118,7 @@ func Open(path string) (Database, error) {
 		addr := path[len(redisPrefix):]
 		database := new(Redis)
 		database.client = redis.NewClient(&redis.Options{Addr: addr})
-		log.Warn("redis is used for testing only")
+		base.Logger().Warn("redis is used for testing only")
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
