@@ -26,14 +26,15 @@ const (
 	CollaborativeItems = "collaborative_items"
 	SubscribeItems     = "subscribe_items"
 
-	GlobalMeta             = "global_meta"
-	CollectPopularTime     = "last_update_popular_time"
-	CollectLatestTime      = "last_update_latest_time"
-	CollectSimilarTime     = "last_update_similar_time"
-	LastFitCFModelTime     = "last_fit_match_model_time"
-	LastFitRankModelTime   = "last_fit_rank_model_time"
-	LatestCFModelVersion   = "latest_match_model_version"
-	LatestRankModelVersion = "latest_rank_model_version"
+	GlobalMeta                  = "global_meta"
+	CollectPopularTime          = "last_update_popular_time"
+	CollectLatestTime           = "last_update_latest_time"
+	CollectSimilarTime          = "last_update_similar_time"
+	FitMatrixFactorizationTime  = "last_fit_match_model_time"
+	FitFactorizationMachineTime = "last_fit_rank_model_time"
+	CollaborativeRecommendTime  = "offline_recommend_time"
+	MatrixFactorizationVersion  = "latest_match_model_version"
+	FactorizationMachineVersion = "latest_rank_model_version"
 )
 
 type Database interface {

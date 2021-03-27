@@ -3,7 +3,6 @@ package data
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"log"
 	"strconv"
 	"testing"
 	"time"
@@ -269,26 +268,19 @@ func testDeleteUser(t *testing.T, db Database) {
 		{FeedbackKey{positiveFeedbackType, "0", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 		{FeedbackKey{positiveFeedbackType, "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
-	if err := db.BatchInsertFeedback(feedback, true, true); err != nil {
-		t.Fatal(err)
-	}
+	err := db.BatchInsertFeedback(feedback, true, true)
+	assert.Nil(t, err)
 	// Delete user
-	if err := db.DeleteUser("0"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.GetUser("0"); err == nil {
-		t.Fatal("failed to delete user")
-	}
-	if ret, err := db.GetUserFeedback("0", &positiveFeedbackType); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Equal(t, 0, len(ret))
-	}
-	if _, ret, err := db.GetFeedback("", 100, &positiveFeedbackType); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Empty(t, ret)
-	}
+	err = db.DeleteUser("0")
+	assert.Nil(t, err)
+	_, err = db.GetUser("0")
+	assert.NotNil(t, err, "failed to delete user")
+	ret, err := db.GetUserFeedback("0", &positiveFeedbackType)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(ret))
+	_, ret, err = db.GetFeedback("", 100, &positiveFeedbackType)
+	assert.Nil(t, err)
+	assert.Empty(t, ret)
 }
 
 func testDeleteItem(t *testing.T, db Database) {
@@ -300,24 +292,17 @@ func testDeleteItem(t *testing.T, db Database) {
 		{FeedbackKey{positiveFeedbackType, "3", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 		{FeedbackKey{positiveFeedbackType, "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
-	if err := db.BatchInsertFeedback(feedbacks, true, true); err != nil {
-		t.Fatal(err)
-	}
+	err := db.BatchInsertFeedback(feedbacks, true, true)
+	assert.Nil(t, err)
 	// Delete item
-	if err := db.DeleteItem("0"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.GetItem("0"); err == nil {
-		t.Fatal("failed to delete item")
-	}
-	if ret, err := db.GetItemFeedback("0", &positiveFeedbackType); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Equal(t, 0, len(ret))
-	}
-	if _, ret, err := db.GetFeedback("", 100, &positiveFeedbackType); err != nil {
-		log.Fatal(err)
-	} else {
-		assert.Empty(t, ret)
-	}
+	err = db.DeleteItem("0")
+	assert.Nil(t, err)
+	_, err = db.GetItem("0")
+	assert.NotNil(t, err, "failed to delete item")
+	ret, err := db.GetItemFeedback("0", &positiveFeedbackType)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(ret))
+	_, ret, err = db.GetFeedback("", 100, &positiveFeedbackType)
+	assert.Nil(t, err)
+	assert.Empty(t, ret)
 }

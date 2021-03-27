@@ -26,6 +26,7 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"net/http"
 	"strconv"
@@ -39,9 +40,9 @@ type Server struct {
 	Config       *config.Config
 	MasterClient protocol.MasterClient
 
-	RankModel        rank.FactorizationMachine
-	RankModelMutex   sync.RWMutex
-	RankModelVersion int64
+	fmModel        rank.FactorizationMachine
+	RankModelMutex sync.RWMutex
+	fmVersion      int64
 
 	MasterHost string
 	MasterPort int
@@ -108,34 +109,30 @@ func (s *Server) Serve() {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort), nil))
 }
 
+// Sync factorization machine.
 func (s *Server) Sync() {
 	defer base.CheckPanic()
 	for {
 		ctx := context.Background()
 
-		// pull model version
-		log.Debug("server: check model version")
-		modelVersion, err := s.MasterClient.GetRankModelVersion(ctx, &protocol.Void{})
-		if err != nil {
-			log.Fatalf("server: failed to check model version (%v)", err)
-		}
-
-		// pull model
-		if modelVersion.Version != s.RankModelVersion {
-			log.Infof("server: sync model")
-			modelData, err := s.MasterClient.GetRankModel(ctx, &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9))
-			if err != nil {
-				log.Fatalf("server: failed to sync model (%v)", err)
+		// pull factorization machine
+		base.Logger().Debug("check factorization machine version")
+		if fmVersionResponse, err := s.MasterClient.GetFactorizationMachineVersion(ctx, &protocol.Void{}); err != nil {
+			base.Logger().Error("failed to check factorization machine version", zap.Error(err))
+		} else if fmVersionResponse.Version == 0 {
+			base.Logger().Debug("remote factorization machine doesn't exist")
+		} else if fmVersionResponse.Version != s.fmVersion {
+			if mfResponse, err := s.MasterClient.GetFactorizationMachine(context.Background(), &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
+				base.Logger().Error("failed to pull factorization machine", zap.Error(err))
+			} else {
+				s.fmModel, err = rank.DecodeModel(mfResponse.Model)
+				if err != nil {
+					base.Logger().Error("failed to decode factorization machine", zap.Error(err))
+				} else {
+					s.fmVersion = mfResponse.Version
+					base.Logger().Info("sync factorization machine", zap.Int64("version", s.fmVersion))
+				}
 			}
-			nextModel, err := rank.DecodeModel(modelData.Model)
-			if err != nil {
-				log.Fatalf("server: failed to decode model (%v)", err)
-			}
-			s.RankModelMutex.Lock()
-			s.RankModel = nextModel
-			s.RankModelVersion = modelData.Version
-			s.RankModelMutex.Unlock()
-			log.Infof("server: complete sync model")
 		}
 
 		// sleep
@@ -143,11 +140,12 @@ func (s *Server) Sync() {
 	}
 }
 
+// Register this server to the master.
 func (s *Server) Register() {
 	defer base.CheckPanic()
 	for {
 		if _, err := s.MasterClient.RegisterServer(context.Background(), &protocol.Void{}); err != nil {
-			log.Fatal("server:", err)
+			base.Logger().Error("failed to register", zap.Error(err))
 		}
 		time.Sleep(time.Duration(s.Config.Master.ClusterMetaTimeout/2) * time.Second)
 	}
@@ -308,7 +306,7 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.FormParameter("n", "number of returned items").DataType("int")).
 		Param(ws.FormParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
-	ws.Route(ws.GET("/popular/{label}").To(s.getPopular).
+	ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
 		Doc("get popular items").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
@@ -323,7 +321,7 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.FormParameter("n", "number of returned items").DataType("int")).
 		Param(ws.FormParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
-	ws.Route(ws.GET("/latest/{label}").To(s.getLatest).
+	ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
 		Doc("get latest items").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
@@ -391,6 +389,7 @@ func (s *Server) getPopular(request *restful.Request, response *restful.Response
 	if !s.auth(request, response) {
 		return
 	}
+	base.Logger().Debug("get popular items")
 	s.getList(cache.PopularItems, "", request, response)
 }
 
@@ -399,6 +398,7 @@ func (s *Server) getLatest(request *restful.Request, response *restful.Response)
 	if !s.auth(request, response) {
 		return
 	}
+	base.Logger().Debug("get latest items")
 	s.getList(cache.LatestItems, "", request, response)
 }
 
@@ -408,6 +408,7 @@ func (s *Server) getLabelPopular(request *restful.Request, response *restful.Res
 		return
 	}
 	label := request.PathParameter("label")
+	base.Logger().Debug("get label popular items", zap.String("label", label))
 	s.getList(cache.PopularItems, label, request, response)
 }
 
@@ -417,6 +418,7 @@ func (s *Server) getLabelLatest(request *restful.Request, response *restful.Resp
 		return
 	}
 	label := request.PathParameter("label")
+	base.Logger().Debug("get label latest items", zap.String("label", label))
 	s.getList(cache.LatestItems, label, request, response)
 }
 
@@ -521,7 +523,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}()
 	// load matched
 	go func() {
-		matchedItems, err := s.CacheStore.GetList(cache.CollaborativeItems, userId, s.Config.CF.NumCF, 0)
+		matchedItems, err := s.CacheStore.GetList(cache.CollaborativeItems, userId, s.Config.Collaborative.NumCollaborative, 0)
 		if err != nil {
 			errors[2] = err
 			candidateCollections <- nil
@@ -571,7 +573,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	recItems := base.NewTopKStringFilter(n)
 	for _, item := range candidateFeaturedItems {
 		s.RankModelMutex.RLock()
-		m := s.RankModel
+		m := s.fmModel
 		s.RankModelMutex.RUnlock()
 		recItems.Push(item.ItemId, m.Predict(userId, item.ItemId, item.Labels))
 	}
@@ -902,23 +904,23 @@ func (s *Server) getTypedFeedback(request *restful.Request, response *restful.Re
 }
 
 func badRequest(response *restful.Response, err error) {
-	log.Error("server:", err)
+	base.Logger().Error("bad request", zap.Error(err))
 	if err = response.WriteError(400, err); err != nil {
-		log.Error("server:", err)
+		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 }
 
 func internalServerError(response *restful.Response, err error) {
-	log.Error("server:", err)
+	base.Logger().Error("internal server error", zap.Error(err))
 	if err = response.WriteError(500, err); err != nil {
-		log.Error("server:", err)
+		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 }
 
 // json sends the content as JSON to the client.
 func ok(response *restful.Response, content interface{}) {
 	if err := response.WriteAsJson(content); err != nil {
-		log.Error("server:", err)
+		base.Logger().Error("failed to write json", zap.Error(err))
 	}
 }
 
@@ -930,8 +932,11 @@ func (s *Server) auth(request *restful.Request, response *restful.Response) bool
 	if apikey == s.Config.Server.APIKey {
 		return true
 	}
+	base.Logger().Error("unauthorized",
+		zap.String("api_key", s.Config.Server.APIKey),
+		zap.String("X-API-Key", apikey))
 	if err := response.WriteError(401, fmt.Errorf("unauthorized")); err != nil {
-		log.Error("server:", err)
+		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 	return false
 }
