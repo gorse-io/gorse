@@ -59,7 +59,7 @@ func TestMaster_CollectLatest(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.cfg = &config.Config{}
-	m.cfg.Latest.NumLatest = 3
+	m.cfg.Latest.NumCache = 3
 	// collect latest
 	items := []data.Item{
 		{"0", time.Date(2000, 1, 1, 1, 1, 0, 0, time.UTC), []string{"even"}, ""},
@@ -92,7 +92,7 @@ func TestMaster_CollectPopItem(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.cfg = &config.Config{}
-	m.cfg.Popular.NumPopular = 3
+	m.cfg.Popular.NumCache = 3
 	m.cfg.Popular.TimeWindow = 365
 	// collect latest
 	items := []data.Item{
@@ -147,7 +147,7 @@ func TestMaster_FitCFModel(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.cfg = &config.Config{}
-	m.cfg.Similar.NumSimilar = 3
+	m.cfg.Similar.NumCache = 3
 	m.cfg.Master.Jobs = 4
 	// collect similar
 	items := []data.Item{

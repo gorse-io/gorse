@@ -28,7 +28,7 @@ type Config struct {
 	Similar       SimilarConfig `toml:"similar"`
 	Latest        LatestConfig  `toml:"latest"`
 	Popular       PopularConfig `toml:"popular"`
-	Collaborative CFConfig      `toml:"cf"`
+	Collaborative CFConfig      `toml:"collaborative"`
 	Rank          RankConfig    `toml:"rank"`
 	Subscribe     SubscribeConfig
 	// nodes
@@ -57,14 +57,14 @@ type SubscribeConfig struct {
 }
 
 type SimilarConfig struct {
-	NumSimilar   int `toml:"n_similar"`
+	NumCache     int `toml:"n_cache"`
 	UpdatePeriod int `toml:"update_period"`
 }
 
 func (c *SimilarConfig) LoadDefaultIfNil() *SimilarConfig {
 	if c == nil {
 		return &SimilarConfig{
-			NumSimilar:   100,
+			NumCache:     100,
 			UpdatePeriod: 60,
 		}
 	}
@@ -72,14 +72,14 @@ func (c *SimilarConfig) LoadDefaultIfNil() *SimilarConfig {
 }
 
 type LatestConfig struct {
-	NumLatest    int `toml:"n_latest"`
+	NumCache     int `toml:"n_cache"`
 	UpdatePeriod int `toml:"update_period"`
 }
 
 func (c *LatestConfig) LoadDefaultIfNil() *LatestConfig {
 	if c == nil {
 		return &LatestConfig{
-			NumLatest:    100,
+			NumCache:     100,
 			UpdatePeriod: 10,
 		}
 	}
@@ -87,7 +87,7 @@ func (c *LatestConfig) LoadDefaultIfNil() *LatestConfig {
 }
 
 type PopularConfig struct {
-	NumPopular   int `toml:"n_popular"`
+	NumCache     int `toml:"n_cache"`
 	UpdatePeriod int `toml:"update_period"`
 	TimeWindow   int `toml:"time_window"`
 }
@@ -95,7 +95,7 @@ type PopularConfig struct {
 func (c *PopularConfig) LoadDefaultIfNil() *PopularConfig {
 	if c == nil {
 		return &PopularConfig{
-			NumPopular:   100,
+			NumCache:     100,
 			UpdatePeriod: 1440,
 			TimeWindow:   365,
 		}
@@ -105,10 +105,10 @@ func (c *PopularConfig) LoadDefaultIfNil() *PopularConfig {
 
 /* CFConfig is configuration for collaborative filtering model */
 type CFConfig struct {
-	NumCollaborative int    `toml:"n_collabortive"`
-	CFModel          string `toml:"cf_model"`
-	FitPeriod        int    `toml:"fit_period"`
-	PredictPeriod    int    `toml:"predict_period"`
+	NumCached     int    `toml:"n_cache"`
+	CFModel       string `toml:"cf_model"`
+	FitPeriod     int    `toml:"fit_period"`
+	PredictPeriod int    `toml:"predict_period"`
 	// Hyper-parameters
 	Lr          float64 `toml:"lr"`           // learning rate
 	Reg         float64 `toml:"reg"`          // regularization strength
@@ -120,7 +120,6 @@ type CFConfig struct {
 	InitStdDev  float64 `toml:"init_std"`     // standard deviation of gaussian initial parameter
 	Alpha       float64 `toml:"alpha"`        // weight for negative samples in ALS/CCD
 	// fit config
-	FitJobs      int `toml:"fit_jobs"`     // number of fit jobs
 	Verbose      int `toml:"verbose"`      // verbose period
 	Candidates   int `toml:"n_candidates"` // number of candidates for test
 	TopK         int `toml:"top_k"`        // evaluate top k recommendations
@@ -130,22 +129,21 @@ type CFConfig struct {
 func (c *CFConfig) LoadDefaultIfNil() *CFConfig {
 	if c == nil {
 		return &CFConfig{
-			NumCollaborative: 800,
-			CFModel:          "als",
-			PredictPeriod:    60,
-			FitPeriod:        1440,
-			FitJobs:          1,
-			Verbose:          10,
-			Candidates:       100,
-			TopK:             10,
+			NumCached:     800,
+			CFModel:       "als",
+			PredictPeriod: 60,
+			FitPeriod:     1440,
+			Verbose:       10,
+			Candidates:    100,
+			TopK:          10,
 		}
 	}
 	return c
 }
 
-func (c *CFConfig) GetFitConfig() *cf.FitConfig {
+func (c *CFConfig) GetFitConfig(nJobs int) *cf.FitConfig {
 	return &cf.FitConfig{
-		Jobs:       c.FitJobs,
+		Jobs:       nJobs,
 		Verbose:    c.Verbose,
 		Candidates: c.Candidates,
 		TopK:       c.TopK,
@@ -182,7 +180,6 @@ type RankConfig struct {
 	Task      string `toml:"task"`
 	FitPeriod int    `toml:"fit_period"`
 	// fit config
-	FitJobs    int     `toml:"fit_jobs"`
 	Verbose    int     `toml:"verbose"`
 	SplitRatio float32 `toml:"split_ratio"`
 	// Hyper-parameters
@@ -201,16 +198,15 @@ func (c *RankConfig) LoadDefaultIfNil() *RankConfig {
 		return &RankConfig{
 			FitPeriod: 60,
 			Task:      "r",
-			FitJobs:   1,
 			Verbose:   10,
 		}
 	}
 	return c
 }
 
-func (c *RankConfig) GetFitConfig() *rank.FitConfig {
+func (c *RankConfig) GetFitConfig(nJobs int) *rank.FitConfig {
 	return &rank.FitConfig{
-		Jobs:    c.FitJobs,
+		Jobs:    nJobs,
 		Verbose: c.Verbose,
 	}
 }
@@ -304,24 +300,24 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// Default similar config
 	defaultSimilarConfig := *(*SimilarConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("similar", "n_similar") {
-		config.Similar.NumSimilar = defaultSimilarConfig.NumSimilar
+	if !meta.IsDefined("similar", "n_cache") {
+		config.Similar.NumCache = defaultSimilarConfig.NumCache
 	}
 	if !meta.IsDefined("similar", "update_period") {
 		config.Similar.UpdatePeriod = defaultSimilarConfig.UpdatePeriod
 	}
 	// Default latest config
 	defaultLatestConfig := *(*LatestConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("latest", "n_latest") {
-		config.Latest.NumLatest = defaultLatestConfig.NumLatest
+	if !meta.IsDefined("latest", "n_cache") {
+		config.Latest.NumCache = defaultLatestConfig.NumCache
 	}
 	if !meta.IsDefined("latest", "update_period") {
 		config.Latest.UpdatePeriod = defaultLatestConfig.UpdatePeriod
 	}
 	// Default popular config
 	defaultPopularConfig := *(*PopularConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("popular", "n_popular") {
-		config.Popular.NumPopular = defaultPopularConfig.NumPopular
+	if !meta.IsDefined("popular", "n_cache") {
+		config.Popular.NumCache = defaultPopularConfig.NumCache
 	}
 	if !meta.IsDefined("popular", "update_period") {
 		config.Popular.UpdatePeriod = defaultPopularConfig.UpdatePeriod
@@ -331,31 +327,28 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	// default Collaborative config
 	defaultCFConfig := *(*CFConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("cf", "n_cf") {
-		config.Collaborative.NumCollaborative = defaultCFConfig.NumCollaborative
+	if !meta.IsDefined("collaborative", "n_cache") {
+		config.Collaborative.NumCached = defaultCFConfig.NumCached
 	}
-	if !meta.IsDefined("cf", "cf_model") {
+	if !meta.IsDefined("collaborative", "cf_model") {
 		config.Collaborative.CFModel = defaultCFConfig.CFModel
 	}
-	if !meta.IsDefined("cf", "predict_period") {
+	if !meta.IsDefined("collaborative", "predict_period") {
 		config.Collaborative.PredictPeriod = defaultCFConfig.PredictPeriod
 	}
-	if !meta.IsDefined("cf", "fit_period") {
+	if !meta.IsDefined("collaborative", "fit_period") {
 		config.Collaborative.FitPeriod = defaultCFConfig.FitPeriod
 	}
-	if !meta.IsDefined("cf", "fit_jobs") {
-		config.Collaborative.FitJobs = defaultCFConfig.FitJobs
-	}
-	if !meta.IsDefined("cf", "verbose") {
+	if !meta.IsDefined("collaborative", "verbose") {
 		config.Collaborative.Verbose = defaultCFConfig.Verbose
 	}
-	if !meta.IsDefined("cf", "n_candidates") {
+	if !meta.IsDefined("collaborative", "n_candidates") {
 		config.Collaborative.Candidates = defaultCFConfig.Candidates
 	}
-	if !meta.IsDefined("cf", "top_k") {
+	if !meta.IsDefined("collaborative", "top_k") {
 		config.Collaborative.TopK = defaultCFConfig.TopK
 	}
-	if !meta.IsDefined("cf", "n_test_users") {
+	if !meta.IsDefined("collaborative", "n_test_users") {
 		config.Collaborative.NumTestUsers = defaultCFConfig.NumTestUsers
 	}
 	// default rank config
@@ -365,9 +358,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("rank", "task") {
 		config.Rank.Task = defaultRankConfig.Task
-	}
-	if !meta.IsDefined("rank", "fit_jobs") {
-		config.Rank.FitJobs = defaultRankConfig.FitJobs
 	}
 	if !meta.IsDefined("rank", "verbose") {
 		config.Rank.Verbose = defaultRankConfig.Verbose
@@ -380,7 +370,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("master", "host") {
 		config.Master.Host = defaultMasterConfig.Host
 	}
-	if !meta.IsDefined("master", "jobs") {
+	if !meta.IsDefined("master", "n_jobs") {
 		config.Master.Jobs = defaultMasterConfig.Jobs
 	}
 	if !meta.IsDefined("master", "cluster_meta_timeout") {

@@ -109,7 +109,7 @@ func (m *Master) Serve() {
 		log.Fatalf("master: failed to connect data database (%v)", err)
 	}
 	if err = m.dataStore.Init(); err != nil {
-		log.Fatalf("master: failed to init database ")
+		base.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
 	// connect cache database
@@ -394,15 +394,15 @@ func (m *Master) FitFactorizationMachine(dataSet *rank.Dataset) {
 }
 
 func (m *Master) FitMatrixFactorization(dataSet *cf.DataSet) {
-	if m.cfg.Collaborative.NumCollaborative > 0 {
-		log.Infof("master: fit matrix factorization (n_jobs = %v)", m.cfg.Master.Jobs)
+	if m.cfg.Collaborative.NumCached > 0 {
+		base.Logger().Info("fit matrix factorization", zap.Int("n_jobs", m.cfg.Master.Jobs))
 		// training match model
 		trainSet, testSet := dataSet.Split(m.cfg.Collaborative.NumTestUsers, 0)
 		mfModel, err := cf.NewModel(m.cfg.Collaborative.CFModel, m.cfg.Collaborative.GetParams(m.meta))
 		if err != nil {
 			log.Infof("master: failed to fit matrix factorization (%v)", err)
 		}
-		mfModel.Fit(trainSet, testSet, m.cfg.Collaborative.GetFitConfig())
+		mfModel.Fit(trainSet, testSet, m.cfg.Collaborative.GetFitConfig(m.cfg.Master.Jobs))
 
 		// update match model
 		m.mfMutex.Lock()
@@ -437,7 +437,7 @@ func (m *Master) IsStale(dateTimeField string, timeLimit int) bool {
 
 // CollectPopItem updates popular items for the database.
 func (m *Master) CollectPopItem(items []data.Item, feedback []data.Feedback) {
-	if m.cfg.Popular.NumPopular > 0 {
+	if m.cfg.Popular.NumCache > 0 {
 		log.Info("master: collect popular items")
 		// create item mapping
 		itemMap := make(map[string]data.Item)
@@ -454,13 +454,13 @@ func (m *Master) CollectPopItem(items []data.Item, feedback []data.Feedback) {
 		}
 		// collect pop items
 		popItems := make(map[string]*base.TopKStringFilter)
-		popItems[""] = base.NewTopKStringFilter(m.cfg.Popular.NumPopular)
+		popItems[""] = base.NewTopKStringFilter(m.cfg.Popular.NumCache)
 		for itemId, f := range count {
 			popItems[""].Push(itemId, float32(f))
 			item := itemMap[itemId]
 			for _, label := range item.Labels {
 				if _, exists := popItems[label]; !exists {
-					popItems[label] = base.NewTopKStringFilter(m.cfg.Popular.NumPopular)
+					popItems[label] = base.NewTopKStringFilter(m.cfg.Popular.NumCache)
 				}
 				popItems[label].Push(itemId, float32(f))
 			}
@@ -480,17 +480,17 @@ func (m *Master) CollectPopItem(items []data.Item, feedback []data.Feedback) {
 
 // CollectLatest updates latest items.
 func (m *Master) CollectLatest(items []data.Item) {
-	if m.cfg.Latest.NumLatest > 0 {
+	if m.cfg.Latest.NumCache > 0 {
 		log.Info("master: collect latest items")
 		var err error
 		latestItems := make(map[string]*base.TopKStringFilter)
-		latestItems[""] = base.NewTopKStringFilter(m.cfg.Latest.NumLatest)
+		latestItems[""] = base.NewTopKStringFilter(m.cfg.Latest.NumCache)
 		// find latest items
 		for _, item := range items {
 			latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
 			for _, label := range item.Labels {
 				if _, exist := latestItems[label]; !exist {
-					latestItems[label] = base.NewTopKStringFilter(m.cfg.Latest.NumLatest)
+					latestItems[label] = base.NewTopKStringFilter(m.cfg.Latest.NumCache)
 				}
 				latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
 			}
@@ -509,8 +509,8 @@ func (m *Master) CollectLatest(items []data.Item) {
 
 // CollectSimilar updates neighbors for the database.
 func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) {
-	if m.cfg.Similar.NumSimilar > 0 {
-		log.Info("master: collect similar items")
+	if m.cfg.Similar.NumCache > 0 {
+		base.Logger().Info("collect similar items")
 		// create progress tracker
 		completed := make(chan []interface{}, 1000)
 		go func() {
@@ -536,7 +536,7 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) {
 				itemSet.Add(dataset.UserFeedback[u]...)
 			}
 			// Ranking
-			nearItems := base.NewTopKFilter(m.cfg.Similar.NumSimilar)
+			nearItems := base.NewTopKFilter(m.cfg.Similar.NumCache)
 			for j := range itemSet {
 				if j != jobId {
 					nearItems.Push(j, Dot(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j]))

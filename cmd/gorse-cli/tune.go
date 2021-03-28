@@ -104,7 +104,7 @@ var tuneMatchCommand = &cobra.Command{
 			}
 			defer database.Close()
 			// Load data
-			data, _, err := cf.LoadDataFromDatabase(database, []string{feedbackType})
+			data, _, _, err := cf.LoadDataFromDatabase(database, []string{feedbackType})
 			if err != nil {
 				log.Fatalf("cli: failed to load data from database (%v)", err)
 			}

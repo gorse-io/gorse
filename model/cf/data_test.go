@@ -118,7 +118,7 @@ func TestLoadDataFromDatabase(t *testing.T) {
 		}
 	}
 	// load data
-	dataset, _, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"})
+	dataset, _, _, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"})
 	assert.Nil(t, err)
 	assert.Equal(t, 9, dataset.Count())
 	// split

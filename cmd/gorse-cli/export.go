@@ -96,7 +96,7 @@ func exportFeedback(csvFile, feedbackType string, sep string, printHeader bool, 
 	for {
 		var feedback []data.Feedback
 		var err error
-		cursor, feedback, err = database.GetFeedback(feedbackType, cursor, batchSize)
+		cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
 		if err != nil {
 			log.Fatal(err)
 		}
