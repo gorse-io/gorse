@@ -211,7 +211,7 @@ func (w *Worker) CollaborativeFilteringRecommend(m cf.MatrixFactorization, users
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_items", len(items)),
 		zap.Int("n_jobs", w.Jobs),
-		zap.Int("n_cache", w.cfg.Collaborative.NumCollaborative))
+		zap.Int("n_cache", w.cfg.Collaborative.NumCached))
 	// progress tracker
 	completed := make(chan interface{})
 	go func() {
@@ -246,7 +246,7 @@ func (w *Worker) CollaborativeFilteringRecommend(m cf.MatrixFactorization, users
 		for _, feedback := range historyFeedback {
 			historySet.Add(feedback.ItemId)
 		}
-		recItems := base.NewTopKStringFilter(w.cfg.Similar.NumSimilar)
+		recItems := base.NewTopKStringFilter(w.cfg.Similar.NumCache)
 		for _, item := range items {
 			if !historySet.Contain(item) {
 				recItems.Push(item, m.Predict(user, item))

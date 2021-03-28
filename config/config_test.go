@@ -28,25 +28,24 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true", config.Database.DataStore)
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
+	assert.Equal(t, []string{"star"}, config.Database.MatchFeedbackType)
+	assert.Equal(t, []string{"fork"}, config.Database.RankFeedbackType)
 
 	// similar configuration
-	assert.Equal(t, []string{"watch"}, config.Similar.FeedbackTypes)
-	assert.Equal(t, 500, config.Similar.NumSimilar)
+	assert.Equal(t, 500, config.Similar.NumCache)
 	assert.Equal(t, 120, config.Similar.UpdatePeriod)
 
 	// latest configuration
-	assert.Equal(t, 500, config.Latest.NumLatest)
+	assert.Equal(t, 500, config.Latest.NumCache)
 	assert.Equal(t, 30, config.Latest.UpdatePeriod)
 
 	// popular configuration
-	assert.Equal(t, []string{"click"}, config.Popular.FeedbackTypes)
-	assert.Equal(t, 500, config.Popular.NumPopular)
+	assert.Equal(t, 500, config.Popular.NumCache)
 	assert.Equal(t, 120, config.Popular.UpdatePeriod)
 	assert.Equal(t, 360, config.Popular.TimeWindow)
 
 	// cf config
-	assert.Equal(t, []string{"click", "watch"}, config.Collaborative.FeedbackTypes)
-	assert.Equal(t, 1000, config.Collaborative.NumCollaborative)
+	assert.Equal(t, 1000, config.Collaborative.NumCached)
 	assert.Equal(t, "als", config.Collaborative.CFModel)
 	assert.Equal(t, 60, config.Collaborative.FitPeriod)
 	assert.Equal(t, 60, config.Collaborative.PredictPeriod)
@@ -61,14 +60,12 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 0.001, config.Collaborative.InitStdDev)
 	assert.Equal(t, 1.0, config.Collaborative.Alpha)
 
-	assert.Equal(t, 4, config.Collaborative.FitJobs)
 	assert.Equal(t, 10, config.Collaborative.Verbose)
 	assert.Equal(t, 100, config.Collaborative.Candidates)
 	assert.Equal(t, 10, config.Collaborative.TopK)
 	assert.Equal(t, 10000, config.Collaborative.NumTestUsers)
 
 	// rank config
-	assert.Equal(t, []string{"click", "likes"}, config.Rank.FeedbackTypes)
 	assert.Equal(t, 60, config.Rank.FitPeriod)
 	assert.Equal(t, "r", config.Rank.Task)
 
@@ -81,7 +78,6 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 0.0, config.Rank.InitMean)
 	assert.Equal(t, 0.001, config.Rank.InitStdDev)
 
-	assert.Equal(t, 4, config.Rank.FitJobs)
 	assert.Equal(t, 10, config.Rank.Verbose)
 
 	// master configuration

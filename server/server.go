@@ -503,7 +503,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	errors := make([]error, 3)
 	// load populars
 	go func() {
-		popularItems, err := s.CacheStore.GetList(cache.PopularItems, "", s.Config.Popular.NumPopular, 0)
+		popularItems, err := s.CacheStore.GetList(cache.PopularItems, "", s.Config.Popular.NumCache, 0)
 		if err != nil {
 			errors[0] = err
 			candidateCollections <- nil
@@ -513,7 +513,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}()
 	// load latest
 	go func() {
-		latestItems, err := s.CacheStore.GetList(cache.LatestItems, "", s.Config.Latest.NumLatest, 0)
+		latestItems, err := s.CacheStore.GetList(cache.LatestItems, "", s.Config.Latest.NumCache, 0)
 		if err != nil {
 			errors[1] = err
 			candidateCollections <- nil
@@ -523,7 +523,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}()
 	// load matched
 	go func() {
-		matchedItems, err := s.CacheStore.GetList(cache.CollaborativeItems, userId, s.Config.Collaborative.NumCollaborative, 0)
+		matchedItems, err := s.CacheStore.GetList(cache.CollaborativeItems, userId, s.Config.Collaborative.NumCached, 0)
 		if err != nil {
 			errors[2] = err
 			candidateCollections <- nil
@@ -558,7 +558,6 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 			return
 		}
 	}
-	log.Infof("server: recommend from (#candidate = %v)", len(candidateItems))
 	// collect item features
 	candidateFeaturedItems := make([]data.Item, len(candidateItems))
 	err = base.Parallel(len(candidateItems), 4, func(_, jobId int) error {
@@ -570,6 +569,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 		return
 	}
 	// online predict
+	startPredictTime := time.Now()
 	recItems := base.NewTopKStringFilter(n)
 	for _, item := range candidateFeaturedItems {
 		s.RankModelMutex.RLock()
@@ -579,7 +579,11 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	result, _ := recItems.PopAll()
 	spent := time.Since(start)
-	log.Infof("server: complete recommendation (time = %v)", spent)
+	predictTime := time.Since(startPredictTime)
+	base.Logger().Info("complete recommendation",
+		zap.Int("n_candidate", len(candidateItems)),
+		zap.Duration("total_time", spent),
+		zap.Duration("predict_time", predictTime))
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range result {
