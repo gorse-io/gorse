@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"errors"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/zhenghaoz/gorse/base"
+	"go.uber.org/zap"
 )
 
 type SQLDatabase struct {
@@ -292,6 +294,7 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 	} else {
 		if _, err := d.GetUser(feedback.UserId); err != nil {
 			if err.Error() == ErrUserNotExist {
+				base.Logger().Warn("user doesn't exist", zap.String("user_id", feedback.UserId))
 				return nil
 			}
 			return err
@@ -306,6 +309,7 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 	} else {
 		if _, err := d.GetItem(feedback.ItemId); err != nil {
 			if err.Error() == ErrItemNotExist {
+				base.Logger().Warn("item doesn't exist", zap.String("item_id", feedback.ItemId))
 				return nil
 			}
 			return err
