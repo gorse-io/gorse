@@ -54,7 +54,11 @@ func (d *SQLDatabase) Init() error {
 		")"); err != nil {
 		return err
 	}
-	return nil
+	// change settings
+	_, err := d.db.Exec("SET SESSION sql_mode=\"" +
+		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
+		"NO_ENGINE_SUBSTITUTION\"")
+	return err
 }
 
 func (d *SQLDatabase) Close() error {
