@@ -503,7 +503,10 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	errors := make([]error, 3)
 	// load populars
 	go func() {
-		popularItems, err := s.CacheStore.GetList(cache.PopularItems, "", s.Config.Popular.NumCache, 0)
+		var popularItems []string
+		if s.Config.Popular.NumCache > 0 {
+			popularItems, err = s.CacheStore.GetList(cache.PopularItems, "", s.Config.Popular.NumCache, 0)
+		}
 		if err != nil {
 			errors[0] = err
 			candidateCollections <- nil
@@ -513,7 +516,10 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}()
 	// load latest
 	go func() {
-		latestItems, err := s.CacheStore.GetList(cache.LatestItems, "", s.Config.Latest.NumCache, 0)
+		var latestItems []string
+		if s.Config.Latest.NumCache > 0 {
+			latestItems, err = s.CacheStore.GetList(cache.LatestItems, "", s.Config.Latest.NumCache, 0)
+		}
 		if err != nil {
 			errors[1] = err
 			candidateCollections <- nil
@@ -523,7 +529,10 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}()
 	// load matched
 	go func() {
-		matchedItems, err := s.CacheStore.GetList(cache.CollaborativeItems, userId, s.Config.Collaborative.NumCached, 0)
+		var matchedItems []string
+		if s.Config.Collaborative.NumCached > 0 {
+			matchedItems, err = s.CacheStore.GetList(cache.CollaborativeItems, userId, s.Config.Collaborative.NumCached, 0)
+		}
 		if err != nil {
 			errors[2] = err
 			candidateCollections <- nil
