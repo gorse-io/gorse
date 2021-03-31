@@ -272,6 +272,9 @@ func (m *Master) GetUserIndex(context.Context, *protocol.Void) (*protocol.Users,
 	if err := encoder.Encode(m.userIndex); err != nil {
 		return nil, err
 	}
+	if err := writer.Flush(); err != nil {
+		return nil, err
+	}
 	return &protocol.Users{
 		Version: int64(m.fmVersion),
 		Users:   buf.Bytes(),

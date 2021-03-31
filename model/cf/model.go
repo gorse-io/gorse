@@ -103,6 +103,9 @@ func EncodeModel(m MatrixFactorization) ([]byte, error) {
 	if err := encoder.Encode(m); err != nil {
 		return nil, err
 	}
+	if err := writer.Flush(); err != nil {
+		return nil, err
+	}
 	return buf.Bytes(), nil
 }
 
