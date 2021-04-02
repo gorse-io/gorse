@@ -32,7 +32,7 @@ func init() {
 		}
 		return defaultValue
 	}
-	mongoUri = env("MONGO_URI", "mongodb://127.0.0.1:27017")
+	mongoUri = env("MONGO_URI", "mongodb://127.0.0.1:27017/")
 }
 
 type testMongoDatabase struct {
@@ -66,8 +66,10 @@ func newTestMongoDatabase(t *testing.T, dbName string) *testMongoDatabase {
 	if err == nil {
 		t.Log("delete existed database:", dbName)
 	}
+	err = database.Database.Close()
+	assert.Nil(t, err)
 	// create schema
-	databaseComm.dbName = dbName
+	database.Database, err = Open(mongoUri + dbName)
 	err = database.Init()
 	assert.Nil(t, err)
 	return database

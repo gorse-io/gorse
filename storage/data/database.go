@@ -22,6 +22,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"strings"
 	"time"
 )
@@ -109,9 +110,16 @@ func Open(path string) (Database, error) {
 		}
 		return database, nil
 	} else if strings.HasPrefix(path, mongoPredix) {
+		// connect to database
 		database := new(MongoDB)
 		if database.client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(path)); err != nil {
 			return nil, err
+		}
+		// parse DSN and extract database name
+		if cs, err := connstring.ParseAndValidate(path); err != nil {
+			return nil, err
+		} else {
+			database.dbName = cs.Database
 		}
 		return database, nil
 	} else if strings.HasPrefix(path, redisPrefix) {
