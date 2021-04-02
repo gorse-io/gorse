@@ -64,6 +64,8 @@ func newTestSQLDatabase(t *testing.T, dbName string) *testSQLDatabase {
 	assert.Nil(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.Nil(t, err)
+	err = database.Database.Close()
+	assert.Nil(t, err)
 	// connect database
 	database.Database, err = Open(sqlUri + dbName + "?timeout=30s&parseTime=true")
 	assert.Nil(t, err)
