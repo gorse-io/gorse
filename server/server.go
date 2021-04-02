@@ -19,6 +19,9 @@ import (
 	"fmt"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -33,6 +36,11 @@ import (
 	"sync"
 	"time"
 )
+
+var getUserFeedbackLatency = promauto.NewHistogram(prometheus.HistogramOpts{
+	Name: "get_user_feedback_latency",
+	Help: "The latency of getting user feedback",
+})
 
 type Server struct {
 	CacheStore   cache.Database
@@ -104,6 +112,9 @@ func (s *Server) Serve() {
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(specConfig))
 	swaggerFile = fmt.Sprintf("http://%s:%d/apidocs.json", s.ServerHost, s.ServerPort)
 	http.HandleFunc(apiDocsPath, handler)
+
+	// register prometheus
+	http.Handle("/metrics", promhttp.Handler())
 
 	log.Printf("start gorse server at %v\n", fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort), nil))
@@ -567,11 +578,13 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 		}
 	}()
 	// load feedback
+	startLoadFeedback := time.Now()
 	userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
+	getUserFeedbackLatency.Observe(time.Since(startLoadFeedback).Seconds())
 	excludeSet := base.NewStringSet()
 	for _, feedback := range userFeedback {
 		excludeSet.Add(feedback.ItemId)
