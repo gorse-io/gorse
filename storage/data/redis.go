@@ -371,3 +371,32 @@ func (redis *Redis) GetFeedback(cursor string, n int, feedbackType *string) (str
 	}
 	return cursor, feedback, nil
 }
+
+func (redis *Redis) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+	var ctx = context.Background()
+	feedback := make([]Feedback, 0)
+	err := redis.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
+		if thisUserId == userId && thisItemId == itemId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+			val, err := redis.getFeedback(key)
+			if err != nil {
+				return err
+			}
+			feedback = append(feedback, val)
+		}
+		return nil
+	})
+	return feedback, err
+}
+
+func (redis *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error) {
+	var ctx = context.Background()
+	deleteCount := 0
+	err := redis.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
+		if thisUserId == userId && thisItemId == itemId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+			redis.client.Del(ctx, key)
+			deleteCount++
+		}
+		return nil
+	})
+	return deleteCount, err
+}

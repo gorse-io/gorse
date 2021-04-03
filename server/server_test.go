@@ -388,6 +388,64 @@ func TestServer_List(t *testing.T) {
 	}
 }
 
+func TestServer_DeleteFeedback(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// Insert feedback
+	feedback := []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "2", ItemId: "3"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "type2", UserId: "2", ItemId: "3"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "type3", UserId: "2", ItemId: "3"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "1", ItemId: "6"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "4", ItemId: "8"}},
+	}
+	apitest.New().
+		Handler(s.handler).
+		Post("/feedback").
+		Header("X-API-Key", apiKey).
+		JSON(feedback).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 5}`).
+		End()
+	// Get Feedback
+	apitest.New().
+		Handler(s.handler).
+		Get("/feedback/2/3").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Body(marshal(t, []data.Feedback{feedback[0], feedback[1], feedback[2]})).
+		Status(http.StatusOK).
+		End()
+	// Get typed feedback
+	apitest.New().
+		Handler(s.handler).
+		Get("/feedback/type2/2/3").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, feedback[1])).
+		End()
+	// delete feedback
+	apitest.New().
+		Handler(s.handler).
+		Delete("/feedback/2/3").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Body(`{"RowAffected": 3}`).
+		Status(http.StatusOK).
+		End()
+	// delete typed feedback
+	apitest.New().
+		Handler(s.handler).
+		Delete("/feedback/type1/4/8").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
+}
+
 //func TestServer_GetRecommends(t *testing.T) {
 //	s := newMockServer(t)
 //	defer s.Close(t)

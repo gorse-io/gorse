@@ -366,3 +366,46 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string) (s
 	}
 	return "", feedbacks, nil
 }
+
+func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+	var result *sql.Rows
+	var err error
+	if feedbackType != nil {
+		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+			"WHERE feedback_type = ? AND user_id = ? AND item_id = ?", *feedbackType, userId, itemId)
+	} else {
+		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+			"WHERE user_id = ? AND item_id = ?", userId, itemId)
+	}
+	if err != nil {
+		return nil, err
+	}
+	feedbacks := make([]Feedback, 0)
+	for result.Next() {
+		var feedback Feedback
+		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
+			return nil, err
+		}
+		feedbacks = append(feedbacks, feedback)
+	}
+	return feedbacks, nil
+}
+
+func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error) {
+	var rs sql.Result
+	var err error
+	if feedbackType != nil {
+		rs, err = d.db.Exec("DELETE FROM feedback WHERE feedback_type = ? AND user_id = ? AND item_id >= ?",
+			*feedbackType, userId, itemId)
+	} else {
+		rs, err = d.db.Exec("DELETE FROM feedback WHERE user_id = ? AND item_id = ?", userId, itemId)
+	}
+	if err != nil {
+		return 0, err
+	}
+	deleteCount, err := rs.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(deleteCount), nil
+}

@@ -104,3 +104,9 @@ func TestMongoDatabase_DeleteItem(t *testing.T) {
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
+
+func TestMongoDatabase_DeleteFeedback(t *testing.T) {
+	db := newTestMongoDatabase(t, "TestSQLDatabase_DeleteFeedback")
+	defer db.Close(t)
+	testDeleteFeedback(t, db.Database)
+}

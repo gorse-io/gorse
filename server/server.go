@@ -253,13 +253,44 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned feedback").DataType("integer")).
 		Writes(FeedbackIterator{}))
+	ws.Route(ws.GET("/feedback/{user-id}/{item-id}").To(s.getUserItemFeedback).
+		Doc("Get feedback between a user and a item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Writes([]data.Feedback{}))
+	ws.Route(ws.DELETE("/feedback/{user-id}/{item-id}").To(s.deleteUserItemFeedback).
+		Doc("Delete feedback between a user and a item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/feedback/{feedback-type}").To(s.getTypedFeedback).
 		Doc("Get multiple feedback with feedback type.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned feedback").DataType("integer")).
 		Writes(FeedbackIterator{}))
+	ws.Route(ws.GET("/feedback/{feedback-type}/{user-id}/{item-id}").To(s.getTypedUserItemFeedback).
+		Doc("Get feedback between a user and a item with feedback type.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Writes(data.Feedback{}))
+	ws.Route(ws.DELETE("/feedback/{feedback-type}/{user-id}/{item-id}").To(s.deleteTypedUserItemFeedback).
+		Doc("Delete feedback between a user and a item with feedback type.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Writes(data.Feedback{}))
 	// Get feedback by user id
 	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByUser).
 		Doc("Get feedback by user id with feedback type.").
@@ -1016,6 +1047,70 @@ func (s *Server) getTypedFeedback(request *restful.Request, response *restful.Re
 	ok(response, FeedbackIterator{Cursor: cursor, Feedback: feedback})
 }
 
+func (s *Server) getUserItemFeedback(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Parse parameters
+	userId := request.PathParameter("user-id")
+	itemId := request.PathParameter("item-id")
+	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, nil); err != nil {
+		internalServerError(response, err)
+	} else {
+		ok(response, feedback)
+	}
+}
+
+func (s *Server) deleteUserItemFeedback(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Parse parameters
+	userId := request.PathParameter("user-id")
+	itemId := request.PathParameter("item-id")
+	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, nil); err != nil {
+		internalServerError(response, err)
+	} else {
+		ok(response, Success{RowAffected: deleteCount})
+	}
+}
+
+func (s *Server) getTypedUserItemFeedback(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Parse parameters
+	feedbackType := request.PathParameter("feedback-type")
+	userId := request.PathParameter("user-id")
+	itemId := request.PathParameter("item-id")
+	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, &feedbackType); err != nil {
+		internalServerError(response, err)
+	} else if len(feedbackType) == 0 {
+		text(response, "{}")
+	} else {
+		ok(response, feedback[0])
+	}
+}
+
+func (s *Server) deleteTypedUserItemFeedback(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Parse parameters
+	feedbackType := request.PathParameter("feedback-type")
+	userId := request.PathParameter("user-id")
+	itemId := request.PathParameter("item-id")
+	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, &feedbackType); err != nil {
+		internalServerError(response, err)
+	} else {
+		ok(response, Success{deleteCount})
+	}
+}
+
 func badRequest(response *restful.Response, err error) {
 	base.Logger().Error("bad request", zap.Error(err))
 	if err = response.WriteError(400, err); err != nil {
@@ -1034,6 +1129,12 @@ func internalServerError(response *restful.Response, err error) {
 func ok(response *restful.Response, content interface{}) {
 	if err := response.WriteAsJson(content); err != nil {
 		base.Logger().Error("failed to write json", zap.Error(err))
+	}
+}
+
+func text(response *restful.Response, content string) {
+	if _, err := response.Write([]byte(content)); err != nil {
+		base.Logger().Error("failed to write text", zap.Error(err))
 	}
 }
 
