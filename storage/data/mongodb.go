@@ -28,15 +28,37 @@ type MongoDB struct {
 func (db *MongoDB) Init() error {
 	ctx := context.Background()
 	d := db.client.Database(db.dbName)
+	// list collections
+	var hasUsers, hasItems, hasFeedback bool
+	collections, err := d.ListCollectionNames(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+	for _, collectionName := range collections {
+		switch collectionName {
+		case "users":
+			hasUsers = true
+		case "items":
+			hasItems = true
+		case "feedback":
+			hasFeedback = true
+		}
+	}
 	// create collections
-	if err := d.CreateCollection(ctx, "users"); err != nil {
-		return err
+	if !hasUsers {
+		if err = d.CreateCollection(ctx, "users"); err != nil {
+			return err
+		}
 	}
-	if err := d.CreateCollection(ctx, "items"); err != nil {
-		return err
+	if !hasItems {
+		if err = d.CreateCollection(ctx, "items"); err != nil {
+			return err
+		}
 	}
-	if err := d.CreateCollection(ctx, "feedback"); err != nil {
-		return err
+	if !hasFeedback {
+		if err = d.CreateCollection(ctx, "feedback"); err != nil {
+			return err
+		}
 	}
 	return nil
 }
