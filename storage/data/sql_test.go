@@ -104,3 +104,9 @@ func TestSQLDatabase_DeleteItem(t *testing.T) {
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
+
+func TestSQLDatabase_DeleteFeedback(t *testing.T) {
+	db := newTestSQLDatabase(t, "TestSQLDatabase_DeleteFeedback")
+	defer db.Close(t)
+	testDeleteFeedback(t, db.Database)
+}

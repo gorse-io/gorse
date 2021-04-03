@@ -321,3 +321,57 @@ func (db *MongoDB) GetFeedback(cursor string, n int, feedbackType *string) (stri
 	}
 	return cursor, feedbacks, nil
 }
+
+func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+	ctx := context.Background()
+	c := db.client.Database(db.dbName).Collection("feedback")
+	var filter bson.M
+	if feedbackType != nil {
+		filter = bson.M{
+			"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
+			"feedbackkey.userid":       bson.M{"$eq": userId},
+			"feedbackkey.itemid":       bson.M{"$eq": itemId},
+		}
+	} else {
+		filter = bson.M{
+			"feedbackkey.userid": bson.M{"$eq": userId},
+			"feedbackkey.itemid": bson.M{"$eq": itemId},
+		}
+	}
+	r, err := c.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	feedbacks := make([]Feedback, 0)
+	for r.Next(ctx) {
+		var feedback Feedback
+		if err = r.Decode(&feedback); err != nil {
+			return nil, err
+		}
+		feedbacks = append(feedbacks, feedback)
+	}
+	return feedbacks, nil
+}
+
+func (db *MongoDB) DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error) {
+	ctx := context.Background()
+	c := db.client.Database(db.dbName).Collection("feedback")
+	var filter bson.M
+	if feedbackType != nil {
+		filter = bson.M{
+			"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
+			"feedbackkey.userid":       bson.M{"$eq": userId},
+			"feedbackkey.itemid":       bson.M{"$eq": itemId},
+		}
+	} else {
+		filter = bson.M{
+			"feedbackkey.userid": bson.M{"$eq": userId},
+			"feedbackkey.itemid": bson.M{"$eq": itemId},
+		}
+	}
+	r, err := c.DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	return int(r.DeletedCount), nil
+}

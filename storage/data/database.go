@@ -90,6 +90,8 @@ type Database interface {
 	GetUsers(cursor string, n int) (string, []User, error)
 	GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error)
 	// feedback
+	GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error)
+	DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error)
 	InsertFeedback(feedback Feedback, insertUser, insertItem bool) error
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
 	GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error)

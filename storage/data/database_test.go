@@ -306,3 +306,37 @@ func testDeleteItem(t *testing.T, db Database) {
 	assert.Nil(t, err)
 	assert.Empty(t, ret)
 }
+
+func testDeleteFeedback(t *testing.T, db Database) {
+	feedbacks := []Feedback{
+		{FeedbackKey{"type1", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type2", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type3", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type1", "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type1", "1", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+	}
+	err := db.BatchInsertFeedback(feedbacks, true, true)
+	assert.Nil(t, err)
+	// get user-item feedback
+	ret, err := db.GetUserItemFeedback("2", "3", nil)
+	assert.Nil(t, err)
+	assert.Equal(t, []Feedback{feedbacks[0], feedbacks[1], feedbacks[2]}, ret)
+	feedbackType2 := "type2"
+	ret, err = db.GetUserItemFeedback("2", "3", &feedbackType2)
+	assert.Nil(t, err)
+	assert.Equal(t, []Feedback{feedbacks[1]}, ret)
+	// delete user-item feedback
+	deleteCount, err := db.DeleteUserItemFeedback("2", "3", nil)
+	assert.Nil(t, err)
+	assert.Equal(t, 3, deleteCount)
+	ret, err = db.GetUserItemFeedback("2", "3", nil)
+	assert.Nil(t, err)
+	assert.Empty(t, ret)
+	feedbackType1 := "type1"
+	deleteCount, err = db.DeleteUserItemFeedback("1", "3", &feedbackType1)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, deleteCount)
+	ret, err = db.GetUserItemFeedback("1", "3", &feedbackType2)
+	assert.Nil(t, err)
+	assert.Empty(t, ret)
+}
