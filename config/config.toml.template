@@ -3,7 +3,7 @@
 # database for caching (support Redis only)
 cache_store = "redis://localhost:6379"
 # database for persist data (support MySQL/MongoDB/Redis)
-data_store = "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true"
+data_store = "mysql://root@tcp(localhost:3306)/gorse?parseTime=true"
 # insert new users while inserting feedback
 auto_insert_user = true
 # insert new items while inserting feedback
@@ -35,6 +35,7 @@ n_cache = 100    # number of cached CF items
 cf_model = "als"        # collabortive filatering model
 fit_period = 60         # fit period for similar items in minutes
 predict_period = 60     # prediction period for similar items in minutes
+# fit
 verbose = 10            # verbose period
 n_candidates = 100      # number of candidates for test
 top_k = 10              # evaluate top k recommendations
@@ -53,6 +54,7 @@ alpha = 1.0             # alpha value, depend on context
 [rank]
 fit_period = 60         # fit period for similar items in minutes
 task = "r"              # task type for ranking (r - regression, c - classification)
+# fit
 split_ratio = 0.2       # split ratio of test set
 verbose = 10            # verbose period
 # hyperparameters
@@ -69,7 +71,7 @@ init_std = 0.001        # standard deviation of gaussian initial parameter
 port = 8086                 # master port
 host = "127.0.0.1"          # master host
 n_jobs = 4                  # number of working jobs
-cluster_meta_timeout = 30   # cluster meta timeout (second)
+meta_timeout = 10   # cluster meta timeout (second)
 
 [server]
 default_n = 100             # default number of returned items

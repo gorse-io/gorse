@@ -15,7 +15,6 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/cmd/version"
@@ -38,7 +37,7 @@ var masterCommand = &cobra.Command{
 		base.Logger().Info("load config", zap.String("config", configPath))
 		conf, meta, err := config.LoadConfig(configPath)
 		if err != nil {
-			log.Fatal(err)
+			base.Logger().Fatal("failed to load config", zap.Error(err))
 		}
 		l := master.NewMaster(conf, meta)
 		l.Serve()
@@ -54,6 +53,6 @@ func init() {
 
 func main() {
 	if err := masterCommand.Execute(); err != nil {
-		log.Fatal(err)
+		base.Logger().Fatal("failed to execute", zap.Error(err))
 	}
 }

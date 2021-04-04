@@ -25,12 +25,12 @@ type Config struct {
 	// database
 	Database DatabaseConfig `toml:"database"`
 	// strategies
-	Similar       SimilarConfig `toml:"similar"`
-	Latest        LatestConfig  `toml:"latest"`
-	Popular       PopularConfig `toml:"popular"`
-	Collaborative CFConfig      `toml:"collaborative"`
-	Rank          RankConfig    `toml:"rank"`
-	Subscribe     SubscribeConfig
+	Similar       SimilarConfig   `toml:"similar"`
+	Latest        LatestConfig    `toml:"latest"`
+	Popular       PopularConfig   `toml:"popular"`
+	Collaborative CFConfig        `toml:"collaborative"`
+	Rank          RankConfig      `toml:"rank"`
+	Subscribe     SubscribeConfig `toml:"subscribe"`
 	// nodes
 	Master MasterConfig `toml:"master"`
 	Server ServerConfig `toml:"server"`
@@ -129,7 +129,7 @@ type CFConfig struct {
 func (c *CFConfig) LoadDefaultIfNil() *CFConfig {
 	if c == nil {
 		return &CFConfig{
-			NumCached:     800,
+			NumCached:     100,
 			CFModel:       "als",
 			PredictPeriod: 60,
 			FitPeriod:     1440,
@@ -237,11 +237,10 @@ func (c *RankConfig) GetParams(metaData *toml.MetaData) model.Params {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port         int    `toml:"port"`
-	Host         string `toml:"host"`
-	Jobs         int    `toml:"n_jobs"`
-	MetaTimeout  int    `toml:"cluster_meta_timeout"`
-	RetryTimeout int    `toml:"retry_timeout"`
+	Port        int    `toml:"port"`
+	Host        string `toml:"host"`
+	Jobs        int    `toml:"n_jobs"`
+	MetaTimeout int    `toml:"meta_timeout"`
 }
 
 func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
@@ -274,8 +273,6 @@ type DatabaseConfig struct {
 func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 	if config == nil {
 		return &DatabaseConfig{
-			CacheStore:     "redis://127.0.0.1:6379",
-			DataStore:      "mysql://root@tcp(127.0.0.1:3306)/gorse",
 			AutoInsertUser: true,
 			AutoInsertItem: true,
 		}
@@ -287,12 +284,6 @@ func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 func (config *Config) FillDefault(meta toml.MetaData) {
 	// Default database config
 	defaultDBConfig := *(*DatabaseConfig)(nil).LoadDefaultIfNil()
-	if !meta.IsDefined("database", "data_store") {
-		config.Database.DataStore = defaultDBConfig.DataStore
-	}
-	if !meta.IsDefined("database", "cache_store") {
-		config.Database.CacheStore = defaultDBConfig.CacheStore
-	}
 	if !meta.IsDefined("database", "auto_insert_user") {
 		config.Database.AutoInsertUser = defaultDBConfig.AutoInsertUser
 	}
@@ -374,7 +365,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("master", "n_jobs") {
 		config.Master.Jobs = defaultMasterConfig.Jobs
 	}
-	if !meta.IsDefined("master", "cluster_meta_timeout") {
+	if !meta.IsDefined("master", "meta_timeout") {
 		config.Master.MetaTimeout = defaultMasterConfig.MetaTimeout
 	}
 }

@@ -14,9 +14,10 @@
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/worker"
+	"go.uber.org/zap"
 	"runtime"
 )
 
@@ -41,6 +42,6 @@ func init() {
 
 func main() {
 	if err := workerCommand.Execute(); err != nil {
-		log.Error(err)
+		base.Logger().Fatal("failed to execute", zap.Error(err))
 	}
 }
