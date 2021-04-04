@@ -29,7 +29,6 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/araddon/dateparse"
-	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/cf"
@@ -63,29 +62,30 @@ type Master struct {
 	cacheStore cache.Database
 
 	// users index
-	userIndex   base.Index
-	userVersion int
-	userMutex   sync.Mutex
+	userIndex        base.Index
+	userIndexVersion int64
+	userIndexMutex   sync.Mutex
 
-	// matrix factorization
-	mfModel   cf.MatrixFactorization
-	mfVersion int
-	mfMutex   sync.Mutex
+	// collaborative filtering
+	cfModel   cf.MatrixFactorization
+	cfVersion int64
+	cfMutex   sync.Mutex
 
 	// factorization machine
 	fmModel   rank.FactorizationMachine
-	fmVersion int
+	fmVersion int64
 	fmMutex   sync.Mutex
 }
 
 func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
+	rand.Seed(time.Now().UnixNano())
 	l := &Master{
-		nodesInfo:   make(map[string]string),
-		cfg:         cfg,
-		meta:        meta,
-		mfVersion:   rand.Int(),
-		fmVersion:   rand.Int(),
-		userVersion: rand.Int(),
+		nodesInfo:        make(map[string]string),
+		cfg:              cfg,
+		meta:             meta,
+		cfVersion:        rand.Int63(),
+		fmVersion:        rand.Int63(),
+		userIndexVersion: rand.Int63(),
 	}
 	return l
 }
@@ -97,16 +97,16 @@ func (m *Master) Serve() {
 	m.ttlCache.SetExpirationCallback(m.nodeDown)
 	m.ttlCache.SetNewItemCallback(m.nodeUp)
 	if err := m.ttlCache.SetTTL(
-		time.Duration(m.cfg.Master.ClusterMetaTimeout) * time.Second,
+		time.Duration(m.cfg.Master.MetaTimeout+10) * time.Second,
 	); err != nil {
-		log.Error("master:", err)
+		base.Logger().Fatal("failed to set TTL", zap.Error(err))
 	}
 
 	// connect data database
 	var err error
 	m.dataStore, err = data.Open(m.cfg.Database.DataStore)
 	if err != nil {
-		log.Fatalf("master: failed to connect data database (%v)", err)
+		base.Logger().Fatal("failed to connect data database", zap.Error(err))
 	}
 	if err = m.dataStore.Init(); err != nil {
 		base.Logger().Fatal("failed to init database", zap.Error(err))
@@ -115,123 +115,107 @@ func (m *Master) Serve() {
 	// connect cache database
 	m.cacheStore, err = cache.Open(m.cfg.Database.CacheStore)
 	if err != nil {
-		log.Fatalf("master: failed to connect cache database (%v)", err)
+		base.Logger().Fatal("failed to connect cache database", zap.Error(err),
+			zap.String("database", m.cfg.Database.CacheStore))
 	}
 
 	// start loop
 	go m.Loop()
 
 	// start rpc server
-	log.Infof("master: start rpc server %v:%v", m.cfg.Master.Host, m.cfg.Master.Port)
+	base.Logger().Info("start rpc server",
+		zap.String("host", m.cfg.Master.Host),
+		zap.Int("port", m.cfg.Master.Port))
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.cfg.Master.Host, m.cfg.Master.Port))
 	if err != nil {
-		log.Fatalf("master: failed to listen: %v", err)
+		base.Logger().Fatal("failed to listen", zap.Error(err))
 	}
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
 	protocol.RegisterMasterServer(grpcServer, m)
 	if err = grpcServer.Serve(lis); err != nil {
-		log.Fatalf("master: failed to start rpc server (%v)", err)
+		base.Logger().Fatal("failed to start rpc server", zap.Error(err))
 	}
 }
 
-func (m *Master) GetConfig(context.Context, *protocol.Void) (*protocol.Config, error) {
+func (m *Master) GetMeta(ctx context.Context, requestInfo *protocol.RequestInfo) (*protocol.Meta, error) {
+	// read address
+	p, _ := peer.FromContext(ctx)
+	addr := p.Addr.String()
+	// save node
+	var nodeType string
+	switch requestInfo.NodeType {
+	case protocol.NodeType_ServerNode:
+		nodeType = ServerNode
+	case protocol.NodeType_WorkerNode:
+		nodeType = WorkerNode
+	}
+	if nodeType != "" {
+		if err := m.ttlCache.Set(addr, nodeType); err != nil {
+			base.Logger().Error("failed to set ttl cache", zap.Error(err))
+			return nil, err
+		}
+	}
+	// marshall config
 	s, err := json.Marshal(m.cfg)
 	if err != nil {
 		return nil, err
 	}
-	return &protocol.Config{Json: string(s)}, nil
-}
-
-func (m *Master) RegisterServer(ctx context.Context, _ *protocol.Void) (*protocol.Void, error) {
-	p, _ := peer.FromContext(ctx)
-	addr := p.Addr.String()
-	if err := m.ttlCache.Set(addr, ServerNode); err != nil {
-		log.Errorf("master: failed to set ttlcache (%v)", err)
-		return nil, err
-	}
-	return &protocol.Void{}, nil
-}
-
-func (m *Master) RegisterWorker(ctx context.Context, _ *protocol.Void) (*protocol.Void, error) {
-	p, _ := peer.FromContext(ctx)
-	addr := p.Addr.String()
-	if err := m.ttlCache.Set(addr, WorkerNode); err != nil {
-		log.Errorf("master: failed to set ttlcache (%v)", err)
-		return nil, err
-	}
-	return &protocol.Void{}, nil
-}
-
-func (m *Master) GetCluster(ctx context.Context, _ *protocol.Void) (*protocol.Cluster, error) {
-	cluster := &protocol.Cluster{
-		Workers: make([]string, 0),
-		Servers: make([]string, 0),
-	}
-	// add me
-	p, _ := peer.FromContext(ctx)
-	cluster.Me = p.Addr.String()
-	// add master
-	cluster.Master = fmt.Sprintf("%s:%d", m.cfg.Master.Host, m.cfg.Master.Port)
-	// add servers/workers
+	// save user index version
+	m.userIndexMutex.Lock()
+	userIndexVersion := m.userIndexVersion
+	m.userIndexMutex.Unlock()
+	// save cf version
+	m.cfMutex.Lock()
+	cfVersion := m.cfVersion
+	m.cfMutex.Unlock()
+	// save fm version
+	m.fmMutex.Lock()
+	fmVersion := m.fmVersion
+	m.fmMutex.Unlock()
+	// collect nodes
+	workers := make([]string, 0)
+	servers := make([]string, 0)
 	m.nodesInfoMutex.Lock()
-	defer m.nodesInfoMutex.Unlock()
-	for addr, nodeType := range m.nodesInfo {
+	for addr, nodeType = range m.nodesInfo {
 		switch nodeType {
 		case WorkerNode:
-			cluster.Workers = append(cluster.Workers, addr)
+			workers = append(workers, addr)
 		case ServerNode:
-			cluster.Servers = append(cluster.Servers, addr)
-		default:
-			log.Fatalf("master: unkown node (%v)", nodeType)
+			servers = append(servers, addr)
 		}
 	}
-	return cluster, nil
-}
-
-func (m *Master) GetCollaborativeFilteringModelVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
-	m.mfMutex.Lock()
-	defer m.mfMutex.Unlock()
-	// skip empty model
-	if m.mfModel == nil {
-		return &protocol.Model{Version: 0}, nil
-	}
-	return &protocol.Model{
-		Name:    m.cfg.Collaborative.CFModel,
-		Version: int64(m.mfVersion),
+	m.nodesInfoMutex.Unlock()
+	return &protocol.Meta{
+		Config:           string(s),
+		UserIndexVersion: userIndexVersion,
+		FmVersion:        fmVersion,
+		CfVersion:        cfVersion,
+		Me:               addr,
+		Workers:          workers,
 	}, nil
 }
 
-func (m *Master) GetCollaborativeFilteringModel(context.Context, *protocol.Void) (*protocol.Model, error) {
-	m.mfMutex.Lock()
-	defer m.mfMutex.Unlock()
+func (m *Master) GetCollaborativeFilteringModel(context.Context, *protocol.RequestInfo) (*protocol.Model, error) {
+	m.cfMutex.Lock()
+	defer m.cfMutex.Unlock()
 	// skip empty model
-	if m.mfModel == nil {
+	if m.cfModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
-	modelData, err := cf.EncodeModel(m.mfModel)
+	modelData, err := cf.EncodeModel(m.cfModel)
 	if err != nil {
 		return nil, err
 	}
 	return &protocol.Model{
 		Name:    m.cfg.Collaborative.CFModel,
-		Version: int64(m.mfVersion),
+		Version: m.cfVersion,
 		Model:   modelData,
 	}, nil
 }
 
-func (m *Master) GetFactorizationMachineVersion(context.Context, *protocol.Void) (*protocol.Model, error) {
-	m.fmMutex.Lock()
-	defer m.fmMutex.Unlock()
-	// skip empty model
-	if m.fmModel == nil {
-		return &protocol.Model{Version: 0}, nil
-	}
-	return &protocol.Model{Version: int64(m.fmVersion)}, nil
-}
-
-func (m *Master) GetFactorizationMachine(context.Context, *protocol.Void) (*protocol.Model, error) {
+func (m *Master) GetFactorizationMachine(context.Context, *protocol.RequestInfo) (*protocol.Model, error) {
 	m.fmMutex.Lock()
 	defer m.fmMutex.Unlock()
 	// skip empty model
@@ -244,26 +228,17 @@ func (m *Master) GetFactorizationMachine(context.Context, *protocol.Void) (*prot
 		return nil, err
 	}
 	return &protocol.Model{
-		Version: int64(m.fmVersion),
+		Version: m.fmVersion,
 		Model:   modelData,
 	}, nil
 }
 
-func (m *Master) GetUserIndexVersion(context.Context, *protocol.Void) (*protocol.Users, error) {
-	m.userMutex.Lock()
-	defer m.userMutex.Unlock()
-	if m.userIndex == nil {
-		return &protocol.Users{Version: 0}, nil
-	}
-	return &protocol.Users{Version: int64(m.fmVersion)}, nil
-}
-
-func (m *Master) GetUserIndex(context.Context, *protocol.Void) (*protocol.Users, error) {
-	m.userMutex.Lock()
-	defer m.userMutex.Unlock()
+func (m *Master) GetUserIndex(context.Context, *protocol.RequestInfo) (*protocol.UserIndex, error) {
+	m.userIndexMutex.Lock()
+	defer m.userIndexMutex.Unlock()
 	// skip empty model
 	if m.userIndex == nil {
-		return &protocol.Users{Version: 0}, nil
+		return &protocol.UserIndex{Version: 0}, nil
 	}
 	// encode index
 	buf := bytes.NewBuffer(nil)
@@ -275,9 +250,9 @@ func (m *Master) GetUserIndex(context.Context, *protocol.Void) (*protocol.Users,
 	if err := writer.Flush(); err != nil {
 		return nil, err
 	}
-	return &protocol.Users{
-		Version: int64(m.fmVersion),
-		Users:   buf.Bytes(),
+	return &protocol.UserIndex{
+		Version:   m.userIndexVersion,
+		UserIndex: buf.Bytes(),
 	}, nil
 }
 
@@ -311,7 +286,7 @@ func (m *Master) Loop() {
 		m.cfg.Similar.UpdatePeriod,
 		m.cfg.Popular.UpdatePeriod,
 		m.cfg.Latest.UpdatePeriod)
-	log.Infof("master: start loop (period = %v min)", loopPeriod)
+	base.Logger().Info("start loop", zap.Int("period", loopPeriod))
 
 	for {
 		// check stale
@@ -326,32 +301,34 @@ func (m *Master) Loop() {
 			base.Logger().Info("load dataset for ranking task", zap.Strings("feedback_types", m.cfg.Database.RankFeedbackType))
 			rankDataSet, err := rank.LoadDataFromDatabase(m.dataStore, m.cfg.Database.RankFeedbackType)
 			if err != nil {
-				log.Fatalf("master: failed to pull dataset for ranking (%v)", err)
+				base.Logger().Error("failed to load database", zap.Error(err))
 			}
 			if rankDataSet.PositiveCount == 0 {
-				log.Infof("master: empty dataset (feedback_type = %v)", m.cfg.Database.RankFeedbackType)
+				base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.cfg.Database.RankFeedbackType))
 			} else {
 				m.FitFactorizationMachine(rankDataSet)
 			}
 		}
 
-		if isCFModelStale || isLatestStale || isPopItemStale || isSimilarStale || m.mfModel == nil {
+		if isCFModelStale || isLatestStale || isPopItemStale || isSimilarStale || m.cfModel == nil {
 			// download dataset
 			base.Logger().Info("load dataset for matching task", zap.Strings("feedback_types", m.cfg.Database.MatchFeedbackType))
 			dataSet, items, feedbacks, err := cf.LoadDataFromDatabase(m.dataStore, m.cfg.Database.MatchFeedbackType)
 			if err != nil {
-				log.Fatal("master: ", err)
+				base.Logger().Error("failed to load database", zap.Error(err))
 			}
 			if dataSet.Count() == 0 {
-				log.Info("master: empty dataset")
+				base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.cfg.Database.MatchFeedbackType))
 			} else {
-				log.Infof("master: data loaded (#user = %v, #item = %v, #feedback = %v)",
-					dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count())
+				base.Logger().Info("data loaded for matching",
+					zap.Int("n_users", dataSet.UserCount()),
+					zap.Int("n_items", dataSet.ItemCount()),
+					zap.Int("n_feedback", dataSet.Count()))
 				// update user index
-				m.userMutex.Lock()
+				m.userIndexMutex.Lock()
 				m.userIndex = dataSet.UserIndex
-				m.userVersion++
-				m.userMutex.Unlock()
+				m.userIndexVersion++
+				m.userIndexMutex.Unlock()
 				// collect popular items
 				if isPopItemStale {
 					m.CollectPopItem(items, feedbacks)
@@ -364,7 +341,7 @@ func (m *Master) Loop() {
 				if isSimilarStale {
 					m.CollectSimilar(items, dataSet)
 				}
-				if isCFModelStale || m.mfModel == nil {
+				if isCFModelStale || m.cfModel == nil {
 					m.FitMatrixFactorization(dataSet)
 				}
 			}
@@ -387,12 +364,13 @@ func (m *Master) FitFactorizationMachine(dataSet *rank.Dataset) {
 	m.fmModel = fmModel
 	m.fmVersion++
 	m.fmMutex.Unlock()
+	base.Logger().Info("fit factorization machine complete", zap.Int64("version", m.fmVersion))
 
 	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.FitFactorizationMachineTime, base.Now()); err != nil {
-		log.Infof("master: failed to write meta (%v)", err)
+		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 	if err := m.cacheStore.SetString(cache.GlobalMeta, cache.FactorizationMachineVersion, fmt.Sprintf("%x", m.fmVersion)); err != nil {
-		log.Infof("master: failed to write meta (%v)", err)
+		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 }
 
@@ -403,21 +381,23 @@ func (m *Master) FitMatrixFactorization(dataSet *cf.DataSet) {
 		trainSet, testSet := dataSet.Split(m.cfg.Collaborative.NumTestUsers, 0)
 		mfModel, err := cf.NewModel(m.cfg.Collaborative.CFModel, m.cfg.Collaborative.GetParams(m.meta))
 		if err != nil {
-			log.Infof("master: failed to fit matrix factorization (%v)", err)
+			base.Logger().Error("failed to fit matrix factorization", zap.Error(err))
+			return
 		}
 		mfModel.Fit(trainSet, testSet, m.cfg.Collaborative.GetFitConfig(m.cfg.Master.Jobs))
 
 		// update match model
-		m.mfMutex.Lock()
-		m.mfModel = mfModel
-		m.mfVersion++
-		m.mfMutex.Unlock()
+		m.cfMutex.Lock()
+		m.cfModel = mfModel
+		m.cfVersion++
+		m.cfMutex.Unlock()
+		base.Logger().Info("fit matrix factorization complete", zap.Int64("version", m.cfVersion))
 
 		if err = m.cacheStore.SetString(cache.GlobalMeta, cache.FitMatrixFactorizationTime, base.Now()); err != nil {
-			log.Infof("master: failed to write meta (%v)", err)
+			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
-		if err = m.cacheStore.SetString(cache.GlobalMeta, cache.MatrixFactorizationVersion, fmt.Sprintf("%x", m.mfVersion)); err != nil {
-			log.Infof("master: failed to write meta (%v)", err)
+		if err = m.cacheStore.SetString(cache.GlobalMeta, cache.MatrixFactorizationVersion, fmt.Sprintf("%x", m.cfVersion)); err != nil {
+			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
 	}
 }
@@ -428,11 +408,11 @@ func (m *Master) IsStale(dateTimeField string, timeLimit int) bool {
 		if err.Error() == "redis: nil" {
 			return true
 		}
-		log.Fatalf("master: failed to get timestamp (%v)", err)
+		base.Logger().Error("failed to read timestamp", zap.Error(err), zap.String("field_name", dateTimeField))
 	}
 	updateTime, err := dateparse.ParseAny(updateTimeText)
 	if err != nil {
-		log.Error("master: ", err)
+		base.Logger().Error("failed to parse datetime", zap.Error(err), zap.String("datetime", updateTimeText))
 		return true
 	}
 	return time.Since(updateTime).Minutes() > float64(timeLimit)
@@ -441,7 +421,7 @@ func (m *Master) IsStale(dateTimeField string, timeLimit int) bool {
 // CollectPopItem updates popular items for the database.
 func (m *Master) CollectPopItem(items []data.Item, feedback []data.Feedback) {
 	if m.cfg.Popular.NumCache > 0 {
-		log.Info("master: collect popular items")
+		base.Logger().Info("collect popular items", zap.Int("n_cache", m.cfg.Popular.NumCache))
 		// create item mapping
 		itemMap := make(map[string]data.Item)
 		for _, item := range items {
@@ -472,11 +452,11 @@ func (m *Master) CollectPopItem(items []data.Item, feedback []data.Feedback) {
 		for label, topItems := range popItems {
 			result, _ := topItems.PopAll()
 			if err := m.cacheStore.SetList(cache.PopularItems, label, result); err != nil {
-				log.Errorf("master: failed to cache popular items (%v)", err)
+				base.Logger().Error("failed to cache popular items", zap.Error(err))
 			}
 		}
 		if err := m.cacheStore.SetString(cache.GlobalMeta, cache.CollectPopularTime, base.Now()); err != nil {
-			log.Errorf("master: failed to cache popular items (%v)", err)
+			base.Logger().Error("failed to cache popular items", zap.Error(err))
 		}
 	}
 }
@@ -484,7 +464,7 @@ func (m *Master) CollectPopItem(items []data.Item, feedback []data.Feedback) {
 // CollectLatest updates latest items.
 func (m *Master) CollectLatest(items []data.Item) {
 	if m.cfg.Latest.NumCache > 0 {
-		log.Info("master: collect latest items")
+		base.Logger().Info("collect latest items", zap.Int("n_cache", m.cfg.Latest.NumCache))
 		var err error
 		latestItems := make(map[string]*base.TopKStringFilter)
 		latestItems[""] = base.NewTopKStringFilter(m.cfg.Latest.NumCache)
@@ -501,19 +481,19 @@ func (m *Master) CollectLatest(items []data.Item) {
 		for label, topItems := range latestItems {
 			result, _ := topItems.PopAll()
 			if err = m.cacheStore.SetList(cache.LatestItems, label, result); err != nil {
-				log.Errorf("master: failed to cache latest items (%v)", err)
+				base.Logger().Error("failed to cache latest items", zap.Error(err))
 			}
 		}
 		if err = m.cacheStore.SetString(cache.GlobalMeta, cache.CollectLatestTime, base.Now()); err != nil {
-			log.Errorf("master: failed to cache latest items (%v)", err)
+			base.Logger().Error("failed to cache latest items time", zap.Error(err))
 		}
 	}
 }
 
 // CollectSimilar updates neighbors for the database.
-func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) {
+func (m *Master) CollectSimilar(_ []data.Item, dataset *cf.DataSet) {
 	if m.cfg.Similar.NumCache > 0 {
-		base.Logger().Info("collect similar items")
+		base.Logger().Info("collect similar items", zap.Int("n_cache", m.cfg.Similar.NumCache))
 		// create progress tracker
 		completed := make(chan []interface{}, 1000)
 		go func() {
@@ -527,7 +507,9 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) {
 					}
 					completedCount++
 				case <-ticker.C:
-					log.Infof("master: collect similar items (%v/%v)", completedCount, dataset.ItemCount())
+					base.Logger().Info("collect similar items",
+						zap.Int("n_complete_items", completedCount),
+						zap.Int("n_items", dataset.ItemCount()))
 				}
 			}
 		}()
@@ -556,11 +538,11 @@ func (m *Master) CollectSimilar(items []data.Item, dataset *cf.DataSet) {
 			completed <- nil
 			return nil
 		}); err != nil {
-			log.Errorf("master: failed to cache similar items (%v)", err)
+			base.Logger().Error("failed to cache similar items", zap.Error(err))
 		}
 		close(completed)
 		if err := m.cacheStore.SetString(cache.GlobalMeta, cache.CollectSimilarTime, base.Now()); err != nil {
-			log.Errorf("master: failed to cache similar items (%v)", err)
+			base.Logger().Error("failed to cache similar items", zap.Error(err))
 		}
 	}
 }

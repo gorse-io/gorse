@@ -22,7 +22,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/rank"
@@ -43,62 +42,61 @@ var getUserFeedbackLatency = promauto.NewHistogram(prometheus.HistogramOpts{
 })
 
 type Server struct {
-	CacheStore   cache.Database
-	DataStore    data.Database
-	Config       *config.Config
-	MasterClient protocol.MasterClient
+	cacheAddress string
+	cacheStore   cache.Database
+	dataAddress  string
+	dataStore    data.Database
+	masterClient protocol.MasterClient
 
-	fmModel        rank.FactorizationMachine
-	RankModelMutex sync.RWMutex
-	fmVersion      int64
+	// factorization machine
+	fmModel         rank.FactorizationMachine
+	RankModelMutex  sync.RWMutex
+	fmVersion       int64
+	latestFMVersion int64
 
-	MasterHost string
-	MasterPort int
-	ServerHost string
-	ServerPort int
+	// config
+	cfg        *config.Config
+	masterHost string
+	masterPort int
+	serverHost string
+	serverPort int
+
+	// events
+	syncedChan chan bool
 }
 
 func NewServer(masterHost string, masterPort int, serverHost string, serverPort int) *Server {
 	return &Server{
-		MasterHost: masterHost,
-		MasterPort: masterPort,
-		ServerHost: serverHost,
-		ServerPort: serverPort,
+		// database
+		dataStore:  &data.NoDatabase{},
+		cacheStore: &cache.NoDatabase{},
+		// config
+		masterHost: masterHost,
+		masterPort: masterPort,
+		serverHost: serverHost,
+		serverPort: serverPort,
+		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
+		// events
+		syncedChan: make(chan bool, 1024),
 	}
 }
 
 func (s *Server) Serve() {
+	base.Logger().Info("start server",
+		zap.String("server_host", s.serverHost),
+		zap.Int("server_port", s.serverPort),
+		zap.String("master_host", s.masterHost),
+		zap.Int("master_port", s.masterPort))
+
 	// connect to master
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.MasterHost, s.MasterPort), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("server: failed to connect master (%v)", err)
+		base.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
-	s.MasterClient = protocol.NewMasterClient(conn)
+	s.masterClient = protocol.NewMasterClient(conn)
 
-	// load master config
-	masterCfgJson, err := s.MasterClient.GetConfig(context.Background(), &protocol.Void{})
-	if err != nil {
-		log.Fatalf("server: failed to load master config (%v)", err)
-	}
-	err = json.Unmarshal([]byte(masterCfgJson.Json), &s.Config)
-	if err != nil {
-		log.Fatalf("server: failed to parse master config (%v)", err)
-	}
-
-	// connect to data store
-	if s.DataStore, err = data.Open(s.Config.Database.DataStore); err != nil {
-		log.Fatalf("server: failed to connect data store (%v)", err)
-	}
-
-	// connect to cache store
-	if s.CacheStore, err = cache.Open(s.Config.Database.CacheStore); err != nil {
-		log.Fatalf("server: failed to connect cache store (%v)", err)
-	}
-
-	// register to master
-	go s.Register()
-	// pull model
 	go s.Sync()
+	go s.Pull()
 
 	// register restful APIs
 	ws := s.CreateWebService()
@@ -110,30 +108,27 @@ func (s *Server) Serve() {
 		APIPath:     "/apidocs.json",
 	}
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(specConfig))
-	swaggerFile = fmt.Sprintf("http://%s:%d/apidocs.json", s.ServerHost, s.ServerPort)
+	swaggerFile = fmt.Sprintf("http://%s:%d/apidocs.json", s.serverHost, s.serverPort)
 	http.HandleFunc(apiDocsPath, handler)
 
 	// register prometheus
 	http.Handle("/metrics", promhttp.Handler())
 
-	log.Printf("start gorse server at %v\n", fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%d", s.ServerHost, s.ServerPort), nil))
+	base.Logger().Info("start gorse server",
+		zap.String("url", fmt.Sprintf("http://%s:%d", s.serverHost, s.serverPort)))
+	base.Logger().Fatal("failed to start gorse server",
+		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.serverHost, s.serverPort), nil)))
 }
 
-// Sync factorization machine.
-func (s *Server) Sync() {
+// Pull factorization machine.
+func (s *Server) Pull() {
 	defer base.CheckPanic()
-	for {
+	for range s.syncedChan {
 		ctx := context.Background()
-
 		// pull factorization machine
-		base.Logger().Debug("check factorization machine version")
-		if fmVersionResponse, err := s.MasterClient.GetFactorizationMachineVersion(ctx, &protocol.Void{}); err != nil {
-			base.Logger().Error("failed to check factorization machine version", zap.Error(err))
-		} else if fmVersionResponse.Version == 0 {
-			base.Logger().Debug("remote factorization machine doesn't exist")
-		} else if fmVersionResponse.Version != s.fmVersion {
-			if mfResponse, err := s.MasterClient.GetFactorizationMachine(context.Background(), &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
+		if s.latestFMVersion != s.fmVersion {
+			base.Logger().Info("pull factorization machine")
+			if mfResponse, err := s.masterClient.GetFactorizationMachine(ctx, &protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
 				base.Logger().Error("failed to pull factorization machine", zap.Error(err))
 			} else {
 				s.fmModel, err = rank.DecodeModel(mfResponse.Model)
@@ -141,24 +136,62 @@ func (s *Server) Sync() {
 					base.Logger().Error("failed to decode factorization machine", zap.Error(err))
 				} else {
 					s.fmVersion = mfResponse.Version
-					base.Logger().Info("sync factorization machine", zap.Int64("version", s.fmVersion))
+					base.Logger().Info("synced factorization machine", zap.Int64("version", s.fmVersion))
 				}
 			}
 		}
-
-		// sleep
-		time.Sleep(time.Minute)
 	}
 }
 
-// Register this server to the master.
-func (s *Server) Register() {
+// Sync this server to the master.
+func (s *Server) Sync() {
 	defer base.CheckPanic()
+	base.Logger().Info("start meta sync", zap.Int("meta_timeout", s.cfg.Master.MetaTimeout))
 	for {
-		if _, err := s.MasterClient.RegisterServer(context.Background(), &protocol.Void{}); err != nil {
-			base.Logger().Error("failed to register", zap.Error(err))
+		var meta *protocol.Meta
+		var err error
+		if meta, err = s.masterClient.GetMeta(context.Background(), &protocol.RequestInfo{NodeType: protocol.NodeType_ServerNode}); err != nil {
+			base.Logger().Error("failed to get meta", zap.Error(err))
+			goto sleep
 		}
-		time.Sleep(time.Duration(s.Config.Master.ClusterMetaTimeout/2) * time.Second)
+
+		// load master config
+		err = json.Unmarshal([]byte(meta.Config), &s.cfg)
+		if err != nil {
+			base.Logger().Error("failed to parse master config", zap.Error(err))
+			goto sleep
+		}
+
+		// connect to data store
+		if s.dataAddress != s.cfg.Database.DataStore {
+			base.Logger().Info("connect data store", zap.String("database", s.cfg.Database.DataStore))
+			if s.dataStore, err = data.Open(s.cfg.Database.DataStore); err != nil {
+				base.Logger().Error("failed to connect data store", zap.Error(err))
+				goto sleep
+			}
+			s.dataAddress = s.cfg.Database.DataStore
+		}
+
+		// connect to cache store
+		if s.cacheAddress != s.cfg.Database.CacheStore {
+			base.Logger().Info("connect cache store", zap.String("database", s.cfg.Database.CacheStore))
+			if s.cacheStore, err = cache.Open(s.cfg.Database.CacheStore); err != nil {
+				base.Logger().Error("failed to connect cache store", zap.Error(err))
+				goto sleep
+			}
+			s.cacheAddress = s.cfg.Database.CacheStore
+		}
+
+		// check FM version
+		s.latestFMVersion = meta.FmVersion
+		if s.latestFMVersion != s.fmVersion {
+			base.Logger().Info("new factorization machine model found",
+				zap.Int64("old_version", s.fmVersion),
+				zap.Int64("new_version", s.latestFMVersion))
+			s.syncedChan <- true
+		}
+	sleep:
+		time.Sleep(time.Duration(s.cfg.Master.MetaTimeout) * time.Second)
 	}
 }
 
@@ -417,7 +450,7 @@ func parseInt(request *restful.Request, name string, fallback int) (value int, e
 func (s *Server) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
 	var n, offset int
 	var err error
-	if n, err = parseInt(request, "n", s.Config.Server.DefaultN); err != nil {
+	if n, err = parseInt(request, "n", s.cfg.Server.DefaultN); err != nil {
 		badRequest(response, err)
 		return
 	}
@@ -427,7 +460,7 @@ func (s *Server) getList(prefix string, name string, request *restful.Request, r
 	}
 	returnType := request.QueryParameter("return")
 	// Get the popular list
-	items, err := s.CacheStore.GetList(prefix, name, n, offset)
+	items, err := s.cacheStore.GetList(prefix, name, n, offset)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -436,7 +469,7 @@ func (s *Server) getList(prefix string, name string, request *restful.Request, r
 	if returnType == "detail" {
 		itemDetails := make([]data.Item, len(items))
 		for i := range items {
-			itemDetails[i], err = s.DataStore.GetItem(items[i])
+			itemDetails[i], err = s.dataStore.GetItem(items[i])
 			if err != nil {
 				internalServerError(response, err)
 				return
@@ -497,7 +530,7 @@ func (s *Server) getTypedFeedbackByItem(request *restful.Request, response *rest
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataStore.GetItemFeedback(itemId, &feedbackType)
+	feedback, err := s.dataStore.GetItemFeedback(itemId, &feedbackType)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -512,7 +545,7 @@ func (s *Server) getFeedbackByItem(request *restful.Request, response *restful.R
 		return
 	}
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataStore.GetItemFeedback(itemId, nil)
+	feedback, err := s.dataStore.GetItemFeedback(itemId, nil)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -561,7 +594,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	start := time.Now()
 	userId := request.PathParameter("user-id")
 	returnType := request.QueryParameter("return")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultN)
+	n, err := parseInt(request, "n", s.cfg.Server.DefaultN)
 	if err != nil {
 		badRequest(response, err)
 		return
@@ -572,45 +605,54 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	// load populars
 	go func() {
 		var popularItems []string
-		if s.Config.Popular.NumCache > 0 {
-			popularItems, err = s.CacheStore.GetList(cache.PopularItems, "", s.Config.Popular.NumCache, 0)
+		if s.cfg.Popular.NumCache > 0 {
+			popularItems, err = s.cacheStore.GetList(cache.PopularItems, "", s.cfg.Popular.NumCache, 0)
 		}
 		if err != nil {
 			errors[0] = err
 			candidateCollections <- nil
 		} else {
 			candidateCollections <- popularItems
+			if len(popularItems) == 0 {
+				base.Logger().Warn("empty popular items")
+			}
 		}
 	}()
 	// load latest
 	go func() {
 		var latestItems []string
-		if s.Config.Latest.NumCache > 0 {
-			latestItems, err = s.CacheStore.GetList(cache.LatestItems, "", s.Config.Latest.NumCache, 0)
+		if s.cfg.Latest.NumCache > 0 {
+			latestItems, err = s.cacheStore.GetList(cache.LatestItems, "", s.cfg.Latest.NumCache, 0)
 		}
 		if err != nil {
 			errors[1] = err
 			candidateCollections <- nil
 		} else {
 			candidateCollections <- latestItems
+			if len(latestItems) == 0 {
+				base.Logger().Warn("empty latest items")
+			}
 		}
 	}()
 	// load matched
 	go func() {
-		var matchedItems []string
-		if s.Config.Collaborative.NumCached > 0 {
-			matchedItems, err = s.CacheStore.GetList(cache.CollaborativeItems, userId, s.Config.Collaborative.NumCached, 0)
+		var collaborativeFilteringItems []string
+		if s.cfg.Collaborative.NumCached > 0 {
+			collaborativeFilteringItems, err = s.cacheStore.GetList(cache.CollaborativeItems, userId, s.cfg.Collaborative.NumCached, 0)
 		}
 		if err != nil {
 			errors[2] = err
 			candidateCollections <- nil
 		} else {
-			candidateCollections <- matchedItems
+			candidateCollections <- collaborativeFilteringItems
+			if len(collaborativeFilteringItems) == 0 {
+				base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
+			}
 		}
 	}()
 	// load feedback
 	startLoadFeedback := time.Now()
-	userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
+	userFeedback, err := s.dataStore.GetUserFeedback(userId, nil)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -640,7 +682,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	// collect item features
 	candidateFeaturedItems := make([]data.Item, len(candidateItems))
 	err = base.Parallel(len(candidateItems), 4, func(_, jobId int) error {
-		candidateFeaturedItems[jobId], err = s.DataStore.GetItem(candidateItems[jobId])
+		candidateFeaturedItems[jobId], err = s.dataStore.GetItem(candidateItems[jobId])
 		return err
 	})
 	if err != nil {
@@ -666,7 +708,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range result {
-			err = s.DataStore.InsertFeedback(data.Feedback{
+			err = s.dataStore.InsertFeedback(data.Feedback{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       userId,
 					ItemId:       itemId,
@@ -684,7 +726,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	if returnType == "detail" {
 		itemDetails := make([]data.Item, len(result))
 		for i := range result {
-			itemDetails[i], err = s.DataStore.GetItem(result[i])
+			itemDetails[i], err = s.dataStore.GetItem(result[i])
 			if err != nil {
 				internalServerError(response, err)
 				return
@@ -713,7 +755,7 @@ func (s *Server) insertUser(request *restful.Request, response *restful.Response
 		badRequest(response, err)
 		return
 	}
-	if err := s.DataStore.InsertUser(temp); err != nil {
+	if err := s.dataStore.InsertUser(temp); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -728,7 +770,7 @@ func (s *Server) getUser(request *restful.Request, response *restful.Response) {
 	// get user id
 	userId := request.PathParameter("user-id")
 	// get user
-	user, err := s.DataStore.GetUser(userId)
+	user, err := s.dataStore.GetUser(userId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -750,7 +792,7 @@ func (s *Server) insertUsers(request *restful.Request, response *restful.Respons
 	var count int
 	// range temp and achieve user
 	for _, user := range *temp {
-		if err := s.DataStore.InsertUser(user); err != nil {
+		if err := s.dataStore.InsertUser(user); err != nil {
 			internalServerError(response, err)
 			return
 		}
@@ -770,13 +812,13 @@ func (s *Server) getUsers(request *restful.Request, response *restful.Response) 
 		return
 	}
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultN)
+	n, err := parseInt(request, "n", s.cfg.Server.DefaultN)
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
 	// get all users
-	cursor, users, err := s.DataStore.GetUsers(cursor, n)
+	cursor, users, err := s.dataStore.GetUsers(cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -792,7 +834,7 @@ func (s *Server) deleteUser(request *restful.Request, response *restful.Response
 	}
 	// get user-id and put into temp
 	userId := request.PathParameter("user-id")
-	if err := s.DataStore.DeleteUser(userId); err != nil {
+	if err := s.dataStore.DeleteUser(userId); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -808,7 +850,7 @@ func (s *Server) getTypedFeedbackByUser(request *restful.Request, response *rest
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	returnType := request.QueryParameter("return")
-	feedback, err := s.DataStore.GetUserFeedback(userId, &feedbackType)
+	feedback, err := s.dataStore.GetUserFeedback(userId, &feedbackType)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -820,7 +862,7 @@ func (s *Server) getTypedFeedbackByUser(request *restful.Request, response *rest
 			feedbackDetails[i].UserId = feedback[i].UserId
 			feedbackDetails[i].Timestamp = feedback[i].Timestamp
 			feedbackDetails[i].Comment = feedback[i].Comment
-			feedbackDetails[i].Item, err = s.DataStore.GetItem(feedback[i].ItemId)
+			feedbackDetails[i].Item, err = s.dataStore.GetItem(feedback[i].ItemId)
 			if err != nil {
 				internalServerError(response, err)
 				return
@@ -850,7 +892,7 @@ func (s *Server) getFeedbackByUser(request *restful.Request, response *restful.R
 	}
 	userId := request.PathParameter("user-id")
 	returnType := request.QueryParameter("return")
-	feedback, err := s.DataStore.GetUserFeedback(userId, nil)
+	feedback, err := s.dataStore.GetUserFeedback(userId, nil)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -862,7 +904,7 @@ func (s *Server) getFeedbackByUser(request *restful.Request, response *restful.R
 			feedbackDetails[i].UserId = feedback[i].UserId
 			feedbackDetails[i].Timestamp = feedback[i].Timestamp
 			feedbackDetails[i].Comment = feedback[i].Comment
-			feedbackDetails[i].Item, err = s.DataStore.GetItem(feedback[i].ItemId)
+			feedbackDetails[i].Item, err = s.dataStore.GetItem(feedback[i].ItemId)
 			if err != nil {
 				internalServerError(response, err)
 				return
@@ -891,7 +933,7 @@ func (s *Server) insertItems(request *restful.Request, response *restful.Respons
 	// Insert items
 	var count int
 	for _, item := range items {
-		err := s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
+		err := s.dataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
 		count++
 		if err != nil {
 			internalServerError(response, err)
@@ -912,7 +954,7 @@ func (s *Server) insertItem(request *restful.Request, response *restful.Response
 		badRequest(response, err)
 		return
 	}
-	if err = s.DataStore.InsertItem(*item); err != nil {
+	if err = s.dataStore.InsertItem(*item); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -930,12 +972,12 @@ func (s *Server) getItems(request *restful.Request, response *restful.Response) 
 		return
 	}
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultN)
+	n, err := parseInt(request, "n", s.cfg.Server.DefaultN)
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	cursor, items, err := s.DataStore.GetItems(cursor, n)
+	cursor, items, err := s.dataStore.GetItems(cursor, n)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -951,7 +993,7 @@ func (s *Server) getItem(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get item
-	item, err := s.DataStore.GetItem(itemId)
+	item, err := s.dataStore.GetItem(itemId)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -965,7 +1007,7 @@ func (s *Server) deleteItem(request *restful.Request, response *restful.Response
 		return
 	}
 	itemId := request.PathParameter("item-id")
-	if err := s.DataStore.DeleteItem(itemId); err != nil {
+	if err := s.dataStore.DeleteItem(itemId); err != nil {
 		internalServerError(response, err)
 		return
 	}
@@ -988,9 +1030,9 @@ func (s *Server) insertFeedback(request *restful.Request, response *restful.Resp
 	// Insert feedback
 	var count int
 	for _, feedback := range *ratings {
-		err = s.DataStore.InsertFeedback(feedback,
-			s.Config.Database.AutoInsertUser,
-			s.Config.Database.AutoInsertItem)
+		err = s.dataStore.InsertFeedback(feedback,
+			s.cfg.Database.AutoInsertUser,
+			s.cfg.Database.AutoInsertItem)
 		count++
 		if err != nil {
 			internalServerError(response, err)
@@ -1013,12 +1055,12 @@ func (s *Server) getFeedback(request *restful.Request, response *restful.Respons
 	}
 	// Parse parameters
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultN)
+	n, err := parseInt(request, "n", s.cfg.Server.DefaultN)
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil)
+	cursor, feedback, err := s.dataStore.GetFeedback(cursor, n, nil)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -1034,12 +1076,12 @@ func (s *Server) getTypedFeedback(request *restful.Request, response *restful.Re
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.Config.Server.DefaultN)
+	n, err := parseInt(request, "n", s.cfg.Server.DefaultN)
 	if err != nil {
 		badRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, &feedbackType)
+	cursor, feedback, err := s.dataStore.GetFeedback(cursor, n, &feedbackType)
 	if err != nil {
 		internalServerError(response, err)
 		return
@@ -1055,7 +1097,7 @@ func (s *Server) getUserItemFeedback(request *restful.Request, response *restful
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, nil); err != nil {
+	if feedback, err := s.dataStore.GetUserItemFeedback(userId, itemId, nil); err != nil {
 		internalServerError(response, err)
 	} else {
 		ok(response, feedback)
@@ -1070,7 +1112,7 @@ func (s *Server) deleteUserItemFeedback(request *restful.Request, response *rest
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, nil); err != nil {
+	if deleteCount, err := s.dataStore.DeleteUserItemFeedback(userId, itemId, nil); err != nil {
 		internalServerError(response, err)
 	} else {
 		ok(response, Success{RowAffected: deleteCount})
@@ -1086,7 +1128,7 @@ func (s *Server) getTypedUserItemFeedback(request *restful.Request, response *re
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, &feedbackType); err != nil {
+	if feedback, err := s.dataStore.GetUserItemFeedback(userId, itemId, &feedbackType); err != nil {
 		internalServerError(response, err)
 	} else if len(feedbackType) == 0 {
 		text(response, "{}")
@@ -1104,7 +1146,7 @@ func (s *Server) deleteTypedUserItemFeedback(request *restful.Request, response 
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, &feedbackType); err != nil {
+	if deleteCount, err := s.dataStore.DeleteUserItemFeedback(userId, itemId, &feedbackType); err != nil {
 		internalServerError(response, err)
 	} else {
 		ok(response, Success{deleteCount})
@@ -1139,15 +1181,15 @@ func text(response *restful.Response, content string) {
 }
 
 func (s *Server) auth(request *restful.Request, response *restful.Response) bool {
-	if s.Config.Server.APIKey == "" {
+	if s.cfg.Server.APIKey == "" {
 		return true
 	}
 	apikey := request.HeaderParameter("X-API-Key")
-	if apikey == s.Config.Server.APIKey {
+	if apikey == s.cfg.Server.APIKey {
 		return true
 	}
 	base.Logger().Error("unauthorized",
-		zap.String("api_key", s.Config.Server.APIKey),
+		zap.String("api_key", s.cfg.Server.APIKey),
 		zap.String("X-API-Key", apikey))
 	if err := response.WriteError(401, fmt.Errorf("unauthorized")); err != nil {
 		base.Logger().Error("failed to write error", zap.Error(err))

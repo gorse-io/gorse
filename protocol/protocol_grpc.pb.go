@@ -17,19 +17,12 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MasterClient interface {
-	// config distribute
-	GetConfig(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Config, error)
-	// model distribute
-	GetUserIndexVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Users, error)
-	GetFactorizationMachineVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
-	GetCollaborativeFilteringModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
-	GetUserIndex(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Users, error)
-	GetFactorizationMachine(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
-	GetCollaborativeFilteringModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error)
-	// cluster management
-	GetCluster(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Cluster, error)
-	RegisterServer(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error)
-	RegisterWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error)
+	// meta distribute
+	GetMeta(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Meta, error)
+	// data distribute
+	GetUserIndex(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*UserIndex, error)
+	GetFactorizationMachine(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error)
+	GetCollaborativeFilteringModel(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error)
 }
 
 type masterClient struct {
@@ -40,44 +33,17 @@ func NewMasterClient(cc grpc.ClientConnInterface) MasterClient {
 	return &masterClient{cc}
 }
 
-func (c *masterClient) GetConfig(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Config, error) {
-	out := new(Config)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetConfig", in, out, opts...)
+func (c *masterClient) GetMeta(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Meta, error) {
+	out := new(Meta)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetMeta", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *masterClient) GetUserIndexVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Users, error) {
-	out := new(Users)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetUserIndexVersion", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) GetFactorizationMachineVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
-	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetFactorizationMachineVersion", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) GetCollaborativeFilteringModelVersion(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
-	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetCollaborativeFilteringModelVersion", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) GetUserIndex(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Users, error) {
-	out := new(Users)
+func (c *masterClient) GetUserIndex(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*UserIndex, error) {
+	out := new(UserIndex)
 	err := c.cc.Invoke(ctx, "/protocol.Master/GetUserIndex", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -85,7 +51,7 @@ func (c *masterClient) GetUserIndex(ctx context.Context, in *Void, opts ...grpc.
 	return out, nil
 }
 
-func (c *masterClient) GetFactorizationMachine(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
+func (c *masterClient) GetFactorizationMachine(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error) {
 	out := new(Model)
 	err := c.cc.Invoke(ctx, "/protocol.Master/GetFactorizationMachine", in, out, opts...)
 	if err != nil {
@@ -94,36 +60,9 @@ func (c *masterClient) GetFactorizationMachine(ctx context.Context, in *Void, op
 	return out, nil
 }
 
-func (c *masterClient) GetCollaborativeFilteringModel(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Model, error) {
+func (c *masterClient) GetCollaborativeFilteringModel(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error) {
 	out := new(Model)
 	err := c.cc.Invoke(ctx, "/protocol.Master/GetCollaborativeFilteringModel", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) GetCluster(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Cluster, error) {
-	out := new(Cluster)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetCluster", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) RegisterServer(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
-	out := new(Void)
-	err := c.cc.Invoke(ctx, "/protocol.Master/RegisterServer", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) RegisterWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
-	out := new(Void)
-	err := c.cc.Invoke(ctx, "/protocol.Master/RegisterWorker", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,19 +73,12 @@ func (c *masterClient) RegisterWorker(ctx context.Context, in *Void, opts ...grp
 // All implementations must embed UnimplementedMasterServer
 // for forward compatibility
 type MasterServer interface {
-	// config distribute
-	GetConfig(context.Context, *Void) (*Config, error)
-	// model distribute
-	GetUserIndexVersion(context.Context, *Void) (*Users, error)
-	GetFactorizationMachineVersion(context.Context, *Void) (*Model, error)
-	GetCollaborativeFilteringModelVersion(context.Context, *Void) (*Model, error)
-	GetUserIndex(context.Context, *Void) (*Users, error)
-	GetFactorizationMachine(context.Context, *Void) (*Model, error)
-	GetCollaborativeFilteringModel(context.Context, *Void) (*Model, error)
-	// cluster management
-	GetCluster(context.Context, *Void) (*Cluster, error)
-	RegisterServer(context.Context, *Void) (*Void, error)
-	RegisterWorker(context.Context, *Void) (*Void, error)
+	// meta distribute
+	GetMeta(context.Context, *RequestInfo) (*Meta, error)
+	// data distribute
+	GetUserIndex(context.Context, *RequestInfo) (*UserIndex, error)
+	GetFactorizationMachine(context.Context, *RequestInfo) (*Model, error)
+	GetCollaborativeFilteringModel(context.Context, *RequestInfo) (*Model, error)
 	mustEmbedUnimplementedMasterServer()
 }
 
@@ -154,35 +86,17 @@ type MasterServer interface {
 type UnimplementedMasterServer struct {
 }
 
-func (UnimplementedMasterServer) GetConfig(context.Context, *Void) (*Config, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
+func (UnimplementedMasterServer) GetMeta(context.Context, *RequestInfo) (*Meta, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMeta not implemented")
 }
-func (UnimplementedMasterServer) GetUserIndexVersion(context.Context, *Void) (*Users, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetUserIndexVersion not implemented")
-}
-func (UnimplementedMasterServer) GetFactorizationMachineVersion(context.Context, *Void) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetFactorizationMachineVersion not implemented")
-}
-func (UnimplementedMasterServer) GetCollaborativeFilteringModelVersion(context.Context, *Void) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCollaborativeFilteringModelVersion not implemented")
-}
-func (UnimplementedMasterServer) GetUserIndex(context.Context, *Void) (*Users, error) {
+func (UnimplementedMasterServer) GetUserIndex(context.Context, *RequestInfo) (*UserIndex, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserIndex not implemented")
 }
-func (UnimplementedMasterServer) GetFactorizationMachine(context.Context, *Void) (*Model, error) {
+func (UnimplementedMasterServer) GetFactorizationMachine(context.Context, *RequestInfo) (*Model, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFactorizationMachine not implemented")
 }
-func (UnimplementedMasterServer) GetCollaborativeFilteringModel(context.Context, *Void) (*Model, error) {
+func (UnimplementedMasterServer) GetCollaborativeFilteringModel(context.Context, *RequestInfo) (*Model, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCollaborativeFilteringModel not implemented")
-}
-func (UnimplementedMasterServer) GetCluster(context.Context, *Void) (*Cluster, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCluster not implemented")
-}
-func (UnimplementedMasterServer) RegisterServer(context.Context, *Void) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterServer not implemented")
-}
-func (UnimplementedMasterServer) RegisterWorker(context.Context, *Void) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterWorker not implemented")
 }
 func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
 
@@ -197,80 +111,26 @@ func RegisterMasterServer(s grpc.ServiceRegistrar, srv MasterServer) {
 	s.RegisterService(&_Master_serviceDesc, srv)
 }
 
-func _Master_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
+func _Master_GetMeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MasterServer).GetConfig(ctx, in)
+		return srv.(MasterServer).GetMeta(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Master/GetConfig",
+		FullMethod: "/protocol.Master/GetMeta",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetConfig(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_GetUserIndexVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetUserIndexVersion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetUserIndexVersion",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetUserIndexVersion(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_GetFactorizationMachineVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetFactorizationMachineVersion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetFactorizationMachineVersion",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetFactorizationMachineVersion(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_GetCollaborativeFilteringModelVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetCollaborativeFilteringModelVersion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetCollaborativeFilteringModelVersion",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetCollaborativeFilteringModelVersion(ctx, req.(*Void))
+		return srv.(MasterServer).GetMeta(ctx, req.(*RequestInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Master_GetUserIndex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
+	in := new(RequestInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -282,13 +142,13 @@ func _Master_GetUserIndex_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/protocol.Master/GetUserIndex",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetUserIndex(ctx, req.(*Void))
+		return srv.(MasterServer).GetUserIndex(ctx, req.(*RequestInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Master_GetFactorizationMachine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
+	in := new(RequestInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -300,13 +160,13 @@ func _Master_GetFactorizationMachine_Handler(srv interface{}, ctx context.Contex
 		FullMethod: "/protocol.Master/GetFactorizationMachine",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetFactorizationMachine(ctx, req.(*Void))
+		return srv.(MasterServer).GetFactorizationMachine(ctx, req.(*RequestInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Master_GetCollaborativeFilteringModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
+	in := new(RequestInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -318,61 +178,7 @@ func _Master_GetCollaborativeFilteringModel_Handler(srv interface{}, ctx context
 		FullMethod: "/protocol.Master/GetCollaborativeFilteringModel",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetCollaborativeFilteringModel(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_GetCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetCluster(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetCluster",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetCluster(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_RegisterServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).RegisterServer(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/RegisterServer",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).RegisterServer(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_RegisterWorker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).RegisterWorker(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/RegisterWorker",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).RegisterWorker(ctx, req.(*Void))
+		return srv.(MasterServer).GetCollaborativeFilteringModel(ctx, req.(*RequestInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -382,20 +188,8 @@ var _Master_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*MasterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetConfig",
-			Handler:    _Master_GetConfig_Handler,
-		},
-		{
-			MethodName: "GetUserIndexVersion",
-			Handler:    _Master_GetUserIndexVersion_Handler,
-		},
-		{
-			MethodName: "GetFactorizationMachineVersion",
-			Handler:    _Master_GetFactorizationMachineVersion_Handler,
-		},
-		{
-			MethodName: "GetCollaborativeFilteringModelVersion",
-			Handler:    _Master_GetCollaborativeFilteringModelVersion_Handler,
+			MethodName: "GetMeta",
+			Handler:    _Master_GetMeta_Handler,
 		},
 		{
 			MethodName: "GetUserIndex",
@@ -408,18 +202,6 @@ var _Master_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCollaborativeFilteringModel",
 			Handler:    _Master_GetCollaborativeFilteringModel_Handler,
-		},
-		{
-			MethodName: "GetCluster",
-			Handler:    _Master_GetCluster_Handler,
-		},
-		{
-			MethodName: "RegisterServer",
-			Handler:    _Master_RegisterServer_Handler,
-		},
-		{
-			MethodName: "RegisterWorker",
-			Handler:    _Master_RegisterWorker_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

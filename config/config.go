@@ -237,19 +237,20 @@ func (c *RankConfig) GetParams(metaData *toml.MetaData) model.Params {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port               int    `toml:"port"`
-	Host               string `toml:"host"`
-	Jobs               int    `toml:"n_jobs"`
-	ClusterMetaTimeout int    `toml:"cluster_meta_timeout"`
+	Port         int    `toml:"port"`
+	Host         string `toml:"host"`
+	Jobs         int    `toml:"n_jobs"`
+	MetaTimeout  int    `toml:"cluster_meta_timeout"`
+	RetryTimeout int    `toml:"retry_timeout"`
 }
 
 func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 	if config == nil {
 		return &MasterConfig{
-			Port:               8086,
-			Host:               "127.0.0.1",
-			Jobs:               2,
-			ClusterMetaTimeout: 60,
+			Port:        8086,
+			Host:        "127.0.0.1",
+			Jobs:        2,
+			MetaTimeout: 60,
 		}
 	}
 	return config
@@ -374,7 +375,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 		config.Master.Jobs = defaultMasterConfig.Jobs
 	}
 	if !meta.IsDefined("master", "cluster_meta_timeout") {
-		config.Master.ClusterMetaTimeout = defaultMasterConfig.ClusterMetaTimeout
+		config.Master.MetaTimeout = defaultMasterConfig.MetaTimeout
 	}
 }
 

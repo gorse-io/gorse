@@ -17,9 +17,11 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/master"
+	"go.uber.org/zap"
 )
 
 var masterCommand = &cobra.Command{
@@ -33,7 +35,7 @@ var masterCommand = &cobra.Command{
 		}
 		// Start master
 		configPath, _ := cmd.PersistentFlags().GetString("config")
-		log.Infof("master: load config from %v", configPath)
+		base.Logger().Info("load config", zap.String("config", configPath))
 		conf, meta, err := config.LoadConfig(configPath)
 		if err != nil {
 			log.Fatal(err)

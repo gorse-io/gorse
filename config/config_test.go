@@ -84,7 +84,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "127.0.0.1", config.Master.Host)
 	assert.Equal(t, 4, config.Master.Jobs)
-	assert.Equal(t, 30, config.Master.ClusterMetaTimeout)
+	assert.Equal(t, 30, config.Master.MetaTimeout)
 
 	// server configuration
 	assert.Equal(t, "p@ssword", config.Server.APIKey)

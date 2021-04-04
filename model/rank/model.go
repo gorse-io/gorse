@@ -22,6 +22,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -213,11 +214,17 @@ func (fm *FM) InternalPredict(x []int) float32 {
 
 func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	log.Infof("fit FM(%v): train set size (positive) = %v, test set size = %v", fm.Task, trainSet.PositiveCount, testSet.Count())
-	log.Infof("hyper-parameters: "+
-		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
-		fm.nFactors, fm.nEpochs, fm.lr, fm.reg, fm.initMean, fm.initStdDev)
-	log.Infof("option: n_jobs = %v", config.Jobs)
+	base.Logger().Info("fit FM",
+		zap.Int("train_size", trainSet.PositiveCount),
+		zap.Int("test_size", testSet.Count()),
+		zap.String("task", string(fm.Task)),
+		zap.Int("n_jobs", config.Jobs),
+		zap.Int("n_factors", fm.nFactors),
+		zap.Int("n_epochs", fm.nEpochs),
+		zap.Float32("lr", fm.lr),
+		zap.Float32("reg", fm.reg),
+		zap.Float32("init_mean", fm.initMean),
+		zap.Float32("init_stddev", fm.initStdDev))
 	fm.Init(trainSet)
 	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)

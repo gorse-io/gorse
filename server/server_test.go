@@ -52,11 +52,11 @@ func newMockServer(t *testing.T) *mockServer {
 	assert.Nil(t, err)
 	// create server
 	server := &Server{
-		DataStore:  s.dataStoreClient,
-		CacheStore: s.cacheStoreClient,
-		Config:     (*config.Config)(nil).LoadDefaultIfNil(),
+		dataStore:  s.dataStoreClient,
+		cacheStore: s.cacheStoreClient,
+		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
 	}
-	server.Config.Server.APIKey = apiKey
+	server.cfg.Server.APIKey = apiKey
 	ws := server.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
