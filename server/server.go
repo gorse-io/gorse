@@ -19,8 +19,6 @@ import (
 	"fmt"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -35,11 +33,6 @@ import (
 	"sync"
 	"time"
 )
-
-var getUserFeedbackLatency = promauto.NewHistogram(prometheus.HistogramOpts{
-	Name: "get_user_feedback_latency",
-	Help: "The latency of getting user feedback",
-})
 
 type Server struct {
 	cacheAddress string
@@ -651,13 +644,11 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 		}
 	}()
 	// load feedback
-	startLoadFeedback := time.Now()
 	userFeedback, err := s.dataStore.GetUserFeedback(userId, nil)
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
-	getUserFeedbackLatency.Observe(time.Since(startLoadFeedback).Seconds())
 	excludeSet := base.NewStringSet()
 	for _, feedback := range userFeedback {
 		excludeSet.Add(feedback.ItemId)
