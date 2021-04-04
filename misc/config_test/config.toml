@@ -69,7 +69,7 @@ init_std = 0.001        # standard deviation of gaussian initial parameter
 port = 8086                 # master port
 host = "127.0.0.1"          # master host
 n_jobs = 4                  # working jobs
-cluster_meta_timeout = 30   # cluster meta timeout (second)
+meta_timeout = 30           # cluster meta timeout (second)
 
 [server]
 default_n = 128             # default number of returned items

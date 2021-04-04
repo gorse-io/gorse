@@ -15,10 +15,11 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/server"
+	"go.uber.org/zap"
 )
 
 var serverCommand = &cobra.Command{
@@ -51,6 +52,6 @@ func init() {
 
 func main() {
 	if err := serverCommand.Execute(); err != nil {
-		log.Fatal("server: ", err)
+		base.Logger().Fatal("failed to execute", zap.Error(err))
 	}
 }

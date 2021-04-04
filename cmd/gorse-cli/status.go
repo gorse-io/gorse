@@ -35,14 +35,13 @@ var clusterCommand = &cobra.Command{
 	Use:   "cluster",
 	Short: "cluster information",
 	Run: func(cmd *cobra.Command, args []string) {
-		cluster, err := masterClient.GetCluster(context.Background(), &protocol.Void{})
+		cluster, err := masterClient.GetMeta(context.Background(), &protocol.RequestInfo{})
 		if err != nil {
 			log.Fatalf("cli: failed to get cluster information (%v)", err)
 		}
 		// show cluster
 		table := tablewriter.NewWriter(os.Stdout)
 		table.SetHeader([]string{"role", "address"})
-		table.Append([]string{"master", cluster.Master})
 		for _, addr := range cluster.Servers {
 			table.Append([]string{"server", addr})
 		}

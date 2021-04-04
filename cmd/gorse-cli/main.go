@@ -48,11 +48,11 @@ func init() {
 	masterClient = protocol.NewMasterClient(conn)
 
 	// load master config
-	masterCfgJson, err := masterClient.GetConfig(context.Background(), &protocol.Void{})
+	masterCfgJson, err := masterClient.GetMeta(context.Background(), &protocol.RequestInfo{})
 	if err != nil {
 		logrus.Fatalf("cli: failed to load master config (%v)", err)
 	}
-	err = json.Unmarshal([]byte(masterCfgJson.Json), &globalConfig)
+	err = json.Unmarshal([]byte(masterCfgJson.Config), &globalConfig)
 	if err != nil {
 		logrus.Fatalf("cli: failed to parse master config (%v)", err)
 	}
