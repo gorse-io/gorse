@@ -10,6 +10,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
+	"go.uber.org/zap"
 	"gonum.org/v1/gonum/mat"
 	"time"
 )
@@ -192,10 +193,10 @@ func (bpr *BPR) Predict(userId, itemId string) float32 {
 	userIndex := bpr.UserIndex.ToNumber(userId)
 	itemIndex := bpr.ItemIndex.ToNumber(itemId)
 	if userIndex == base.NotId {
-		log.Warn("unknown user:", userId)
+		base.Logger().Warn("unknown user", zap.String("user_id", userId))
 	}
 	if itemIndex == base.NotId {
-		log.Warn("unknown item:", itemId)
+		base.Logger().Warn("unknown item", zap.String("item_id", itemId))
 	}
 	return bpr.InternalPredict(userIndex, itemIndex)
 }
@@ -214,9 +215,15 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the BPR model.
 func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	log.Infof("fit BPR with hyper-parameters: "+
-		"n_factors = %v, n_epochs = %v, lr = %v, reg = %v, init_mean = %v, init_stddev = %v",
-		bpr.nFactors, bpr.nEpochs, bpr.lr, bpr.reg, bpr.initMean, bpr.initStdDev)
+	base.Logger().Info("fit BPR",
+		zap.Int("n_jobs", config.Jobs),
+		zap.Int("n_candidates", config.Candidates),
+		zap.Int("n_factors", bpr.nFactors),
+		zap.Int("n_epochs", bpr.nEpochs),
+		zap.Float32("lr", bpr.lr),
+		zap.Float32("reg", bpr.reg),
+		zap.Float32("init_mean", bpr.initMean),
+		zap.Float32("init_stddev", bpr.initStdDev))
 	bpr.Init(trainSet)
 	// Create buffers
 	temp := base.NewMatrix32(config.Jobs, bpr.nFactors)
@@ -391,11 +398,11 @@ func (als *ALS) Predict(userId, itemId string) float32 {
 	userIndex := als.UserIndex.ToNumber(userId)
 	itemIndex := als.ItemIndex.ToNumber(itemId)
 	if userIndex == base.NotId {
-		log.Info("unknown user:", userId)
+		base.Logger().Info("unknown user", zap.String("user_id", userId))
 		return 0
 	}
 	if itemIndex == base.NotId {
-		log.Info("unknown item:", itemId)
+		base.Logger().Info("unknown item", zap.String("item_id", itemId))
 		return 0
 	}
 	return als.InternalPredict(userIndex, itemIndex)
@@ -409,10 +416,14 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the ALS model.
 func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	log.Infof("fit ALS with hyper-parameters: "+
-		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
-		als.nFactors, als.nEpochs, als.reg, als.initMean, als.initStdDev)
-	log.Infof("        with options: n_jobs = %v, candidates = %v", config.Jobs, config.Candidates)
+	base.Logger().Info("fit ALS",
+		zap.Int("n_jobs", config.Jobs),
+		zap.Int("n_candidates", config.Candidates),
+		zap.Int("n_factors", als.nFactors),
+		zap.Int("n_epochs", als.nEpochs),
+		zap.Float64("reg", als.reg),
+		zap.Float64("init_mean", als.initMean),
+		zap.Float64("init_stddev", als.initStdDev))
 	als.Init(trainSet)
 	// Create temporary matrix
 	temp1 := make([]*mat.Dense, config.Jobs)
@@ -579,11 +590,11 @@ func (ccd *CCD) Predict(userId, itemId string) float32 {
 	userIndex := ccd.UserIndex.ToNumber(userId)
 	itemIndex := ccd.ItemIndex.ToNumber(itemId)
 	if userIndex == base.NotId {
-		log.Info("unknown user:", userId)
+		base.Logger().Info("unknown user:", zap.String("user_id", userId))
 		return 0
 	}
 	if itemIndex == base.NotId {
-		log.Info("unknown item:", itemId)
+		base.Logger().Info("unknown item:", zap.String("item_id", itemId))
 		return 0
 	}
 	return ccd.InternalPredict(userIndex, itemIndex)
@@ -631,9 +642,14 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 
 func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	log.Infof("fit CCD with hyper-parameters: "+
-		"n_factors = %v, n_epochs = %v, reg = %v, init_mean = %v, init_stddev = %v",
-		ccd.nFactors, ccd.nEpochs, ccd.reg, ccd.initMean, ccd.initStdDev)
+	base.Logger().Info("fit CCD",
+		zap.Int("n_jobs", config.Jobs),
+		zap.Int("n_candidates", config.Candidates),
+		zap.Int("n_factors", ccd.nFactors),
+		zap.Int("n_epochs", ccd.nEpochs),
+		zap.Float32("reg", ccd.reg),
+		zap.Float32("init_mean", ccd.initMean),
+		zap.Float32("init_stddev", ccd.initStdDev))
 	ccd.Init(trainSet)
 	// Create temporary matrix
 	s := base.NewMatrix32(ccd.nFactors, ccd.nFactors)

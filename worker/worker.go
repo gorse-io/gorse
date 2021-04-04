@@ -23,7 +23,6 @@ import (
 	"go.uber.org/zap"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/cf"
@@ -34,89 +33,154 @@ import (
 )
 
 type Worker struct {
-	cfg        *config.Config
-	cacheStore cache.Database
-	dataStore  data.Database
+	cfg  *config.Config
+	Jobs int
 
-	// master
-	MasterHost   string
-	MasterPort   int
+	// database connection
+	cacheAddress string
+	cacheStore   cache.Database
+	dataAddress  string
+	dataStore    data.Database
+
+	// master connection
+	masterHost   string
+	masterPort   int
 	MasterClient protocol.MasterClient
 
 	// user index
-	userVersion int64
-	userIndex   *base.MapIndex
+	latestUserVersion int64
+	userVersion       int64
+	userIndex         *base.MapIndex
 
 	// collaborative filtering model
-	Jobs      int
-	cfVersion int64
-	cfModel   cf.MatrixFactorization
+	latestCFVersion int64
+	cfVersion       int64
+	cfModel         cf.MatrixFactorization
 
-	// channels
+	// peers
+	peers []string
+	me    string
+
+	// events
 	ticker     *time.Ticker
-	syncedChan chan bool
+	syncedChan chan bool // meta synced events
+	pullChan   chan bool // model pulled events
 }
 
 func NewWorker(masterHost string, masterPort int, jobs int) *Worker {
 	return &Worker{
-		MasterPort: masterPort,
-		MasterHost: masterHost,
+		// database
+		dataStore:  data.NoDatabase{},
+		cacheStore: cache.NoDatabase{},
+		// config
+		masterPort: masterPort,
+		masterHost: masterHost,
 		Jobs:       jobs,
+		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
+		// events
 		ticker:     time.NewTicker(time.Minute),
 		syncedChan: make(chan bool, 1024),
+		pullChan:   make(chan bool, 1024),
 	}
 }
 
-// Register this worker to the master.
-func (w *Worker) Register() {
-	defer base.CheckPanic()
-	for {
-		if _, err := w.MasterClient.RegisterWorker(context.Background(), &protocol.Void{}); err != nil {
-			base.Logger().Error("failed to register", zap.Error(err))
-		}
-		time.Sleep(time.Duration(w.cfg.Master.ClusterMetaTimeout/2) * time.Second)
-	}
-}
-
-// Sync user index and collaborative filtering model from master.
+// Sync this worker to the master.
 func (w *Worker) Sync() {
 	defer base.CheckPanic()
+	base.Logger().Info("start meta sync", zap.Int("meta_timeout", w.cfg.Master.MetaTimeout))
 	for {
-		synced := false
+		var meta *protocol.Meta
+		var err error
+		if meta, err = w.MasterClient.GetMeta(context.Background(), &protocol.RequestInfo{NodeType: protocol.NodeType_WorkerNode}); err != nil {
+			base.Logger().Error("failed to get meta", zap.Error(err))
+			goto sleep
+		}
+
+		// load master config
+		err = json.Unmarshal([]byte(meta.Config), &w.cfg)
+		if err != nil {
+			base.Logger().Error("failed to parse master config", zap.Error(err))
+			goto sleep
+		}
+
+		// connect to data store
+		if w.dataAddress != w.cfg.Database.DataStore {
+			base.Logger().Info("connect data store", zap.String("database", w.cfg.Database.DataStore))
+			if w.dataStore, err = data.Open(w.cfg.Database.DataStore); err != nil {
+				base.Logger().Error("failed to connect data store", zap.Error(err))
+				goto sleep
+			}
+			w.dataAddress = w.cfg.Database.DataStore
+		}
+
+		// connect to cache store
+		if w.cacheAddress != w.cfg.Database.CacheStore {
+			base.Logger().Info("connect cache store", zap.String("database", w.cfg.Database.CacheStore))
+			if w.cacheStore, err = cache.Open(w.cfg.Database.CacheStore); err != nil {
+				base.Logger().Error("failed to connect cache store", zap.Error(err))
+				goto sleep
+			}
+			w.cacheAddress = w.cfg.Database.CacheStore
+		}
+
+		// check CF version
+		w.latestCFVersion = meta.CfVersion
+		if w.latestCFVersion != w.cfVersion {
+			base.Logger().Info("new collaborative filtering model found",
+				zap.Int64("old_version", w.cfVersion),
+				zap.Int64("new_version", w.latestCFVersion))
+			w.syncedChan <- true
+		}
+
+		// check user index version
+		w.latestUserVersion = meta.UserIndexVersion
+		if w.latestUserVersion != w.userVersion {
+			base.Logger().Info("new user index found",
+				zap.Int64("old_version", w.userVersion),
+				zap.Int64("new_version", w.latestUserVersion))
+			w.syncedChan <- true
+		}
+
+		w.peers = meta.Workers
+		w.me = meta.Me
+	sleep:
+		time.Sleep(time.Duration(w.cfg.Master.MetaTimeout) * time.Second)
+	}
+}
+
+// Pull user index and collaborative filtering model from master.
+func (w *Worker) Pull() {
+	defer base.CheckPanic()
+	for range w.syncedChan {
+		pulled := false
 
 		// pull user index
-		base.Logger().Debug("check user index version")
-		if userIndexVersionResponse, err := w.MasterClient.GetUserIndexVersion(context.Background(), &protocol.Void{}); err != nil {
-			base.Logger().Error("failed to check user index version", zap.Error(err))
-		} else if userIndexVersionResponse.Version == 0 {
-			base.Logger().Debug("user index doesn't exist")
-		} else if userIndexVersionResponse.Version != w.userVersion {
-			if userIndexResponse, err := w.MasterClient.GetUserIndex(context.Background(), &protocol.Void{}); err != nil {
+		if w.latestUserVersion != w.userVersion {
+			base.Logger().Info("start pull user index")
+			if userIndexResponse, err := w.MasterClient.GetUserIndex(context.Background(),
+				&protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
 				base.Logger().Error("failed to pull user index", zap.Error(err))
 			} else {
 				// encode user index
 				var userIndex base.MapIndex
-				reader := bytes.NewReader(userIndexResponse.Users)
+				reader := bytes.NewReader(userIndexResponse.UserIndex)
 				decoder := gob.NewDecoder(reader)
 				if err = decoder.Decode(&userIndex); err != nil {
 					base.Logger().Error("failed to decode user index", zap.Error(err))
 				} else {
 					w.userIndex = &userIndex
 					w.userVersion = userIndexResponse.Version
-					base.Logger().Info("sync user index", zap.Int64("version", w.userVersion))
-					synced = true
+					base.Logger().Info("synced user index", zap.Int64("version", w.userVersion))
+					pulled = true
 				}
 			}
 		}
 
 		// pull collaborative filtering model
-		base.Logger().Debug("check collaborative filtering model version")
-		if mfVersionResponse, err := w.MasterClient.GetCollaborativeFilteringModelVersion(context.Background(), &protocol.Void{}); err != nil {
-			base.Logger().Error("failed to check collaborative filtering model version", zap.Error(err))
-		} else if mfVersionResponse.Version == 0 {
-			base.Logger().Debug("remote collaborative filtering model doesn't exist")
-		} else if mfVersionResponse.Version != w.cfVersion {
-			if mfResponse, err := w.MasterClient.GetCollaborativeFilteringModel(context.Background(), &protocol.Void{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
+		if w.latestCFVersion != w.cfVersion {
+			base.Logger().Info("start pull collaborative filtering")
+			if mfResponse, err := w.MasterClient.GetCollaborativeFilteringModel(context.Background(),
+				&protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
 				base.Logger().Error("failed to pull collaborative filtering model", zap.Error(err))
 			} else {
 				w.cfModel, err = cf.DecodeModel(mfResponse.Name, mfResponse.Model)
@@ -124,64 +188,43 @@ func (w *Worker) Sync() {
 					base.Logger().Error("failed to decode collaborative filtering model", zap.Error(err))
 				} else {
 					w.cfVersion = mfResponse.Version
-					base.Logger().Info("sync collaborative filtering model", zap.Int64("version", w.cfVersion))
-					synced = true
+					base.Logger().Info("synced collaborative filtering model", zap.Int64("version", w.cfVersion))
+					pulled = true
 				}
 			}
 		}
 
-		if synced {
+		if pulled {
 			w.syncedChan <- true
 		}
-		time.Sleep(time.Minute)
 	}
 }
 
 func (w *Worker) Serve() {
 
 	// connect to master
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.MasterHost, w.MasterPort), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithInsecure())
 	if err != nil {
 		base.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
 	w.MasterClient = protocol.NewMasterClient(conn)
 
-	// load master config
-	masterCfgJson, err := w.MasterClient.GetConfig(context.Background(), &protocol.Void{})
-	if err != nil {
-		base.Logger().Fatal("failed to load config from master", zap.Error(err))
-	}
-	err = json.Unmarshal([]byte(masterCfgJson.Json), &w.cfg)
-	if err != nil {
-		log.Fatalf("worker: failed to parse master config (%v)", err)
-	}
-
-	// connect to data store
-	if w.dataStore, err = data.Open(w.cfg.Database.DataStore); err != nil {
-		log.Fatalf("worker: failed to connect data store (%v)", err)
-	}
-
-	// connect to cache store
-	if w.cacheStore, err = cache.Open(w.cfg.Database.CacheStore); err != nil {
-		log.Fatalf("worker: failed to connect cache store (%v)", err)
-	}
-
-	// register to master
-	go w.Register()
-	// sync model
+	// sync
 	go w.Sync()
+	go w.Pull()
 
 	loop := func() {
 		if w.userIndex == nil {
 			base.Logger().Debug("user index doesn't exist")
 		} else {
 			// split users
-			cluster, err := w.MasterClient.GetCluster(context.Background(), &protocol.Void{})
+			workingUsers, err := split(w.cfModel.GetUserIndex(), w.peers, w.me)
 			if err != nil {
-				base.Logger().Error("failed to get cluster info", zap.Error(err))
+				base.Logger().Error("failed to split users", zap.Error(err),
+					zap.String("me", w.me),
+					zap.Strings("workers", w.peers))
 				return
 			}
-			workingUsers := split(w.cfModel.GetUserIndex(), cluster.Workers, cluster.Me)
 
 			// offline recommendation
 			if !w.isStale(cache.CollaborativeRecommendTime, w.cfg.Collaborative.PredictPeriod) {
@@ -217,7 +260,7 @@ func (w *Worker) CollaborativeFilteringRecommend(m cf.MatrixFactorization, users
 	go func() {
 		defer base.CheckPanic()
 		completedCount := 0
-		ticker := time.NewTicker(time.Second * 5)
+		ticker := time.NewTicker(time.Second)
 		for {
 			select {
 			case _, ok := <-completed:
@@ -338,7 +381,7 @@ func (w *Worker) isStale(dateTimeField string, minuteLimit int) bool {
 	return time.Since(updateTime).Minutes() > float64(minuteLimit)
 }
 
-func split(userIndex base.Index, nodes []string, me string) []string {
+func split(userIndex base.Index, nodes []string, me string) ([]string, error) {
 	// locate me
 	pos := -1
 	for i, node := range nodes {
@@ -347,7 +390,7 @@ func split(userIndex base.Index, nodes []string, me string) []string {
 		}
 	}
 	if pos == -1 {
-		log.Fatalf("worker: who am I?")
+		return nil, fmt.Errorf("current node isn't in worker nodes")
 	}
 	// split users
 	users := userIndex.GetNames()
@@ -358,5 +401,5 @@ func split(userIndex base.Index, nodes []string, me string) []string {
 	base.Logger().Info("allocate working users",
 		zap.Int("n_working_users", len(workingUsers)),
 		zap.Int("n_users", len(users)))
-	return workingUsers
+	return workingUsers, nil
 }

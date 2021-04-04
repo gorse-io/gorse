@@ -17,51 +17,44 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 
 package protocol;
 
+enum NodeType {
+  ServerNode = 0;
+  WorkerNode = 1;
+}
+
 service Master {
 
-  /* config distribute */
-  rpc GetConfig(Void) returns (Config) {}
+  /* meta distribute */
+  rpc GetMeta(RequestInfo) returns (Meta) {}
 
-  /* model distribute */
-  rpc GetUserIndexVersion(Void) returns(Users) {}
-  rpc GetFactorizationMachineVersion(Void) returns (Model) {}
-  rpc GetCollaborativeFilteringModelVersion(Void) returns (Model) {}
-  rpc GetUserIndex(Void) returns(Users) {}
-  rpc GetFactorizationMachine(Void) returns (Model) {}
-  rpc GetCollaborativeFilteringModel(Void) returns (Model) {}
-
-  /* cluster management */
-  rpc GetCluster(Void) returns (Cluster) {}
-  rpc RegisterServer(Void) returns (Void) {}
-  rpc RegisterWorker(Void) returns (Void) {}
+  /* data distribute */
+  rpc GetUserIndex(RequestInfo) returns(UserIndex) {}
+  rpc GetFactorizationMachine(RequestInfo) returns (Model) {}
+  rpc GetCollaborativeFilteringModel(RequestInfo) returns (Model) {}
 
 }
 
-message Config {
-  string json = 1;
+message Meta {
+  string config = 1;
+  int64 user_index_version = 2;
+  int64 cf_version = 3;
+  int64 fm_version = 4;
+  string me = 5;
+  repeated string servers = 6;
+  repeated string workers = 7;
 }
 
-message Users {
-  int64 version = 1;
-  bytes users = 2;
+message UserIndex {
+  int64 version = 1;    // user index version
+  bytes user_index = 2; // user index data
 }
 
 message Model {
-  int64 version = 1;
-  string name = 2;
-  bytes model = 3;
+  int64 version = 1;  // model version
+  string name = 2;    // model name
+  bytes model = 3;    // model data
 }
 
-message Void {}
-
-message Node {
-  string host = 1;
-  int64 port = 2;
-}
-
-message Cluster {
-  string me = 1;
-  string master = 2;
-  repeated string servers = 3;
-  repeated string workers = 4;
+message RequestInfo {
+  NodeType node_type = 1;
 }
