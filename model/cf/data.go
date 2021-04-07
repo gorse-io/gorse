@@ -19,7 +19,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"log"
+	"go.uber.org/zap"
 	"os"
 	"strings"
 )
@@ -237,7 +237,8 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 	// Open file
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Fatal(err)
+		base.Logger().Fatal("failed to open csv file", zap.Error(err),
+			zap.String("csv_file", fileName))
 	}
 	defer file.Close()
 	// Read CSV file
@@ -295,10 +296,27 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		}
 	}
 	// pull database
-	for _, feedbackType := range feedbackTypes {
+	if len(feedbackTypes) > 0 {
+		for _, feedbackType := range feedbackTypes {
+			for {
+				var feedback []data.Feedback
+				cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				for _, v := range feedback {
+					dataset.AddFeedback(v.UserId, v.ItemId, false)
+					allFeedback = append(allFeedback, v)
+				}
+				if cursor == "" {
+					break
+				}
+			}
+		}
+	} else {
 		for {
 			var feedback []data.Feedback
-			cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
+			cursor, feedback, err = database.GetFeedback(cursor, batchSize, nil)
 			if err != nil {
 				return nil, nil, nil, err
 			}
