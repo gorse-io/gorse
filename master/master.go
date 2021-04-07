@@ -163,15 +163,24 @@ func (m *Master) GetMeta(ctx context.Context, requestInfo *protocol.RequestInfo)
 	}
 	// save user index version
 	m.userIndexMutex.Lock()
-	userIndexVersion := m.userIndexVersion
+	var userIndexVersion int64
+	if m.userIndex != nil {
+		userIndexVersion = m.userIndexVersion
+	}
 	m.userIndexMutex.Unlock()
 	// save cf version
 	m.cfMutex.Lock()
-	cfVersion := m.cfVersion
+	var cfVersion int64
+	if m.cfModel != nil {
+		cfVersion = m.cfVersion
+	}
 	m.cfMutex.Unlock()
 	// save fm version
 	m.fmMutex.Lock()
-	fmVersion := m.fmVersion
+	var fmVersion int64
+	if m.fmModel != nil {
+		fmVersion = m.fmVersion
+	}
 	m.fmMutex.Unlock()
 	// collect nodes
 	workers := make([]string, 0)
@@ -193,6 +202,7 @@ func (m *Master) GetMeta(ctx context.Context, requestInfo *protocol.RequestInfo)
 		CfVersion:        cfVersion,
 		Me:               addr,
 		Workers:          workers,
+		Servers:          servers,
 	}, nil
 }
 
