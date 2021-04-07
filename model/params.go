@@ -15,7 +15,8 @@ package model
 
 import (
 	"encoding/json"
-	log "github.com/sirupsen/logrus"
+	"github.com/zhenghaoz/gorse/base"
+	"go.uber.org/zap"
 	"reflect"
 )
 
@@ -63,7 +64,9 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 		case int:
 			return val
 		default:
-			log.Errorf("Params.GetInt: expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			base.Logger().Error("type mismatch",
+				zap.String("param_name", string(name)),
+				zap.String("actual_type", reflect.TypeOf(name).Name()))
 		}
 	}
 	return _default
@@ -79,7 +82,9 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 		case int:
 			return int64(val)
 		default:
-			log.Printf("Params.GetInt64: expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			base.Logger().Error("type mismatch",
+				zap.String("param_name", string(name)),
+				zap.String("actual_type", reflect.TypeOf(name).Name()))
 		}
 	}
 	return _default
@@ -95,7 +100,9 @@ func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 		case int:
 			return float32(val)
 		default:
-			log.Errorf("Params.GetFloat32 expect %v to be int, but get %v", name, reflect.TypeOf(name))
+			base.Logger().Error("type mismatch",
+				zap.String("param_name", string(name)),
+				zap.String("actual_type", reflect.TypeOf(name).Name()))
 		}
 	}
 	return _default
@@ -115,7 +122,7 @@ func (parameters Params) Overwrite(params Params) Params {
 func (parameters Params) ToString() string {
 	b, err := json.Marshal(parameters)
 	if err != nil {
-		log.Fatal("Params.ToString: ", err)
+		base.Logger().Fatal("failed to convert to string", zap.Error(err))
 	}
 	return string(b)
 }
