@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/chewxy/math32"
-	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
@@ -295,8 +294,12 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			log.Infof("epoch %v/%v [fit=%v, eval=%v]: loss=%v, NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
-				epoch, bpr.nEpochs, fitTime, evalTime, cost, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+			base.Logger().Info(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
+				zap.String("fit_time", fitTime.String()),
+				zap.String("eval_time", evalTime.String()),
+				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
+				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
+				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 		}
 	}
 	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
@@ -465,7 +468,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			return err
 		})
 		if err != nil {
-			log.Error("als: ", err)
+			base.Logger().Error("failed to inverse matrix", zap.Error(err))
 		}
 		// Recompute all item factors: y_i = (X^T C^i X + \lambda reg)^{-1} X^T C^i p(i)
 		// X^T X
@@ -483,13 +486,13 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 				b.AddVec(b, temp2[workerId])
 			}
 			a[workerId].Add(a[workerId], regI)
-			err := temp1[workerId].Inverse(a[workerId])
+			err = temp1[workerId].Inverse(a[workerId])
 			temp2[workerId].MulVec(temp1[workerId], b)
 			als.ItemFactor.SetRow(itemIndex, temp2[workerId].RawVector().Data)
 			return err
 		})
 		if err != nil {
-			log.Error("als: ", err)
+			base.Logger().Error("failed to inverse matrix", zap.Error(err))
 		}
 		fitTime := time.Since(fitStart)
 		// Cross validation
@@ -497,8 +500,12 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			log.Infof("epoch %v/%v [fit=%v, eval=%v]: NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
-				ep, als.nEpochs, fitTime, evalTime, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+			base.Logger().Info(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
+				zap.String("fit_time", fitTime.String()),
+				zap.String("eval_time", evalTime.String()),
+				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
+				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
+				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 		}
 	}
 	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
@@ -749,8 +756,12 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			log.Infof("epoch %v/%v [fit=%v, eval=%v]: NDCG@%v=%v, Precision@%v=%v, Recall@%v=%v",
-				ep, ccd.nEpochs, fitTime, evalTime, config.TopK, scores[0], config.TopK, scores[1], config.TopK, scores[2])
+			base.Logger().Info(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
+				zap.String("fit_time", fitTime.String()),
+				zap.String("eval_time", evalTime.String()),
+				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
+				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
+				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 		}
 	}
 	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)

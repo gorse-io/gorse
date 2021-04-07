@@ -14,14 +14,10 @@
 package cf
 
 import (
-	"crypto/md5"
 	"fmt"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"io"
-	"log"
-	"os"
 	"strconv"
 	"testing"
 )
@@ -40,21 +36,6 @@ func TestNewMapIndexDataset(t *testing.T) {
 	dataSet.AddItem("10")
 	assert.Equal(t, 5, dataSet.UserCount())
 	assert.Equal(t, 6, dataSet.ItemCount())
-}
-
-func md5Sum(fileName string) string {
-	// Open file
-	f, err := os.Open(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-	// Generate check sum
-	h := md5.New()
-	if _, err := io.Copy(h, f); err != nil {
-		log.Fatal(err)
-	}
-	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func TestLoadDataFromCSV(t *testing.T) {
