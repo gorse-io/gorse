@@ -17,8 +17,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"github.com/chewxy/math32"
-	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
@@ -230,6 +230,10 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		trainSet.NegativeSample(1, nil, fm.GetRandomGenerator().Int63())
+		for _, target := range trainSet.FeedbackTarget {
+			fm.MinTarget = math32.Min(fm.MinTarget, target)
+			fm.MaxTarget = math32.Max(fm.MaxTarget, target)
+		}
 		fitStart := time.Now()
 		cost := float32(0)
 		_ = base.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
@@ -239,14 +243,14 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 				var grad float32
 				switch fm.Task {
 				case FMRegression:
-					fm.MinTarget = math32.Min(fm.MinTarget, target)
-					fm.MaxTarget = math32.Max(fm.MaxTarget, target)
 					grad = prediction - target
 					cost += grad * grad / 2
 				case FMClassification:
 					grad = -target * (1 - 1/(1+math32.Exp(-target*prediction)))
+					cost += (1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2
+					cost += (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
 				default:
-					log.Fatal("FM.Fit: unknown task ", fm.Task)
+					base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 				}
 				// \sum^n_{j=1}v_j,fx_j
 				floats.Zero(temp[workerId])
@@ -278,11 +282,19 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 			case FMClassification:
 				score = EvaluateClassification(fm, testSet)
 			default:
-				log.Fatal("FM.Fit: unknown task ", fm.Task)
+				base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 			}
 			evalTime := time.Since(evalStart)
-			log.Infof("epoch %v/%v [fit=%v, eval=%v]: loss=%v, %v=%v",
-				epoch, fm.nEpochs, fitTime, evalTime, cost, score.GetName(), score.GetValue())
+			base.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs),
+				zap.String("fit_time", fitTime.String()),
+				zap.String("eval_time", evalTime.String()),
+				zap.Float32("loss", cost),
+				zap.Float32(score.GetName(), score.GetValue()))
+			// check NaN
+			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
+				base.Logger().Error("model diverged", zap.Float32("lr", fm.lr))
+				break
+			}
 		}
 	}
 	switch fm.Task {
@@ -291,12 +303,13 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 	case FMClassification:
 		return EvaluateClassification(fm, testSet)
 	default:
-		log.Fatal("FM.Fit: unknown task ", fm.Task)
+		base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 		return Score{}
 	}
 }
 
 func (fm *FM) Clear() {
+	fm.B = 0.0
 	fm.V = nil
 	fm.W = nil
 	fm.Index = nil
