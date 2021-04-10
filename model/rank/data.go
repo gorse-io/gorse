@@ -15,11 +15,11 @@ package rank
 
 import (
 	"bufio"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -85,7 +85,7 @@ func LoadLibFMFile(path string) (labels [][]int, targets []float32, maxLabel int
 			kv := strings.Split(field, ":")
 			k, v := kv[0], kv[1]
 			if v != "1" {
-				log.Error("load: support binary features only")
+				base.Logger().Error("support binary features only", zap.String("field", field))
 			}
 			label, err := strconv.Atoi(k)
 			if err != nil {
@@ -189,22 +189,50 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	// insert feedback
 	dataSet.UserFeedbackItems = base.NewMatrixInt(dataSet.UnifiedIndex.CountUsers(), 0)
 	dataSet.UserFeedbackTarget = base.NewMatrix32(dataSet.UnifiedIndex.CountUsers(), 0)
-	for _, feedbackType := range feedbackTypes {
+	if len(feedbackTypes) > 0 {
+		for _, feedbackType := range feedbackTypes {
+			for {
+				var batchFeedback []data.Feedback
+				cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
+				if err != nil {
+					return nil, err
+				}
+				for _, v := range batchFeedback {
+					userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
+					if userId == base.NotId {
+						base.Logger().Warn("user not found", zap.String("user_id", v.UserId))
+						continue
+					}
+					itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
+					if itemId == base.NotId {
+						base.Logger().Warn("item not found", zap.String("item_id", v.ItemId))
+						continue
+					}
+					dataSet.PositiveCount++
+					dataSet.UserFeedbackItems[userId] = append(dataSet.UserFeedbackItems[userId], itemId)
+					dataSet.UserFeedbackTarget[userId] = append(dataSet.UserFeedbackTarget[userId], 1)
+				}
+				if cursor == "" {
+					break
+				}
+			}
+		}
+	} else {
 		for {
 			var batchFeedback []data.Feedback
-			cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
+			cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, nil)
 			if err != nil {
 				return nil, err
 			}
 			for _, v := range batchFeedback {
 				userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
 				if userId == base.NotId {
-					log.Warnf("user (%v) not found", v.UserId)
+					base.Logger().Warn("user not found", zap.String("user_id", v.UserId))
 					continue
 				}
 				itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
 				if itemId == base.NotId {
-					log.Warnf("item (%v) not found", v.ItemId)
+					base.Logger().Warn("item not found", zap.String("item_id", v.ItemId))
 					continue
 				}
 				dataSet.PositiveCount++

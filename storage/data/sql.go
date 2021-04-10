@@ -20,6 +20,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/zhenghaoz/gorse/base"
 	"go.uber.org/zap"
+	"time"
 )
 
 type SQLDatabase struct {
@@ -151,6 +152,7 @@ func (d *SQLDatabase) GetItems(cursor string, n int) (string, []Item, error) {
 }
 
 func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
+	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	if feedbackType != nil {
@@ -171,6 +173,7 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackType *string) ([]Fe
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
+	GetItemFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 
@@ -261,6 +264,7 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 }
 
 func (d *SQLDatabase) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
+	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	if feedbackType != nil {
@@ -281,6 +285,7 @@ func (d *SQLDatabase) GetUserFeedback(userId string, feedbackType *string) ([]Fe
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
+	GetUserFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 
@@ -372,6 +377,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string) (s
 }
 
 func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	if feedbackType != nil {
@@ -392,6 +398,7 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackType *s
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
+	GetUserItemFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 

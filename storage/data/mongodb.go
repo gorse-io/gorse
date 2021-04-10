@@ -18,6 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"time"
 )
 
 type MongoDB struct {
@@ -134,6 +135,7 @@ func (db *MongoDB) GetItems(cursor string, n int) (string, []Item, error) {
 }
 
 func (db *MongoDB) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
+	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var r *mongo.Cursor
@@ -159,6 +161,7 @@ func (db *MongoDB) GetItemFeedback(itemId string, feedbackType *string) ([]Feedb
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
+	GetItemFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 
@@ -220,6 +223,7 @@ func (db *MongoDB) GetUsers(cursor string, n int) (string, []User, error) {
 }
 
 func (db *MongoDB) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
+	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var r *mongo.Cursor
@@ -245,6 +249,7 @@ func (db *MongoDB) GetUserFeedback(userId string, feedbackType *string) ([]Feedb
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
+	GetUserFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 
@@ -345,6 +350,7 @@ func (db *MongoDB) GetFeedback(cursor string, n int, feedbackType *string) (stri
 }
 
 func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var filter bson.M
@@ -372,6 +378,7 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackType *stri
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
+	GetUserItemFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 

@@ -14,9 +14,10 @@
 package cf
 
 import (
-	log "github.com/sirupsen/logrus"
+	"fmt"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
+	"go.uber.org/zap"
 )
 
 // ParamsSearchResult contains the return of grid search.
@@ -65,7 +66,8 @@ func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *Dat
 	dfs = func(deep int, params model.Params) {
 		if deep == len(paramNames) {
 			progress++
-			log.Infof("grid search %v/%v: %v", progress, count, params)
+			base.Logger().Info(fmt.Sprintf("grid search (%v/%v)", progress, count),
+				zap.Any("params", params))
 			// Cross validate
 			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Overwrite(params))
@@ -108,7 +110,8 @@ func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *D
 			params[paramName] = value
 		}
 		// Cross validate
-		log.Infof("random search (%v/%v): %v", i, numTrials, params)
+		base.Logger().Info(fmt.Sprintf("random search (%v/%v)", i, numTrials),
+			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
 		score := estimator.Fit(trainSet, testSet, fitConfig)

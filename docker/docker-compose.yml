@@ -1,0 +1,42 @@
+version: "3"
+services:
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - 6379:6379
+  mysql:
+    image: mysql
+    restart: always
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: gorse
+      MYSQL_USER: gorse
+      MYSQL_PASSWORD: gorse_pass
+    volumes:
+      - data:/var/lib/mysql
+  worker:
+    image: zhenghaoz/gorse-worker
+    restart: always
+    command: --master-host master --master-port 8086 -j 4
+  server:
+    image: zhenghaoz/gorse-server
+    restart: always
+    ports:
+      - 8087:8087
+    expose:
+      - 8087
+    command: --master-host master --master-port 8086 --host 0.0.0.0 --port 8087
+  master:
+    image: zhenghaoz/gorse-master
+    restart: always
+    ports:
+      - 8086:8086
+    expose:
+      - 8086
+    volumes:
+      - ./config.toml:/etc/config.toml
+volumes:
+  data:
