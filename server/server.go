@@ -121,7 +121,7 @@ func (s *Server) Pull() {
 		// pull factorization machine
 		if s.latestFMVersion != s.fmVersion {
 			base.Logger().Info("pull factorization machine")
-			if mfResponse, err := s.masterClient.GetFactorizationMachine(ctx, &protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
+			if mfResponse, err := s.masterClient.GetFactorizationMachine(ctx, &protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull factorization machine", zap.Error(err))
 			} else {
 				s.fmModel, err = rank.DecodeModel(mfResponse.Model)
