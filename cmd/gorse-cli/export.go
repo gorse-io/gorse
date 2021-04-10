@@ -15,9 +15,10 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
 	"os"
 	"strings"
 )
@@ -67,42 +68,46 @@ var exportFeedbackCommand = &cobra.Command{
 		sep, _ := cmd.PersistentFlags().GetString("sep")
 		header, _ := cmd.PersistentFlags().GetBool("header")
 		batchSize, _ := cmd.PersistentFlags().GetInt("batch-size")
-		feedbackType, _ := cmd.PersistentFlags().GetString("type")
+		var feedbackType *string
+		if cmd.PersistentFlags().Changed("type") {
+			temp, _ := cmd.PersistentFlags().GetString("type")
+			feedbackType = &temp
+		}
 		exportFeedback(csvFile, feedbackType, sep, header, batchSize)
 	},
 }
 
-func exportFeedback(csvFile, feedbackType string, sep string, printHeader bool, batchSize int) {
+func exportFeedback(csvFile string, feedbackType *string, sep string, printHeader bool, batchSize int) {
 	// Open database
 	database, err := data.Open(globalConfig.Database.DataStore)
 	if err != nil {
-		log.Fatalf("cli: failed to connect database (%v)", err)
+		base.Logger().Fatal("failed to connect database", zap.Error(err))
 	}
 	defer database.Close()
 	// Open file
 	file, err := os.Create(csvFile)
 	if err != nil {
-		log.Fatalf("cli: failed to create file (%v)", err)
+		base.Logger().Fatal("failed to create file", zap.Error(err))
 	}
 	defer file.Close()
 	// Export feedbacks
 	if printHeader {
-		if _, err := file.WriteString(fmt.Sprintf("user_id%vitem_id%vtime_stamp\n",
-			sep, sep)); err != nil {
-			log.Fatalf("cli: failed to write file (%v)", err)
+		if _, err = file.WriteString(fmt.Sprintf("feedback_type%vuser_id%vitem_id%vtime_stamp\n",
+			sep, sep, sep)); err != nil {
+			base.Logger().Fatal("failed to write file", zap.Error(err))
 		}
 	}
 	cursor := ""
 	for {
 		var feedback []data.Feedback
-		var err error
-		cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
+		cursor, feedback, err = database.GetFeedback(cursor, batchSize, feedbackType)
 		if err != nil {
-			log.Fatal(err)
+			base.Logger().Fatal("failed to get feedback", zap.Error(err))
 		}
 		for _, v := range feedback {
-			if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v\n", v.UserId, sep, v.ItemId, sep, v.Timestamp)); err != nil {
-				log.Fatal(err)
+			if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v%v%v\n",
+				v.FeedbackType, sep, v.UserId, sep, v.ItemId, sep, v.Timestamp)); err != nil {
+				base.Logger().Fatal("failed to write line", zap.Error(err))
 			}
 		}
 		if cursor == "" {
@@ -115,19 +120,19 @@ func exportItems(csvFile string, sep string, labelSep string, printHeader bool, 
 	// Open database
 	database, err := data.Open(globalConfig.Database.DataStore)
 	if err != nil {
-		log.Fatalf("cli: failed to connect database (%v)", err)
+		base.Logger().Fatal("failed to connect database", zap.Error(err))
 	}
 	defer database.Close()
 	// Open file
 	file, err := os.Create(csvFile)
 	if err != nil {
-		log.Fatalf("cli: failed to create file (%v)", err)
+		base.Logger().Fatal("failed to create file", zap.Error(err))
 	}
 	defer file.Close()
 	// Print header
 	if printHeader {
 		if _, err = file.WriteString(fmt.Sprintf("item_id%vtime_stamp%vlabels", sep, sep)); err != nil {
-			log.Fatalf("cli: failed to write file (%v)", err)
+			base.Logger().Fatal("failed to write file", zap.Error(err))
 		}
 	}
 	// Export items
@@ -136,12 +141,12 @@ func exportItems(csvFile string, sep string, labelSep string, printHeader bool, 
 		var items []data.Item
 		cursor, items, err = database.GetItems(cursor, batchSize)
 		if err != nil {
-			log.Fatal(err)
+			base.Logger().Fatal("failed to get items", zap.Error(err))
 		}
 		for _, item := range items {
 			if _, err = file.WriteString(fmt.Sprintf("%v%v%v%v%v\n",
 				item.ItemId, sep, item.Timestamp, sep, strings.Join(item.Labels, labelSep))); err != nil {
-				log.Fatal(err)
+				base.Logger().Fatal("failed to write line", zap.Error(err))
 			}
 		}
 		if cursor == "" {

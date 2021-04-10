@@ -17,12 +17,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/protocol"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"log"
 )
@@ -37,24 +38,25 @@ func init() {
 	// load cli config
 	cliConfig, _, err := config.LoadConfig(configPath)
 	if err != nil {
-		logrus.Fatalf("cli: failed to load config from %v", configPath)
+		base.Logger().Fatal("failed to load config", zap.Error(err),
+			zap.String("path", configPath))
 	}
 
 	// create connection
 	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", cliConfig.Master.Host, cliConfig.Master.Port), grpc.WithInsecure())
 	if err != nil {
-		logrus.Fatalf("cli: failed to connect master (%v)", err)
+		base.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
 	masterClient = protocol.NewMasterClient(conn)
 
 	// load master config
 	masterCfgJson, err := masterClient.GetMeta(context.Background(), &protocol.RequestInfo{})
 	if err != nil {
-		logrus.Fatalf("cli: failed to load master config (%v)", err)
+		base.Logger().Fatal("failed to load master config", zap.Error(err))
 	}
 	err = json.Unmarshal([]byte(masterCfgJson.Config), &globalConfig)
 	if err != nil {
-		logrus.Fatalf("cli: failed to parse master config (%v)", err)
+		base.Logger().Fatal("failed to parse master config", zap.Error(err))
 	}
 }
 

@@ -19,9 +19,10 @@ import (
 	"github.com/araddon/dateparse"
 	"github.com/cheggaaa/pb/v3"
 	"github.com/olekukonko/tablewriter"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
 	"os"
 	"strings"
 )
@@ -75,7 +76,7 @@ func previewImportItems(csvFile string, sep string, labelSep string, hasHeader b
 	// Open file
 	file, err := os.Open(csvFile)
 	if err != nil {
-		log.Fatalf("cli: failed to open file (%v)", err)
+		base.Logger().Fatal("failed to open file", zap.Error(err))
 	}
 	defer file.Close()
 	// read lines
@@ -93,20 +94,19 @@ func previewImportItems(csvFile string, sep string, labelSep string, hasHeader b
 		splits = format(fmtString, "itl", splits)
 		// parse item id
 		if splits[0] == "" {
-			log.Fatal("cli: invalid item id")
+			base.Logger().Fatal("invalid item id", zap.String("item_id", splits[0]))
 		}
 		item := data.Item{ItemId: splits[0]}
 		if splits[1] != "" {
 			item.Timestamp, err = dateparse.ParseAny(splits[1])
 			if err != nil {
-				log.Fatalf("cli: failed to parse datetime at line %v (%v)", table.NumLines(), err)
+				base.Logger().Fatal("failed to parse datetime", zap.Error(err),
+					zap.Int("line", table.NumLines()),
+					zap.String("datetime", splits[1]))
 			}
 		}
 		if splits[2] != "" {
 			item.Labels = strings.Split(splits[2], labelSep)
-		}
-		if err != nil {
-			log.Fatal(err)
 		}
 		// preview first 5 lines
 		table.Append([]string{
@@ -132,23 +132,23 @@ func importItems(csvFile string, sep string, labelSep string, hasHeader bool, fm
 	// Get file size
 	info, err := os.Stat(csvFile)
 	if err != nil {
-		log.Fatal(err)
+		base.Logger().Fatal("failed to get file size", zap.Error(err))
 	}
 	length := info.Size()
 	// Open file
 	file, err := os.Open(csvFile)
 	if err != nil {
-		log.Fatal(err)
+		base.Logger().Fatal("failed to open file", zap.Error(err))
 	}
 	defer file.Close()
 	// Open database
 	database, err := data.Open(globalConfig.Database.DataStore)
 	if err != nil {
-		log.Fatalf("cli: failed to connect database (%v)", err)
+		base.Logger().Fatal("failed to connect database", zap.Error(err))
 	}
 	err = database.Init()
 	if err != nil {
-		log.Fatalf("cli: failed to init database (%v)", err)
+		base.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 	defer database.Close()
 	// Read lines
@@ -164,27 +164,27 @@ func importItems(csvFile string, sep string, labelSep string, hasHeader bool, fm
 		splits := strings.Split(line, sep)
 		splits = format(fmt, "itl", splits)
 		if splits[0] == "" {
-			log.Fatalf("cli: failed to open file (%v)", err)
+			base.Logger().Fatal("failed to open file", zap.Error(err))
 		}
 		item := data.Item{ItemId: splits[0]}
 		if splits[1] != "" {
 			item.Timestamp, err = dateparse.ParseAny(splits[1])
 			if err != nil {
-				log.Fatalf("cli: failed to parse datetime at line %v (%v)", lineCount, err)
+				base.Logger().Fatal("failed to parse datetime", zap.Error(err), zap.Int("line", lineCount))
 			}
 		}
 		if splits[2] != "" {
 			item.Labels = strings.Split(splits[2], labelSep)
 		}
-		err := database.InsertItem(item)
+		err = database.InsertItem(item)
 		if err != nil {
-			log.Fatal(err)
+			base.Logger().Fatal("failed to insert item", zap.Error(err))
 		}
 		bar.Add(len(line) + 1)
 		lineCount++
 	}
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+	if err = scanner.Err(); err != nil {
+		base.Logger().Fatal("failed to read lines", zap.Error(err))
 	}
 	bar.Finish()
 }
@@ -214,7 +214,7 @@ func previewImportFeedback(csvFile string, feedbackType string, sep string, hasH
 	// Open file
 	file, err := os.Open(csvFile)
 	if err != nil {
-		log.Fatalf("cli: failed to open file (%v)", err)
+		base.Logger().Fatal("failed to open file", zap.Error(err))
 	}
 	defer file.Close()
 
@@ -228,16 +228,22 @@ func previewImportFeedback(csvFile string, feedbackType string, sep string, hasH
 		}
 		splits := strings.Split(line, sep)
 		splits = format(fmtString, "uit", splits)
-		if splits[0] == "" {
-			log.Fatalf("cli: invalid user id at line %v", table.NumLines())
+		if !validateId(splits[0]) {
+			base.Logger().Fatal("invalid user id",
+				zap.String("user_id", splits[0]),
+				zap.Int("line", table.NumLines()))
 		}
-		if splits[1] == "" {
-			log.Fatalf("cli: invalid item id at line %v", table.NumLines())
+		if !validateId(splits[1]) {
+			base.Logger().Fatal("invalid item id",
+				zap.String("item_id", splits[1]),
+				zap.Int("line", table.NumLines()))
 		}
 		feedback := data.Feedback{FeedbackKey: data.FeedbackKey{FeedbackType: feedbackType, UserId: splits[0], ItemId: splits[1]}}
 		feedback.Timestamp, err = dateparse.ParseAny(splits[2])
 		if err != nil {
-			log.Fatalf("cli: failed to parse datetime at line %v (%v)", table.NumLines(), err)
+			base.Logger().Fatal("failed to parse datetime", zap.Error(err),
+				zap.String("datetime", splits[2]),
+				zap.Int("line", table.NumLines()))
 		}
 		// preview first 5 lines
 		table.Append([]string{
@@ -266,19 +272,19 @@ func importFeedback(csvFile, feedbackType string, sep string, hasHeader bool, fm
 	// Get file size
 	info, err := os.Stat(csvFile)
 	if err != nil {
-		log.Fatal(err)
+		base.Logger().Fatal("failed to get file size", zap.Error(err))
 	}
 	length := info.Size()
 	// Open file
 	file, err := os.Open(csvFile)
 	if err != nil {
-		log.Fatal(err)
+		base.Logger().Fatal("failed to open file", zap.Error(err))
 	}
 	defer file.Close()
 	// Open database
 	database, err := data.Open(globalConfig.Database.DataStore)
 	if err != nil {
-		log.Fatal(err)
+		base.Logger().Fatal("failed to connect database", zap.Error(err))
 	}
 	defer database.Close()
 	// Read lines
@@ -292,33 +298,39 @@ func importFeedback(csvFile, feedbackType string, sep string, hasHeader bool, fm
 		}
 		splits := strings.Split(line, sep)
 		splits = format(fmtString, "uit", splits)
-		if splits[0] == "" {
-			log.Fatalf("cli: invalid user id at line %v", lineCount)
+		if !validateId(splits[0]) {
+			base.Logger().Fatal("invalid user id",
+				zap.String("user_id", splits[0]),
+				zap.Int("line", lineCount))
 		}
-		if splits[1] == "" {
-			log.Fatalf("cli: invalid item id at line %v", lineCount)
+		if !validateId(splits[1]) {
+			base.Logger().Fatal("invalid item id",
+				zap.String("item_id", splits[1]),
+				zap.Int("line", lineCount))
 		}
 		feedback := data.Feedback{FeedbackKey: data.FeedbackKey{FeedbackType: feedbackType, UserId: splits[0], ItemId: splits[1]}}
 		feedback.Timestamp, err = dateparse.ParseAny(splits[2])
 		if err != nil {
-			log.Fatalf("cli: failed to parse datetime at line %v (%v)", lineCount, err)
+			base.Logger().Fatal("failed to parse datetime", zap.Error(err), zap.Int("line", lineCount))
 		}
 		err = database.InsertFeedback(feedback, globalConfig.Database.AutoInsertUser, globalConfig.Database.AutoInsertItem)
 		if err != nil {
-			log.Fatal(err)
+			base.Logger().Fatal("failed to insert feedback", zap.Error(err))
 		}
 		bar.Add(len(line) + 1)
 		lineCount++
 	}
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+	if err = scanner.Err(); err != nil {
+		base.Logger().Fatal("failed to read lines", zap.Error(err))
 	}
 	bar.Finish()
 }
 
 func format(inFmt string, outFmt string, s []string) []string {
 	if len(s) < len(inFmt) {
-		log.Fatalf("Expect %d fields, get %d", len(inFmt), len(s))
+		base.Logger().Fatal("number of fields mismatch",
+			zap.Int("expect", len(inFmt)),
+			zap.Int("actual", len(s)))
 	}
 	if inFmt == outFmt {
 		return s
@@ -332,4 +344,13 @@ func format(inFmt string, outFmt string, s []string) []string {
 		out[i] = pool[uint8(c)]
 	}
 	return out
+}
+
+func validateId(text string) bool {
+	if text == "" {
+		return false
+	} else if strings.Contains(text, "/") {
+		return false
+	}
+	return true
 }

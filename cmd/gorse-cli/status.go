@@ -18,10 +18,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/olekukonko/tablewriter"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
+	"go.uber.org/zap"
 	"os"
 )
 
@@ -37,7 +38,7 @@ var clusterCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cluster, err := masterClient.GetMeta(context.Background(), &protocol.RequestInfo{})
 		if err != nil {
-			log.Fatalf("cli: failed to get cluster information (%v)", err)
+			base.Logger().Fatal("failed to get cluster information", zap.Error(err))
 		}
 		// show cluster
 		table := tablewriter.NewWriter(os.Stdout)
@@ -59,7 +60,7 @@ var statusCommand = &cobra.Command{
 		// connect to cache store
 		cacheStore, err := cache.Open(globalConfig.Database.CacheStore)
 		if err != nil {
-			log.Fatal("cli:", err)
+			base.Logger().Fatal("failed to connect database", zap.Error(err))
 		}
 		// show status
 		status := []string{
@@ -76,7 +77,7 @@ var statusCommand = &cobra.Command{
 		for _, stat := range status {
 			val, err := cacheStore.GetString(cache.GlobalMeta, stat)
 			if err != nil && err.Error() != "redis: nil" {
-				log.Fatal("cli:", err)
+				base.Logger().Fatal("failed to get meta", zap.Error(err))
 			}
 			table.Append([]string{stat, val})
 		}
@@ -90,7 +91,7 @@ var configCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		bytes, err := json.MarshalIndent(globalConfig, "", "\t")
 		if err != nil {
-			log.Fatalf("cli: failed to marshall JSON (%v)", err)
+			base.Logger().Fatal("failed to marshall JSON", zap.Error(err))
 		}
 		fmt.Println(string(bytes))
 	},
