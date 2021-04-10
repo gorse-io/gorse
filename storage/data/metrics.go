@@ -19,6 +19,18 @@ import (
 )
 
 var (
+	GetItemLatency = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "get_item_latency",
+		Help: "Latency of GetItem",
+	})
+	InsertItemLatency = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "insert_item_latency",
+		Help: "Latency of InsertItem",
+	})
+	InsertFeedbackLatency = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "insert_feedback_latency",
+		Help: "Latency of InsertFeedback",
+	})
 	GetUserFeedbackLatency = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "get_user_feedback_latency",
 		Help: "Latency of GetUserFeedback",

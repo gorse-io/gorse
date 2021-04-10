@@ -69,6 +69,7 @@ func (d *SQLDatabase) Close() error {
 }
 
 func (d *SQLDatabase) InsertItem(item Item) error {
+	startTime := time.Now()
 	labels, err := json.Marshal(item.Labels)
 	if err != nil {
 		return err
@@ -76,6 +77,7 @@ func (d *SQLDatabase) InsertItem(item Item) error {
 	_, err = d.db.Exec("INSERT items(item_id, time_stamp, labels, `comment`) VALUES (?, ?, ?, ?) "+
 		"ON DUPLICATE KEY UPDATE time_stamp = ?, labels = ?, `comment` = ?",
 		item.ItemId, item.Timestamp, labels, item.Comment, item.Timestamp, labels, item.Comment)
+	InsertItemLatency.Observe(time.Since(startTime).Seconds())
 	return err
 }
 
@@ -107,6 +109,7 @@ func (d *SQLDatabase) DeleteItem(itemId string) error {
 }
 
 func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
+	startTime := time.Now()
 	result, err := d.db.Query("SELECT item_id, time_stamp, labels, `comment` FROM items WHERE item_id = ?", itemId)
 	if err != nil {
 		return Item{}, err
@@ -121,6 +124,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
 			return Item{}, err
 		}
+		GetItemLatency.Observe(time.Since(startTime).Seconds())
 		return item, nil
 	}
 	return Item{}, errors.New(ErrItemNotExist)
@@ -290,6 +294,7 @@ func (d *SQLDatabase) GetUserFeedback(userId string, feedbackType *string) ([]Fe
 }
 
 func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
+	startTime := time.Now()
 	// insert users
 	if insertUser {
 		_, err := d.db.Exec("INSERT IGNORE users(user_id) VALUES (?)", feedback.UserId)
@@ -324,6 +329,7 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 	_, err := d.db.Exec("INSERT feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES (?,?,?,?,?) "+
 		"ON DUPLICATE KEY UPDATE time_stamp = ?, `comment` = ?",
 		feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment, feedback.Timestamp, feedback.Comment)
+	InsertFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return err
 }
 
