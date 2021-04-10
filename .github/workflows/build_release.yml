@@ -18,11 +18,20 @@ jobs:
         run: go get -v github.com/mitchellh/gox
         
       - name: Build release
-        run: gox -os='darwin windows linux' -arch='386 amd64'
+        run: gox -os='darwin windows linux' -arch='amd64'
+
+      - name: Install zip
+        uses: montudor/action-zip@v0.1.1
+
+      - name: Zip binaries
+        run: |
+          zip gorse_linux_amd64.zip gorse-*_linux_amd64
+          zip gorse_windows_amd64.zip gorse-*_windows_amd64.exe
+          zip gorse_darwin_amd64.zip gorse-*_darwin_amd64
 
       - name: Upload release
         uses: JasonEtco/upload-to-release@master
         with:
-          args: gorse_darwin_386 gorse_darwin_amd64 gorse_linux_386 gorse_linux_amd64 gorse_windows_386.exe gorse_windows_amd64.exe
+          args: gorse_darwin_amd64.zip gorse_linux_amd64.zip gorse_windows_amd64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

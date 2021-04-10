@@ -158,7 +158,7 @@ func (w *Worker) Pull() {
 		if w.latestUserVersion != w.userVersion {
 			base.Logger().Info("start pull user index")
 			if userIndexResponse, err := w.MasterClient.GetUserIndex(context.Background(),
-				&protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
+				&protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull user index", zap.Error(err))
 			} else {
 				// encode user index
@@ -180,7 +180,7 @@ func (w *Worker) Pull() {
 		if w.latestCFVersion != w.cfVersion {
 			base.Logger().Info("start pull collaborative filtering")
 			if mfResponse, err := w.MasterClient.GetCollaborativeFilteringModel(context.Background(),
-				&protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e9)); err != nil {
+				&protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull collaborative filtering model", zap.Error(err))
 			} else {
 				w.cfModel, err = cf.DecodeModel(mfResponse.Name, mfResponse.Model)
