@@ -4,12 +4,12 @@ Language: English | [中文](https://github.com/zhenghaoz/gorse/blob/master/READ
 
 <img width=160 src="https://gorse.io/zh/docs/img/gorse.png"/>
 
-![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)
+[![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild)
 [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
 [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse)
 [![Build Docs](https://github.com/gorse-io/gorse-io.github.io/actions/workflows/build_docs.yml/badge.svg)](https://gorse.io/en/docs/)
-[![Gitter](https://badges.gitter.im/gorse-io/gorse.svg)](https://gitter.im/gorse-io/gorse?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![Discord](https://img.shields.io/discord/830635934210588743)](https://discord.com/channels/830635934210588743/)
 <a target="_blank" href="https://qm.qq.com/cgi-bin/qm/qr?k=lOERnxfAM2U2rj4C9Htv9T68SLIXg6uk&jump_from=webapi"><img border="0" src="https://pub.idqqimg.com/wpa/images/group.png" alt="Gorse推荐系统交流群" title="Gorse推荐系统交流群"></a>
 
 Gorse is an open source recommendation system written in Go. Gorse aims to be an universal open source recommender system that can be easily introduced into a wide variety of online services. By importing items, users and interaction data into Gorse, the system will automatically train models to generate recommendations for each user. Project features are as follows.
