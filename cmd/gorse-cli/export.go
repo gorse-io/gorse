@@ -131,7 +131,7 @@ func exportItems(csvFile string, sep string, labelSep string, printHeader bool, 
 	defer file.Close()
 	// Print header
 	if printHeader {
-		if _, err = file.WriteString(fmt.Sprintf("item_id%vtime_stamp%vlabels", sep, sep)); err != nil {
+		if _, err = file.WriteString(fmt.Sprintf("item_id%vtime_stamp%vlabels\n", sep, sep)); err != nil {
 			base.Logger().Fatal("failed to write file", zap.Error(err))
 		}
 	}
