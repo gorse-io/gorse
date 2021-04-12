@@ -7,7 +7,7 @@ require (
 	github.com/ReneKroon/ttlcache/v2 v2.3.0
 	github.com/alicebob/miniredis/v2 v2.14.3
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
-	github.com/cheggaaa/pb/v3 v3.0.7
+	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/chewxy/math32 v1.0.6
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.4.0
