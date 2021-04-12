@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/ReneKroon/ttlcache/v2 v2.3.0
+	github.com/ReneKroon/ttlcache/v2 v2.4.0
 	github.com/alicebob/miniredis/v2 v2.14.3
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/cheggaaa/pb/v3 v3.0.7
