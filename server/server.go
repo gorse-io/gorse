@@ -17,6 +17,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strconv"
+	"sync"
+	"time"
+
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,10 +33,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"net/http"
-	"strconv"
-	"sync"
-	"time"
 )
 
 type Server struct {
@@ -441,19 +442,19 @@ func parseInt(request *restful.Request, name string, fallback int) (value int, e
 }
 
 func (s *Server) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
-	var n, offset int
+	var begin, end int
 	var err error
-	if n, err = parseInt(request, "n", s.cfg.Server.DefaultN); err != nil {
+	if begin, err = parseInt(request, "begin", 0); err != nil {
 		badRequest(response, err)
 		return
 	}
-	if offset, err = parseInt(request, "offset", 0); err != nil {
+	if end, err = parseInt(request, "end", s.cfg.Server.DefaultN-1); err != nil {
 		badRequest(response, err)
 		return
 	}
 	returnType := request.QueryParameter("return")
 	// Get the popular list
-	items, err := s.cacheStore.GetList(prefix, name, n, offset)
+	items, err := s.cacheStore.GetList(prefix, name, begin, end)
 	if err != nil {
 		internalServerError(response, err)
 		return

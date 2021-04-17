@@ -27,7 +27,7 @@ func (NoDatabase) SetList(prefix, name string, items []string) error {
 	return NoDatabaseError
 }
 
-func (NoDatabase) GetList(prefix, name string, n int, offset int) ([]string, error) {
+func (NoDatabase) GetList(prefix, name string, begin int, end int) ([]string, error) {
 	return nil, NoDatabaseError
 }
 

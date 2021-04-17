@@ -15,6 +15,10 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
+	"testing"
+	"time"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/steinfletcher/apitest"
@@ -22,9 +26,6 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"net/http"
-	"testing"
-	"time"
 )
 
 const apiKey = "test_api_key"
@@ -356,8 +357,8 @@ func TestServer_List(t *testing.T) {
 			Get(operator.Get).
 			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
-				"n":      "3",
-				"offset": "0"}).
+				"begin": "0",
+				"end":   "2"}).
 			Expect(t).
 			Status(http.StatusOK).
 			Body(`["0", "1", "2"]`).
@@ -367,8 +368,8 @@ func TestServer_List(t *testing.T) {
 			Get(operator.Get).
 			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
-				"n":      "3",
-				"offset": "1"}).
+				"begin": "1",
+				"end":   "3"}).
 			Expect(t).
 			Status(http.StatusOK).
 			Body(`["1", "2", "3"]`).
@@ -379,8 +380,8 @@ func TestServer_List(t *testing.T) {
 			Get(operator.Get).
 			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
-				"n":      "0",
-				"offset": "0"}).
+				"begin": "0",
+				"end":   "-1"}).
 			Expect(t).
 			Status(http.StatusOK).
 			Body(``).

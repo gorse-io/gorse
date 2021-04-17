@@ -44,18 +44,11 @@ func (redis *Redis) SetList(prefix, name string, items []string) error {
 	return nil
 }
 
-func (redis *Redis) GetList(prefix, name string, n int, offset int) ([]string, error) {
+func (redis *Redis) GetList(prefix, name string, begin, end int) ([]string, error) {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	res := make([]string, 0)
-	if n == 0 {
-		val, err := redis.client.LLen(ctx, key).Result()
-		if err != nil {
-			return nil, err
-		}
-		n = int(val) - offset
-	}
-	data, err := redis.client.LRange(ctx, key, int64(offset), int64(n+offset-1)).Result()
+	data, err := redis.client.LRange(ctx, key, int64(begin), int64(end)).Result()
 
 	if err != nil {
 		return nil, err
