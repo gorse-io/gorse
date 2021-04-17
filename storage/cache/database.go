@@ -40,7 +40,7 @@ const (
 type Database interface {
 	Close() error
 	SetList(prefix, name string, items []string) error
-	GetList(prefix, name string, n int, offset int) ([]string, error)
+	GetList(prefix, name string, begin int, end int) ([]string, error)
 	GetString(prefix, name string) (string, error)
 	SetString(prefix, name string, val string) error
 	GetInt(prefix, name string) (int, error)
