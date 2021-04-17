@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package cf
+package pr
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
+func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
 	seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
@@ -95,8 +95,12 @@ func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *Dat
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
+func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
+	// if the number of combination is less than number of trials, use grid search
+	if paramGrid.NumCombinations() < numTrials {
+		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig)
+	}
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
 		Scores: make([]Score, 0, numTrials),
@@ -124,4 +128,57 @@ func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *D
 		}
 	}
 	return results
+}
+
+type AutoML struct {
+	// arguments
+	nEpochs int
+	nTrials int
+	// results
+	BestScore  Score
+	BestModel  string
+	BestParams model.Params
+	Results    map[string]ParamsSearchResult
+}
+
+func NewAutoML(nEpoch, nTrials int) *AutoML {
+	ml := new(AutoML)
+	ml.nTrials = nTrials
+	ml.nEpochs = nEpoch
+	return ml
+}
+
+func (ml *AutoML) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
+	config = config.LoadDefaultIfNil()
+	base.Logger().Info("fit AutoML",
+		zap.Int("n_users", trainSet.UserCount()),
+		zap.Int("n_items", trainSet.ItemCount()),
+		zap.Int("n_jobs", config.Jobs))
+	ml.Results = make(map[string]ParamsSearchResult)
+	// fit baseline
+	knn := NewKNN(model.Params{model.NEpochs: ml.nEpochs})
+	r := GridSearchCV(knn, trainSet, valSet, knn.GetParamsGrid(), 0, config)
+	ml.Results["knn"] = r
+	ml.BestModel = "knn"
+	ml.BestParams = r.BestParams
+	ml.BestScore = r.BestScore
+	// fit bpr
+	bpr := NewBPR(model.Params{model.NEpochs: ml.nEpochs})
+	r = RandomSearchCV(bpr, trainSet, valSet, bpr.GetParamsGrid(), ml.nTrials, 0, config)
+	ml.Results["bpr"] = r
+	if r.BestScore.NDCG > ml.BestScore.NDCG {
+		ml.BestModel = "bpr"
+		ml.BestParams = r.BestParams
+		ml.BestScore = r.BestScore
+	}
+	// fit ccd
+	ccd := NewCCD(model.Params{model.NEpochs: ml.nEpochs})
+	r = RandomSearchCV(ccd, trainSet, valSet, bpr.GetParamsGrid(), ml.nTrials, 0, config)
+	ml.Results["ccd"] = r
+	if r.BestScore.NDCG > ml.BestScore.NDCG {
+		ml.BestModel = "ccd"
+		ml.BestParams = r.BestParams
+		ml.BestScore = r.BestScore
+	}
+	return ml.BestScore
 }

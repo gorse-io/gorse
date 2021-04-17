@@ -11,11 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package cf
+package pr
 
 import (
 	"bufio"
 	"fmt"
+	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -147,8 +148,8 @@ func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [
 		rng := base.NewRandomGenerator(0)
 		dataset.Negatives = make([][]int, dataset.UserCount())
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			s1 := base.NewSet(dataset.UserFeedback[userIndex]...)
-			s2 := base.NewSet(excludeSet.UserFeedback[userIndex]...)
+			s1 := set.NewIntSet(dataset.UserFeedback[userIndex]...)
+			s2 := set.NewIntSet(excludeSet.UserFeedback[userIndex]...)
 			dataset.Negatives[userIndex] = rng.Sample(0, dataset.ItemCount(), numCandidates, s1, s2)
 		}
 	}
@@ -202,9 +203,9 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 				}
 			}
 		}
-		testUserSet := base.NewSet(testUsers...)
+		testUserSet := set.NewIntSet(testUsers...)
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			if !testUserSet.Contain(userIndex) {
+			if !testUserSet.Has(userIndex) {
 				for _, itemIndex := range dataset.UserFeedback[userIndex] {
 					trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
 					trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)

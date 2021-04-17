@@ -1,17 +1,31 @@
-package cf
+// Copyright 2021 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+package pr
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"time"
+
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"gonum.org/v1/gonum/mat"
-	"time"
 )
 
 type Score struct {
@@ -39,14 +53,18 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 	return config
 }
 
-type MatrixFactorization interface {
+type Model interface {
 	model.Model
 	// Fit a model with a train set and parameters.
 	Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score
+}
+
+type MatrixFactorization interface {
+	Model
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId string) float32
-	// InternalPredict
-	InternalPredict(userId, itemId int) float32
+	// InternalPredict predicts rating given by a user index and a item index
+	InternalPredict(userIndex, itemIndex int) float32
 	// GetUserIndex returns user index.
 	GetUserIndex() base.Index
 	// GetItemIndex returns item index.
@@ -84,7 +102,10 @@ func (model *BaseMatrixFactorization) GetItemIndex() base.Index {
 	return model.ItemIndex
 }
 
-func NewModel(name string, params model.Params) (MatrixFactorization, error) {
+func NewModel(name string, params model.Params) (Model, error) {
+	base.Logger().Info("create model",
+		zap.String("model", name),
+		zap.String("params", params.ToString()))
 	switch name {
 	case "als":
 		return NewALS(params), nil
@@ -92,11 +113,13 @@ func NewModel(name string, params model.Params) (MatrixFactorization, error) {
 		return NewBPR(params), nil
 	case "ccd":
 		return NewCCD(params), nil
+	case "knn":
+		return NewKNN(params), nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
 
-func EncodeModel(m MatrixFactorization) ([]byte, error) {
+func EncodeModel(m Model) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	writer := bufio.NewWriter(buf)
 	encoder := gob.NewEncoder(writer)
@@ -109,7 +132,7 @@ func EncodeModel(m MatrixFactorization) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecodeModel(name string, buf []byte) (MatrixFactorization, error) {
+func DecodeModel(name string, buf []byte) (model.Model, error) {
 	reader := bytes.NewReader(buf)
 	decoder := gob.NewDecoder(reader)
 	switch name {
@@ -125,6 +148,18 @@ func DecodeModel(name string, buf []byte) (MatrixFactorization, error) {
 			return nil, err
 		}
 		return &bpr, nil
+	case "ccd":
+		var ccd CCD
+		if err := decoder.Decode(&ccd); err != nil {
+			return nil, err
+		}
+		return &ccd, nil
+	case "knn":
+		var knn KNN
+		if err := decoder.Decode(&knn); err != nil {
+			return nil, err
+		}
+		return &knn, nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
@@ -242,6 +277,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		}
 	}
 	// Training
+	snapshots := SnapshotManger{}
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
@@ -290,7 +326,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if epoch%config.Verbose == 0 {
+		if epoch%config.Verbose == 0 || epoch == bpr.nEpochs {
 			evalStart := time.Now()
 			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
@@ -300,10 +336,13 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
 	}
-	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
-	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
+	// restore best snapshot
+	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
+	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	return snapshots.BestScore
 }
 
 func (bpr *BPR) Clear() {
@@ -424,6 +463,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		zap.Int("n_candidates", config.Candidates),
 		zap.Int("n_factors", als.nFactors),
 		zap.Int("n_epochs", als.nEpochs),
+		zap.Float64("weight", als.weight),
 		zap.Float64("reg", als.reg),
 		zap.Float64("init_mean", als.initMean),
 		zap.Float64("init_stddev", als.initStdDev))
@@ -444,6 +484,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		regs[i] = als.reg
 	}
 	regI := mat.NewDiagDense(als.nFactors, regs)
+	snapshots := SnapshotManger{}
 	for ep := 1; ep <= als.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Recompute all user factors: x_u = (Y^T C^userIndex Y + \lambda reg)^{-1} Y^T C^userIndex p(userIndex)
@@ -496,7 +537,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		}
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if ep%config.Verbose == 0 {
+		if ep%config.Verbose == 0 || ep == als.nEpochs {
 			evalStart := time.Now()
 			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
@@ -506,10 +547,13 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, als.UserFactor, als.ItemFactor)
 		}
 	}
-	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
-	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
+	// restore best snapshot
+	als.UserFactor = snapshots.BestWeights[0].(*mat.Dense)
+	als.ItemFactor = snapshots.BestWeights[1].(*mat.Dense)
+	return snapshots.BestScore
 }
 
 func (als *ALS) Clear() {
@@ -654,6 +698,7 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		zap.Int("n_candidates", config.Candidates),
 		zap.Int("n_factors", ccd.nFactors),
 		zap.Int("n_epochs", ccd.nEpochs),
+		zap.Float32("weight", ccd.weight),
 		zap.Float32("reg", ccd.reg),
 		zap.Float32("init_mean", ccd.initMean),
 		zap.Float32("init_stddev", ccd.initStdDev))
@@ -670,6 +715,7 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		userRes[i] = make([]float32, trainSet.ItemCount())
 		itemRes[i] = make([]float32, trainSet.UserCount())
 	}
+	snapshots := SnapshotManger{}
 	for ep := 1; ep <= ccd.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Update user factors
@@ -752,7 +798,7 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if ep%config.Verbose == 0 {
+		if ep%config.Verbose == 0 || ep == ccd.nEpochs {
 			evalStart := time.Now()
 			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
@@ -762,8 +808,11 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
 	}
-	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
-	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
+	// restore best snapshot
+	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
+	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	return snapshots.BestScore
 }
