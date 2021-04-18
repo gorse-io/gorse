@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package rank
+package pr
 
 import (
 	"fmt"
@@ -22,6 +22,7 @@ import (
 
 // ParamsSearchResult contains the return of grid search.
 type ParamsSearchResult struct {
+	BestModel  Model
 	BestScore  Score
 	BestParams model.Params
 	BestIndex  int
@@ -39,7 +40,7 @@ func NewParamsSearchResult() *ParamsSearchResult {
 func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 	r.Scores = append(r.Scores, score)
 	r.Params = append(r.Params, params.Copy())
-	if len(r.Scores) == 0 || score.BetterThan(r.BestScore) {
+	if len(r.Scores) == 0 || score.NDCG > r.BestScore.NDCG {
 		r.BestScore = score
 		r.BestParams = params.Copy()
 		r.BestIndex = len(r.Params) - 1
@@ -47,7 +48,7 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
+func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
 	seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
@@ -66,7 +67,7 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 	dfs = func(deep int, params model.Params) {
 		if deep == len(paramNames) {
 			progress++
-			base.Logger().Info(fmt.Sprintf("grid search %v/%v", progress, count),
+			base.Logger().Info(fmt.Sprintf("grid search (%v/%v)", progress, count),
 				zap.Any("params", params))
 			// Cross validate
 			estimator.Clear()
@@ -75,7 +76,8 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 			// Create GridSearch result
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
-			if len(results.Scores) == 0 || score.BetterThan(results.BestScore) {
+			if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
+				results.BestModel = CloneModel(estimator)
 				results.BestScore = score
 				results.BestParams = params.Copy()
 				results.BestIndex = len(results.Params) - 1
@@ -95,8 +97,12 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
+func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
+	// if the number of combination is less than number of trials, use grid search
+	if paramGrid.NumCombinations() < numTrials {
+		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig)
+	}
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
 		Scores: make([]Score, 0, numTrials),
@@ -110,14 +116,15 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 			params[paramName] = value
 		}
 		// Cross validate
-		base.Logger().Info(fmt.Sprintf("random search %v/%v", i, numTrials),
+		base.Logger().Info(fmt.Sprintf("random search (%v/%v)", i, numTrials),
 			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
 		score := estimator.Fit(trainSet, testSet, fitConfig)
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
-		if len(results.Scores) == 0 || score.BetterThan(results.BestScore) {
+		if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
+			results.BestModel = CloneModel(estimator)
 			results.BestScore = score
 			results.BestParams = params.Copy()
 			results.BestIndex = len(results.Params) - 1
