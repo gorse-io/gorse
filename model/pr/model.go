@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/jinzhu/copier"
+	"reflect"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -103,9 +105,6 @@ func (model *BaseMatrixFactorization) GetItemIndex() base.Index {
 }
 
 func NewModel(name string, params model.Params) (Model, error) {
-	base.Logger().Info("create model",
-		zap.String("model", name),
-		zap.String("params", params.ToString()))
 	switch name {
 	case "als":
 		return NewALS(params), nil
@@ -114,9 +113,34 @@ func NewModel(name string, params model.Params) (Model, error) {
 	case "ccd":
 		return NewCCD(params), nil
 	case "knn":
-		return NewKNN(params), nil
+		return NewCollaborativeKNN(params), nil
+	case "content_knn":
+		return NewContentKNN(params), nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
+}
+
+func CloneModel(m Model) Model {
+	var copied Model
+	switch m.(type) {
+	case *CCD:
+		copied = &CCD{}
+	case *ALS:
+		copied = &ALS{}
+	case *BPR:
+		copied = &BPR{}
+	case *CollaborativeKNN:
+		copied = &CollaborativeKNN{}
+	case *ContentKNN:
+		copied = &ContentKNN{}
+	default:
+		panic(fmt.Errorf("unknown model %v", reflect.TypeOf(m)))
+	}
+	err := copier.Copy(copied, m)
+	if err != nil {
+		panic(err)
+	}
+	return copied
 }
 
 func EncodeModel(m Model) ([]byte, error) {
@@ -155,7 +179,13 @@ func DecodeModel(name string, buf []byte) (model.Model, error) {
 		}
 		return &ccd, nil
 	case "knn":
-		var knn KNN
+		var knn CollaborativeKNN
+		if err := decoder.Decode(&knn); err != nil {
+			return nil, err
+		}
+		return &knn, nil
+	case "content_knn":
+		var knn ContentKNN
 		if err := decoder.Decode(&knn); err != nil {
 			return nil, err
 		}
@@ -249,7 +279,7 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the BPR model.
 func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	base.Logger().Info("fit BPR",
+	base.Logger().Info("fit bpr",
 		zap.Int("n_jobs", config.Jobs),
 		zap.Int("n_candidates", config.Candidates),
 		zap.Int("n_factors", bpr.nFactors),
@@ -330,7 +360,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
+			base.Logger().Info(fmt.Sprintf("eval bpr %v/%v", epoch, bpr.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -458,7 +488,7 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the ALS model.
 func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	base.Logger().Info("fit ALS",
+	base.Logger().Info("fit als",
 		zap.Int("n_jobs", config.Jobs),
 		zap.Int("n_candidates", config.Candidates),
 		zap.Int("n_factors", als.nFactors),
@@ -541,7 +571,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
+			base.Logger().Info(fmt.Sprintf("eval als %v/%v", ep, als.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -693,7 +723,7 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 
 func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	base.Logger().Info("fit CCD",
+	base.Logger().Info("fit ccd",
 		zap.Int("n_jobs", config.Jobs),
 		zap.Int("n_candidates", config.Candidates),
 		zap.Int("n_factors", ccd.nFactors),
@@ -802,7 +832,7 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
+			base.Logger().Info(fmt.Sprintf("eval ccd %v/%v", ep, ccd.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),

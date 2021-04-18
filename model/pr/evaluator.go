@@ -161,8 +161,8 @@ func Rank(model model.Model, userId int, userProfile []int, candidates []int, to
 		switch model.(type) {
 		case MatrixFactorization:
 			itemsHeap.Push(itemId, model.(MatrixFactorization).InternalPredict(userId, itemId))
-		case *KNN:
-			itemsHeap.Push(itemId, model.(*KNN).InternalPredict(userProfile, itemId))
+		case KNN:
+			itemsHeap.Push(itemId, model.(KNN).InternalPredict(userProfile, itemId))
 		default:
 			panic("unknown model")
 		}

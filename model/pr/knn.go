@@ -12,38 +12,77 @@ import (
 	"time"
 )
 
-type KNN struct {
+type KNN interface {
+	Model
+	// Predict the rating given by a user (userId) to a item (itemId).
+	Predict(userProfile []string, itemId string) float32
+	// InternalPredict predicts rating given by a user index and a item index
+	InternalPredict(userProfile []int, itemIndex int) float32
+}
+
+type BaseKNN struct {
 	model.BaseModel
 	similarity string
 	ItemIndex  base.Index
 	Similarity []ConcurrentMap
 }
 
-func NewKNN(params model.Params) *KNN {
-	knn := new(KNN)
-	knn.SetParams(params)
-	return knn
-}
-
-func (knn *KNN) SetParams(params model.Params) {
+func (knn *BaseKNN) SetParams(params model.Params) {
 	knn.BaseModel.SetParams(params)
 	knn.similarity = params.GetString(model.Similarity, model.Similarity_Cosine)
 }
 
-func (knn *KNN) GetParamsGrid() model.ParamsGrid {
+func (knn *BaseKNN) GetParamsGrid() model.ParamsGrid {
 	return model.ParamsGrid{
 		model.Similarity: []interface{}{model.Similarity_Cosine, model.Similarity_Dot},
 	}
 }
 
-func (knn *KNN) Clear() {
+func (knn *BaseKNN) Clear() {
 	// do nothing
 }
 
-func (knn *KNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
+func (knn *BaseKNN) Predict(userProfile []string, itemId string) float32 {
+	supportIndices := make([]int, 0, len(userProfile))
+	for _, supportId := range userProfile {
+		supportIndex := knn.ItemIndex.ToNumber(supportId)
+		if supportIndex == base.NotId {
+			base.Logger().Info("unknown item:", zap.String("item_id", supportId))
+			return 0
+		}
+		supportIndices = append(supportIndices, supportIndex)
+	}
+	itemIndex := knn.ItemIndex.ToNumber(itemId)
+	if itemIndex == base.NotId {
+		base.Logger().Info("unknown item:", zap.String("item_id", itemId))
+		return 0
+	}
+	return knn.InternalPredict(supportIndices, itemIndex)
+}
+
+func (knn *BaseKNN) InternalPredict(userProfile []int, itemIndex int) float32 {
+	sum := float32(0)
+	for _, supportIndex := range userProfile {
+		sum += knn.Similarity[supportIndex].Get(itemIndex)
+	}
+	return sum
+}
+
+type CollaborativeKNN struct {
+	BaseKNN
+}
+
+func NewCollaborativeKNN(params model.Params) *CollaborativeKNN {
+	knn := new(CollaborativeKNN)
+	knn.SetParams(params)
+	return knn
+}
+
+func (knn *CollaborativeKNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	knn.ItemIndex = trainSet.ItemIndex
-	base.Logger().Info("fit KNN",
+	base.Logger().Info("fit collaborative knn",
+		zap.String("similarity", knn.similarity),
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()),
 		zap.Int("n_feedback", trainSet.Count()),
@@ -67,6 +106,7 @@ func (knn *KNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 	} else {
 		sparseDataset = true
 	}
+	fitStart := time.Now()
 	_ = base.Parallel(trainSet.ItemCount(), config.Jobs, func(_, itemIndex int) error {
 		// compute similarity
 		var neighbors []int
@@ -100,10 +140,12 @@ func (knn *KNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		}
 		return nil
 	})
+	fitTime := time.Since(fitStart)
 	evalStart := time.Now()
 	scores := Evaluate(knn, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
-	base.Logger().Info("fit knn",
+	base.Logger().Info("eval collaborative knn",
+		zap.String("fit_time", fitTime.String()),
 		zap.String("eval_time", evalTime.String()),
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
@@ -111,30 +153,95 @@ func (knn *KNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
-func (knn *KNN) Predict(userProfile []string, itemId string) float32 {
-	supportIndices := make([]int, 0, len(userProfile))
-	for _, supportId := range userProfile {
-		supportIndex := knn.ItemIndex.ToNumber(supportId)
-		if supportIndex == base.NotId {
-			base.Logger().Info("unknown item:", zap.String("item_id", supportId))
-			return 0
-		}
-		supportIndices = append(supportIndices, supportIndex)
-	}
-	itemIndex := knn.ItemIndex.ToNumber(itemId)
-	if itemIndex == base.NotId {
-		base.Logger().Info("unknown item:", zap.String("item_id", itemId))
-		return 0
-	}
-	return knn.InternalPredict(supportIndices, itemIndex)
+type ContentKNN struct {
+	BaseKNN
 }
 
-func (knn *KNN) InternalPredict(userProfile []int, itemIndex int) float32 {
-	sum := float32(0)
-	for _, supportIndex := range userProfile {
-		sum += knn.Similarity[supportIndex].Get(itemIndex)
+func NewContentKNN(params model.Params) *ContentKNN {
+	knn := new(ContentKNN)
+	knn.SetParams(params)
+	return knn
+}
+
+func (knn *ContentKNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
+	config = config.LoadDefaultIfNil()
+	knn.ItemIndex = trainSet.ItemIndex
+	base.Logger().Info("fit content knn",
+		zap.String("similarity", knn.similarity),
+		zap.Int("n_users", trainSet.UserCount()),
+		zap.Int("n_items", trainSet.ItemCount()),
+		zap.Int("n_feedback", trainSet.Count()),
+		zap.Int("n_jobs", config.Jobs),
+		zap.Int("n_candidates", config.Candidates))
+	// init similarity
+	knn.Similarity = make([]ConcurrentMap, trainSet.ItemCount())
+	for i := range knn.Similarity {
+		knn.Similarity[i] = NewConcurrentMap()
 	}
-	return sum
+	// sort item labels and build revers index
+	labelPairCount := 0
+	labelItems := base.NewMatrixInt(trainSet.NumItemLabels, 0)
+	for itemIndex := range trainSet.ItemLabels {
+		sort.Ints(trainSet.ItemLabels[itemIndex])
+		for _, labelIndex := range trainSet.ItemLabels[itemIndex] {
+			labelPairCount++
+			labelItems[labelIndex] = append(labelItems[labelIndex], itemIndex)
+		}
+	}
+	// execute plan
+	var items []int
+	var sparseDataset bool
+	if labelPairCount*labelPairCount/trainSet.NumItemLabels/trainSet.ItemCount() > trainSet.ItemCount() {
+		sparseDataset = false
+		items = base.RangeInt(trainSet.ItemCount())
+	} else {
+		sparseDataset = true
+	}
+	fitStart := time.Now()
+	_ = base.Parallel(trainSet.ItemCount(), config.Jobs, func(_, itemIndex int) error {
+		// compute similarity
+		var neighbors []int
+		if sparseDataset {
+			neighborSet := set.NewIntSet()
+			for _, labelIndex := range trainSet.ItemLabels[itemIndex] {
+				neighborSet.Add(labelItems[labelIndex]...)
+			}
+			neighbors = neighborSet.List()
+		} else {
+			neighbors = items
+		}
+		for _, neighborId := range neighbors {
+			if neighborId < itemIndex {
+				var similarity float32
+				switch knn.similarity {
+				case model.Similarity_Cosine:
+					similarity = dot(trainSet.ItemLabels[itemIndex], trainSet.ItemLabels[neighborId])
+					if similarity != 0 {
+						similarity /= math32.Sqrt(float32(len(trainSet.ItemLabels[itemIndex])))
+						similarity /= math32.Sqrt(float32(len(trainSet.ItemLabels[neighborId])))
+					}
+				case model.Similarity_Dot:
+					similarity = dot(trainSet.ItemLabels[itemIndex], trainSet.ItemLabels[neighborId])
+				default:
+					panic("invalid similarity")
+				}
+				knn.Similarity[itemIndex].Set(neighborId, similarity)
+				knn.Similarity[neighborId].Set(itemIndex, similarity)
+			}
+		}
+		return nil
+	})
+	fitTime := time.Since(fitStart)
+	evalStart := time.Now()
+	scores := Evaluate(knn, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	evalTime := time.Since(evalStart)
+	base.Logger().Info("eval content knn",
+		zap.String("fit_time", fitTime.String()),
+		zap.String("eval_time", evalTime.String()),
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+	return Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}
 }
 
 func dot(a, b []int) float32 {

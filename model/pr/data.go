@@ -36,20 +36,23 @@ type DataSet struct {
 	UserFeedback  [][]int
 	ItemFeedback  [][]int
 	Negatives     [][]int
+	ItemLabels    [][]int
+	// statistics
+	NumItemLabels int
 }
 
 // NewMapIndexDataset creates a data set.
 func NewMapIndexDataset() *DataSet {
-	set := new(DataSet)
+	s := new(DataSet)
 	// Create index
-	set.UserIndex = base.NewMapIndex()
-	set.ItemIndex = base.NewMapIndex()
+	s.UserIndex = base.NewMapIndex()
+	s.ItemIndex = base.NewMapIndex()
 	// Initialize slices
-	set.FeedbackUsers = make([]int, 0)
-	set.FeedbackItems = make([]int, 0)
-	set.UserFeedback = make([][]int, 0)
-	set.ItemFeedback = make([][]int, 0)
-	return set
+	s.FeedbackUsers = make([]int, 0)
+	s.FeedbackItems = make([]int, 0)
+	s.UserFeedback = make([][]int, 0)
+	s.ItemFeedback = make([][]int, 0)
+	return s
 }
 
 func NewDirectIndexDataset() *DataSet {
@@ -161,6 +164,8 @@ func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [
 // in the test set.
 func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet) {
 	trainSet, testSet := new(DataSet), new(DataSet)
+	trainSet.NumItemLabels, testSet.NumItemLabels = dataset.NumItemLabels, dataset.NumItemLabels
+	trainSet.ItemLabels, trainSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex
 	trainSet.ItemIndex, testSet.ItemIndex = dataset.ItemIndex, dataset.ItemIndex
 	trainSet.UserFeedback, testSet.UserFeedback = createSliceOfSlice(dataset.UserCount()), createSliceOfSlice(dataset.UserCount())
@@ -282,6 +287,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		}
 	}
 	// pull items
+	itemLabelIndex := base.NewMapIndex()
 	for {
 		var items []data.Item
 		cursor, items, err = database.GetItems(cursor, batchSize)
@@ -291,11 +297,18 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		}
 		for _, item := range items {
 			dataset.AddItem(item.ItemId)
+			itemIndex := dataset.ItemIndex.ToNumber(item.ItemId)
+			dataset.ItemLabels = append(dataset.ItemLabels, make([]int, len(item.Labels)))
+			for i, label := range item.Labels {
+				itemLabelIndex.Add(label)
+				dataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
+			}
 		}
 		if cursor == "" {
 			break
 		}
 	}
+	dataset.NumItemLabels = itemLabelIndex.Len()
 	// pull database
 	if len(feedbackTypes) > 0 {
 		for _, feedbackType := range feedbackTypes {
