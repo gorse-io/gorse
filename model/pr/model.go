@@ -59,6 +59,8 @@ type Model interface {
 	model.Model
 	// Fit a model with a train set and parameters.
 	Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score
+	// GetItemIndex returns item index.
+	GetItemIndex() base.Index
 }
 
 type MatrixFactorization interface {
@@ -69,8 +71,6 @@ type MatrixFactorization interface {
 	InternalPredict(userIndex, itemIndex int) float32
 	// GetUserIndex returns user index.
 	GetUserIndex() base.Index
-	// GetItemIndex returns item index.
-	GetItemIndex() base.Index
 }
 
 type BaseMatrixFactorization struct {
@@ -156,7 +156,7 @@ func EncodeModel(m Model) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecodeModel(name string, buf []byte) (model.Model, error) {
+func DecodeModel(name string, buf []byte) (Model, error) {
 	reader := bytes.NewReader(buf)
 	decoder := gob.NewDecoder(reader)
 	switch name {

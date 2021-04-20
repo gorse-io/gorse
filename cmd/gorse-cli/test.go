@@ -26,8 +26,8 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/rank"
+	"github.com/zhenghaoz/gorse/model/ctr"
+	"github.com/zhenghaoz/gorse/model/pr"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
@@ -157,16 +157,16 @@ var testCFCommand = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		modelName := args[0]
-		m, err := cf.NewModel(modelName, nil)
+		m, err := pr.NewModel(modelName, nil)
 		if err != nil {
 			base.Logger().Fatal("failed to create model", zap.String("name", modelName), zap.Error(err))
 		}
 		// Load data
-		var trainSet, testSet *cf.DataSet
+		var trainSet, testSet *pr.DataSet
 		if cmd.PersistentFlags().Changed("load-builtin") {
 			name, _ := cmd.PersistentFlags().GetString("load-builtin")
 			base.Logger().Info("load built-in dataset", zap.String("name", name))
-			trainSet, testSet, err = cf.LoadDataFromBuiltIn(name)
+			trainSet, testSet, err = pr.LoadDataFromBuiltIn(name)
 			if err != nil {
 				base.Logger().Fatal("failed to load built-in dataset", zap.Error(err),
 					zap.String("name", name))
@@ -178,7 +178,7 @@ var testCFCommand = &cobra.Command{
 			numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
 			seed, _ := cmd.PersistentFlags().GetInt("random-state")
 			base.Logger().Info("load csv file", zap.String("csv_file", name))
-			data := cf.LoadDataFromCSV(name, sep, header)
+			data := pr.LoadDataFromCSV(name, sep, header)
 			base.Logger().Info("load data csv file",
 				zap.Int("n_users", data.UserCount()),
 				zap.Int("n_items", data.ItemCount()),
@@ -195,7 +195,7 @@ var testCFCommand = &cobra.Command{
 			}
 			defer database.Close()
 			// Load data
-			data, _, _, err := cf.LoadDataFromDatabase(database, feedbackTypes)
+			data, _, _, err := pr.LoadDataFromDatabase(database, feedbackTypes)
 			if err != nil {
 				base.Logger().Fatal("failed to load data from database", zap.Error(err))
 			}
@@ -213,20 +213,20 @@ var testCFCommand = &cobra.Command{
 		grid := parseParamFlags(cmd)
 		base.Logger().Info("load hyper-parameters grid", zap.Any("grid", grid))
 		// Load runtime options
-		fitConfig := &cf.FitConfig{}
+		fitConfig := &pr.FitConfig{}
 		fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
 		fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
 		fitConfig.TopK, _ = cmd.PersistentFlags().GetInt("top-k")
 		fitConfig.Candidates, _ = cmd.PersistentFlags().GetInt("n-negatives")
 		// Cross validation
 		start := time.Now()
-		var result *cf.ParamsSearchResult
+		var result *pr.ParamsSearchResult
 		if grid.Len() == 0 {
-			result = cf.NewParamsSearchResult()
+			result = pr.NewParamsSearchResult()
 			score := m.Fit(trainSet, testSet, fitConfig)
 			result.AddScore(nil, score)
 		} else {
-			a := cf.GridSearchCV(m, trainSet, testSet, grid, 0, fitConfig)
+			a := pr.GridSearchCV(m, trainSet, testSet, grid, 0, fitConfig)
 			result = &a
 		}
 		elapsed := time.Since(start)
@@ -254,11 +254,11 @@ var testFMCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 		// Load data
-		var trainSet, testSet *rank.Dataset
+		var trainSet, testSet *ctr.Dataset
 		if cmd.PersistentFlags().Changed("load-builtin") {
 			name, _ := cmd.PersistentFlags().GetString("load-builtin")
 			base.Logger().Info("load built-in dataset", zap.String("name", name))
-			trainSet, testSet, err = rank.LoadDataFromBuiltIn(name)
+			trainSet, testSet, err = ctr.LoadDataFromBuiltIn(name)
 			if err != nil {
 				base.Logger().Fatal("failed to load built-in dataset", zap.Error(err))
 			}
@@ -273,7 +273,7 @@ var testFMCommand = &cobra.Command{
 			defer database.Close()
 			seed, _ := cmd.PersistentFlags().GetInt64("seed")
 			testRatio, _ := cmd.PersistentFlags().GetFloat32("test-ratio")
-			dataSet, err := rank.LoadDataFromDatabase(database, feedbackTypes)
+			dataSet, err := ctr.LoadDataFromDatabase(database, feedbackTypes)
 			if err != nil {
 				base.Logger().Fatal("failed to load data from database", zap.Error(err))
 			}
@@ -292,20 +292,20 @@ var testFMCommand = &cobra.Command{
 		grid := parseParamFlags(cmd)
 		base.Logger().Info("load hyper-parameters grid", zap.Any("grid", grid))
 		// Load runtime options
-		fitConfig := &rank.FitConfig{}
+		fitConfig := &ctr.FitConfig{}
 		fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
 		fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
 		// Cross validation
 		start := time.Now()
 		task, _ := cmd.PersistentFlags().GetString("task")
-		m := rank.NewFM(rank.FMTask(task), nil)
-		var result *rank.ParamsSearchResult
+		m := ctr.NewFM(ctr.FMTask(task), nil)
+		var result *ctr.ParamsSearchResult
 		if grid.Len() == 0 {
-			result = rank.NewParamsSearchResult()
+			result = ctr.NewParamsSearchResult()
 			score := m.Fit(trainSet, testSet, fitConfig)
 			result.AddScore(nil, score)
 		} else {
-			a := rank.GridSearchCV(m, trainSet, testSet, grid, 0, fitConfig)
+			a := ctr.GridSearchCV(m, trainSet, testSet, grid, 0, fitConfig)
 			result = &a
 		}
 		elapsed := time.Since(start)

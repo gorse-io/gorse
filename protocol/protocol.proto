@@ -25,20 +25,20 @@ enum NodeType {
 service Master {
 
   /* meta distribute */
-  rpc GetMeta(RequestInfo) returns (Meta) {}
+  rpc GetMeta(NodeInfo) returns (Meta) {}
 
   /* data distribute */
-  rpc GetUserIndex(RequestInfo) returns(UserIndex) {}
-  rpc GetFactorizationMachine(RequestInfo) returns (Model) {}
-  rpc GetCollaborativeFilteringModel(RequestInfo) returns (Model) {}
+  rpc GetUserIndex(NodeInfo) returns(UserIndex) {}
+  rpc GetCTRModel(NodeInfo) returns (Model) {}
+  rpc GetPRModel(NodeInfo) returns (Model) {}
 
 }
 
 message Meta {
   string config = 1;
   int64 user_index_version = 2;
-  int64 cf_version = 3;
-  int64 fm_version = 4;
+  int64 pr_version = 3;
+  int64 ctr_version = 4;
   string me = 5;
   repeated string servers = 6;
   repeated string workers = 7;
@@ -55,6 +55,7 @@ message Model {
   bytes model = 3;    // model data
 }
 
-message RequestInfo {
+message NodeInfo {
   NodeType node_type = 1;
+  string node_name = 2;
 }

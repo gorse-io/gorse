@@ -68,6 +68,10 @@ func (knn *BaseKNN) InternalPredict(userProfile []int, itemIndex int) float32 {
 	return sum
 }
 
+func (knn *BaseKNN) GetItemIndex() base.Index {
+	return knn.ItemIndex
+}
+
 type CollaborativeKNN struct {
 	BaseKNN
 }
@@ -262,7 +266,7 @@ func dot(a, b []int) float32 {
 
 type ConcurrentMap struct {
 	Map   map[int]float32
-	Mutex sync.RWMutex
+	mutex sync.RWMutex
 }
 
 func NewConcurrentMap() ConcurrentMap {
@@ -272,14 +276,14 @@ func NewConcurrentMap() ConcurrentMap {
 }
 
 func (m *ConcurrentMap) Set(i int, v float32) {
-	m.Mutex.Lock()
-	defer m.Mutex.Unlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.Map[i] = v
 }
 
 func (m *ConcurrentMap) Get(i int) float32 {
-	m.Mutex.RLock()
-	defer m.Mutex.RUnlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 	if v, ok := m.Map[i]; ok {
 		return v
 	}

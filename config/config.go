@@ -86,6 +86,8 @@ type RecommendConfig struct {
 	PopularWindow int `toml:"popular_window"`
 	FitPeriod     int `toml:"fit_period"`
 	SearchPeriod  int `toml:"search_period"`
+	SearchEpoch   int `toml:"search_epoch"`
+	SearchTrials  int `toml:"search_trials"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -95,6 +97,8 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			PopularWindow: 1,
 			FitPeriod:     60,
 			SearchPeriod:  60,
+			SearchEpoch:   100,
+			SearchTrials:  10,
 		}
 	}
 	return config
@@ -165,6 +169,12 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "search_period") {
 		config.Recommend.SearchPeriod = defaultRecommendConfig.SearchPeriod
+	}
+	if !meta.IsDefined("recommend", "search_epoch") {
+		config.Recommend.SearchEpoch = defaultRecommendConfig.SearchEpoch
+	}
+	if !meta.IsDefined("recommend", "search_trials") {
+		config.Recommend.SearchTrials = defaultRecommendConfig.SearchTrials
 	}
 }
 

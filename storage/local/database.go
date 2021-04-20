@@ -42,7 +42,9 @@ type Database struct {
 func Open(path string) (*Database, error) {
 	var err error
 	database := new(Database)
-	if database.db, err = badger.Open(badger.DefaultOptions(path)); err != nil {
+	options := badger.DefaultOptions(path)
+	options.Truncate = true
+	if database.db, err = badger.Open(options); err != nil {
 		return nil, err
 	}
 	return database, nil

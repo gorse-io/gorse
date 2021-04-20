@@ -18,8 +18,8 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/rank"
+	"github.com/zhenghaoz/gorse/model/ctr"
+	"github.com/zhenghaoz/gorse/model/pr"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"os"
@@ -72,15 +72,15 @@ var tuneCFCommand = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		modelName := args[0]
-		m, err := cf.NewModel(modelName, nil)
+		m, err := pr.NewModel(modelName, nil)
 		if err != nil {
 			base.Logger().Fatal("failed to create model", zap.Error(err))
 		}
 		// Load data
-		var trainSet, testSet *cf.DataSet
+		var trainSet, testSet *pr.DataSet
 		if cmd.PersistentFlags().Changed("load-builtin") {
 			name, _ := cmd.PersistentFlags().GetString("load-builtin")
-			trainSet, testSet, err = cf.LoadDataFromBuiltIn(name)
+			trainSet, testSet, err = pr.LoadDataFromBuiltIn(name)
 			if err != nil {
 				base.Logger().Fatal("failed to load built-in dataset", zap.Error(err),
 					zap.String("name", name))
@@ -92,7 +92,7 @@ var tuneCFCommand = &cobra.Command{
 			header, _ := cmd.PersistentFlags().GetBool("csv-header")
 			numTestUsers, _ := cmd.PersistentFlags().GetInt("n-test-users")
 			seed, _ := cmd.PersistentFlags().GetInt("random-state")
-			data := cf.LoadDataFromCSV(name, sep, header)
+			data := pr.LoadDataFromCSV(name, sep, header)
 			trainSet, testSet = data.Split(numTestUsers, int64(seed))
 		} else {
 			feedbackTypes, _ := cmd.PersistentFlags().GetStringArray("feedback-type")
@@ -105,7 +105,7 @@ var tuneCFCommand = &cobra.Command{
 			}
 			defer database.Close()
 			// Load data
-			data, _, _, err := cf.LoadDataFromDatabase(database, feedbackTypes)
+			data, _, _, err := pr.LoadDataFromDatabase(database, feedbackTypes)
 			if err != nil {
 				base.Logger().Fatal("failed to load data from database", zap.Error(err))
 			}
@@ -122,7 +122,7 @@ var tuneCFCommand = &cobra.Command{
 		grid := parseParamFlags(cmd)
 		base.Logger().Info("load hyper-parameters grid", zap.Any("grid", grid))
 		// Load runtime options
-		fitConfig := &cf.FitConfig{}
+		fitConfig := &pr.FitConfig{}
 		fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
 		fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
 		fitConfig.TopK, _ = cmd.PersistentFlags().GetInt("top-k")
@@ -132,7 +132,7 @@ var tuneCFCommand = &cobra.Command{
 		grid.Fill(m.GetParamsGrid())
 		base.Logger().Info("tune hyper-parameters", zap.Any("grid", grid))
 		numTrials, _ := cmd.PersistentFlags().GetInt("n-trials")
-		result := cf.RandomSearchCV(m, trainSet, testSet, grid, numTrials, 0, fitConfig)
+		result := pr.RandomSearchCV(m, trainSet, testSet, grid, numTrials, 0, fitConfig)
 		elapsed := time.Since(start)
 		// Render table
 		table := tablewriter.NewWriter(os.Stdout)
@@ -158,11 +158,11 @@ var tuneFMCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 		// Load data
-		var trainSet, testSet *rank.Dataset
+		var trainSet, testSet *ctr.Dataset
 		if cmd.PersistentFlags().Changed("load-builtin") {
 			name, _ := cmd.PersistentFlags().GetString("load-builtin")
 			base.Logger().Info("load built-in dataset", zap.String("name", name))
-			trainSet, testSet, err = rank.LoadDataFromBuiltIn(name)
+			trainSet, testSet, err = ctr.LoadDataFromBuiltIn(name)
 			if err != nil {
 				base.Logger().Fatal("failed to load built-in dataset", zap.Error(err))
 			}
@@ -177,7 +177,7 @@ var tuneFMCommand = &cobra.Command{
 			defer database.Close()
 			seed, _ := cmd.PersistentFlags().GetInt64("seed")
 			testRatio, _ := cmd.PersistentFlags().GetFloat32("test-ratio")
-			dataSet, err := rank.LoadDataFromDatabase(database, feedbackTypes)
+			dataSet, err := ctr.LoadDataFromDatabase(database, feedbackTypes)
 			if err != nil {
 				base.Logger().Fatal("failed to load data from database", zap.Error(err))
 			}
@@ -195,17 +195,17 @@ var tuneFMCommand = &cobra.Command{
 		grid := parseParamFlags(cmd)
 		base.Logger().Info("load hyper-parameters grid", zap.Any("grid", grid))
 		// Load runtime options
-		fitConfig := &rank.FitConfig{}
+		fitConfig := &ctr.FitConfig{}
 		fitConfig.Verbose, _ = cmd.PersistentFlags().GetInt("verbose")
 		fitConfig.Jobs, _ = cmd.PersistentFlags().GetInt("jobs")
 		// Cross validation
 		task, _ := cmd.PersistentFlags().GetString("task")
-		m := rank.NewFM(rank.FMTask(task), nil)
+		m := ctr.NewFM(ctr.FMTask(task), nil)
 		start := time.Now()
 		grid.Fill(m.GetParamsGrid())
 		base.Logger().Info("tune hyper-parameters", zap.Any("grid", grid))
 		numTrials, _ := cmd.PersistentFlags().GetInt("n-trials")
-		result := rank.RandomSearchCV(m, trainSet, testSet, grid, numTrials, 0, fitConfig)
+		result := ctr.RandomSearchCV(m, trainSet, testSet, grid, numTrials, 0, fitConfig)
 		elapsed := time.Since(start)
 		// Render table
 		table := tablewriter.NewWriter(os.Stdout)

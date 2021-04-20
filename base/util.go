@@ -14,6 +14,7 @@
 package base
 
 import (
+	"fmt"
 	"go.uber.org/zap"
 	"time"
 )
@@ -57,6 +58,14 @@ func Min(a ...int) int {
 		}
 	}
 	return minimum
+}
+
+func RangeInt(n int) []int {
+	a := make([]int, n)
+	for i := range a {
+		a[i] = i
+	}
+	return a
 }
 
 func NewMatrix32(row, col int) [][]float32 {
@@ -106,4 +115,8 @@ func CheckPanic() {
 	if r := recover(); r != nil {
 		Logger().Error("panic recovered", zap.Any("panic", r))
 	}
+}
+
+func Hex(v int64) string {
+	return fmt.Sprintf("%x", v)
 }

@@ -18,11 +18,11 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MasterClient interface {
 	// meta distribute
-	GetMeta(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Meta, error)
+	GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Meta, error)
 	// data distribute
-	GetUserIndex(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*UserIndex, error)
-	GetFactorizationMachine(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error)
-	GetCollaborativeFilteringModel(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error)
+	GetUserIndex(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*UserIndex, error)
+	GetCTRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
+	GetPRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
 }
 
 type masterClient struct {
@@ -33,7 +33,7 @@ func NewMasterClient(cc grpc.ClientConnInterface) MasterClient {
 	return &masterClient{cc}
 }
 
-func (c *masterClient) GetMeta(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Meta, error) {
+func (c *masterClient) GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Meta, error) {
 	out := new(Meta)
 	err := c.cc.Invoke(ctx, "/protocol.Master/GetMeta", in, out, opts...)
 	if err != nil {
@@ -42,7 +42,7 @@ func (c *masterClient) GetMeta(ctx context.Context, in *RequestInfo, opts ...grp
 	return out, nil
 }
 
-func (c *masterClient) GetUserIndex(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*UserIndex, error) {
+func (c *masterClient) GetUserIndex(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*UserIndex, error) {
 	out := new(UserIndex)
 	err := c.cc.Invoke(ctx, "/protocol.Master/GetUserIndex", in, out, opts...)
 	if err != nil {
@@ -51,18 +51,18 @@ func (c *masterClient) GetUserIndex(ctx context.Context, in *RequestInfo, opts .
 	return out, nil
 }
 
-func (c *masterClient) GetFactorizationMachine(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error) {
+func (c *masterClient) GetCTRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
 	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetFactorizationMachine", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetCTRModel", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *masterClient) GetCollaborativeFilteringModel(ctx context.Context, in *RequestInfo, opts ...grpc.CallOption) (*Model, error) {
+func (c *masterClient) GetPRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
 	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetCollaborativeFilteringModel", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetPRModel", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,11 +74,11 @@ func (c *masterClient) GetCollaborativeFilteringModel(ctx context.Context, in *R
 // for forward compatibility
 type MasterServer interface {
 	// meta distribute
-	GetMeta(context.Context, *RequestInfo) (*Meta, error)
+	GetMeta(context.Context, *NodeInfo) (*Meta, error)
 	// data distribute
-	GetUserIndex(context.Context, *RequestInfo) (*UserIndex, error)
-	GetFactorizationMachine(context.Context, *RequestInfo) (*Model, error)
-	GetCollaborativeFilteringModel(context.Context, *RequestInfo) (*Model, error)
+	GetUserIndex(context.Context, *NodeInfo) (*UserIndex, error)
+	GetCTRModel(context.Context, *NodeInfo) (*Model, error)
+	GetPRModel(context.Context, *NodeInfo) (*Model, error)
 	mustEmbedUnimplementedMasterServer()
 }
 
@@ -86,17 +86,17 @@ type MasterServer interface {
 type UnimplementedMasterServer struct {
 }
 
-func (UnimplementedMasterServer) GetMeta(context.Context, *RequestInfo) (*Meta, error) {
+func (UnimplementedMasterServer) GetMeta(context.Context, *NodeInfo) (*Meta, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMeta not implemented")
 }
-func (UnimplementedMasterServer) GetUserIndex(context.Context, *RequestInfo) (*UserIndex, error) {
+func (UnimplementedMasterServer) GetUserIndex(context.Context, *NodeInfo) (*UserIndex, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserIndex not implemented")
 }
-func (UnimplementedMasterServer) GetFactorizationMachine(context.Context, *RequestInfo) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetFactorizationMachine not implemented")
+func (UnimplementedMasterServer) GetCTRModel(context.Context, *NodeInfo) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCTRModel not implemented")
 }
-func (UnimplementedMasterServer) GetCollaborativeFilteringModel(context.Context, *RequestInfo) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCollaborativeFilteringModel not implemented")
+func (UnimplementedMasterServer) GetPRModel(context.Context, *NodeInfo) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPRModel not implemented")
 }
 func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
 
@@ -112,7 +112,7 @@ func RegisterMasterServer(s grpc.ServiceRegistrar, srv MasterServer) {
 }
 
 func _Master_GetMeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestInfo)
+	in := new(NodeInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -124,13 +124,13 @@ func _Master_GetMeta_Handler(srv interface{}, ctx context.Context, dec func(inte
 		FullMethod: "/protocol.Master/GetMeta",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetMeta(ctx, req.(*RequestInfo))
+		return srv.(MasterServer).GetMeta(ctx, req.(*NodeInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Master_GetUserIndex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestInfo)
+	in := new(NodeInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -142,43 +142,43 @@ func _Master_GetUserIndex_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: "/protocol.Master/GetUserIndex",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetUserIndex(ctx, req.(*RequestInfo))
+		return srv.(MasterServer).GetUserIndex(ctx, req.(*NodeInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Master_GetFactorizationMachine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestInfo)
+func _Master_GetCTRModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MasterServer).GetFactorizationMachine(ctx, in)
+		return srv.(MasterServer).GetCTRModel(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Master/GetFactorizationMachine",
+		FullMethod: "/protocol.Master/GetCTRModel",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetFactorizationMachine(ctx, req.(*RequestInfo))
+		return srv.(MasterServer).GetCTRModel(ctx, req.(*NodeInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Master_GetCollaborativeFilteringModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestInfo)
+func _Master_GetPRModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MasterServer).GetCollaborativeFilteringModel(ctx, in)
+		return srv.(MasterServer).GetPRModel(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Master/GetCollaborativeFilteringModel",
+		FullMethod: "/protocol.Master/GetPRModel",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetCollaborativeFilteringModel(ctx, req.(*RequestInfo))
+		return srv.(MasterServer).GetPRModel(ctx, req.(*NodeInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -196,12 +196,12 @@ var _Master_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Master_GetUserIndex_Handler,
 		},
 		{
-			MethodName: "GetFactorizationMachine",
-			Handler:    _Master_GetFactorizationMachine_Handler,
+			MethodName: "GetCTRModel",
+			Handler:    _Master_GetCTRModel_Handler,
 		},
 		{
-			MethodName: "GetCollaborativeFilteringModel",
-			Handler:    _Master_GetCollaborativeFilteringModel_Handler,
+			MethodName: "GetPRModel",
+			Handler:    _Master_GetPRModel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
