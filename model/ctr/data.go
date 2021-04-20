@@ -11,10 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package rank
+package ctr
 
 import (
 	"bufio"
+	"github.com/scylladb/go-set"
 	"go.uber.org/zap"
 	"os"
 	"strconv"
@@ -122,6 +123,22 @@ func LoadDataFromBuiltIn(name string) (train *Dataset, test *Dataset, err error)
 	return
 }
 
+type Counter struct {
+	Map map[string]int
+}
+
+func NewCounter() *Counter {
+	return &Counter{Map: make(map[string]int)}
+}
+
+func (c *Counter) Add(s string) {
+	c.Map[s]++
+}
+
+func (c *Counter) Get(s string) int {
+	return c.Map[s]
+}
+
 func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Dataset, error) {
 	unifiedIndex := NewUnifiedMapIndexBuilder()
 	cursor := ""
@@ -147,6 +164,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		}
 	}
 	// pull items
+	counter := NewCounter()
 	for {
 		var batchItems []data.Item
 		cursor, batchItems, err = database.GetItems(cursor, batchSize)
@@ -157,13 +175,25 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 			items = append(items, item)
 			unifiedIndex.AddItem(item.ItemId)
 			for _, label := range item.Labels {
-				unifiedIndex.AddItemLabel(label)
+				counter.Add(label)
+				//unifiedIndex.AddItemLabel(label)
 			}
 		}
 		if cursor == "" {
 			break
 		}
 	}
+	for _, item := range items {
+		items = append(items, item)
+		//unifiedIndex.AddItem(item.ItemId)
+		for _, label := range item.Labels {
+			if counter.Get(label) > 10 {
+				unifiedIndex.AddItemLabel(label)
+			}
+		}
+	}
+	//fmt.Println(counter)
+	//os.Exit(0)
 	// create dataset
 	dataSet := &Dataset{
 		UnifiedIndex:   unifiedIndex.Build(),
@@ -180,10 +210,17 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	}
 	// insert items
 	for _, item := range items {
-		itemId := dataSet.UnifiedIndex.EncodeItem(item.ItemId)
-		dataSet.UserItemLabels[itemId] = make([]int, len(item.Labels))
-		for i := range item.Labels {
-			dataSet.UserItemLabels[itemId][i] = dataSet.UnifiedIndex.EncodeItemLabel(item.Labels[i])
+		itemIndex := dataSet.UnifiedIndex.EncodeItem(item.ItemId)
+		dataSet.UserItemLabels[itemIndex] = make([]int, 0, len(item.Labels))
+		for _, label := range item.Labels {
+			labelIndex := dataSet.UnifiedIndex.EncodeItemLabel(label)
+			if labelIndex != base.NotId {
+				dataSet.UserItemLabels[itemIndex] = append(dataSet.UserItemLabels[itemIndex], labelIndex)
+			} else {
+				base.Logger().Warn("label not used",
+					zap.String("item_id", item.ItemId),
+					zap.String("label", label))
+			}
 		}
 	}
 	// insert feedback
@@ -264,11 +301,11 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	// split by random
 	numTestSize := int(float32(dataset.PositiveCount) * ratio)
 	rng := base.NewRandomGenerator(seed)
-	sampledIndex := base.NewSet(rng.Sample(0, dataset.PositiveCount, numTestSize)...)
+	sampledIndex := set.NewIntSet(rng.Sample(0, dataset.PositiveCount, numTestSize)...)
 	cursor := 0
 	for userId, items := range dataset.UserFeedbackItems {
 		for i, itemId := range items {
-			if sampledIndex.Contain(cursor) {
+			if sampledIndex.Has(cursor) {
 				// add samples into test set
 				testSet.PositiveCount++
 				testSet.UserFeedbackItems[userId] = append(testSet.UserFeedbackItems[userId], itemId)
@@ -302,7 +339,7 @@ func (dataset *Dataset) NegativeSample(numNegatives int, trainSet *Dataset, seed
 				dataset.FeedbackTarget = append(dataset.FeedbackTarget, dataset.UserFeedbackTarget[userId][i])
 			}
 			// fill negative samples
-			posSet := base.NewSet(items...)
+			posSet := set.NewIntSet(items...)
 			if trainSet != nil {
 				posSet.Add(trainSet.UserFeedbackItems[userId]...)
 			}

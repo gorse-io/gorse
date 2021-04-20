@@ -9,16 +9,19 @@ require (
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/cheggaaa/pb/v3 v3.0.7
 	github.com/chewxy/math32 v1.0.6
+	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.4.0
 	github.com/go-redis/redis/v8 v8.8.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
+	github.com/jinzhu/copier v0.2.9
 	github.com/json-iterator/go v1.1.10
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.10.0
+	github.com/scylladb/go-set v1.0.2
 	github.com/spf13/cobra v0.0.7
 	github.com/steinfletcher/apitest v1.5.3
 	github.com/stretchr/testify v1.7.0
