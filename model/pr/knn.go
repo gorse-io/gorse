@@ -138,8 +138,10 @@ func (knn *CollaborativeKNN) Fit(trainSet *DataSet, valSet *DataSet, config *Fit
 				default:
 					panic("invalid similarity")
 				}
-				knn.Similarity[itemIndex].Set(neighborId, similarity)
-				knn.Similarity[neighborId].Set(itemIndex, similarity)
+				if similarity != 0 {
+					knn.Similarity[itemIndex].Set(neighborId, similarity)
+					knn.Similarity[neighborId].Set(itemIndex, similarity)
+				}
 			}
 		}
 		return nil
@@ -182,7 +184,7 @@ func (knn *ContentKNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig
 	for i := range knn.Similarity {
 		knn.Similarity[i] = NewConcurrentMap()
 	}
-	// sort item labels and build revers index
+	// sort item labels and build reverse index
 	labelPairCount := 0
 	labelItems := base.NewMatrixInt(trainSet.NumItemLabels, 0)
 	for itemIndex := range trainSet.ItemLabels {
@@ -229,8 +231,10 @@ func (knn *ContentKNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig
 				default:
 					panic("invalid similarity")
 				}
-				knn.Similarity[itemIndex].Set(neighborId, similarity)
-				knn.Similarity[neighborId].Set(itemIndex, similarity)
+				if similarity != 0 {
+					knn.Similarity[itemIndex].Set(neighborId, similarity)
+					knn.Similarity[neighborId].Set(itemIndex, similarity)
+				}
 			}
 		}
 		return nil
