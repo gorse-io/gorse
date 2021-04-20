@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package rank
+package ctr
 
 import (
 	"bufio"
@@ -39,7 +39,7 @@ func (score Score) GetName() string {
 	case FMClassification:
 		return "Precision"
 	default:
-		panic("unknown task type")
+		return "NaN"
 	}
 }
 
@@ -50,7 +50,7 @@ func (score Score) GetValue() float32 {
 	case FMClassification:
 		return score.Precision
 	default:
-		panic("unknown task type")
+		return math32.NaN()
 	}
 }
 
@@ -69,7 +69,7 @@ func (score Score) BetterThan(s Score) bool {
 	case FMClassification:
 		return score.Precision > s.Precision
 	default:
-		panic("unknown task type")
+		return true
 	}
 }
 
@@ -228,6 +228,7 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 	fm.Init(trainSet)
 	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
+	snapshots := SnapshotManger{}
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		trainSet.NegativeSample(1, nil, fm.GetRandomGenerator().Int63())
 		for _, target := range trainSet.FeedbackTarget {
@@ -273,7 +274,7 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if epoch%config.Verbose == 0 {
+		if epoch%config.Verbose == 0 || epoch == fm.nEpochs {
 			evalStart := time.Now()
 			var score Score
 			switch fm.Task {
@@ -295,17 +296,16 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 				base.Logger().Error("model diverged", zap.Float32("lr", fm.lr))
 				break
 			}
+			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 		}
 	}
-	switch fm.Task {
-	case FMRegression:
-		return EvaluateRegression(fm, testSet)
-	case FMClassification:
-		return EvaluateClassification(fm, testSet)
-	default:
-		base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
-		return Score{}
+	// restore best snapshot
+	if len(snapshots.BestWeights) > 0 {
+		fm.V = snapshots.BestWeights[0].([][]float32)
+		fm.W = snapshots.BestWeights[1].([]float32)
+		fm.B = snapshots.BestWeights[2].(float32)
 	}
+	return snapshots.BestScore
 }
 
 func (fm *FM) Clear() {

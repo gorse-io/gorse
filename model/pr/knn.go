@@ -29,12 +29,12 @@ type BaseKNN struct {
 
 func (knn *BaseKNN) SetParams(params model.Params) {
 	knn.BaseModel.SetParams(params)
-	knn.similarity = params.GetString(model.Similarity, model.Similarity_Cosine)
+	knn.similarity = params.GetString(model.Similarity, model.SimilarityCosine)
 }
 
 func (knn *BaseKNN) GetParamsGrid() model.ParamsGrid {
 	return model.ParamsGrid{
-		model.Similarity: []interface{}{model.Similarity_Cosine, model.Similarity_Dot},
+		model.Similarity: []interface{}{model.SimilarityCosine, model.SimilarityDot},
 	}
 }
 
@@ -123,13 +123,13 @@ func (knn *CollaborativeKNN) Fit(trainSet *DataSet, valSet *DataSet, config *Fit
 			if neighborId < itemIndex {
 				var similarity float32
 				switch knn.similarity {
-				case model.Similarity_Cosine:
+				case model.SimilarityCosine:
 					similarity = dot(trainSet.ItemFeedback[itemIndex], trainSet.ItemFeedback[neighborId])
 					if similarity != 0 {
 						similarity /= math32.Sqrt(float32(len(trainSet.ItemFeedback[itemIndex])))
 						similarity /= math32.Sqrt(float32(len(trainSet.ItemFeedback[neighborId])))
 					}
-				case model.Similarity_Dot:
+				case model.SimilarityDot:
 					similarity = dot(trainSet.ItemFeedback[itemIndex], trainSet.ItemFeedback[neighborId])
 				default:
 					panic("invalid similarity")
@@ -214,13 +214,13 @@ func (knn *ContentKNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig
 			if neighborId < itemIndex {
 				var similarity float32
 				switch knn.similarity {
-				case model.Similarity_Cosine:
+				case model.SimilarityCosine:
 					similarity = dot(trainSet.ItemLabels[itemIndex], trainSet.ItemLabels[neighborId])
 					if similarity != 0 {
 						similarity /= math32.Sqrt(float32(len(trainSet.ItemLabels[itemIndex])))
 						similarity /= math32.Sqrt(float32(len(trainSet.ItemLabels[neighborId])))
 					}
-				case model.Similarity_Dot:
+				case model.SimilarityDot:
 					similarity = dot(trainSet.ItemLabels[itemIndex], trainSet.ItemLabels[neighborId])
 				default:
 					panic("invalid similarity")
