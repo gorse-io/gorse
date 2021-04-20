@@ -30,7 +30,7 @@ func (db *MongoDB) Init() error {
 	ctx := context.Background()
 	d := db.client.Database(db.dbName)
 	// list collections
-	var hasUsers, hasItems, hasFeedback bool
+	var hasUsers, hasItems, hasFeedback, hasMeasurements bool
 	collections, err := d.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
 		return err
@@ -43,6 +43,8 @@ func (db *MongoDB) Init() error {
 			hasItems = true
 		case "feedback":
 			hasFeedback = true
+		case "measurements":
+			hasMeasurements = true
 		}
 	}
 	// create collections
@@ -61,11 +63,44 @@ func (db *MongoDB) Init() error {
 			return err
 		}
 	}
+	if !hasMeasurements {
+		if err = d.CreateCollection(ctx, "measurements"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (db *MongoDB) Close() error {
 	return db.client.Disconnect(context.Background())
+}
+
+func (db *MongoDB) InsertMeasurement(measurement Measurement) error {
+	ctx := context.Background()
+	c := db.client.Database(db.dbName).Collection("measurements")
+	_, err := c.InsertOne(ctx, measurement)
+	return err
+}
+
+func (db *MongoDB) GetMeasurements(name string, n int) ([]Measurement, error) {
+	ctx := context.Background()
+	c := db.client.Database(db.dbName).Collection("measurements")
+	opt := options.Find()
+	opt.SetLimit(int64(n))
+	opt.SetSort(bson.D{{"timestamp", -1}})
+	r, err := c.Find(ctx, bson.M{"name": bson.M{"$eq": name}}, opt)
+	measurements := make([]Measurement, 0)
+	if err != nil {
+		return measurements, err
+	}
+	for r.Next(ctx) {
+		var measurement Measurement
+		if err = r.Decode(&measurement); err != nil {
+			return measurements, err
+		}
+		measurements = append(measurements, measurement)
+	}
+	return measurements, nil
 }
 
 func (db *MongoDB) InsertItem(item Item) error {
