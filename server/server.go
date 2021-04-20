@@ -17,9 +17,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/scylladb/go-set"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
@@ -27,7 +27,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/rank"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -43,10 +42,10 @@ type Server struct {
 	masterClient protocol.MasterClient
 
 	// factorization machine
-	fmModel         rank.FactorizationMachine
-	RankModelMutex  sync.RWMutex
-	fmVersion       int64
-	latestFMVersion int64
+	//fmModel         ctr.FactorizationMachine
+	//RankModelMutex  sync.RWMutex
+	//fmVersion       int64
+	//latestFMVersion int64
 
 	// config
 	cfg        *config.Config
@@ -56,7 +55,7 @@ type Server struct {
 	serverPort int
 
 	// events
-	syncedChan chan bool
+	//syncedChan chan bool
 }
 
 func NewServer(masterHost string, masterPort int, serverHost string, serverPort int) *Server {
@@ -71,7 +70,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 		serverPort: serverPort,
 		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
 		// events
-		syncedChan: make(chan bool, 1024),
+		//syncedChan: make(chan bool, 1024),
 	}
 }
 
@@ -90,12 +89,11 @@ func (s *Server) Serve() {
 	s.masterClient = protocol.NewMasterClient(conn)
 
 	go s.Sync()
-	go s.Pull()
+	//go s.Pull()
 
 	// register restful APIs
 	ws := s.CreateWebService()
 	restful.DefaultContainer.Add(ws)
-
 	// register swagger UI
 	specConfig := restfulspec.Config{
 		WebServices: restful.RegisteredWebServices(),
@@ -104,7 +102,6 @@ func (s *Server) Serve() {
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(specConfig))
 	swaggerFile = fmt.Sprintf("http://%s:%d/apidocs.json", s.serverHost, s.serverPort)
 	http.HandleFunc(apiDocsPath, handler)
-
 	// register prometheus
 	http.Handle("/metrics", promhttp.Handler())
 
@@ -115,27 +112,27 @@ func (s *Server) Serve() {
 }
 
 // Pull factorization machine.
-func (s *Server) Pull() {
-	defer base.CheckPanic()
-	for range s.syncedChan {
-		ctx := context.Background()
-		// pull factorization machine
-		if s.latestFMVersion != s.fmVersion {
-			base.Logger().Info("pull factorization machine")
-			if mfResponse, err := s.masterClient.GetFactorizationMachine(ctx, &protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
-				base.Logger().Error("failed to pull factorization machine", zap.Error(err))
-			} else {
-				s.fmModel, err = rank.DecodeModel(mfResponse.Model)
-				if err != nil {
-					base.Logger().Error("failed to decode factorization machine", zap.Error(err))
-				} else {
-					s.fmVersion = mfResponse.Version
-					base.Logger().Info("synced factorization machine", zap.Int64("version", s.fmVersion))
-				}
-			}
-		}
-	}
-}
+//func (s *Server) Pull() {
+//	defer base.CheckPanic()
+//	for range s.syncedChan {
+//		ctx := context.Background()
+//		// pull factorization machine
+//		if s.latestFMVersion != s.fmVersion {
+//			base.Logger().Info("pull factorization machine")
+//			if mfResponse, err := s.masterClient.GetFactorizationMachine(ctx, &protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
+//				base.Logger().Error("failed to pull factorization machine", zap.Error(err))
+//			} else {
+//				s.fmModel, err = ctr.DecodeModel(mfResponse.Model)
+//				if err != nil {
+//					base.Logger().Error("failed to decode factorization machine", zap.Error(err))
+//				} else {
+//					s.fmVersion = mfResponse.Version
+//					base.Logger().Info("synced factorization machine", zap.Int64("version", s.fmVersion))
+//				}
+//			}
+//		}
+//	}
+//}
 
 // Sync this server to the master.
 func (s *Server) Sync() {
@@ -177,13 +174,13 @@ func (s *Server) Sync() {
 		}
 
 		// check FM version
-		s.latestFMVersion = meta.FmVersion
-		if s.latestFMVersion != s.fmVersion {
-			base.Logger().Info("new factorization machine model found",
-				zap.Int64("old_version", s.fmVersion),
-				zap.Int64("new_version", s.latestFMVersion))
-			s.syncedChan <- true
-		}
+		//s.latestFMVersion = meta.FmVersion
+		//if s.latestFMVersion != s.fmVersion {
+		//	base.Logger().Info("new factorization machine model found",
+		//		zap.Int64("old_version", s.fmVersion),
+		//		zap.Int64("new_version", s.latestFMVersion))
+		//	s.syncedChan <- true
+		//}
 	sleep:
 		time.Sleep(time.Duration(s.cfg.Master.MetaTimeout) * time.Second)
 	}
@@ -349,12 +346,12 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Writes([]string{}))
 
-	/* Interaction with cache store */
+	/* Interaction with intermediate result */
 
 	// Get collaborative filtering recommendation by user id
-	ws.Route(ws.GET("/collaborative/{user-id}").To(s.getCollaborative).
+	ws.Route(ws.GET("/intermediate/recommend/{user-id}").To(s.getCollaborative).
 		Doc("get the collaborative filtering recommendation for a user").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"collections"}).
+		Metadata(restfulspec.KeyOpenAPITags, []string{"intermediate"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
@@ -362,19 +359,22 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 	// Get subscribe items
-	ws.Route(ws.GET("/subscribe/{user-id}").To(s.getSubscribe).
-		Doc("get subscribe items for a user").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"collections"}).
-		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
-		Writes([]string{}))
+	//ws.Route(ws.GET("/intermediate/subscribe/{user-id}").To(s.getSubscribe).
+	//	Doc("get subscribe items for a user").
+	//	Metadata(restfulspec.KeyOpenAPITags, []string{"intermediate"}).
+	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+	//	Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+	//	Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+	//	Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
+	//	Writes([]string{}))
+
+	/* Rank recommendation */
+
 	// Get popular items
 	ws.Route(ws.GET("/popular").To(s.getPopular).
 		Doc("get popular items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"collections"}).
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
@@ -382,7 +382,7 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Writes([]string{}))
 	ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
 		Doc("get popular items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"collections"}).
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
@@ -391,7 +391,7 @@ func (s *Server) CreateWebService() *restful.WebService {
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("get latest items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"collections"}).
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
@@ -399,7 +399,7 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Writes([]string{}))
 	ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
 		Doc("get latest items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"collections"}).
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
@@ -408,16 +408,13 @@ func (s *Server) CreateWebService() *restful.WebService {
 	// Get neighbors
 	ws.Route(ws.GET("/neighbors/{item-id}").To(s.getNeighbors).
 		Doc("get neighbors of a item").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"collections"}).
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
-
-	/* Rank recommendation */
-
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
@@ -427,6 +424,15 @@ func (s *Server) CreateWebService() *restful.WebService {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
+
+	/* Interaction with measurements */
+
+	ws.Route(ws.GET("/measurements/{name}").To(s.getMeasurements).
+		Doc("Get measurements").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"measurements"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Writes([]data.Measurement{}))
 
 	return ws
 }
@@ -581,11 +587,11 @@ func (s *Server) getCollaborative(request *restful.Request, response *restful.Re
 }
 
 func (s *Server) getRecommend(request *restful.Request, response *restful.Response) {
-	// Authorize
+	// authorize
 	if !s.auth(request, response) {
 		return
 	}
-	start := time.Now()
+	// parse arguments
 	userId := request.PathParameter("user-id")
 	returnType := request.QueryParameter("return")
 	n, err := parseInt(request, "n", s.cfg.Server.DefaultN)
@@ -594,112 +600,56 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 		return
 	}
 	writeBackFeedback := request.QueryParameter("write-back")
-	candidateCollections := make(chan []string, 3)
-	errors := make([]error, 3)
-	// load populars
-	go func() {
-		var popularItems []string
-		if s.cfg.Popular.NumCache > 0 {
-			popularItems, err = s.cacheStore.GetList(cache.PopularItems, "", s.cfg.Popular.NumCache, 0)
-		}
-		if err != nil {
-			errors[0] = err
-			candidateCollections <- nil
-		} else {
-			candidateCollections <- popularItems
-			if len(popularItems) == 0 {
-				base.Logger().Warn("empty popular items")
-			}
-		}
-	}()
-	// load latest
-	go func() {
-		var latestItems []string
-		if s.cfg.Latest.NumCache > 0 {
-			latestItems, err = s.cacheStore.GetList(cache.LatestItems, "", s.cfg.Latest.NumCache, 0)
-		}
-		if err != nil {
-			errors[1] = err
-			candidateCollections <- nil
-		} else {
-			candidateCollections <- latestItems
-			if len(latestItems) == 0 {
-				base.Logger().Warn("empty latest items")
-			}
-		}
-	}()
-	// load matched
+	// load offline recommendation
+	start := time.Now()
+	itemsChan := make(chan []string, 1)
+	errChan := make(chan error, 1)
 	go func() {
 		var collaborativeFilteringItems []string
-		if s.cfg.Collaborative.NumCached > 0 {
-			collaborativeFilteringItems, err = s.cacheStore.GetList(cache.CollaborativeItems, userId, s.cfg.Collaborative.NumCached, 0)
-		}
+		collaborativeFilteringItems, err = s.cacheStore.GetList(cache.CollaborativeItems, userId, 0, s.cfg.Database.CacheSize)
 		if err != nil {
-			errors[2] = err
-			candidateCollections <- nil
+			itemsChan <- nil
+			errChan <- err
 		} else {
-			candidateCollections <- collaborativeFilteringItems
+			itemsChan <- collaborativeFilteringItems
+			errChan <- nil
 			if len(collaborativeFilteringItems) == 0 {
 				base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
 			}
 		}
 	}()
-	// load feedback
+	// load historical feedback
 	userFeedback, err := s.dataStore.GetUserFeedback(userId, nil)
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
-	excludeSet := base.NewStringSet()
+	excludeSet := set.NewStringSet()
 	for _, feedback := range userFeedback {
 		excludeSet.Add(feedback.ItemId)
 	}
-	// merge collections
-	candidateItems := make([]string, 0)
-	for i := 0; i < 3; i++ {
-		items := <-candidateCollections
-		for _, itemId := range items {
-			if !excludeSet.Contain(itemId) {
-				candidateItems = append(candidateItems, itemId)
-				excludeSet.Add(itemId)
-			}
-		}
-	}
-	for i := 0; i < 3; i++ {
-		if errors[i] != nil {
-			internalServerError(response, errors[i])
-			return
-		}
-	}
-	// collect item features
-	candidateFeaturedItems := make([]data.Item, len(candidateItems))
-	err = base.Parallel(len(candidateItems), 4, func(_, jobId int) error {
-		candidateFeaturedItems[jobId], err = s.dataStore.GetItem(candidateItems[jobId])
-		return err
-	})
+	// remove historical items
+	items := <-itemsChan
+	err = <-errChan
 	if err != nil {
 		internalServerError(response, err)
 		return
 	}
-	// online predict
-	startPredictTime := time.Now()
-	recItems := base.NewTopKStringFilter(n)
-	for _, item := range candidateFeaturedItems {
-		s.RankModelMutex.RLock()
-		m := s.fmModel
-		s.RankModelMutex.RUnlock()
-		recItems.Push(item.ItemId, m.Predict(userId, item.ItemId, item.Labels))
+	results := make([]string, 0, len(items))
+	for _, itemId := range items {
+		if !excludeSet.Has(itemId) {
+			results = append(results, itemId)
+		}
 	}
-	result, _ := recItems.PopAll()
+	if len(results) > n {
+		results = results[:n]
+	}
 	spent := time.Since(start)
-	predictTime := time.Since(startPredictTime)
 	base.Logger().Info("complete recommendation",
-		zap.Int("n_candidate", len(candidateItems)),
-		zap.Duration("total_time", spent),
-		zap.Duration("predict_time", predictTime))
+		zap.Duration("total_time", spent))
 	// write back
 	if writeBackFeedback != "" {
-		for _, itemId := range result {
+		for _, itemId := range results {
 			err = s.dataStore.InsertFeedback(data.Feedback{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       userId,
@@ -716,9 +666,9 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	// Send result
 	if returnType == "detail" {
-		itemDetails := make([]data.Item, len(result))
-		for i := range result {
-			itemDetails[i], err = s.dataStore.GetItem(result[i])
+		itemDetails := make([]data.Item, len(results))
+		for i := range results {
+			itemDetails[i], err = s.dataStore.GetItem(results[i])
 			if err != nil {
 				internalServerError(response, err)
 				return
@@ -726,7 +676,7 @@ func (s *Server) getRecommend(request *restful.Request, response *restful.Respon
 		}
 		ok(response, itemDetails)
 	} else if returnType == "id" || returnType == "" {
-		ok(response, result)
+		ok(response, results)
 	} else {
 		badRequest(response, fmt.Errorf("unknown return type %v", returnType))
 	}
@@ -764,7 +714,11 @@ func (s *Server) getUser(request *restful.Request, response *restful.Response) {
 	// get user
 	user, err := s.dataStore.GetUser(userId)
 	if err != nil {
-		internalServerError(response, err)
+		if err.Error() == data.ErrUserNotExist {
+			pageNotFound(response, err)
+		} else {
+			internalServerError(response, err)
+		}
 		return
 	}
 	ok(response, user)
@@ -987,7 +941,11 @@ func (s *Server) getItem(request *restful.Request, response *restful.Response) {
 	// Get item
 	item, err := s.dataStore.GetItem(itemId)
 	if err != nil {
-		internalServerError(response, err)
+		if err.Error() == data.ErrItemNotExist {
+			pageNotFound(response, err)
+		} else {
+			internalServerError(response, err)
+		}
 		return
 	}
 	ok(response, item)
@@ -1145,6 +1103,26 @@ func (s *Server) deleteTypedUserItemFeedback(request *restful.Request, response 
 	}
 }
 
+func (s *Server) getMeasurements(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Parse parameters
+	name := request.PathParameter("name")
+	n, err := parseInt(request, "n", 100)
+	if err != nil {
+		badRequest(response, err)
+		return
+	}
+	measurements, err := s.dataStore.GetMeasurements(name, n)
+	if err != nil {
+		internalServerError(response, err)
+		return
+	}
+	ok(response, measurements)
+}
+
 func badRequest(response *restful.Response, err error) {
 	base.Logger().Error("bad request", zap.Error(err))
 	if err = response.WriteError(400, err); err != nil {
@@ -1155,6 +1133,12 @@ func badRequest(response *restful.Response, err error) {
 func internalServerError(response *restful.Response, err error) {
 	base.Logger().Error("internal server error", zap.Error(err))
 	if err = response.WriteError(500, err); err != nil {
+		base.Logger().Error("failed to write error", zap.Error(err))
+	}
+}
+
+func pageNotFound(response *restful.Response, err error) {
+	if err := response.WriteError(400, err); err != nil {
 		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 }

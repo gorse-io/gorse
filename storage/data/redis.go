@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,6 +26,7 @@ const (
 	prefixItem     = "item/"     // prefix for items
 	prefixUser     = "user/"     // prefix for users
 	prefixFeedback = "feedback/" // prefix for feedback
+	prefixMeasure  = "measure/"  // prefix for measurements
 )
 
 type Redis struct {
@@ -37,6 +39,71 @@ func (redis *Redis) Init() error {
 
 func (redis *Redis) Close() error {
 	return redis.client.Close()
+}
+
+func (redis *Redis) InsertMeasurement(measurement Measurement) error {
+	var ctx = context.Background()
+	data, err := json.Marshal(measurement)
+	if err != nil {
+		return err
+	}
+	if err = redis.client.Set(ctx, prefixMeasure+measurement.Name+"/"+measurement.Timestamp.String(),
+		data, 0).Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (redis *Redis) GetMeasurements(name string, n int) ([]Measurement, error) {
+	var ctx = context.Background()
+	measurements := make([]Measurement, 0)
+	var err error
+	var cursor uint64
+	var keys []string
+	for {
+		keys, cursor, err = redis.client.Scan(ctx, cursor, prefixMeasure+name+"/*", 0).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			data, err := redis.client.Get(ctx, key).Result()
+			if err != nil {
+				return measurements, err
+			}
+			var measurement Measurement
+			err = json.Unmarshal([]byte(data), &measurement)
+			if err != nil {
+				return measurements, err
+			}
+			measurements = append(measurements, measurement)
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	// sort measurements by timestamp
+	s := &sortMeasurements{measurements: measurements}
+	sort.Sort(s)
+	if len(measurements) > n {
+		measurements = measurements[:n]
+	}
+	return measurements, nil
+}
+
+type sortMeasurements struct {
+	measurements []Measurement
+}
+
+func (s *sortMeasurements) Len() int {
+	return len(s.measurements)
+}
+
+func (s *sortMeasurements) Less(i, j int) bool {
+	return s.measurements[i].Timestamp.Unix() > s.measurements[j].Timestamp.Unix()
+}
+
+func (s *sortMeasurements) Swap(i, j int) {
+	s.measurements[i], s.measurements[j] = s.measurements[j], s.measurements[i]
 }
 
 func (redis *Redis) InsertItem(item Item) error {

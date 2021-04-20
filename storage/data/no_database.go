@@ -90,3 +90,11 @@ func (NoDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertIte
 func (NoDatabase) GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error) {
 	return "", nil, NoDatabaseError
 }
+
+func (NoDatabase) InsertMeasurement(measurement Measurement) error {
+	return NoDatabaseError
+}
+
+func (NoDatabase) GetMeasurements(name string, n int) ([]Measurement, error) {
+	return nil, NoDatabaseError
+}

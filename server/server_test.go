@@ -328,8 +328,8 @@ func TestServer_List(t *testing.T) {
 		Get    string
 	}
 	operators := []ListOperator{
-		{cache.CollaborativeItems, "0", "/collaborative/0"},
-		{cache.SubscribeItems, "0", "/subscribe/0"},
+		{cache.CollaborativeItems, "0", "/intermediate/recommend/0"},
+		//{cache.SubscribeItems, "0", "/subscribe/0"},
 		{cache.LatestItems, "", "/latest/"},
 		{cache.LatestItems, "0", "/latest/0"},
 		{cache.PopularItems, "", "/popular/"},
@@ -447,72 +447,80 @@ func TestServer_DeleteFeedback(t *testing.T) {
 		End()
 }
 
-//func TestServer_GetRecommends(t *testing.T) {
-//	s := newMockServer(t)
-//	defer s.Close(t)
-//	// Put recommends
-//	items := []storage.RecommendedItem{
-//		{"0", 0.0},
-//		{"1", 0.1},
-//		{"2", 0.2},
-//		{"3", 0.3},
-//		{"4", 0.4},
-//		{"5", 0.5},
-//		{"6", 0.6},
-//		{"7", 0.7},
-//		{"8", 0.8},
-//		{"9", 0.9},
-//	}
-//	err := s.dataStoreClient.SetRecommend("0", items)
-//	assert.Nil(t, err)
-//	// Put feedback
-//	apitest.New().
-//		Handler(s.handler).
-//		Post("/feedback").
-//		JSON([]storage.Feedback{
-//			{UserId: "0", ItemId: "0"},
-//			{UserId: "0", ItemId: "1"},
-//		}).
-//		Expect(t).
-//		Status(http.StatusOK).
-//		End()
-//	apitest.New().
-//		Handler(s.handler).
-//		Post("/user/0/ignore").
-//		JSON([]string{"2", "3"}).
-//		Expect(t).
-//		Status(http.StatusOK).
-//		End()
-//	apitest.New().
-//		Handler(s.handler).
-//		Get("/recommend/0").
-//		QueryParams(map[string]string{
-//			"n": "4",
-//		}).
-//		Expect(t).
-//		Status(http.StatusOK).
-//		Body(marshal(t, items[4:8])).
-//		End()
-//	// Consume
-//	apitest.New().
-//		Handler(s.handler).
-//		Get("/recommend/0").
-//		QueryParams(map[string]string{
-//			"n":       "4",
-//			"consume": "1",
-//		}).
-//		Expect(t).
-//		Status(http.StatusOK).
-//		Body(marshal(t, items[4:8])).
-//		End()
-//	apitest.New().
-//		Handler(s.handler).
-//		Get("/recommend/0").
-//		QueryParams(map[string]string{
-//			"n": "4",
-//		}).
-//		Expect(t).
-//		Status(http.StatusOK).
-//		Body(marshal(t, items[8:])).
-//		End()
-//}
+func TestServer_Measurement(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	measurements := []data.Measurement{
+		{"Test_NDCG", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 0, "a"},
+		{"Test_NDCG", time.Date(2001, 1, 1, 1, 1, 1, 0, time.UTC), 1, "b"},
+		{"Test_NDCG", time.Date(2002, 1, 1, 1, 1, 1, 0, time.UTC), 2, "c"},
+		{"Test_NDCG", time.Date(2003, 1, 1, 1, 1, 1, 0, time.UTC), 3, "d"},
+		{"Test_NDCG", time.Date(2004, 1, 1, 1, 1, 1, 0, time.UTC), 4, "e"},
+		{"Test_Recall", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 1, "f"},
+	}
+	for _, measurement := range measurements {
+		err := s.dataStoreClient.InsertMeasurement(measurement)
+		assert.Nil(t, err)
+	}
+	apitest.New().
+		Handler(s.handler).
+		Get("/measurements/Test_NDCG").
+		Query("n", "3").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []data.Measurement{
+			measurements[4],
+			measurements[3],
+			measurements[2],
+		})).
+		End()
+}
+
+func TestServer_GetRecommends(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// inset recommendation
+	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0",
+		[]string{"1", "2", "3", "4", "5", "6", "7", "8"})
+	assert.Nil(t, err)
+	// insert feedback
+	err = s.dataStoreClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
+	}, true, true)
+	apitest.New().
+		Handler(s.handler).
+		Get("/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"1", "3", "5"})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n":          "3",
+			"write-back": "read",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"1", "3", "5"})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"6", "7", "8"})).
+		End()
+}
