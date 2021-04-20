@@ -17,7 +17,8 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/cf"
+	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/pr"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"math/rand"
@@ -59,7 +60,7 @@ func TestMaster_CollectLatest(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.cfg = &config.Config{}
-	m.cfg.Latest.NumCache = 3
+	m.cfg.Database.CacheSize = 3
 	// collect latest
 	items := []data.Item{
 		{"0", time.Date(2000, 1, 1, 1, 1, 0, 0, time.UTC), []string{"even"}, ""},
@@ -73,15 +74,15 @@ func TestMaster_CollectLatest(t *testing.T) {
 		{"8", time.Date(2008, 1, 1, 1, 1, 0, 0, time.UTC), []string{"even"}, ""},
 		{"9", time.Date(2009, 1, 1, 1, 1, 0, 0, time.UTC), []string{"odd"}, ""},
 	}
-	m.CollectLatest(items)
+	m.latest(items)
 	// check latest items
-	latest, err := m.cacheStore.GetList(cache.LatestItems, "", 100, 0)
+	latest, err := m.cacheStore.GetList(cache.LatestItems, "", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "8", "7"}, latest)
-	latest, err = m.cacheStore.GetList(cache.LatestItems, "even", 100, 0)
+	latest, err = m.cacheStore.GetList(cache.LatestItems, "even", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "6", "4"}, latest)
-	latest, err = m.cacheStore.GetList(cache.LatestItems, "odd", 100, 0)
+	latest, err = m.cacheStore.GetList(cache.LatestItems, "odd", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "7", "5"}, latest)
 }
@@ -92,8 +93,8 @@ func TestMaster_CollectPopItem(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.cfg = &config.Config{}
-	m.cfg.Popular.NumCache = 3
-	m.cfg.Popular.TimeWindow = 365
+	m.cfg.Database.CacheSize = 3
+	m.cfg.Recommend.PopularWindow = 365
 	// collect latest
 	items := []data.Item{
 		{"0", time.Now(), []string{"even"}, ""},
@@ -128,15 +129,15 @@ func TestMaster_CollectPopItem(t *testing.T) {
 			Timestamp: time.Now().AddDate(-100, 0, 0),
 		})
 	}
-	m.CollectPopItem(items, feedbacks)
+	m.popItem(items, feedbacks)
 	// check popular items
-	popular, err := m.cacheStore.GetList(cache.PopularItems, "", 100, 0)
+	popular, err := m.cacheStore.GetList(cache.PopularItems, "", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "8", "7"}, popular)
-	popular, err = m.cacheStore.GetList(cache.PopularItems, "even", 100, 0)
+	popular, err = m.cacheStore.GetList(cache.PopularItems, "even", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "6", "4"}, popular)
-	popular, err = m.cacheStore.GetList(cache.PopularItems, "odd", 100, 0)
+	popular, err = m.cacheStore.GetList(cache.PopularItems, "odd", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "7", "5"}, popular)
 }
@@ -147,8 +148,8 @@ func TestMaster_FitCFModel(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.cfg = &config.Config{}
-	m.cfg.Similar.NumCache = 3
-	m.cfg.Master.Jobs = 4
+	m.cfg.Database.CacheSize = 3
+	m.cfg.Master.FitJobs = 4
 	// collect similar
 	items := []data.Item{
 		{"0", time.Now(), []string{"even"}, ""},
@@ -180,11 +181,11 @@ func TestMaster_FitCFModel(t *testing.T) {
 	assert.Nil(t, err)
 	err = m.dataStore.BatchInsertFeedback(feedbacks, true, true)
 	assert.Nil(t, err)
-	dataset, _, _, err := cf.LoadDataFromDatabase(m.dataStore, []string{"FeedbackType"})
+	dataset, _, _, err := pr.LoadDataFromDatabase(m.dataStore, []string{"FeedbackType"})
 	assert.Nil(t, err)
 	// similar items (common users)
-	m.CollectSimilar(items, dataset)
-	similar, err := m.cacheStore.GetList(cache.SimilarItems, "9", 100, 0)
+	m.similar(items, dataset, model.SimilarityCollaborative, model.SimilarityDot)
+	similar, err := m.cacheStore.GetList(cache.SimilarItems, "9", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, similar)
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
-	"runtime"
 )
 
 var workerCommand = &cobra.Command{
@@ -37,7 +36,7 @@ var workerCommand = &cobra.Command{
 func init() {
 	workerCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
 	workerCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
-	workerCommand.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "number of working jobs.")
+	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
 }
 
 func main() {

@@ -17,8 +17,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/scylladb/go-set"
+	"github.com/zhenghaoz/gorse/storage/local"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -35,10 +39,14 @@ import (
 )
 
 type Server struct {
+	// database connections
 	cacheAddress string
 	cacheStore   cache.Database
 	dataAddress  string
 	dataStore    data.Database
+	localStore   *local.Database
+
+	// master connection
 	masterClient protocol.MasterClient
 
 	// factorization machine
@@ -49,6 +57,7 @@ type Server struct {
 
 	// config
 	cfg        *config.Config
+	serverName string
 	masterHost string
 	masterPort int
 	serverHost string
@@ -75,7 +84,27 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 }
 
 func (s *Server) Serve() {
+	// open local store
+	var err error
+	s.localStore, err = local.Open(filepath.Join(os.TempDir(), "gorse-server"))
+	if err != nil {
+		base.Logger().Fatal("failed to connect local store", zap.Error(err),
+			zap.String("path", filepath.Join(os.TempDir(), "gorse-server")))
+	}
+	if s.serverName, err = s.localStore.GetString(local.NodeName); err != nil {
+		if err == badger.ErrKeyNotFound {
+			s.serverName = base.GetRandomName(0)
+			err = s.localStore.SetString(local.NodeName, s.serverName)
+			if err != nil {
+				base.Logger().Fatal("failed to write meta", zap.Error(err))
+			}
+		} else {
+			base.Logger().Fatal("failed to read meta", zap.Error(err))
+		}
+	}
+
 	base.Logger().Info("start server",
+		zap.String("server_name", s.serverName),
 		zap.String("server_host", s.serverHost),
 		zap.Int("server_port", s.serverPort),
 		zap.String("master_host", s.masterHost),
@@ -141,7 +170,11 @@ func (s *Server) Sync() {
 	for {
 		var meta *protocol.Meta
 		var err error
-		if meta, err = s.masterClient.GetMeta(context.Background(), &protocol.RequestInfo{NodeType: protocol.NodeType_ServerNode}); err != nil {
+		if meta, err = s.masterClient.GetMeta(context.Background(),
+			&protocol.NodeInfo{
+				NodeType: protocol.NodeType_ServerNode,
+				NodeName: s.serverName,
+			}); err != nil {
 			base.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
 		}

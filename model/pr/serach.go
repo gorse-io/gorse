@@ -141,18 +141,21 @@ type ModelSearcher struct {
 	numEpochs int
 	numTrials int
 	// results
-	bestMutex      sync.Mutex
-	bestModel      Model
-	bestScore      Score
-	bestSimilarity string
+	bestMutex             sync.Mutex
+	bestModelName         string
+	bestModel             Model
+	bestScore             Score
+	bestSimilaritySource  string
+	bestSimilarityMetrics string
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials int) *ModelSearcher {
 	return &ModelSearcher{
-		numTrials:      nTrials,
-		numEpochs:      nEpoch,
-		bestSimilarity: model.SimilarityCollaborative,
+		numTrials:             nTrials,
+		numEpochs:             nEpoch,
+		bestSimilaritySource:  model.SimilarityCollaborative,
+		bestSimilarityMetrics: model.SimilarityCosine,
 	}
 }
 
@@ -164,10 +167,10 @@ func (searcher *ModelSearcher) GetBestModel() (Model, Score) {
 }
 
 // GetBestSimilarity returns the optimal similarity for neighborhood recommendations.
-func (searcher *ModelSearcher) GetBestSimilarity() string {
+func (searcher *ModelSearcher) GetBestSimilarity() (source, metric string) {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
-	return searcher.bestSimilarity
+	return searcher.bestSimilaritySource, searcher.bestSimilarityMetrics
 }
 
 func (searcher *ModelSearcher) Fit(trainSet *DataSet, valSet *DataSet) error {
@@ -183,16 +186,19 @@ func (searcher *ModelSearcher) Fit(trainSet *DataSet, valSet *DataSet) error {
 			return err
 		}
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0, nil)
+		searcher.bestMutex.Lock()
 		if name == "knn" {
 			knnBestScore = r.BestScore
+			searcher.bestSimilarityMetrics = r.BestModel.GetParams()[model.Similarity].(string)
 		}
-		searcher.bestMutex.Lock()
 		if name == "content_knn" {
 			if r.BestScore.NDCG > knnBestScore.NDCG {
-				searcher.bestSimilarity = model.SimilarityFeature
+				searcher.bestSimilaritySource = model.SimilarityFeature
+				searcher.bestSimilarityMetrics = r.BestModel.GetParams()[model.Similarity].(string)
 			}
 		}
 		if searcher.bestModel == nil || r.BestScore.NDCG > searcher.bestScore.NDCG {
+			searcher.bestModelName = name
 			searcher.bestModel = r.BestModel
 			searcher.bestScore = r.BestScore
 		}
