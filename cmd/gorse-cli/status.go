@@ -36,7 +36,7 @@ var clusterCommand = &cobra.Command{
 	Use:   "cluster",
 	Short: "cluster information",
 	Run: func(cmd *cobra.Command, args []string) {
-		cluster, err := masterClient.GetMeta(context.Background(), &protocol.RequestInfo{})
+		cluster, err := masterClient.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ClientNode})
 		if err != nil {
 			base.Logger().Fatal("failed to get cluster information", zap.Error(err))
 		}

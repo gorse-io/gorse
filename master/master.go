@@ -84,7 +84,7 @@ func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
 		userIndexVersion: rand.Int63(),
 		// default model
 		prModelName: "knn",
-		prModel:     pr.NewCollaborativeKNN(nil),
+		prModel:     pr.NewKNN(nil),
 		prSearcher:  pr.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
 	}
 }
@@ -120,7 +120,9 @@ func (m *Master) Serve() {
 
 	// start loop
 	go m.FitLoop()
-	//go m.SearchLoop()
+	base.Logger().Info("start model fit", zap.Int("period", m.cfg.Recommend.FitPeriod))
+	go m.SearchLoop()
+	base.Logger().Info("start model searcher", zap.Int("period", m.cfg.Recommend.SearchPeriod))
 
 	// start rpc server
 	base.Logger().Info("start rpc server",
@@ -171,7 +173,7 @@ func (m *Master) FitLoop() {
 		// fit model
 		m.fitPRModel(dataSet, m.prModel)
 		// collect similar items
-		m.similar(items, dataSet, model.SimilarityCollaborative, model.SimilarityDot)
+		m.similar(items, dataSet, model.SimilarityDot)
 		// collect popular items
 		m.popItem(items, feedbacks)
 		// collect latest items

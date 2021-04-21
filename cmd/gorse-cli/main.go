@@ -50,7 +50,7 @@ func init() {
 	masterClient = protocol.NewMasterClient(conn)
 
 	// load master config
-	masterCfgJson, err := masterClient.GetMeta(context.Background(), &protocol.RequestInfo{})
+	masterCfgJson, err := masterClient.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ClientNode})
 	if err != nil {
 		base.Logger().Fatal("failed to load master config", zap.Error(err))
 	}

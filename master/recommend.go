@@ -83,7 +83,7 @@ func (m *Master) latest(items []data.Item) {
 }
 
 // similar updates neighbors for the database.
-func (m *Master) similar(items []data.Item, dataset *pr.DataSet, source, similarity string) {
+func (m *Master) similar(items []data.Item, dataset *pr.DataSet, similarity string) {
 	base.Logger().Info("collect similar items", zap.Int("n_cache", m.cfg.Database.CacheSize))
 	// create progress tracker
 	completed := make(chan []interface{}, 1000)
@@ -106,17 +106,8 @@ func (m *Master) similar(items []data.Item, dataset *pr.DataSet, source, similar
 	}()
 
 	// pre-ranking
-	switch source {
-	case model.SimilarityCollaborative:
-		for _, feedbacks := range dataset.ItemFeedback {
-			sort.Ints(feedbacks)
-		}
-	case model.SimilarityFeature:
-		for _, item := range items {
-			sort.Strings(item.Labels)
-		}
-	default:
-		base.Logger().Error("unknown similarity source", zap.String("source", source))
+	for _, feedbacks := range dataset.ItemFeedback {
+		sort.Ints(feedbacks)
 	}
 
 	if err := base.Parallel(dataset.ItemCount(), m.cfg.Master.FitJobs, func(workerId, jobId int) error {
@@ -131,19 +122,10 @@ func (m *Master) similar(items []data.Item, dataset *pr.DataSet, source, similar
 		for j := range itemSet.List() {
 			if j != jobId {
 				var score float32
-				switch source {
-				case model.SimilarityCollaborative:
-					score = dotInt(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j])
-					if similarity == model.SimilarityCosine {
-						score /= math32.Sqrt(float32(len(dataset.ItemFeedback[jobId])))
-						score /= math32.Sqrt(float32(len(dataset.ItemFeedback[j])))
-					}
-				case model.SimilarityFeature:
-					score = dotString(items[jobId].Labels, items[j].Labels)
-					if similarity == model.SimilarityCosine {
-						score /= math32.Sqrt(float32(len(items[jobId].Labels)))
-						score /= math32.Sqrt(float32(len(items[j].Labels)))
-					}
+				score = dotInt(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j])
+				if similarity == model.SimilarityCosine {
+					score /= math32.Sqrt(float32(len(dataset.ItemFeedback[jobId])))
+					score /= math32.Sqrt(float32(len(dataset.ItemFeedback[j])))
 				}
 				nearItems.Push(j, score)
 			}

@@ -70,7 +70,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		Config:           string(s),
 		UserIndexVersion: userIndexVersion,
 		//FmVersion:        fmVersion,
-		CfVersion: prVersion,
+		PrVersion: prVersion,
 		Me:        nodeInfo.NodeName,
 		Workers:   workers,
 		Servers:   servers,

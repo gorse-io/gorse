@@ -113,9 +113,7 @@ func NewModel(name string, params model.Params) (Model, error) {
 	case "ccd":
 		return NewCCD(params), nil
 	case "knn":
-		return NewCollaborativeKNN(params), nil
-	case "content_knn":
-		return NewContentKNN(params), nil
+		return NewKNN(params), nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
@@ -129,10 +127,8 @@ func CloneModel(m Model) Model {
 		copied = &ALS{}
 	case *BPR:
 		copied = &BPR{}
-	case *CollaborativeKNN:
-		copied = &CollaborativeKNN{}
-	case *ContentKNN:
-		copied = &ContentKNN{}
+	case *KNN:
+		copied = &KNN{}
 	default:
 		panic(fmt.Errorf("unknown model %v", reflect.TypeOf(m)))
 	}
@@ -179,13 +175,7 @@ func DecodeModel(name string, buf []byte) (Model, error) {
 		}
 		return &ccd, nil
 	case "knn":
-		var knn CollaborativeKNN
-		if err := decoder.Decode(&knn); err != nil {
-			return nil, err
-		}
-		return &knn, nil
-	case "content_knn":
-		var knn ContentKNN
+		var knn KNN
 		if err := decoder.Decode(&knn); err != nil {
 			return nil, err
 		}
@@ -280,14 +270,8 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit bpr",
-		zap.Int("n_jobs", config.Jobs),
-		zap.Int("n_candidates", config.Candidates),
-		zap.Int("n_factors", bpr.nFactors),
-		zap.Int("n_epochs", bpr.nEpochs),
-		zap.Float32("lr", bpr.lr),
-		zap.Float32("reg", bpr.reg),
-		zap.Float32("init_mean", bpr.initMean),
-		zap.Float32("init_stddev", bpr.initStdDev))
+		zap.Any("params", bpr.GetParams()),
+		zap.Any("config", config))
 	bpr.Init(trainSet)
 	// Create buffers
 	temp := base.NewMatrix32(config.Jobs, bpr.nFactors)
@@ -360,7 +344,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("eval bpr %v/%v", epoch, bpr.nEpochs),
+			base.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -372,6 +356,10 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 	// restore best snapshot
 	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
 	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	base.Logger().Info("fit bpr complete",
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
 	return snapshots.BestScore
 }
 
@@ -489,14 +477,8 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit als",
-		zap.Int("n_jobs", config.Jobs),
-		zap.Int("n_candidates", config.Candidates),
-		zap.Int("n_factors", als.nFactors),
-		zap.Int("n_epochs", als.nEpochs),
-		zap.Float64("weight", als.weight),
-		zap.Float64("reg", als.reg),
-		zap.Float64("init_mean", als.initMean),
-		zap.Float64("init_stddev", als.initStdDev))
+		zap.Any("params", als.GetParams()),
+		zap.Any("config", config))
 	als.Init(trainSet)
 	// Create temporary matrix
 	temp1 := make([]*mat.Dense, config.Jobs)
@@ -571,7 +553,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("eval als %v/%v", ep, als.nEpochs),
+			base.Logger().Debug(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -583,6 +565,10 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 	// restore best snapshot
 	als.UserFactor = snapshots.BestWeights[0].(*mat.Dense)
 	als.ItemFactor = snapshots.BestWeights[1].(*mat.Dense)
+	base.Logger().Info("fit als complete",
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
 	return snapshots.BestScore
 }
 
@@ -724,14 +710,8 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit ccd",
-		zap.Int("n_jobs", config.Jobs),
-		zap.Int("n_candidates", config.Candidates),
-		zap.Int("n_factors", ccd.nFactors),
-		zap.Int("n_epochs", ccd.nEpochs),
-		zap.Float32("weight", ccd.weight),
-		zap.Float32("reg", ccd.reg),
-		zap.Float32("init_mean", ccd.initMean),
-		zap.Float32("init_stddev", ccd.initStdDev))
+		zap.Any("params", ccd.GetParams()),
+		zap.Any("config", config))
 	ccd.Init(trainSet)
 	// Create temporary matrix
 	s := base.NewMatrix32(ccd.nFactors, ccd.nFactors)
@@ -832,7 +812,7 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			evalStart := time.Now()
 			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("eval ccd %v/%v", ep, ccd.nEpochs),
+			base.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -844,5 +824,9 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 	// restore best snapshot
 	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
 	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	base.Logger().Info("fit ccd complete",
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
 	return snapshots.BestScore
 }

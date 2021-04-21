@@ -20,6 +20,7 @@ package protocol;
 enum NodeType {
   ServerNode = 0;
   WorkerNode = 1;
+  ClientNode = 2;
 }
 
 service Master {
