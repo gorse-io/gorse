@@ -85,7 +85,7 @@ func NewWorker(masterHost string, masterPort int, jobs int) *Worker {
 		Jobs:       jobs,
 		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
 		// events
-		ticker:     time.NewTicker(time.Minute),
+		ticker:     time.NewTicker(10 * time.Minute),
 		syncedChan: make(chan bool, 1024),
 		pullChan:   make(chan bool, 1024),
 	}
@@ -137,9 +137,9 @@ func (w *Worker) Sync() {
 		// check CF version
 		w.latestPRVersion = meta.PrVersion
 		if w.latestPRVersion != w.prModelVersion {
-			base.Logger().Info("new collaborative filtering model found",
-				zap.Int64("old_version", w.prModelVersion),
-				zap.Int64("new_version", w.latestPRVersion))
+			base.Logger().Info("new personal ranking model found",
+				zap.String("old_version", base.Hex(w.prModelVersion)),
+				zap.String("new_version", base.Hex(w.latestPRVersion)))
 			w.syncedChan <- true
 		}
 
@@ -147,8 +147,8 @@ func (w *Worker) Sync() {
 		w.latestUserVersion = meta.UserIndexVersion
 		if w.latestUserVersion != w.userVersion {
 			base.Logger().Info("new user index found",
-				zap.Int64("old_version", w.userVersion),
-				zap.Int64("new_version", w.latestUserVersion))
+				zap.String("old_version", base.Hex(w.userVersion)),
+				zap.String("new_version", base.Hex(w.latestUserVersion)))
 			w.syncedChan <- true
 		}
 
@@ -204,7 +204,7 @@ func (w *Worker) Pull() {
 					base.Logger().Error("failed to decode personal ranking model", zap.Error(err))
 				} else {
 					w.prModelVersion = mfResponse.Version
-					base.Logger().Info("synced collaborative filtering model",
+					base.Logger().Info("synced personal ranking model",
 						zap.String("version", base.Hex(w.prModelVersion)))
 					pulled = true
 				}
@@ -237,7 +237,9 @@ func (w *Worker) Serve() {
 		}
 	}
 
-	base.Logger().Info("start worker", zap.String("worker_name", w.workerName))
+	base.Logger().Info("start worker",
+		zap.Int("n_jobs", w.Jobs),
+		zap.String("worker_name", w.workerName))
 
 	// connect to master
 	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithInsecure())
@@ -267,7 +269,7 @@ func (w *Worker) Serve() {
 			if w.prModel != nil {
 				w.Recommend(w.prModel, workingUsers)
 			} else {
-				base.Logger().Debug("local collaborative filtering model doesn't exist")
+				base.Logger().Debug("local personal ranking model doesn't exist")
 			}
 		}
 	}
@@ -285,13 +287,13 @@ func (w *Worker) Serve() {
 func (w *Worker) Recommend(m pr.Model, users []string) {
 	// get items
 	items := m.GetItemIndex().GetNames()
-	base.Logger().Info("collaborative filtering recommendation",
+	base.Logger().Info("personal ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_items", len(items)),
 		zap.Int("n_jobs", w.Jobs),
 		zap.Int("cache_size", w.cfg.Database.CacheSize))
 	// progress tracker
-	completed := make(chan interface{})
+	completed := make(chan interface{}, 1000)
 	go func() {
 		defer base.CheckPanic()
 		completedCount := 0
@@ -304,7 +306,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 				}
 				completedCount++
 			case <-ticker.C:
-				base.Logger().Info("collaborative filtering recommendation",
+				base.Logger().Debug("personal ranking recommendation",
 					zap.Int("n_complete_users", completedCount),
 					zap.Int("n_working_users", len(users)))
 			}
@@ -330,7 +332,10 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 				return err
 			}
 			for _, itemId := range favoredItems {
-				favoredItemIndices = append(favoredItemIndices, m.GetItemIndex().ToNumber(itemId))
+				itemIndex := m.GetItemIndex().ToNumber(itemId)
+				if itemIndex != base.NotId {
+					favoredItemIndices = append(favoredItemIndices, itemIndex)
+				}
 			}
 		}
 		recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
@@ -359,6 +364,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 		return nil
 	})
 	close(completed)
+	base.Logger().Info("complete personal ranking recommendation")
 }
 
 //
