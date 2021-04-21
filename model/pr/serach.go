@@ -176,7 +176,7 @@ func (searcher *ModelSearcher) Fit(trainSet *DataSet, valSet *DataSet) error {
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
 	fitStart := time.Now()
-	models := []string{"knn", "ccd", "bpr"}
+	models := []string{"bpr", "ccd", "knn"}
 	for _, name := range models {
 		m, err := NewModel(name, model.Params{model.NEpochs: searcher.numEpochs})
 		if err != nil {

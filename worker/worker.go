@@ -85,7 +85,7 @@ func NewWorker(masterHost string, masterPort int, jobs int) *Worker {
 		Jobs:       jobs,
 		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
 		// events
-		ticker:     time.NewTicker(10 * time.Minute),
+		ticker:     time.NewTicker(time.Minute),
 		syncedChan: make(chan bool, 1024),
 		pullChan:   make(chan bool, 1024),
 	}
@@ -297,7 +297,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 	go func() {
 		defer base.CheckPanic()
 		completedCount := 0
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(10 * time.Second)
 		for {
 			select {
 			case _, ok := <-completed:
@@ -306,7 +306,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 				}
 				completedCount++
 			case <-ticker.C:
-				base.Logger().Debug("personal ranking recommendation",
+				base.Logger().Info("personal ranking recommendation",
 					zap.Int("n_complete_users", completedCount),
 					zap.Int("n_working_users", len(users)))
 			}

@@ -83,8 +83,8 @@ func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
 		// ctrVersion:       rand.Int63(),
 		userIndexVersion: rand.Int63(),
 		// default model
-		prModelName: "knn",
-		prModel:     pr.NewKNN(nil),
+		prModelName: "bpr",
+		prModel:     pr.NewBPR(nil),
 		prSearcher:  pr.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
 	}
 }
