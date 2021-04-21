@@ -143,9 +143,11 @@ func (m *Master) Serve() {
 func (m *Master) FitLoop() {
 	defer base.CheckPanic()
 	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
+	var bestName string
+	var bestModel pr.Model
 	for {
 		// download dataset
-		base.Logger().Info("load dataset for personal ranking", zap.Strings("feedback_types", m.cfg.Database.PositiveFeedbackType))
+		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.cfg.Database.PositiveFeedbackType))
 		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.dataStore, m.cfg.Database.PositiveFeedbackType)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
@@ -156,14 +158,22 @@ func (m *Master) FitLoop() {
 			base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.cfg.Database.PositiveFeedbackType))
 			goto sleep
 		}
-		// sleep if nothing changed
-		if dataSet.UserCount() == lastNumUsers && dataSet.ItemCount() == lastNumItems && dataSet.Count() == lastNumFeedback {
+		// check best model
+		bestName, bestModel, _ = m.prSearcher.GetBestModel()
+		m.prMutex.Lock()
+		if bestName != "" && (bestName != m.prModelName || bestModel.GetParams().ToString() != m.prModel.GetParams().ToString()) {
+			// use new best model
+			m.prModel = bestModel
+			m.prModelName = bestName
+			base.Logger().Info("find better model",
+				zap.String("name", bestName),
+				zap.Any("params", m.prModel.GetParams()))
+		} else if dataSet.UserCount() == lastNumUsers && dataSet.ItemCount() == lastNumItems && dataSet.Count() == lastNumFeedback {
+			// sleep if nothing changed
+			m.prMutex.Unlock()
 			goto sleep
 		}
-		base.Logger().Info("data loaded for matching",
-			zap.Int("n_users", dataSet.UserCount()),
-			zap.Int("n_items", dataSet.ItemCount()),
-			zap.Int("n_feedback", dataSet.Count()))
+		m.prMutex.Unlock()
 		lastNumUsers, lastNumItems, lastNumFeedback = dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count()
 		// update user index
 		m.userIndexMutex.Lock()
@@ -190,7 +200,7 @@ func (m *Master) SearchLoop() {
 	for {
 		var trainSet, valSet *pr.DataSet
 		// download dataset
-		base.Logger().Info("load dataset for personal ranking", zap.Strings("feedback_types", m.cfg.Database.PositiveFeedbackType))
+		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.cfg.Database.PositiveFeedbackType))
 		dataSet, _, _, err := pr.LoadDataFromDatabase(m.dataStore, m.cfg.Database.PositiveFeedbackType)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))

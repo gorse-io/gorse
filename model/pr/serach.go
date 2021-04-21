@@ -79,7 +79,7 @@ func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGri
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
 			if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
-				results.BestModel = CloneModel(estimator)
+				results.BestModel = Clone(estimator)
 				results.BestScore = score
 				results.BestParams = params.Copy()
 				results.BestIndex = len(results.Params) - 1
@@ -126,7 +126,7 @@ func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramG
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
 		if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
-			results.BestModel = CloneModel(estimator)
+			results.BestModel = Clone(estimator)
 			results.BestScore = score
 			results.BestParams = params.Copy()
 			results.BestIndex = len(results.Params) - 1
@@ -158,10 +158,10 @@ func NewModelSearcher(nEpoch, nTrials int) *ModelSearcher {
 }
 
 // GetBestModel returns the optimal personal ranking model.
-func (searcher *ModelSearcher) GetBestModel() (Model, Score) {
+func (searcher *ModelSearcher) GetBestModel() (string, Model, Score) {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
-	return searcher.bestModel, searcher.bestScore
+	return searcher.bestModelName, searcher.bestModel, searcher.bestScore
 }
 
 // GetBestSimilarity returns the optimal similarity for neighborhood recommendations.

@@ -118,7 +118,7 @@ func NewModel(name string, params model.Params) (Model, error) {
 	return nil, fmt.Errorf("unknown model %v", name)
 }
 
-func CloneModel(m Model) Model {
+func Clone(m Model) Model {
 	var copied Model
 	switch m.(type) {
 	case *CCD:
@@ -136,6 +136,7 @@ func CloneModel(m Model) Model {
 	if err != nil {
 		panic(err)
 	}
+	copied.SetParams(copied.GetParams())
 	return copied
 }
 
