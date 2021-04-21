@@ -141,21 +141,19 @@ type ModelSearcher struct {
 	numEpochs int
 	numTrials int
 	// results
-	bestMutex             sync.Mutex
-	bestModelName         string
-	bestModel             Model
-	bestScore             Score
-	bestSimilaritySource  string
-	bestSimilarityMetrics string
+	bestMutex      sync.Mutex
+	bestModelName  string
+	bestModel      Model
+	bestScore      Score
+	bestSimilarity string
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials int) *ModelSearcher {
 	return &ModelSearcher{
-		numTrials:             nTrials,
-		numEpochs:             nEpoch,
-		bestSimilaritySource:  model.SimilarityCollaborative,
-		bestSimilarityMetrics: model.SimilarityCosine,
+		numTrials:      nTrials,
+		numEpochs:      nEpoch,
+		bestSimilarity: model.SimilarityCosine,
 	}
 }
 
@@ -167,19 +165,18 @@ func (searcher *ModelSearcher) GetBestModel() (Model, Score) {
 }
 
 // GetBestSimilarity returns the optimal similarity for neighborhood recommendations.
-func (searcher *ModelSearcher) GetBestSimilarity() (source, metric string) {
+func (searcher *ModelSearcher) GetBestSimilarity() string {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
-	return searcher.bestSimilaritySource, searcher.bestSimilarityMetrics
+	return searcher.bestSimilarity
 }
 
 func (searcher *ModelSearcher) Fit(trainSet *DataSet, valSet *DataSet) error {
-	base.Logger().Info("fit auto_ml",
+	base.Logger().Info("model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
 	fitStart := time.Now()
-	models := []string{"knn", "content_knn", "ccd", "bpr"}
-	knnBestScore := Score{}
+	models := []string{"knn", "ccd", "bpr"}
 	for _, name := range models {
 		m, err := NewModel(name, model.Params{model.NEpochs: searcher.numEpochs})
 		if err != nil {
@@ -188,14 +185,7 @@ func (searcher *ModelSearcher) Fit(trainSet *DataSet, valSet *DataSet) error {
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0, nil)
 		searcher.bestMutex.Lock()
 		if name == "knn" {
-			knnBestScore = r.BestScore
-			searcher.bestSimilarityMetrics = r.BestModel.GetParams()[model.Similarity].(string)
-		}
-		if name == "content_knn" {
-			if r.BestScore.NDCG > knnBestScore.NDCG {
-				searcher.bestSimilaritySource = model.SimilarityFeature
-				searcher.bestSimilarityMetrics = r.BestModel.GetParams()[model.Similarity].(string)
-			}
+			searcher.bestSimilarity = r.BestModel.GetParams()[model.Similarity].(string)
 		}
 		if searcher.bestModel == nil || r.BestScore.NDCG > searcher.bestScore.NDCG {
 			searcher.bestModelName = name
@@ -205,7 +195,12 @@ func (searcher *ModelSearcher) Fit(trainSet *DataSet, valSet *DataSet) error {
 		searcher.bestMutex.Unlock()
 	}
 	fitTime := time.Since(fitStart)
-	base.Logger().Info("complete planning",
+	base.Logger().Info("complete model search",
+		zap.Float32("NDCG@10", searcher.bestScore.NDCG),
+		zap.Float32("Precision@10", searcher.bestScore.Precision),
+		zap.Float32("Recall@10", searcher.bestScore.Recall),
+		zap.String("model", searcher.bestModelName),
+		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("fit_time", fitTime.String()))
 	return nil
 }

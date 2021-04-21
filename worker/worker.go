@@ -135,7 +135,7 @@ func (w *Worker) Sync() {
 		}
 
 		// check CF version
-		w.latestPRVersion = meta.CfVersion
+		w.latestPRVersion = meta.PrVersion
 		if w.latestPRVersion != w.prModelVersion {
 			base.Logger().Info("new collaborative filtering model found",
 				zap.Int64("old_version", w.prModelVersion),
@@ -322,7 +322,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 			return err
 		}
 		var favoredItemIndices []int
-		if _, ok := m.(pr.KNN); ok {
+		if _, ok := m.(*pr.KNN); ok {
 			favoredItems, err := loadFeedbackItems(w.dataStore, user, w.cfg.Database.PositiveFeedbackType...)
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
@@ -339,9 +339,9 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 				switch m.(type) {
 				case pr.MatrixFactorization:
 					recItems.Push(item, m.(pr.MatrixFactorization).Predict(user, item))
-				case pr.KNN:
+				case *pr.KNN:
 					itemIndex := m.GetItemIndex().ToNumber(item)
-					recItems.Push(item, m.(pr.KNN).InternalPredict(favoredItemIndices, itemIndex))
+					recItems.Push(item, m.(*pr.KNN).InternalPredict(favoredItemIndices, itemIndex))
 				default:
 					base.Logger().Error("unknown model type")
 				}

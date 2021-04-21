@@ -44,6 +44,7 @@ func Open(path string) (*Database, error) {
 	database := new(Database)
 	options := badger.DefaultOptions(path)
 	options.Truncate = true
+	options.Logger = nil
 	if database.db, err = badger.Open(options); err != nil {
 		return nil, err
 	}

@@ -39,10 +39,8 @@ const (
 )
 
 const (
-	SimilarityCosine        = "Cosine"
-	SimilarityDot           = "Dot"
-	SimilarityCollaborative = "Collaborative"
-	SimilarityFeature       = "Feature"
+	SimilarityCosine = "Cosine"
+	SimilarityDot    = "Dot"
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
