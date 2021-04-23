@@ -52,12 +52,12 @@ func newMockServer(t *testing.T) *mockServer {
 	s.cacheStoreClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.Nil(t, err)
 	// create server
-	server := &Server{
-		dataStore:  s.dataStoreClient,
-		cacheStore: s.cacheStoreClient,
-		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
+	server := &RestServer{
+		DataStore:   s.dataStoreClient,
+		CacheStore:  s.cacheStoreClient,
+		GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
 	}
-	server.cfg.Server.APIKey = apiKey
+	server.GorseConfig.Server.APIKey = apiKey
 	ws := server.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()

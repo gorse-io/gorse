@@ -15,10 +15,12 @@ package master
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"math/rand"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -89,6 +91,14 @@ func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
 	}
 }
 
+func (m *Master) ServeMetrics() {
+	http.Handle("/metrics", promhttp.Handler())
+	err := http.ListenAndServe(":2112", nil)
+	if err != nil {
+		base.Logger().Fatal("failed to start http server", zap.Error(err))
+	}
+}
+
 func (m *Master) Serve() {
 
 	// create cluster meta cache
@@ -118,7 +128,7 @@ func (m *Master) Serve() {
 			zap.String("database", m.cfg.Database.CacheStore))
 	}
 
-	// start loop
+	go m.ServeMetrics()
 	go m.FitLoop()
 	base.Logger().Info("start model fit", zap.Int("period", m.cfg.Recommend.FitPeriod))
 	go m.SearchLoop()
