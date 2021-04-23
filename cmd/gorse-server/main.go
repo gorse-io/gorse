@@ -33,10 +33,10 @@ var serverCommand = &cobra.Command{
 			return
 		}
 		// start server
-		masterPort, _ := cmd.PersistentFlags().GetInt("master-httpPort")
-		masterHost, _ := cmd.PersistentFlags().GetString("master-httpHost")
-		httpPort, _ := cmd.PersistentFlags().GetInt("http-httpPort")
-		httpHost, _ := cmd.PersistentFlags().GetString("http-httpHost")
+		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
+		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
+		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
+		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
 		s := server.NewServer(masterHost, masterPort, httpHost, httpPort)
 		s.Serve()
 	},

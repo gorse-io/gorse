@@ -8,7 +8,6 @@ Language: English | [中文](https://github.com/zhenghaoz/gorse/blob/master/READ
 [![codecov](https://codecov.io/gh/zhenghaoz/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/zhenghaoz/gorse)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
 [![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse)
-[![Build Docs](https://github.com/gorse-io/gorse-io.github.io/actions/workflows/build_docs.yml/badge.svg)](https://gorse.io/en/docs/)
 [![Discord](https://img.shields.io/discord/830635934210588743)](https://discord.com/channels/830635934210588743/)
 <a target="_blank" href="https://qm.qq.com/cgi-bin/qm/qr?k=lOERnxfAM2U2rj4C9Htv9T68SLIXg6uk&jump_from=webapi"><img border="0" src="https://pub.idqqimg.com/wpa/images/group.png" alt="Gorse推荐系统交流群" title="Gorse推荐系统交流群"></a>
 

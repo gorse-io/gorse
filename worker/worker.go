@@ -20,9 +20,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/badger/v2"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/storage/local"
 	"go.uber.org/zap"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -221,6 +223,14 @@ func (w *Worker) Pull() {
 	}
 }
 
+func (w *Worker) ServeMetrics() {
+	http.Handle("/metrics", promhttp.Handler())
+	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
+	if err != nil {
+		base.Logger().Fatal("failed to start http server", zap.Error(err))
+	}
+}
+
 func (w *Worker) Serve() {
 	// open local store
 	var err error
@@ -252,9 +262,9 @@ func (w *Worker) Serve() {
 	}
 	w.MasterClient = protocol.NewMasterClient(conn)
 
-	// sync
 	go w.Sync()
 	go w.Pull()
+	go w.ServeMetrics()
 
 	loop := func() {
 		if w.userIndex == nil {
