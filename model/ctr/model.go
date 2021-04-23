@@ -218,13 +218,8 @@ func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score 
 		zap.Int("train_size", trainSet.PositiveCount),
 		zap.Int("test_size", testSet.Count()),
 		zap.String("task", string(fm.Task)),
-		zap.Int("n_jobs", config.Jobs),
-		zap.Int("n_factors", fm.nFactors),
-		zap.Int("n_epochs", fm.nEpochs),
-		zap.Float32("lr", fm.lr),
-		zap.Float32("reg", fm.reg),
-		zap.Float32("init_mean", fm.initMean),
-		zap.Float32("init_stddev", fm.initStdDev))
+		zap.Any("params", fm.GetParams()),
+		zap.Any("config", config))
 	fm.Init(trainSet)
 	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)

@@ -130,7 +130,8 @@ func Clone(m Model) Model {
 	case *KNN:
 		copied = &KNN{}
 	default:
-		panic(fmt.Errorf("unknown model %v", reflect.TypeOf(m)))
+		base.Logger().Error("failed to clone model", zap.String("model", reflect.TypeOf(m).String()))
+		return nil
 	}
 	err := copier.Copy(copied, m)
 	if err != nil {

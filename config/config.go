@@ -63,6 +63,8 @@ func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 type MasterConfig struct {
 	Port        int    `toml:"port"`
 	Host        string `toml:"host"`
+	HttpPort    int    `toml:"http_port"`
+	HttpHost    string `toml:"http_host"`
 	SearchJobs  int    `toml:"search_jobs"`
 	FitJobs     int    `toml:"fit_jobs"`
 	MetaTimeout int    `toml:"meta_timeout"`
@@ -74,6 +76,8 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 		return &MasterConfig{
 			Port:        8086,
 			Host:        "127.0.0.1",
+			HttpPort:    8088,
+			HttpHost:    "127.0.0.1",
 			SearchJobs:  1,
 			FitJobs:     1,
 			MetaTimeout: 60,
@@ -141,6 +145,12 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("master", "host") {
 		config.Master.Host = defaultMasterConfig.Host
+	}
+	if !meta.IsDefined("master", "http_port") {
+		config.Master.HttpPort = defaultMasterConfig.HttpPort
+	}
+	if !meta.IsDefined("master", "http_host") {
+		config.Master.HttpHost = defaultMasterConfig.HttpHost
 	}
 	if !meta.IsDefined("master", "fit_jobs") {
 		config.Master.FitJobs = defaultMasterConfig.FitJobs

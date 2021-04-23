@@ -26,9 +26,11 @@ var workerCommand = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
+		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
+		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
 		workingJobs, _ := cmd.PersistentFlags().GetInt("jobs")
 		// create worker
-		w := worker.NewWorker(masterHost, masterPort, workingJobs)
+		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs)
 		w.Serve()
 	},
 }
@@ -36,6 +38,8 @@ var workerCommand = &cobra.Command{
 func init() {
 	workerCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
 	workerCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
+	workerCommand.PersistentFlags().String("http-host", "127.0.0.1", "host of status report")
+	workerCommand.PersistentFlags().Int("http-port", 8089, "port of status report")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
 }
 
