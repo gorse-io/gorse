@@ -341,7 +341,7 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if epoch%config.Verbose == 0 || epoch == bpr.nEpochs {
+		if epoch%config.Verbose == 0 {
 			evalStart := time.Now()
 			scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
@@ -354,6 +354,8 @@ func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
 	}
+	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 	// restore best snapshot
 	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
 	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
@@ -550,7 +552,7 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		}
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if ep%config.Verbose == 0 || ep == als.nEpochs {
+		if ep%config.Verbose == 0 {
 			evalStart := time.Now()
 			scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
@@ -563,6 +565,8 @@ func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, als.UserFactor, als.ItemFactor)
 		}
 	}
+	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, als.UserFactor, als.ItemFactor)
 	// restore best snapshot
 	als.UserFactor = snapshots.BestWeights[0].(*mat.Dense)
 	als.ItemFactor = snapshots.BestWeights[1].(*mat.Dense)
@@ -809,7 +813,7 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if ep%config.Verbose == 0 || ep == ccd.nEpochs {
+		if ep%config.Verbose == 0 {
 			evalStart := time.Now()
 			scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime := time.Since(evalStart)
@@ -822,6 +826,8 @@ func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
 	}
+	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 	// restore best snapshot
 	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
 	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
