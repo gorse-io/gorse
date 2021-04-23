@@ -41,6 +41,10 @@ type Worker struct {
 	cfg        *config.Config
 	Jobs       int
 	workerName string
+	httpHost   string
+	httpPort   int
+	masterHost string
+	masterPort int
 
 	// database connection
 	cacheAddress string
@@ -50,8 +54,6 @@ type Worker struct {
 	localStore   *local.Database
 
 	// master connection
-	masterHost   string
-	masterPort   int
 	MasterClient protocol.MasterClient
 
 	// user index
@@ -74,14 +76,16 @@ type Worker struct {
 	pullChan   chan bool // model pulled events
 }
 
-func NewWorker(masterHost string, masterPort int, jobs int) *Worker {
+func NewWorker(masterHost string, masterPort int, httpHost string, httpPort int, jobs int) *Worker {
 	return &Worker{
 		// database
 		dataStore:  data.NoDatabase{},
 		cacheStore: cache.NoDatabase{},
 		// config
-		masterPort: masterPort,
 		masterHost: masterHost,
+		masterPort: masterPort,
+		httpHost:   httpHost,
+		httpPort:   httpPort,
 		Jobs:       jobs,
 		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
 		// events

@@ -15,6 +15,8 @@ positive_feedback_types = ["star", "fork"]
 [master]
 port = 8086                 # master port
 host = "127.0.0.1"          # master host
+http_port = 8088            # HTTP API port
+http_host = "127.0.0.1"     # HTTP API host
 search_jobs = 3             # number of jobs for model search
 fit_jobs = 4                # number of jobs for model fitting
 meta_timeout = 30           # cluster meta timeout (second)

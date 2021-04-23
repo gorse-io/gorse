@@ -34,6 +34,8 @@ func TestLoadConfig(t *testing.T) {
 	// master configuration
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "127.0.0.1", config.Master.Host)
+	assert.Equal(t, 8088, config.Master.HttpPort)
+	assert.Equal(t, "127.0.0.1", config.Master.HttpHost)
 	assert.Equal(t, 3, config.Master.SearchJobs)
 	assert.Equal(t, 4, config.Master.FitJobs)
 	assert.Equal(t, 30, config.Master.MetaTimeout)

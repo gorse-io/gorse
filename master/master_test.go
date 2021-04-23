@@ -184,7 +184,7 @@ func TestMaster_FitCFModel(t *testing.T) {
 	dataset, _, _, err := pr.LoadDataFromDatabase(m.dataStore, []string{"FeedbackType"})
 	assert.Nil(t, err)
 	// similar items (common users)
-	m.similar(items, dataset, model.SimilarityCollaborative, model.SimilarityDot)
+	m.similar(items, dataset, model.SimilarityDot)
 	similar, err := m.cacheStore.GetList(cache.SimilarItems, "9", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, similar)
