@@ -15,6 +15,7 @@ package base
 
 import (
 	"github.com/chewxy/math32"
+	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/floats"
 	"gonum.org/v1/gonum/stat"
@@ -46,12 +47,12 @@ func TestRandomGenerator_MakeNormalMatrix64(t *testing.T) {
 }
 
 func TestRandomGenerator_Sample(t *testing.T) {
-	excludeSet := NewSet(0, 1, 2, 3, 4)
+	excludeSet := set.NewIntSet(0, 1, 2, 3, 4)
 	rng := NewRandomGenerator(0)
 	for i := 1; i <= 10; i++ {
 		sampled := rng.Sample(0, 10, i, excludeSet)
 		for j := range sampled {
-			assert.False(t, excludeSet.Contain(sampled[j]))
+			assert.False(t, excludeSet.Has(sampled[j]))
 		}
 	}
 }
