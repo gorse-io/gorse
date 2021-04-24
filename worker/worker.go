@@ -106,8 +106,9 @@ func (w *Worker) Sync() {
 		var err error
 		if meta, err = w.MasterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType: protocol.NodeType_WorkerNode,
-				NodeName: w.workerName,
+				NodeType:    protocol.NodeType_WorkerNode,
+				NodeName:    w.workerName,
+				HttpAddress: fmt.Sprintf("%s:%d", w.httpHost, w.httpPort),
 			}); err != nil {
 			base.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
@@ -371,7 +372,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 			base.Logger().Error("failed to cache collaborative filtering recommendation", zap.Error(err))
 			return err
 		}
-		if err = w.cacheStore.SetString(cache.GlobalMeta, cache.CollaborativeRecommendTime, base.Now()); err != nil {
+		if err = w.cacheStore.SetString(cache.LastUpdateRecommendTime, user, base.Now()); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation time", zap.Error(err))
 		}
 		completed <- nil

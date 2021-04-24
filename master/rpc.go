@@ -18,11 +18,13 @@ type Node struct {
 	Name string
 	Type string
 	IP   string
+	Http string
 }
 
 func NewNode(ctx context.Context, nodeInfo *protocol.NodeInfo) *Node {
 	node := new(Node)
 	node.Name = nodeInfo.NodeName
+	node.Http = nodeInfo.HttpAddress
 	// read address
 	p, _ := peer.FromContext(ctx)
 	hostAndPort := p.Addr.String()
