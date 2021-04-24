@@ -10,25 +10,44 @@ import (
 	"github.com/zhenghaoz/gorse/model/pr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/peer"
+	"strings"
 )
+
+type Node struct {
+	Name string
+	Type string
+	IP   string
+}
+
+func NewNode(ctx context.Context, nodeInfo *protocol.NodeInfo) *Node {
+	node := new(Node)
+	node.Name = nodeInfo.NodeName
+	// read address
+	p, _ := peer.FromContext(ctx)
+	hostAndPort := p.Addr.String()
+	node.IP = strings.Split(hostAndPort, ":")[0]
+	// read type
+	switch nodeInfo.NodeType {
+	case protocol.NodeType_ServerNode:
+		node.Type = ServerNode
+	case protocol.NodeType_WorkerNode:
+		node.Type = WorkerNode
+	}
+	return node
+}
 
 func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*protocol.Meta, error) {
 	// save node
-	var nodeType string
-	switch nodeInfo.NodeType {
-	case protocol.NodeType_ServerNode:
-		nodeType = ServerNode
-	case protocol.NodeType_WorkerNode:
-		nodeType = WorkerNode
-	}
-	if nodeType != "" {
-		if err := m.ttlCache.Set(nodeInfo.NodeName, nodeType); err != nil {
+	node := NewNode(ctx, nodeInfo)
+	if node.Type != "" {
+		if err := m.ttlCache.Set(nodeInfo.NodeName, node); err != nil {
 			base.Logger().Error("failed to set ttl cache", zap.Error(err))
 			return nil, err
 		}
 	}
 	// marshall config
-	s, err := json.Marshal(m.cfg)
+	s, err := json.Marshal(m.GorseConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +76,8 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	workers := make([]string, 0)
 	servers := make([]string, 0)
 	m.nodesInfoMutex.Lock()
-	for name, tp := range m.nodesInfo {
-		switch tp {
+	for name, info := range m.nodesInfo {
+		switch info.Type {
 		case WorkerNode:
 			workers = append(workers, name)
 		case ServerNode:
@@ -138,20 +157,22 @@ func (m *Master) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.Us
 }
 
 func (m *Master) nodeUp(key string, value interface{}) {
-	nodeType := value.(string)
+	node := value.(*Node)
 	base.Logger().Info("node up",
 		zap.String("node_name", key),
-		zap.String("node_type", nodeType))
+		zap.String("node_ip", node.IP),
+		zap.String("node_type", node.Type))
 	m.nodesInfoMutex.Lock()
 	defer m.nodesInfoMutex.Unlock()
-	m.nodesInfo[key] = nodeType
+	m.nodesInfo[key] = node
 }
 
 func (m *Master) nodeDown(key string, value interface{}) {
-	nodeType := value.(string)
+	node := value.(*Node)
 	base.Logger().Info("node down",
 		zap.String("node_name", key),
-		zap.String("node_type", nodeType))
+		zap.String("node_ip", node.IP),
+		zap.String("node_type", node.Type))
 	m.nodesInfoMutex.Lock()
 	defer m.nodesInfoMutex.Unlock()
 	delete(m.nodesInfo, key)

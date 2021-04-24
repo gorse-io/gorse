@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgraph-io/badger/v2"
+	"github.com/emicklei/go-restful/v3"
 	"github.com/zhenghaoz/gorse/storage/local"
 	"os"
 	"path/filepath"
@@ -67,6 +68,8 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 			GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
 			HttpHost:    serverHost,
 			HttpPort:    serverPort,
+			EnableAuth:  true,
+			WebService:  new(restful.WebService),
 		},
 	}
 }

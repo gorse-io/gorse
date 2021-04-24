@@ -15,16 +15,15 @@ package master
 
 import (
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/emicklei/go-restful/v3"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
 	"math/rand"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -36,25 +35,18 @@ import (
 )
 
 const (
-	ServerNode = "server"
-	WorkerNode = "worker"
+	ServerNode = "Server"
+	WorkerNode = "Worker"
 )
 
 type Master struct {
 	protocol.UnimplementedMasterServer
+	server.RestServer
 
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache
-	nodesInfo      map[string]string
+	nodesInfo      map[string]*Node
 	nodesInfoMutex sync.Mutex
-
-	// configuration
-	cfg  *config.Config
-	meta *toml.MetaData
-
-	// database connection
-	dataStore  data.Database
-	cacheStore cache.Database
 
 	// users index
 	userIndex        base.Index
@@ -74,12 +66,10 @@ type Master struct {
 	//fmMutex    sync.mutex
 }
 
-func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
+func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
 	return &Master{
-		nodesInfo: make(map[string]string),
-		cfg:       cfg,
-		meta:      meta,
+		nodesInfo: make(map[string]*Node),
 		// init versions
 		prVersion: rand.Int63(),
 		// ctrVersion:       rand.Int63(),
@@ -88,14 +78,13 @@ func NewMaster(cfg *config.Config, meta *toml.MetaData) *Master {
 		prModelName: "bpr",
 		prModel:     pr.NewBPR(nil),
 		prSearcher:  pr.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
-	}
-}
-
-func (m *Master) ServeMetrics() {
-	http.Handle("/metrics", promhttp.Handler())
-	err := http.ListenAndServe(":2112", nil)
-	if err != nil {
-		base.Logger().Fatal("failed to start http server", zap.Error(err))
+		RestServer: server.RestServer{
+			GorseConfig: cfg,
+			HttpHost:    cfg.Master.HttpHost,
+			HttpPort:    cfg.Master.HttpPort,
+			EnableAuth:  false,
+			WebService:  new(restful.WebService),
+		},
 	}
 }
 
@@ -106,39 +95,39 @@ func (m *Master) Serve() {
 	m.ttlCache.SetExpirationCallback(m.nodeDown)
 	m.ttlCache.SetNewItemCallback(m.nodeUp)
 	if err := m.ttlCache.SetTTL(
-		time.Duration(m.cfg.Master.MetaTimeout+10) * time.Second,
+		time.Duration(m.GorseConfig.Master.MetaTimeout+10) * time.Second,
 	); err != nil {
 		base.Logger().Fatal("failed to set TTL", zap.Error(err))
 	}
 
 	// connect data database
 	var err error
-	m.dataStore, err = data.Open(m.cfg.Database.DataStore)
+	m.DataStore, err = data.Open(m.GorseConfig.Database.DataStore)
 	if err != nil {
 		base.Logger().Fatal("failed to connect data database", zap.Error(err))
 	}
-	if err = m.dataStore.Init(); err != nil {
+	if err = m.DataStore.Init(); err != nil {
 		base.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
 	// connect cache database
-	m.cacheStore, err = cache.Open(m.cfg.Database.CacheStore)
+	m.CacheStore, err = cache.Open(m.GorseConfig.Database.CacheStore)
 	if err != nil {
 		base.Logger().Fatal("failed to connect cache database", zap.Error(err),
-			zap.String("database", m.cfg.Database.CacheStore))
+			zap.String("database", m.GorseConfig.Database.CacheStore))
 	}
 
-	go m.ServeMetrics()
+	go m.StartHttpServer()
 	go m.FitLoop()
-	base.Logger().Info("start model fit", zap.Int("period", m.cfg.Recommend.FitPeriod))
+	base.Logger().Info("start model fit", zap.Int("period", m.GorseConfig.Recommend.FitPeriod))
 	go m.SearchLoop()
-	base.Logger().Info("start model searcher", zap.Int("period", m.cfg.Recommend.SearchPeriod))
+	base.Logger().Info("start model searcher", zap.Int("period", m.GorseConfig.Recommend.SearchPeriod))
 
 	// start rpc server
 	base.Logger().Info("start rpc server",
-		zap.String("host", m.cfg.Master.Host),
-		zap.Int("port", m.cfg.Master.Port))
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.cfg.Master.Host, m.cfg.Master.Port))
+		zap.String("host", m.GorseConfig.Master.Host),
+		zap.Int("port", m.GorseConfig.Master.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.GorseConfig.Master.Host, m.GorseConfig.Master.Port))
 	if err != nil {
 		base.Logger().Fatal("failed to listen", zap.Error(err))
 	}
@@ -157,15 +146,15 @@ func (m *Master) FitLoop() {
 	var bestModel pr.Model
 	for {
 		// download dataset
-		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.cfg.Database.PositiveFeedbackType))
-		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.dataStore, m.cfg.Database.PositiveFeedbackType)
+		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
+		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep
 		}
 		// sleep if empty
 		if dataSet.Count() == 0 {
-			base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.cfg.Database.PositiveFeedbackType))
+			base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 			goto sleep
 		}
 		// check best model
@@ -200,7 +189,7 @@ func (m *Master) FitLoop() {
 		m.latest(items)
 		// sleep
 	sleep:
-		time.Sleep(time.Duration(m.cfg.Recommend.FitPeriod) * time.Minute)
+		time.Sleep(time.Duration(m.GorseConfig.Recommend.FitPeriod) * time.Minute)
 	}
 }
 
@@ -210,15 +199,15 @@ func (m *Master) SearchLoop() {
 	for {
 		var trainSet, valSet *pr.DataSet
 		// download dataset
-		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.cfg.Database.PositiveFeedbackType))
-		dataSet, _, _, err := pr.LoadDataFromDatabase(m.dataStore, m.cfg.Database.PositiveFeedbackType)
+		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
+		dataSet, _, _, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep
 		}
 		// sleep if empty
 		if dataSet.Count() == 0 {
-			base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.cfg.Database.PositiveFeedbackType))
+			base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 			goto sleep
 		}
 		// sleep if nothing changed
@@ -232,6 +221,6 @@ func (m *Master) SearchLoop() {
 			base.Logger().Error("failed to search model", zap.Error(err))
 		}
 	sleep:
-		time.Sleep(time.Duration(m.cfg.Recommend.SearchPeriod) * time.Minute)
+		time.Sleep(time.Duration(m.GorseConfig.Recommend.SearchPeriod) * time.Minute)
 	}
 }

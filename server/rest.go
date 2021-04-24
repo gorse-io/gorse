@@ -36,12 +36,14 @@ type RestServer struct {
 	GorseConfig *config.Config
 	HttpHost    string
 	HttpPort    int
+	EnableAuth  bool
+	WebService  *restful.WebService
 }
 
 func (s *RestServer) StartHttpServer() {
 	// register restful APIs
-	ws := s.CreateWebService()
-	restful.DefaultContainer.Add(ws)
+	s.CreateWebService()
+	restful.DefaultContainer.Add(s.WebService)
 	// register swagger UI
 	specConfig := restfulspec.Config{
 		WebServices: restful.RegisteredWebServices(),
@@ -59,9 +61,9 @@ func (s *RestServer) StartHttpServer() {
 		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), nil)))
 }
 
-func (s *RestServer) CreateWebService() *restful.WebService {
+func (s *RestServer) CreateWebService() {
 	// Create a server
-	ws := new(restful.WebService)
+	ws := s.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 
 	/* Interactions with data store */
@@ -306,8 +308,6 @@ func (s *RestServer) CreateWebService() *restful.WebService {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Measurement{}))
-
-	return ws
 }
 
 func parseInt(request *restful.Request, name string, fallback int) (value int, err error) {
@@ -324,18 +324,18 @@ func (s *RestServer) getList(prefix string, name string, request *restful.Reques
 	var begin, end int
 	var err error
 	if begin, err = parseInt(request, "begin", 0); err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	if end, err = parseInt(request, "end", s.GorseConfig.Server.DefaultN-1); err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	returnType := request.QueryParameter("return")
 	// Get the popular list
 	items, err := s.CacheStore.GetList(prefix, name, begin, end)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	// Send result
@@ -344,15 +344,15 @@ func (s *RestServer) getList(prefix string, name string, request *restful.Reques
 		for i := range items {
 			itemDetails[i], err = s.DataStore.GetItem(items[i])
 			if err != nil {
-				internalServerError(response, err)
+				InternalServerError(response, err)
 				return
 			}
 		}
-		ok(response, itemDetails)
+		Ok(response, itemDetails)
 	} else if returnType == "id" || returnType == "" {
-		ok(response, items)
+		Ok(response, items)
 	} else {
-		badRequest(response, fmt.Errorf("unknown return type %v", returnType))
+		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
 	}
 }
 
@@ -405,10 +405,10 @@ func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *
 	itemId := request.PathParameter("item-id")
 	feedback, err := s.DataStore.GetItemFeedback(itemId, &feedbackType)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, feedback)
+	Ok(response, feedback)
 }
 
 // get feedback by item-id
@@ -420,10 +420,10 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 	itemId := request.PathParameter("item-id")
 	feedback, err := s.DataStore.GetItemFeedback(itemId, nil)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, feedback)
+	Ok(response, feedback)
 }
 
 // getNeighbors gets neighbors of a item from database.
@@ -469,7 +469,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	returnType := request.QueryParameter("return")
 	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	writeBackFeedback := request.QueryParameter("write-back")
@@ -494,7 +494,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	// load historical feedback
 	userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	excludeSet := set.NewStringSet()
@@ -505,7 +505,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	items := <-itemsChan
 	err = <-errChan
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	results := make([]string, 0, len(items))
@@ -532,7 +532,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 				Timestamp: time.Now(),
 			}, false, false)
 			if err != nil {
-				internalServerError(response, err)
+				InternalServerError(response, err)
 				return
 			}
 		}
@@ -543,15 +543,15 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		for i := range results {
 			itemDetails[i], err = s.DataStore.GetItem(results[i])
 			if err != nil {
-				internalServerError(response, err)
+				InternalServerError(response, err)
 				return
 			}
 		}
-		ok(response, itemDetails)
+		Ok(response, itemDetails)
 	} else if returnType == "id" || returnType == "" {
-		ok(response, results)
+		Ok(response, results)
 	} else {
-		badRequest(response, fmt.Errorf("unknown return type %v", returnType))
+		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
 	}
 }
 
@@ -567,14 +567,14 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 	temp := data.User{}
 	// get userInfo from request and put into temp
 	if err := request.ReadEntity(&temp); err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	if err := s.DataStore.InsertUser(temp); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, Success{RowAffected: 1})
+	Ok(response, Success{RowAffected: 1})
 }
 
 func (s *RestServer) getUser(request *restful.Request, response *restful.Response) {
@@ -588,13 +588,13 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 	user, err := s.DataStore.GetUser(userId)
 	if err != nil {
 		if err.Error() == data.ErrUserNotExist {
-			pageNotFound(response, err)
+			PageNotFound(response, err)
 		} else {
-			internalServerError(response, err)
+			InternalServerError(response, err)
 		}
 		return
 	}
-	ok(response, user)
+	Ok(response, user)
 }
 
 func (s *RestServer) insertUsers(request *restful.Request, response *restful.Response) {
@@ -605,19 +605,19 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	temp := new([]data.User)
 	// get param from request and put into temp
 	if err := request.ReadEntity(temp); err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	var count int
 	// range temp and achieve user
 	for _, user := range *temp {
 		if err := s.DataStore.InsertUser(user); err != nil {
-			internalServerError(response, err)
+			InternalServerError(response, err)
 			return
 		}
 		count++
 	}
-	ok(response, Success{RowAffected: count})
+	Ok(response, Success{RowAffected: count})
 }
 
 type UserIterator struct {
@@ -633,16 +633,16 @@ func (s *RestServer) getUsers(request *restful.Request, response *restful.Respon
 	cursor := request.QueryParameter("cursor")
 	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	// get all users
 	cursor, users, err := s.DataStore.GetUsers(cursor, n)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, UserIterator{Cursor: cursor, Users: users})
+	Ok(response, UserIterator{Cursor: cursor, Users: users})
 }
 
 // delete a user by user-id
@@ -654,10 +654,10 @@ func (s *RestServer) deleteUser(request *restful.Request, response *restful.Resp
 	// get user-id and put into temp
 	userId := request.PathParameter("user-id")
 	if err := s.DataStore.DeleteUser(userId); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, Success{RowAffected: 1})
+	Ok(response, Success{RowAffected: 1})
 }
 
 // get feedback by user-id with feedback type
@@ -671,7 +671,7 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 	returnType := request.QueryParameter("return")
 	feedback, err := s.DataStore.GetUserFeedback(userId, &feedbackType)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	if returnType == "detail" {
@@ -683,15 +683,15 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 			feedbackDetails[i].Comment = feedback[i].Comment
 			feedbackDetails[i].Item, err = s.DataStore.GetItem(feedback[i].ItemId)
 			if err != nil {
-				internalServerError(response, err)
+				InternalServerError(response, err)
 				return
 			}
 		}
-		ok(response, feedbackDetails)
+		Ok(response, feedbackDetails)
 	} else if returnType == "id" || returnType == "" {
-		ok(response, feedback)
+		Ok(response, feedback)
 	} else {
-		badRequest(response, fmt.Errorf("unknown return type %v", returnType))
+		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
 	}
 }
 
@@ -713,7 +713,7 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 	returnType := request.QueryParameter("return")
 	feedback, err := s.DataStore.GetUserFeedback(userId, nil)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
 	if returnType == "detail" {
@@ -725,15 +725,15 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 			feedbackDetails[i].Comment = feedback[i].Comment
 			feedbackDetails[i].Item, err = s.DataStore.GetItem(feedback[i].ItemId)
 			if err != nil {
-				internalServerError(response, err)
+				InternalServerError(response, err)
 				return
 			}
 		}
-		ok(response, feedbackDetails)
+		Ok(response, feedbackDetails)
 	} else if returnType == "id" || returnType == "" {
-		ok(response, feedback)
+		Ok(response, feedback)
 	} else {
-		badRequest(response, fmt.Errorf("unknown return type %v", returnType))
+		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
 	}
 }
 
@@ -746,7 +746,7 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 	// Add ratings
 	items := make([]data.Item, 0)
 	if err := request.ReadEntity(&items); err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	// Insert items
@@ -755,11 +755,11 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 		err := s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
 		count++
 		if err != nil {
-			internalServerError(response, err)
+			InternalServerError(response, err)
 			return
 		}
 	}
-	ok(response, Success{RowAffected: count})
+	Ok(response, Success{RowAffected: count})
 }
 
 func (s *RestServer) insertItem(request *restful.Request, response *restful.Response) {
@@ -770,14 +770,14 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 	item := new(data.Item)
 	var err error
 	if err = request.ReadEntity(item); err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	if err = s.DataStore.InsertItem(*item); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, Success{RowAffected: 1})
+	Ok(response, Success{RowAffected: 1})
 }
 
 type ItemIterator struct {
@@ -793,15 +793,15 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 	cursor := request.QueryParameter("cursor")
 	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	cursor, items, err := s.DataStore.GetItems(cursor, n)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, ItemIterator{Cursor: cursor, Items: items})
+	Ok(response, ItemIterator{Cursor: cursor, Items: items})
 }
 
 func (s *RestServer) getItem(request *restful.Request, response *restful.Response) {
@@ -815,13 +815,13 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	item, err := s.DataStore.GetItem(itemId)
 	if err != nil {
 		if err.Error() == data.ErrItemNotExist {
-			pageNotFound(response, err)
+			PageNotFound(response, err)
 		} else {
-			internalServerError(response, err)
+			InternalServerError(response, err)
 		}
 		return
 	}
-	ok(response, item)
+	Ok(response, item)
 }
 
 func (s *RestServer) deleteItem(request *restful.Request, response *restful.Response) {
@@ -831,10 +831,10 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 	}
 	itemId := request.PathParameter("item-id")
 	if err := s.DataStore.DeleteItem(itemId); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, Success{RowAffected: 1})
+	Ok(response, Success{RowAffected: 1})
 }
 
 // putFeedback puts new ratings into the database.
@@ -846,7 +846,7 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 	// Add ratings
 	ratings := new([]data.Feedback)
 	if err := request.ReadEntity(ratings); err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	var err error
@@ -858,11 +858,11 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 			s.GorseConfig.Database.AutoInsertItem)
 		count++
 		if err != nil {
-			internalServerError(response, err)
+			InternalServerError(response, err)
 			return
 		}
 	}
-	ok(response, Success{RowAffected: count})
+	Ok(response, Success{RowAffected: count})
 }
 
 type FeedbackIterator struct {
@@ -880,15 +880,15 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 	cursor := request.QueryParameter("cursor")
 	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, FeedbackIterator{Cursor: cursor, Feedback: feedback})
+	Ok(response, FeedbackIterator{Cursor: cursor, Feedback: feedback})
 }
 
 func (s *RestServer) getTypedFeedback(request *restful.Request, response *restful.Response) {
@@ -901,15 +901,15 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 	cursor := request.QueryParameter("cursor")
 	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, &feedbackType)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, FeedbackIterator{Cursor: cursor, Feedback: feedback})
+	Ok(response, FeedbackIterator{Cursor: cursor, Feedback: feedback})
 }
 
 func (s *RestServer) getUserItemFeedback(request *restful.Request, response *restful.Response) {
@@ -921,9 +921,9 @@ func (s *RestServer) getUserItemFeedback(request *restful.Request, response *res
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
 	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, nil); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 	} else {
-		ok(response, feedback)
+		Ok(response, feedback)
 	}
 }
 
@@ -936,9 +936,9 @@ func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
 	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, nil); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 	} else {
-		ok(response, Success{RowAffected: deleteCount})
+		Ok(response, Success{RowAffected: deleteCount})
 	}
 }
 
@@ -952,11 +952,11 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
 	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, &feedbackType); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 	} else if len(feedbackType) == 0 {
-		text(response, "{}")
+		Text(response, "{}")
 	} else {
-		ok(response, feedback[0])
+		Ok(response, feedback[0])
 	}
 }
 
@@ -970,9 +970,9 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
 	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, &feedbackType); err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 	} else {
-		ok(response, Success{deleteCount})
+		Ok(response, Success{deleteCount})
 	}
 }
 
@@ -985,18 +985,18 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 	name := request.PathParameter("name")
 	n, err := parseInt(request, "n", 100)
 	if err != nil {
-		badRequest(response, err)
+		BadRequest(response, err)
 		return
 	}
 	measurements, err := s.DataStore.GetMeasurements(name, n)
 	if err != nil {
-		internalServerError(response, err)
+		InternalServerError(response, err)
 		return
 	}
-	ok(response, measurements)
+	Ok(response, measurements)
 }
 
-func badRequest(response *restful.Response, err error) {
+func BadRequest(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	base.Logger().Error("bad request", zap.Error(err))
 	if err = response.WriteError(400, err); err != nil {
@@ -1004,7 +1004,7 @@ func badRequest(response *restful.Response, err error) {
 	}
 }
 
-func internalServerError(response *restful.Response, err error) {
+func InternalServerError(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	base.Logger().Error("internal server error", zap.Error(err))
 	if err = response.WriteError(500, err); err != nil {
@@ -1012,7 +1012,7 @@ func internalServerError(response *restful.Response, err error) {
 	}
 }
 
-func pageNotFound(response *restful.Response, err error) {
+func PageNotFound(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteError(400, err); err != nil {
 		base.Logger().Error("failed to write error", zap.Error(err))
@@ -1020,14 +1020,14 @@ func pageNotFound(response *restful.Response, err error) {
 }
 
 // json sends the content as JSON to the client.
-func ok(response *restful.Response, content interface{}) {
+func Ok(response *restful.Response, content interface{}) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteAsJson(content); err != nil {
 		base.Logger().Error("failed to write json", zap.Error(err))
 	}
 }
 
-func text(response *restful.Response, content string) {
+func Text(response *restful.Response, content string) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if _, err := response.Write([]byte(content)); err != nil {
 		base.Logger().Error("failed to write text", zap.Error(err))
