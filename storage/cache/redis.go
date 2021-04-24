@@ -63,6 +63,9 @@ func (redis *Redis) GetString(prefix, name string) (string, error) {
 	key := prefix + "/" + name
 	val, err := redis.client.Get(ctx, key).Result()
 	if err != nil {
+		if err.Error() == "redis: nil" {
+			return "", ErrObjectNotExist
+		}
 		return "", err
 	}
 	return val, err

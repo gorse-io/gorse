@@ -197,14 +197,12 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/user/{user-id}/feedback/").To(s.getFeedbackByUser).
 		Doc("Get feedback by user id.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]data.Feedback{}))
 	// Get feedback by item-id
 	ws.Route(ws.GET("/item/{item-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByItem).
@@ -231,7 +229,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 	// Get subscribe items
 	//ws.Route(ws.GET("/intermediate/subscribe/{user-id}").To(s.getSubscribe).
@@ -253,7 +250,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 	ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
 		Doc("get popular items").
@@ -261,7 +257,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
@@ -270,7 +265,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 	ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
 		Doc("get latest items").
@@ -278,7 +272,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 	// Get neighbors
 	ws.Route(ws.GET("/neighbors/{item-id}").To(s.getNeighbors).
@@ -288,7 +281,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
 		Doc("Get recommendation for user.").
@@ -297,7 +289,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("write-back", "write recommendation back to feedback").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
 		Writes([]string{}))
 
 	/* Interaction with measurements */
@@ -310,7 +301,7 @@ func (s *RestServer) CreateWebService() {
 		Writes([]data.Measurement{}))
 }
 
-func parseInt(request *restful.Request, name string, fallback int) (value int, err error) {
+func ParseInt(request *restful.Request, name string, fallback int) (value int, err error) {
 	valueString := request.QueryParameter(name)
 	value, err = strconv.Atoi(valueString)
 	if err != nil && valueString == "" {
@@ -323,15 +314,14 @@ func parseInt(request *restful.Request, name string, fallback int) (value int, e
 func (s *RestServer) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
 	var begin, end int
 	var err error
-	if begin, err = parseInt(request, "begin", 0); err != nil {
+	if begin, err = ParseInt(request, "begin", 0); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	if end, err = parseInt(request, "end", s.GorseConfig.Server.DefaultN-1); err != nil {
+	if end, err = ParseInt(request, "end", s.GorseConfig.Server.DefaultN-1); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	returnType := request.QueryParameter("return")
 	// Get the popular list
 	items, err := s.CacheStore.GetList(prefix, name, begin, end)
 	if err != nil {
@@ -339,21 +329,7 @@ func (s *RestServer) getList(prefix string, name string, request *restful.Reques
 		return
 	}
 	// Send result
-	if returnType == "detail" {
-		itemDetails := make([]data.Item, len(items))
-		for i := range items {
-			itemDetails[i], err = s.DataStore.GetItem(items[i])
-			if err != nil {
-				InternalServerError(response, err)
-				return
-			}
-		}
-		Ok(response, itemDetails)
-	} else if returnType == "id" || returnType == "" {
-		Ok(response, items)
-	} else {
-		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
-	}
+	Ok(response, items)
 }
 
 // getPopular gets popular items from database.
@@ -466,8 +442,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	}
 	// parse arguments
 	userId := request.PathParameter("user-id")
-	returnType := request.QueryParameter("return")
-	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -538,21 +513,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		}
 	}
 	// Send result
-	if returnType == "detail" {
-		itemDetails := make([]data.Item, len(results))
-		for i := range results {
-			itemDetails[i], err = s.DataStore.GetItem(results[i])
-			if err != nil {
-				InternalServerError(response, err)
-				return
-			}
-		}
-		Ok(response, itemDetails)
-	} else if returnType == "id" || returnType == "" {
-		Ok(response, results)
-	} else {
-		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
-	}
+	Ok(response, results)
 }
 
 type Success struct {
@@ -631,7 +592,7 @@ func (s *RestServer) getUsers(request *restful.Request, response *restful.Respon
 		return
 	}
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -668,39 +629,12 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	returnType := request.QueryParameter("return")
 	feedback, err := s.DataStore.GetUserFeedback(userId, &feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
-	if returnType == "detail" {
-		feedbackDetails := make([]FeedbackDetail, len(feedback))
-		for i := range feedback {
-			feedbackDetails[i].FeedbackType = feedback[i].FeedbackType
-			feedbackDetails[i].UserId = feedback[i].UserId
-			feedbackDetails[i].Timestamp = feedback[i].Timestamp
-			feedbackDetails[i].Comment = feedback[i].Comment
-			feedbackDetails[i].Item, err = s.DataStore.GetItem(feedback[i].ItemId)
-			if err != nil {
-				InternalServerError(response, err)
-				return
-			}
-		}
-		Ok(response, feedbackDetails)
-	} else if returnType == "id" || returnType == "" {
-		Ok(response, feedback)
-	} else {
-		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
-	}
-}
-
-type FeedbackDetail struct {
-	FeedbackType string
-	UserId       string
-	Item         data.Item
-	Timestamp    time.Time
-	Comment      string
+	Ok(response, feedback)
 }
 
 // get feedback by user-id
@@ -710,31 +644,12 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 		return
 	}
 	userId := request.PathParameter("user-id")
-	returnType := request.QueryParameter("return")
 	feedback, err := s.DataStore.GetUserFeedback(userId, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
-	if returnType == "detail" {
-		feedbackDetails := make([]FeedbackDetail, len(feedback))
-		for i := range feedback {
-			feedbackDetails[i].FeedbackType = feedback[i].FeedbackType
-			feedbackDetails[i].UserId = feedback[i].UserId
-			feedbackDetails[i].Timestamp = feedback[i].Timestamp
-			feedbackDetails[i].Comment = feedback[i].Comment
-			feedbackDetails[i].Item, err = s.DataStore.GetItem(feedback[i].ItemId)
-			if err != nil {
-				InternalServerError(response, err)
-				return
-			}
-		}
-		Ok(response, feedbackDetails)
-	} else if returnType == "id" || returnType == "" {
-		Ok(response, feedback)
-	} else {
-		BadRequest(response, fmt.Errorf("unknown return type %v", returnType))
-	}
+	Ok(response, feedback)
 }
 
 // putItems puts items into the database.
@@ -791,7 +706,7 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 		return
 	}
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -852,11 +767,20 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 	var err error
 	// Insert feedback
 	var count int
+	users := set.NewStringSet()
 	for _, feedback := range *ratings {
+		users.Add(feedback.UserId)
 		err = s.DataStore.InsertFeedback(feedback,
 			s.GorseConfig.Database.AutoInsertUser,
 			s.GorseConfig.Database.AutoInsertItem)
 		count++
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
+	for _, userId := range users.List() {
+		err = s.CacheStore.SetString(cache.LastActiveTime, userId, base.Now())
 		if err != nil {
 			InternalServerError(response, err)
 			return
@@ -878,7 +802,7 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 	}
 	// Parse parameters
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -899,7 +823,7 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	cursor := request.QueryParameter("cursor")
-	n, err := parseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -983,7 +907,7 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 	}
 	// Parse parameters
 	name := request.PathParameter("name")
-	n, err := parseInt(request, "n", 100)
+	n, err := ParseInt(request, "n", 100)
 	if err != nil {
 		BadRequest(response, err)
 		return

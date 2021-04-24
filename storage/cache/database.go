@@ -14,6 +14,7 @@
 package cache
 
 import (
+	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 	"strings"
@@ -32,10 +33,18 @@ const (
 	CollectSimilarTime          = "last_update_similar_time"
 	FitMatrixFactorizationTime  = "last_fit_match_model_time"
 	FitFactorizationMachineTime = "last_fit_rank_model_time"
-	CollaborativeRecommendTime  = "offline_recommend_time"
 	MatrixFactorizationVersion  = "latest_match_model_version"
 	FactorizationMachineVersion = "latest_rank_model_version"
+
+	LastActiveTime          = "last_active_time"
+	LastUpdateRecommendTime = "last_update_recommend_time"
+	NumUsers                = "num_users"
+	NumItems                = "num_items"
+	NumPositiveFeedback     = "num_pos_feedback"
 )
+
+var ErrObjectNotExist = fmt.Errorf("object not exists")
+var ErrNoDatabase = fmt.Errorf("no database specified")
 
 type Database interface {
 	Close() error

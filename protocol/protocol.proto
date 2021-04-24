@@ -59,4 +59,5 @@ message Model {
 message NodeInfo {
   NodeType node_type = 1;
   string node_name = 2;
+  string http_address = 3;
 }

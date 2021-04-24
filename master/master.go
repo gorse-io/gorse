@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 	"math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -151,6 +152,16 @@ func (m *Master) FitLoop() {
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep
+		}
+		// save stats
+		if err = m.CacheStore.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(dataSet.UserCount())); err != nil {
+			base.Logger().Error("failed to write meta", zap.Error(err))
+		}
+		if err = m.CacheStore.SetString(cache.GlobalMeta, cache.NumItems, strconv.Itoa(dataSet.ItemCount())); err != nil {
+			base.Logger().Error("failed to write meta", zap.Error(err))
+		}
+		if err = m.CacheStore.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, strconv.Itoa(dataSet.Count())); err != nil {
+			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		// sleep if empty
 		if dataSet.Count() == 0 {
