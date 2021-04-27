@@ -14,6 +14,7 @@
 package base
 
 import (
+	"github.com/scylladb/go-set/iset"
 	"math/rand"
 )
 
@@ -82,14 +83,13 @@ func (rng RandomGenerator) NormalMatrix64(row, col int, mean, stdDev float64) []
 	return ret
 }
 
-func (rng RandomGenerator) Sample(low, high, n int, exclude ...Set) []int {
+func (rng RandomGenerator) Sample(low, high, n int, exclude ...*iset.Set) []int {
 	intervalLength := high - low
-	excludeSet := NewSet()
-	excludeSet.Merge(exclude...)
+	excludeSet := iset.Union(exclude...)
 	sampled := make([]int, 0, n)
-	if n >= intervalLength-excludeSet.Len() {
+	if n >= intervalLength-excludeSet.Size() {
 		for i := low; i < high; i++ {
-			if !excludeSet.Contain(i) {
+			if !excludeSet.Has(i) {
 				sampled = append(sampled, i)
 				excludeSet.Add(i)
 			}
@@ -97,7 +97,7 @@ func (rng RandomGenerator) Sample(low, high, n int, exclude ...Set) []int {
 	} else {
 		for len(sampled) < n {
 			v := rng.Intn(intervalLength) + low
-			if !excludeSet.Contain(v) {
+			if !excludeSet.Has(v) {
 				sampled = append(sampled, v)
 				excludeSet.Add(v)
 			}

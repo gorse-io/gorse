@@ -14,8 +14,9 @@
 package cache
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testMeta(t *testing.T, db Database) {
@@ -53,15 +54,15 @@ func testList(t *testing.T, db Database) {
 	err := db.SetList("list", "0", items)
 	assert.Nil(t, err)
 	// Get items
-	totalItems, err := db.GetList("list", "0", 0, 0)
+	totalItems, err := db.GetList("list", "0", 0, -1)
 	assert.Nil(t, err)
 	assert.Equal(t, items, totalItems)
 	// Get n items
-	headItems, err := db.GetList("list", "0", 3, 0)
+	headItems, err := db.GetList("list", "0", 0, 2)
 	assert.Nil(t, err)
 	assert.Equal(t, items[:3], headItems)
 	// Get n items with offset
-	offsetItems, err := db.GetList("list", "0", 3, 1)
+	offsetItems, err := db.GetList("list", "0", 1, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, items[1:4], offsetItems)
 	// Get empty
@@ -72,7 +73,7 @@ func testList(t *testing.T, db Database) {
 	overwriteItems := []string{"10", "11", "12", "13", "14"}
 	err = db.SetList("list", "0", overwriteItems)
 	assert.Nil(t, err)
-	totalItems, err = db.GetList("list", "0", 0, 0)
+	totalItems, err = db.GetList("list", "0", 0, -1)
 	assert.Nil(t, err)
 	assert.Equal(t, overwriteItems, totalItems)
 }

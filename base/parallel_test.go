@@ -14,6 +14,7 @@
 package base
 
 import (
+	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -33,19 +34,19 @@ func TestParallel(t *testing.T) {
 		time.Sleep(time.Microsecond)
 		return nil
 	})
-	workersSet := NewSet(workerIds...)
+	workersSet := set.NewIntSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.GreaterOrEqual(t, 4, workersSet.Len())
-	assert.Less(t, 1, workersSet.Len())
+	assert.GreaterOrEqual(t, 4, workersSet.Size())
+	assert.Less(t, 1, workersSet.Size())
 	// single thread
 	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
 		b[jobId] = a[jobId]
 		workerIds[jobId] = workerId
 		return nil
 	})
-	workersSet = NewSet(workerIds...)
+	workersSet = set.NewIntSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.Equal(t, 1, workersSet.Len())
+	assert.Equal(t, 1, workersSet.Size())
 }
 
 func TestBatchParallel(t *testing.T) {
@@ -64,17 +65,17 @@ func TestBatchParallel(t *testing.T) {
 		time.Sleep(time.Microsecond)
 		return nil
 	})
-	workersSet := NewSet(workerIds...)
+	workersSet := set.NewIntSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.GreaterOrEqual(t, 4, workersSet.Len())
-	assert.Less(t, 1, workersSet.Len())
+	assert.GreaterOrEqual(t, 4, workersSet.Size())
+	assert.Less(t, 1, workersSet.Size())
 	// single thread
 	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
 		b[jobId] = a[jobId]
 		workerIds[jobId] = workerId
 		return nil
 	})
-	workersSet = NewSet(workerIds...)
+	workersSet = set.NewIntSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.Equal(t, 1, workersSet.Len())
+	assert.Equal(t, 1, workersSet.Size())
 }

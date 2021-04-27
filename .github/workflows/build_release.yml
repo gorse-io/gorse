@@ -5,20 +5,20 @@ jobs:
     name: Build Release
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go 1.13
+      - name: Set up Go 1.16.x
         uses: actions/setup-go@v1
         with:
-          go-version: 1.13
+          go-version: 1.16.x
         id: go
         
       - name: Pull source
         uses: actions/checkout@v1
-
-      - name: Install gox
-        run: go get -v github.com/mitchellh/gox
         
       - name: Build release
-        run: gox -os='darwin windows linux' -arch='amd64'
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          go get -v github.com/mitchellh/gox
+          gox -os='darwin windows linux' -arch='amd64' ./...
 
       - name: Install zip
         uses: montudor/action-zip@v0.1.1
@@ -28,10 +28,12 @@ jobs:
           zip gorse_linux_amd64.zip gorse-*_linux_amd64
           zip gorse_windows_amd64.zip gorse-*_windows_amd64.exe
           zip gorse_darwin_amd64.zip gorse-*_darwin_amd64
-
+          
       - name: Upload release
-        uses: JasonEtco/upload-to-release@master
+        uses: svenstaro/upload-release-action@v2
         with:
-          args: gorse_darwin_amd64.zip gorse_linux_amd64.zip gorse_windows_amd64.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gorse_*_amd64.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true

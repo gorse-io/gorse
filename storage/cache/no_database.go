@@ -13,36 +13,32 @@
 // limitations under the License.
 package cache
 
-import "fmt"
-
-var NoDatabaseError = fmt.Errorf("no database specified for cachestore")
-
 type NoDatabase struct{}
 
 func (NoDatabase) Close() error {
-	return NoDatabaseError
+	return ErrNoDatabase
 }
 
 func (NoDatabase) SetList(prefix, name string, items []string) error {
-	return NoDatabaseError
+	return ErrNoDatabase
 }
 
-func (NoDatabase) GetList(prefix, name string, n int, offset int) ([]string, error) {
-	return nil, NoDatabaseError
+func (NoDatabase) GetList(prefix, name string, begin int, end int) ([]string, error) {
+	return nil, ErrNoDatabase
 }
 
 func (NoDatabase) GetString(prefix, name string) (string, error) {
-	return "", NoDatabaseError
+	return "", ErrNoDatabase
 }
 
 func (NoDatabase) SetString(prefix, name string, val string) error {
-	return NoDatabaseError
+	return ErrNoDatabase
 }
 
 func (NoDatabase) GetInt(prefix, name string) (int, error) {
-	return 0, NoDatabaseError
+	return 0, ErrNoDatabase
 }
 
 func (NoDatabase) SetInt(prefix, name string, val int) error {
-	return NoDatabaseError
+	return ErrNoDatabase
 }

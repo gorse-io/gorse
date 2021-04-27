@@ -73,6 +73,13 @@ type Feedback struct {
 	Comment   string
 }
 
+type Measurement struct {
+	Name      string
+	Timestamp time.Time
+	Value     float32
+	Comment   string
+}
+
 type Database interface {
 	Init() error
 	Close() error
@@ -95,6 +102,9 @@ type Database interface {
 	InsertFeedback(feedback Feedback, insertUser, insertItem bool) error
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
 	GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error)
+	// measurement
+	InsertMeasurement(measurement Measurement) error
+	GetMeasurements(name string, n int) ([]Measurement, error)
 }
 
 const mySQLPrefix = "mysql://"

@@ -80,13 +80,12 @@ func getFeedback(t *testing.T, db Database, feedbackType *string) []Feedback {
 func testUsers(t *testing.T, db Database) {
 	// Insert users
 	for i := 9; i >= 0; i-- {
-		if err := db.InsertUser(User{
+		err := db.InsertUser(User{
 			UserId:  strconv.Itoa(i),
 			Labels:  []string{strconv.Itoa(i + 100)},
 			Comment: fmt.Sprintf("comment %d", i),
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		assert.Nil(t, err)
 	}
 	// Get users
 	users := getUsers(t, db)
@@ -241,9 +240,7 @@ func testItems(t *testing.T, db Database) {
 	// Get item
 	for _, item := range items {
 		ret, err := db.GetItem(item.ItemId)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Nil(t, err)
 		assert.Equal(t, item, ret)
 	}
 	// Delete item
@@ -339,4 +336,26 @@ func testDeleteFeedback(t *testing.T, db Database) {
 	ret, err = db.GetUserItemFeedback("1", "3", &feedbackType2)
 	assert.Nil(t, err)
 	assert.Empty(t, ret)
+}
+
+func testMeasurements(t *testing.T, db Database) {
+	measurements := []Measurement{
+		{"Test_NDCG", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 0, "a"},
+		{"Test_NDCG", time.Date(2001, 1, 1, 1, 1, 1, 0, time.UTC), 1, "b"},
+		{"Test_NDCG", time.Date(2002, 1, 1, 1, 1, 1, 0, time.UTC), 2, "c"},
+		{"Test_NDCG", time.Date(2003, 1, 1, 1, 1, 1, 0, time.UTC), 3, "d"},
+		{"Test_NDCG", time.Date(2004, 1, 1, 1, 1, 1, 0, time.UTC), 4, "e"},
+		{"Test_Recall", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 1, "f"},
+	}
+	for _, measurement := range measurements {
+		err := db.InsertMeasurement(measurement)
+		assert.Nil(t, err)
+	}
+	ret, err := db.GetMeasurements("Test_NDCG", 3)
+	assert.Nil(t, err)
+	assert.Equal(t, []Measurement{
+		measurements[4],
+		measurements[3],
+		measurements[2],
+	}, ret)
 }

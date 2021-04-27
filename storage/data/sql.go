@@ -57,6 +57,15 @@ func (d *SQLDatabase) Init() error {
 		")"); err != nil {
 		return err
 	}
+	if _, err := d.db.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
+		"name varchar(256) NOT NULL," +
+		"time_stamp timestamp NOT NULL," +
+		"value double NOT NULL," +
+		"comment TEXT NOT NULL," +
+		"PRIMARY KEY(name, time_stamp)" +
+		")"); err != nil {
+		return err
+	}
 	// change settings
 	_, err := d.db.Exec("SET SESSION sql_mode=\"" +
 		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
@@ -66,6 +75,29 @@ func (d *SQLDatabase) Init() error {
 
 func (d *SQLDatabase) Close() error {
 	return d.db.Close()
+}
+
+func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
+	_, err := d.db.Exec("INSERT measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
+		measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
+	return err
+}
+
+func (d *SQLDatabase) GetMeasurements(name string, n int) ([]Measurement, error) {
+	measurements := make([]Measurement, 0)
+	result, err := d.db.Query("SELECT name, time_stamp, value, `comment` FROM measurements WHERE name = ? ORDER BY time_stamp DESC LIMIT ?", name, n)
+	if err != nil {
+		return measurements, err
+	}
+	defer result.Close()
+	for result.Next() {
+		var measurement Measurement
+		if err = result.Scan(&measurement.Name, &measurement.Timestamp, &measurement.Value, &measurement.Comment); err != nil {
+			return measurements, err
+		}
+		measurements = append(measurements, measurement)
+	}
+	return measurements, nil
 }
 
 func (d *SQLDatabase) InsertItem(item Item) error {

@@ -11,21 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package cf
+package pr
 
 import (
 	"github.com/chewxy/math32"
+	"github.com/jinzhu/copier"
+	"github.com/scylladb/go-set"
+	"github.com/scylladb/go-set/iset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
+	"github.com/zhenghaoz/gorse/model"
 )
 
 /* Evaluate Item Ranking */
 
 // Metric is used by evaluators in personalized ranking tasks.
-type Metric func(targetSet base.Set, rankList []int) float32
+type Metric func(targetSet *iset.Set, rankList []int) float32
 
 // Evaluate evaluates a model in top-n tasks.
-func Evaluate(estimator MatrixFactorization, testSet *DataSet, trainSet *DataSet, topK int, numCandidates int, nJobs int, scorers ...Metric) []float32 {
+func Evaluate(estimator model.Model, testSet *DataSet, trainSet *DataSet, topK int, numCandidates int, nJobs int, scorers ...Metric) []float32 {
 	partSum := make([][]float32, nJobs)
 	partCount := make([]float32, nJobs)
 	for i := 0; i < nJobs; i++ {
@@ -36,16 +40,16 @@ func Evaluate(estimator MatrixFactorization, testSet *DataSet, trainSet *DataSet
 	negatives := testSet.NegativeSample(trainSet, numCandidates)
 	_ = base.Parallel(testSet.UserCount(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
-		targetSet := base.NewSet(testSet.UserFeedback[userIndex]...)
-		if targetSet.Len() > 0 {
+		targetSet := set.NewIntSet(testSet.UserFeedback[userIndex]...)
+		if targetSet.Size() > 0 {
 			// Sample negative samples
 			//userTrainSet := NewSet(trainSet.UserFeedback[userIndex])
 			negativeSample := negatives[userIndex]
-			candidates := make([]int, 0, targetSet.Len()+len(negativeSample))
+			candidates := make([]int, 0, targetSet.Size()+len(negativeSample))
 			candidates = append(candidates, testSet.UserFeedback[userIndex]...)
 			candidates = append(candidates, negativeSample...)
 			// Find top-n ItemFeedback in predictions
-			rankList, _ := Rank(estimator.(MatrixFactorization), userIndex, candidates, topK)
+			rankList, _ := Rank(estimator, userIndex, trainSet.UserFeedback[userIndex], candidates, topK)
 			partCount[workerId]++
 			for i, metric := range scorers {
 				partSum[workerId][i] += metric(targetSet, rankList)
@@ -65,16 +69,16 @@ func Evaluate(estimator MatrixFactorization, testSet *DataSet, trainSet *DataSet
 }
 
 // NDCG means Normalized Discounted Cumulative Gain.
-func NDCG(targetSet base.Set, rankList []int) float32 {
+func NDCG(targetSet *iset.Set, rankList []int) float32 {
 	// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
 	idcg := float32(0)
-	for i := 0; i < targetSet.Len() && i < len(rankList); i++ {
+	for i := 0; i < targetSet.Size() && i < len(rankList); i++ {
 		idcg += 1.0 / math32.Log2(float32(i)+2.0)
 	}
 	// DCG = \sum^{N}_{i=1} \frac {2^{rel_i}-1} {\log_2(i+1)}
 	dcg := float32(0)
 	for i, itemId := range rankList {
-		if targetSet.Contain(itemId) {
+		if targetSet.Has(itemId) {
 			dcg += 1.0 / math32.Log2(float32(i)+2.0)
 		}
 	}
@@ -83,10 +87,10 @@ func NDCG(targetSet base.Set, rankList []int) float32 {
 
 // Precision is the fraction of relevant ItemFeedback among the recommended ItemFeedback.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{retrieved documents}|}
-func Precision(targetSet base.Set, rankList []int) float32 {
+func Precision(targetSet *iset.Set, rankList []int) float32 {
 	hit := float32(0)
 	for _, itemId := range rankList {
-		if targetSet.Contain(itemId) {
+		if targetSet.Has(itemId) {
 			hit++
 		}
 	}
@@ -96,20 +100,20 @@ func Precision(targetSet base.Set, rankList []int) float32 {
 // Recall is the fraction of relevant ItemFeedback that have been recommended over the total
 // amount of relevant ItemFeedback.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{relevant documents}|}
-func Recall(targetSet base.Set, rankList []int) float32 {
+func Recall(targetSet *iset.Set, rankList []int) float32 {
 	hit := 0
 	for _, itemId := range rankList {
-		if targetSet.Contain(itemId) {
+		if targetSet.Has(itemId) {
 			hit++
 		}
 	}
-	return float32(hit) / float32(targetSet.Len())
+	return float32(hit) / float32(targetSet.Size())
 }
 
 // HR means Hit Ratio.
-func HR(targetSet base.Set, rankList []int) float32 {
+func HR(targetSet *iset.Set, rankList []int) float32 {
 	for _, itemId := range rankList {
-		if targetSet.Contain(itemId) {
+		if targetSet.Has(itemId) {
 			return 1
 		}
 	}
@@ -118,16 +122,16 @@ func HR(targetSet base.Set, rankList []int) float32 {
 
 // MAP means Mean Average Precision.
 // mAP: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
-func MAP(targetSet base.Set, rankList []int) float32 {
+func MAP(targetSet *iset.Set, rankList []int) float32 {
 	sumPrecision := float32(0)
 	hit := 0
 	for i, itemId := range rankList {
-		if targetSet.Contain(itemId) {
+		if targetSet.Has(itemId) {
 			hit++
 			sumPrecision += float32(hit) / float32(i+1)
 		}
 	}
-	return sumPrecision / float32(targetSet.Len())
+	return sumPrecision / float32(targetSet.Size())
 }
 
 // MRR means Mean Reciprocal Rank.
@@ -141,21 +145,27 @@ func MAP(targetSet base.Set, rankList []int) float32 {
 // a sample of queries Q:
 //
 //   MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
-func MRR(targetSet base.Set, rankList []int) float32 {
+func MRR(targetSet *iset.Set, rankList []int) float32 {
 	for i, itemId := range rankList {
-		if targetSet.Contain(itemId) {
+		if targetSet.Has(itemId) {
 			return 1 / float32(i+1)
 		}
 	}
 	return 0
 }
 
-// Rank gets the ranking
-func Rank(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
+func Rank(model model.Model, userId int, userProfile []int, candidates []int, topN int) ([]int, []float32) {
 	// Get top-n list
 	itemsHeap := base.NewTopKFilter(topN)
 	for _, itemId := range candidates {
-		itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
+		switch model.(type) {
+		case MatrixFactorization:
+			itemsHeap.Push(itemId, model.(MatrixFactorization).InternalPredict(userId, itemId))
+		case *KNN:
+			itemsHeap.Push(itemId, model.(*KNN).InternalPredict(userProfile, itemId))
+		default:
+			panic("unknown model")
+		}
 	}
 	elem, scores := itemsHeap.PopAll()
 	recommends := make([]int, len(elem))
@@ -163,4 +173,18 @@ func Rank(model MatrixFactorization, userId int, candidates []int, topN int) ([]
 		recommends[i] = elem[i]
 	}
 	return recommends, scores
+}
+
+type SnapshotManger struct {
+	BestWeights []interface{}
+	BestScore   Score
+}
+
+func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
+	if sm.BestWeights == nil || score.NDCG > sm.BestScore.NDCG {
+		sm.BestScore = score
+		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
+			panic(err)
+		}
+	}
 }

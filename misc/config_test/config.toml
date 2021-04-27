@@ -1,76 +1,33 @@
-# This section declares setting for the database.
+# This section declares settings for the database.
 [database]
 # database for caching (support Redis only)
 cache_store = "redis://localhost:6379"
-# database for persist data (support MySQL/MongoDB/Redis)
-data_store = "mysql://root@tcp(localhost:3306)/gitrec?parseTime=true"
+# database for persist data (support MySQL/MongoDB)
+data_store = "mysql://root@tcp(localhost:3306)/gorse?parseTime=true"
 # insert new users while inserting feedback
 auto_insert_user = true
 # insert new items while inserting feedback
 auto_insert_item = false
-# feedback types for matching
-match_feedback_types = ["star"]
-# feedback types for ranking
-rank_feedback_types = ["fork"]
+# types of positive feedback
+positive_feedback_types = ["star", "fork"]
 
-# This section declares setting for cached latest items.
-[latest]
-n_cache = 500           # number of cached latest items
-update_period = 30      # update period for latest items in minutes
-
-# This section declares setting for cached popular items.
-[popular]
-n_cache = 500           # number of cached popular items
-update_period = 120     # update period for popular items in minutes
-time_window = 360       # time window of cached popular items in days
-
-# This section declares setting for cached similar items.
-[similar]
-n_cache = 500           # number of cached similar items
-update_period = 120     # update period for similar items in minutes
-
-# This section declares setting for collabortive filatering model.
-[collaborative]
-n_cache = 1000          # number of cached CF items
-cf_model = "als"        # collabortive filatering model
-fit_period = 60         # fit period for similar items in minutes
-predict_period = 60     # prediction period for similar items in minutes
-verbose = 10            # verbose period
-n_candidates = 100      # number of candidates for test
-top_k = 10              # evaluate top k recommendations
-n_test_users = 10000    # number of users in test set
-# hyperparameters
-lr = 0.05               # learning rate
-reg = 0.01              # regularization strength
-n_epochs = 100          # number of epochs
-n_factors = 10          # number of factors
-random_state = 21       # random state (seed)
-init_mean = 0.0         # mean of gaussian initial parameter
-init_std = 0.001        # standard deviation of gaussian initial parameter
-alpha = 1.0             # alpha value, depend on context
-
-# This section declares setting for rank model (factorization machines).
-[rank]
-fit_period = 60         # fit period for similar items in minutes
-task = "r"              # task type for ranking (r - regression, c - classification)
-split_ratio = 0.2       # split ratio of test set
-verbose = 10            # verbose period
-# hyperparameters
-lr = 0.05               # learning rate
-reg = 0.01              # regularization strength
-n_epochs = 100          # number of epochs
-n_factors = 10          # number of factors
-random_state = 21       # random state (seed)
-init_mean = 0.0         # mean of gaussian initial parameter
-init_std = 0.001        # standard deviation of gaussian initial parameter
-
-# This section declares hyperparameters for the recommendation model.
+# This section declares settings for the master node.
 [master]
 port = 8086                 # master port
 host = "127.0.0.1"          # master host
-n_jobs = 4                  # working jobs
+http_port = 8088            # HTTP API port
+http_host = "127.0.0.1"     # HTTP API host
+search_jobs = 3             # number of jobs for model search
+fit_jobs = 4                # number of jobs for model fitting
 meta_timeout = 30           # cluster meta timeout (second)
 
+# This section declares settings for the server node.
 [server]
 default_n = 128             # default number of returned items
 api_key = "p@ssword"        # secret key for RESTful APIs (SSL required)
+
+# This section declares settings for recommendation.
+[recommend]
+popular_window = 12         # timw window of popular items (days)
+fit_period = 66             # time period for model fitting (minutes)
+search_period = 88          # time period for model searching (minutes)

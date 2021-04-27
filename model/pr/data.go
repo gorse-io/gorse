@@ -11,11 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package cf
+package pr
 
 import (
 	"bufio"
 	"fmt"
+	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -35,20 +36,23 @@ type DataSet struct {
 	UserFeedback  [][]int
 	ItemFeedback  [][]int
 	Negatives     [][]int
+	ItemLabels    [][]int
+	// statistics
+	NumItemLabels int
 }
 
 // NewMapIndexDataset creates a data set.
 func NewMapIndexDataset() *DataSet {
-	set := new(DataSet)
+	s := new(DataSet)
 	// Create index
-	set.UserIndex = base.NewMapIndex()
-	set.ItemIndex = base.NewMapIndex()
+	s.UserIndex = base.NewMapIndex()
+	s.ItemIndex = base.NewMapIndex()
 	// Initialize slices
-	set.FeedbackUsers = make([]int, 0)
-	set.FeedbackItems = make([]int, 0)
-	set.UserFeedback = make([][]int, 0)
-	set.ItemFeedback = make([][]int, 0)
-	return set
+	s.FeedbackUsers = make([]int, 0)
+	s.FeedbackItems = make([]int, 0)
+	s.UserFeedback = make([][]int, 0)
+	s.ItemFeedback = make([][]int, 0)
+	return s
 }
 
 func NewDirectIndexDataset() *DataSet {
@@ -147,8 +151,8 @@ func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [
 		rng := base.NewRandomGenerator(0)
 		dataset.Negatives = make([][]int, dataset.UserCount())
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			s1 := base.NewSet(dataset.UserFeedback[userIndex]...)
-			s2 := base.NewSet(excludeSet.UserFeedback[userIndex]...)
+			s1 := set.NewIntSet(dataset.UserFeedback[userIndex]...)
+			s2 := set.NewIntSet(excludeSet.UserFeedback[userIndex]...)
 			dataset.Negatives[userIndex] = rng.Sample(0, dataset.ItemCount(), numCandidates, s1, s2)
 		}
 	}
@@ -160,6 +164,8 @@ func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [
 // in the test set.
 func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet) {
 	trainSet, testSet := new(DataSet), new(DataSet)
+	trainSet.NumItemLabels, testSet.NumItemLabels = dataset.NumItemLabels, dataset.NumItemLabels
+	trainSet.ItemLabels, trainSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex
 	trainSet.ItemIndex, testSet.ItemIndex = dataset.ItemIndex, dataset.ItemIndex
 	trainSet.UserFeedback, testSet.UserFeedback = createSliceOfSlice(dataset.UserCount()), createSliceOfSlice(dataset.UserCount())
@@ -202,9 +208,9 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 				}
 			}
 		}
-		testUserSet := base.NewSet(testUsers...)
+		testUserSet := set.NewIntSet(testUsers...)
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			if !testUserSet.Contain(userIndex) {
+			if !testUserSet.Has(userIndex) {
 				for _, itemIndex := range dataset.UserFeedback[userIndex] {
 					trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
 					trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
@@ -281,6 +287,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		}
 	}
 	// pull items
+	itemLabelIndex := base.NewMapIndex()
 	for {
 		var items []data.Item
 		cursor, items, err = database.GetItems(cursor, batchSize)
@@ -290,11 +297,18 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		}
 		for _, item := range items {
 			dataset.AddItem(item.ItemId)
+			itemIndex := dataset.ItemIndex.ToNumber(item.ItemId)
+			dataset.ItemLabels = append(dataset.ItemLabels, make([]int, len(item.Labels)))
+			for i, label := range item.Labels {
+				itemLabelIndex.Add(label)
+				dataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
+			}
 		}
 		if cursor == "" {
 			break
 		}
 	}
+	dataset.NumItemLabels = itemLabelIndex.Len()
 	// pull database
 	if len(feedbackTypes) > 0 {
 		for _, feedbackType := range feedbackTypes {

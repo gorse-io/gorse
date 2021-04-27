@@ -35,6 +35,12 @@ const (
 	InitMean    ParamName = "InitMean"    // mean of gaussian initial parameter
 	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
 	Alpha       ParamName = "Alpha"       // weight for negative samples in ALS
+	Similarity  ParamName = "Similarity"
+)
+
+const (
+	SimilarityCosine = "Cosine"
+	SimilarityDot    = "Dot"
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -108,6 +114,14 @@ func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 	return _default
 }
 
+// GetString gets a string parameter
+func (parameters Params) GetString(name ParamName, _default string) string {
+	if val, exist := parameters[name]; exist {
+		return val.(string)
+	}
+	return _default
+}
+
 func (parameters Params) Overwrite(params Params) Params {
 	merged := make(Params)
 	for k, v := range parameters {
@@ -132,6 +146,14 @@ type ParamsGrid map[ParamName][]interface{}
 
 func (grid ParamsGrid) Len() int {
 	return len(grid)
+}
+
+func (grid ParamsGrid) NumCombinations() int {
+	count := 1
+	for _, values := range grid {
+		count *= len(values)
+	}
+	return count
 }
 
 func (grid ParamsGrid) Fill(_default ParamsGrid) {

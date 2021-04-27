@@ -69,7 +69,7 @@ func newTestMongoDatabase(t *testing.T, dbName string) *testMongoDatabase {
 	err = database.Database.Close()
 	assert.Nil(t, err)
 	// create schema
-	database.Database, err = Open(mongoUri + dbName + "?authSource=admin")
+	database.Database, err = Open(mongoUri + dbName + "?authSource=admin&connect=direct")
 	assert.Nil(t, err)
 	err = database.Init()
 	assert.Nil(t, err)
@@ -110,4 +110,10 @@ func TestMongoDatabase_DeleteFeedback(t *testing.T) {
 	db := newTestMongoDatabase(t, "TestSQLDatabase_DeleteFeedback")
 	defer db.Close(t)
 	testDeleteFeedback(t, db.Database)
+}
+
+func TestMongoDatabase_Measurements(t *testing.T) {
+	db := newTestMongoDatabase(t, "TestSQLDatabase_Measurements")
+	defer db.Close(t)
+	testMeasurements(t, db.Database)
 }

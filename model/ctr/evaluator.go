@@ -11,10 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package rank
+package ctr
 
 import (
 	"github.com/chewxy/math32"
+	"github.com/jinzhu/copier"
 )
 
 func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score {
@@ -44,5 +45,19 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 	return Score{
 		Task:      FMClassification,
 		Precision: correct / float32(testSet.Count()),
+	}
+}
+
+type SnapshotManger struct {
+	BestWeights []interface{}
+	BestScore   Score
+}
+
+func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
+	if sm.BestWeights == nil || score.BetterThan(sm.BestScore) {
+		sm.BestScore = score
+		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
+			panic(err)
+		}
 	}
 }

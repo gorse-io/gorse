@@ -35,9 +35,9 @@ var serverCommand = &cobra.Command{
 		// start server
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
-		port, _ := cmd.PersistentFlags().GetInt("port")
-		host, _ := cmd.PersistentFlags().GetString("host")
-		s := server.NewServer(masterHost, masterPort, host, port)
+		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
+		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
+		s := server.NewServer(masterHost, masterPort, httpHost, httpPort)
 		s.Serve()
 	},
 }
@@ -46,8 +46,8 @@ func init() {
 	serverCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	serverCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
 	serverCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
-	serverCommand.PersistentFlags().Int("port", 8087, "port of server node")
-	serverCommand.PersistentFlags().String("host", "127.0.0.1", "host of server node")
+	serverCommand.PersistentFlags().Int("http-port", 8087, "port of RESTful API")
+	serverCommand.PersistentFlags().String("http-host", "127.0.0.1", "host of RESTful API")
 }
 
 func main() {
