@@ -58,10 +58,11 @@ func newMockServer(t *testing.T) *mockServer {
 		GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
 	}
 	server.GorseConfig.Server.APIKey = apiKey
-	ws := server.CreateWebService()
+	server.WebService = new(restful.WebService)
+	server.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
-	s.handler.Add(ws)
+	s.handler.Add(server.WebService)
 	return s
 }
 
@@ -88,7 +89,7 @@ func TestServer_Users(t *testing.T) {
 	}
 	apitest.New().
 		Handler(s.handler).
-		Post("/user").
+		Post("/api/user").
 		Header("X-API-Key", apiKey).
 		JSON(users[0]).
 		Expect(t).
@@ -97,7 +98,7 @@ func TestServer_Users(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/user/0").
+		Get("/api/user/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -105,7 +106,7 @@ func TestServer_Users(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Post("/users").
+		Post("/api/users").
 		Header("X-API-Key", apiKey).
 		JSON(users[1:]).
 		Expect(t).
@@ -114,7 +115,7 @@ func TestServer_Users(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/users").
+		Get("/api/users").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"cursor": "",
@@ -129,7 +130,7 @@ func TestServer_Users(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Delete("/user/0").
+		Delete("/api/user/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -137,7 +138,7 @@ func TestServer_Users(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/user/0").
+		Get("/api/user/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusInternalServerError).
@@ -178,7 +179,7 @@ func TestServer_Items(t *testing.T) {
 	// insert items
 	apitest.New().
 		Handler(s.handler).
-		Post("/item").
+		Post("/api/item").
 		Header("X-API-Key", apiKey).
 		JSON(items[0]).
 		Expect(t).
@@ -188,7 +189,7 @@ func TestServer_Items(t *testing.T) {
 	// batch insert items
 	apitest.New().
 		Handler(s.handler).
-		Post("/items").
+		Post("/api/items").
 		Header("X-API-Key", apiKey).
 		JSON(items[1:]).
 		Expect(t).
@@ -198,7 +199,7 @@ func TestServer_Items(t *testing.T) {
 	//get items
 	apitest.New().
 		Handler(s.handler).
-		Get("/items").
+		Get("/api/items").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"cursor": "",
@@ -214,7 +215,7 @@ func TestServer_Items(t *testing.T) {
 	// delete item
 	apitest.New().
 		Handler(s.handler).
-		Delete("/item/0").
+		Delete("/api/item/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -223,7 +224,7 @@ func TestServer_Items(t *testing.T) {
 	// get item
 	apitest.New().
 		Handler(s.handler).
-		Get("/item/0").
+		Get("/api/item/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusInternalServerError).
@@ -244,7 +245,7 @@ func TestServer_Feedback(t *testing.T) {
 	//BatchInsertFeedback
 	apitest.New().
 		Handler(s.handler).
-		Post("/feedback").
+		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON(feedback).
 		Expect(t).
@@ -254,7 +255,7 @@ func TestServer_Feedback(t *testing.T) {
 	//Get Feedback
 	apitest.New().
 		Handler(s.handler).
-		Get("/feedback").
+		Get("/api/feedback").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"cursor": "",
@@ -270,7 +271,7 @@ func TestServer_Feedback(t *testing.T) {
 	//Get Items
 	apitest.New().
 		Handler(s.handler).
-		Get("/items").
+		Get("/api/items").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -287,7 +288,7 @@ func TestServer_Feedback(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/users").
+		Get("/api/users").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -303,7 +304,7 @@ func TestServer_Feedback(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/user/2/feedback/click").
+		Get("/api/user/2/feedback/click").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -311,7 +312,7 @@ func TestServer_Feedback(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/item/4/feedback/click").
+		Get("/api/item/4/feedback/click").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -328,13 +329,13 @@ func TestServer_List(t *testing.T) {
 		Get    string
 	}
 	operators := []ListOperator{
-		{cache.CollaborativeItems, "0", "/intermediate/recommend/0"},
+		{cache.CollaborativeItems, "0", "/api/intermediate/recommend/0"},
 		//{cache.SubscribeItems, "0", "/subscribe/0"},
-		{cache.LatestItems, "", "/latest/"},
-		{cache.LatestItems, "0", "/latest/0"},
-		{cache.PopularItems, "", "/popular/"},
-		{cache.PopularItems, "0", "/popular/0"},
-		{cache.SimilarItems, "0", "/neighbors/0"},
+		{cache.LatestItems, "", "/api/latest/"},
+		{cache.LatestItems, "0", "/api/latest/0"},
+		{cache.PopularItems, "", "/api/popular/"},
+		{cache.PopularItems, "0", "/api/popular/0"},
+		{cache.SimilarItems, "0", "/api/neighbors/0"},
 	}
 
 	for _, operator := range operators {
@@ -402,7 +403,7 @@ func TestServer_DeleteFeedback(t *testing.T) {
 	}
 	apitest.New().
 		Handler(s.handler).
-		Post("/feedback").
+		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON(feedback).
 		Expect(t).
@@ -412,7 +413,7 @@ func TestServer_DeleteFeedback(t *testing.T) {
 	// Get Feedback
 	apitest.New().
 		Handler(s.handler).
-		Get("/feedback/2/3").
+		Get("/api/feedback/2/3").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Body(marshal(t, []data.Feedback{feedback[0], feedback[1], feedback[2]})).
@@ -421,7 +422,7 @@ func TestServer_DeleteFeedback(t *testing.T) {
 	// Get typed feedback
 	apitest.New().
 		Handler(s.handler).
-		Get("/feedback/type2/2/3").
+		Get("/api/feedback/type2/2/3").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -430,7 +431,7 @@ func TestServer_DeleteFeedback(t *testing.T) {
 	// delete feedback
 	apitest.New().
 		Handler(s.handler).
-		Delete("/feedback/2/3").
+		Delete("/api/feedback/2/3").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Body(`{"RowAffected": 3}`).
@@ -439,7 +440,7 @@ func TestServer_DeleteFeedback(t *testing.T) {
 	// delete typed feedback
 	apitest.New().
 		Handler(s.handler).
-		Delete("/feedback/type1/4/8").
+		Delete("/api/feedback/type1/4/8").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
@@ -464,7 +465,7 @@ func TestServer_Measurement(t *testing.T) {
 	}
 	apitest.New().
 		Handler(s.handler).
-		Get("/measurements/Test_NDCG").
+		Get("/api/measurements/Test_NDCG").
 		Query("n", "3").
 		Header("X-API-Key", apiKey).
 		Expect(t).
@@ -491,7 +492,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	}, true, true)
 	apitest.New().
 		Handler(s.handler).
-		Get("/recommend/0").
+		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n": "3",
@@ -502,7 +503,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/recommend/0").
+		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n":          "3",
@@ -514,7 +515,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		End()
 	apitest.New().
 		Handler(s.handler).
-		Get("/recommend/0").
+		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n": "3",
