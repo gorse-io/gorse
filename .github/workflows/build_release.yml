@@ -20,7 +20,7 @@ jobs:
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           go get -v github.com/mitchellh/gox
-          gox -os='darwin windows linux' -arch='amd64'
+          gox -os='darwin windows linux' -arch='amd64' ./...
 
       - name: Install zip
         uses: montudor/action-zip@v0.1.1
