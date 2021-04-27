@@ -13,12 +13,12 @@ jobs:
         
       - name: Pull source
         uses: actions/checkout@v1
-
-      - name: Install gox
-        run: go get -v github.com/mitchellh/gox
         
       - name: Build release
-        run: gox -os='darwin windows linux' -arch='amd64'
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          go get -v github.com/mitchellh/gox
+          gox -os='darwin windows linux' -arch='amd64'
 
       - name: Install zip
         uses: montudor/action-zip@v0.1.1
