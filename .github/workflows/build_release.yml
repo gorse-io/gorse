@@ -1,7 +1,5 @@
 name: Build Release
-on: 
-  release:
-  workflow_dispatch:
+on: release
 jobs:
   build-release:
     name: Build Release
@@ -32,8 +30,7 @@ jobs:
           zip gorse_darwin_amd64.zip gorse-*_darwin_amd64
 
       - name: Upload release
-        uses: JasonEtco/upload-to-release@master
+        uses: johnwbyrd/update-release@v1
         with:
-          args: gorse_darwin_amd64.zip gorse_linux_amd64.zip gorse_windows_amd64.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: gorse_darwin_amd64.zip gorse_linux_amd64.zip gorse_windows_amd64.zip
