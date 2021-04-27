@@ -28,9 +28,12 @@ jobs:
           zip gorse_linux_amd64.zip gorse-*_linux_amd64
           zip gorse_windows_amd64.zip gorse-*_windows_amd64.exe
           zip gorse_darwin_amd64.zip gorse-*_darwin_amd64
-
+          
       - name: Upload release
-        uses: johnwbyrd/update-release@v1
+        uses: svenstaro/upload-release-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: gorse_darwin_amd64.zip gorse_linux_amd64.zip gorse_windows_amd64.zip
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gorse_*_amd64.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
