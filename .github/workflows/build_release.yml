@@ -1,5 +1,7 @@
 name: Build Release
-on: release
+on: 
+  release:
+  workflow_dispatch:
 jobs:
   build-release:
     name: Build Release
