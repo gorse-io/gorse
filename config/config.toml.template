@@ -28,6 +28,6 @@ api_key = ""                # secret key for RESTful APIs (SSL required)
 
 # This section declares settings for recommendation.
 [recommend]
-popular_window = 1          # timw window of popular items (days)
+popular_window = 365        # timw window of popular items (days)
 fit_period = 10             # time period for model fitting (minutes)
 search_period = 60          # time period for model searching (minutes)

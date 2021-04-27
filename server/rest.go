@@ -65,6 +65,7 @@ func (s *RestServer) CreateWebService() {
 	// Create a server
 	ws := s.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
+	ws.Path("/api/")
 
 	/* Interactions with data store */
 

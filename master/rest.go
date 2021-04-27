@@ -3,23 +3,33 @@ package master
 import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
+	_ "github.com/gorse-io/dashboard"
+	"github.com/rakyll/statik/fs"
 	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"net/http"
 	"time"
 )
 
 func (m *Master) StartHttpServer() {
 
 	ws := m.WebService
+	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
+	ws.Path("/api/")
 
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Writes([]Node{}))
+	ws.Route(ws.GET("/dashboard/config").To(m.getConfig).
+		Doc("Get config.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Writes(config.Config{}))
 	ws.Route(ws.GET("/dashboard/stats").To(m.getStats).
 		Doc("Get global statistics.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -32,6 +42,13 @@ func (m *Master) StartHttpServer() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(User{}))
+	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/{feedback-type}").To(m.getTypedFeedbackByUser).
+		Doc("Get feedback by user id with feedback type.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Writes([]Feedback{}))
 	// Get users
 	ws.Route(ws.GET("/dashboard/users").To(m.getUsers).
 		Doc("Get users.").
@@ -60,6 +77,12 @@ func (m *Master) StartHttpServer() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Item{}))
 
+	statikFS, err := fs.New()
+	if err != nil {
+		base.Logger().Fatal("failed to load statik files", zap.Error(err))
+	}
+	http.Handle("/", http.FileServer(statikFS))
+
 	m.RestServer.StartHttpServer()
 }
 
@@ -82,6 +105,10 @@ func (m *Master) getCluster(request *restful.Request, response *restful.Response
 	nodes = append(nodes, workers...)
 	nodes = append(nodes, servers...)
 	server.Ok(response, nodes)
+}
+
+func (m *Master) getConfig(request *restful.Request, response *restful.Response) {
+	server.Ok(response, m.GorseConfig)
 }
 
 type Status struct {
@@ -280,6 +307,30 @@ func (m *Master) getFeedbackByUser(request *restful.Request, response *restful.R
 	server.Ok(response, details)
 }
 
+// get feedback by user-id with feedback type
+func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
+	feedbackType := request.PathParameter("feedback-type")
+	userId := request.PathParameter("user-id")
+	feedback, err := m.DataStore.GetUserFeedback(userId, &feedbackType)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	details := make([]Feedback, len(feedback))
+	for i := range feedback {
+		details[i].FeedbackType = feedback[i].FeedbackType
+		details[i].UserId = feedback[i].UserId
+		details[i].Timestamp = feedback[i].Timestamp
+		details[i].Comment = feedback[i].Comment
+		details[i].Item, err = m.DataStore.GetItem(feedback[i].ItemId)
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+	}
+	server.Ok(response, details)
+}
+
 func (m *Master) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
 	var begin, end int
 	var err error
@@ -298,15 +349,15 @@ func (m *Master) getList(prefix string, name string, request *restful.Request, r
 		return
 	}
 	// Send result
-	itemDetails := make([]data.Item, len(items))
+	details := make([]data.Item, len(items))
 	for i := range items {
-		itemDetails[i], err = m.DataStore.GetItem(items[i])
+		details[i], err = m.DataStore.GetItem(items[i])
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
 		}
 	}
-	server.Ok(response, itemDetails)
+	server.Ok(response, details)
 }
 
 // getPopular gets popular items from database.
