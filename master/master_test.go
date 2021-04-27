@@ -47,9 +47,9 @@ func newMockMaster(t *testing.T) *mockMaster {
 	s.cacheStoreServer, err = miniredis.Run()
 	assert.Nil(t, err)
 	// open database
-	s.dataStore, err = data.Open("redis://" + s.dataStoreServer.Addr())
+	s.DataStore, err = data.Open("redis://" + s.dataStoreServer.Addr())
 	assert.Nil(t, err)
-	s.cacheStore, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
+	s.CacheStore, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.Nil(t, err)
 	return s
 }
@@ -59,8 +59,8 @@ func TestMaster_CollectLatest(t *testing.T) {
 	m := newMockMaster(t)
 	defer m.Close()
 	// create config
-	m.cfg = &config.Config{}
-	m.cfg.Database.CacheSize = 3
+	m.GorseConfig = &config.Config{}
+	m.GorseConfig.Database.CacheSize = 3
 	// collect latest
 	items := []data.Item{
 		{"0", time.Date(2000, 1, 1, 1, 1, 0, 0, time.UTC), []string{"even"}, ""},
@@ -76,13 +76,13 @@ func TestMaster_CollectLatest(t *testing.T) {
 	}
 	m.latest(items)
 	// check latest items
-	latest, err := m.cacheStore.GetList(cache.LatestItems, "", 0, 100)
+	latest, err := m.CacheStore.GetList(cache.LatestItems, "", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "8", "7"}, latest)
-	latest, err = m.cacheStore.GetList(cache.LatestItems, "even", 0, 100)
+	latest, err = m.CacheStore.GetList(cache.LatestItems, "even", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "6", "4"}, latest)
-	latest, err = m.cacheStore.GetList(cache.LatestItems, "odd", 0, 100)
+	latest, err = m.CacheStore.GetList(cache.LatestItems, "odd", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "7", "5"}, latest)
 }
@@ -92,9 +92,9 @@ func TestMaster_CollectPopItem(t *testing.T) {
 	m := newMockMaster(t)
 	defer m.Close()
 	// create config
-	m.cfg = &config.Config{}
-	m.cfg.Database.CacheSize = 3
-	m.cfg.Recommend.PopularWindow = 365
+	m.GorseConfig = &config.Config{}
+	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Recommend.PopularWindow = 365
 	// collect latest
 	items := []data.Item{
 		{"0", time.Now(), []string{"even"}, ""},
@@ -131,13 +131,13 @@ func TestMaster_CollectPopItem(t *testing.T) {
 	}
 	m.popItem(items, feedbacks)
 	// check popular items
-	popular, err := m.cacheStore.GetList(cache.PopularItems, "", 0, 100)
+	popular, err := m.CacheStore.GetList(cache.PopularItems, "", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "8", "7"}, popular)
-	popular, err = m.cacheStore.GetList(cache.PopularItems, "even", 0, 100)
+	popular, err = m.CacheStore.GetList(cache.PopularItems, "even", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "6", "4"}, popular)
-	popular, err = m.cacheStore.GetList(cache.PopularItems, "odd", 0, 100)
+	popular, err = m.CacheStore.GetList(cache.PopularItems, "odd", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"9", "7", "5"}, popular)
 }
@@ -147,9 +147,9 @@ func TestMaster_FitCFModel(t *testing.T) {
 	m := newMockMaster(t)
 	defer m.Close()
 	// create config
-	m.cfg = &config.Config{}
-	m.cfg.Database.CacheSize = 3
-	m.cfg.Master.FitJobs = 4
+	m.GorseConfig = &config.Config{}
+	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Master.FitJobs = 4
 	// collect similar
 	items := []data.Item{
 		{"0", time.Now(), []string{"even"}, ""},
@@ -177,15 +177,15 @@ func TestMaster_FitCFModel(t *testing.T) {
 		}
 	}
 	var err error
-	err = m.dataStore.BatchInsertItem(items)
+	err = m.DataStore.BatchInsertItem(items)
 	assert.Nil(t, err)
-	err = m.dataStore.BatchInsertFeedback(feedbacks, true, true)
+	err = m.DataStore.BatchInsertFeedback(feedbacks, true, true)
 	assert.Nil(t, err)
-	dataset, _, _, err := pr.LoadDataFromDatabase(m.dataStore, []string{"FeedbackType"})
+	dataset, _, _, err := pr.LoadDataFromDatabase(m.DataStore, []string{"FeedbackType"})
 	assert.Nil(t, err)
 	// similar items (common users)
 	m.similar(items, dataset, model.SimilarityDot)
-	similar, err := m.cacheStore.GetList(cache.SimilarItems, "9", 0, 100)
+	similar, err := m.CacheStore.GetList(cache.SimilarItems, "9", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, similar)
 }
