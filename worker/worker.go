@@ -301,11 +301,16 @@ func (w *Worker) Serve() {
 }
 
 func (w *Worker) Recommend(m pr.Model, users []string) {
-	// get items
-	items := m.GetItemIndex().GetNames()
+	var userIndexer base.Index
+	// load user index
+	if _, ok := m.(pr.MatrixFactorization); ok {
+		userIndexer = m.(pr.MatrixFactorization).GetUserIndex()
+	}
+	// load item index
+	itemIds := m.GetItemIndex().GetNames()
 	base.Logger().Info("personal ranking recommendation",
 		zap.Int("n_working_users", len(users)),
-		zap.Int("n_items", len(items)),
+		zap.Int("n_items", len(itemIds)),
 		zap.Int("n_jobs", w.Jobs),
 		zap.Int("cache_size", w.cfg.Database.CacheSize))
 	// progress tracker
@@ -329,28 +334,32 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 		}
 	}()
 	// collaborative filtering recommendation
+	startTime := time.Now()
 	_ = base.Parallel(len(users), w.Jobs, func(workerId, jobId int) error {
-		user := users[jobId]
-
+		userId := users[jobId]
+		// convert to user index
+		var userIndex int
+		if _, ok := m.(pr.MatrixFactorization); ok {
+			userIndex = userIndexer.ToNumber(userId)
+		}
 		// skip inactive users before max recommend period
-		if !w.checkRecommendCacheTimeout(user) {
+		if !w.checkRecommendCacheTimeout(userId) {
 			return nil
 		}
-
 		// remove saw items
-		historyItems, err := loadFeedbackItems(w.dataStore, user)
+		historyItems, err := loadFeedbackItems(w.dataStore, userId)
 		historySet := set.NewStringSet(historyItems...)
 		if err != nil {
 			base.Logger().Error("failed to pull user feedback",
-				zap.String("user_id", user), zap.Error(err))
+				zap.String("user_id", userId), zap.Error(err))
 			return err
 		}
 		var favoredItemIndices []int
 		if _, ok := m.(*pr.KNN); ok {
-			favoredItems, err := loadFeedbackItems(w.dataStore, user, w.cfg.Database.PositiveFeedbackType...)
+			favoredItems, err := loadFeedbackItems(w.dataStore, userId, w.cfg.Database.PositiveFeedbackType...)
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
-					zap.String("user_id", user), zap.Error(err))
+					zap.String("user_id", userId), zap.Error(err))
 				return err
 			}
 			for _, itemId := range favoredItems {
@@ -361,32 +370,32 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 			}
 		}
 		recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
-		for _, item := range items {
-			if !historySet.Has(item) {
+		for itemIndex, itemId := range itemIds {
+			if !historySet.Has(itemId) {
 				switch m.(type) {
 				case pr.MatrixFactorization:
-					recItems.Push(item, m.(pr.MatrixFactorization).Predict(user, item))
+					recItems.Push(itemId, m.(pr.MatrixFactorization).InternalPredict(userIndex, itemIndex))
 				case *pr.KNN:
-					itemIndex := m.GetItemIndex().ToNumber(item)
-					recItems.Push(item, m.(*pr.KNN).InternalPredict(favoredItemIndices, itemIndex))
+					recItems.Push(itemId, m.(*pr.KNN).InternalPredict(favoredItemIndices, itemIndex))
 				default:
 					base.Logger().Error("unknown model type")
 				}
 			}
 		}
 		elems, _ := recItems.PopAll()
-		if err = w.cacheStore.SetList(cache.CollaborativeItems, user, elems); err != nil {
+		if err = w.cacheStore.SetList(cache.CollaborativeItems, userId, elems); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation", zap.Error(err))
 			return err
 		}
-		if err = w.cacheStore.SetString(cache.LastUpdateRecommendTime, user, base.Now()); err != nil {
+		if err = w.cacheStore.SetString(cache.LastUpdateRecommendTime, userId, base.Now()); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation time", zap.Error(err))
 		}
 		completed <- nil
 		return nil
 	})
 	close(completed)
-	base.Logger().Info("complete personal ranking recommendation")
+	base.Logger().Info("complete personal ranking recommendation",
+		zap.String("used_time", time.Since(startTime).String()))
 }
 
 // checkRecommendCacheTimeout checks if recommend cache stale.
