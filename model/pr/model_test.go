@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	epsilon = 0.01
+	benchEpsilon = 0.01
+	incrEpsilon  = 1e-6
 )
 
 var fitConfig = &FitConfig{
@@ -19,9 +20,9 @@ var fitConfig = &FitConfig{
 	TopK:       10,
 }
 
-func assertEpsilon(t *testing.T, expect float32, actual float32) {
-	if math32.Abs(expect-actual) > epsilon {
-		t.Fatalf("|%v - %v| > %v", expect, actual, epsilon)
+func assertEpsilon(t *testing.T, expect float32, actual float32, eps float32) {
+	if math32.Abs(expect-actual) > eps {
+		t.Fatalf("|%v - %v| > %v", expect, actual, eps)
 	}
 }
 
@@ -40,15 +41,15 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitStdDev: 0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test increment test
 	m.nEpochs = 0
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
 	// test clear
 	m.Clear()
@@ -68,7 +69,7 @@ func TestBPR_Pinterest(t *testing.T) {
 		model.InitStdDev: 0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.53, score.NDCG)
+	assertEpsilon(t, 0.53, score.NDCG, benchEpsilon)
 }
 
 func TestALS_MovieLens(t *testing.T) {
@@ -81,15 +82,15 @@ func TestALS_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test increment test
 	m.nEpochs = 0
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
 	// test clear
 	m.Clear()
@@ -108,7 +109,7 @@ func TestALS_Pinterest(t *testing.T) {
 		model.Alpha:      0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.52, score.NDCG)
+	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
 }
 
 func TestCCD_MovieLens(t *testing.T) {
@@ -121,15 +122,15 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test increment test
 	m.nEpochs = 0
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
 	// test clear
 	m.Clear()
@@ -148,5 +149,5 @@ func TestCCD_Pinterest(t *testing.T) {
 		model.Alpha:      0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.52, score.NDCG)
+	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
 }

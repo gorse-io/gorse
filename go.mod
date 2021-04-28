@@ -7,6 +7,7 @@ require (
 	github.com/ReneKroon/ttlcache/v2 v2.4.0
 	github.com/alicebob/miniredis/v2 v2.14.3
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
+	github.com/barkimedes/go-deepcopy v0.0.0-20200817023428-a044a1957ca4
 	github.com/cheggaaa/pb/v3 v3.0.7
 	github.com/chewxy/math32 v1.0.6
 	github.com/dgraph-io/badger/v2 v2.2007.2
@@ -17,7 +18,6 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/gorse-io/dashboard v0.0.0-20210427055434-dd7692a9cd17
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
-	github.com/jinzhu/copier v0.2.9
 	github.com/json-iterator/go v1.1.10
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pkg/errors v0.9.1

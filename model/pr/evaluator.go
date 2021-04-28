@@ -11,11 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package pr
 
 import (
+	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
-	"github.com/jinzhu/copier"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/iset"
 	"github.com/zhenghaoz/gorse/base"
@@ -175,16 +176,31 @@ func Rank(model model.Model, userId int, userProfile []int, candidates []int, to
 	return recommends, scores
 }
 
+// SnapshotManger manages the best snapshot.
 type SnapshotManger struct {
 	BestWeights []interface{}
 	BestScore   Score
 }
 
+// AddSnapshot adds a copied snapshot.
 func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
 	if sm.BestWeights == nil || score.NDCG > sm.BestScore.NDCG {
 		sm.BestScore = score
-		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
+		if temp, err := deepcopy.Anything(weights); err != nil {
 			panic(err)
+		} else {
+			sm.BestWeights = temp.([]interface{})
+		}
+	}
+}
+
+// AddSnapshotNoCopy adds a snapshot without copy.
+func (sm *SnapshotManger) AddSnapshotNoCopy(score Score, weights ...interface{}) {
+	if sm.BestWeights == nil || score.NDCG > sm.BestScore.NDCG {
+		sm.BestScore = score
+		sm.BestWeights = make([]interface{}, len(weights))
+		for i := range weights {
+			sm.BestWeights[i] = weights[i]
 		}
 	}
 }

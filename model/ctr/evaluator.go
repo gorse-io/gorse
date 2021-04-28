@@ -11,11 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package ctr
 
 import (
+	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
-	"github.com/jinzhu/copier"
 )
 
 func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score {
@@ -48,16 +49,20 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 	}
 }
 
+// SnapshotManger manages the best snapshot.
 type SnapshotManger struct {
 	BestWeights []interface{}
 	BestScore   Score
 }
 
+// AddSnapshot adds a copied snapshot.
 func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
 	if sm.BestWeights == nil || score.BetterThan(sm.BestScore) {
 		sm.BestScore = score
-		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
+		if temp, err := deepcopy.Anything(weights); err != nil {
 			panic(err)
+		} else {
+			sm.BestWeights = temp.([]interface{})
 		}
 	}
 }
