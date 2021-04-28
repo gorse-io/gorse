@@ -19,6 +19,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/araddon/dateparse"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
@@ -330,6 +331,12 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 	// collaborative filtering recommendation
 	_ = base.Parallel(len(users), w.Jobs, func(workerId, jobId int) error {
 		user := users[jobId]
+
+		// skip inactive users before max recommend period
+		if !w.checkRecommendCacheTimeout(user) {
+			return nil
+		}
+
 		// remove saw items
 		historyItems, err := loadFeedbackItems(w.dataStore, user)
 		historySet := set.NewStringSet(historyItems...)
@@ -380,6 +387,45 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 	})
 	close(completed)
 	base.Logger().Info("complete personal ranking recommendation")
+}
+
+// checkRecommendCacheTimeout checks if recommend cache stale.
+// 1. if active time > recommend time, stale.
+// 2. if recommend time + timeout < now, stale.
+func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
+	var activeTime, recommendTime time.Time
+	// read active time
+	activeTimeLiteral, err := w.cacheStore.GetString(cache.LastActiveTime, userId)
+	if err != nil {
+		if err != cache.ErrObjectNotExist {
+			base.Logger().Error("failed to read meta", zap.Error(err))
+		}
+	} else {
+		activeTime, err = dateparse.ParseAny(activeTimeLiteral)
+		if err != nil {
+			base.Logger().Error("failed to time", zap.Error(err))
+		}
+	}
+	// read recommend time
+	recommendTimeLiteral, err := w.cacheStore.GetString(cache.LastUpdateRecommendTime, userId)
+	if err != nil {
+		if err != cache.ErrObjectNotExist {
+			base.Logger().Error("failed to read meta", zap.Error(err))
+		} else {
+			return true
+		}
+	} else {
+		recommendTime, err = dateparse.ParseAny(recommendTimeLiteral)
+		if err != nil {
+			base.Logger().Error("failed to time", zap.Error(err))
+		}
+	}
+	// check time
+	if activeTime.Unix() < recommendTime.Unix() {
+		timeoutTime := recommendTime.Add(time.Hour * 24 * time.Duration(w.cfg.Recommend.MaxRecommendPeriod))
+		return timeoutTime.Unix() < time.Now().Unix()
+	}
+	return true
 }
 
 //

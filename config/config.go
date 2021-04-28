@@ -87,22 +87,24 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 }
 
 type RecommendConfig struct {
-	PopularWindow int `toml:"popular_window"`
-	FitPeriod     int `toml:"fit_period"`
-	SearchPeriod  int `toml:"search_period"`
-	SearchEpoch   int `toml:"search_epoch"`
-	SearchTrials  int `toml:"search_trials"`
+	PopularWindow      int `toml:"popular_window"`
+	FitPeriod          int `toml:"fit_period"`
+	MaxRecommendPeriod int `toml:"max_recommend_period"`
+	SearchPeriod       int `toml:"search_period"`
+	SearchEpoch        int `toml:"search_epoch"`
+	SearchTrials       int `toml:"search_trials"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
 func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 	if config == nil {
 		return &RecommendConfig{
-			PopularWindow: 1,
-			FitPeriod:     60,
-			SearchPeriod:  60,
-			SearchEpoch:   100,
-			SearchTrials:  10,
+			PopularWindow:      1,
+			FitPeriod:          60,
+			MaxRecommendPeriod: 1,
+			SearchPeriod:       60,
+			SearchEpoch:        100,
+			SearchTrials:       10,
 		}
 	}
 	return config
@@ -176,6 +178,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "fit_period") {
 		config.Recommend.FitPeriod = defaultRecommendConfig.FitPeriod
+	}
+	if !meta.IsDefined("recommend", "max_recommend_period") {
+		config.Recommend.MaxRecommendPeriod = defaultRecommendConfig.MaxRecommendPeriod
 	}
 	if !meta.IsDefined("recommend", "search_period") {
 		config.Recommend.SearchPeriod = defaultRecommendConfig.SearchPeriod
