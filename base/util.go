@@ -22,15 +22,19 @@ import (
 var logger *zap.Logger
 
 func init() {
-	logger, _ = zap.NewProduction()
+	SetProductionLogger()
 }
 
 func Logger() *zap.Logger {
 	return logger
 }
 
-func SetLogger(_logger *zap.Logger) {
-	logger = _logger
+func SetProductionLogger() {
+	logger, _ = zap.NewProduction()
+}
+
+func SetDevelopmentLogger() {
+	logger, _ = zap.NewDevelopment()
 }
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.

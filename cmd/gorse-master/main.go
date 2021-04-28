@@ -32,6 +32,11 @@ var masterCommand = &cobra.Command{
 			fmt.Println(version.Name)
 			return
 		}
+		// setup logger
+		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
+		if debugMode {
+			base.SetDevelopmentLogger()
+		}
 		// Start master
 		configPath, _ := cmd.PersistentFlags().GetString("config")
 		base.Logger().Info("load config", zap.String("config", configPath))
@@ -45,6 +50,7 @@ var masterCommand = &cobra.Command{
 }
 
 func init() {
+	masterCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	masterCommand.PersistentFlags().StringP("config", "c", "/etc/gorse.toml", "configuration file path")
 	masterCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 }

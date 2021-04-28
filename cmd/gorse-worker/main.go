@@ -28,7 +28,12 @@ var workerCommand = &cobra.Command{
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
 		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
 		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
+		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
 		workingJobs, _ := cmd.PersistentFlags().GetInt("jobs")
+		// setup logger
+		if debugMode {
+			base.SetDevelopmentLogger()
+		}
 		// create worker
 		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs)
 		w.Serve()
@@ -40,6 +45,7 @@ func init() {
 	workerCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
 	workerCommand.PersistentFlags().String("http-host", "127.0.0.1", "host of status report")
 	workerCommand.PersistentFlags().Int("http-port", 8089, "port of status report")
+	workerCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
 }
 
