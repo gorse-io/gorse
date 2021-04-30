@@ -10,7 +10,6 @@ require (
 	github.com/barkimedes/go-deepcopy v0.0.0-20200817023428-a044a1957ca4
 	github.com/cheggaaa/pb/v3 v3.0.7
 	github.com/chewxy/math32 v1.0.6
-	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.4.0
 	github.com/go-redis/redis/v8 v8.8.0

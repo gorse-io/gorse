@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package worker
 
 import (
@@ -20,10 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/araddon/dateparse"
-	"github.com/dgraph-io/badger/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
-	"github.com/zhenghaoz/gorse/storage/local"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -54,7 +53,6 @@ type Worker struct {
 	cacheStore   cache.Database
 	dataAddress  string
 	dataStore    data.Database
-	localStore   *local.Database
 
 	// master connection
 	MasterClient protocol.MasterClient
@@ -235,24 +233,19 @@ func (w *Worker) ServeMetrics() {
 
 func (w *Worker) Serve() {
 	// open local store
-	var err error
-	w.localStore, err = local.Open(filepath.Join(os.TempDir(), "gorse-worker"))
+	state, err := LoadLocalCache(filepath.Join(os.TempDir(), "gorse-worker"))
 	if err != nil {
-		base.Logger().Fatal("failed to connect local store", zap.Error(err),
+		base.Logger().Error("failed to load persist state", zap.Error(err),
 			zap.String("path", filepath.Join(os.TempDir(), "gorse-server")))
 	}
-	if w.workerName, err = w.localStore.GetString(local.NodeName); err != nil {
-		if err == badger.ErrKeyNotFound {
-			w.workerName = base.GetRandomName(0)
-			err = w.localStore.SetString(local.NodeName, w.workerName)
-			if err != nil {
-				base.Logger().Fatal("failed to write meta", zap.Error(err))
-			}
-		} else {
-			base.Logger().Fatal("failed to read meta", zap.Error(err))
+	if state.WorkerName == "" {
+		state.WorkerName = base.GetRandomName(0)
+		err = state.WriteLocalCache()
+		if err != nil {
+			base.Logger().Fatal("failed to write meta", zap.Error(err))
 		}
 	}
-
+	w.workerName = state.WorkerName
 	base.Logger().Info("start worker",
 		zap.Int("n_jobs", w.Jobs),
 		zap.String("worker_name", w.workerName))

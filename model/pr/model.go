@@ -118,11 +118,14 @@ func NewModel(name string, params model.Params) (Model, error) {
 	return nil, fmt.Errorf("unknown model %v", name)
 }
 
+// Clone a model with deep copy.
 func Clone(m Model) Model {
 	if temp, err := deepcopy.Anything(m); err != nil {
 		panic(err)
 	} else {
-		return temp.(Model)
+		copied := temp.(Model)
+		copied.SetParams(copied.GetParams())
+		return copied
 	}
 }
 
