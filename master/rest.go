@@ -1,3 +1,17 @@
+// Copyright 2021 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package master
 
 import (
@@ -75,6 +89,13 @@ func (m *Master) StartHttpServer() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/neighbors/{item-id}").To(m.getNeighbors).
+		Doc("get neighbors of a item").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
 
 	statikFS, err := fs.New()
@@ -367,4 +388,9 @@ func (m *Master) getPopular(request *restful.Request, response *restful.Response
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
 	m.getList(cache.LatestItems, "", request, response)
+}
+
+func (m *Master) getNeighbors(request *restful.Request, response *restful.Response) {
+	itemId := request.PathParameter("item-id")
+	m.getList(cache.SimilarItems, itemId, request, response)
 }
