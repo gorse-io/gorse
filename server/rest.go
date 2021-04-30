@@ -50,7 +50,7 @@ func (s *RestServer) StartHttpServer() {
 		APIPath:     "/apidocs.json",
 	}
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(specConfig))
-	swaggerFile = fmt.Sprintf("http://%s:%d/apidocs.json", s.HttpHost, s.HttpPort)
+	swaggerFile = specConfig.APIPath
 	http.HandleFunc(apiDocsPath, handler)
 	// register prometheus
 	http.Handle("/metrics", promhttp.Handler())
