@@ -105,9 +105,9 @@ func (w *Worker) Sync() {
 		var err error
 		if meta, err = w.MasterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType:    protocol.NodeType_WorkerNode,
-				NodeName:    w.workerName,
-				HttpAddress: fmt.Sprintf("%s:%d", w.httpHost, w.httpPort),
+				NodeType: protocol.NodeType_WorkerNode,
+				NodeName: w.workerName,
+				HttpPort: int64(w.httpPort),
 			}); err != nil {
 			base.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep

@@ -138,9 +138,9 @@ func (s *Server) Sync() {
 		var err error
 		if meta, err = s.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType:    protocol.NodeType_ServerNode,
-				NodeName:    s.serverName,
-				HttpAddress: fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort),
+				NodeType: protocol.NodeType_ServerNode,
+				NodeName: s.serverName,
+				HttpPort: int64(s.HttpPort),
 			}); err != nil {
 			base.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
