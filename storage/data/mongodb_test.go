@@ -117,3 +117,9 @@ func TestMongoDatabase_Measurements(t *testing.T) {
 	defer db.Close(t)
 	testMeasurements(t, db.Database)
 }
+
+func TestMongoDatabase_TimeLimit(t *testing.T) {
+	db := newTestMongoDatabase(t, "TestMongoDatabase_TimeLimit")
+	defer db.Close(t)
+	testTimeLimit(t, db.Database)
+}

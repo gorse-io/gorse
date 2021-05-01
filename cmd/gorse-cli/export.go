@@ -100,7 +100,7 @@ func exportFeedback(csvFile string, feedbackType *string, sep string, printHeade
 	cursor := ""
 	for {
 		var feedback []data.Feedback
-		cursor, feedback, err = database.GetFeedback(cursor, batchSize, feedbackType)
+		cursor, feedback, err = database.GetFeedback(cursor, batchSize, feedbackType, nil)
 		if err != nil {
 			base.Logger().Fatal("failed to get feedback", zap.Error(err))
 		}
@@ -139,7 +139,7 @@ func exportItems(csvFile string, sep string, labelSep string, printHeader bool, 
 	cursor := ""
 	for {
 		var items []data.Item
-		cursor, items, err = database.GetItems(cursor, batchSize)
+		cursor, items, err = database.GetItems(cursor, batchSize, nil)
 		if err != nil {
 			base.Logger().Fatal("failed to get items", zap.Error(err))
 		}

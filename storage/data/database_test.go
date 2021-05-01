@@ -1,3 +1,17 @@
+// Copyright 2021 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package data
 
 import (
@@ -39,7 +53,7 @@ func getItems(t *testing.T, db Database) []Item {
 	var data []Item
 	cursor := ""
 	for {
-		cursor, data, err = db.GetItems(cursor, 2)
+		cursor, data, err = db.GetItems(cursor, 2, nil)
 		assert.Nil(t, err)
 		items = append(items, data...)
 		if cursor == "" {
@@ -61,7 +75,7 @@ func getFeedback(t *testing.T, db Database, feedbackType *string) []Feedback {
 	var data []Feedback
 	cursor := ""
 	for {
-		cursor, data, err = db.GetFeedback(cursor, 2, feedbackType)
+		cursor, data, err = db.GetFeedback(cursor, 2, feedbackType, nil)
 		assert.Nil(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
@@ -275,7 +289,7 @@ func testDeleteUser(t *testing.T, db Database) {
 	ret, err := db.GetUserFeedback("0", &positiveFeedbackType)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(ret))
-	_, ret, err = db.GetFeedback("", 100, &positiveFeedbackType)
+	_, ret, err = db.GetFeedback("", 100, &positiveFeedbackType, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, ret)
 }
@@ -299,7 +313,7 @@ func testDeleteItem(t *testing.T, db Database) {
 	ret, err := db.GetItemFeedback("0", &positiveFeedbackType)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(ret))
-	_, ret, err = db.GetFeedback("", 100, &positiveFeedbackType)
+	_, ret, err = db.GetFeedback("", 100, &positiveFeedbackType, nil)
 	assert.Nil(t, err)
 	assert.Empty(t, ret)
 }
@@ -358,4 +372,64 @@ func testMeasurements(t *testing.T, db Database) {
 		measurements[3],
 		measurements[2],
 	}, ret)
+}
+
+func testTimeLimit(t *testing.T, db Database) {
+	// insert items
+	items := []Item{
+		{
+			ItemId:    "0",
+			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"a"},
+			Comment:   "comment 0",
+		},
+		{
+			ItemId:    "2",
+			Timestamp: time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"a"},
+			Comment:   "comment 2",
+		},
+		{
+			ItemId:    "4",
+			Timestamp: time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"a", "b"},
+			Comment:   "comment 4",
+		},
+		{
+			ItemId:    "6",
+			Timestamp: time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"b"},
+			Comment:   "comment 6",
+		},
+		{
+			ItemId:    "8",
+			Timestamp: time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:    []string{"b"},
+			Comment:   "comment 8",
+		},
+	}
+	err := db.BatchInsertItem(items[1:])
+	assert.Nil(t, err)
+	timeLimit := time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC)
+	_, ret, err := db.GetItems("", 100, &timeLimit)
+	assert.Nil(t, err)
+	assert.Equal(t, []Item{items[2], items[3], items[4]}, ret)
+
+	// insert feedback
+	feedbacks := []Feedback{
+		{FeedbackKey{"type1", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type2", "2", "3"}, time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type3", "2", "3"}, time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type1", "2", "4"}, time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"type1", "1", "3"}, time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+	}
+	err = db.BatchInsertFeedback(feedbacks, true, true)
+	assert.Nil(t, err)
+	_, retFeedback, err := db.GetFeedback("", 100, nil, &timeLimit)
+	assert.Nil(t, err)
+	assert.Equal(t, []Feedback{feedbacks[4], feedbacks[3], feedbacks[2]}, retFeedback)
+	typeFilter := "type1"
+	_, retFeedback, err = db.GetFeedback("", 100, &typeFilter, &timeLimit)
+	assert.Nil(t, err)
+	assert.Equal(t, []Feedback{feedbacks[4], feedbacks[3]}, retFeedback)
 }

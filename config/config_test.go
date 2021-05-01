@@ -30,6 +30,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
 	assert.Equal(t, []string{"star", "fork"}, config.Database.PositiveFeedbackType)
+	assert.Equal(t, 998, config.Database.PositiveFeedbackTTL)
+	assert.Equal(t, 999, config.Database.ItemTTL)
 
 	// master configuration
 	assert.Equal(t, 8086, config.Master.Port)

@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2021 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package data
 
 import (
@@ -88,7 +89,7 @@ type Database interface {
 	BatchInsertItem(items []Item) error
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
-	GetItems(cursor string, n int) (string, []Item, error)
+	GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error)
 	GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error)
 	// users
 	InsertUser(user User) error
@@ -101,7 +102,7 @@ type Database interface {
 	DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error)
 	InsertFeedback(feedback Feedback, insertUser, insertItem bool) error
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
-	GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error)
+	GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error)
 	// measurement
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)

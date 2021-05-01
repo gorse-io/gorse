@@ -172,7 +172,8 @@ func (m *Master) FitLoop() {
 	for {
 		// download dataset
 		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType)
+		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep
@@ -240,7 +241,8 @@ func (m *Master) SearchLoop() {
 		var trainSet, valSet *pr.DataSet
 		// download dataset
 		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, _, _, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType)
+		dataSet, _, _, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep

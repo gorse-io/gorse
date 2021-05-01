@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2021 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package data
 
 import (
@@ -143,13 +144,17 @@ func (db *MongoDB) GetItem(itemId string) (item Item, err error) {
 	return
 }
 
-func (db *MongoDB) GetItems(cursor string, n int) (string, []Item, error) {
+func (db *MongoDB) GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("items")
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"itemid", 1}})
-	r, err := c.Find(ctx, bson.M{"itemid": bson.M{"$gt": cursor}}, opt)
+	filter := bson.M{"itemid": bson.M{"$gt": cursor}}
+	if timeLimit != nil {
+		filter["timestamp"] = bson.M{"$gt": *timeLimit}
+	}
+	r, err := c.Find(ctx, filter, opt)
 	if err != nil {
 		return "", nil, err
 	}
@@ -330,36 +335,28 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 	return nil
 }
 
-func (db *MongoDB) GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error) {
+func (db *MongoDB) GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"feedbackkey", 1}})
-	var filter bson.M
-	if cursor == "" {
-		if feedbackType != nil {
-			filter = bson.M{
-				"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
-			}
-		} else {
-			filter = bson.M{}
-		}
-	} else {
+	filter := make(bson.M)
+	// pass cursor to filter
+	if cursor != "" {
 		feedbackKey, err := FeedbackKeyFromString(cursor)
 		if err != nil {
 			return "", nil, err
 		}
-		if feedbackType != nil {
-			filter = bson.M{
-				"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
-				"feedbackkey":              bson.M{"$gt": feedbackKey},
-			}
-		} else {
-			filter = bson.M{
-				"feedbackkey": bson.M{"$gt": feedbackKey},
-			}
-		}
+		filter["feedbackkey"] = bson.M{"$gt": feedbackKey}
+	}
+	// pass feedback type to filter
+	if feedbackType != nil {
+		filter["feedbackkey.feedbacktype"] = bson.M{"$eq": *feedbackType}
+	}
+	// pass time limit to filter
+	if timeLimit != nil {
+		filter["timestamp"] = bson.M{"$gt": *timeLimit}
 	}
 	r, err := c.Find(ctx, filter, opt)
 	if err != nil {

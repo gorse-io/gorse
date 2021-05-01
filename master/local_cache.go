@@ -51,6 +51,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	if err != nil {
 		return state, err
 	}
+	state.Model.SetParams(state.Model.GetParams())
 	// 4. model score
 	err = decoder.Decode(&state.ModelScore)
 	if err != nil {

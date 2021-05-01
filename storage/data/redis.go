@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2021 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package data
 
 import (
@@ -20,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -177,7 +179,7 @@ func (redis *Redis) GetItem(itemId string) (Item, error) {
 	return item, err
 }
 
-func (redis *Redis) GetItems(cursor string, n int) (string, []Item, error) {
+func (redis *Redis) GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
 	var ctx = context.Background()
 	var err error
 	cursorNum := uint64(0)
@@ -203,6 +205,10 @@ func (redis *Redis) GetItems(cursor string, n int) (string, []Item, error) {
 		err = json.Unmarshal([]byte(data), &item)
 		if err != nil {
 			return "", nil, err
+		}
+		// compare timestamp
+		if timeLimit != nil && item.Timestamp.Unix() < timeLimit.Unix() {
+			continue
 		}
 		items = append(items, item)
 	}
@@ -399,7 +405,7 @@ func (redis *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertI
 	return nil
 }
 
-func (redis *Redis) GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error) {
+func (redis *Redis) GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error) {
 	var ctx = context.Background()
 	var err error
 	cursorNum := uint64(0)
@@ -428,6 +434,10 @@ func (redis *Redis) GetFeedback(cursor string, n int, feedbackType *string) (str
 		err = json.Unmarshal([]byte(val), &data)
 		if err != nil {
 			return "", nil, err
+		}
+		// compare timestamp
+		if timeLimit != nil && data.Timestamp.Unix() < timeLimit.Unix() {
+			continue
 		}
 		feedback = append(feedback, data)
 	}
