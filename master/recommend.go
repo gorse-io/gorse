@@ -190,6 +190,7 @@ func (m *Master) fitPRModel(dataSet *pr.DataSet, prModel pr.Model) {
 	m.prMutex.Lock()
 	m.prModel = prModel
 	m.prVersion++
+	m.prScore = score
 	m.prMutex.Unlock()
 	base.Logger().Info("fit personal ranking model complete",
 		zap.String("version", fmt.Sprintf("%x", m.prVersion)))
@@ -207,5 +208,20 @@ func (m *Master) fitPRModel(dataSet *pr.DataSet, prModel pr.Model) {
 	}
 	if err := m.CacheStore.SetString(cache.GlobalMeta, cache.MatrixFactorizationVersion, fmt.Sprintf("%x", m.prVersion)); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
+	}
+	// caching model
+	m.localCache.ModelName = m.prModelName
+	m.localCache.ModelVersion = m.prVersion
+	m.localCache.Model = prModel
+	m.localCache.ModelScore = score
+	m.localCache.UserIndex = m.userIndex
+	if err := m.localCache.WriteLocalCache(); err != nil {
+		base.Logger().Error("failed to write local cache", zap.Error(err))
+	} else {
+		base.Logger().Info("write model to local cache",
+			zap.String("model_name", m.localCache.ModelName),
+			zap.String("model_version", base.Hex(m.localCache.ModelVersion)),
+			zap.Float32("model_score", m.localCache.ModelScore.NDCG),
+			zap.Any("params", m.localCache.Model.GetParams()))
 	}
 }

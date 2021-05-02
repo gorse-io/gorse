@@ -10,6 +10,10 @@ auto_insert_user = true
 auto_insert_item = false
 # types of positive feedback
 positive_feedback_types = ["star"]
+# positive feedback time-to-live (days), 0 means disabled.
+positive_feedback_ttl = 0
+# item time-to-live (days), 0 means disabled.
+item_ttl = 0
 
 # This section declares settings for the master node.
 [master]
@@ -19,7 +23,7 @@ http_port = 8088            # HTTP API port
 http_host = "127.0.0.1"     # HTTP API host
 search_jobs = 1             # number of jobs for model search
 fit_jobs = 1                # number of jobs for model fitting
-meta_timeout = 30           # cluster meta timeout (second)
+meta_timeout = 10           # cluster meta timeout (second)
 
 # This section declares settings for the server node.
 [server]
@@ -31,3 +35,4 @@ api_key = ""                # secret key for RESTful APIs (SSL required)
 popular_window = 365        # timw window of popular items (days)
 fit_period = 10             # time period for model fitting (minutes)
 search_period = 60          # time period for model searching (minutes)
+max_recommend_period = 1    # time period for inactive user recommendation (days)

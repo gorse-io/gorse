@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2021 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package data
 
 import (
@@ -162,9 +163,16 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	return Item{}, errors.New(ErrItemNotExist)
 }
 
-func (d *SQLDatabase) GetItems(cursor string, n int) (string, []Item, error) {
-	result, err := d.db.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
-		"WHERE item_id >= ? ORDER BY item_id LIMIT ?", cursor, n+1)
+func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
+	var result *sql.Rows
+	var err error
+	if timeLimit == nil {
+		result, err = d.db.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
+			"WHERE item_id >= ? ORDER BY item_id LIMIT ?", cursor, n+1)
+	} else {
+		result, err = d.db.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
+			"WHERE item_id >= ? AND time_stamp >= ? ORDER BY item_id LIMIT ?", cursor, *timeLimit, n+1)
+	}
 	if err != nil {
 		return "", nil, err
 	}
@@ -374,7 +382,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 	return nil
 }
 
-func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error) {
+func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error) {
 	var cursorKey FeedbackKey
 	if cursor != "" {
 		if err := json.Unmarshal([]byte(cursor), &cursorKey); err != nil {
@@ -384,13 +392,25 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string) (s
 	var result *sql.Rows
 	var err error
 	if feedbackType != nil {
-		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-			"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
-			*feedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+		if timeLimit != nil {
+			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+				"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? AND time_stamp >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
+				*feedbackType, cursorKey.UserId, cursorKey.ItemId, *timeLimit, n+1)
+		} else {
+			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+				"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
+				*feedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+		}
 	} else {
-		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-			"WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
-			cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+		if timeLimit != nil {
+			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+				"WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ? AND time_stamp >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
+				cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId, *timeLimit, n+1)
+		} else {
+			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
+				"WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
+				cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+		}
 	}
 	if err != nil {
 		return "", nil, err

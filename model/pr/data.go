@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"strings"
+	"time"
 )
 
 const batchSize = 1000
@@ -266,7 +267,18 @@ func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
 	return dataset
 }
 
-func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*DataSet, []data.Item, []data.Feedback, error) {
+// LoadDataFromDatabase loads dataset from data store.
+func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTTL, positiveFeedbackTTL uint) (*DataSet, []data.Item, []data.Feedback, error) {
+	// setup time limit
+	var itemTimeLimit, feedbackTimeLimit *time.Time
+	if itemTTL > 0 {
+		temp := time.Now().AddDate(0, 0, -int(itemTTL))
+		itemTimeLimit = &temp
+	}
+	if positiveFeedbackTTL > 0 {
+		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
+		feedbackTimeLimit = &temp
+	}
 	dataset := NewMapIndexDataset()
 	cursor := ""
 	var err error
@@ -290,7 +302,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	itemLabelIndex := base.NewMapIndex()
 	for {
 		var items []data.Item
-		cursor, items, err = database.GetItems(cursor, batchSize)
+		cursor, items, err = database.GetItems(cursor, batchSize, itemTimeLimit)
 		allItems = append(allItems, items...)
 		if err != nil {
 			return nil, nil, nil, err
@@ -314,7 +326,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		for _, feedbackType := range feedbackTypes {
 			for {
 				var feedback []data.Feedback
-				cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
+				cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType, feedbackTimeLimit)
 				if err != nil {
 					return nil, nil, nil, err
 				}
@@ -330,7 +342,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	} else {
 		for {
 			var feedback []data.Feedback
-			cursor, feedback, err = database.GetFeedback(cursor, batchSize, nil)
+			cursor, feedback, err = database.GetFeedback(cursor, batchSize, nil, feedbackTimeLimit)
 			if err != nil {
 				return nil, nil, nil, err
 			}

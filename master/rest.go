@@ -1,6 +1,21 @@
+// Copyright 2021 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package master
 
 import (
+	"fmt"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	_ "github.com/gorse-io/dashboard"
@@ -13,6 +28,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -76,12 +92,22 @@ func (m *Master) StartHttpServer() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/neighbors/{item-id}").To(m.getNeighbors).
+		Doc("get neighbors of a item").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]data.Item{}))
 
 	statikFS, err := fs.New()
 	if err != nil {
 		base.Logger().Fatal("failed to load statik files", zap.Error(err))
 	}
 	http.Handle("/", http.FileServer(statikFS))
+
+	http.HandleFunc("/api/bulk/items", m.importExportItems)
+	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
 
 	m.RestServer.StartHttpServer()
 }
@@ -367,4 +393,79 @@ func (m *Master) getPopular(request *restful.Request, response *restful.Response
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
 	m.getList(cache.LatestItems, "", request, response)
+}
+
+func (m *Master) getNeighbors(request *restful.Request, response *restful.Response) {
+	itemId := request.PathParameter("item-id")
+	m.getList(cache.SimilarItems, itemId, request, response)
+}
+
+func (m *Master) importExportItems(response http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case http.MethodGet:
+		var err error
+		response.Header().Set("Content-Type", "text/csv")
+		response.Header().Set("Content-Disposition", fmt.Sprint("attachment;filename=items.csv"))
+		// write header
+		if _, err = response.Write([]byte("item_id,time_stamp,labels\n")); err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
+		// write rows
+		var cursor string
+		const batchSize = 1024
+		for {
+			var items []data.Item
+			cursor, items, err = m.DataStore.GetItems(cursor, batchSize, nil)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			}
+			for _, item := range items {
+				if _, err = response.Write([]byte(fmt.Sprintf("%v,%v,%v\n",
+					item.ItemId, item.Timestamp, strings.Join(item.Labels, "|")))); err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
+			}
+			if cursor == "" {
+				break
+			}
+		}
+	}
+}
+
+func (m *Master) importExportFeedback(response http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case http.MethodGet:
+		var err error
+		response.Header().Set("Content-Type", "text/csv")
+		response.Header().Set("Content-Disposition", fmt.Sprint("attachment;filename=feedback.csv"))
+		// write header
+		if _, err = response.Write([]byte("feedback_type,user_id,item_id,time_stamp\n")); err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
+		// write rows
+		var cursor string
+		const batchSize = 1024
+		for {
+			var feedback []data.Feedback
+			cursor, feedback, err = m.DataStore.GetFeedback(cursor, batchSize, nil, nil)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			}
+			for _, v := range feedback {
+				if _, err = response.Write([]byte(fmt.Sprintf("%v%v%v%v\n",
+					v.FeedbackType, v.UserId, v.ItemId, v.Timestamp))); err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
+			}
+			if cursor == "" {
+				break
+			}
+		}
+	}
 }

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package server
 
 import (
@@ -712,7 +713,7 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 		BadRequest(response, err)
 		return
 	}
-	cursor, items, err := s.DataStore.GetItems(cursor, n)
+	cursor, items, err := s.DataStore.GetItems(cursor, n, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -808,7 +809,7 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil)
+	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -829,7 +830,7 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, &feedbackType)
+	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, &feedbackType, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return

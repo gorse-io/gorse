@@ -181,7 +181,7 @@ func TestMaster_FitCFModel(t *testing.T) {
 	assert.Nil(t, err)
 	err = m.DataStore.BatchInsertFeedback(feedbacks, true, true)
 	assert.Nil(t, err)
-	dataset, _, _, err := pr.LoadDataFromDatabase(m.DataStore, []string{"FeedbackType"})
+	dataset, _, _, err := pr.LoadDataFromDatabase(m.DataStore, []string{"FeedbackType"}, 0, 0)
 	assert.Nil(t, err)
 	// similar items (common users)
 	m.similar(items, dataset, model.SimilarityDot)

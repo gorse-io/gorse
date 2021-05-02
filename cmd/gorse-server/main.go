@@ -32,6 +32,11 @@ var serverCommand = &cobra.Command{
 			fmt.Println(version.Name)
 			return
 		}
+		// setup logger
+		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
+		if debugMode {
+			base.SetDevelopmentLogger()
+		}
 		// start server
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
@@ -48,6 +53,7 @@ func init() {
 	serverCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
 	serverCommand.PersistentFlags().Int("http-port", 8087, "port of RESTful API")
 	serverCommand.PersistentFlags().String("http-host", "127.0.0.1", "host of RESTful API")
+	serverCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 }
 
 func main() {

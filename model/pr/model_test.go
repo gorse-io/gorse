@@ -1,3 +1,16 @@
+// Copyright 2021 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package pr
 
 import (
@@ -9,7 +22,8 @@ import (
 )
 
 const (
-	epsilon = 0.01
+	benchEpsilon = 0.01
+	incrEpsilon  = 1e-6
 )
 
 var fitConfig = &FitConfig{
@@ -19,9 +33,9 @@ var fitConfig = &FitConfig{
 	TopK:       10,
 }
 
-func assertEpsilon(t *testing.T, expect float32, actual float32) {
-	if math32.Abs(expect-actual) > epsilon {
-		t.Fatalf("|%v - %v| > %v", expect, actual, epsilon)
+func assertEpsilon(t *testing.T, expect float32, actual float32, eps float32) {
+	if math32.Abs(expect-actual) > eps {
+		t.Fatalf("|%v - %v| > %v", expect, actual, eps)
 	}
 }
 
@@ -40,15 +54,15 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitStdDev: 0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test increment test
 	m.nEpochs = 0
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
 	// test clear
 	m.Clear()
@@ -56,20 +70,20 @@ func TestBPR_MovieLens(t *testing.T) {
 	assert.Less(t, score.NDCG, float32(0.2))
 }
 
-func TestBPR_Pinterest(t *testing.T) {
-	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-	assert.Nil(t, err)
-	m := NewBPR(model.Params{
-		model.NFactors:   8,
-		model.Reg:        0.005,
-		model.Lr:         0.05,
-		model.NEpochs:    50,
-		model.InitMean:   0,
-		model.InitStdDev: 0.001,
-	})
-	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.53, score.NDCG)
-}
+//func TestBPR_Pinterest(t *testing.T) {
+//	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
+//	assert.Nil(t, err)
+//	m := NewBPR(model.Params{
+//		model.NFactors:   8,
+//		model.Reg:        0.005,
+//		model.Lr:         0.05,
+//		model.NEpochs:    50,
+//		model.InitMean:   0,
+//		model.InitStdDev: 0.001,
+//	})
+//	score := m.Fit(trainSet, testSet, fitConfig)
+//	assertEpsilon(t, 0.53, score.NDCG, benchEpsilon)
+//}
 
 func TestALS_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
@@ -81,15 +95,15 @@ func TestALS_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test increment test
 	m.nEpochs = 0
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
 	// test clear
 	m.Clear()
@@ -97,19 +111,19 @@ func TestALS_MovieLens(t *testing.T) {
 	assert.Less(t, score.NDCG, float32(0.2))
 }
 
-func TestALS_Pinterest(t *testing.T) {
-	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-	assert.Nil(t, err)
-	m := NewALS(model.Params{
-		model.NFactors:   8,
-		model.Reg:        0.01,
-		model.NEpochs:    10,
-		model.InitStdDev: 0.01,
-		model.Alpha:      0.001,
-	})
-	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.52, score.NDCG)
-}
+//func TestALS_Pinterest(t *testing.T) {
+//	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
+//	assert.Nil(t, err)
+//	m := NewALS(model.Params{
+//		model.NFactors:   8,
+//		model.Reg:        0.01,
+//		model.NEpochs:    10,
+//		model.InitStdDev: 0.01,
+//		model.Alpha:      0.001,
+//	})
+//	score := m.Fit(trainSet, testSet, fitConfig)
+//	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
+//}
 
 func TestCCD_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
@@ -121,15 +135,15 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test increment test
 	m.nEpochs = 0
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG)
+	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
 	// test clear
 	m.Clear()
@@ -137,16 +151,16 @@ func TestCCD_MovieLens(t *testing.T) {
 	assert.Less(t, score.NDCG, float32(0.2))
 }
 
-func TestCCD_Pinterest(t *testing.T) {
-	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-	assert.Nil(t, err)
-	m := NewCCD(model.Params{
-		model.NFactors:   8,
-		model.Reg:        0.01,
-		model.NEpochs:    20,
-		model.InitStdDev: 0.01,
-		model.Alpha:      0.001,
-	})
-	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.52, score.NDCG)
-}
+//func TestCCD_Pinterest(t *testing.T) {
+//	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
+//	assert.Nil(t, err)
+//	m := NewCCD(model.Params{
+//		model.NFactors:   8,
+//		model.Reg:        0.01,
+//		model.NEpochs:    20,
+//		model.InitStdDev: 0.01,
+//		model.Alpha:      0.001,
+//	})
+//	score := m.Fit(trainSet, testSet, fitConfig)
+//	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
+//}

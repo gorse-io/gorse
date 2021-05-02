@@ -10,6 +10,10 @@ auto_insert_user = true
 auto_insert_item = false
 # types of positive feedback
 positive_feedback_types = ["star", "fork"]
+# positive feedback time-to-live (days)
+positive_feedback_ttl = 998
+# item time-to-live (days)
+item_ttl = 999
 
 # This section declares settings for the master node.
 [master]

@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2021 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package data
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 var NoDatabaseError = fmt.Errorf("no database specified for datastore")
 
@@ -43,7 +47,7 @@ func (NoDatabase) GetItem(itemId string) (Item, error) {
 	return Item{}, NoDatabaseError
 }
 
-func (NoDatabase) GetItems(cursor string, n int) (string, []Item, error) {
+func (NoDatabase) GetItems(cursor string, n int, time *time.Time) (string, []Item, error) {
 	return "", nil, NoDatabaseError
 }
 
@@ -87,7 +91,7 @@ func (NoDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertIte
 	return NoDatabaseError
 }
 
-func (NoDatabase) GetFeedback(cursor string, n int, feedbackType *string) (string, []Feedback, error) {
+func (NoDatabase) GetFeedback(cursor string, n int, feedbackType *string, time *time.Time) (string, []Feedback, error) {
 	return "", nil, NoDatabaseError
 }
 

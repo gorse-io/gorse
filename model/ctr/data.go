@@ -167,7 +167,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	counter := NewCounter()
 	for {
 		var batchItems []data.Item
-		cursor, batchItems, err = database.GetItems(cursor, batchSize)
+		cursor, batchItems, err = database.GetItems(cursor, batchSize, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +230,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 		for _, feedbackType := range feedbackTypes {
 			for {
 				var batchFeedback []data.Feedback
-				cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, &feedbackType)
+				cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, &feedbackType, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -257,7 +257,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	} else {
 		for {
 			var batchFeedback []data.Feedback
-			cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, nil)
+			cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, nil, nil)
 			if err != nil {
 				return nil, err
 			}

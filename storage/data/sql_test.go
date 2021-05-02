@@ -116,3 +116,9 @@ func TestSQLDatabase_Measurements(t *testing.T) {
 	defer db.Close(t)
 	testMeasurements(t, db.Database)
 }
+
+func TestSQLDatabase_TimeLimit(t *testing.T) {
+	db := newTestSQLDatabase(t, "TestSQLDatabase_TimeLimit")
+	defer db.Close(t)
+	testTimeLimit(t, db.Database)
+}

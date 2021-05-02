@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package worker
 
 import (
@@ -19,10 +20,9 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/badger/v2"
+	"github.com/araddon/dateparse"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
-	"github.com/zhenghaoz/gorse/storage/local"
 	"go.uber.org/zap"
 	"net/http"
 	"os"
@@ -53,7 +53,6 @@ type Worker struct {
 	cacheStore   cache.Database
 	dataAddress  string
 	dataStore    data.Database
-	localStore   *local.Database
 
 	// master connection
 	MasterClient protocol.MasterClient
@@ -106,9 +105,9 @@ func (w *Worker) Sync() {
 		var err error
 		if meta, err = w.MasterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType:    protocol.NodeType_WorkerNode,
-				NodeName:    w.workerName,
-				HttpAddress: fmt.Sprintf("%s:%d", w.httpHost, w.httpPort),
+				NodeType: protocol.NodeType_WorkerNode,
+				NodeName: w.workerName,
+				HttpPort: int64(w.httpPort),
 			}); err != nil {
 			base.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
@@ -234,24 +233,19 @@ func (w *Worker) ServeMetrics() {
 
 func (w *Worker) Serve() {
 	// open local store
-	var err error
-	w.localStore, err = local.Open(filepath.Join(os.TempDir(), "gorse-worker"))
+	state, err := LoadLocalCache(filepath.Join(os.TempDir(), "gorse-worker"))
 	if err != nil {
-		base.Logger().Fatal("failed to connect local store", zap.Error(err),
+		base.Logger().Error("failed to load persist state", zap.Error(err),
 			zap.String("path", filepath.Join(os.TempDir(), "gorse-server")))
 	}
-	if w.workerName, err = w.localStore.GetString(local.NodeName); err != nil {
-		if err == badger.ErrKeyNotFound {
-			w.workerName = base.GetRandomName(0)
-			err = w.localStore.SetString(local.NodeName, w.workerName)
-			if err != nil {
-				base.Logger().Fatal("failed to write meta", zap.Error(err))
-			}
-		} else {
-			base.Logger().Fatal("failed to read meta", zap.Error(err))
+	if state.WorkerName == "" {
+		state.WorkerName = base.GetRandomName(0)
+		err = state.WriteLocalCache()
+		if err != nil {
+			base.Logger().Fatal("failed to write meta", zap.Error(err))
 		}
 	}
-
+	w.workerName = state.WorkerName
 	base.Logger().Info("start worker",
 		zap.Int("n_jobs", w.Jobs),
 		zap.String("worker_name", w.workerName))
@@ -300,11 +294,16 @@ func (w *Worker) Serve() {
 }
 
 func (w *Worker) Recommend(m pr.Model, users []string) {
-	// get items
-	items := m.GetItemIndex().GetNames()
+	var userIndexer base.Index
+	// load user index
+	if _, ok := m.(pr.MatrixFactorization); ok {
+		userIndexer = m.(pr.MatrixFactorization).GetUserIndex()
+	}
+	// load item index
+	itemIds := m.GetItemIndex().GetNames()
 	base.Logger().Info("personal ranking recommendation",
 		zap.Int("n_working_users", len(users)),
-		zap.Int("n_items", len(items)),
+		zap.Int("n_items", len(itemIds)),
 		zap.Int("n_jobs", w.Jobs),
 		zap.Int("cache_size", w.cfg.Database.CacheSize))
 	// progress tracker
@@ -328,22 +327,32 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 		}
 	}()
 	// collaborative filtering recommendation
+	startTime := time.Now()
 	_ = base.Parallel(len(users), w.Jobs, func(workerId, jobId int) error {
-		user := users[jobId]
+		userId := users[jobId]
+		// convert to user index
+		var userIndex int
+		if _, ok := m.(pr.MatrixFactorization); ok {
+			userIndex = userIndexer.ToNumber(userId)
+		}
+		// skip inactive users before max recommend period
+		if !w.checkRecommendCacheTimeout(userId) {
+			return nil
+		}
 		// remove saw items
-		historyItems, err := loadFeedbackItems(w.dataStore, user)
+		historyItems, err := loadFeedbackItems(w.dataStore, userId)
 		historySet := set.NewStringSet(historyItems...)
 		if err != nil {
 			base.Logger().Error("failed to pull user feedback",
-				zap.String("user_id", user), zap.Error(err))
+				zap.String("user_id", userId), zap.Error(err))
 			return err
 		}
 		var favoredItemIndices []int
 		if _, ok := m.(*pr.KNN); ok {
-			favoredItems, err := loadFeedbackItems(w.dataStore, user, w.cfg.Database.PositiveFeedbackType...)
+			favoredItems, err := loadFeedbackItems(w.dataStore, userId, w.cfg.Database.PositiveFeedbackType...)
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
-					zap.String("user_id", user), zap.Error(err))
+					zap.String("user_id", userId), zap.Error(err))
 				return err
 			}
 			for _, itemId := range favoredItems {
@@ -354,32 +363,71 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 			}
 		}
 		recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
-		for _, item := range items {
-			if !historySet.Has(item) {
+		for itemIndex, itemId := range itemIds {
+			if !historySet.Has(itemId) {
 				switch m.(type) {
 				case pr.MatrixFactorization:
-					recItems.Push(item, m.(pr.MatrixFactorization).Predict(user, item))
+					recItems.Push(itemId, m.(pr.MatrixFactorization).InternalPredict(userIndex, itemIndex))
 				case *pr.KNN:
-					itemIndex := m.GetItemIndex().ToNumber(item)
-					recItems.Push(item, m.(*pr.KNN).InternalPredict(favoredItemIndices, itemIndex))
+					recItems.Push(itemId, m.(*pr.KNN).InternalPredict(favoredItemIndices, itemIndex))
 				default:
 					base.Logger().Error("unknown model type")
 				}
 			}
 		}
 		elems, _ := recItems.PopAll()
-		if err = w.cacheStore.SetList(cache.CollaborativeItems, user, elems); err != nil {
+		if err = w.cacheStore.SetList(cache.CollaborativeItems, userId, elems); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation", zap.Error(err))
 			return err
 		}
-		if err = w.cacheStore.SetString(cache.LastUpdateRecommendTime, user, base.Now()); err != nil {
+		if err = w.cacheStore.SetString(cache.LastUpdateRecommendTime, userId, base.Now()); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation time", zap.Error(err))
 		}
 		completed <- nil
 		return nil
 	})
 	close(completed)
-	base.Logger().Info("complete personal ranking recommendation")
+	base.Logger().Info("complete personal ranking recommendation",
+		zap.String("used_time", time.Since(startTime).String()))
+}
+
+// checkRecommendCacheTimeout checks if recommend cache stale.
+// 1. if active time > recommend time, stale.
+// 2. if recommend time + timeout < now, stale.
+func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
+	var activeTime, recommendTime time.Time
+	// read active time
+	activeTimeLiteral, err := w.cacheStore.GetString(cache.LastActiveTime, userId)
+	if err != nil {
+		if err != cache.ErrObjectNotExist {
+			base.Logger().Error("failed to read meta", zap.Error(err))
+		}
+	} else {
+		activeTime, err = dateparse.ParseAny(activeTimeLiteral)
+		if err != nil {
+			base.Logger().Error("failed to time", zap.Error(err))
+		}
+	}
+	// read recommend time
+	recommendTimeLiteral, err := w.cacheStore.GetString(cache.LastUpdateRecommendTime, userId)
+	if err != nil {
+		if err != cache.ErrObjectNotExist {
+			base.Logger().Error("failed to read meta", zap.Error(err))
+		} else {
+			return true
+		}
+	} else {
+		recommendTime, err = dateparse.ParseAny(recommendTimeLiteral)
+		if err != nil {
+			base.Logger().Error("failed to time", zap.Error(err))
+		}
+	}
+	// check time
+	if activeTime.Unix() < recommendTime.Unix() {
+		timeoutTime := recommendTime.Add(time.Hour * 24 * time.Duration(w.cfg.Recommend.MaxRecommendPeriod))
+		return timeoutTime.Unix() < time.Now().Unix()
+	}
+	return true
 }
 
 //

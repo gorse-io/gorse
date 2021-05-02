@@ -53,23 +53,23 @@ func TestFM_Classification_Frappe(t *testing.T) {
 	assertEpsilon(t, 0.91684, score.Precision)
 }
 
-func TestFM_Classification_MovieLens(t *testing.T) {
-	// LibFM command:
-	// libfm.exe -train train.libfm -test test.libfm -task r \
-	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
-	//   -learn_rate 0.01 -regular 0,0,0.0001
-	train, test, err := LoadDataFromBuiltIn("ml-tag")
-	assert.Nil(t, err)
-	m := NewFM(FMClassification, model.Params{
-		model.InitStdDev: 0.01,
-		model.NFactors:   8,
-		model.NEpochs:    20,
-		model.Lr:         0.01,
-		model.Reg:        0.0001,
-	})
-	score := m.Fit(train, test, fitConfig)
-	assertEpsilon(t, 0.901777, score.Precision)
-}
+//func TestFM_Classification_MovieLens(t *testing.T) {
+//	// LibFM command:
+//	// libfm.exe -train train.libfm -test test.libfm -task r \
+//	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
+//	//   -learn_rate 0.01 -regular 0,0,0.0001
+//	train, test, err := LoadDataFromBuiltIn("ml-tag")
+//	assert.Nil(t, err)
+//	m := NewFM(FMClassification, model.Params{
+//		model.InitStdDev: 0.01,
+//		model.NFactors:   8,
+//		model.NEpochs:    20,
+//		model.Lr:         0.01,
+//		model.Reg:        0.0001,
+//	})
+//	score := m.Fit(train, test, fitConfig)
+//	assertEpsilon(t, 0.901777, score.Precision)
+//}
 
 func TestFM_Regression_Frappe(t *testing.T) {
 	// LibFM command:
@@ -89,20 +89,20 @@ func TestFM_Regression_Frappe(t *testing.T) {
 	assertEpsilon(t, 0.494435, score.RMSE)
 }
 
-func TestFM_Regression_MovieLens(t *testing.T) {
-	// LibFM command:
-	// libfm.exe -train train.libfm -test test.libfm -task r \
-	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
-	//   -learn_rate 0.01 -regular 0,0,0.0001
-	train, test, err := LoadDataFromBuiltIn("ml-tag")
-	assert.Nil(t, err)
-	m := NewFM(FMRegression, model.Params{
-		model.InitStdDev: 0.01,
-		model.NFactors:   8,
-		model.NEpochs:    20,
-		model.Lr:         0.01,
-		model.Reg:        0.0001,
-	})
-	score := m.Fit(train, test, fitConfig)
-	assertEpsilon(t, 0.570648, score.RMSE)
-}
+//func TestFM_Regression_MovieLens(t *testing.T) {
+//	// LibFM command:
+//	// libfm.exe -train train.libfm -test test.libfm -task r \
+//	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
+//	//   -learn_rate 0.01 -regular 0,0,0.0001
+//	train, test, err := LoadDataFromBuiltIn("ml-tag")
+//	assert.Nil(t, err)
+//	m := NewFM(FMRegression, model.Params{
+//		model.InitStdDev: 0.01,
+//		model.NFactors:   8,
+//		model.NEpochs:    20,
+//		model.Lr:         0.01,
+//		model.Reg:        0.0001,
+//	})
+//	score := m.Fit(train, test, fitConfig)
+//	assertEpsilon(t, 0.570648, score.RMSE)
+//}

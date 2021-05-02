@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package master
 
 import (
@@ -21,6 +22,8 @@ import (
 	"go.uber.org/zap"
 	"math/rand"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -58,6 +61,7 @@ type Master struct {
 	prModel     pr.Model
 	prModelName string
 	prVersion   int64
+	prScore     pr.Score
 	prMutex     sync.Mutex
 	prSearcher  *pr.ModelSearcher
 
@@ -65,6 +69,8 @@ type Master struct {
 	//fmModel    ctr.FactorizationMachine
 	//ctrVersion int64
 	//fmMutex    sync.mutex
+
+	localCache *LocalCache
 }
 
 func NewMaster(cfg *config.Config) *Master {
@@ -91,18 +97,35 @@ func NewMaster(cfg *config.Config) *Master {
 
 func (m *Master) Serve() {
 
+	// load local cached model
+	var err error
+	m.localCache, err = LoadLocalCache(filepath.Join(os.TempDir(), "gorse-master"))
+	if err != nil {
+		base.Logger().Error("failed to load local cache", zap.Error(err))
+	}
+	if m.localCache.Model != nil {
+		base.Logger().Info("load cached model",
+			zap.String("model_name", m.localCache.ModelName),
+			zap.String("model_version", base.Hex(m.localCache.ModelVersion)),
+			zap.Float32("model_score", m.localCache.ModelScore.NDCG),
+			zap.Any("params", m.localCache.Model.GetParams()))
+		m.prModel = m.localCache.Model
+		m.prModelName = m.localCache.ModelName
+		m.prVersion = m.localCache.ModelVersion
+		m.prScore = m.localCache.ModelScore
+	}
+
 	// create cluster meta cache
 	m.ttlCache = ttlcache.NewCache()
 	m.ttlCache.SetExpirationCallback(m.nodeDown)
 	m.ttlCache.SetNewItemCallback(m.nodeUp)
-	if err := m.ttlCache.SetTTL(
+	if err = m.ttlCache.SetTTL(
 		time.Duration(m.GorseConfig.Master.MetaTimeout+10) * time.Second,
 	); err != nil {
 		base.Logger().Fatal("failed to set TTL", zap.Error(err))
 	}
 
 	// connect data database
-	var err error
 	m.DataStore, err = data.Open(m.GorseConfig.Database.DataStore)
 	if err != nil {
 		base.Logger().Fatal("failed to connect data database", zap.Error(err))
@@ -145,10 +168,12 @@ func (m *Master) FitLoop() {
 	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
 	var bestName string
 	var bestModel pr.Model
+	var bestScore pr.Score
 	for {
 		// download dataset
 		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType)
+		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep
@@ -169,10 +194,14 @@ func (m *Master) FitLoop() {
 			goto sleep
 		}
 		// check best model
-		bestName, bestModel, _ = m.prSearcher.GetBestModel()
+		bestName, bestModel, bestScore = m.prSearcher.GetBestModel()
 		m.prMutex.Lock()
-		if bestName != "" && (bestName != m.prModelName || bestModel.GetParams().ToString() != m.prModel.GetParams().ToString()) {
-			// use new best model
+		if bestName != "" &&
+			(bestName != m.prModelName || bestModel.GetParams().ToString() != m.prModel.GetParams().ToString()) &&
+			(bestScore.NDCG > m.prScore.NDCG) {
+			// 1. best model must have been found.
+			// 2. best model must be different from current model
+			// 3. best model must perform better than current model
 			m.prModel = bestModel
 			m.prModelName = bestName
 			base.Logger().Info("find better model",
@@ -204,6 +233,7 @@ func (m *Master) FitLoop() {
 	}
 }
 
+// SearchLoop searches optimal recommendation model in background. It never modifies variables other than prSearcher.
 func (m *Master) SearchLoop() {
 	defer base.CheckPanic()
 	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
@@ -211,7 +241,8 @@ func (m *Master) SearchLoop() {
 		var trainSet, valSet *pr.DataSet
 		// download dataset
 		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, _, _, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType)
+		dataSet, _, _, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep
