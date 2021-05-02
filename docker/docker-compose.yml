@@ -28,7 +28,7 @@ services:
       - 8087:8087
     expose:
       - 8087
-    command: --master-host master --master-port 8086 --host 0.0.0.0 --port 8087
+    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8087
   master:
     image: zhenghaoz/gorse-master
     restart: always
