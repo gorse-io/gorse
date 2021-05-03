@@ -2,12 +2,12 @@ version: "3"
 services:
   redis:
     image: redis
-    restart: always
+    restart: unless-stopped
     ports:
       - 6379:6379
   mysql:
     image: mysql
-    restart: always
+    restart: unless-stopped
     ports:
       - 3306:3306
     environment:
@@ -19,23 +19,22 @@ services:
       - data:/var/lib/mysql
   worker:
     image: zhenghaoz/gorse-worker
-    restart: always
-    command: --master-host master --master-port 8086 -j 4
+    restart: unless-stopped
+    ports:
+      - 8089:8089
+    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8089
   server:
     image: zhenghaoz/gorse-server
-    restart: always
+    restart: unless-stopped
     ports:
       - 8087:8087
-    expose:
-      - 8087
     command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8087
   master:
     image: zhenghaoz/gorse-master
-    restart: always
+    restart: unless-stopped
     ports:
       - 8086:8086
-    expose:
-      - 8086
+      - 8088:8088
     volumes:
       - ./config.toml:/etc/config.toml
 volumes:
