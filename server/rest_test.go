@@ -342,9 +342,8 @@ func TestServer_List(t *testing.T) {
 		t.Logf("test RESTful API: %v", operator.Get)
 		// Put items
 		items := []string{"0", "1", "2", "3", "4"}
-		if err := s.cacheStoreClient.SetList(operator.Prefix, operator.Label, items); err != nil {
-			t.Fatal(err)
-		}
+		err := s.cacheStoreClient.SetList(operator.Prefix, operator.Label, items)
+		assert.Nil(t, err)
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
