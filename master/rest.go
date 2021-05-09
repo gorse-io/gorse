@@ -31,6 +31,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -98,13 +99,27 @@ func (m *Master) CreateWebService() {
 		Writes([]data.Item{}))
 }
 
+// SinglePageAppFileSystem is the file system for single page app.
+type SinglePageAppFileSystem struct {
+	root http.FileSystem
+}
+
+// Open index.html if required file not exists.
+func (fs *SinglePageAppFileSystem) Open(name string) (http.File, error) {
+	f, err := fs.root.Open(name)
+	if os.IsNotExist(err) {
+		return fs.root.Open("/index.html")
+	}
+	return f, err
+}
+
 func (m *Master) StartHttpServer() {
 	m.CreateWebService()
 	statikFS, err := fs.New()
 	if err != nil {
 		base.Logger().Fatal("failed to load statik files", zap.Error(err))
 	}
-	http.Handle("/", http.FileServer(statikFS))
+	http.Handle("/", http.FileServer(&SinglePageAppFileSystem{statikFS}))
 	http.HandleFunc("/api/bulk/items", m.importExportItems)
 	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
 	m.RestServer.StartHttpServer()
