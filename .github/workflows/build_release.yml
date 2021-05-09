@@ -55,15 +55,35 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           
       - uses: olegtarasov/get-tag@v2.1
+        id: tag_name
           
-      - name: Build and push
-        id: docker_build
+      - name: Build master image
+        id: docker_build_master
         uses: docker/build-push-action@v2
         with:
           context: docker/gorse-master
           push: true
-          tags: zhenghaoz/gorse-master:$GIT_TAG_NAME
+          tags: zhenghaoz/gorse-master:${{ steps.tag_name.outputs.tag }}
+          
+      - name: Build server image
+        id: docker_build_server
+        uses: docker/build-push-action@v2
+        with:
+          context: docker/gorse-server
+          push: true
+          tags: zhenghaoz/gorse-server:${{ steps.tag_name.outputs.tag }}
+          
+      - name: Build worker image
+        id: docker_build_worker
+        uses: docker/build-push-action@v2
+        with:
+          context: docker/gorse-worker
+          push: true
+          tags: zhenghaoz/gorse-worker:${{ steps.tag_name.outputs.tag }}
           
       - name: Image digest
-        run: echo ${{ steps.docker_build.outputs.digest }}
+        run: |
+          echo ${{ steps.docker_build_master.outputs.digest }}
+          echo ${{ steps.docker_build_server.outputs.digest }}
+          echo ${{ steps.docker_build_worker.outputs.digest }}
   
