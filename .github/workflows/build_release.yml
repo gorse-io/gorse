@@ -54,13 +54,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           
+      - uses: olegtarasov/get-tag@v2.1
+          
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v2
         with:
           context: docker/gorse-master
           push: true
-          tags: zhenghaoz/gorse-master:${{ github.ref }}
+          tags: zhenghaoz/gorse-master:$GIT_TAG_NAME
           
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
