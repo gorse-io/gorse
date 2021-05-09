@@ -20,11 +20,8 @@
 
 ## 使用指南
 
+- [手动运行Gorse](https://github.com/zhenghaoz/gorse/tree/master/cmd)
 - [借助Docker Compose运行Gorse](https://github.com/zhenghaoz/gorse/tree/master/docker)
-- [快速上手](https://gorse.io/zh/docs/chapter_2.html)
-- [配置项介绍](https://gorse.io/zh/docs/ch02-01-config.html)
-- [命令行介绍](https://gorse.io/zh/docs/ch02-02-command.html)
-- [RESTful接口介绍](https://gorse.io/zh/docs/ch02-03-api.html)
 
 ## [推荐原理](https://gorse.io/zh/docs/ch01-01-principle.html)
 
