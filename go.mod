@@ -8,17 +8,15 @@ require (
 	github.com/alicebob/miniredis/v2 v2.14.3
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/barkimedes/go-deepcopy v0.0.0-20200817023428-a044a1957ca4
-	github.com/cheggaaa/pb/v3 v3.0.7
 	github.com/chewxy/math32 v1.0.6
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.4.0
 	github.com/go-redis/redis/v8 v8.8.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
-	github.com/gorse-io/dashboard v0.0.0-20210501140755-db06e9166a34
+	github.com/gorse-io/dashboard v0.0.0-20210509140222-28d8ecca687c
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.10
-	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.10.0
 	github.com/rakyll/statik v0.1.7

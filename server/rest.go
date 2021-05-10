@@ -945,7 +945,7 @@ func PageNotFound(response *restful.Response, err error) {
 	}
 }
 
-// json sends the content as JSON to the client.
+// Ok sends the content as JSON to the client.
 func Ok(response *restful.Response, content interface{}) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteAsJson(content); err != nil {

@@ -1,7 +1,6 @@
 # Run Gorse with Docker Compose
 
-The best practice to manage Gorse nodes is using orchestration tools such as Docker Compose, etc.. There are Docker images of master node, server node and worker node.
-
+The best practice to manage Gorse nodes is using orchestration tools such as Docker Compose, etc.. There are Docker images of the master node, the server node and the worker node.
 
 | Docker Image         | Build Status |
 | ------------ | -------- |
@@ -25,3 +24,11 @@ docker-compose up -d
 mysql -h 127.0.0.1 -u root -proot_pass gorse < github.sql
 ```
 
+- Play with Gorse: 
+
+| Entry | Link |
+| --- | --- |
+| Master Dashboard | http://127.0.0.1:8088/ |
+| Server RESTful API | http://127.0.0.1:8087/apidocs |
+| Server Prometheus Metrics | http://127.0.0.1:8087/metrics |
+| Worker Prometheus Metrics | http://127.0.0.1:8089/metrics |
