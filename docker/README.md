@@ -2,7 +2,6 @@
 
 The best practice to manage Gorse nodes is using orchestration tools such as Docker Compose, etc.. There are Docker images of the master node, the server node and the worker node.
 
-
 | Docker Image         | Build Status |
 | ------------ | -------- |
 | gorse-master | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-master)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-master) |
