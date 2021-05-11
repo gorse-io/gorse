@@ -11,9 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package base
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -28,4 +30,24 @@ func TestNewMatrix32(t *testing.T) {
 	assert.Equal(t, 4, len(a[0]))
 	assert.Equal(t, 4, len(a[0]))
 	assert.Equal(t, 4, len(a[0]))
+}
+
+func TestHex(t *testing.T) {
+	assert.Equal(t, fmt.Sprintf("%x", 325600), Hex(325600))
+}
+
+func TestRangeInt(t *testing.T) {
+	a := RangeInt(7)
+	assert.Equal(t, 7, len(a))
+	for i := range a {
+		assert.Equal(t, i, a[i])
+	}
+}
+
+func TestNewMatrixInt(t *testing.T) {
+	m := NewMatrixInt(4, 3)
+	assert.Equal(t, 4, len(m))
+	for _, v := range m {
+		assert.Equal(t, 3, len(v))
+	}
 }
