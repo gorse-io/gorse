@@ -86,9 +86,9 @@ func TestMaster_ExportItems(t *testing.T) {
 	defer s.Close(t)
 	// insert items
 	items := []data.Item{
-		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
-		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
-		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "three"},
+		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
+		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
+		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}
 	err := s.dataStoreClient.BatchInsertItem(items)
 	assert.Nil(t, err)
@@ -99,10 +99,10 @@ func TestMaster_ExportItems(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment;filename=items.csv", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, "item_id,time_stamp,labels,description\n"+
-		"1,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\n"+
-		"2,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\n"+
-		"3,2022-01-01 01:01:01.000000001 +0000 UTC,c|d,three\n", w.Body.String())
+	assert.Equal(t, "item_id,time_stamp,labels,description\r\n"+
+		"1,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,\"o,n,e\"\r\n"+
+		"2,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,\"t\r\nw\r\no\"\r\n"+
+		"3,2022-01-01 01:01:01.000000001 +0000 UTC,c|d,\"\"\"three\"\"\"\r\n", w.Body.String())
 }
 
 func TestMaster_ExportFeedback(t *testing.T) {
@@ -123,10 +123,10 @@ func TestMaster_ExportFeedback(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment;filename=feedback.csv", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, "feedback_type,user_id,item_id,time_stamp\n"+
-		"click,0,2,0001-01-01 00:00:00 +0000 UTC\n"+
-		"read,2,6,0001-01-01 00:00:00 +0000 UTC\n"+
-		"share,1,4,0001-01-01 00:00:00 +0000 UTC\n", w.Body.String())
+	assert.Equal(t, "feedback_type,user_id,item_id,time_stamp\r\n"+
+		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n"+
+		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n"+
+		"share,1,4,0001-01-01 00:00:00 +0000 UTC\r\n", w.Body.String())
 }
 
 func TestMaster_ImportItems(t *testing.T) {
@@ -145,9 +145,9 @@ func TestMaster_ImportItems(t *testing.T) {
 	assert.Nil(t, err)
 	file, err := writer.CreateFormFile("file", "items.csv")
 	assert.Nil(t, err)
-	_, err = file.Write([]byte("1\ta::b\tone\t2020-01-01 01:01:01.000000001 +0000 UTC\n" +
-		"2\tb::c\ttwo\t2021-01-01 01:01:01.000000001 +0000 UTC\n" +
-		"3\tc::d\tthree\t2022-01-01 01:01:01.000000001 +0000 UTC\n"))
+	_, err = file.Write([]byte("1\ta::b\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\n" +
+		"2\tb::c\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\n" +
+		"3\tc::d\t\"\"\"three\"\"\"\t2022-01-01 01:01:01.000000001 +0000 UTC\n"))
 	assert.Nil(t, err)
 	err = writer.Close()
 	assert.Nil(t, err)
@@ -161,9 +161,9 @@ func TestMaster_ImportItems(t *testing.T) {
 	_, items, err := s.dataStoreClient.GetItems("", 100, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
-		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
-		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "three"},
+		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
+		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
+		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}, items)
 }
 
@@ -175,10 +175,10 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "items.csv")
 	assert.Nil(t, err)
-	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\n" +
-		"1,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\n" +
-		"2,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\n" +
-		"3,2022-01-01 01:01:01.000000001 +0000 UTC,c|d,three\n"))
+	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n" +
+		"1,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\r\n" +
+		"2,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\r\n" +
+		"3,2022-01-01 01:01:01.000000001 +0000 UTC,c|d,three\r\n"))
 	assert.Nil(t, err)
 	err = writer.Close()
 	assert.Nil(t, err)
@@ -241,10 +241,10 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "feedback.csv")
 	assert.Nil(t, err)
-	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\n" +
-		"click,0,2,0001-01-01 00:00:00 +0000 UTC\n" +
-		"read,2,6,0001-01-01 00:00:00 +0000 UTC\n" +
-		"share,1,4,0001-01-01 00:00:00 +0000 UTC\n"))
+	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n" +
+		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n" +
+		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n" +
+		"share,1,4,0001-01-01 00:00:00 +0000 UTC\r\n"))
 	assert.Nil(t, err)
 	err = writer.Close()
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
