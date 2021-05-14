@@ -16,6 +16,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/araddon/dateparse"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"net/http"
@@ -654,6 +655,14 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 	Ok(response, feedback)
 }
 
+// Item is the data structure for the item but stores the timestamp using string.
+type Item struct {
+	ItemId    string
+	Timestamp string
+	Labels    []string
+	Comment   string
+}
+
 // putItems puts items into the database.
 func (s *RestServer) insertItems(request *restful.Request, response *restful.Response) {
 	// Authorize
@@ -661,7 +670,7 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 		return
 	}
 	// Add ratings
-	items := make([]data.Item, 0)
+	items := make([]Item, 0)
 	if err := request.ReadEntity(&items); err != nil {
 		BadRequest(response, err)
 		return
@@ -669,7 +678,13 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 	// Insert items
 	var count int
 	for _, item := range items {
-		err := s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
+		// parse datetime
+		timestamp, err := dateparse.ParseAny(item.Timestamp)
+		if err != nil {
+			BadRequest(response, err)
+			return
+		}
+		err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels})
 		count++
 		if err != nil {
 			InternalServerError(response, err)
@@ -680,17 +695,23 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 }
 
 func (s *RestServer) insertItem(request *restful.Request, response *restful.Response) {
-	// Authorize
+	// authorize
 	if !s.auth(request, response) {
 		return
 	}
-	item := new(data.Item)
+	item := new(Item)
 	var err error
 	if err = request.ReadEntity(item); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	if err = s.DataStore.InsertItem(*item); err != nil {
+	// parse datetime
+	timestamp, err := dateparse.ParseAny(item.Timestamp)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	if err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -754,32 +775,46 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 	Ok(response, Success{RowAffected: 1})
 }
 
+// Feedback is the data structure for the feedback but stores the timestamp using string.
+type Feedback struct {
+	data.FeedbackKey
+	Timestamp string
+	Comment   string
+}
+
 // putFeedback puts new ratings into the database.
 func (s *RestServer) insertFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
+	// authorize
 	if !s.auth(request, response) {
 		return
 	}
-	// Add ratings
-	ratings := new([]data.Feedback)
-	if err := request.ReadEntity(ratings); err != nil {
+	// add ratings
+	feedbackLiterTime := new([]Feedback)
+	if err := request.ReadEntity(feedbackLiterTime); err != nil {
 		BadRequest(response, err)
 		return
 	}
+	// parse datetime
 	var err error
-	// Insert feedback
-	var count int
+	feedback := make([]data.Feedback, len(*feedbackLiterTime))
 	users := set.NewStringSet()
-	for _, feedback := range *ratings {
-		users.Add(feedback.UserId)
-		err = s.DataStore.InsertFeedback(feedback,
-			s.GorseConfig.Database.AutoInsertUser,
-			s.GorseConfig.Database.AutoInsertItem)
-		count++
+	for i := range feedback {
+		users.Add((*feedbackLiterTime)[i].UserId)
+		feedback[i].FeedbackKey = (*feedbackLiterTime)[i].FeedbackKey
+		feedback[i].Comment = (*feedbackLiterTime)[i].Comment
+		feedback[i].Timestamp, err = dateparse.ParseAny((*feedbackLiterTime)[i].Timestamp)
 		if err != nil {
-			InternalServerError(response, err)
+			BadRequest(response, err)
 			return
 		}
+	}
+	// Insert feedback
+	err = s.DataStore.BatchInsertFeedback(feedback,
+		s.GorseConfig.Database.AutoInsertUser,
+		s.GorseConfig.Database.AutoInsertItem)
+	if err != nil {
+		InternalServerError(response, err)
+		return
 	}
 	for _, userId := range users.List() {
 		err = s.CacheStore.SetString(cache.LastActiveTime, userId, base.Now())
@@ -788,7 +823,7 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 			return
 		}
 	}
-	Ok(response, Success{RowAffected: count})
+	Ok(response, Success{RowAffected: len(feedback)})
 }
 
 type FeedbackIterator struct {
