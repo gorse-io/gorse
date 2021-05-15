@@ -56,6 +56,12 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(Status{}))
 	// Get a user
+	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
+		Doc("Get a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Writes(User{}))
+	// Get a user feedback
 	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/{feedback-type}").To(m.getTypedFeedbackByUser).
 		Doc("Get feedback by user id with feedback type.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
@@ -192,6 +198,31 @@ type User struct {
 	data.User
 	LastActiveTime string
 	LastUpdateTime string
+}
+
+func (m *Master) getUser(request *restful.Request, response *restful.Response) {
+	// get user id
+	userId := request.PathParameter("user-id")
+	// get user
+	user, err := m.DataStore.GetUser(userId)
+	if err != nil {
+		if err.Error() == data.ErrUserNotExist {
+			server.PageNotFound(response, err)
+		} else {
+			server.InternalServerError(response, err)
+		}
+		return
+	}
+	detail := User{User: user}
+	if detail.LastActiveTime, err = m.CacheStore.GetString(cache.LastActiveTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		server.InternalServerError(response, err)
+		return
+	}
+	if detail.LastUpdateTime, err = m.CacheStore.GetString(cache.LastUpdateRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Ok(response, detail)
 }
 
 func (m *Master) getUsers(request *restful.Request, response *restful.Response) {

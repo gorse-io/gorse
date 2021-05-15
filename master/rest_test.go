@@ -336,6 +336,14 @@ func TestMaster_GetUsers(t *testing.T) {
 			Users:  users,
 		})).
 		End()
+	// get a user
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/dashboard/user/1").
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, users[1])).
+		End()
 }
 
 func TestServer_List(t *testing.T) {
