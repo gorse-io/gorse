@@ -45,7 +45,7 @@ func TestEscape(t *testing.T) {
 func splitLines(t *testing.T, text string) [][]string {
 	sc := bufio.NewScanner(strings.NewReader(text))
 	lines := make([][]string, 0)
-	err := ReadLines(sc, func(i int, i2 []string) bool {
+	err := ReadLines(sc, ',', func(i int, i2 []string) bool {
 		lines = append(lines, i2)
 		return i2[0] != "STOP"
 	})
