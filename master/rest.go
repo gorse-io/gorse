@@ -22,7 +22,6 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	_ "github.com/gorse-io/dashboard"
 	"github.com/rakyll/statik/fs"
-	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/server"
@@ -262,53 +261,11 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		server.BadRequest(response, err)
 		return
 	}
-	// load offline recommendation
-	start := time.Now()
-	itemsChan := make(chan []string, 1)
-	errChan := make(chan error, 1)
-	go func() {
-		var collaborativeFilteringItems []string
-		collaborativeFilteringItems, err = m.CacheStore.GetList(cache.CollaborativeItems, userId, 0, m.GorseConfig.Database.CacheSize)
-		if err != nil {
-			itemsChan <- nil
-			errChan <- err
-		} else {
-			itemsChan <- collaborativeFilteringItems
-			errChan <- nil
-			if len(collaborativeFilteringItems) == 0 {
-				base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
-			}
-		}
-	}()
-	// load historical feedback
-	userFeedback, err := m.DataStore.GetUserFeedback(userId, nil)
+	results, err := m.Recommend(userId, n)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
 	}
-	excludeSet := set.NewStringSet()
-	for _, feedback := range userFeedback {
-		excludeSet.Add(feedback.ItemId)
-	}
-	// remove historical items
-	items := <-itemsChan
-	err = <-errChan
-	if err != nil {
-		server.InternalServerError(response, err)
-		return
-	}
-	results := make([]string, 0, len(items))
-	for _, itemId := range items {
-		if !excludeSet.Has(itemId) {
-			results = append(results, itemId)
-		}
-	}
-	if len(results) > n {
-		results = results[:n]
-	}
-	spent := time.Since(start)
-	base.Logger().Info("complete recommendation",
-		zap.Duration("total_time", spent))
 	// Send result
 	details := make([]data.Item, len(results))
 	for i := range results {

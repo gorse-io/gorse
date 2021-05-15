@@ -50,6 +50,9 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 12, config.Recommend.PopularWindow)
 	assert.Equal(t, 66, config.Recommend.FitPeriod)
 	assert.Equal(t, 88, config.Recommend.SearchPeriod)
+	assert.Equal(t, 102, config.Recommend.SearchEpoch)
+	assert.Equal(t, 9, config.Recommend.SearchTrials)
+	assert.Equal(t, "latest", config.Recommend.FallbackRecommend)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

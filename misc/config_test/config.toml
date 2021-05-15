@@ -17,21 +17,24 @@ item_ttl = 999
 
 # This section declares settings for the master node.
 [master]
-port = 8086                 # master port
-host = "127.0.0.1"          # master host
-http_port = 8088            # HTTP API port
-http_host = "127.0.0.1"     # HTTP API host
-search_jobs = 3             # number of jobs for model search
-fit_jobs = 4                # number of jobs for model fitting
-meta_timeout = 30           # cluster meta timeout (second)
+port = 8086                     # master port
+host = "127.0.0.1"              # master host
+http_port = 8088                # HTTP API port
+http_host = "127.0.0.1"         # HTTP API host
+search_jobs = 3                 # number of jobs for model search
+fit_jobs = 4                    # number of jobs for model fitting
+meta_timeout = 30               # cluster meta timeout (second)
 
 # This section declares settings for the server node.
 [server]
-default_n = 128             # default number of returned items
-api_key = "p@ssword"        # secret key for RESTful APIs (SSL required)
+default_n = 128                 # default number of returned items
+api_key = "p@ssword"            # secret key for RESTful APIs (SSL required)
 
 # This section declares settings for recommendation.
 [recommend]
-popular_window = 12         # timw window of popular items (days)
-fit_period = 66             # time period for model fitting (minutes)
-search_period = 88          # time period for model searching (minutes)
+popular_window = 12             # timw window of popular items (days)
+fit_period = 66                 # time period for model fitting (minutes)
+search_period = 88              # time period for model searching (minutes)
+search_epoch = 102              # number of epochs for model searching
+search_trials = 9               # number of trials for model searching
+fallback_recommend = "latest"   # fallback method for recommendation (popular/latest)

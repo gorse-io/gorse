@@ -438,20 +438,13 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	s.getList(cache.CollaborativeItems, userId, request, response)
 }
 
-func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
-	// authorize
-	if !s.auth(request, response) {
-		return
-	}
-	// parse arguments
-	userId := request.PathParameter("user-id")
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
-	if err != nil {
-		BadRequest(response, err)
-		return
-	}
-	writeBackFeedback := request.QueryParameter("write-back")
-	// load offline recommendation
+// Recommend items to users.
+// 1. If there are recommendations in cache, return cached recommendations.
+// 2. Otherwise, return fallback recommendation (popular/latest).
+func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
+	var err error
+
+	// 1. read recommendations in cache.
 	start := time.Now()
 	itemsChan := make(chan []string, 1)
 	errChan := make(chan error, 1)
@@ -472,8 +465,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	// load historical feedback
 	userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
 	if err != nil {
-		InternalServerError(response, err)
-		return
+		return nil, err
 	}
 	excludeSet := set.NewStringSet()
 	for _, feedback := range userFeedback {
@@ -483,8 +475,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	items := <-itemsChan
 	err = <-errChan
 	if err != nil {
-		InternalServerError(response, err)
-		return
+		return nil, err
 	}
 	results := make([]string, 0, len(items))
 	for _, itemId := range items {
@@ -492,12 +483,53 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			results = append(results, itemId)
 		}
 	}
+
+	// 2. return fallback recommendation
+	if len(results) < n {
+		var fallbacks []string
+		switch s.GorseConfig.Recommend.FallbackRecommend {
+		case "latest":
+			fallbacks, err = s.CacheStore.GetList(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
+		case "popular":
+			fallbacks, err = s.CacheStore.GetList(cache.PopularItems, "", 0, s.GorseConfig.Database.CacheSize)
+		default:
+			return nil, fmt.Errorf("unknown fallback recommendation method `%s`", s.GorseConfig.Recommend.FallbackRecommend)
+		}
+		for _, itemId := range fallbacks {
+			if !excludeSet.Has(itemId) {
+				results = append(results, itemId)
+			}
+		}
+	}
+
+	// return recommendations
 	if len(results) > n {
 		results = results[:n]
 	}
 	spent := time.Since(start)
 	base.Logger().Info("complete recommendation",
 		zap.Duration("total_time", spent))
+	return results, nil
+}
+
+func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
+	// authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// parse arguments
+	userId := request.PathParameter("user-id")
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	writeBackFeedback := request.QueryParameter("write-back")
+	results, err := s.Recommend(userId, n)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range results {
