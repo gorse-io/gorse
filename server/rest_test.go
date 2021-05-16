@@ -36,6 +36,7 @@ type mockServer struct {
 	dataStoreClient  data.Database
 	cacheStoreClient cache.Database
 	handler          *restful.Container
+	server           *RestServer
 }
 
 func newMockServer(t *testing.T) *mockServer {
@@ -63,6 +64,7 @@ func newMockServer(t *testing.T) *mockServer {
 	// create handler
 	s.handler = restful.NewContainer()
 	s.handler.Add(server.WebService)
+	s.server = server
 	return s
 }
 
@@ -480,7 +482,7 @@ func TestServer_Measurement(t *testing.T) {
 func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
-	// inset recommendation
+	// insert recommendation
 	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0",
 		[]string{"1", "2", "3", "4", "5", "6", "7", "8"})
 	assert.Nil(t, err)
@@ -522,5 +524,60 @@ func TestServer_GetRecommends(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"6", "7", "8"})).
+		End()
+}
+
+func TestServer_GetRecommends_Fallback(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// insert recommendation
+	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0",
+		[]string{"1", "2", "3", "4"})
+	assert.Nil(t, err)
+	// insert latest
+	err = s.cacheStoreClient.SetList(cache.LatestItems, "",
+		[]string{"5", "6", "7", "8"})
+	assert.Nil(t, err)
+	// insert popular
+	err = s.cacheStoreClient.SetList(cache.PopularItems, "",
+		[]string{"9", "10", "11", "12"})
+	assert.Nil(t, err)
+	// test popular fallback
+	s.server.GorseConfig.Recommend.FallbackRecommend = "popular"
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"1", "2", "3", "4", "9", "10", "11", "12"})).
+		End()
+	// test latest fallback
+	s.server.GorseConfig.Recommend.FallbackRecommend = "latest"
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"})).
+		End()
+	// test wrong fallback
+	s.server.GorseConfig.Recommend.FallbackRecommend = ""
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(t).
+		Status(http.StatusInternalServerError).
 		End()
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	_ "github.com/gorse-io/dashboard"
 	"github.com/rakyll/statik/fs"
-	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/server"
@@ -56,6 +55,12 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(Status{}))
 	// Get a user
+	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
+		Doc("Get a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Writes(User{}))
+	// Get a user feedback
 	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/{feedback-type}").To(m.getTypedFeedbackByUser).
 		Doc("Get feedback by user id with feedback type.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
@@ -194,6 +199,31 @@ type User struct {
 	LastUpdateTime string
 }
 
+func (m *Master) getUser(request *restful.Request, response *restful.Response) {
+	// get user id
+	userId := request.PathParameter("user-id")
+	// get user
+	user, err := m.DataStore.GetUser(userId)
+	if err != nil {
+		if err.Error() == data.ErrUserNotExist {
+			server.PageNotFound(response, err)
+		} else {
+			server.InternalServerError(response, err)
+		}
+		return
+	}
+	detail := User{User: user}
+	if detail.LastActiveTime, err = m.CacheStore.GetString(cache.LastActiveTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		server.InternalServerError(response, err)
+		return
+	}
+	if detail.LastUpdateTime, err = m.CacheStore.GetString(cache.LastUpdateRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Ok(response, detail)
+}
+
 func (m *Master) getUsers(request *restful.Request, response *restful.Response) {
 	// Authorize
 	cursor := request.QueryParameter("cursor")
@@ -231,53 +261,11 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		server.BadRequest(response, err)
 		return
 	}
-	// load offline recommendation
-	start := time.Now()
-	itemsChan := make(chan []string, 1)
-	errChan := make(chan error, 1)
-	go func() {
-		var collaborativeFilteringItems []string
-		collaborativeFilteringItems, err = m.CacheStore.GetList(cache.CollaborativeItems, userId, 0, m.GorseConfig.Database.CacheSize)
-		if err != nil {
-			itemsChan <- nil
-			errChan <- err
-		} else {
-			itemsChan <- collaborativeFilteringItems
-			errChan <- nil
-			if len(collaborativeFilteringItems) == 0 {
-				base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
-			}
-		}
-	}()
-	// load historical feedback
-	userFeedback, err := m.DataStore.GetUserFeedback(userId, nil)
+	results, err := m.Recommend(userId, n)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
 	}
-	excludeSet := set.NewStringSet()
-	for _, feedback := range userFeedback {
-		excludeSet.Add(feedback.ItemId)
-	}
-	// remove historical items
-	items := <-itemsChan
-	err = <-errChan
-	if err != nil {
-		server.InternalServerError(response, err)
-		return
-	}
-	results := make([]string, 0, len(items))
-	for _, itemId := range items {
-		if !excludeSet.Has(itemId) {
-			results = append(results, itemId)
-		}
-	}
-	if len(results) > n {
-		results = results[:n]
-	}
-	spent := time.Since(start)
-	base.Logger().Info("complete recommendation",
-		zap.Duration("total_time", spent))
 	// Send result
 	details := make([]data.Item, len(results))
 	for i := range results {
@@ -372,7 +360,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		response.Header().Set("Content-Type", "text/csv")
 		response.Header().Set("Content-Disposition", fmt.Sprint("attachment;filename=items.csv"))
 		// write header
-		if _, err = response.Write([]byte("item_id,time_stamp,labels,description\n")); err != nil {
+		if _, err = response.Write([]byte("item_id,time_stamp,labels,description\r\n")); err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return
 		}
@@ -387,7 +375,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 				return
 			}
 			for _, item := range items {
-				if _, err = response.Write([]byte(fmt.Sprintf("%s,%v,%s,%s\n",
+				if _, err = response.Write([]byte(fmt.Sprintf("%s,%v,%s,%s\r\n",
 					base.Escape(item.ItemId), item.Timestamp, base.Escape(strings.Join(item.Labels, "|")), base.Escape(item.Comment)))); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
@@ -400,6 +388,11 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 	case http.MethodPost:
 		hasHeader := formValue(request, "has-header", "true") == "true"
 		sep := formValue(request, "sep", ",")
+		// field separator must be a single character
+		if len(sep) != 1 {
+			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
+			return
+		}
 		labelSep := formValue(request, "label-sep", "|")
 		fmtString := formValue(request, "format", "itlc")
 		file, _, err := request.FormFile("file")
@@ -413,47 +406,57 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 }
 
 func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
-	var err error
-	scanner := bufio.NewScanner(file)
 	lineCount := 0
-	for scanner.Scan() {
-		line := scanner.Text()
+	err := base.ReadLines(bufio.NewScanner(file), sep[0], func(lineNumber int, splits []string) bool {
+		var err error
 		// skip header
 		if hasHeader {
 			hasHeader = false
-			continue
+			return true
 		}
-		splits := strings.Split(line, sep)
-		splits, err = format(fmtString, "itlc", splits, lineCount)
+		splits, err = format(fmtString, "itlc", splits, lineNumber)
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
-			return
+			return false
 		}
 		// 1. item id
+		if err = base.ValidateId(splits[0]); err != nil {
+			server.BadRequest(restful.NewResponse(response),
+				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+			return false
+		}
 		item := data.Item{ItemId: splits[0]}
 		// 2. timestamp
 		if splits[1] != "" {
 			item.Timestamp, err = dateparse.ParseAny(splits[1])
 			if err != nil {
 				server.BadRequest(restful.NewResponse(response),
-					fmt.Errorf("failed to parse datetime `%v` at line %v", splits[1], lineCount))
-				return
+					fmt.Errorf("failed to parse datetime `%v` at line %v", splits[1], lineNumber))
+				return false
 			}
 		}
 		// 3. labels
 		if splits[2] != "" {
 			item.Labels = strings.Split(splits[2], labelSep)
+			for _, label := range item.Labels {
+				if err = base.ValidateLabel(label); err != nil {
+					server.BadRequest(restful.NewResponse(response),
+						fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+					return false
+				}
+			}
 		}
 		// 4. comment
 		item.Comment = splits[3]
 		err = m.DataStore.InsertItem(item)
 		if err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
-			return
+			return false
 		}
 		lineCount++
-	}
-	if err = scanner.Err(); err != nil {
+		return true
+	})
+	if err != nil {
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
@@ -496,7 +499,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		response.Header().Set("Content-Type", "text/csv")
 		response.Header().Set("Content-Disposition", fmt.Sprint("attachment;filename=feedback.csv"))
 		// write header
-		if _, err = response.Write([]byte("feedback_type,user_id,item_id,time_stamp\n")); err != nil {
+		if _, err = response.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n")); err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return
 		}
@@ -511,7 +514,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 				return
 			}
 			for _, v := range feedback {
-				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s,%s,%v\n",
+				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s,%s,%v\r\n",
 					base.Escape(v.FeedbackType), base.Escape(v.UserId), base.Escape(v.ItemId), v.Timestamp))); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
@@ -524,6 +527,11 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 	case http.MethodPost:
 		hasHeader := formValue(request, "has-header", "true") == "true"
 		sep := formValue(request, "sep", ",")
+		// field separator must be a single character
+		if len(sep) != 1 {
+			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
+			return
+		}
 		fmtString := formValue(request, "format", "fuit")
 		// import items
 		file, _, err := request.FormFile("file")
@@ -556,15 +564,20 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 		feedback := data.Feedback{}
 		// 1. feedback type
 		feedback.FeedbackType = splits[0]
-		// 2. user id
 		if err = base.ValidateId(splits[0]); err != nil {
+			server.BadRequest(restful.NewResponse(response),
+				fmt.Errorf("invalid feedback type `%v` at line %d (%s)", splits[0], lineCount, err.Error()))
+			return
+		}
+		// 2. user id
+		if err = base.ValidateId(splits[1]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
 				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[1], lineCount, err.Error()))
 			return
 		}
 		feedback.UserId = splits[1]
 		// 3. item id
-		if err = base.ValidateId(splits[1]); err != nil {
+		if err = base.ValidateId(splits[2]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
 				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[2], lineCount, err.Error()))
 			return

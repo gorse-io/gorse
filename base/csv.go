@@ -15,6 +15,7 @@
 package base
 
 import (
+	"bufio"
 	"fmt"
 	"strings"
 )
@@ -46,7 +47,10 @@ func ValidateLabel(text string) error {
 // Escape text for csv.
 func Escape(text string) string {
 	// check if need escape
-	if !strings.Contains(text, ",") && !strings.Contains(text, "\"") {
+	if !strings.Contains(text, ",") &&
+		!strings.Contains(text, "\"") &&
+		!strings.Contains(text, "\n") &&
+		!strings.Contains(text, "\r") {
 		return text
 	}
 	// start to encode
@@ -63,35 +67,53 @@ func Escape(text string) string {
 	return builder.String()
 }
 
-// Split fields for csv.
-func Split(text string) []string {
-	fields := make([]string, 0)
-	builder := strings.Builder{}
-	quoted := false
-	for i := 0; i < len(text); i++ {
-		if text[i] == ',' && !quoted {
-			// end of field
-			fields = append(fields, builder.String())
-			builder.Reset()
-		} else if text[i] == '"' {
-			if quoted {
-				if i+1 >= len(text) || text[i+1] != '"' {
-					// end of quoted
-					quoted = false
+// ReadLines parse fields of each line for csv file.
+func ReadLines(sc *bufio.Scanner, sep uint8, handler func(int, []string) bool) error {
+	lineCount := 0               // line number of current position
+	fields := make([]string, 0)  // fields for current line
+	builder := strings.Builder{} // string builder for current field
+	quoted := false              // whether current position in quote
+	for sc.Scan() {
+		// read line
+		line := sc.Text()
+		// start of line
+		if quoted {
+			builder.WriteString("\r\n")
+		}
+		// parse line
+		for i := 0; i < len(line); i++ {
+			if line[i] == sep && !quoted {
+				// end of field
+				fields = append(fields, builder.String())
+				builder.Reset()
+			} else if line[i] == '"' {
+				if quoted {
+					if i+1 >= len(line) || line[i+1] != '"' {
+						// end of quoted
+						quoted = false
+					} else {
+						i++
+						builder.WriteRune('"')
+					}
 				} else {
-					i++
-					builder.WriteRune('"')
+					// start of quoted
+					quoted = true
 				}
 			} else {
-				// start of quoted
-				quoted = true
+				builder.WriteRune(rune(line[i]))
 			}
-		} else {
-			builder.WriteRune(rune(text[i]))
 		}
+		// end of line
+		if !quoted {
+			fields = append(fields, builder.String())
+			builder.Reset()
+			if !handler(lineCount, fields) {
+				return nil
+			}
+			fields = []string{}
+		}
+		// increase line count
+		lineCount++
 	}
-	// end of line
-	fields = append(fields, builder.String())
-	builder.Reset()
-	return fields
+	return sc.Err()
 }

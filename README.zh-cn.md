@@ -18,10 +18,11 @@
 - 提供RESTful接口，用于数据的增删改查和推荐结果的获取。
 - 提供CLI工具，用于数据导入导出、模型调参、集群状态检查。
 
-## 使用指南
+## 快速开始
 
 - [手动运行Gorse](https://github.com/zhenghaoz/gorse/tree/master/cmd)
 - [借助Docker Compose运行Gorse](https://github.com/zhenghaoz/gorse/tree/master/docker)
+- [使用Gorse推荐优秀GitHub仓库](https://github.com/zhenghaoz/gitrec)
 
 ## [推荐原理](https://gorse.io/zh/docs/ch01-01-principle.html)
 

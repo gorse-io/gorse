@@ -16,6 +16,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/araddon/dateparse"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"net/http"
@@ -437,20 +438,13 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	s.getList(cache.CollaborativeItems, userId, request, response)
 }
 
-func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
-	// authorize
-	if !s.auth(request, response) {
-		return
-	}
-	// parse arguments
-	userId := request.PathParameter("user-id")
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
-	if err != nil {
-		BadRequest(response, err)
-		return
-	}
-	writeBackFeedback := request.QueryParameter("write-back")
-	// load offline recommendation
+// Recommend items to users.
+// 1. If there are recommendations in cache, return cached recommendations.
+// 2. Otherwise, return fallback recommendation (popular/latest).
+func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
+	var err error
+
+	// 1. read recommendations in cache.
 	start := time.Now()
 	itemsChan := make(chan []string, 1)
 	errChan := make(chan error, 1)
@@ -471,8 +465,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	// load historical feedback
 	userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
 	if err != nil {
-		InternalServerError(response, err)
-		return
+		return nil, err
 	}
 	excludeSet := set.NewStringSet()
 	for _, feedback := range userFeedback {
@@ -482,8 +475,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	items := <-itemsChan
 	err = <-errChan
 	if err != nil {
-		InternalServerError(response, err)
-		return
+		return nil, err
 	}
 	results := make([]string, 0, len(items))
 	for _, itemId := range items {
@@ -491,12 +483,53 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			results = append(results, itemId)
 		}
 	}
+
+	// 2. return fallback recommendation
+	if len(results) < n {
+		var fallbacks []string
+		switch s.GorseConfig.Recommend.FallbackRecommend {
+		case "latest":
+			fallbacks, err = s.CacheStore.GetList(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
+		case "popular":
+			fallbacks, err = s.CacheStore.GetList(cache.PopularItems, "", 0, s.GorseConfig.Database.CacheSize)
+		default:
+			return nil, fmt.Errorf("unknown fallback recommendation method `%s`", s.GorseConfig.Recommend.FallbackRecommend)
+		}
+		for _, itemId := range fallbacks {
+			if !excludeSet.Has(itemId) {
+				results = append(results, itemId)
+			}
+		}
+	}
+
+	// return recommendations
 	if len(results) > n {
 		results = results[:n]
 	}
 	spent := time.Since(start)
 	base.Logger().Info("complete recommendation",
 		zap.Duration("total_time", spent))
+	return results, nil
+}
+
+func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
+	// authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// parse arguments
+	userId := request.PathParameter("user-id")
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	writeBackFeedback := request.QueryParameter("write-back")
+	results, err := s.Recommend(userId, n)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range results {
@@ -654,6 +687,14 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 	Ok(response, feedback)
 }
 
+// Item is the data structure for the item but stores the timestamp using string.
+type Item struct {
+	ItemId    string
+	Timestamp string
+	Labels    []string
+	Comment   string
+}
+
 // putItems puts items into the database.
 func (s *RestServer) insertItems(request *restful.Request, response *restful.Response) {
 	// Authorize
@@ -661,7 +702,7 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 		return
 	}
 	// Add ratings
-	items := make([]data.Item, 0)
+	items := make([]Item, 0)
 	if err := request.ReadEntity(&items); err != nil {
 		BadRequest(response, err)
 		return
@@ -669,7 +710,13 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 	// Insert items
 	var count int
 	for _, item := range items {
-		err := s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: item.Timestamp, Labels: item.Labels})
+		// parse datetime
+		timestamp, err := dateparse.ParseAny(item.Timestamp)
+		if err != nil {
+			BadRequest(response, err)
+			return
+		}
+		err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels})
 		count++
 		if err != nil {
 			InternalServerError(response, err)
@@ -680,17 +727,23 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 }
 
 func (s *RestServer) insertItem(request *restful.Request, response *restful.Response) {
-	// Authorize
+	// authorize
 	if !s.auth(request, response) {
 		return
 	}
-	item := new(data.Item)
+	item := new(Item)
 	var err error
 	if err = request.ReadEntity(item); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	if err = s.DataStore.InsertItem(*item); err != nil {
+	// parse datetime
+	timestamp, err := dateparse.ParseAny(item.Timestamp)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	if err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -754,32 +807,46 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 	Ok(response, Success{RowAffected: 1})
 }
 
+// Feedback is the data structure for the feedback but stores the timestamp using string.
+type Feedback struct {
+	data.FeedbackKey
+	Timestamp string
+	Comment   string
+}
+
 // putFeedback puts new ratings into the database.
 func (s *RestServer) insertFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
+	// authorize
 	if !s.auth(request, response) {
 		return
 	}
-	// Add ratings
-	ratings := new([]data.Feedback)
-	if err := request.ReadEntity(ratings); err != nil {
+	// add ratings
+	feedbackLiterTime := new([]Feedback)
+	if err := request.ReadEntity(feedbackLiterTime); err != nil {
 		BadRequest(response, err)
 		return
 	}
+	// parse datetime
 	var err error
-	// Insert feedback
-	var count int
+	feedback := make([]data.Feedback, len(*feedbackLiterTime))
 	users := set.NewStringSet()
-	for _, feedback := range *ratings {
-		users.Add(feedback.UserId)
-		err = s.DataStore.InsertFeedback(feedback,
-			s.GorseConfig.Database.AutoInsertUser,
-			s.GorseConfig.Database.AutoInsertItem)
-		count++
+	for i := range feedback {
+		users.Add((*feedbackLiterTime)[i].UserId)
+		feedback[i].FeedbackKey = (*feedbackLiterTime)[i].FeedbackKey
+		feedback[i].Comment = (*feedbackLiterTime)[i].Comment
+		feedback[i].Timestamp, err = dateparse.ParseAny((*feedbackLiterTime)[i].Timestamp)
 		if err != nil {
-			InternalServerError(response, err)
+			BadRequest(response, err)
 			return
 		}
+	}
+	// Insert feedback
+	err = s.DataStore.BatchInsertFeedback(feedback,
+		s.GorseConfig.Database.AutoInsertUser,
+		s.GorseConfig.Database.AutoInsertItem)
+	if err != nil {
+		InternalServerError(response, err)
+		return
 	}
 	for _, userId := range users.List() {
 		err = s.CacheStore.SetString(cache.LastActiveTime, userId, base.Now())
@@ -788,7 +855,7 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 			return
 		}
 	}
-	Ok(response, Success{RowAffected: count})
+	Ok(response, Success{RowAffected: len(feedback)})
 }
 
 type FeedbackIterator struct {

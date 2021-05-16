@@ -90,12 +90,13 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 }
 
 type RecommendConfig struct {
-	PopularWindow      int `toml:"popular_window"`
-	FitPeriod          int `toml:"fit_period"`
-	MaxRecommendPeriod int `toml:"max_recommend_period"`
-	SearchPeriod       int `toml:"search_period"`
-	SearchEpoch        int `toml:"search_epoch"`
-	SearchTrials       int `toml:"search_trials"`
+	PopularWindow      int    `toml:"popular_window"`
+	FitPeriod          int    `toml:"fit_period"`
+	MaxRecommendPeriod int    `toml:"max_recommend_period"`
+	SearchPeriod       int    `toml:"search_period"`
+	SearchEpoch        int    `toml:"search_epoch"`
+	SearchTrials       int    `toml:"search_trials"`
+	FallbackRecommend  string `toml:"fallback_recommend"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -108,6 +109,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			SearchPeriod:       60,
 			SearchEpoch:        100,
 			SearchTrials:       10,
+			FallbackRecommend:  "latest",
 		}
 	}
 	return config
@@ -193,6 +195,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "search_trials") {
 		config.Recommend.SearchTrials = defaultRecommendConfig.SearchTrials
+	}
+	if !meta.IsDefined("recommend", "fallback_recommend") {
+		config.Recommend.FallbackRecommend = defaultRecommendConfig.FallbackRecommend
 	}
 }
 
