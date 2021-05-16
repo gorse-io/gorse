@@ -20,4 +20,6 @@ FROM scratch
 
 COPY --from=0 /usr/bin/gorse-worker /usr/bin/gorse-worker
 
+ENV USER root
+
 ENTRYPOINT ["/usr/bin/gorse-worker"]
