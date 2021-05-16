@@ -17,6 +17,7 @@ package server
 import (
 	"encoding/gob"
 	"os"
+	"path/filepath"
 )
 
 type LocalCache struct {
@@ -31,6 +32,14 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		if os.IsNotExist(err) {
 			return state, nil
 		} else {
+			return nil, err
+		}
+	}
+	// create parent folder if not exists
+	parent := filepath.Base(path)
+	if _, err := os.Stat(parent); os.IsNotExist(err) {
+		err = os.MkdirAll(parent, os.ModePerm)
+		if err != nil {
 			return nil, err
 		}
 	}
