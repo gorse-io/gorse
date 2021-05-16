@@ -20,4 +20,6 @@ FROM scratch
 
 COPY --from=0 /usr/bin/gorse-master /usr/bin/gorse-master
 
+ENV USER root
+
 ENTRYPOINT ["/usr/bin/gorse-master", "-c", "/etc/config.toml"]

@@ -18,6 +18,8 @@ RUN cd gorse/cmd/gorse-server && \
 ############################
 FROM scratch
 
+ENV USER root
+
 COPY --from=0 /usr/bin/gorse-server /usr/bin/gorse-server
 
 ENTRYPOINT ["/usr/bin/gorse-server"]
