@@ -27,14 +27,6 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 			return nil, err
 		}
 	}
-	// create parent folder if not exists
-	parent := filepath.Base(path)
-	if _, err := os.Stat(parent); os.IsNotExist(err) {
-		err = os.MkdirAll(parent, os.ModePerm)
-		if err != nil {
-			return nil, err
-		}
-	}
 	// open file
 	f, err := os.Open(path)
 	if err != nil {
@@ -76,6 +68,14 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 }
 
 func (c *LocalCache) WriteLocalCache() error {
+	// create parent folder if not exists
+	parent := filepath.Dir(c.path)
+	if _, err := os.Stat(parent); os.IsNotExist(err) {
+		err = os.MkdirAll(parent, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
 	// create file
 	f, err := os.Create(c.path)
 	if err != nil {
