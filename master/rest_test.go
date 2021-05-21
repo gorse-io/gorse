@@ -362,13 +362,19 @@ func TestServer_List(t *testing.T) {
 	for _, operator := range operators {
 		t.Logf("test RESTful API: %v", operator.Get)
 		// Put itemIds
-		itemIds := []string{"0", "1", "2", "3", "4"}
+		itemIds := []cache.ScoredItem{
+			{"0", 100},
+			{"1", 99},
+			{"2", 98},
+			{"3", 97},
+			{"4", 96},
+		}
 		err := s.cacheStoreClient.SetList(operator.Prefix, operator.Label, itemIds)
 		assert.Nil(t, err)
 		items := make([]data.Item, 0)
-		for _, itemId := range itemIds {
-			items = append(items, data.Item{ItemId: itemId})
-			err = s.dataStoreClient.InsertItem(data.Item{ItemId: itemId})
+		for _, item := range itemIds {
+			items = append(items, data.Item{ItemId: item.ItemId})
+			err = s.dataStoreClient.InsertItem(data.Item{ItemId: item.ItemId})
 			assert.Nil(t, err)
 		}
 		apitest.New().
@@ -412,7 +418,16 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// inset recommendation
-	itemIds := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
+	itemIds := []cache.ScoredItem{
+		{"1", 99},
+		{"2", 98},
+		{"3", 97},
+		{"4", 96},
+		{"5", 95},
+		{"6", 94},
+		{"7", 93},
+		{"8", 92},
+	}
 	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0", itemIds)
 	assert.Nil(t, err)
 	// insert feedback
@@ -421,8 +436,8 @@ func TestServer_GetRecommends(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}, true, true)
 	// insert items
-	for _, itemId := range itemIds {
-		err = s.dataStoreClient.InsertItem(data.Item{ItemId: itemId})
+	for _, item := range itemIds {
+		err = s.dataStoreClient.InsertItem(data.Item{ItemId: item.ItemId})
 		assert.Nil(t, err)
 	}
 	apitest.New().

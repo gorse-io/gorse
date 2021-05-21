@@ -11,10 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package cache
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 
 	"github.com/go-redis/redis/v8"
@@ -28,15 +30,19 @@ func (redis *Redis) Close() error {
 	return redis.client.Close()
 }
 
-func (redis *Redis) SetList(prefix, name string, items []string) error {
+func (redis *Redis) SetList(prefix, name string, items []ScoredItem) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	err := redis.client.Del(ctx, key).Err()
 	if err != nil {
 		return err
 	}
-	for _, itemId := range items {
-		err = redis.client.RPush(ctx, key, itemId).Err()
+	for _, item := range items {
+		data, err := json.Marshal(item)
+		if err != nil {
+			return err
+		}
+		err = redis.client.RPush(ctx, key, data).Err()
 		if err != nil {
 			return err
 		}
@@ -44,17 +50,22 @@ func (redis *Redis) SetList(prefix, name string, items []string) error {
 	return nil
 }
 
-func (redis *Redis) GetList(prefix, name string, begin, end int) ([]string, error) {
+func (redis *Redis) GetList(prefix, name string, begin, end int) ([]ScoredItem, error) {
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	res := make([]string, 0)
+	res := make([]ScoredItem, 0)
 	data, err := redis.client.LRange(ctx, key, int64(begin), int64(end)).Result()
-
 	if err != nil {
 		return nil, err
 	}
-
-	res = append(res, data...)
+	for _, s := range data {
+		var item ScoredItem
+		err = json.Unmarshal([]byte(s), &item)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, item)
+	}
 	return res, err
 }
 

@@ -449,13 +449,13 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	itemsChan := make(chan []string, 1)
 	errChan := make(chan error, 1)
 	go func() {
-		var collaborativeFilteringItems []string
+		var collaborativeFilteringItems []cache.ScoredItem
 		collaborativeFilteringItems, err = s.CacheStore.GetList(cache.CollaborativeItems, userId, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			itemsChan <- nil
 			errChan <- err
 		} else {
-			itemsChan <- collaborativeFilteringItems
+			itemsChan <- cache.RemoveScores(collaborativeFilteringItems)
 			errChan <- nil
 			if len(collaborativeFilteringItems) == 0 {
 				base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
@@ -486,7 +486,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 
 	// 2. return fallback recommendation
 	if len(results) < n {
-		var fallbacks []string
+		var fallbacks []cache.ScoredItem
 		switch s.GorseConfig.Recommend.FallbackRecommend {
 		case "latest":
 			fallbacks, err = s.CacheStore.GetList(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
@@ -495,9 +495,9 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		default:
 			return nil, fmt.Errorf("unknown fallback recommendation method `%s`", s.GorseConfig.Recommend.FallbackRecommend)
 		}
-		for _, itemId := range fallbacks {
-			if !excludeSet.Has(itemId) {
-				results = append(results, itemId)
+		for _, item := range fallbacks {
+			if !excludeSet.Has(item.ItemId) {
+				results = append(results, item.ItemId)
 			}
 		}
 	}

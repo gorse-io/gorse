@@ -330,7 +330,7 @@ func (m *Master) getList(prefix string, name string, request *restful.Request, r
 	// Send result
 	details := make([]data.Item, len(items))
 	for i := range items {
-		details[i], err = m.DataStore.GetItem(items[i])
+		details[i], err = m.DataStore.GetItem(items[i].ItemId)
 		if err != nil {
 			server.InternalServerError(response, err)
 			return

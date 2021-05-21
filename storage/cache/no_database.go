@@ -19,11 +19,11 @@ func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) SetList(prefix, name string, items []string) error {
+func (NoDatabase) SetList(prefix, name string, items []ScoredItem) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) GetList(prefix, name string, begin int, end int) ([]string, error) {
+func (NoDatabase) GetList(prefix, name string, begin int, end int) ([]ScoredItem, error) {
 	return nil, ErrNoDatabase
 }
 

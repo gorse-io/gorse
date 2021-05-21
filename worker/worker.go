@@ -375,8 +375,8 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 				}
 			}
 		}
-		elems, _ := recItems.PopAll()
-		if err = w.cacheStore.SetList(cache.CollaborativeItems, userId, elems); err != nil {
+		elems, scores := recItems.PopAll()
+		if err = w.cacheStore.SetList(cache.CollaborativeItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation", zap.Error(err))
 			return err
 		}

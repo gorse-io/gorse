@@ -46,10 +46,35 @@ const (
 var ErrObjectNotExist = fmt.Errorf("object not exists")
 var ErrNoDatabase = fmt.Errorf("no database specified")
 
+type ScoredItem struct {
+	ItemId string
+	Score  float32
+}
+
+func CreateScoredItems(itemIds []string, scores []float32) []ScoredItem {
+	if len(itemIds) != len(scores) {
+		panic("the length of itemIds and scores should be equal")
+	}
+	items := make([]ScoredItem, len(itemIds))
+	for i := range items {
+		items[i].ItemId = itemIds[i]
+		items[i].Score = scores[i]
+	}
+	return items
+}
+
+func RemoveScores(items []ScoredItem) []string {
+	itemIds := make([]string, len(items))
+	for i := range itemIds {
+		itemIds[i] = items[i].ItemId
+	}
+	return itemIds
+}
+
 type Database interface {
 	Close() error
-	SetList(prefix, name string, items []string) error
-	GetList(prefix, name string, begin int, end int) ([]string, error)
+	SetList(prefix, name string, items []ScoredItem) error
+	GetList(prefix, name string, begin int, end int) ([]ScoredItem, error)
 	GetString(prefix, name string) (string, error)
 	SetString(prefix, name string, val string) error
 	GetInt(prefix, name string) (int, error)
