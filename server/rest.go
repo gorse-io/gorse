@@ -744,7 +744,7 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 			BadRequest(response, err)
 			return
 		}
-		err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels})
+		err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment})
 		count++
 		if err != nil {
 			InternalServerError(response, err)
@@ -771,7 +771,7 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
-	if err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels}); err != nil {
+	if err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}); err != nil {
 		InternalServerError(response, err)
 		return
 	}

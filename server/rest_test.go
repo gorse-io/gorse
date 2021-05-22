@@ -156,26 +156,31 @@ func TestServer_Items(t *testing.T) {
 			ItemId:    "0",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a"},
+			Comment:   "comment_0",
 		},
 		{
 			ItemId:    "2",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a"},
+			Comment:   "comment_2",
 		},
 		{
 			ItemId:    "4",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a", "b"},
+			Comment:   "comment_4",
 		},
 		{
 			ItemId:    "6",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"b"},
+			Comment:   "comment_6",
 		},
 		{
 			ItemId:    "8",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"b"},
+			Comment:   "comment_8",
 		},
 	}
 	// insert items
