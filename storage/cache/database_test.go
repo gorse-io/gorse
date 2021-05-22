@@ -50,7 +50,13 @@ func testMeta(t *testing.T, db Database) {
 
 func testList(t *testing.T, db Database) {
 	// Put items
-	items := []string{"0", "1", "2", "3", "4"}
+	items := []ScoredItem{
+		{"0", 0},
+		{"1", 1.1},
+		{"2", 1.2},
+		{"3", 1.3},
+		{"4", 1.4},
+	}
 	err := db.SetList("list", "0", items)
 	assert.Nil(t, err)
 	// Get items
@@ -70,7 +76,13 @@ func testList(t *testing.T, db Database) {
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(noItems))
 	// test overwrite
-	overwriteItems := []string{"10", "11", "12", "13", "14"}
+	overwriteItems := []ScoredItem{
+		{"10", 10.0},
+		{"11", 10.1},
+		{"12", 10.2},
+		{"13", 10.3},
+		{"14", 10.4},
+	}
 	err = db.SetList("list", "0", overwriteItems)
 	assert.Nil(t, err)
 	totalItems, err = db.GetList("list", "0", 0, -1)
