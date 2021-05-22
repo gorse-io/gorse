@@ -542,7 +542,63 @@ func TestServer_GetRecommends(t *testing.T) {
 		End()
 }
 
-func TestServer_GetRecommends_Fallback(t *testing.T) {
+func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// insert recommendation
+	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0",
+		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
+	assert.Nil(t, err)
+	// insert feedback
+	err = s.dataStoreClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
+	}, true, true)
+	// insert similar items
+	err = s.cacheStoreClient.SetList(cache.SimilarItems, "1", []cache.ScoredItem{
+		{"2", 100000},
+		{"9", 1},
+	})
+	assert.Nil(t, err)
+	err = s.cacheStoreClient.SetList(cache.SimilarItems, "2", []cache.ScoredItem{
+		{"3", 100000},
+		{"8", 1},
+		{"9", 1},
+	})
+	assert.Nil(t, err)
+	err = s.cacheStoreClient.SetList(cache.SimilarItems, "3", []cache.ScoredItem{
+		{"4", 100000},
+		{"7", 1},
+		{"8", 1},
+		{"9", 1},
+	})
+	assert.Nil(t, err)
+	err = s.cacheStoreClient.SetList(cache.SimilarItems, "4", []cache.ScoredItem{
+		{"1", 100000},
+		{"6", 1},
+		{"7", 1},
+		{"8", 1},
+		{"9", 1},
+	})
+	assert.Nil(t, err)
+	// test fallback
+	s.server.GorseConfig.Recommend.FallbackRecommend = "popular"
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"9", "8", "7"})).
+		End()
+}
+
+func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation

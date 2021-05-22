@@ -440,7 +440,8 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 
 // Recommend items to users.
 // 1. If there are recommendations in cache, return cached recommendations.
-// 2. Otherwise, return fallback recommendation (popular/latest).
+// 2. If there are historical interactions of the users, return similar items.
+// 3. Otherwise, return fallback recommendation (popular/latest).
 func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	var err error
 
@@ -484,7 +485,34 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		}
 	}
 
-	// 2. return fallback recommendation
+	// 2. return similar items
+	if len(results) < n && len(userFeedback) > 0 {
+		// collect candidates
+		candidates := make(map[string]float32)
+		for _, feedback := range userFeedback {
+			// load similar items
+			similarItems, err := s.CacheStore.GetList(cache.SimilarItems, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
+			if err != nil {
+				return nil, err
+			}
+			// add unseen items
+			for _, item := range similarItems {
+				if !excludeSet.Has(item.ItemId) {
+					candidates[item.ItemId] += item.Score
+				}
+			}
+		}
+		// collect top k
+		k := n - len(results)
+		filter := base.NewTopKStringFilter(k)
+		for id, score := range candidates {
+			filter.Push(id, score)
+		}
+		ids, _ := filter.PopAll()
+		results = append(results, ids...)
+	}
+
+	// 3. return fallback recommendation
 	if len(results) < n {
 		var fallbacks []cache.ScoredItem
 		switch s.GorseConfig.Recommend.FallbackRecommend {
