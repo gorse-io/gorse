@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"go.uber.org/zap"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -232,6 +233,7 @@ func (w *Worker) ServeMetrics() {
 }
 
 func (w *Worker) Serve() {
+	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
 	state, err := LoadLocalCache(filepath.Join(os.TempDir(), "gorse-worker"))
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -73,6 +74,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 }
 
 func (s *Server) Serve() {
+	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
 	state, err := LoadLocalCache(filepath.Join(os.TempDir(), "gorse-server"))
 	if err != nil {
