@@ -12,6 +12,7 @@ The best practice to manage Gorse nodes is using orchestration tools such as Doc
 
 There is an example [docker-compose.yml](https://github.com/zhenghaoz/gorse/blob/master/docker/docker-compose.yml) consists of a master node, a server node and a worker node, a Redis instance, and a MySQL instance.
 
+- Create a configuration file [config.toml](https://github.com/zhenghaoz/gorse/blob/master/docker/config.toml) (Docker Compose version) in the working directory.
 - Setup the Gorse cluster using Docker Compose.
 
 ```bash

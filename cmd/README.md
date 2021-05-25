@@ -32,7 +32,7 @@ Built binaries locate at `$(go env GOPATH)/bin`.
 
 - Configuration
 
-Set `cache_store` and `data_store` in the configuration file [config.toml](https://github.com/zhenghaoz/gorse/blob/master/config/config.toml.template).
+Create a configuration file [config.toml](https://github.com/zhenghaoz/gorse/blob/master/config/config.toml.template) in the working directory. Set `cache_store` and `data_store` in the configuration file [config.toml](https://github.com/zhenghaoz/gorse/blob/master/config/config.toml.template). 
 
 ```toml
 # This section declares settings for the database.
