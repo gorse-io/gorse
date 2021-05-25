@@ -444,6 +444,7 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 // 3. Otherwise, return fallback recommendation (popular/latest).
 func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	var err error
+	var knnTime, fallbackTime, removeReadTime time.Duration
 
 	// 1. read recommendations in cache.
 	start := time.Now()
@@ -464,6 +465,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		}
 	}()
 	// load historical feedback
+	loadReadStart := time.Now()
 	userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
 	if err != nil {
 		return nil, err
@@ -472,6 +474,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	for _, feedback := range userFeedback {
 		excludeSet.Add(feedback.ItemId)
 	}
+	loadReadTime := time.Since(loadReadStart)
 	// remove historical items
 	items := <-itemsChan
 	err = <-errChan
@@ -479,14 +482,17 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		return nil, err
 	}
 	results := make([]string, 0, len(items))
+	removeReadStart := time.Now()
 	for _, itemId := range items {
 		if !excludeSet.Has(itemId) {
 			results = append(results, itemId)
 		}
 	}
+	removeReadTime += time.Since(removeReadStart)
 
 	// 2. return similar items
 	if len(results) < n && len(userFeedback) > 0 {
+		knnStart := time.Now()
 		// collect candidates
 		candidates := make(map[string]float32)
 		for _, feedback := range userFeedback {
@@ -496,11 +502,13 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 				return nil, err
 			}
 			// add unseen items
+			removeReadStart = time.Now()
 			for _, item := range similarItems {
 				if !excludeSet.Has(item.ItemId) {
 					candidates[item.ItemId] += item.Score
 				}
 			}
+			removeReadTime += time.Since(removeReadStart)
 		}
 		// collect top k
 		k := n - len(results)
@@ -510,10 +518,12 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		}
 		ids, _ := filter.PopAll()
 		results = append(results, ids...)
+		knnTime = time.Since(knnStart)
 	}
 
 	// 3. return fallback recommendation
 	if len(results) < n {
+		fallbackStart := time.Now()
 		var fallbacks []cache.ScoredItem
 		switch s.GorseConfig.Recommend.FallbackRecommend {
 		case "latest":
@@ -523,11 +533,14 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		default:
 			return nil, fmt.Errorf("unknown fallback recommendation method `%s`", s.GorseConfig.Recommend.FallbackRecommend)
 		}
+		removeReadStart = time.Now()
 		for _, item := range fallbacks {
 			if !excludeSet.Has(item.ItemId) {
 				results = append(results, item.ItemId)
 			}
 		}
+		removeReadTime += time.Since(removeReadStart)
+		fallbackTime = time.Since(fallbackStart)
 	}
 
 	// return recommendations
@@ -536,6 +549,10 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	}
 	spent := time.Since(start)
 	base.Logger().Info("complete recommendation",
+		zap.Duration("load_read_time", loadReadTime),
+		zap.Duration("remove_read_time", removeReadTime),
+		zap.Duration("knn_time", knnTime),
+		zap.Duration("fallback_time", fallbackTime),
 		zap.Duration("total_time", spent))
 	return results, nil
 }
