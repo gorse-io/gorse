@@ -268,7 +268,8 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 		var user User
 		var labels *string
 		var subscribe *string
-		if err := result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
+		var comment *string
+		if err := result.Scan(&user.UserId, &labels, &subscribe, &comment); err != nil {
 			return User{}, err
 		}
 		if labels != nil {
@@ -280,6 +281,9 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 			if err := json.Unmarshal([]byte(*subscribe), &user.Subscribe); err != nil {
 				return User{}, err
 			}
+		}
+		if comment != nil {
+			user.Comment = *comment
 		}
 		return user, nil
 	}
@@ -298,7 +302,8 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 		var user User
 		var labels *string
 		var subscribe *string
-		if err := result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
+		var comment *string
+		if err := result.Scan(&user.UserId, &labels, &subscribe, &comment); err != nil {
 			return "", nil, err
 		}
 		if labels != nil {
@@ -310,6 +315,9 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 			if err := json.Unmarshal([]byte(*subscribe), &user.Subscribe); err != nil {
 				return "", nil, err
 			}
+		}
+		if comment != nil {
+			user.Comment = *comment
 		}
 		users = append(users, user)
 	}
