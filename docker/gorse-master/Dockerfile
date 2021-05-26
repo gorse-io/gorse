@@ -5,8 +5,9 @@ FROM golang:1.16
 
 ENV GOPROXY=https://goproxy.io,direct
 
-RUN git clone --depth 1 https://github.com/zhenghaoz/gorse.git && \
-    cd gorse && \
+COPY . gorse
+
+RUN cd gorse && \
     go get -v -t -d ./...
 
 RUN cd gorse/cmd/gorse-master && \
