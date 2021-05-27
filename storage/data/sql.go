@@ -33,7 +33,7 @@ func (d *SQLDatabase) Init() error {
 	if _, err := d.db.Exec("CREATE TABLE IF NOT EXISTS items (" +
 		"item_id varchar(256) NOT NULL," +
 		"time_stamp timestamp NOT NULL," +
-		"labels json," +
+		"labels json NOT NULL," +
 		"comment TEXT NOT NULL," +
 		"PRIMARY KEY(item_id)" +
 		")"); err != nil {
@@ -41,8 +41,8 @@ func (d *SQLDatabase) Init() error {
 	}
 	if _, err := d.db.Exec("CREATE TABLE IF NOT EXISTS users (" +
 		"user_id varchar(256) NOT NULL," +
-		"labels json," +
-		"subscribe json," +
+		"labels json NOT NULL," +
+		"subscribe json NOT NULL," +
 		"comment TEXT NOT NULL," +
 		"PRIMARY KEY (user_id)" +
 		")"); err != nil {
@@ -150,14 +150,12 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	defer result.Close()
 	if result.Next() {
 		var item Item
-		var labels *string
+		var labels string
 		if err := result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
 			return Item{}, err
 		}
-		if labels != nil {
-			if err := json.Unmarshal([]byte(*labels), &item.Labels); err != nil {
-				return Item{}, err
-			}
+		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
+			return Item{}, err
 		}
 		GetItemLatency.Observe(time.Since(startTime).Seconds())
 		return item, nil
@@ -182,14 +180,12 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 	defer result.Close()
 	for result.Next() {
 		var item Item
-		var labels *string
+		var labels string
 		if err := result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
 			return "", nil, err
 		}
-		if labels != nil {
-			if err := json.Unmarshal([]byte(*labels), &item.Labels); err != nil {
-				return "", nil, err
-			}
+		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
+			return "", nil, err
 		}
 		items = append(items, item)
 	}
@@ -266,20 +262,16 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 	defer result.Close()
 	if result.Next() {
 		var user User
-		var labels *string
-		var subscribe *string
+		var labels string
+		var subscribe string
 		if err := result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
 			return User{}, err
 		}
-		if labels != nil {
-			if err := json.Unmarshal([]byte(*labels), &user.Labels); err != nil {
-				return User{}, err
-			}
+		if err := json.Unmarshal([]byte(labels), &user.Labels); err != nil {
+			return User{}, err
 		}
-		if subscribe != nil {
-			if err := json.Unmarshal([]byte(*subscribe), &user.Subscribe); err != nil {
-				return User{}, err
-			}
+		if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
+			return User{}, err
 		}
 		return user, nil
 	}
@@ -296,20 +288,16 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	defer result.Close()
 	for result.Next() {
 		var user User
-		var labels *string
-		var subscribe *string
+		var labels string
+		var subscribe string
 		if err := result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
 			return "", nil, err
 		}
-		if labels != nil {
-			if err := json.Unmarshal([]byte(*labels), &user.Labels); err != nil {
-				return "", nil, err
-			}
+		if err := json.Unmarshal([]byte(labels), &user.Labels); err != nil {
+			return "", nil, err
 		}
-		if subscribe != nil {
-			if err := json.Unmarshal([]byte(*subscribe), &user.Subscribe); err != nil {
-				return "", nil, err
-			}
+		if err := json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
+			return "", nil, err
 		}
 		users = append(users, user)
 	}
