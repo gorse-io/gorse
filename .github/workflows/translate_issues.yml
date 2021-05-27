@@ -6,7 +6,8 @@ on:
     types: [opened]
 
 jobs:
-  build:
+  translate-isssues:
+    name: Translate Issues
     runs-on: ubuntu-latest
     steps:
       - name: Issues Translator

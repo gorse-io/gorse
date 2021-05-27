@@ -2,11 +2,11 @@
 
 The best practice to manage Gorse nodes is using orchestration tools such as Docker Compose, etc.. There are Docker images of the master node, the server node and the worker node.
 
-| Docker Image         | Build Status |
+| Docker Image         | Image Size |
 | ------------ | -------- |
-| gorse-master | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-master)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-master) |
-| gorse-server | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-server)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-server) |
-| gorse-worker | [![](https://img.shields.io/docker/cloud/build/zhenghaoz/gorse-worker)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-worker) |
+| gorse-master | [![](https://img.shields.io/docker/image-size/zhenghaoz/gorse-master)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-master) |
+| gorse-server | [![](https://img.shields.io/docker/image-size/zhenghaoz/gorse-server)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-server) |
+| gorse-worker | [![](https://img.shields.io/docker/image-size/zhenghaoz/gorse-worker)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-worker) |
 
 ## Quick Start
 
