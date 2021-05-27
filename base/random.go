@@ -66,7 +66,7 @@ func (rng RandomGenerator) UniformMatrix(row, col int, low, high float32) [][]fl
 	return ret
 }
 
-// NewNormalVector makes a vec filled with normal random floats.
+// NormalVector64 makes a vec filled with normal random floats.
 func (rng RandomGenerator) NormalVector64(size int, mean, stdDev float64) []float64 {
 	ret := make([]float64, size)
 	for i := 0; i < len(ret); i++ {
@@ -84,6 +84,7 @@ func (rng RandomGenerator) NormalMatrix64(row, col int, mean, stdDev float64) []
 	return ret
 }
 
+// Sample n values between low and high, but not in exclude.
 func (rng RandomGenerator) Sample(low, high, n int, exclude ...*iset.Set) []int {
 	intervalLength := high - low
 	excludeSet := iset.Union(exclude...)

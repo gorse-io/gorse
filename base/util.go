@@ -26,14 +26,17 @@ func init() {
 	SetProductionLogger()
 }
 
+// Logger get current logger
 func Logger() *zap.Logger {
 	return logger
 }
 
+// SetProductionLogger set current logger in production mode.
 func SetProductionLogger() {
 	logger, _ = zap.NewProduction()
 }
 
+// SetDevelopmentLogger set current logger in development mode.
 func SetDevelopmentLogger() {
 	logger, _ = zap.NewDevelopment()
 }
@@ -52,6 +55,7 @@ func Max(a ...int) int {
 	return maximum
 }
 
+// Min finds the minimum in a vector of integers. Panic if the slice is empty.
 func Min(a ...int) int {
 	if len(a) == 0 {
 		panic("can't get the minimum from empty vec")
@@ -65,6 +69,7 @@ func Min(a ...int) int {
 	return minimum
 }
 
+// RangeInt generate a slice [0, ..., n-1].
 func RangeInt(n int) []int {
 	a := make([]int, n)
 	for i := range a {
@@ -73,6 +78,7 @@ func RangeInt(n int) []int {
 	return a
 }
 
+// NewMatrix32 creates a 2D matrix of 32-bit floats.
 func NewMatrix32(row, col int) [][]float32 {
 	ret := make([][]float32, row)
 	for i := range ret {
@@ -81,6 +87,7 @@ func NewMatrix32(row, col int) [][]float32 {
 	return ret
 }
 
+// NewMatrixInt creates a 2D matrix of integers.
 func NewMatrixInt(row, col int) [][]int {
 	ret := make([][]int, row)
 	for i := range ret {
@@ -89,16 +96,19 @@ func NewMatrixInt(row, col int) [][]int {
 	return ret
 }
 
+// Now returns the current time in the format of `2006-01-02T15:04:05Z07:00`.
 func Now() string {
 	return time.Now().Format("2006-01-02T15:04:05Z07:00")
 }
 
+// CheckPanic catches panic.
 func CheckPanic() {
 	if r := recover(); r != nil {
 		Logger().Error("panic recovered", zap.Any("panic", r))
 	}
 }
 
+// Hex returns the hex form of a 64-bit integer.
 func Hex(v int64) string {
 	return fmt.Sprintf("%x", v)
 }

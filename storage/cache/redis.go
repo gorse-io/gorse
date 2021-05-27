@@ -22,14 +22,17 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+// Redis cache storage.
 type Redis struct {
 	client *redis.Client
 }
 
+// Close redis connection.
 func (redis *Redis) Close() error {
 	return redis.client.Close()
 }
 
+// SetScores save a list of scored items to redis.
 func (redis *Redis) SetScores(prefix, name string, items []ScoredItem) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
@@ -50,6 +53,7 @@ func (redis *Redis) SetScores(prefix, name string, items []ScoredItem) error {
 	return nil
 }
 
+// GetScores returns a list of scored items from redis.
 func (redis *Redis) GetScores(prefix, name string, begin, end int) ([]ScoredItem, error) {
 	var ctx = context.Background()
 	key := prefix + "/" + name
@@ -69,12 +73,14 @@ func (redis *Redis) GetScores(prefix, name string, begin, end int) ([]ScoredItem
 	return res, err
 }
 
+// ClearList clears a list of items in redis.
 func (redis *Redis) ClearList(prefix, name string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	return redis.client.Del(ctx, key).Err()
 }
 
+// AppendList appends a list of scored items to redis.
 func (redis *Redis) AppendList(prefix, name string, items ...string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
@@ -87,6 +93,7 @@ func (redis *Redis) AppendList(prefix, name string, items ...string) error {
 	return nil
 }
 
+// GetList returns a list of scored items from redis.
 func (redis *Redis) GetList(prefix, name string) ([]string, error) {
 	var ctx = context.Background()
 	key := prefix + "/" + name
@@ -101,6 +108,7 @@ func (redis *Redis) GetList(prefix, name string) ([]string, error) {
 	return res, err
 }
 
+// GetString returns a string from redis.
 func (redis *Redis) GetString(prefix, name string) (string, error) {
 	var ctx = context.Background()
 	key := prefix + "/" + name
@@ -114,6 +122,7 @@ func (redis *Redis) GetString(prefix, name string) (string, error) {
 	return val, err
 }
 
+// SetString saves a string to redis.
 func (redis *Redis) SetString(prefix, name string, val string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
@@ -123,6 +132,7 @@ func (redis *Redis) SetString(prefix, name string, val string) error {
 	return nil
 }
 
+// GetInt returns a integer from redis.
 func (redis *Redis) GetInt(prefix, name string) (int, error) {
 	val, err := redis.GetString(prefix, name)
 	if err != nil {
@@ -135,6 +145,7 @@ func (redis *Redis) GetInt(prefix, name string) (int, error) {
 	return buf, err
 }
 
+// SetInt saves a integer from redis.
 func (redis *Redis) SetInt(prefix, name string, val int) error {
 	return redis.SetString(prefix, name, strconv.Itoa(val))
 }

@@ -49,11 +49,13 @@ const (
 var ErrObjectNotExist = fmt.Errorf("object not exists")
 var ErrNoDatabase = fmt.Errorf("no database specified")
 
+// ScoredItem associate a item with a score.
 type ScoredItem struct {
 	ItemId string
 	Score  float32
 }
 
+// CreateScoredItems from items and scores.
 func CreateScoredItems(itemIds []string, scores []float32) []ScoredItem {
 	if len(itemIds) != len(scores) {
 		panic("the length of itemIds and scores should be equal")
@@ -66,6 +68,7 @@ func CreateScoredItems(itemIds []string, scores []float32) []ScoredItem {
 	return items
 }
 
+// RemoveScores resolve items for a slice of ScoredItems.
 func RemoveScores(items []ScoredItem) []string {
 	itemIds := make([]string, len(items))
 	for i := range itemIds {
@@ -74,6 +77,7 @@ func RemoveScores(items []ScoredItem) []string {
 	return itemIds
 }
 
+// Database is the common interface for cache store.
 type Database interface {
 	Close() error
 	SetScores(prefix, name string, items []ScoredItem) error

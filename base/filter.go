@@ -19,11 +19,13 @@ type weightedItem struct {
 	weight float32
 }
 
+// TopKFilter filters out top k items with maximum weights.
 type TopKFilter struct {
 	items []weightedItem
 	k     int
 }
 
+// NewTopKFilter creates a top k filter.
 func NewTopKFilter(k int) *TopKFilter {
 	filter := new(TopKFilter)
 	filter.items = make([]weightedItem, 0, k+1)
@@ -96,6 +98,7 @@ func (filter *TopKFilter) down(i0, n int) bool {
 	return i > i0
 }
 
+// PopAll pops all items in the filter with decreasing order.
 func (filter *TopKFilter) PopAll() ([]int, []float32) {
 	items := make([]int, filter.Len())
 	weights := make([]float32, filter.Len())
@@ -110,11 +113,13 @@ type weightedString struct {
 	weight float32
 }
 
+// TopKStringFilter filters out top k strings with maximum weights.
 type TopKStringFilter struct {
 	items []weightedString
 	k     int
 }
 
+// NewTopKStringFilter creates a top k string filter.
 func NewTopKStringFilter(k int) *TopKStringFilter {
 	filter := new(TopKStringFilter)
 	filter.items = make([]weightedString, 0, k+1)
@@ -187,6 +192,7 @@ func (filter *TopKStringFilter) down(i0, n int) bool {
 	return i > i0
 }
 
+// PopAll pops all strings in the filter with decreasing order.
 func (filter *TopKStringFilter) PopAll() ([]string, []float32) {
 	items := make([]string, filter.Len())
 	weights := make([]float32, filter.Len())

@@ -86,54 +86,54 @@ type batchJob struct {
 	endId   int
 }
 
+// BatchParallel run parallel jobs in batches to reduce the cost of context switch.
 func BatchParallel(nJobs int, nWorkers int, batchSize int, worker func(workerId, beginJobId, endJobId int) error) error {
 	if nWorkers == 1 {
 		return worker(0, 0, nJobs)
-	} else {
-		const chanSize = 64
-		const chanEOF = -1
-		c := make(chan batchJob, chanSize)
-		// producer
-		go func() {
-			defer CheckPanic()
-			// send jobs
-			for i := 0; i < nJobs; i += batchSize {
-				c <- batchJob{beginId: i, endId: Min(i+batchSize, nJobs)}
-			}
-			// send EOF
-			for i := 0; i < nWorkers; i++ {
-				c <- batchJob{beginId: chanEOF, endId: chanEOF}
-			}
-		}()
-		// consumer
-		var wg sync.WaitGroup
-		wg.Add(nWorkers)
-		errs := make([]error, nJobs)
-		for j := 0; j < nWorkers; j++ {
-			// start workers
-			go func(workerId int) {
-				defer CheckPanic()
-				defer wg.Done()
-				for {
-					// read job
-					job := <-c
-					if job.beginId == chanEOF {
-						return
-					}
-					// run job
-					if err := worker(workerId, job.beginId, job.endId); err != nil {
-						errs[job.beginId] = err
-						return
-					}
-				}
-			}(j)
+	}
+	const chanSize = 64
+	const chanEOF = -1
+	c := make(chan batchJob, chanSize)
+	// producer
+	go func() {
+		defer CheckPanic()
+		// send jobs
+		for i := 0; i < nJobs; i += batchSize {
+			c <- batchJob{beginId: i, endId: Min(i+batchSize, nJobs)}
 		}
-		wg.Wait()
-		// check errors
-		for _, err := range errs {
-			if err != nil {
-				return err
+		// send EOF
+		for i := 0; i < nWorkers; i++ {
+			c <- batchJob{beginId: chanEOF, endId: chanEOF}
+		}
+	}()
+	// consumer
+	var wg sync.WaitGroup
+	wg.Add(nWorkers)
+	errs := make([]error, nJobs)
+	for j := 0; j < nWorkers; j++ {
+		// start workers
+		go func(workerId int) {
+			defer CheckPanic()
+			defer wg.Done()
+			for {
+				// read job
+				job := <-c
+				if job.beginId == chanEOF {
+					return
+				}
+				// run job
+				if err := worker(workerId, job.beginId, job.endId); err != nil {
+					errs[job.beginId] = err
+					return
+				}
 			}
+		}(j)
+	}
+	wg.Wait()
+	// check errors
+	for _, err := range errs {
+		if err != nil {
+			return err
 		}
 	}
 	return nil
