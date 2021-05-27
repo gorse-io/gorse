@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package cache
 
 import (
@@ -21,6 +22,8 @@ import (
 )
 
 const (
+	// IgnoreItems is these items that a user has read.
+	IgnoreItems        = "ignore_items"
 	PopularItems       = "popular_items"
 	LatestItems        = "latest_items"
 	SimilarItems       = "similar_items"
@@ -73,8 +76,11 @@ func RemoveScores(items []ScoredItem) []string {
 
 type Database interface {
 	Close() error
-	SetList(prefix, name string, items []ScoredItem) error
-	GetList(prefix, name string, begin int, end int) ([]ScoredItem, error)
+	SetScores(prefix, name string, items []ScoredItem) error
+	GetScores(prefix, name string, begin int, end int) ([]ScoredItem, error)
+	ClearList(prefix, name string) error
+	AppendList(prefix, name string, items ...string) error
+	GetList(prefix, name string) ([]string, error)
 	GetString(prefix, name string) (string, error)
 	SetString(prefix, name string, val string) error
 	GetInt(prefix, name string) (int, error)

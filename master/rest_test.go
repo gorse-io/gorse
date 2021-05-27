@@ -369,7 +369,7 @@ func TestServer_List(t *testing.T) {
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.cacheStoreClient.SetList(operator.Prefix, operator.Label, itemIds)
+		err := s.cacheStoreClient.SetScores(operator.Prefix, operator.Label, itemIds)
 		assert.Nil(t, err)
 		items := make([]data.Item, 0)
 		for _, item := range itemIds {
@@ -428,13 +428,17 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0", itemIds)
+	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0", itemIds)
 	assert.Nil(t, err)
 	// insert feedback
-	err = s.dataStoreClient.BatchInsertFeedback([]data.Feedback{
+	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
-	}, true, true)
+	}
+	for _, v := range feedback {
+		err = s.master.InsertFeedbackTwice(v, true, true)
+		assert.Nil(t, err)
+	}
 	// insert items
 	for _, item := range itemIds {
 		err = s.dataStoreClient.InsertItem(data.Item{ItemId: item.ItemId})

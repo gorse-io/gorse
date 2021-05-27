@@ -76,21 +76,21 @@ func TestMaster_CollectLatest(t *testing.T) {
 	}
 	m.latest(items)
 	// check latest items
-	latest, err := m.CacheStore.GetList(cache.LatestItems, "", 0, 100)
+	latest, err := m.CacheStore.GetScores(cache.LatestItems, "", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 	}, latest)
-	latest, err = m.CacheStore.GetList(cache.LatestItems, "even", 0, 100)
+	latest, err = m.CacheStore.GetScores(cache.LatestItems, "even", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 		{items[4].ItemId, float32(items[4].Timestamp.Unix())},
 	}, latest)
-	latest, err = m.CacheStore.GetList(cache.LatestItems, "odd", 0, 100)
+	latest, err = m.CacheStore.GetScores(cache.LatestItems, "odd", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
@@ -143,21 +143,21 @@ func TestMaster_CollectPopItem(t *testing.T) {
 	}
 	m.popItem(items, feedbacks)
 	// check popular items
-	popular, err := m.CacheStore.GetList(cache.PopularItems, "", 0, 100)
+	popular, err := m.CacheStore.GetScores(cache.PopularItems, "", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{ItemId: items[9].ItemId, Score: 10},
 		{ItemId: items[8].ItemId, Score: 9},
 		{ItemId: items[7].ItemId, Score: 8},
 	}, popular)
-	popular, err = m.CacheStore.GetList(cache.PopularItems, "even", 0, 100)
+	popular, err = m.CacheStore.GetScores(cache.PopularItems, "even", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{ItemId: items[8].ItemId, Score: 9},
 		{ItemId: items[6].ItemId, Score: 7},
 		{ItemId: items[4].ItemId, Score: 5},
 	}, popular)
-	popular, err = m.CacheStore.GetList(cache.PopularItems, "odd", 0, 100)
+	popular, err = m.CacheStore.GetScores(cache.PopularItems, "odd", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{ItemId: items[9].ItemId, Score: 10},
@@ -209,7 +209,7 @@ func TestMaster_FitCFModel(t *testing.T) {
 	assert.Nil(t, err)
 	// similar items (common users)
 	m.similar(items, dataset, model.SimilarityDot)
-	similar, err := m.CacheStore.GetList(cache.SimilarItems, "9", 0, 100)
+	similar, err := m.CacheStore.GetScores(cache.SimilarItems, "9", 0, 100)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
 }

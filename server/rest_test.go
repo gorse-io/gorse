@@ -355,7 +355,7 @@ func TestServer_List(t *testing.T) {
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.cacheStoreClient.SetList(operator.Prefix, operator.Label, items)
+		err := s.cacheStoreClient.SetScores(operator.Prefix, operator.Label, items)
 		assert.Nil(t, err)
 		apitest.New().
 			Handler(s.handler).
@@ -494,7 +494,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0",
+	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0",
 		[]cache.ScoredItem{
 			{"1", 99},
 			{"2", 98},
@@ -507,10 +507,14 @@ func TestServer_GetRecommends(t *testing.T) {
 		})
 	assert.Nil(t, err)
 	// insert feedback
-	err = s.dataStoreClient.BatchInsertFeedback([]data.Feedback{
+	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
-	}, true, true)
+	}
+	for _, v := range feedback {
+		err = s.server.InsertFeedbackTwice(v, true, true)
+		assert.Nil(t, err)
+	}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -551,36 +555,40 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0",
+	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.Nil(t, err)
 	// insert feedback
-	err = s.dataStoreClient.BatchInsertFeedback([]data.Feedback{
+	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
-	}, true, true)
+	}
+	for _, v := range feedback {
+		err = s.server.InsertFeedbackTwice(v, true, true)
+		assert.Nil(t, err)
+	}
 	// insert similar items
-	err = s.cacheStoreClient.SetList(cache.SimilarItems, "1", []cache.ScoredItem{
+	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "1", []cache.ScoredItem{
 		{"2", 100000},
 		{"9", 1},
 	})
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetList(cache.SimilarItems, "2", []cache.ScoredItem{
+	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "2", []cache.ScoredItem{
 		{"3", 100000},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetList(cache.SimilarItems, "3", []cache.ScoredItem{
+	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "3", []cache.ScoredItem{
 		{"4", 100000},
 		{"7", 1},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetList(cache.SimilarItems, "4", []cache.ScoredItem{
+	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "4", []cache.ScoredItem{
 		{"1", 100000},
 		{"6", 1},
 		{"7", 1},
@@ -607,15 +615,15 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.cacheStoreClient.SetList(cache.CollaborativeItems, "0",
+	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.Nil(t, err)
 	// insert latest
-	err = s.cacheStoreClient.SetList(cache.LatestItems, "",
+	err = s.cacheStoreClient.SetScores(cache.LatestItems, "",
 		[]cache.ScoredItem{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
 	assert.Nil(t, err)
 	// insert popular
-	err = s.cacheStoreClient.SetList(cache.PopularItems, "",
+	err = s.cacheStoreClient.SetScores(cache.PopularItems, "",
 		[]cache.ScoredItem{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
 	assert.Nil(t, err)
 	// test popular fallback

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package cache
 
 type NoDatabase struct{}
@@ -19,11 +20,23 @@ func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) SetList(prefix, name string, items []ScoredItem) error {
+func (NoDatabase) SetScores(prefix, name string, items []ScoredItem) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) GetList(prefix, name string, begin int, end int) ([]ScoredItem, error) {
+func (NoDatabase) GetScores(prefix, name string, begin int, end int) ([]ScoredItem, error) {
+	return nil, ErrNoDatabase
+}
+
+func (NoDatabase) ClearList(prefix, name string) error {
+	return ErrNoDatabase
+}
+
+func (NoDatabase) AppendList(prefix, name string, items ...string) error {
+	return ErrNoDatabase
+}
+
+func (NoDatabase) GetList(prefix, name string) ([]string, error) {
 	return nil, ErrNoDatabase
 }
 

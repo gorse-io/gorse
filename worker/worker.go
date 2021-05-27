@@ -341,6 +341,12 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 		if !w.checkRecommendCacheTimeout(userId) {
 			return nil
 		}
+		// Clear ignore items in cache. Since ignore items have been ignored
+		// in offline recommendation stage.
+		err := w.cacheStore.ClearList(cache.IgnoreItems, userId)
+		if err != nil {
+			return err
+		}
 		// remove saw items
 		historyItems, err := loadFeedbackItems(w.dataStore, userId)
 		historySet := set.NewStringSet(historyItems...)
@@ -378,7 +384,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 			}
 		}
 		elems, scores := recItems.PopAll()
-		if err = w.cacheStore.SetList(cache.CollaborativeItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
+		if err = w.cacheStore.SetScores(cache.CollaborativeItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation", zap.Error(err))
 			return err
 		}
