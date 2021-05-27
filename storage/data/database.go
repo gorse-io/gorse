@@ -17,7 +17,6 @@ package data
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 	"github.com/zhenghaoz/gorse/base"
@@ -56,17 +55,6 @@ type FeedbackKey struct {
 	ItemId       string
 }
 
-func FeedbackKeyFromString(s string) (*FeedbackKey, error) {
-	var feedbackKey FeedbackKey
-	err := json.Unmarshal([]byte(s), &feedbackKey)
-	return &feedbackKey, err
-}
-
-func (k *FeedbackKey) ToString() (string, error) {
-	b, err := json.Marshal(k)
-	return string(b), err
-}
-
 // Feedback stores feedback.
 type Feedback struct {
 	FeedbackKey
@@ -74,6 +62,7 @@ type Feedback struct {
 	Comment   string
 }
 
+// Measurement stores a statistical value.
 type Measurement struct {
 	Name      string
 	Timestamp time.Time
@@ -84,26 +73,22 @@ type Measurement struct {
 type Database interface {
 	Init() error
 	Close() error
-	// items
 	InsertItem(item Item) error
 	BatchInsertItem(items []Item) error
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
 	GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error)
 	GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error)
-	// users
 	InsertUser(user User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
 	GetUsers(cursor string, n int) (string, []User, error)
 	GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error)
-	// feedback
 	GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error)
 	DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error)
 	InsertFeedback(feedback Feedback, insertUser, insertItem bool) error
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
 	GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error)
-	// measurement
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)
 }

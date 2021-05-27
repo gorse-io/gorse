@@ -11,12 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package floats
 
 import (
 	"github.com/chewxy/math32"
 )
 
+// MatZero fills zeros in a matrix of 32-bit floats.
 func MatZero(x [][]float32) {
 	for i := range x {
 		for j := range x[i] {
@@ -25,6 +27,7 @@ func MatZero(x [][]float32) {
 	}
 }
 
+// Zero fills zeros in a slice of 32-bit floats.
 func Zero(a []float32) {
 	for i := range a {
 		a[i] = 0
@@ -129,6 +132,7 @@ func Dot(a, b []float32) (ret float32) {
 	return
 }
 
+// Min element of a slice of 32-bit floats.
 func Min(x []float32) float32 {
 	if len(x) == 0 {
 		panic("floats: zero slice length")
@@ -142,6 +146,7 @@ func Min(x []float32) float32 {
 	return min
 }
 
+// Max element of a slice of 32-bit floats.
 func Max(x []float32) float32 {
 	if len(x) == 0 {
 		panic("floats: zero slice length")
@@ -155,6 +160,7 @@ func Max(x []float32) float32 {
 	return max
 }
 
+// Sum of a slice of 32-bit floats.
 func Sum(x []float32) float32 {
 	sum := float32(0)
 	for _, v := range x {
@@ -163,6 +169,7 @@ func Sum(x []float32) float32 {
 	return sum
 }
 
+// Mean of a slice of 32-bit floats.
 func Mean(x []float32) float32 {
 	return Sum(x) / float32(len(x))
 }

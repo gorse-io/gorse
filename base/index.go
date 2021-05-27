@@ -19,6 +19,7 @@ import (
 	"strconv"
 )
 
+// Index keeps the mapping between names (string) and indices (integer).
 type Index interface {
 	Len() int
 	Add(name string)
@@ -79,22 +80,28 @@ func (idx *MapIndex) ToName(index int) string {
 	return idx.Names[index]
 }
 
+// GetNames returns all names in current index.
 func (idx *MapIndex) GetNames() []string {
 	return idx.Names
 }
 
+// DirectIndex means that the name and its index is the same. For example,
+// the index of "1" is 1, vice versa.
 type DirectIndex struct {
 	Limit int
 }
 
+// NewDirectIndex create a direct mapping index.
 func NewDirectIndex() *DirectIndex {
 	return &DirectIndex{Limit: 0}
 }
 
+// Len returns the number of names in current index.
 func (idx *DirectIndex) Len() int {
 	return idx.Limit
 }
 
+// Add a name to current index.
 func (idx *DirectIndex) Add(s string) {
 	i, err := strconv.Atoi(s)
 	if err != nil {
@@ -105,6 +112,7 @@ func (idx *DirectIndex) Add(s string) {
 	}
 }
 
+// ToNumber converts a name to corresponding index.
 func (idx *DirectIndex) ToNumber(name string) int {
 	i, err := strconv.Atoi(name)
 	if err != nil {
@@ -116,6 +124,7 @@ func (idx *DirectIndex) ToNumber(name string) int {
 	return i
 }
 
+// ToName converts a index to corresponding name.
 func (idx *DirectIndex) ToName(index int) string {
 	if index >= idx.Limit {
 		panic("index out of range")
@@ -123,6 +132,7 @@ func (idx *DirectIndex) ToName(index int) string {
 	return strconv.Itoa(index)
 }
 
+// GetNames returns all names in current index.
 func (idx *DirectIndex) GetNames() []string {
 	names := make([]string, idx.Limit)
 	for i := range names {

@@ -14,44 +14,55 @@
 
 package cache
 
+// NoDatabase means no database used for cache.
 type NoDatabase struct{}
 
+// Close method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
+// SetScores method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) SetScores(prefix, name string, items []ScoredItem) error {
 	return ErrNoDatabase
 }
 
+// GetScores method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetScores(prefix, name string, begin int, end int) ([]ScoredItem, error) {
 	return nil, ErrNoDatabase
 }
 
+// ClearList method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) ClearList(prefix, name string) error {
 	return ErrNoDatabase
 }
 
+// AppendList method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) AppendList(prefix, name string, items ...string) error {
 	return ErrNoDatabase
 }
 
+// GetList method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetList(prefix, name string) ([]string, error) {
 	return nil, ErrNoDatabase
 }
 
+// GetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetString(prefix, name string) (string, error) {
 	return "", ErrNoDatabase
 }
 
+// SetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) SetString(prefix, name string, val string) error {
 	return ErrNoDatabase
 }
 
+// GetInt method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetInt(prefix, name string) (int, error) {
 	return 0, ErrNoDatabase
 }
 
+// SetInt method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) SetInt(prefix, name string, val int) error {
 	return ErrNoDatabase
 }

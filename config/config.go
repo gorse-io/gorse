@@ -26,6 +26,7 @@ type Config struct {
 	Recommend RecommendConfig `toml:"recommend"`
 }
 
+// LoadDefaultIfNil loads default settings if config is nil.
 func (config *Config) LoadDefaultIfNil() *Config {
 	if config == nil {
 		return &Config{
@@ -89,6 +90,7 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 	return config
 }
 
+// RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
 	PopularWindow      int    `toml:"popular_window"`
 	FitPeriod          int    `toml:"fit_period"`
