@@ -67,6 +67,10 @@ func (d *SQLDatabase) Init() error {
 		")"); err != nil {
 		return err
 	}
+	// create index
+	if _, err := d.db.Exec("ALTER TABLE feedback ADD INDEX (user_id)"); err != nil {
+		return err
+	}
 	// change settings
 	_, err := d.db.Exec("SET SESSION sql_mode=\"" +
 		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
