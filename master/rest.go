@@ -322,7 +322,7 @@ func (m *Master) getList(prefix string, name string, request *restful.Request, r
 		return
 	}
 	// Get the popular list
-	items, err := m.CacheStore.GetList(prefix, name, begin, end)
+	items, err := m.CacheStore.GetScores(prefix, name, begin, end)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -588,7 +588,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 			server.BadRequest(restful.NewResponse(response),
 				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineCount))
 		}
-		err = m.DataStore.InsertFeedback(feedback,
+		err = m.InsertFeedbackTwice(feedback,
 			m.GorseConfig.Database.AutoInsertUser,
 			m.GorseConfig.Database.AutoInsertItem)
 		if err != nil {

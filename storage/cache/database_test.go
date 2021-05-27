@@ -48,7 +48,7 @@ func testMeta(t *testing.T, db Database) {
 	}
 }
 
-func testList(t *testing.T, db Database) {
+func testScores(t *testing.T, db Database) {
 	// Put items
 	items := []ScoredItem{
 		{"0", 0},
@@ -57,22 +57,22 @@ func testList(t *testing.T, db Database) {
 		{"3", 1.3},
 		{"4", 1.4},
 	}
-	err := db.SetList("list", "0", items)
+	err := db.SetScores("list", "0", items)
 	assert.Nil(t, err)
 	// Get items
-	totalItems, err := db.GetList("list", "0", 0, -1)
+	totalItems, err := db.GetScores("list", "0", 0, -1)
 	assert.Nil(t, err)
 	assert.Equal(t, items, totalItems)
 	// Get n items
-	headItems, err := db.GetList("list", "0", 0, 2)
+	headItems, err := db.GetScores("list", "0", 0, 2)
 	assert.Nil(t, err)
 	assert.Equal(t, items[:3], headItems)
 	// Get n items with offset
-	offsetItems, err := db.GetList("list", "0", 1, 3)
+	offsetItems, err := db.GetScores("list", "0", 1, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, items[1:4], offsetItems)
 	// Get empty
-	noItems, err := db.GetList("list", "1", 0, 0)
+	noItems, err := db.GetScores("list", "1", 0, 0)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(noItems))
 	// test overwrite
@@ -83,9 +83,32 @@ func testList(t *testing.T, db Database) {
 		{"13", 10.3},
 		{"14", 10.4},
 	}
-	err = db.SetList("list", "0", overwriteItems)
+	err = db.SetScores("list", "0", overwriteItems)
 	assert.Nil(t, err)
-	totalItems, err = db.GetList("list", "0", 0, -1)
+	totalItems, err = db.GetScores("list", "0", 0, -1)
 	assert.Nil(t, err)
 	assert.Equal(t, overwriteItems, totalItems)
+}
+
+func testList(t *testing.T, db Database) {
+	// append
+	items := []string{"0", "1", "2", "3", "4"}
+	err := db.AppendList("list", "0", items...)
+	assert.Nil(t, err)
+	totalItems, err := db.GetList("list", "0")
+	assert.Nil(t, err)
+	assert.Equal(t, items, totalItems)
+	// append
+	appendItems := []string{"10", "11", "12", "13", "14"}
+	err = db.AppendList("list", "0", appendItems...)
+	assert.Nil(t, err)
+	totalItems, err = db.GetList("list", "0")
+	assert.Nil(t, err)
+	assert.Equal(t, append(items, appendItems...), totalItems)
+	// clear
+	err = db.ClearList("list", "0")
+	assert.Nil(t, err)
+	totalItems, err = db.GetList("list", "0")
+	assert.Nil(t, err)
+	assert.Empty(t, totalItems)
 }

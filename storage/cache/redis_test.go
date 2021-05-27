@@ -46,6 +46,12 @@ func TestRedis_Meta(t *testing.T) {
 	testMeta(t, db.Database)
 }
 
+func TestRedis_Scores(t *testing.T) {
+	db := newMockRedis(t)
+	defer db.Close(t)
+	testScores(t, db.Database)
+}
+
 func TestRedis_List(t *testing.T) {
 	db := newMockRedis(t)
 	defer db.Close(t)

@@ -46,7 +46,7 @@ func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
 	// write back
 	for label, topItems := range popItems {
 		result, scores := topItems.PopAll()
-		if err := m.CacheStore.SetList(cache.PopularItems, label, cache.CreateScoredItems(result, scores)); err != nil {
+		if err := m.CacheStore.SetScores(cache.PopularItems, label, cache.CreateScoredItems(result, scores)); err != nil {
 			base.Logger().Error("failed to cache popular items", zap.Error(err))
 		}
 	}
@@ -73,7 +73,7 @@ func (m *Master) latest(items []data.Item) {
 	}
 	for label, topItems := range latestItems {
 		result, scores := topItems.PopAll()
-		if err = m.CacheStore.SetList(cache.LatestItems, label, cache.CreateScoredItems(result, scores)); err != nil {
+		if err = m.CacheStore.SetScores(cache.LatestItems, label, cache.CreateScoredItems(result, scores)); err != nil {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 	}
@@ -135,7 +135,7 @@ func (m *Master) similar(items []data.Item, dataset *pr.DataSet, similarity stri
 		for i := range recommends {
 			recommends[i] = dataset.ItemIndex.ToName(elem[i])
 		}
-		if err := m.CacheStore.SetList(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheStore.SetScores(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), cache.CreateScoredItems(recommends, scores)); err != nil {
 			return err
 		}
 		completed <- nil

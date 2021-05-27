@@ -326,7 +326,7 @@ func (s *RestServer) getList(prefix string, name string, request *restful.Reques
 		return
 	}
 	// Get the popular list
-	items, err := s.CacheStore.GetList(prefix, name, begin, end)
+	items, err := s.CacheStore.GetScores(prefix, name, begin, end)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -438,13 +438,24 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	s.getList(cache.CollaborativeItems, userId, request, response)
 }
 
+// InsertFeedbackTwice insert feedback both to database and cache.
+func (s *RestServer) InsertFeedbackTwice(feedback data.Feedback, insertUser, insertItem bool) error {
+	// 1. insert feedback to database
+	err := s.DataStore.InsertFeedback(feedback, insertUser, insertItem)
+	if err != nil {
+		return err
+	}
+	// 2. insert feedback to cache
+	return s.CacheStore.AppendList(cache.IgnoreItems, feedback.UserId, feedback.ItemId)
+}
+
 // Recommend items to users.
 // 1. If there are recommendations in cache, return cached recommendations.
 // 2. If there are historical interactions of the users, return similar items.
 // 3. Otherwise, return fallback recommendation (popular/latest).
 func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	var err error
-	var knnTime, fallbackTime, removeReadTime time.Duration
+	var knnTime, fallbackTime, loadArchReadTime, removeReadTime time.Duration
 
 	// 1. read recommendations in cache.
 	start := time.Now()
@@ -452,7 +463,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	errChan := make(chan error, 1)
 	go func() {
 		var collaborativeFilteringItems []cache.ScoredItem
-		collaborativeFilteringItems, err = s.CacheStore.GetList(cache.CollaborativeItems, userId, 0, s.GorseConfig.Database.CacheSize)
+		collaborativeFilteringItems, err = s.CacheStore.GetScores(cache.CollaborativeItems, userId, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			itemsChan <- nil
 			errChan <- err
@@ -464,18 +475,17 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 			}
 		}
 	}()
-	// load historical feedback
-	loadReadStart := time.Now()
-	userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
-	if err != nil {
-		return nil, err
-	}
+
+	// 0. load ignore items
+	loadCachedReadStart := time.Now()
+	ignoreItems, err := s.CacheStore.GetList(cache.IgnoreItems, userId)
 	excludeSet := set.NewStringSet()
-	for _, feedback := range userFeedback {
-		excludeSet.Add(feedback.ItemId)
+	for _, item := range ignoreItems {
+		excludeSet.Add(item)
 	}
-	loadReadTime := time.Since(loadReadStart)
-	// remove historical items
+	loadCachedReadTime := time.Since(loadCachedReadStart)
+
+	// *. remove ignore items
 	items := <-itemsChan
 	err = <-errChan
 	if err != nil {
@@ -491,13 +501,23 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	removeReadTime += time.Since(removeReadStart)
 
 	// 2. return similar items
-	if len(results) < n && len(userFeedback) > 0 {
+	if len(results) < n {
+		// load historical feedback
+		loadArchReadStart := time.Now()
+		userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
+		if err != nil {
+			return nil, err
+		}
+		for _, feedback := range userFeedback {
+			excludeSet.Add(feedback.ItemId)
+		}
+		loadArchReadTime = time.Since(loadArchReadStart)
 		knnStart := time.Now()
 		// collect candidates
 		candidates := make(map[string]float32)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheStore.GetList(cache.SimilarItems, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
+			similarItems, err := s.CacheStore.GetScores(cache.SimilarItems, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {
 				return nil, err
 			}
@@ -527,9 +547,9 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		var fallbacks []cache.ScoredItem
 		switch s.GorseConfig.Recommend.FallbackRecommend {
 		case "latest":
-			fallbacks, err = s.CacheStore.GetList(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
+			fallbacks, err = s.CacheStore.GetScores(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
 		case "popular":
-			fallbacks, err = s.CacheStore.GetList(cache.PopularItems, "", 0, s.GorseConfig.Database.CacheSize)
+			fallbacks, err = s.CacheStore.GetScores(cache.PopularItems, "", 0, s.GorseConfig.Database.CacheSize)
 		default:
 			return nil, fmt.Errorf("unknown fallback recommendation method `%s`", s.GorseConfig.Recommend.FallbackRecommend)
 		}
@@ -549,7 +569,8 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	}
 	spent := time.Since(start)
 	base.Logger().Info("complete recommendation",
-		zap.Duration("load_read_time", loadReadTime),
+		zap.Duration("load_cache_read_time", loadCachedReadTime),
+		zap.Duration("load_arch_read_time", loadArchReadTime),
 		zap.Duration("remove_read_time", removeReadTime),
 		zap.Duration("knn_time", knnTime),
 		zap.Duration("fallback_time", fallbackTime),
@@ -578,7 +599,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range results {
-			err = s.DataStore.InsertFeedback(data.Feedback{
+			err = s.InsertFeedbackTwice(data.Feedback{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       userId,
 					ItemId:       itemId,
@@ -886,12 +907,14 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 		}
 	}
 	// Insert feedback
-	err = s.DataStore.BatchInsertFeedback(feedback,
-		s.GorseConfig.Database.AutoInsertUser,
-		s.GorseConfig.Database.AutoInsertItem)
-	if err != nil {
-		InternalServerError(response, err)
-		return
+	for _, v := range feedback {
+		err = s.InsertFeedbackTwice(v,
+			s.GorseConfig.Database.AutoInsertUser,
+			s.GorseConfig.Database.AutoInsertItem)
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
 	}
 	for _, userId := range users.List() {
 		err = s.CacheStore.SetString(cache.LastActiveTime, userId, base.Now())

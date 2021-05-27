@@ -30,7 +30,7 @@ func (redis *Redis) Close() error {
 	return redis.client.Close()
 }
 
-func (redis *Redis) SetList(prefix, name string, items []ScoredItem) error {
+func (redis *Redis) SetScores(prefix, name string, items []ScoredItem) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	err := redis.client.Del(ctx, key).Err()
@@ -50,7 +50,7 @@ func (redis *Redis) SetList(prefix, name string, items []ScoredItem) error {
 	return nil
 }
 
-func (redis *Redis) GetList(prefix, name string, begin, end int) ([]ScoredItem, error) {
+func (redis *Redis) GetScores(prefix, name string, begin, end int) ([]ScoredItem, error) {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	res := make([]ScoredItem, 0)
@@ -65,6 +65,38 @@ func (redis *Redis) GetList(prefix, name string, begin, end int) ([]ScoredItem, 
 			return nil, err
 		}
 		res = append(res, item)
+	}
+	return res, err
+}
+
+func (redis *Redis) ClearList(prefix, name string) error {
+	var ctx = context.Background()
+	key := prefix + "/" + name
+	return redis.client.Del(ctx, key).Err()
+}
+
+func (redis *Redis) AppendList(prefix, name string, items ...string) error {
+	var ctx = context.Background()
+	key := prefix + "/" + name
+	for _, item := range items {
+		err := redis.client.RPush(ctx, key, item).Err()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (redis *Redis) GetList(prefix, name string) ([]string, error) {
+	var ctx = context.Background()
+	key := prefix + "/" + name
+	res := make([]string, 0)
+	data, err := redis.client.LRange(ctx, key, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range data {
+		res = append(res, s)
 	}
 	return res, err
 }
