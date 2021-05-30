@@ -27,9 +27,9 @@ import (
 	"time"
 )
 
-const (
-	ErrUserNotExist = "user not exist"
-	ErrItemNotExist = "item not exist"
+var (
+	ErrUserNotExist = errors.New("user not exist")
+	ErrItemNotExist = errors.New("item not exist")
 )
 
 // Item stores meta data about item.

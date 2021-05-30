@@ -110,20 +110,18 @@ func testUsers(t *testing.T, db Database) {
 		assert.Equal(t, fmt.Sprintf("comment %d", i), user.Comment)
 	}
 	// Get this user
-	if user, err := db.GetUser("0"); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Equal(t, "0", user.UserId)
-	}
+	user, err := db.GetUser("0")
+	assert.Nil(t, err)
+	assert.Equal(t, "0", user.UserId)
 	// Delete this user
-	err := db.DeleteUser("0")
+	err = db.DeleteUser("0")
 	assert.Nil(t, err)
 	_, err = db.GetUser("0")
-	assert.NotNil(t, err)
+	assert.ErrorIs(t, err, ErrUserNotExist)
 	// test override
 	err = db.InsertUser(User{UserId: "1", Comment: "override"})
 	assert.Nil(t, err)
-	user, err := db.GetUser("1")
+	user, err = db.GetUser("1")
 	assert.Nil(t, err)
 	assert.Equal(t, "override", user.Comment)
 }
@@ -261,7 +259,7 @@ func testItems(t *testing.T, db Database) {
 	err = db.DeleteItem("0")
 	assert.Nil(t, err)
 	_, err = db.GetItem("0")
-	assert.NotNil(t, err)
+	assert.ErrorIs(t, err, ErrItemNotExist)
 	// test override
 	err = db.InsertItem(Item{ItemId: "2", Comment: "override"})
 	assert.Nil(t, err)

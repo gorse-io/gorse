@@ -143,7 +143,7 @@ func TestServer_Users(t *testing.T) {
 		Get("/api/user/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
-		Status(http.StatusInternalServerError).
+		Status(http.StatusNotFound).
 		End()
 }
 
@@ -234,7 +234,7 @@ func TestServer_Items(t *testing.T) {
 		Get("/api/item/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
-		Status(http.StatusInternalServerError).
+		Status(http.StatusNotFound).
 		End()
 }
 
