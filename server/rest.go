@@ -649,7 +649,7 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 	// get user
 	user, err := s.DataStore.GetUser(userId)
 	if err != nil {
-		if err.Error() == data.ErrUserNotExist {
+		if err == data.ErrUserNotExist {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)
@@ -850,7 +850,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	// Get item
 	item, err := s.DataStore.GetItem(itemId)
 	if err != nil {
-		if err.Error() == data.ErrItemNotExist {
+		if err == data.ErrItemNotExist {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)
@@ -1060,7 +1060,7 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 func BadRequest(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	base.Logger().Error("bad request", zap.Error(err))
-	if err = response.WriteError(400, err); err != nil {
+	if err = response.WriteError(http.StatusBadRequest, err); err != nil {
 		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 }
@@ -1068,14 +1068,14 @@ func BadRequest(response *restful.Response, err error) {
 func InternalServerError(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	base.Logger().Error("internal server error", zap.Error(err))
-	if err = response.WriteError(500, err); err != nil {
+	if err = response.WriteError(http.StatusInternalServerError, err); err != nil {
 		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 }
 
 func PageNotFound(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
-	if err := response.WriteError(400, err); err != nil {
+	if err := response.WriteError(http.StatusNotFound, err); err != nil {
 		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 }
@@ -1106,7 +1106,7 @@ func (s *RestServer) auth(request *restful.Request, response *restful.Response) 
 	base.Logger().Error("unauthorized",
 		zap.String("api_key", s.GorseConfig.Server.APIKey),
 		zap.String("X-API-Key", apikey))
-	if err := response.WriteError(401, fmt.Errorf("unauthorized")); err != nil {
+	if err := response.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
 		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 	return false

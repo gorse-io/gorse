@@ -205,7 +205,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 	// get user
 	user, err := m.DataStore.GetUser(userId)
 	if err != nil {
-		if err.Error() == data.ErrUserNotExist {
+		if err == data.ErrUserNotExist {
 			server.PageNotFound(response, err)
 		} else {
 			server.InternalServerError(response, err)
@@ -407,6 +407,8 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 
 func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
 	lineCount := 0
+	timeStart := time.Now()
+	items := make([]data.Item, 0)
 	err := base.ReadLines(bufio.NewScanner(file), sep[0], func(lineNumber int, splits []string) bool {
 		var err error
 		// skip header
@@ -448,11 +450,12 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		}
 		// 4. comment
 		item.Comment = splits[3]
-		err = m.DataStore.InsertItem(item)
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return false
-		}
+		items = append(items, item)
+		//err = m.DataStore.InsertItem(item)
+		//if err != nil {
+		//	server.InternalServerError(restful.NewResponse(response), err)
+		//	return false
+		//}
 		lineCount++
 		return true
 	})
@@ -460,6 +463,15 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
+	err = m.DataStore.BatchInsertItem(items)
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(response), err)
+		return
+	}
+	timeUsed := time.Since(timeStart)
+	base.Logger().Info("complete import items",
+		zap.Duration("time_used", timeUsed),
+		zap.Int("num_items", lineCount))
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
@@ -548,6 +560,8 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	var err error
 	scanner := bufio.NewScanner(file)
 	lineCount := 0
+	timeStart := time.Now()
+	feedbacks := make([]data.Feedback, 0)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if hasHeader {
@@ -588,18 +602,23 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 			server.BadRequest(restful.NewResponse(response),
 				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineCount))
 		}
-		err = m.InsertFeedbackTwice(feedback,
-			m.GorseConfig.Database.AutoInsertUser,
-			m.GorseConfig.Database.AutoInsertItem)
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
+		feedbacks = append(feedbacks, feedback)
 		lineCount++
 	}
 	if err = scanner.Err(); err != nil {
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
+	err = m.DataStore.BatchInsertFeedback(feedbacks,
+		m.GorseConfig.Database.AutoInsertUser,
+		m.GorseConfig.Database.AutoInsertItem)
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(response), err)
+		return
+	}
+	timeUsed := time.Since(timeStart)
+	base.Logger().Info("complete import feedback",
+		zap.Duration("time_used", timeUsed),
+		zap.Int("num_items", lineCount))
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
