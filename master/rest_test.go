@@ -35,10 +35,8 @@ import (
 type mockServer struct {
 	dataStoreServer  *miniredis.Miniredis
 	cacheStoreServer *miniredis.Miniredis
-	dataStoreClient  data.Database
-	cacheStoreClient cache.Database
 	handler          *restful.Container
-	master           *Master
+	Master
 }
 
 func newMockServer(t *testing.T) *mockServer {
@@ -50,29 +48,27 @@ func newMockServer(t *testing.T) *mockServer {
 	s.cacheStoreServer, err = miniredis.Run()
 	assert.Nil(t, err)
 	// open database
-	s.dataStoreClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
+	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
 	assert.Nil(t, err)
-	s.cacheStoreClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
+	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.Nil(t, err)
 	// create server
-	s.master = &Master{
-		RestServer: server.RestServer{
-			DataStore:   s.dataStoreClient,
-			CacheStore:  s.cacheStoreClient,
-			GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
-		},
-	}
-	s.master.WebService = new(restful.WebService)
-	s.master.CreateWebService()
+	s.GorseConfig = (*config.Config)(nil).LoadDefaultIfNil()
+	s.WebService = new(restful.WebService)
+	s.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
-	s.handler.Add(s.master.WebService)
+	s.handler.Add(s.WebService)
 	return s
 }
 
 func (s *mockServer) Close(t *testing.T) {
-	err := s.dataStoreClient.Close()
+	err := s.DataClient.Close()
 	assert.Nil(t, err)
+	err = s.CacheClient.Close()
+	assert.Nil(t, err)
+	s.dataStoreServer.Close()
+	s.cacheStoreServer.Close()
 }
 
 func marshal(t *testing.T, v interface{}) string {
@@ -90,12 +86,12 @@ func TestMaster_ExportItems(t *testing.T) {
 		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
 		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}
-	err := s.dataStoreClient.BatchInsertItem(items)
+	err := s.DataClient.BatchInsertItem(items)
 	assert.Nil(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
 	w := httptest.NewRecorder()
-	s.master.importExportItems(w, req)
+	s.importExportItems(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment;filename=items.csv", w.Header().Get("Content-Disposition"))
@@ -114,12 +110,12 @@ func TestMaster_ExportFeedback(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
 	}
-	err := s.dataStoreClient.BatchInsertFeedback(feedbacks, true, true)
+	err := s.DataClient.BatchInsertFeedback(feedbacks, true, true)
 	assert.Nil(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
 	w := httptest.NewRecorder()
-	s.master.importExportFeedback(w, req)
+	s.importExportFeedback(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment;filename=feedback.csv", w.Header().Get("Content-Disposition"))
@@ -154,11 +150,11 @@ func TestMaster_ImportItems(t *testing.T) {
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
-	s.master.importExportItems(w, req)
+	s.importExportItems(w, req)
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.dataStoreClient.GetItems("", 100, nil)
+	_, items, err := s.DataClient.GetItems("", 100, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, []data.Item{
 		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
@@ -185,11 +181,11 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
-	s.master.importExportItems(w, req)
+	s.importExportItems(w, req)
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.dataStoreClient.GetItems("", 100, nil)
+	_, items, err := s.DataClient.GetItems("", 100, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, []data.Item{
 		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
@@ -221,11 +217,11 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
-	s.master.importExportFeedback(w, req)
+	s.importExportFeedback(w, req)
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.dataStoreClient.GetFeedback("", 100, nil)
+	_, feedback, err := s.DataClient.GetFeedback("", 100, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -252,11 +248,11 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
-	s.master.importExportFeedback(w, req)
+	s.importExportFeedback(w, req)
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.dataStoreClient.GetFeedback("", 100, nil)
+	_, feedback, err := s.DataClient.GetFeedback("", 100, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -271,9 +267,9 @@ func TestMaster_GetCluster(t *testing.T) {
 	// add nodes
 	serverNode := &Node{"alan turnin", ServerNode, "192.168.1.100", 1080}
 	workerNode := &Node{"dennis ritchie", WorkerNode, "192.168.1.101", 1081}
-	s.master.nodesInfo = make(map[string]*Node)
-	s.master.nodesInfo["alan turning"] = serverNode
-	s.master.nodesInfo["dennis ritchie"] = workerNode
+	s.nodesInfo = make(map[string]*Node)
+	s.nodesInfo["alan turning"] = serverNode
+	s.nodesInfo["dennis ritchie"] = workerNode
 	// get nodes
 	apitest.New().
 		Handler(s.handler).
@@ -288,12 +284,12 @@ func TestMaster_GetStats(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// set stats
-	s.master.prModelName = "ccd"
-	err := s.cacheStoreClient.SetString(cache.GlobalMeta, cache.NumItems, "123")
+	s.rankingModelName = "ccd"
+	err := s.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, "123")
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetString(cache.GlobalMeta, cache.NumUsers, "234")
+	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, "234")
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, "345")
+	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, "345")
 	assert.Nil(t, err)
 	// get stats
 	apitest.New().
@@ -305,7 +301,7 @@ func TestMaster_GetStats(t *testing.T) {
 			NumUsers:       "234",
 			NumItems:       "123",
 			NumPosFeedback: "345",
-			PRModel:        "ccd",
+			RankingModel:   "ccd",
 		})).
 		End()
 }
@@ -320,11 +316,11 @@ func TestMaster_GetUsers(t *testing.T) {
 		{data.User{UserId: "2"}, "2002-01-01", "2022-01-02"},
 	}
 	for _, user := range users {
-		err := s.dataStoreClient.InsertUser(user.User)
+		err := s.DataClient.InsertUser(user.User)
 		assert.Nil(t, err)
-		err = s.cacheStoreClient.SetString(cache.LastActiveTime, user.UserId, user.LastActiveTime)
+		err = s.CacheClient.SetString(cache.LastActiveTime, user.UserId, user.LastActiveTime)
 		assert.Nil(t, err)
-		err = s.cacheStoreClient.SetString(cache.LastUpdateRecommendTime, user.UserId, user.LastUpdateTime)
+		err = s.CacheClient.SetString(cache.LastUpdateRecommendTime, user.UserId, user.LastUpdateTime)
 		assert.Nil(t, err)
 	}
 	// get users
@@ -371,12 +367,12 @@ func TestServer_List(t *testing.T) {
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.cacheStoreClient.SetScores(operator.Prefix, operator.Label, itemIds)
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, itemIds)
 		assert.Nil(t, err)
 		items := make([]data.Item, 0)
 		for _, item := range itemIds {
 			items = append(items, data.Item{ItemId: item.ItemId})
-			err = s.dataStoreClient.InsertItem(data.Item{ItemId: item.ItemId})
+			err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
 			assert.Nil(t, err)
 		}
 		apitest.New().
@@ -401,7 +397,7 @@ func TestServer_Feedback(t *testing.T) {
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "8"}},
 	}
 	for _, v := range feedback {
-		err := s.dataStoreClient.InsertFeedback(data.Feedback{
+		err := s.DataClient.InsertFeedback(data.Feedback{
 			FeedbackKey: data.FeedbackKey{FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId},
 		}, true, true)
 		assert.Nil(t, err)
@@ -430,20 +426,18 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0", itemIds)
+	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0", itemIds)
 	assert.Nil(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}
-	for _, v := range feedback {
-		err = s.master.InsertFeedbackTwice(v, true, true)
-		assert.Nil(t, err)
-	}
+	err = s.RestServer.InsertFeedbackToCache(feedback)
+	assert.Nil(t, err)
 	// insert items
 	for _, item := range itemIds {
-		err = s.dataStoreClient.InsertItem(data.Item{ItemId: item.ItemId})
+		err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
 		assert.Nil(t, err)
 	}
 	apitest.New().

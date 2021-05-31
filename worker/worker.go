@@ -20,7 +20,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/araddon/dateparse"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -39,10 +38,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Worker manages states of a worker node.
 type Worker struct {
 	// worker config
 	cfg        *config.Config
-	Jobs       int
+	jobs       int
 	workerName string
 	httpHost   string
 	httpPort   int
@@ -50,23 +50,23 @@ type Worker struct {
 	masterPort int
 
 	// database connection
-	cacheAddress string
-	cacheStore   cache.Database
-	dataAddress  string
-	dataStore    data.Database
+	cachePath   string
+	cacheClient cache.Database
+	dataPath    string
+	dataClient  data.Database
 
 	// master connection
-	MasterClient protocol.MasterClient
+	masterClient protocol.MasterClient
 
 	// user index
-	latestUserVersion int64
-	userVersion       int64
-	userIndex         *base.MapIndex
+	latestUserIndexVersion  int64
+	currentUserIndexVersion int64
+	userIndex               *base.MapIndex
 
-	// collaborative filtering model
-	latestPRVersion int64
-	prModelVersion  int64
-	prModel         ranking.Model
+	// ranking model
+	latestRankingModelVersion  int64
+	currentRankingModelVersion int64
+	rankingModel               ranking.Model
 
 	// peers
 	peers []string
@@ -75,25 +75,26 @@ type Worker struct {
 	// events
 	ticker     *time.Ticker
 	syncedChan chan bool // meta synced events
-	pullChan   chan bool // model pulled events
+	pulledChan chan bool // model pulled events
 }
 
+// NewWorker creates a new worker node.
 func NewWorker(masterHost string, masterPort int, httpHost string, httpPort int, jobs int) *Worker {
 	return &Worker{
 		// database
-		dataStore:  data.NoDatabase{},
-		cacheStore: cache.NoDatabase{},
+		dataClient:  data.NoDatabase{},
+		cacheClient: cache.NoDatabase{},
 		// config
 		masterHost: masterHost,
 		masterPort: masterPort,
 		httpHost:   httpHost,
 		httpPort:   httpPort,
-		Jobs:       jobs,
+		jobs:       jobs,
 		cfg:        (*config.Config)(nil).LoadDefaultIfNil(),
 		// events
 		ticker:     time.NewTicker(time.Minute),
 		syncedChan: make(chan bool, 1024),
-		pullChan:   make(chan bool, 1024),
+		pulledChan: make(chan bool, 1024),
 	}
 }
 
@@ -104,7 +105,7 @@ func (w *Worker) Sync() {
 	for {
 		var meta *protocol.Meta
 		var err error
-		if meta, err = w.MasterClient.GetMeta(context.Background(),
+		if meta, err = w.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
 				NodeType: protocol.NodeType_WorkerNode,
 				NodeName: w.workerName,
@@ -122,40 +123,40 @@ func (w *Worker) Sync() {
 		}
 
 		// connect to data store
-		if w.dataAddress != w.cfg.Database.DataStore {
+		if w.dataPath != w.cfg.Database.DataStore {
 			base.Logger().Info("connect data store", zap.String("database", w.cfg.Database.DataStore))
-			if w.dataStore, err = data.Open(w.cfg.Database.DataStore); err != nil {
+			if w.dataClient, err = data.Open(w.cfg.Database.DataStore); err != nil {
 				base.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
-			w.dataAddress = w.cfg.Database.DataStore
+			w.dataPath = w.cfg.Database.DataStore
 		}
 
 		// connect to cache store
-		if w.cacheAddress != w.cfg.Database.CacheStore {
+		if w.cachePath != w.cfg.Database.CacheStore {
 			base.Logger().Info("connect cache store", zap.String("database", w.cfg.Database.CacheStore))
-			if w.cacheStore, err = cache.Open(w.cfg.Database.CacheStore); err != nil {
+			if w.cacheClient, err = cache.Open(w.cfg.Database.CacheStore); err != nil {
 				base.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
-			w.cacheAddress = w.cfg.Database.CacheStore
+			w.cachePath = w.cfg.Database.CacheStore
 		}
 
-		// check CF version
-		w.latestPRVersion = meta.PrVersion
-		if w.latestPRVersion != w.prModelVersion {
-			base.Logger().Info("new personal ranking model found",
-				zap.String("old_version", base.Hex(w.prModelVersion)),
-				zap.String("new_version", base.Hex(w.latestPRVersion)))
+		// check ranking model version
+		w.latestRankingModelVersion = meta.RankingModelVersion
+		if w.latestRankingModelVersion != w.currentRankingModelVersion {
+			base.Logger().Info("new ranking model found",
+				zap.String("old_version", base.Hex(w.currentRankingModelVersion)),
+				zap.String("new_version", base.Hex(w.latestRankingModelVersion)))
 			w.syncedChan <- true
 		}
 
 		// check user index version
-		w.latestUserVersion = meta.UserIndexVersion
-		if w.latestUserVersion != w.userVersion {
+		w.latestUserIndexVersion = meta.UserIndexVersion
+		if w.latestUserIndexVersion != w.currentUserIndexVersion {
 			base.Logger().Info("new user index found",
-				zap.String("old_version", base.Hex(w.userVersion)),
-				zap.String("new_version", base.Hex(w.latestUserVersion)))
+				zap.String("old_version", base.Hex(w.currentUserIndexVersion)),
+				zap.String("new_version", base.Hex(w.latestUserIndexVersion)))
 			w.syncedChan <- true
 		}
 
@@ -166,16 +167,16 @@ func (w *Worker) Sync() {
 	}
 }
 
-// Pull user index and collaborative filtering model from master.
+// Pull user index and ranking model from master.
 func (w *Worker) Pull() {
 	defer base.CheckPanic()
 	for range w.syncedChan {
 		pulled := false
 
 		// pull user index
-		if w.latestUserVersion != w.userVersion {
+		if w.latestUserIndexVersion != w.currentUserIndexVersion {
 			base.Logger().Info("start pull user index")
-			if userIndexResponse, err := w.MasterClient.GetUserIndex(context.Background(),
+			if userIndexResponse, err := w.masterClient.GetUserIndex(context.Background(),
 				&protocol.NodeInfo{NodeType: protocol.NodeType_WorkerNode, NodeName: w.workerName},
 				grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull user index", zap.Error(err))
@@ -188,31 +189,31 @@ func (w *Worker) Pull() {
 					base.Logger().Error("failed to decode user index", zap.Error(err))
 				} else {
 					w.userIndex = &userIndex
-					w.userVersion = userIndexResponse.Version
+					w.currentUserIndexVersion = userIndexResponse.Version
 					base.Logger().Info("synced user index",
-						zap.String("version", base.Hex(w.userVersion)))
+						zap.String("version", base.Hex(w.currentUserIndexVersion)))
 					pulled = true
 				}
 			}
 		}
 
-		// pull personal ranking model
-		if w.latestPRVersion != w.prModelVersion {
-			base.Logger().Info("start pull personal ranking model")
-			if mfResponse, err := w.MasterClient.GetPRModel(context.Background(),
+		// pull ranking model
+		if w.latestRankingModelVersion != w.currentRankingModelVersion {
+			base.Logger().Info("start pull ranking model")
+			if mfResponse, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.NodeInfo{
 					NodeType: protocol.NodeType_WorkerNode,
 					NodeName: w.workerName,
 				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
-				base.Logger().Error("failed to pull personal ranking model", zap.Error(err))
+				base.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
-				w.prModel, err = ranking.DecodeModel(mfResponse.Name, mfResponse.Model)
+				w.rankingModel, err = ranking.DecodeModel(mfResponse.Name, mfResponse.Model)
 				if err != nil {
-					base.Logger().Error("failed to decode personal ranking model", zap.Error(err))
+					base.Logger().Error("failed to decode ranking model", zap.Error(err))
 				} else {
-					w.prModelVersion = mfResponse.Version
-					base.Logger().Info("synced personal ranking model",
-						zap.String("version", base.Hex(w.prModelVersion)))
+					w.currentRankingModelVersion = mfResponse.Version
+					base.Logger().Info("synced ranking model",
+						zap.String("version", base.Hex(w.currentRankingModelVersion)))
 					pulled = true
 				}
 			}
@@ -224,6 +225,7 @@ func (w *Worker) Pull() {
 	}
 }
 
+// ServeMetrics serves Prometheus metrics.
 func (w *Worker) ServeMetrics() {
 	http.Handle("/metrics", promhttp.Handler())
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
@@ -232,6 +234,7 @@ func (w *Worker) ServeMetrics() {
 	}
 }
 
+// Serve as a worker node.
 func (w *Worker) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
@@ -249,7 +252,7 @@ func (w *Worker) Serve() {
 	}
 	w.workerName = state.WorkerName
 	base.Logger().Info("start worker",
-		zap.Int("n_jobs", w.Jobs),
+		zap.Int("n_jobs", w.jobs),
 		zap.String("worker_name", w.workerName))
 
 	// connect to master
@@ -257,7 +260,7 @@ func (w *Worker) Serve() {
 	if err != nil {
 		base.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
-	w.MasterClient = protocol.NewMasterClient(conn)
+	w.masterClient = protocol.NewMasterClient(conn)
 
 	go w.Sync()
 	go w.Pull()
@@ -276,11 +279,11 @@ func (w *Worker) Serve() {
 				return
 			}
 
-			// offline recommendation
-			if w.prModel != nil {
-				w.Recommend(w.prModel, workingUsers)
+			// recommendation
+			if w.rankingModel != nil {
+				w.Recommend(w.rankingModel, workingUsers)
 			} else {
-				base.Logger().Debug("local personal ranking model doesn't exist")
+				base.Logger().Debug("local ranking model doesn't exist")
 			}
 		}
 	}
@@ -295,6 +298,13 @@ func (w *Worker) Serve() {
 	}
 }
 
+// Recommend items to users. The workflow of recommendation is:
+// 1. Skip inactive users.
+// 2. Load historical items.
+// 3. Load positive items if KNN used.
+// 4. Generate recommendation.
+// 5. Save result.
+// 6. Refresh cache.
 func (w *Worker) Recommend(m ranking.Model, users []string) {
 	var userIndexer base.Index
 	// load user index
@@ -303,10 +313,10 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 	}
 	// load item index
 	itemIds := m.GetItemIndex().GetNames()
-	base.Logger().Info("personal ranking recommendation",
+	base.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_items", len(itemIds)),
-		zap.Int("n_jobs", w.Jobs),
+		zap.Int("n_jobs", w.jobs),
 		zap.Int("cache_size", w.cfg.Database.CacheSize))
 	// progress tracker
 	completed := make(chan interface{}, 1000)
@@ -322,15 +332,15 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				}
 				completedCount++
 			case <-ticker.C:
-				base.Logger().Info("personal ranking recommendation",
+				base.Logger().Info("ranking recommendation",
 					zap.Int("n_complete_users", completedCount),
 					zap.Int("n_working_users", len(users)))
 			}
 		}
 	}()
-	// collaborative filtering recommendation
+	// recommendation
 	startTime := time.Now()
-	_ = base.Parallel(len(users), w.Jobs, func(workerId, jobId int) error {
+	_ = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		userId := users[jobId]
 		// convert to user index
 		var userIndex int
@@ -341,23 +351,18 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		if !w.checkRecommendCacheTimeout(userId) {
 			return nil
 		}
-		// Clear ignore items in cache. Since ignore items have been ignored
-		// in offline recommendation stage.
-		err := w.cacheStore.ClearList(cache.IgnoreItems, userId)
-		if err != nil {
-			return err
-		}
-		// remove saw items
-		historyItems, err := loadFeedbackItems(w.dataStore, userId)
+		// load historical items
+		historyItems, err := loadUserHistoricalItems(w.dataClient, userId)
 		historySet := set.NewStringSet(historyItems...)
 		if err != nil {
 			base.Logger().Error("failed to pull user feedback",
 				zap.String("user_id", userId), zap.Error(err))
 			return err
 		}
-		var favoredItemIndices []int
+		// load positive items
+		var positiveItemIndices []int
 		if _, ok := m.(*ranking.KNN); ok {
-			favoredItems, err := loadFeedbackItems(w.dataStore, userId, w.cfg.Database.PositiveFeedbackType...)
+			favoredItems, err := loadUserHistoricalItems(w.dataClient, userId, w.cfg.Database.PositiveFeedbackType...)
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
 					zap.String("user_id", userId), zap.Error(err))
@@ -366,10 +371,11 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			for _, itemId := range favoredItems {
 				itemIndex := m.GetItemIndex().ToNumber(itemId)
 				if itemIndex != base.NotId {
-					favoredItemIndices = append(favoredItemIndices, itemIndex)
+					positiveItemIndices = append(positiveItemIndices, itemIndex)
 				}
 			}
 		}
+		// generate recommendation
 		recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
 		for itemIndex, itemId := range itemIds {
 			if !historySet.Has(itemId) {
@@ -377,25 +383,31 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				case ranking.MatrixFactorization:
 					recItems.Push(itemId, m.(ranking.MatrixFactorization).InternalPredict(userIndex, itemIndex))
 				case *ranking.KNN:
-					recItems.Push(itemId, m.(*ranking.KNN).InternalPredict(favoredItemIndices, itemIndex))
+					recItems.Push(itemId, m.(*ranking.KNN).InternalPredict(positiveItemIndices, itemIndex))
 				default:
 					base.Logger().Error("unknown model type")
 				}
 			}
 		}
+		// save result
 		elems, scores := recItems.PopAll()
-		if err = w.cacheStore.SetScores(cache.CollaborativeItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
-			base.Logger().Error("failed to cache collaborative filtering recommendation", zap.Error(err))
+		if err = w.cacheClient.SetScores(cache.CollaborativeItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
+			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return err
 		}
-		if err = w.cacheStore.SetString(cache.LastUpdateRecommendTime, userId, base.Now()); err != nil {
-			base.Logger().Error("failed to cache collaborative filtering recommendation time", zap.Error(err))
+		if err = w.cacheClient.SetString(cache.LastUpdateRecommendTime, userId, base.Now()); err != nil {
+			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
+		}
+		// refresh cache
+		err = w.refreshCache(userId)
+		if err != nil {
+			return err
 		}
 		completed <- nil
 		return nil
 	})
 	close(completed)
-	base.Logger().Info("complete personal ranking recommendation",
+	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 }
 
@@ -404,30 +416,19 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 // 2. if recommend time + timeout < now, stale.
 func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	var activeTime, recommendTime time.Time
+	var err error
 	// read active time
-	activeTimeLiteral, err := w.cacheStore.GetString(cache.LastActiveTime, userId)
-	if err != nil {
-		if err != cache.ErrObjectNotExist {
-			base.Logger().Error("failed to read meta", zap.Error(err))
-		}
-	} else {
-		activeTime, err = dateparse.ParseAny(activeTimeLiteral)
-		if err != nil {
-			base.Logger().Error("failed to time", zap.Error(err))
-		}
+	activeTime, err = w.cacheClient.GetTime(cache.LastActiveTime, userId)
+	if err != nil && err != cache.ErrObjectNotExist {
+		base.Logger().Error("failed to read meta", zap.Error(err))
 	}
 	// read recommend time
-	recommendTimeLiteral, err := w.cacheStore.GetString(cache.LastUpdateRecommendTime, userId)
+	recommendTime, err = w.cacheClient.GetTime(cache.LastUpdateRecommendTime, userId)
 	if err != nil {
 		if err != cache.ErrObjectNotExist {
 			base.Logger().Error("failed to read meta", zap.Error(err))
 		} else {
 			return true
-		}
-	} else {
-		recommendTime, err = dateparse.ParseAny(recommendTimeLiteral)
-		if err != nil {
-			base.Logger().Error("failed to time", zap.Error(err))
 		}
 	}
 	// check time
@@ -438,86 +439,51 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	return true
 }
 
-//
-//func (w *Worker) Subscribe(users []string) {
-//	base.Logger().Info("subscribe",
-//		zap.Bool("implicit_subscribe", w.cfg.Subscribe.ImplicitSubscribe))
-//	completed := make(chan interface{})
-//	go func() {
-//		defer base.CheckPanic()
-//		completedCount := 0
-//		ticker := time.NewTicker(time.Second * 5)
-//		for {
-//			select {
-//			case _, ok := <-completed:
-//				if !ok {
-//					return
-//				}
-//				completedCount++
-//			case <-ticker.C:
-//				base.Logger().Info("subscribe",
-//					zap.Int("n_complete_users", completedCount),
-//					zap.Int("n_working_users", len(users)))
-//			}
-//		}
-//	}()
-//	_ = base.Parallel(len(users), w.FitJobs, func(workerId, jobId int) error {
-//		user := users[jobId]
-//		// collect items
-//		historySet := base.NewStringSet()
-//		for _, feedbackType := range w.cfg.Database.PositiveFeedbackType {
-//			historyFeedback, err := w.dataStore.GetUserFeedback(user, &feedbackType)
-//			if err != nil {
-//				base.Logger().Error("failed to pull user feedback",
-//					zap.String("user_id", user), zap.Error(err))
-//				return err
-//			}
-//			for _, feedback := range historyFeedback {
-//				historySet.Add(feedback.ItemId)
-//			}
-//		}
-//		// collect labels
-//		labelSet := make(map[string]int)
-//		for itemId, _ := range historySet {
-//			if item, err := w.dataStore.GetItem(itemId); err != nil {
-//				base.Logger().Error("failed to get item", zap.String("item_id", itemId), zap.Error(err))
-//			} else {
-//				for _, label := range item.Labels {
-//					labelSet[label] ++
-//				}
-//			}
-//		}
-//		base.Logger().Info("items", zap.Any("items", labelSet))
-//		completed <- nil
-//		return nil
-//	})
-//	close(completed)
-//}
-
-func loadFeedbackItems(database data.Database, userId string, feedbackTypes ...string) ([]string, error) {
+func loadUserHistoricalItems(database data.Database, userId string, feedbackTypes ...string) ([]string, error) {
 	items := make([]string, 0)
-	if len(feedbackTypes) == 0 {
-		feedbacks, err := database.GetUserFeedback(userId)
-		if err != nil {
-			return nil, err
-		}
-		for _, feedback := range feedbacks {
-			items = append(items, feedback.ItemId)
-		}
-	} else {
-		for _, tp := range feedbackTypes {
-			feedbacks, err := database.GetUserFeedback(userId, tp)
-			if err != nil {
-				return nil, err
-			}
-			for _, feedback := range feedbacks {
-				items = append(items, feedback.ItemId)
-			}
-		}
+	feedbacks, err := database.GetUserFeedback(userId, feedbackTypes...)
+	if err != nil {
+		return nil, err
+	}
+	for _, feedback := range feedbacks {
+		items = append(items, feedback.ItemId)
 	}
 	return items, nil
 }
 
+func (w *Worker) refreshCache(userId string) error {
+	var timeLimit *time.Time
+	// read recommend time
+	recommendTime, err := w.cacheClient.GetTime(cache.LastUpdateRecommendTime, userId)
+	if err == nil {
+		timeLimit = &recommendTime
+	} else {
+		return err
+	}
+	// clear cache
+	err = w.cacheClient.ClearList(cache.IgnoreItems, userId)
+	if err != nil {
+		return err
+	}
+	// load cache
+	feedback, err := w.dataClient.GetUserFeedback(userId)
+	if err != nil {
+		return err
+	}
+	var items []string
+	for _, v := range feedback {
+		if v.Timestamp.Unix() > timeLimit.Unix() {
+			items = append(items, v.ItemId)
+		}
+	}
+	err = w.cacheClient.AppendList(cache.IgnoreItems, userId, items...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// split users between worker nodes.
 func split(userIndex base.Index, nodes []string, me string) ([]string, error) {
 	// locate me
 	pos := -1

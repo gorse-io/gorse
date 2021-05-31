@@ -15,37 +15,39 @@ package cache
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func testMeta(t *testing.T, db Database) {
 	// Set meta string
-	if err := db.SetString("meta", "1", "2"); err != nil {
-		t.Fatal(err)
-	}
+	err := db.SetString("meta", "1", "2")
+	assert.Nil(t, err)
 	// Get meta string
 	value, err := db.GetString("meta", "1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 	assert.Equal(t, "2", value)
 	// Get meta not existed
 	value, err = db.GetString("meta", "NULL")
-	if err == nil {
-		t.Fatal(err)
-	}
+	assert.ErrorIs(t, err, ErrObjectNotExist)
 	assert.Equal(t, "", value)
 	// Set meta int
-	if err = db.SetInt("meta", "1", 2); err != nil {
-		t.Fatal(err)
-	}
+	err = db.SetInt("meta", "1", 2)
+	assert.Nil(t, err)
 	// Get meta int
-	if value, err := db.GetInt("meta", "1"); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Equal(t, 2, value)
-	}
+	valInt, err := db.GetInt("meta", "1")
+	assert.Nil(t, err)
+	assert.Equal(t, 2, valInt)
+	// set meta time
+	err = db.SetTime("meta", "1", time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC))
+	assert.Nil(t, err)
+	// get meta time
+	valTime, err := db.GetTime("meta", "1")
+	assert.Nil(t, err)
+	assert.Equal(t, 1996, valTime.Year())
+	assert.Equal(t, time.Month(4), valTime.Month())
+	assert.Equal(t, 8, valTime.Day())
 }
 
 func testScores(t *testing.T, db Database) {

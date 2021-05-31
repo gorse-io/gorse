@@ -1,3 +1,17 @@
+// Copyright 2021 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package master
 
 import (
@@ -8,15 +22,17 @@ import (
 	"path/filepath"
 )
 
+// LocalCache is local cache for the master node.
 type LocalCache struct {
-	path         string
-	ModelName    string
-	ModelVersion int64
-	Model        ranking.Model
-	ModelScore   ranking.Score
-	UserIndex    base.Index
+	path                string
+	RankingModelName    string
+	RankingModelVersion int64
+	RankingModel        ranking.Model
+	RankingScore        ranking.Score
+	UserIndex           base.Index
 }
 
+// LoadLocalCache loads local cache from a file.
 func LoadLocalCache(path string) (*LocalCache, error) {
 	state := &LocalCache{path: path}
 	// check if file exists
@@ -34,27 +50,27 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	}
 	decoder := gob.NewDecoder(f)
 	// 1. model name
-	err = decoder.Decode(&state.ModelName)
+	err = decoder.Decode(&state.RankingModelName)
 	if err != nil {
 		return state, err
 	}
 	// 2. model version
-	err = decoder.Decode(&state.ModelVersion)
+	err = decoder.Decode(&state.RankingModelVersion)
 	if err != nil {
 		return state, err
 	}
 	// 3. model
-	state.Model, err = ranking.NewModel(state.ModelName, nil)
+	state.RankingModel, err = ranking.NewModel(state.RankingModelName, nil)
 	if err != nil {
 		return state, err
 	}
-	err = decoder.Decode(state.Model)
+	err = decoder.Decode(state.RankingModel)
 	if err != nil {
 		return state, err
 	}
-	state.Model.SetParams(state.Model.GetParams())
+	state.RankingModel.SetParams(state.RankingModel.GetParams())
 	// 4. model score
-	err = decoder.Decode(&state.ModelScore)
+	err = decoder.Decode(&state.RankingScore)
 	if err != nil {
 		return state, err
 	}
@@ -67,6 +83,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	return state, nil
 }
 
+// WriteLocalCache writes local cache to a file.
 func (c *LocalCache) WriteLocalCache() error {
 	// create parent folder if not exists
 	parent := filepath.Dir(c.path)
@@ -83,22 +100,22 @@ func (c *LocalCache) WriteLocalCache() error {
 	}
 	encoder := gob.NewEncoder(f)
 	// 1. model name
-	err = encoder.Encode(c.ModelName)
+	err = encoder.Encode(c.RankingModelName)
 	if err != nil {
 		return err
 	}
 	// 2. model version
-	err = encoder.Encode(c.ModelVersion)
+	err = encoder.Encode(c.RankingModelVersion)
 	if err != nil {
 		return err
 	}
 	// 3. model
-	err = encoder.Encode(c.Model)
+	err = encoder.Encode(c.RankingModel)
 	if err != nil {
 		return err
 	}
 	// 4. model score
-	err = encoder.Encode(c.ModelScore)
+	err = encoder.Encode(c.RankingScore)
 	if err != nil {
 		return err
 	}

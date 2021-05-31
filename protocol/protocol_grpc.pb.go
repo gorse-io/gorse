@@ -21,8 +21,7 @@ type MasterClient interface {
 	GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Meta, error)
 	// data distribute
 	GetUserIndex(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*UserIndex, error)
-	GetCTRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
-	GetPRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
+	GetRankingModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
 }
 
 type masterClient struct {
@@ -51,18 +50,9 @@ func (c *masterClient) GetUserIndex(ctx context.Context, in *NodeInfo, opts ...g
 	return out, nil
 }
 
-func (c *masterClient) GetCTRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
+func (c *masterClient) GetRankingModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
 	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetCTRModel", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) GetPRModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
-	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetPRModel", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetRankingModel", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +67,7 @@ type MasterServer interface {
 	GetMeta(context.Context, *NodeInfo) (*Meta, error)
 	// data distribute
 	GetUserIndex(context.Context, *NodeInfo) (*UserIndex, error)
-	GetCTRModel(context.Context, *NodeInfo) (*Model, error)
-	GetPRModel(context.Context, *NodeInfo) (*Model, error)
+	GetRankingModel(context.Context, *NodeInfo) (*Model, error)
 	mustEmbedUnimplementedMasterServer()
 }
 
@@ -92,11 +81,8 @@ func (UnimplementedMasterServer) GetMeta(context.Context, *NodeInfo) (*Meta, err
 func (UnimplementedMasterServer) GetUserIndex(context.Context, *NodeInfo) (*UserIndex, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserIndex not implemented")
 }
-func (UnimplementedMasterServer) GetCTRModel(context.Context, *NodeInfo) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCTRModel not implemented")
-}
-func (UnimplementedMasterServer) GetPRModel(context.Context, *NodeInfo) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetPRModel not implemented")
+func (UnimplementedMasterServer) GetRankingModel(context.Context, *NodeInfo) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRankingModel not implemented")
 }
 func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
 
@@ -147,38 +133,20 @@ func _Master_GetUserIndex_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Master_GetCTRModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Master_GetRankingModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MasterServer).GetCTRModel(ctx, in)
+		return srv.(MasterServer).GetRankingModel(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Master/GetCTRModel",
+		FullMethod: "/protocol.Master/GetRankingModel",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetCTRModel(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_GetPRModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetPRModel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetPRModel",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetPRModel(ctx, req.(*NodeInfo))
+		return srv.(MasterServer).GetRankingModel(ctx, req.(*NodeInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -196,12 +164,8 @@ var _Master_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Master_GetUserIndex_Handler,
 		},
 		{
-			MethodName: "GetCTRModel",
-			Handler:    _Master_GetCTRModel_Handler,
-		},
-		{
-			MethodName: "GetPRModel",
-			Handler:    _Master_GetPRModel_Handler,
+			MethodName: "GetRankingModel",
+			Handler:    _Master_GetRankingModel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

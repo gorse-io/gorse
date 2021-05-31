@@ -19,6 +19,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 	"strings"
+	"time"
 )
 
 const (
@@ -30,14 +31,12 @@ const (
 	CollaborativeItems = "collaborative_items"
 	SubscribeItems     = "subscribe_items"
 
-	GlobalMeta                  = "global_meta"
-	CollectPopularTime          = "last_update_popular_time"
-	CollectLatestTime           = "last_update_latest_time"
-	CollectSimilarTime          = "last_update_similar_time"
-	FitMatrixFactorizationTime  = "last_fit_match_model_time"
-	FitFactorizationMachineTime = "last_fit_rank_model_time"
-	MatrixFactorizationVersion  = "latest_match_model_version"
-	FactorizationMachineVersion = "latest_rank_model_version"
+	GlobalMeta                 = "global_meta"
+	CollectPopularTime         = "last_update_popular_time"
+	CollectLatestTime          = "last_update_latest_time"
+	CollectSimilarTime         = "last_update_similar_time"
+	FitMatrixFactorizationTime = "last_fit_match_model_time"
+	MatrixFactorizationVersion = "latest_match_model_version"
 
 	LastActiveTime          = "last_active_time"
 	LastUpdateRecommendTime = "last_update_recommend_time"
@@ -87,6 +86,8 @@ type Database interface {
 	GetList(prefix, name string) ([]string, error)
 	GetString(prefix, name string) (string, error)
 	SetString(prefix, name string, val string) error
+	GetTime(prefix, name string) (time.Time, error)
+	SetTime(prefix, name string, val time.Time) error
 	GetInt(prefix, name string) (int, error)
 	SetInt(prefix, name string, val int) error
 }

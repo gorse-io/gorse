@@ -1,3 +1,17 @@
+// Copyright 2021 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package master
 
 import (
@@ -14,6 +28,7 @@ import (
 	"strings"
 )
 
+// Node could be worker node for server node.
 type Node struct {
 	Name     string
 	Type     string
@@ -21,6 +36,7 @@ type Node struct {
 	HttpPort int64
 }
 
+// NewNode creates a node from Context and NodeInfo.
 func NewNode(ctx context.Context, nodeInfo *protocol.NodeInfo) *Node {
 	node := new(Node)
 	node.Name = nodeInfo.NodeName
@@ -39,8 +55,9 @@ func NewNode(ctx context.Context, nodeInfo *protocol.NodeInfo) *Node {
 	return node
 }
 
+// GetMeta returns latest configuration.
 func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*protocol.Meta, error) {
-	// save node
+	// register node
 	node := NewNode(ctx, nodeInfo)
 	if node.Type != "" {
 		if err := m.ttlCache.Set(nodeInfo.NodeName, node); err != nil {
@@ -53,27 +70,20 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	if err != nil {
 		return nil, err
 	}
-	// save user index version
+	// collect user index version
 	m.userIndexMutex.Lock()
 	var userIndexVersion int64
 	if m.userIndex != nil {
 		userIndexVersion = m.userIndexVersion
 	}
 	m.userIndexMutex.Unlock()
-	// save pr version
-	m.prMutex.Lock()
-	var prVersion int64
-	if m.prModel != nil {
-		prVersion = m.prVersion
+	// save ranking model version
+	m.rankingModelMutex.Lock()
+	var rankingModelVersion int64
+	if m.rankingModel != nil {
+		rankingModelVersion = m.rankingModelVersion
 	}
-	m.prMutex.Unlock()
-	// save fm version
-	//m.fmMutex.Lock()
-	//var fmVersion int64
-	//if m.fmModel != nil {
-	//	fmVersion = m.ctrVersion
-	//}
-	//m.fmMutex.Unlock()
+	m.rankingModelMutex.Unlock()
 	// collect nodes
 	workers := make([]string, 0)
 	servers := make([]string, 0)
@@ -88,53 +98,36 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	}
 	m.nodesInfoMutex.Unlock()
 	return &protocol.Meta{
-		Config:           string(s),
-		UserIndexVersion: userIndexVersion,
-		//FmVersion:        fmVersion,
-		PrVersion: prVersion,
-		Me:        nodeInfo.NodeName,
-		Workers:   workers,
-		Servers:   servers,
+		Config:              string(s),
+		UserIndexVersion:    userIndexVersion,
+		RankingModelVersion: rankingModelVersion,
+		Me:                  nodeInfo.NodeName,
+		Workers:             workers,
+		Servers:             servers,
 	}, nil
 }
 
-func (m *Master) GetPRModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
-	m.prMutex.Lock()
-	defer m.prMutex.Unlock()
+// GetRankingModel returns latest ranking model.
+func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+	m.rankingModelMutex.Lock()
+	defer m.rankingModelMutex.Unlock()
 	// skip empty model
-	if m.prModel == nil {
+	if m.rankingModel == nil {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
-	modelData, err := ranking.EncodeModel(m.prModel)
+	modelData, err := ranking.EncodeModel(m.rankingModel)
 	if err != nil {
 		return nil, err
 	}
 	return &protocol.Model{
-		Name:    m.prModelName,
-		Version: m.prVersion,
+		Name:    m.rankingModelName,
+		Version: m.rankingModelVersion,
 		Model:   modelData,
 	}, nil
 }
 
-//func (m *Master) GetFactorizationMachine(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
-//	m.fmMutex.Lock()
-//	defer m.fmMutex.Unlock()
-//	// skip empty model
-//	if m.fmModel == nil {
-//		return &protocol.Model{Version: 0}, nil
-//	}
-//	// encode model
-//	modelData, err := ctr.EncodeModel(m.fmModel)
-//	if err != nil {
-//		return nil, err
-//	}
-//	return &protocol.Model{
-//		Version: m.ctrVersion,
-//		Model:   modelData,
-//	}, nil
-//}
-
+// GetUserIndex returns latest user index.
 func (m *Master) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.UserIndex, error) {
 	m.userIndexMutex.Lock()
 	defer m.userIndexMutex.Unlock()
@@ -158,6 +151,7 @@ func (m *Master) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.Us
 	}, nil
 }
 
+// nodeUp handles node information inserted events.
 func (m *Master) nodeUp(key string, value interface{}) {
 	node := value.(*Node)
 	base.Logger().Info("node up",
@@ -169,6 +163,7 @@ func (m *Master) nodeUp(key string, value interface{}) {
 	m.nodesInfo[key] = node
 }
 
+// nodeDown handles node information timout events.
 func (m *Master) nodeDown(key string, value interface{}) {
 	node := value.(*Node)
 	base.Logger().Info("node down",
