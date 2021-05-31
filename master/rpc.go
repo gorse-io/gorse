@@ -7,7 +7,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model/pr"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/peer"
@@ -106,7 +106,7 @@ func (m *Master) GetPRModel(context.Context, *protocol.NodeInfo) (*protocol.Mode
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
-	modelData, err := pr.EncodeModel(m.prModel)
+	modelData, err := ranking.EncodeModel(m.prModel)
 	if err != nil {
 		return nil, err
 	}

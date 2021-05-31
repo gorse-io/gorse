@@ -60,7 +60,7 @@ func (NoDatabase) GetItems(cursor string, n int, time *time.Time) (string, []Ite
 }
 
 // GetItemFeedback method of NoDatabase returns NoDatabaseError.
-func (NoDatabase) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
+func (NoDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	return nil, NoDatabaseError
 }
 
@@ -85,17 +85,17 @@ func (NoDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 }
 
 // GetUserFeedback method of NoDatabase returns NoDatabaseError.
-func (NoDatabase) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
+func (NoDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error) {
 	return nil, NoDatabaseError
 }
 
 // GetUserItemFeedback method of NoDatabase returns NoDatabaseError.
-func (NoDatabase) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+func (NoDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	return nil, NoDatabaseError
 }
 
 // DeleteUserItemFeedback method of NoDatabase returns NoDatabaseError.
-func (NoDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error) {
+func (NoDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
 	return 0, NoDatabaseError
 }
 
@@ -110,7 +110,7 @@ func (NoDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertIte
 }
 
 // GetFeedback method of NoDatabase returns NoDatabaseError.
-func (NoDatabase) GetFeedback(cursor string, n int, feedbackType *string, time *time.Time) (string, []Feedback, error) {
+func (NoDatabase) GetFeedback(cursor string, n int, time *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	return "", nil, NoDatabaseError
 }
 

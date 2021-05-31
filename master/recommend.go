@@ -6,7 +6,7 @@ import (
 	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/model/pr"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
@@ -83,7 +83,7 @@ func (m *Master) latest(items []data.Item) {
 }
 
 // similar updates neighbors for the database.
-func (m *Master) similar(items []data.Item, dataset *pr.DataSet, similarity string) {
+func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity string) {
 	base.Logger().Info("collect similar items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create progress tracker
 	completed := make(chan []interface{}, 1000)
@@ -181,7 +181,7 @@ func dotInt(a, b []int) float32 {
 	return sum
 }
 
-func (m *Master) fitPRModel(dataSet *pr.DataSet, prModel pr.Model) {
+func (m *Master) fitPRModel(dataSet *ranking.DataSet, prModel ranking.Model) {
 	base.Logger().Info("fit personal ranking model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
 	// training model
 	trainSet, testSet := dataSet.Split(0, 0)

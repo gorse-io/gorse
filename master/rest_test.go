@@ -225,7 +225,7 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.dataStoreClient.GetFeedback("", 100, nil, nil)
+	_, feedback, err := s.dataStoreClient.GetFeedback("", 100, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -256,7 +256,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.dataStoreClient.GetFeedback("", 100, nil, nil)
+	_, feedback, err := s.dataStoreClient.GetFeedback("", 100, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},

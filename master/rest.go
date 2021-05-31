@@ -290,7 +290,7 @@ type Feedback struct {
 func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataStore.GetUserFeedback(userId, &feedbackType)
+	feedback, err := m.DataStore.GetUserFeedback(userId, feedbackType)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -520,7 +520,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		const batchSize = 1024
 		for {
 			var feedback []data.Feedback
-			cursor, feedback, err = m.DataStore.GetFeedback(cursor, batchSize, nil, nil)
+			cursor, feedback, err = m.DataStore.GetFeedback(cursor, batchSize, nil)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
 				return

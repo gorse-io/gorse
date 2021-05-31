@@ -240,22 +240,19 @@ func (db *MongoDB) GetItems(cursor string, n int, timeLimit *time.Time) (string,
 }
 
 // GetItemFeedback returns feedback of a item from MongoDB.
-func (db *MongoDB) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
+func (db *MongoDB) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var r *mongo.Cursor
 	var err error
-	if feedbackType != nil {
-		r, err = c.Find(ctx, bson.M{
-			"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
-			"feedbackkey.itemid":       bson.M{"$eq": itemId},
-		})
-	} else {
-		r, err = c.Find(ctx, bson.M{
-			"feedbackkey.itemid": bson.M{"$eq": itemId},
-		})
+	filter := bson.M{
+		"feedbackkey.itemid": bson.M{"$eq": itemId},
 	}
+	if len(feedbackTypes) > 0 {
+		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+	}
+	r, err = c.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -337,22 +334,19 @@ func (db *MongoDB) GetUsers(cursor string, n int) (string, []User, error) {
 }
 
 // GetUserFeedback returns feedback of a user from MongoDB.
-func (db *MongoDB) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
+func (db *MongoDB) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var r *mongo.Cursor
 	var err error
-	if feedbackType != nil {
-		r, err = c.Find(ctx, bson.M{
-			"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
-			"feedbackkey.userid":       bson.M{"$eq": userId},
-		})
-	} else {
-		r, err = c.Find(ctx, bson.M{
-			"feedbackkey.userid": bson.M{"$eq": userId},
-		})
+	filter := bson.M{
+		"feedbackkey.userid": bson.M{"$eq": userId},
 	}
+	if len(feedbackTypes) > 0 {
+		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+	}
+	r, err = c.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +488,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 }
 
 // GetFeedback returns multiple feedback from MongoDB.
-func (db *MongoDB) GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error) {
+func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	opt := options.Find()
@@ -510,8 +504,8 @@ func (db *MongoDB) GetFeedback(cursor string, n int, feedbackType *string, timeL
 		filter["feedbackkey"] = bson.M{"$gt": feedbackKey}
 	}
 	// pass feedback type to filter
-	if feedbackType != nil {
-		filter["feedbackkey.feedbacktype"] = bson.M{"$eq": *feedbackType}
+	if len(feedbackTypes) > 0 {
+		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
 	}
 	// pass time limit to filter
 	if timeLimit != nil {
@@ -541,22 +535,17 @@ func (db *MongoDB) GetFeedback(cursor string, n int, feedbackType *string, timeL
 }
 
 // GetUserItemFeedback returns a feedback return the user id and item id from MongoDB.
-func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var filter bson.M
-	if feedbackType != nil {
-		filter = bson.M{
-			"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
-			"feedbackkey.userid":       bson.M{"$eq": userId},
-			"feedbackkey.itemid":       bson.M{"$eq": itemId},
-		}
-	} else {
-		filter = bson.M{
-			"feedbackkey.userid": bson.M{"$eq": userId},
-			"feedbackkey.itemid": bson.M{"$eq": itemId},
-		}
+	filter = bson.M{
+		"feedbackkey.userid": bson.M{"$eq": userId},
+		"feedbackkey.itemid": bson.M{"$eq": itemId},
+	}
+	if len(feedbackTypes) > 0 {
+		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
 	}
 	r, err := c.Find(ctx, filter)
 	if err != nil {
@@ -575,21 +564,16 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackType *stri
 }
 
 // DeleteUserItemFeedback deletes a feedback return the user id and item id from MongoDB.
-func (db *MongoDB) DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error) {
+func (db *MongoDB) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var filter bson.M
-	if feedbackType != nil {
-		filter = bson.M{
-			"feedbackkey.feedbacktype": bson.M{"$eq": *feedbackType},
-			"feedbackkey.userid":       bson.M{"$eq": userId},
-			"feedbackkey.itemid":       bson.M{"$eq": itemId},
-		}
-	} else {
-		filter = bson.M{
-			"feedbackkey.userid": bson.M{"$eq": userId},
-			"feedbackkey.itemid": bson.M{"$eq": itemId},
-		}
+	filter = bson.M{
+		"feedbackkey.userid": bson.M{"$eq": userId},
+		"feedbackkey.itemid": bson.M{"$eq": itemId},
+	}
+	if len(feedbackTypes) > 0 {
+		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
 	}
 	r, err := c.DeleteMany(ctx, filter)
 	if err != nil {

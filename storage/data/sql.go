@@ -234,17 +234,25 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 }
 
 // GetItemFeedback returns feedback of a item from MySQL.
-func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
+func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
 	var result *sql.Rows
 	var err error
-	if feedbackType != nil {
-		result, err = d.db.Query("SELECT user_id, item_id, feedback_type FROM feedback "+
-			"WHERE item_id = ? AND feedback_type = ?",
-			itemId, *feedbackType)
-	} else {
-		result, err = d.db.Query("SELECT user_id, item_id, feedback_type FROM feedback WHERE item_id = ?", itemId)
+	var builder strings.Builder
+	builder.WriteString("SELECT user_id, item_id, feedback_type FROM feedback WHERE item_id = ?")
+	args := []interface{}{itemId}
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(" AND feedback_type IN (")
+		for i, feedbackType := range feedbackTypes {
+			builder.WriteString("?")
+			if i+1 < len(feedbackTypes) {
+				builder.WriteString(",")
+			}
+			args = append(args, feedbackType)
+		}
+		builder.WriteString(")")
 	}
+	result, err = d.db.Query(builder.String(), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -355,17 +363,25 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 }
 
 // GetUserFeedback returns feedback of a user from MySQL.
-func (d *SQLDatabase) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
+func (d *SQLDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
 	var result *sql.Rows
 	var err error
-	if feedbackType != nil {
-		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` "+
-			"FROM feedback WHERE user_id = ? AND feedback_type = ?", userId, *feedbackType)
-	} else {
-		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` "+
-			"FROM feedback WHERE user_id = ?", userId)
+	var builder strings.Builder
+	builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE user_id = ?")
+	args := []interface{}{userId}
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(" AND feedback_type IN (")
+		for i, feedbackType := range feedbackTypes {
+			builder.WriteString("?")
+			if i+1 < len(feedbackTypes) {
+				builder.WriteString(",")
+			}
+			args = append(args, feedbackType)
+		}
+		builder.WriteString(")")
 	}
+	result, err = d.db.Query(builder.String(), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +537,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 }
 
 // GetFeedback returns feedback from MySQL.
-func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error) {
+func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	var cursorKey FeedbackKey
 	if cursor != "" {
 		if err := json.Unmarshal([]byte(cursor), &cursorKey); err != nil {
@@ -530,27 +546,27 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string, ti
 	}
 	var result *sql.Rows
 	var err error
-	if feedbackType != nil {
-		if timeLimit != nil {
-			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-				"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? AND time_stamp >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
-				*feedbackType, cursorKey.UserId, cursorKey.ItemId, *timeLimit, n+1)
-		} else {
-			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-				"WHERE feedback_type = ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
-				*feedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
+	var builder strings.Builder
+	builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ?")
+	args := []interface{}{cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId}
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(" AND feedback_type IN (")
+		for i, feedbackType := range feedbackTypes {
+			builder.WriteString("?")
+			if i+1 < len(feedbackTypes) {
+				builder.WriteString(",")
+			}
+			args = append(args, feedbackType)
 		}
-	} else {
-		if timeLimit != nil {
-			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-				"WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ? AND time_stamp >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
-				cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId, *timeLimit, n+1)
-		} else {
-			result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-				"WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ? ORDER BY feedback_type, user_id, item_id LIMIT ?",
-				cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId, n+1)
-		}
+		builder.WriteString(")")
 	}
+	if timeLimit != nil {
+		builder.WriteString(" AND time_stamp >= ?")
+		args = append(args, *timeLimit)
+	}
+	builder.WriteString(" ORDER BY feedback_type, user_id, item_id LIMIT ?")
+	args = append(args, n+1)
+	result, err = d.db.Query(builder.String(), args...)
 	if err != nil {
 		return "", nil, err
 	}
@@ -574,17 +590,25 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, feedbackType *string, ti
 }
 
 // GetUserItemFeedback gets a feedback by user id and item id from MySQL.
-func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
 	var result *sql.Rows
 	var err error
-	if feedbackType != nil {
-		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-			"WHERE feedback_type = ? AND user_id = ? AND item_id = ?", *feedbackType, userId, itemId)
-	} else {
-		result, err = d.db.Query("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback "+
-			"WHERE user_id = ? AND item_id = ?", userId, itemId)
+	var builder strings.Builder
+	builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE user_id = ? AND item_id = ?")
+	args := []interface{}{userId, itemId}
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(" AND feedback_type IN (")
+		for i, feedbackType := range feedbackTypes {
+			builder.WriteString("?")
+			if i+1 < len(feedbackTypes) {
+				builder.WriteString(",")
+			}
+			args = append(args, feedbackType)
+		}
+		builder.WriteString(")")
 	}
+	result, err = d.db.Query(builder.String(), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -601,15 +625,24 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackType *s
 }
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from MySQL.
-func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error) {
+func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
 	var rs sql.Result
 	var err error
-	if feedbackType != nil {
-		rs, err = d.db.Exec("DELETE FROM feedback WHERE feedback_type = ? AND user_id = ? AND item_id >= ?",
-			*feedbackType, userId, itemId)
-	} else {
-		rs, err = d.db.Exec("DELETE FROM feedback WHERE user_id = ? AND item_id = ?", userId, itemId)
+	var builder strings.Builder
+	builder.WriteString("DELETE FROM feedback WHERE user_id = ? AND item_id = ?")
+	args := []interface{}{userId, itemId}
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(" AND feedback_type IN (")
+		for i, feedbackType := range feedbackTypes {
+			builder.WriteString("?")
+			if i+1 < len(feedbackTypes) {
+				builder.WriteString(",")
+			}
+			args = append(args, feedbackType)
+		}
+		builder.WriteString(")")
 	}
+	rs, err = d.db.Exec(builder.String(), args...)
 	if err != nil {
 		return 0, err
 	}

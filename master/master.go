@@ -31,7 +31,7 @@ import (
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/pr"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -58,12 +58,12 @@ type Master struct {
 	userIndexMutex   sync.Mutex
 
 	// personal ranking model
-	prModel     pr.Model
+	prModel     ranking.Model
 	prModelName string
 	prVersion   int64
-	prScore     pr.Score
+	prScore     ranking.Score
 	prMutex     sync.Mutex
-	prSearcher  *pr.ModelSearcher
+	prSearcher  *ranking.ModelSearcher
 
 	// factorization machine
 	//fmModel    ctr.FactorizationMachine
@@ -83,8 +83,8 @@ func NewMaster(cfg *config.Config) *Master {
 		userIndexVersion: rand.Int63(),
 		// default model
 		prModelName: "bpr",
-		prModel:     pr.NewBPR(nil),
-		prSearcher:  pr.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
+		prModel:     ranking.NewBPR(nil),
+		prSearcher:  ranking.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
 		RestServer: server.RestServer{
 			GorseConfig: cfg,
 			HttpHost:    cfg.Master.HttpHost,
@@ -167,12 +167,12 @@ func (m *Master) FitLoop() {
 	defer base.CheckPanic()
 	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
 	var bestName string
-	var bestModel pr.Model
-	var bestScore pr.Score
+	var bestModel ranking.Model
+	var bestScore ranking.Score
 	for {
 		// download dataset
 		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, items, feedbacks, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+		dataSet, items, feedbacks, err := ranking.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
 			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
@@ -238,10 +238,10 @@ func (m *Master) SearchLoop() {
 	defer base.CheckPanic()
 	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
 	for {
-		var trainSet, valSet *pr.DataSet
+		var trainSet, valSet *ranking.DataSet
 		// download dataset
 		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, _, _, err := pr.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+		dataSet, _, _, err := ranking.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
 			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))

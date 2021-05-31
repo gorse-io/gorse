@@ -382,7 +382,7 @@ func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataStore.GetItemFeedback(itemId, &feedbackType)
+	feedback, err := s.DataStore.GetItemFeedback(itemId, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -397,7 +397,7 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 		return
 	}
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataStore.GetItemFeedback(itemId, nil)
+	feedback, err := s.DataStore.GetItemFeedback(itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -504,7 +504,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	if len(results) < n {
 		// load historical feedback
 		loadArchReadStart := time.Now()
-		userFeedback, err := s.DataStore.GetUserFeedback(userId, nil)
+		userFeedback, err := s.DataStore.GetUserFeedback(userId)
 		if err != nil {
 			return nil, err
 		}
@@ -730,7 +730,7 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataStore.GetUserFeedback(userId, &feedbackType)
+	feedback, err := s.DataStore.GetUserFeedback(userId, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -745,7 +745,7 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 		return
 	}
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataStore.GetUserFeedback(userId, nil)
+	feedback, err := s.DataStore.GetUserFeedback(userId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -944,7 +944,7 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil, nil)
+	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -965,7 +965,7 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, &feedbackType, nil)
+	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -981,7 +981,7 @@ func (s *RestServer) getUserItemFeedback(request *restful.Request, response *res
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, nil); err != nil {
+	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, feedback)
@@ -996,7 +996,7 @@ func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, nil); err != nil {
+	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{RowAffected: deleteCount})
@@ -1012,7 +1012,7 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, &feedbackType); err != nil {
+	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else if len(feedbackType) == 0 {
 		Text(response, "{}")
@@ -1030,7 +1030,7 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, &feedbackType); err != nil {
+	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{deleteCount})

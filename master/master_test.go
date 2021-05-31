@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/model/pr"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"math/rand"
@@ -205,7 +205,7 @@ func TestMaster_FitCFModel(t *testing.T) {
 	assert.Nil(t, err)
 	err = m.DataStore.BatchInsertFeedback(feedbacks, true, true)
 	assert.Nil(t, err)
-	dataset, _, _, err := pr.LoadDataFromDatabase(m.DataStore, []string{"FeedbackType"}, 0, 0)
+	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataStore, []string{"FeedbackType"}, 0, 0)
 	assert.Nil(t, err)
 	// similar items (common users)
 	m.similar(items, dataset, model.SimilarityDot)

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
+	"github.com/scylladb/go-set/strset"
 	"sort"
 	"strconv"
 	"strings"
@@ -234,11 +235,12 @@ func (r *Redis) GetItems(cursor string, n int, timeLimit *time.Time) (string, []
 }
 
 // GetItemFeedback returns feedback of a item from Redis.
-func (r *Redis) GetItemFeedback(itemId string, feedbackType *string) ([]Feedback, error) {
+func (r *Redis) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
+	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, _, thisItemId string) error {
-		if itemId == thisItemId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+		if itemId == thisItemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
 			val, err := r.getFeedback(key)
 			if err != nil {
 				return err
@@ -332,13 +334,13 @@ func (r *Redis) GetUsers(cursor string, n int) (string, []User, error) {
 }
 
 // GetUserFeedback returns feedback of a user from Redis.
-func (r *Redis) GetUserFeedback(userId string, feedbackType *string) ([]Feedback, error) {
+func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
-
+	feedbackTypeSet := strset.New(feedbackTypes...)
 	// get itemId list by userId
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if thisUserId == userId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+		if thisUserId == userId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
 			val, err := r.getFeedback(key)
 			if err != nil {
 				return err
@@ -434,56 +436,33 @@ func (r *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem 
 }
 
 // GetFeedback returns feedback from Redis.
-func (r *Redis) GetFeedback(cursor string, n int, feedbackType *string, timeLimit *time.Time) (string, []Feedback, error) {
+func (r *Redis) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	var ctx = context.Background()
-	var err error
-	cursorNum := uint64(0)
-	if len(cursor) > 0 {
-		cursorNum, err = strconv.ParseUint(cursor, 10, 64)
-		if err != nil {
-			return "", nil, err
-		}
-	}
 	feedback := make([]Feedback, 0)
-	var keys []string
-	if feedbackType != nil {
-		keys, cursorNum, err = r.client.Scan(ctx, cursorNum, prefixFeedback+*feedbackType+"*", int64(n)).Result()
-	} else {
-		keys, cursorNum, err = r.client.Scan(ctx, cursorNum, prefixFeedback+"*", int64(n)).Result()
-	}
-	if err != nil {
-		return "", nil, err
-	}
-	for _, key := range keys {
-		val, err := r.client.Get(ctx, key).Result()
-		if err != nil {
-			return "", nil, err
+	feedbackTypeSet := strset.New(feedbackTypes...)
+	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
+		if feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType) {
+			val, err := r.getFeedback(key)
+			if err != nil {
+				return err
+			}
+			if timeLimit != nil && val.Timestamp.Unix() < timeLimit.Unix() {
+				return nil
+			}
+			feedback = append(feedback, val)
 		}
-		var data Feedback
-		err = json.Unmarshal([]byte(val), &data)
-		if err != nil {
-			return "", nil, err
-		}
-		// compare timestamp
-		if timeLimit != nil && data.Timestamp.Unix() < timeLimit.Unix() {
-			continue
-		}
-		feedback = append(feedback, data)
-	}
-	if cursorNum == 0 {
-		cursor = ""
-	} else {
-		cursor = strconv.Itoa(int(cursorNum))
-	}
-	return cursor, feedback, nil
+		return nil
+	})
+	return "", feedback, err
 }
 
 // GetUserItemFeedback gets a feedback by user id and item id from Redis.
-func (r *Redis) GetUserItemFeedback(userId, itemId string, feedbackType *string) ([]Feedback, error) {
+func (r *Redis) GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
+	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if thisUserId == userId && thisItemId == itemId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+		if thisUserId == userId && thisItemId == itemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
 			val, err := r.getFeedback(key)
 			if err != nil {
 				return err
@@ -496,11 +475,12 @@ func (r *Redis) GetUserItemFeedback(userId, itemId string, feedbackType *string)
 }
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from Redis.
-func (r *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackType *string) (int, error) {
+func (r *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
 	var ctx = context.Background()
+	feedbackTypeSet := strset.New(feedbackTypes...)
 	deleteCount := 0
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if thisUserId == userId && thisItemId == itemId && (feedbackType == nil || *feedbackType == thisFeedbackType) {
+		if thisUserId == userId && thisItemId == itemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
 			r.client.Del(ctx, key)
 			deleteCount++
 		}

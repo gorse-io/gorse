@@ -226,59 +226,29 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string) (*Data
 	// insert feedback
 	dataSet.UserFeedbackItems = base.NewMatrixInt(dataSet.UnifiedIndex.CountUsers(), 0)
 	dataSet.UserFeedbackTarget = base.NewMatrix32(dataSet.UnifiedIndex.CountUsers(), 0)
-	if len(feedbackTypes) > 0 {
-		for _, feedbackType := range feedbackTypes {
-			for {
-				var batchFeedback []data.Feedback
-				cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, &feedbackType, nil)
-				if err != nil {
-					return nil, err
-				}
-				for _, v := range batchFeedback {
-					userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
-					if userId == base.NotId {
-						base.Logger().Warn("user not found", zap.String("user_id", v.UserId))
-						continue
-					}
-					itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
-					if itemId == base.NotId {
-						base.Logger().Warn("item not found", zap.String("item_id", v.ItemId))
-						continue
-					}
-					dataSet.PositiveCount++
-					dataSet.UserFeedbackItems[userId] = append(dataSet.UserFeedbackItems[userId], itemId)
-					dataSet.UserFeedbackTarget[userId] = append(dataSet.UserFeedbackTarget[userId], 1)
-				}
-				if cursor == "" {
-					break
-				}
-			}
+	for {
+		var batchFeedback []data.Feedback
+		cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, nil, feedbackTypes...)
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		for {
-			var batchFeedback []data.Feedback
-			cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, nil, nil)
-			if err != nil {
-				return nil, err
+		for _, v := range batchFeedback {
+			userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
+			if userId == base.NotId {
+				base.Logger().Warn("user not found", zap.String("user_id", v.UserId))
+				continue
 			}
-			for _, v := range batchFeedback {
-				userId := dataSet.UnifiedIndex.EncodeUser(v.UserId)
-				if userId == base.NotId {
-					base.Logger().Warn("user not found", zap.String("user_id", v.UserId))
-					continue
-				}
-				itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
-				if itemId == base.NotId {
-					base.Logger().Warn("item not found", zap.String("item_id", v.ItemId))
-					continue
-				}
-				dataSet.PositiveCount++
-				dataSet.UserFeedbackItems[userId] = append(dataSet.UserFeedbackItems[userId], itemId)
-				dataSet.UserFeedbackTarget[userId] = append(dataSet.UserFeedbackTarget[userId], 1)
+			itemId := dataSet.UnifiedIndex.EncodeItem(v.ItemId)
+			if itemId == base.NotId {
+				base.Logger().Warn("item not found", zap.String("item_id", v.ItemId))
+				continue
 			}
-			if cursor == "" {
-				break
-			}
+			dataSet.PositiveCount++
+			dataSet.UserFeedbackItems[userId] = append(dataSet.UserFeedbackItems[userId], itemId)
+			dataSet.UserFeedbackTarget[userId] = append(dataSet.UserFeedbackTarget[userId], 1)
+		}
+		if cursor == "" {
+			break
 		}
 	}
 	return dataSet, nil
