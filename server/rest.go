@@ -32,9 +32,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// RestServer implements a REST-ful API server.
 type RestServer struct {
-	CacheStore  cache.Database
-	DataStore   data.Database
+	CacheClient cache.Database
+	DataClient  data.Database
 	GorseConfig *config.Config
 	HttpHost    string
 	HttpPort    int
@@ -42,6 +43,7 @@ type RestServer struct {
 	WebService  *restful.WebService
 }
 
+// StartHttpServer starts the REST-ful API server.
 func (s *RestServer) StartHttpServer() {
 	// register restful APIs
 	s.CreateWebService()
@@ -63,6 +65,7 @@ func (s *RestServer) StartHttpServer() {
 		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), nil)))
 }
 
+// CreateWebService creates web service.
 func (s *RestServer) CreateWebService() {
 	// Create a server
 	ws := s.WebService
@@ -233,16 +236,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
-	// Get subscribe items
-	//ws.Route(ws.GET("/intermediate/subscribe/{user-id}").To(s.getSubscribe).
-	//	Doc("get subscribe items for a user").
-	//	Metadata(restfulspec.KeyOpenAPITags, []string{"intermediate"}).
-	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-	//	Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
-	//	Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-	//	Param(ws.QueryParameter("return", "return type (id/detail)").DataType("string")).
-	//	Writes([]string{}))
 
 	/* Rank recommendation */
 
@@ -304,6 +297,7 @@ func (s *RestServer) CreateWebService() {
 		Writes([]data.Measurement{}))
 }
 
+// ParseInt parses integers from the query parameter.
 func ParseInt(request *restful.Request, name string, fallback int) (value int, err error) {
 	valueString := request.QueryParameter(name)
 	value, err = strconv.Atoi(valueString)
@@ -326,7 +320,7 @@ func (s *RestServer) getList(prefix string, name string, request *restful.Reques
 		return
 	}
 	// Get the popular list
-	items, err := s.CacheStore.GetScores(prefix, name, begin, end)
+	items, err := s.CacheClient.GetScores(prefix, name, begin, end)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -382,7 +376,7 @@ func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataStore.GetItemFeedback(itemId, feedbackType)
+	feedback, err := s.DataClient.GetItemFeedback(itemId, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -397,7 +391,7 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 		return
 	}
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataStore.GetItemFeedback(itemId)
+	feedback, err := s.DataClient.GetItemFeedback(itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -438,17 +432,6 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	s.getList(cache.CollaborativeItems, userId, request, response)
 }
 
-// InsertFeedbackTwice insert feedback both to database and cache.
-func (s *RestServer) InsertFeedbackTwice(feedback data.Feedback, insertUser, insertItem bool) error {
-	// 1. insert feedback to database
-	err := s.DataStore.InsertFeedback(feedback, insertUser, insertItem)
-	if err != nil {
-		return err
-	}
-	// 2. insert feedback to cache
-	return s.CacheStore.AppendList(cache.IgnoreItems, feedback.UserId, feedback.ItemId)
-}
-
 // Recommend items to users.
 // 1. If there are recommendations in cache, return cached recommendations.
 // 2. If there are historical interactions of the users, return similar items.
@@ -463,7 +446,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	errChan := make(chan error, 1)
 	go func() {
 		var collaborativeFilteringItems []cache.ScoredItem
-		collaborativeFilteringItems, err = s.CacheStore.GetScores(cache.CollaborativeItems, userId, 0, s.GorseConfig.Database.CacheSize)
+		collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.CollaborativeItems, userId, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			itemsChan <- nil
 			errChan <- err
@@ -478,7 +461,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 
 	// 0. load ignore items
 	loadCachedReadStart := time.Now()
-	ignoreItems, err := s.CacheStore.GetList(cache.IgnoreItems, userId)
+	ignoreItems, err := s.CacheClient.GetList(cache.IgnoreItems, userId)
 	excludeSet := set.NewStringSet()
 	for _, item := range ignoreItems {
 		excludeSet.Add(item)
@@ -504,7 +487,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	if len(results) < n {
 		// load historical feedback
 		loadArchReadStart := time.Now()
-		userFeedback, err := s.DataStore.GetUserFeedback(userId)
+		userFeedback, err := s.DataClient.GetUserFeedback(userId)
 		if err != nil {
 			return nil, err
 		}
@@ -517,7 +500,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		candidates := make(map[string]float32)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheStore.GetScores(cache.SimilarItems, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
+			similarItems, err := s.CacheClient.GetScores(cache.SimilarItems, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {
 				return nil, err
 			}
@@ -547,9 +530,9 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		var fallbacks []cache.ScoredItem
 		switch s.GorseConfig.Recommend.FallbackRecommend {
 		case "latest":
-			fallbacks, err = s.CacheStore.GetScores(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
+			fallbacks, err = s.CacheClient.GetScores(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
 		case "popular":
-			fallbacks, err = s.CacheStore.GetScores(cache.PopularItems, "", 0, s.GorseConfig.Database.CacheSize)
+			fallbacks, err = s.CacheClient.GetScores(cache.PopularItems, "", 0, s.GorseConfig.Database.CacheSize)
 		default:
 			return nil, fmt.Errorf("unknown fallback recommendation method `%s`", s.GorseConfig.Recommend.FallbackRecommend)
 		}
@@ -599,14 +582,22 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range results {
-			err = s.InsertFeedbackTwice(data.Feedback{
+			// insert to data store
+			feedback := data.Feedback{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       userId,
 					ItemId:       itemId,
 					FeedbackType: writeBackFeedback,
 				},
 				Timestamp: time.Now(),
-			}, false, false)
+			}
+			err = s.DataClient.InsertFeedback(feedback, false, false)
+			if err != nil {
+				InternalServerError(response, err)
+				return
+			}
+			// insert to cache store
+			err = s.InsertFeedbackToCache([]data.Feedback{feedback})
 			if err != nil {
 				InternalServerError(response, err)
 				return
@@ -617,6 +608,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	Ok(response, results)
 }
 
+// Success is the returned data structure for data insert operations.
 type Success struct {
 	RowAffected int
 }
@@ -632,7 +624,7 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
-	if err := s.DataStore.InsertUser(temp); err != nil {
+	if err := s.DataClient.InsertUser(temp); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -647,7 +639,7 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 	// get user id
 	userId := request.PathParameter("user-id")
 	// get user
-	user, err := s.DataStore.GetUser(userId)
+	user, err := s.DataClient.GetUser(userId)
 	if err != nil {
 		if err == data.ErrUserNotExist {
 			PageNotFound(response, err)
@@ -673,7 +665,7 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	var count int
 	// range temp and achieve user
 	for _, user := range *temp {
-		if err := s.DataStore.InsertUser(user); err != nil {
+		if err := s.DataClient.InsertUser(user); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -699,7 +691,7 @@ func (s *RestServer) getUsers(request *restful.Request, response *restful.Respon
 		return
 	}
 	// get all users
-	cursor, users, err := s.DataStore.GetUsers(cursor, n)
+	cursor, users, err := s.DataClient.GetUsers(cursor, n)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -715,7 +707,7 @@ func (s *RestServer) deleteUser(request *restful.Request, response *restful.Resp
 	}
 	// get user-id and put into temp
 	userId := request.PathParameter("user-id")
-	if err := s.DataStore.DeleteUser(userId); err != nil {
+	if err := s.DataClient.DeleteUser(userId); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -730,7 +722,7 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataStore.GetUserFeedback(userId, feedbackType)
+	feedback, err := s.DataClient.GetUserFeedback(userId, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -745,7 +737,7 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 		return
 	}
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataStore.GetUserFeedback(userId)
+	feedback, err := s.DataClient.GetUserFeedback(userId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -761,7 +753,6 @@ type Item struct {
 	Comment   string
 }
 
-// putItems puts items into the database.
 func (s *RestServer) insertItems(request *restful.Request, response *restful.Response) {
 	// Authorize
 	if !s.auth(request, response) {
@@ -782,7 +773,7 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 			BadRequest(response, err)
 			return
 		}
-		err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment})
+		err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment})
 		count++
 		if err != nil {
 			InternalServerError(response, err)
@@ -809,13 +800,14 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
-	if err = s.DataStore.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}); err != nil {
+	if err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
 }
 
+// ItemIterator is the iterator for items.
 type ItemIterator struct {
 	Cursor string
 	Items  []data.Item
@@ -832,7 +824,7 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 		BadRequest(response, err)
 		return
 	}
-	cursor, items, err := s.DataStore.GetItems(cursor, n, nil)
+	cursor, items, err := s.DataClient.GetItems(cursor, n, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -848,7 +840,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get item
-	item, err := s.DataStore.GetItem(itemId)
+	item, err := s.DataClient.GetItem(itemId)
 	if err != nil {
 		if err == data.ErrItemNotExist {
 			PageNotFound(response, err)
@@ -866,7 +858,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	itemId := request.PathParameter("item-id")
-	if err := s.DataStore.DeleteItem(itemId); err != nil {
+	if err := s.DataClient.DeleteItem(itemId); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -880,7 +872,6 @@ type Feedback struct {
 	Comment   string
 }
 
-// putFeedback puts new ratings into the database.
 func (s *RestServer) insertFeedback(request *restful.Request, response *restful.Response) {
 	// authorize
 	if !s.auth(request, response) {
@@ -906,9 +897,9 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 			return
 		}
 	}
-	// Insert feedback
+	// insert feedback to data store
 	for _, v := range feedback {
-		err = s.InsertFeedbackTwice(v,
+		err = s.DataClient.InsertFeedback(v,
 			s.GorseConfig.Database.AutoInsertUser,
 			s.GorseConfig.Database.AutoInsertItem)
 		if err != nil {
@@ -916,8 +907,14 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 			return
 		}
 	}
+	// insert feedback to cache store
+	if err = s.InsertFeedbackToCache(feedback); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+
 	for _, userId := range users.List() {
-		err = s.CacheStore.SetString(cache.LastActiveTime, userId, base.Now())
+		err = s.CacheClient.SetString(cache.LastActiveTime, userId, base.Now())
 		if err != nil {
 			InternalServerError(response, err)
 			return
@@ -926,12 +923,12 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 	Ok(response, Success{RowAffected: len(feedback)})
 }
 
+// FeedbackIterator is the iterator for feedback.
 type FeedbackIterator struct {
 	Cursor   string
 	Feedback []data.Feedback
 }
 
-// Get feedback
 func (s *RestServer) getFeedback(request *restful.Request, response *restful.Response) {
 	// Authorize
 	if !s.auth(request, response) {
@@ -944,7 +941,7 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil)
+	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -965,7 +962,7 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataStore.GetFeedback(cursor, n, nil, feedbackType)
+	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -981,7 +978,7 @@ func (s *RestServer) getUserItemFeedback(request *restful.Request, response *res
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId); err != nil {
+	if feedback, err := s.DataClient.GetUserItemFeedback(userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, feedback)
@@ -996,7 +993,7 @@ func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId); err != nil {
+	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{RowAffected: deleteCount})
@@ -1012,7 +1009,7 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataStore.GetUserItemFeedback(userId, itemId, feedbackType); err != nil {
+	if feedback, err := s.DataClient.GetUserItemFeedback(userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else if len(feedbackType) == 0 {
 		Text(response, "{}")
@@ -1030,7 +1027,7 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataStore.DeleteUserItemFeedback(userId, itemId, feedbackType); err != nil {
+	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{deleteCount})
@@ -1049,7 +1046,7 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 		BadRequest(response, err)
 		return
 	}
-	measurements, err := s.DataStore.GetMeasurements(name, n)
+	measurements, err := s.DataClient.GetMeasurements(name, n)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1057,6 +1054,7 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 	Ok(response, measurements)
 }
 
+// BadRequest returns a bad request error.
 func BadRequest(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	base.Logger().Error("bad request", zap.Error(err))
@@ -1065,6 +1063,7 @@ func BadRequest(response *restful.Response, err error) {
 	}
 }
 
+// InternalServerError returns a internal server error.
 func InternalServerError(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	base.Logger().Error("internal server error", zap.Error(err))
@@ -1073,6 +1072,7 @@ func InternalServerError(response *restful.Response, err error) {
 	}
 }
 
+// PageNotFound returns a not found error.
 func PageNotFound(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteError(http.StatusNotFound, err); err != nil {
@@ -1088,6 +1088,7 @@ func Ok(response *restful.Response, content interface{}) {
 	}
 }
 
+// Text returns a plain text.
 func Text(response *restful.Response, content string) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if _, err := response.Write([]byte(content)); err != nil {
@@ -1110,4 +1111,15 @@ func (s *RestServer) auth(request *restful.Request, response *restful.Response) 
 		base.Logger().Error("failed to write error", zap.Error(err))
 	}
 	return false
+}
+
+// InsertFeedbackToCache inserts feedback to cache.
+func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
+	for _, v := range feedback {
+		err := s.CacheClient.AppendList(cache.IgnoreItems, v.UserId, v.ItemId)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -33,10 +33,8 @@ const apiKey = "test_api_key"
 type mockServer struct {
 	dataStoreServer  *miniredis.Miniredis
 	cacheStoreServer *miniredis.Miniredis
-	dataStoreClient  data.Database
-	cacheStoreClient cache.Database
 	handler          *restful.Container
-	server           *RestServer
+	RestServer
 }
 
 func newMockServer(t *testing.T) *mockServer {
@@ -48,29 +46,28 @@ func newMockServer(t *testing.T) *mockServer {
 	s.cacheStoreServer, err = miniredis.Run()
 	assert.Nil(t, err)
 	// open database
-	s.dataStoreClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
+	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
 	assert.Nil(t, err)
-	s.cacheStoreClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
+	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.Nil(t, err)
-	// create server
-	server := &RestServer{
-		DataStore:   s.dataStoreClient,
-		CacheStore:  s.cacheStoreClient,
-		GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
-	}
-	server.GorseConfig.Server.APIKey = apiKey
-	server.WebService = new(restful.WebService)
-	server.CreateWebService()
+	// configuration
+	s.GorseConfig = (*config.Config)(nil).LoadDefaultIfNil()
+	s.GorseConfig.Server.APIKey = apiKey
+	s.WebService = new(restful.WebService)
+	s.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
-	s.handler.Add(server.WebService)
-	s.server = server
+	s.handler.Add(s.WebService)
 	return s
 }
 
 func (s *mockServer) Close(t *testing.T) {
-	err := s.dataStoreClient.Close()
+	err := s.DataClient.Close()
 	assert.Nil(t, err)
+	err = s.CacheClient.Close()
+	assert.Nil(t, err)
+	s.dataStoreServer.Close()
+	s.cacheStoreServer.Close()
 }
 
 func marshal(t *testing.T, v interface{}) string {
@@ -355,7 +352,7 @@ func TestServer_List(t *testing.T) {
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.cacheStoreClient.SetScores(operator.Prefix, operator.Label, items)
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, items)
 		assert.Nil(t, err)
 		apitest.New().
 			Handler(s.handler).
@@ -472,7 +469,7 @@ func TestServer_Measurement(t *testing.T) {
 		{"Test_Recall", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 1, "f"},
 	}
 	for _, measurement := range measurements {
-		err := s.dataStoreClient.InsertMeasurement(measurement)
+		err := s.DataClient.InsertMeasurement(measurement)
 		assert.Nil(t, err)
 	}
 	apitest.New().
@@ -494,7 +491,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0",
+	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0",
 		[]cache.ScoredItem{
 			{"1", 99},
 			{"2", 98},
@@ -511,10 +508,15 @@ func TestServer_GetRecommends(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}
-	for _, v := range feedback {
-		err = s.server.InsertFeedbackTwice(v, true, true)
-		assert.Nil(t, err)
-	}
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON(feedback).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 2}`).
+		End()
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -555,7 +557,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0",
+	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.Nil(t, err)
 	// insert feedback
@@ -565,30 +567,35 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}
-	for _, v := range feedback {
-		err = s.server.InsertFeedbackTwice(v, true, true)
-		assert.Nil(t, err)
-	}
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON(feedback).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 4}`).
+		End()
 	// insert similar items
-	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "1", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.SimilarItems, "1", []cache.ScoredItem{
 		{"2", 100000},
 		{"9", 1},
 	})
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "2", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.SimilarItems, "2", []cache.ScoredItem{
 		{"3", 100000},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "3", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.SimilarItems, "3", []cache.ScoredItem{
 		{"4", 100000},
 		{"7", 1},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.Nil(t, err)
-	err = s.cacheStoreClient.SetScores(cache.SimilarItems, "4", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.SimilarItems, "4", []cache.ScoredItem{
 		{"1", 100000},
 		{"6", 1},
 		{"7", 1},
@@ -597,7 +604,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	})
 	assert.Nil(t, err)
 	// test fallback
-	s.server.GorseConfig.Recommend.FallbackRecommend = "popular"
+	s.GorseConfig.Recommend.FallbackRecommend = "popular"
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -615,19 +622,19 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.cacheStoreClient.SetScores(cache.CollaborativeItems, "0",
+	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.Nil(t, err)
 	// insert latest
-	err = s.cacheStoreClient.SetScores(cache.LatestItems, "",
+	err = s.CacheClient.SetScores(cache.LatestItems, "",
 		[]cache.ScoredItem{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
 	assert.Nil(t, err)
 	// insert popular
-	err = s.cacheStoreClient.SetScores(cache.PopularItems, "",
+	err = s.CacheClient.SetScores(cache.PopularItems, "",
 		[]cache.ScoredItem{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
 	assert.Nil(t, err)
 	// test popular fallback
-	s.server.GorseConfig.Recommend.FallbackRecommend = "popular"
+	s.GorseConfig.Recommend.FallbackRecommend = "popular"
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -640,7 +647,7 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 		Body(marshal(t, []string{"1", "2", "3", "4", "9", "10", "11", "12"})).
 		End()
 	// test latest fallback
-	s.server.GorseConfig.Recommend.FallbackRecommend = "latest"
+	s.GorseConfig.Recommend.FallbackRecommend = "latest"
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -653,7 +660,7 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 		Body(marshal(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"})).
 		End()
 	// test wrong fallback
-	s.server.GorseConfig.Recommend.FallbackRecommend = ""
+	s.GorseConfig.Recommend.FallbackRecommend = ""
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").

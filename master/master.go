@@ -58,17 +58,12 @@ type Master struct {
 	userIndexMutex   sync.Mutex
 
 	// personal ranking model
-	prModel     ranking.Model
-	prModelName string
-	prVersion   int64
-	prScore     ranking.Score
-	prMutex     sync.Mutex
-	prSearcher  *ranking.ModelSearcher
-
-	// factorization machine
-	//fmModel    ctr.FactorizationMachine
-	//ctrVersion int64
-	//fmMutex    sync.mutex
+	rankingModel         ranking.Model
+	rankingModelName     string
+	rankingModelVersion  int64
+	rankingScore         ranking.Score
+	rankingModelMutex    sync.Mutex
+	rankingModelSearcher *ranking.ModelSearcher
 
 	localCache *LocalCache
 }
@@ -78,13 +73,13 @@ func NewMaster(cfg *config.Config) *Master {
 	return &Master{
 		nodesInfo: make(map[string]*Node),
 		// init versions
-		prVersion: rand.Int63(),
+		rankingModelVersion: rand.Int63(),
 		// ctrVersion:       rand.Int63(),
 		userIndexVersion: rand.Int63(),
 		// default model
-		prModelName: "bpr",
-		prModel:     ranking.NewBPR(nil),
-		prSearcher:  ranking.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
+		rankingModelName:     "bpr",
+		rankingModel:         ranking.NewBPR(nil),
+		rankingModelSearcher: ranking.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
 		RestServer: server.RestServer{
 			GorseConfig: cfg,
 			HttpHost:    cfg.Master.HttpHost,
@@ -103,16 +98,16 @@ func (m *Master) Serve() {
 	if err != nil {
 		base.Logger().Error("failed to load local cache", zap.Error(err))
 	}
-	if m.localCache.Model != nil {
+	if m.localCache.RankingModel != nil {
 		base.Logger().Info("load cached model",
-			zap.String("model_name", m.localCache.ModelName),
-			zap.String("model_version", base.Hex(m.localCache.ModelVersion)),
-			zap.Float32("model_score", m.localCache.ModelScore.NDCG),
-			zap.Any("params", m.localCache.Model.GetParams()))
-		m.prModel = m.localCache.Model
-		m.prModelName = m.localCache.ModelName
-		m.prVersion = m.localCache.ModelVersion
-		m.prScore = m.localCache.ModelScore
+			zap.String("model_name", m.localCache.RankingModelName),
+			zap.String("model_version", base.Hex(m.localCache.RankingModelVersion)),
+			zap.Float32("model_score", m.localCache.RankingScore.NDCG),
+			zap.Any("params", m.localCache.RankingModel.GetParams()))
+		m.rankingModel = m.localCache.RankingModel
+		m.rankingModelName = m.localCache.RankingModelName
+		m.rankingModelVersion = m.localCache.RankingModelVersion
+		m.rankingScore = m.localCache.RankingScore
 	}
 
 	// create cluster meta cache
@@ -126,16 +121,16 @@ func (m *Master) Serve() {
 	}
 
 	// connect data database
-	m.DataStore, err = data.Open(m.GorseConfig.Database.DataStore)
+	m.DataClient, err = data.Open(m.GorseConfig.Database.DataStore)
 	if err != nil {
 		base.Logger().Fatal("failed to connect data database", zap.Error(err))
 	}
-	if err = m.DataStore.Init(); err != nil {
+	if err = m.DataClient.Init(); err != nil {
 		base.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
 	// connect cache database
-	m.CacheStore, err = cache.Open(m.GorseConfig.Database.CacheStore)
+	m.CacheClient, err = cache.Open(m.GorseConfig.Database.CacheStore)
 	if err != nil {
 		base.Logger().Fatal("failed to connect cache database", zap.Error(err),
 			zap.String("database", m.GorseConfig.Database.CacheStore))
@@ -172,20 +167,20 @@ func (m *Master) FitLoop() {
 	for {
 		// download dataset
 		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, items, feedbacks, err := ranking.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+		dataSet, items, feedbacks, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
 			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			goto sleep
 		}
 		// save stats
-		if err = m.CacheStore.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(dataSet.UserCount())); err != nil {
+		if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(dataSet.UserCount())); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
-		if err = m.CacheStore.SetString(cache.GlobalMeta, cache.NumItems, strconv.Itoa(dataSet.ItemCount())); err != nil {
+		if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, strconv.Itoa(dataSet.ItemCount())); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
-		if err = m.CacheStore.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, strconv.Itoa(dataSet.Count())); err != nil {
+		if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, strconv.Itoa(dataSet.Count())); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		// sleep if empty
@@ -194,25 +189,25 @@ func (m *Master) FitLoop() {
 			goto sleep
 		}
 		// check best model
-		bestName, bestModel, bestScore = m.prSearcher.GetBestModel()
-		m.prMutex.Lock()
+		bestName, bestModel, bestScore = m.rankingModelSearcher.GetBestModel()
+		m.rankingModelMutex.Lock()
 		if bestName != "" &&
-			(bestName != m.prModelName || bestModel.GetParams().ToString() != m.prModel.GetParams().ToString()) &&
-			(bestScore.NDCG > m.prScore.NDCG) {
+			(bestName != m.rankingModelName || bestModel.GetParams().ToString() != m.rankingModel.GetParams().ToString()) &&
+			(bestScore.NDCG > m.rankingScore.NDCG) {
 			// 1. best model must have been found.
 			// 2. best model must be different from current model
 			// 3. best model must perform better than current model
-			m.prModel = bestModel
-			m.prModelName = bestName
+			m.rankingModel = bestModel
+			m.rankingModelName = bestName
 			base.Logger().Info("find better model",
 				zap.String("name", bestName),
-				zap.Any("params", m.prModel.GetParams()))
+				zap.Any("params", m.rankingModel.GetParams()))
 		} else if dataSet.UserCount() == lastNumUsers && dataSet.ItemCount() == lastNumItems && dataSet.Count() == lastNumFeedback {
 			// sleep if nothing changed
-			m.prMutex.Unlock()
+			m.rankingModelMutex.Unlock()
 			goto sleep
 		}
-		m.prMutex.Unlock()
+		m.rankingModelMutex.Unlock()
 		lastNumUsers, lastNumItems, lastNumFeedback = dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count()
 		// update user index
 		m.userIndexMutex.Lock()
@@ -220,7 +215,7 @@ func (m *Master) FitLoop() {
 		m.userIndexVersion++
 		m.userIndexMutex.Unlock()
 		// fit model
-		m.fitPRModel(dataSet, m.prModel)
+		m.fitRankingModel(dataSet, m.rankingModel)
 		// collect similar items
 		m.similar(items, dataSet, model.SimilarityDot)
 		// collect popular items
@@ -233,7 +228,7 @@ func (m *Master) FitLoop() {
 	}
 }
 
-// SearchLoop searches optimal recommendation model in background. It never modifies variables other than prSearcher.
+// SearchLoop searches optimal recommendation model in background. It never modifies variables other than rankingModelSearcher.
 func (m *Master) SearchLoop() {
 	defer base.CheckPanic()
 	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
@@ -241,7 +236,7 @@ func (m *Master) SearchLoop() {
 		var trainSet, valSet *ranking.DataSet
 		// download dataset
 		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-		dataSet, _, _, err := ranking.LoadDataFromDatabase(m.DataStore, m.GorseConfig.Database.PositiveFeedbackType,
+		dataSet, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
 			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
@@ -258,7 +253,7 @@ func (m *Master) SearchLoop() {
 		}
 		// start search
 		trainSet, valSet = dataSet.Split(0, 0)
-		err = m.prSearcher.Fit(trainSet, valSet)
+		err = m.rankingModelSearcher.Fit(trainSet, valSet)
 		if err != nil {
 			base.Logger().Error("failed to search model", zap.Error(err))
 		}

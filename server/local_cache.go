@@ -20,11 +20,13 @@ import (
 	"path/filepath"
 )
 
+// LocalCache is local cache for the server node.
 type LocalCache struct {
 	path       string
 	ServerName string
 }
 
+// LoadLocalCache loads local cache from a file.
 func LoadLocalCache(path string) (*LocalCache, error) {
 	state := &LocalCache{path: path}
 	// check if file exists
@@ -47,6 +49,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	return state, nil
 }
 
+// WriteLocalCache writes local cache to a file.
 func (s *LocalCache) WriteLocalCache() error {
 	// create parent folder if not exists
 	parent := filepath.Dir(s.path)

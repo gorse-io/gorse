@@ -159,32 +159,32 @@ type Status struct {
 	NumUsers       string
 	NumItems       string
 	NumPosFeedback string
-	PRModel        string
-	CTRModel       string
+	RankingModel   string
+	ClickModel     string
 }
 
 func (m *Master) getStats(request *restful.Request, response *restful.Response) {
 	status := Status{}
 	var err error
 	// read number of users
-	status.NumUsers, err = m.CacheStore.GetString(cache.GlobalMeta, cache.NumUsers)
+	status.NumUsers, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumUsers)
 	if err != nil && err != cache.ErrObjectNotExist {
 		server.InternalServerError(response, err)
 		return
 	}
 	// read number of items
-	status.NumItems, err = m.CacheStore.GetString(cache.GlobalMeta, cache.NumItems)
+	status.NumItems, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumItems)
 	if err != nil && err != cache.ErrObjectNotExist {
 		server.InternalServerError(response, err)
 		return
 	}
 	// read number of positive feedback
-	status.NumPosFeedback, err = m.CacheStore.GetString(cache.GlobalMeta, cache.NumPositiveFeedback)
+	status.NumPosFeedback, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumPositiveFeedback)
 	if err != nil && err != cache.ErrObjectNotExist {
 		server.InternalServerError(response, err)
 		return
 	}
-	status.PRModel = m.prModelName
+	status.RankingModel = m.rankingModelName
 	server.Ok(response, status)
 }
 
@@ -203,7 +203,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 	// get user id
 	userId := request.PathParameter("user-id")
 	// get user
-	user, err := m.DataStore.GetUser(userId)
+	user, err := m.DataClient.GetUser(userId)
 	if err != nil {
 		if err == data.ErrUserNotExist {
 			server.PageNotFound(response, err)
@@ -213,11 +213,11 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 		return
 	}
 	detail := User{User: user}
-	if detail.LastActiveTime, err = m.CacheStore.GetString(cache.LastActiveTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+	if detail.LastActiveTime, err = m.CacheClient.GetString(cache.LastActiveTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
 		server.InternalServerError(response, err)
 		return
 	}
-	if detail.LastUpdateTime, err = m.CacheStore.GetString(cache.LastUpdateRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+	if detail.LastUpdateTime, err = m.CacheClient.GetString(cache.LastUpdateRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
 		server.InternalServerError(response, err)
 		return
 	}
@@ -233,7 +233,7 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 		return
 	}
 	// get all users
-	cursor, users, err := m.DataStore.GetUsers(cursor, n)
+	cursor, users, err := m.DataClient.GetUsers(cursor, n)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -241,11 +241,11 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 	details := make([]User, len(users))
 	for i, user := range users {
 		details[i].User = user
-		if details[i].LastActiveTime, err = m.CacheStore.GetString(cache.LastActiveTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		if details[i].LastActiveTime, err = m.CacheClient.GetString(cache.LastActiveTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
 			server.InternalServerError(response, err)
 			return
 		}
-		if details[i].LastUpdateTime, err = m.CacheStore.GetString(cache.LastUpdateRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		if details[i].LastUpdateTime, err = m.CacheClient.GetString(cache.LastUpdateRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
 			server.InternalServerError(response, err)
 			return
 		}
@@ -269,7 +269,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// Send result
 	details := make([]data.Item, len(results))
 	for i := range results {
-		details[i], err = m.DataStore.GetItem(results[i])
+		details[i], err = m.DataClient.GetItem(results[i])
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -290,7 +290,7 @@ type Feedback struct {
 func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataStore.GetUserFeedback(userId, feedbackType)
+	feedback, err := m.DataClient.GetUserFeedback(userId, feedbackType)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -301,7 +301,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		details[i].UserId = feedback[i].UserId
 		details[i].Timestamp = feedback[i].Timestamp
 		details[i].Comment = feedback[i].Comment
-		details[i].Item, err = m.DataStore.GetItem(feedback[i].ItemId)
+		details[i].Item, err = m.DataClient.GetItem(feedback[i].ItemId)
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -322,7 +322,7 @@ func (m *Master) getList(prefix string, name string, request *restful.Request, r
 		return
 	}
 	// Get the popular list
-	items, err := m.CacheStore.GetScores(prefix, name, begin, end)
+	items, err := m.CacheClient.GetScores(prefix, name, begin, end)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -330,7 +330,7 @@ func (m *Master) getList(prefix string, name string, request *restful.Request, r
 	// Send result
 	details := make([]data.Item, len(items))
 	for i := range items {
-		details[i], err = m.DataStore.GetItem(items[i].ItemId)
+		details[i], err = m.DataClient.GetItem(items[i].ItemId)
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -369,7 +369,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		const batchSize = 1024
 		for {
 			var items []data.Item
-			cursor, items, err = m.DataStore.GetItems(cursor, batchSize, nil)
+			cursor, items, err = m.DataClient.GetItems(cursor, batchSize, nil)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
 				return
@@ -451,7 +451,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		// 4. comment
 		item.Comment = splits[3]
 		items = append(items, item)
-		//err = m.DataStore.InsertItem(item)
+		//err = m.DataClient.InsertItem(item)
 		//if err != nil {
 		//	server.InternalServerError(restful.NewResponse(response), err)
 		//	return false
@@ -463,7 +463,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
-	err = m.DataStore.BatchInsertItem(items)
+	err = m.DataClient.BatchInsertItem(items)
 	if err != nil {
 		server.InternalServerError(restful.NewResponse(response), err)
 		return
@@ -520,7 +520,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		const batchSize = 1024
 		for {
 			var feedback []data.Feedback
-			cursor, feedback, err = m.DataStore.GetFeedback(cursor, batchSize, nil)
+			cursor, feedback, err = m.DataClient.GetFeedback(cursor, batchSize, nil)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
 				return
@@ -609,9 +609,16 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
-	err = m.DataStore.BatchInsertFeedback(feedbacks,
+	// insert to data store
+	err = m.DataClient.BatchInsertFeedback(feedbacks,
 		m.GorseConfig.Database.AutoInsertUser,
 		m.GorseConfig.Database.AutoInsertItem)
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(response), err)
+		return
+	}
+	// insert to cache store
+	err = m.InsertFeedbackToCache(feedbacks)
 	if err != nil {
 		server.InternalServerError(restful.NewResponse(response), err)
 		return

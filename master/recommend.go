@@ -46,11 +46,11 @@ func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
 	// write back
 	for label, topItems := range popItems {
 		result, scores := topItems.PopAll()
-		if err := m.CacheStore.SetScores(cache.PopularItems, label, cache.CreateScoredItems(result, scores)); err != nil {
+		if err := m.CacheClient.SetScores(cache.PopularItems, label, cache.CreateScoredItems(result, scores)); err != nil {
 			base.Logger().Error("failed to cache popular items", zap.Error(err))
 		}
 	}
-	if err := m.CacheStore.SetString(cache.GlobalMeta, cache.CollectPopularTime, base.Now()); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.CollectPopularTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
 }
@@ -73,11 +73,11 @@ func (m *Master) latest(items []data.Item) {
 	}
 	for label, topItems := range latestItems {
 		result, scores := topItems.PopAll()
-		if err = m.CacheStore.SetScores(cache.LatestItems, label, cache.CreateScoredItems(result, scores)); err != nil {
+		if err = m.CacheClient.SetScores(cache.LatestItems, label, cache.CreateScoredItems(result, scores)); err != nil {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 	}
-	if err = m.CacheStore.SetString(cache.GlobalMeta, cache.CollectLatestTime, base.Now()); err != nil {
+	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.CollectLatestTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache latest items time", zap.Error(err))
 	}
 }
@@ -135,7 +135,7 @@ func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity
 		for i := range recommends {
 			recommends[i] = dataset.ItemIndex.ToName(elem[i])
 		}
-		if err := m.CacheStore.SetScores(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.SetScores(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), cache.CreateScoredItems(recommends, scores)); err != nil {
 			return err
 		}
 		completed <- nil
@@ -144,7 +144,7 @@ func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity
 		base.Logger().Error("failed to cache similar items", zap.Error(err))
 	}
 	close(completed)
-	if err := m.CacheStore.SetString(cache.GlobalMeta, cache.CollectSimilarTime, base.Now()); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.CollectSimilarTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache similar items", zap.Error(err))
 	}
 }
@@ -181,47 +181,47 @@ func dotInt(a, b []int) float32 {
 	return sum
 }
 
-func (m *Master) fitPRModel(dataSet *ranking.DataSet, prModel ranking.Model) {
+func (m *Master) fitRankingModel(dataSet *ranking.DataSet, prModel ranking.Model) {
 	base.Logger().Info("fit personal ranking model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
 	// training model
 	trainSet, testSet := dataSet.Split(0, 0)
 	score := prModel.Fit(trainSet, testSet, nil)
 	// update match model
-	m.prMutex.Lock()
-	m.prModel = prModel
-	m.prVersion++
-	m.prScore = score
-	m.prMutex.Unlock()
+	m.rankingModelMutex.Lock()
+	m.rankingModel = prModel
+	m.rankingModelVersion++
+	m.rankingScore = score
+	m.rankingModelMutex.Unlock()
 	base.Logger().Info("fit personal ranking model complete",
-		zap.String("version", fmt.Sprintf("%x", m.prVersion)))
-	if err := m.DataStore.InsertMeasurement(data.Measurement{Name: "NDCG@10", Value: score.NDCG, Timestamp: time.Now()}); err != nil {
+		zap.String("version", fmt.Sprintf("%x", m.rankingModelVersion)))
+	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: "NDCG@10", Value: score.NDCG, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
-	if err := m.DataStore.InsertMeasurement(data.Measurement{Name: "Recall@10", Value: score.Recall, Timestamp: time.Now()}); err != nil {
+	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: "Recall@10", Value: score.Recall, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
-	if err := m.DataStore.InsertMeasurement(data.Measurement{Name: "Precision@10", Value: score.Precision, Timestamp: time.Now()}); err != nil {
+	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: "Precision@10", Value: score.Precision, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
-	if err := m.CacheStore.SetString(cache.GlobalMeta, cache.FitMatrixFactorizationTime, base.Now()); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.FitMatrixFactorizationTime, base.Now()); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
-	if err := m.CacheStore.SetString(cache.GlobalMeta, cache.MatrixFactorizationVersion, fmt.Sprintf("%x", m.prVersion)); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.MatrixFactorizationVersion, fmt.Sprintf("%x", m.rankingModelVersion)); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 	// caching model
-	m.localCache.ModelName = m.prModelName
-	m.localCache.ModelVersion = m.prVersion
-	m.localCache.Model = prModel
-	m.localCache.ModelScore = score
+	m.localCache.RankingModelName = m.rankingModelName
+	m.localCache.RankingModelVersion = m.rankingModelVersion
+	m.localCache.RankingModel = prModel
+	m.localCache.RankingScore = score
 	m.localCache.UserIndex = m.userIndex
 	if err := m.localCache.WriteLocalCache(); err != nil {
 		base.Logger().Error("failed to write local cache", zap.Error(err))
 	} else {
 		base.Logger().Info("write model to local cache",
-			zap.String("model_name", m.localCache.ModelName),
-			zap.String("model_version", base.Hex(m.localCache.ModelVersion)),
-			zap.Float32("model_score", m.localCache.ModelScore.NDCG),
-			zap.Any("params", m.localCache.Model.GetParams()))
+			zap.String("model_name", m.localCache.RankingModelName),
+			zap.String("model_version", base.Hex(m.localCache.RankingModelVersion)),
+			zap.Float32("model_score", m.localCache.RankingScore.NDCG),
+			zap.Any("params", m.localCache.RankingModel.GetParams()))
 	}
 }

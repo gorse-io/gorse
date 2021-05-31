@@ -14,6 +14,8 @@
 
 package cache
 
+import "time"
+
 // NoDatabase means no database used for cache.
 type NoDatabase struct{}
 
@@ -64,5 +66,15 @@ func (NoDatabase) GetInt(prefix, name string) (int, error) {
 
 // SetInt method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) SetInt(prefix, name string, val int) error {
+	return ErrNoDatabase
+}
+
+// GetTime method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetTime(prefix, name string) (time.Time, error) {
+	return time.Time{}, ErrNoDatabase
+}
+
+// SetTime method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) SetTime(prefix, name string, val time.Time) error {
 	return ErrNoDatabase
 }

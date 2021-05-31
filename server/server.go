@@ -33,37 +33,25 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Server manages states of a server node.
 type Server struct {
 	RestServer
-	// database connections
-	cacheAddress string
-	dataAddress  string
-
-	// master connection
+	cachePath    string
+	dataPath     string
 	masterClient protocol.MasterClient
-
-	// factorization machine
-	//fmModel         ctr.FactorizationMachine
-	//RankModelMutex  sync.RWMutex
-	//fmVersion       int64
-	//latestFMVersion int64
-
-	// config
-	serverName string
-	masterHost string
-	masterPort int
-
-	// events
-	//syncedChan chan bool
+	serverName   string
+	masterHost   string
+	masterPort   int
 }
 
+// NewServer creates a server node.
 func NewServer(masterHost string, masterPort int, serverHost string, serverPort int) *Server {
 	return &Server{
 		masterHost: masterHost,
 		masterPort: masterPort,
 		RestServer: RestServer{
-			DataStore:   &data.NoDatabase{},
-			CacheStore:  &cache.NoDatabase{},
+			DataClient:  &data.NoDatabase{},
+			CacheClient: &cache.NoDatabase{},
 			GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
 			HttpHost:    serverHost,
 			HttpPort:    serverPort,
@@ -73,6 +61,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 	}
 }
 
+// Serve starts a server node.
 func (s *Server) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
@@ -104,32 +93,8 @@ func (s *Server) Serve() {
 	s.masterClient = protocol.NewMasterClient(conn)
 
 	go s.Sync()
-	//go s.Pull()
 	s.StartHttpServer()
 }
-
-// Pull factorization machine.
-//func (s *RestServer) Pull() {
-//	defer base.CheckPanic()
-//	for range s.syncedChan {
-//		ctx := context.Background()
-//		// pull factorization machine
-//		if s.latestFMVersion != s.fmVersion {
-//			base.Logger().Info("pull factorization machine")
-//			if mfResponse, err := s.masterClient.GetFactorizationMachine(ctx, &protocol.RequestInfo{}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
-//				base.Logger().Error("failed to pull factorization machine", zap.Error(err))
-//			} else {
-//				s.fmModel, err = ctr.DecodeModel(mfResponse.Model)
-//				if err != nil {
-//					base.Logger().Error("failed to decode factorization machine", zap.Error(err))
-//				} else {
-//					s.fmVersion = mfResponse.Version
-//					base.Logger().Info("synced factorization machine", zap.Int64("version", s.fmVersion))
-//				}
-//			}
-//		}
-//	}
-//}
 
 // Sync this server to the master.
 func (s *Server) Sync() {
@@ -156,33 +121,25 @@ func (s *Server) Sync() {
 		}
 
 		// connect to data store
-		if s.dataAddress != s.GorseConfig.Database.DataStore {
+		if s.dataPath != s.GorseConfig.Database.DataStore {
 			base.Logger().Info("connect data store", zap.String("database", s.GorseConfig.Database.DataStore))
-			if s.DataStore, err = data.Open(s.GorseConfig.Database.DataStore); err != nil {
+			if s.DataClient, err = data.Open(s.GorseConfig.Database.DataStore); err != nil {
 				base.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
-			s.dataAddress = s.GorseConfig.Database.DataStore
+			s.dataPath = s.GorseConfig.Database.DataStore
 		}
 
 		// connect to cache store
-		if s.cacheAddress != s.GorseConfig.Database.CacheStore {
+		if s.cachePath != s.GorseConfig.Database.CacheStore {
 			base.Logger().Info("connect cache store", zap.String("database", s.GorseConfig.Database.CacheStore))
-			if s.CacheStore, err = cache.Open(s.GorseConfig.Database.CacheStore); err != nil {
+			if s.CacheClient, err = cache.Open(s.GorseConfig.Database.CacheStore); err != nil {
 				base.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
-			s.cacheAddress = s.GorseConfig.Database.CacheStore
+			s.cachePath = s.GorseConfig.Database.CacheStore
 		}
 
-		// check FM version
-		//s.latestFMVersion = meta.FmVersion
-		//if s.latestFMVersion != s.fmVersion {
-		//	base.Logger().Info("new factorization machine model found",
-		//		zap.Int64("old_version", s.fmVersion),
-		//		zap.Int64("new_version", s.latestFMVersion))
-		//	s.syncedChan <- true
-		//}
 	sleep:
 		time.Sleep(time.Duration(s.GorseConfig.Master.MetaTimeout) * time.Second)
 	}
