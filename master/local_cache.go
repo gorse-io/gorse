@@ -3,7 +3,7 @@ package master
 import (
 	"encoding/gob"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model/pr"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"os"
 	"path/filepath"
 )
@@ -12,8 +12,8 @@ type LocalCache struct {
 	path         string
 	ModelName    string
 	ModelVersion int64
-	Model        pr.Model
-	ModelScore   pr.Score
+	Model        ranking.Model
+	ModelScore   ranking.Score
 	UserIndex    base.Index
 }
 
@@ -44,7 +44,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		return state, err
 	}
 	// 3. model
-	state.Model, err = pr.NewModel(state.ModelName, nil)
+	state.Model, err = ranking.NewModel(state.ModelName, nil)
 	if err != nil {
 		return state, err
 	}

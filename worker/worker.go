@@ -23,6 +23,7 @@ import (
 	"github.com/araddon/dateparse"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"go.uber.org/zap"
 	"math/rand"
 	"net/http"
@@ -32,7 +33,6 @@ import (
 
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/pr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -66,7 +66,7 @@ type Worker struct {
 	// collaborative filtering model
 	latestPRVersion int64
 	prModelVersion  int64
-	prModel         pr.Model
+	prModel         ranking.Model
 
 	// peers
 	peers []string
@@ -206,7 +206,7 @@ func (w *Worker) Pull() {
 				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull personal ranking model", zap.Error(err))
 			} else {
-				w.prModel, err = pr.DecodeModel(mfResponse.Name, mfResponse.Model)
+				w.prModel, err = ranking.DecodeModel(mfResponse.Name, mfResponse.Model)
 				if err != nil {
 					base.Logger().Error("failed to decode personal ranking model", zap.Error(err))
 				} else {
@@ -295,11 +295,11 @@ func (w *Worker) Serve() {
 	}
 }
 
-func (w *Worker) Recommend(m pr.Model, users []string) {
+func (w *Worker) Recommend(m ranking.Model, users []string) {
 	var userIndexer base.Index
 	// load user index
-	if _, ok := m.(pr.MatrixFactorization); ok {
-		userIndexer = m.(pr.MatrixFactorization).GetUserIndex()
+	if _, ok := m.(ranking.MatrixFactorization); ok {
+		userIndexer = m.(ranking.MatrixFactorization).GetUserIndex()
 	}
 	// load item index
 	itemIds := m.GetItemIndex().GetNames()
@@ -334,7 +334,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 		userId := users[jobId]
 		// convert to user index
 		var userIndex int
-		if _, ok := m.(pr.MatrixFactorization); ok {
+		if _, ok := m.(ranking.MatrixFactorization); ok {
 			userIndex = userIndexer.ToNumber(userId)
 		}
 		// skip inactive users before max recommend period
@@ -356,7 +356,7 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 			return err
 		}
 		var favoredItemIndices []int
-		if _, ok := m.(*pr.KNN); ok {
+		if _, ok := m.(*ranking.KNN); ok {
 			favoredItems, err := loadFeedbackItems(w.dataStore, userId, w.cfg.Database.PositiveFeedbackType...)
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
@@ -374,10 +374,10 @@ func (w *Worker) Recommend(m pr.Model, users []string) {
 		for itemIndex, itemId := range itemIds {
 			if !historySet.Has(itemId) {
 				switch m.(type) {
-				case pr.MatrixFactorization:
-					recItems.Push(itemId, m.(pr.MatrixFactorization).InternalPredict(userIndex, itemIndex))
-				case *pr.KNN:
-					recItems.Push(itemId, m.(*pr.KNN).InternalPredict(favoredItemIndices, itemIndex))
+				case ranking.MatrixFactorization:
+					recItems.Push(itemId, m.(ranking.MatrixFactorization).InternalPredict(userIndex, itemIndex))
+				case *ranking.KNN:
+					recItems.Push(itemId, m.(*ranking.KNN).InternalPredict(favoredItemIndices, itemIndex))
 				default:
 					base.Logger().Error("unknown model type")
 				}
@@ -497,7 +497,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 func loadFeedbackItems(database data.Database, userId string, feedbackTypes ...string) ([]string, error) {
 	items := make([]string, 0)
 	if len(feedbackTypes) == 0 {
-		feedbacks, err := database.GetUserFeedback(userId, nil)
+		feedbacks, err := database.GetUserFeedback(userId)
 		if err != nil {
 			return nil, err
 		}
@@ -506,7 +506,7 @@ func loadFeedbackItems(database data.Database, userId string, feedbackTypes ...s
 		}
 	} else {
 		for _, tp := range feedbackTypes {
-			feedbacks, err := database.GetUserFeedback(userId, &tp)
+			feedbacks, err := database.GetUserFeedback(userId, tp)
 			if err != nil {
 				return nil, err
 			}

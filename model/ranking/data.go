@@ -11,7 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package pr
+
+package ranking
 
 import (
 	"bufio"
@@ -322,37 +323,18 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 	}
 	dataset.NumItemLabels = itemLabelIndex.Len()
 	// pull database
-	if len(feedbackTypes) > 0 {
-		for _, feedbackType := range feedbackTypes {
-			for {
-				var feedback []data.Feedback
-				cursor, feedback, err = database.GetFeedback(cursor, batchSize, &feedbackType, feedbackTimeLimit)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				for _, v := range feedback {
-					dataset.AddFeedback(v.UserId, v.ItemId, false)
-					allFeedback = append(allFeedback, v)
-				}
-				if cursor == "" {
-					break
-				}
-			}
+	for {
+		var feedback []data.Feedback
+		cursor, feedback, err = database.GetFeedback(cursor, batchSize, feedbackTimeLimit, feedbackTypes...)
+		if err != nil {
+			return nil, nil, nil, err
 		}
-	} else {
-		for {
-			var feedback []data.Feedback
-			cursor, feedback, err = database.GetFeedback(cursor, batchSize, nil, feedbackTimeLimit)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			for _, v := range feedback {
-				dataset.AddFeedback(v.UserId, v.ItemId, false)
-				allFeedback = append(allFeedback, v)
-			}
-			if cursor == "" {
-				break
-			}
+		for _, v := range feedback {
+			dataset.AddFeedback(v.UserId, v.ItemId, false)
+			allFeedback = append(allFeedback, v)
+		}
+		if cursor == "" {
+			break
 		}
 	}
 	return dataset, allItems, allFeedback, nil
