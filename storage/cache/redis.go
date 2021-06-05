@@ -152,6 +152,16 @@ func (r *Redis) SetInt(prefix, name string, val int) error {
 	return r.SetString(prefix, name, strconv.Itoa(val))
 }
 
+// IncrInt increase a integer in Redis.
+func (r *Redis) IncrInt(prefix, name string) error {
+	var ctx = context.Background()
+	key := prefix + "/" + name
+	if err := r.client.Incr(ctx, key).Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetTime returns a time from Redis.
 func (r *Redis) GetTime(prefix, name string) (time.Time, error) {
 	val, err := r.GetString(prefix, name)

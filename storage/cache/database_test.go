@@ -39,6 +39,12 @@ func testMeta(t *testing.T, db Database) {
 	valInt, err := db.GetInt("meta", "1")
 	assert.Nil(t, err)
 	assert.Equal(t, 2, valInt)
+	// increase meta int
+	err = db.IncrInt("meta", "1")
+	assert.Nil(t, err)
+	valInt, err = db.GetInt("meta", "1")
+	assert.Nil(t, err)
+	assert.Equal(t, 3, valInt)
 	// set meta time
 	err = db.SetTime("meta", "1", time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC))
 	assert.Nil(t, err)

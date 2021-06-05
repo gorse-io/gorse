@@ -391,7 +391,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		}
 		// save result
 		elems, scores := recItems.PopAll()
-		if err = w.cacheClient.SetScores(cache.CollaborativeItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
+		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return err
 		}
@@ -412,24 +412,30 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 }
 
 // checkRecommendCacheTimeout checks if recommend cache stale.
-// 1. if active time > recommend time, stale.
-// 2. if recommend time + timeout < now, stale.
+// 1. if cache is empty, stale.
+// 2. if active time > recommend time, stale.
+// 3. if recommend time + timeout < now, stale.
 func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	var activeTime, recommendTime time.Time
-	var err error
+	// check cache
+	items, err := w.cacheClient.GetScores(cache.RecommendItems, userId, 0, -1)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	} else if len(items) == 0 {
+		return true
+	}
 	// read active time
 	activeTime, err = w.cacheClient.GetTime(cache.LastActiveTime, userId)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
 	}
 	// read recommend time
 	recommendTime, err = w.cacheClient.GetTime(cache.LastUpdateRecommendTime, userId)
 	if err != nil {
-		if err != cache.ErrObjectNotExist {
-			base.Logger().Error("failed to read meta", zap.Error(err))
-		} else {
-			return true
-		}
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
 	}
 	// check time
 	if activeTime.Unix() < recommendTime.Unix() {

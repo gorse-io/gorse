@@ -49,6 +49,24 @@ func TestSplit(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestCheckRecommendCacheTimeout(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	// insert cache
+	err := w.cacheClient.SetScores(cache.RecommendItems, "0", []cache.ScoredItem{{"0", 0}})
+	assert.Nil(t, err)
+	assert.True(t, w.checkRecommendCacheTimeout("0"))
+	err = w.cacheClient.SetTime(cache.LastActiveTime, "0", time.Now().Add(-time.Hour))
+	assert.True(t, w.checkRecommendCacheTimeout("0"))
+	err = w.cacheClient.SetTime(cache.LastUpdateRecommendTime, "0", time.Now().Add(-time.Hour*100))
+	assert.True(t, w.checkRecommendCacheTimeout("0"))
+	err = w.cacheClient.SetTime(cache.LastUpdateRecommendTime, "0", time.Now().Add(time.Hour*100))
+	assert.False(t, w.checkRecommendCacheTimeout("0"))
+	err = w.cacheClient.ClearList(cache.RecommendItems, "0")
+	assert.True(t, w.checkRecommendCacheTimeout("0"))
+}
+
 type mockMatrixFactorizationForRecommend struct {
 	ranking.BaseMatrixFactorization
 }
@@ -131,7 +149,7 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
 
-	recommends, err := w.cacheClient.GetScores(cache.CollaborativeItems, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.RecommendItems, "0", 0, -1)
 	assert.Nil(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{"3", 3},

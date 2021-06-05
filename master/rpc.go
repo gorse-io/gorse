@@ -36,6 +36,11 @@ type Node struct {
 	HttpPort int64
 }
 
+const (
+	ServerNode = "Server"
+	WorkerNode = "Worker"
+)
+
 // NewNode creates a node from Context and NodeInfo.
 func NewNode(ctx context.Context, nodeInfo *protocol.NodeInfo) *Node {
 	node := new(Node)
