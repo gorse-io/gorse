@@ -333,7 +333,7 @@ func TestServer_List(t *testing.T) {
 		Get    string
 	}
 	operators := []ListOperator{
-		{cache.CollaborativeItems, "0", "/api/intermediate/recommend/0"},
+		{cache.RecommendItems, "0", "/api/intermediate/recommend/0"},
 		//{cache.SubscribeItems, "0", "/subscribe/0"},
 		{cache.LatestItems, "", "/api/latest/"},
 		{cache.LatestItems, "0", "/api/latest/0"},
@@ -491,7 +491,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0",
+	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
 		[]cache.ScoredItem{
 			{"1", 99},
 			{"2", 98},
@@ -557,7 +557,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0",
+	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.Nil(t, err)
 	// insert feedback
@@ -622,7 +622,7 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0",
+	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.Nil(t, err)
 	// insert latest

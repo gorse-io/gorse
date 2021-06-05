@@ -78,3 +78,8 @@ func (NoDatabase) GetTime(prefix, name string) (time.Time, error) {
 func (NoDatabase) SetTime(prefix, name string, val time.Time) error {
 	return ErrNoDatabase
 }
+
+// IncrInt method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) IncrInt(prefix, name string) error {
+	return ErrNoDatabase
+}

@@ -38,11 +38,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	ServerNode = "Server"
-	WorkerNode = "Worker"
-)
-
+// Master is the master node.
 type Master struct {
 	protocol.UnimplementedMasterServer
 	server.RestServer
@@ -66,8 +62,13 @@ type Master struct {
 	rankingModelSearcher *ranking.ModelSearcher
 
 	localCache *LocalCache
+
+	// events
+	ticker       *time.Ticker
+	insertedChan chan bool // feedback inserted events
 }
 
+// NewMaster creates a master node.
 func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
 	return &Master{
@@ -87,9 +88,12 @@ func NewMaster(cfg *config.Config) *Master {
 			EnableAuth:  false,
 			WebService:  new(restful.WebService),
 		},
+		ticker:       time.NewTicker(time.Duration(cfg.Recommend.SearchPeriod) * time.Minute),
+		insertedChan: make(chan bool),
 	}
 }
 
+// Serve starts the master node.
 func (m *Master) Serve() {
 
 	// load local cached model
@@ -164,14 +168,27 @@ func (m *Master) FitLoop() {
 	var bestName string
 	var bestModel ranking.Model
 	var bestScore ranking.Score
+	go func() {
+		m.insertedChan <- true
+		for {
+			if m.hasFeedbackInserted() {
+				m.insertedChan <- true
+			}
+			time.Sleep(time.Second)
+		}
+	}()
 	for {
+		select {
+		case <-m.ticker.C:
+		case <-m.insertedChan:
+		}
 		// download dataset
 		base.Logger().Info("load dataset for model fit", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
 		dataSet, items, feedbacks, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
 			m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 		if err != nil {
 			base.Logger().Error("failed to load database", zap.Error(err))
-			goto sleep
+			continue
 		}
 		// save stats
 		if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(dataSet.UserCount())); err != nil {
@@ -186,7 +203,7 @@ func (m *Master) FitLoop() {
 		// sleep if empty
 		if dataSet.Count() == 0 {
 			base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
-			goto sleep
+			continue
 		}
 		// check best model
 		bestName, bestModel, bestScore = m.rankingModelSearcher.GetBestModel()
@@ -205,7 +222,7 @@ func (m *Master) FitLoop() {
 		} else if dataSet.UserCount() == lastNumUsers && dataSet.ItemCount() == lastNumItems && dataSet.Count() == lastNumFeedback {
 			// sleep if nothing changed
 			m.rankingModelMutex.Unlock()
-			goto sleep
+			continue
 		}
 		m.rankingModelMutex.Unlock()
 		lastNumUsers, lastNumItems, lastNumFeedback = dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count()
@@ -222,9 +239,6 @@ func (m *Master) FitLoop() {
 		m.popItem(items, feedbacks)
 		// collect latest items
 		m.latest(items)
-		// sleep
-	sleep:
-		time.Sleep(time.Duration(m.GorseConfig.Recommend.FitPeriod) * time.Minute)
 	}
 }
 
@@ -260,4 +274,19 @@ func (m *Master) SearchLoop() {
 	sleep:
 		time.Sleep(time.Duration(m.GorseConfig.Recommend.SearchPeriod) * time.Minute)
 	}
+}
+
+func (m *Master) hasFeedbackInserted() bool {
+	numInserted, err := m.CacheClient.GetInt(cache.GlobalMeta, cache.NumInserted)
+	if err != nil {
+		return false
+	}
+	if numInserted > 0 {
+		err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumInserted, 0)
+		if err != nil {
+			base.Logger().Error("failed to write meta", zap.Error(err))
+		}
+		return true
+	}
+	return false
 }

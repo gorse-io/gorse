@@ -429,7 +429,7 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	}
 	// Get user id
 	userId := request.PathParameter("user-id")
-	s.getList(cache.CollaborativeItems, userId, request, response)
+	s.getList(cache.RecommendItems, userId, request, response)
 }
 
 // Recommend items to users.
@@ -446,7 +446,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	errChan := make(chan error, 1)
 	go func() {
 		var collaborativeFilteringItems []cache.ScoredItem
-		collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.CollaborativeItems, userId, 0, s.GorseConfig.Database.CacheSize)
+		collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.RecommendItems, userId, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			itemsChan <- nil
 			errChan <- err
@@ -1117,6 +1117,10 @@ func (s *RestServer) auth(request *restful.Request, response *restful.Response) 
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 	for _, v := range feedback {
 		err := s.CacheClient.AppendList(cache.IgnoreItems, v.UserId, v.ItemId)
+		if err != nil {
+			return err
+		}
+		err = s.CacheClient.IncrInt(cache.GlobalMeta, cache.NumInserted)
 		if err != nil {
 			return err
 		}

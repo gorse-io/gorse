@@ -1,3 +1,17 @@
+// Copyright 2020 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package master
 
 import (
@@ -50,7 +64,7 @@ func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
 			base.Logger().Error("failed to cache popular items", zap.Error(err))
 		}
 	}
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.CollectPopularTime, base.Now()); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
 }
@@ -77,7 +91,7 @@ func (m *Master) latest(items []data.Item) {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.CollectLatestTime, base.Now()); err != nil {
+	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache latest items time", zap.Error(err))
 	}
 }
@@ -144,7 +158,7 @@ func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity
 		base.Logger().Error("failed to cache similar items", zap.Error(err))
 	}
 	close(completed)
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.CollectSimilarTime, base.Now()); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateNeighborTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache similar items", zap.Error(err))
 	}
 }
@@ -203,10 +217,10 @@ func (m *Master) fitRankingModel(dataSet *ranking.DataSet, prModel ranking.Model
 	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: "Precision@10", Value: score.Precision, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.FitMatrixFactorizationTime, base.Now()); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastFitRankingModelTime, base.Now()); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.MatrixFactorizationVersion, fmt.Sprintf("%x", m.rankingModelVersion)); err != nil {
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastRankingModelVersion, fmt.Sprintf("%x", m.rankingModelVersion)); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 	// caching model

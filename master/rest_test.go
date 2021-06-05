@@ -426,7 +426,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.CacheClient.SetScores(cache.CollaborativeItems, "0", itemIds)
+	err := s.CacheClient.SetScores(cache.RecommendItems, "0", itemIds)
 	assert.Nil(t, err)
 	// insert feedback
 	feedback := []data.Feedback{

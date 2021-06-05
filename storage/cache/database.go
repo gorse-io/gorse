@@ -23,26 +23,26 @@ import (
 )
 
 const (
-	// IgnoreItems is these items that a user has read.
-	IgnoreItems        = "ignore_items"
-	PopularItems       = "popular_items"
-	LatestItems        = "latest_items"
-	SimilarItems       = "similar_items"
-	CollaborativeItems = "collaborative_items"
-	SubscribeItems     = "subscribe_items"
-
-	GlobalMeta                 = "global_meta"
-	CollectPopularTime         = "last_update_popular_time"
-	CollectLatestTime          = "last_update_latest_time"
-	CollectSimilarTime         = "last_update_similar_time"
-	FitMatrixFactorizationTime = "last_fit_match_model_time"
-	MatrixFactorizationVersion = "latest_match_model_version"
-
+	IgnoreItems             = "ignore_items"
+	SimilarItems            = "similar_items"
+	RecommendItems          = "collaborative_items"
+	SubscribeItems          = "subscribe_items"
+	PopularItems            = "popular_items"
+	LatestItems             = "latest_items"
 	LastActiveTime          = "last_active_time"
 	LastUpdateRecommendTime = "last_update_recommend_time"
+
+	// GlobalMeta is global meta information
+	GlobalMeta              = "global_meta"
+	NumInserted             = "num_inserted"
 	NumUsers                = "num_users"
 	NumItems                = "num_items"
 	NumPositiveFeedback     = "num_pos_feedback"
+	LastUpdatePopularTime   = "last_update_popular_time"
+	LastUpdateLatestTime    = "last_update_latest_time"
+	LastUpdateNeighborTime  = "last_update_similar_time"
+	LastFitRankingModelTime = "last_fit_match_model_time"
+	LastRankingModelVersion = "latest_match_model_version"
 )
 
 var ErrObjectNotExist = fmt.Errorf("object not exists")
@@ -90,6 +90,7 @@ type Database interface {
 	SetTime(prefix, name string, val time.Time) error
 	GetInt(prefix, name string) (int, error)
 	SetInt(prefix, name string, val int) error
+	IncrInt(prefix, name string) error
 }
 
 const redisPrefix = "redis://"
