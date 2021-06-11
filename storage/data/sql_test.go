@@ -122,3 +122,15 @@ func TestSQLDatabase_TimeLimit(t *testing.T) {
 	defer db.Close(t)
 	testTimeLimit(t, db.Database)
 }
+
+func TestSQLDatabase_GetClickThroughRate(t *testing.T) {
+	db := newTestSQLDatabase(t, "TestSQLDatabase_GetClickThroughRate")
+	defer db.Close(t)
+	testGetClickThroughRate(t, db.Database)
+}
+
+func TestSQLDatabase_CountActiveUsers(t *testing.T) {
+	db := newTestSQLDatabase(t, "TestSQLDatabase_CountActiveUsers")
+	defer db.Close(t)
+	testCountActiveUsers(t, db.Database)
+}

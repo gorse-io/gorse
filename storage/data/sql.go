@@ -652,3 +652,42 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 	}
 	return int(deleteCount), nil
 }
+
+// GetClickThroughRate computes the click-through-rate of a specified date.
+func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveType, readType string) (float64, error) {
+	rs, err := d.db.Query("SELECT SUM(feedback_type IN (?)) / SUM(feedback_type IN (?)) "+
+		"FROM feedback where DATE(time_stamp) = DATE(?) "+
+		"GROUP BY user_id HAVING SUM(feedback_type IN (?)) > 0 AND SUM(feedback_type IN (?)) > 0",
+		positiveType, readType, date, positiveType, readType)
+	if err != nil {
+		return 0, err
+	}
+	var sum, count float64
+	for rs.Next() {
+		var temp float64
+		if err = rs.Scan(&temp); err != nil {
+			return 0, err
+		}
+		sum += temp
+		count++
+	}
+	if count > 0 {
+		sum /= count
+	}
+	return sum, err
+}
+
+// CountActiveUsers returns the number active users starting from a specified date.
+func (d *SQLDatabase) CountActiveUsers(date time.Time) (int, error) {
+	rs, err := d.db.Query("SELECT COUNT(DISTINCT user_id) FROM feedback WHERE DATE(time_stamp) >= DATE(?)", date)
+	if err != nil {
+		return 0, err
+	}
+	var count int
+	if rs.Next() {
+		if err = rs.Scan(&count); err != nil {
+			return 0, err
+		}
+	}
+	return count, nil
+}
