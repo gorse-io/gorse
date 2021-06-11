@@ -123,3 +123,15 @@ func TestMongoDatabase_TimeLimit(t *testing.T) {
 	defer db.Close(t)
 	testTimeLimit(t, db.Database)
 }
+
+func TestMongoDatabase_GetClickThroughRate(t *testing.T) {
+	db := newTestMongoDatabase(t, "TestMongoDatabase_GetClickThroughRate")
+	defer db.Close(t)
+	testGetClickThroughRate(t, db.Database)
+}
+
+func TestMongoDatabase_CountActiveUsers(t *testing.T) {
+	db := newTestMongoDatabase(t, "TestMongoDatabase_CountActiveUsers")
+	defer db.Close(t)
+	testCountActiveUsers(t, db.Database)
+}

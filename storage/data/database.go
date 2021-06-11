@@ -17,6 +17,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 	"github.com/zhenghaoz/gorse/base"
@@ -30,6 +31,7 @@ import (
 var (
 	ErrUserNotExist = errors.New("user not exist")
 	ErrItemNotExist = errors.New("item not exist")
+	ErrUnsupported  = fmt.Errorf("unsupported interface")
 )
 
 // Item stores meta data about item.
@@ -91,6 +93,8 @@ type Database interface {
 	GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error)
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)
+	GetClickThroughRate(date time.Time, positiveType, readType string) (float64, error)
+	CountActiveUsers(date time.Time) (int, error)
 }
 
 const mySQLPrefix = "mysql://"

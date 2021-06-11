@@ -488,3 +488,13 @@ func (r *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...s
 	})
 	return deleteCount, err
 }
+
+// GetClickThroughRate method of Redis returns ErrUnsupported.
+func (r *Redis) GetClickThroughRate(date time.Time, positiveType, readType string) (float64, error) {
+	return 0, ErrUnsupported
+}
+
+// CountActiveUsers method of Redis returns ErrUnsupported.
+func (r *Redis) CountActiveUsers(date time.Time) (int, error) {
+	return 0, ErrUnsupported
+}
