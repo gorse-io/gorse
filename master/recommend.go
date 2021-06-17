@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -238,4 +239,98 @@ func (m *Master) fitRankingModel(dataSet *ranking.DataSet, prModel ranking.Model
 			zap.Float32("model_score", m.localCache.RankingScore.NDCG),
 			zap.Any("params", m.localCache.RankingModel.GetParams()))
 	}
+}
+
+const ClickThroughRate = "ClickThroughRate"
+const ActiveUsersYesterday = "ActiveUsersYesterday"
+const ActiveUsersMonthly = "ActiveUsersMonthly"
+
+func (m *Master) analyze() error {
+	// pull existed click through rates
+	clickThroughRates, err := m.DataClient.GetMeasurements(ClickThroughRate, 30)
+	if err != nil {
+		return err
+	}
+	existed := strset.New()
+	for _, clickThroughRate := range clickThroughRates {
+		existed.Add(clickThroughRate.Timestamp.String())
+	}
+	// update click through rate
+	for i := 30; i > 0; i-- {
+		dateTime := time.Now().AddDate(0, 0, -i)
+		date := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC)
+		if !existed.Has(date.String()) {
+			// click through clickThroughRate
+			startTime := time.Now()
+			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, "like", "read")
+			if err != nil {
+				return err
+			}
+			err = m.DataClient.InsertMeasurement(data.Measurement{
+				Name:      ClickThroughRate,
+				Timestamp: date,
+				Value:     float32(clickThroughRate),
+			})
+			if err != nil {
+				return err
+			}
+			base.Logger().Info("update click through rate",
+				zap.String("date", date.String()),
+				zap.Duration("time_used", time.Since(startTime)),
+				zap.Float64("click_through_rate", clickThroughRate))
+		}
+	}
+
+	// pull existed active users
+	yesterdayActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersYesterday, 1)
+	if err != nil {
+		return err
+	}
+	yesterdayDatetime := time.Now().AddDate(0, 0, -1)
+	yesterdayDate := time.Date(yesterdayDatetime.Year(), yesterdayDatetime.Month(), yesterdayDatetime.Day(), 0, 0, 0, 0, time.UTC)
+	if len(yesterdayActiveUsers) == 0 || !yesterdayActiveUsers[0].Timestamp.Equal(yesterdayDate) {
+		startTime := time.Now()
+		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -1))
+		if err != nil {
+			return err
+		}
+		err = m.DataClient.InsertMeasurement(data.Measurement{
+			Name:      ActiveUsersYesterday,
+			Timestamp: yesterdayDate,
+			Value:     float32(activeUsers),
+		})
+		if err != nil {
+			return err
+		}
+		base.Logger().Info("update active users of yesterday",
+			zap.String("date", yesterdayDate.String()),
+			zap.Duration("time_used", time.Since(startTime)),
+			zap.Int("active_users", activeUsers))
+	}
+
+	monthActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersMonthly, 1)
+	if err != nil {
+		return err
+	}
+	if len(monthActiveUsers) == 0 || !monthActiveUsers[0].Timestamp.Equal(yesterdayDate) {
+		startTime := time.Now()
+		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -30))
+		if err != nil {
+			return err
+		}
+		err = m.DataClient.InsertMeasurement(data.Measurement{
+			Name:      ActiveUsersMonthly,
+			Timestamp: yesterdayDate,
+			Value:     float32(activeUsers),
+		})
+		if err != nil {
+			return err
+		}
+		base.Logger().Info("update active users of this month",
+			zap.String("date", yesterdayDate.String()),
+			zap.Duration("time_used", time.Since(startTime)),
+			zap.Int("active_users", activeUsers))
+	}
+
+	return nil
 }
