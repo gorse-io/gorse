@@ -436,18 +436,21 @@ func testGetClickThroughRate(t *testing.T, db Database) {
 	// insert feedback
 	err := db.BatchInsertFeedback([]Feedback{
 		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "4"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"star", "2", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"star", "2", "3"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "2", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "2", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "3", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, true, true)
 	assert.Nil(t, err)
 	// get click-through-rate
-	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), "star", "read")
+	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
 	assert.Nil(t, err)
 	assert.Equal(t, 0.375, rate)
 }

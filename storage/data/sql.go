@@ -654,11 +654,33 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 }
 
 // GetClickThroughRate computes the click-through-rate of a specified date.
-func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveType, readType string) (float64, error) {
-	rs, err := d.db.Query("SELECT SUM(feedback_type IN (?)) / SUM(feedback_type IN (?)) "+
-		"FROM feedback where DATE(time_stamp) = DATE(?) "+
-		"GROUP BY user_id HAVING SUM(feedback_type IN (?)) > 0 AND SUM(feedback_type IN (?)) > 0",
-		positiveType, readType, date, positiveType, readType)
+func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
+	builder := strings.Builder{}
+	var args []interface{}
+	builder.WriteString("SELECT positive_count.positive_count / read_count.read_count FROM (")
+	builder.WriteString("SELECT user_id, COUNT(*) AS positive_count FROM (")
+	builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type IN (")
+	args = append(args, date)
+	for i, positiveType := range positiveTypes {
+		if i > 0 {
+			builder.WriteString(",")
+		}
+		builder.WriteString("?")
+		args = append(args, positiveType)
+	}
+	builder.WriteString(")) AS positive_feedback GROUP BY user_id) AS positive_count ")
+	builder.WriteString("JOIN (")
+	builder.WriteString("SELECT user_id, COUNT(*) AS read_count FROM (")
+	builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type IN (?")
+	args = append(args, date, readType)
+	for _, positiveType := range positiveTypes {
+		builder.WriteString(",?")
+		args = append(args, positiveType)
+	}
+	builder.WriteString(")) AS read_feedback GROUP BY user_id) AS read_count ")
+	builder.WriteString("ON positive_count.user_id = read_count.user_id")
+	base.Logger().Info("get click through rate from MySQL", zap.String("query", builder.String()))
+	rs, err := d.db.Query(builder.String(), args...)
 	if err != nil {
 		return 0, err
 	}

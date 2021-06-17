@@ -21,7 +21,7 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	config, _, err := LoadConfig("../misc/config_test/config.toml")
+	config, _, err := LoadConfig("config.toml.template")
 	assert.Nil(t, err)
 
 	// database configuration
@@ -29,29 +29,33 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "mysql://root@tcp(localhost:3306)/gorse?parseTime=true", config.Database.DataStore)
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
-	assert.Equal(t, []string{"star", "fork"}, config.Database.PositiveFeedbackType)
-	assert.Equal(t, uint(998), config.Database.PositiveFeedbackTTL)
-	assert.Equal(t, uint(999), config.Database.ItemTTL)
+	assert.Equal(t, 200, config.Database.CacheSize)
+	assert.Equal(t, []string{"star", "like"}, config.Database.PositiveFeedbackType)
+	assert.Equal(t, []string{"like"}, config.Database.ClickFeedbackTypes)
+	assert.Equal(t, "read", config.Database.ReadFeedbackType)
+	assert.Equal(t, uint(3650), config.Database.PositiveFeedbackTTL)
+	assert.Equal(t, uint(3650), config.Database.ItemTTL)
 
 	// master configuration
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "127.0.0.1", config.Master.Host)
 	assert.Equal(t, 8088, config.Master.HttpPort)
 	assert.Equal(t, "127.0.0.1", config.Master.HttpHost)
-	assert.Equal(t, 3, config.Master.SearchJobs)
-	assert.Equal(t, 4, config.Master.FitJobs)
-	assert.Equal(t, 30, config.Master.MetaTimeout)
+	assert.Equal(t, 1, config.Master.SearchJobs)
+	assert.Equal(t, 2, config.Master.FitJobs)
+	assert.Equal(t, 10, config.Master.MetaTimeout)
 
 	// server configuration
-	assert.Equal(t, 128, config.Server.DefaultN)
-	assert.Equal(t, "p@ssword", config.Server.APIKey)
+	assert.Equal(t, 10, config.Server.DefaultN)
+	assert.Equal(t, "", config.Server.APIKey)
 
 	// recommend configuration
-	assert.Equal(t, 12, config.Recommend.PopularWindow)
-	assert.Equal(t, 66, config.Recommend.FitPeriod)
-	assert.Equal(t, 88, config.Recommend.SearchPeriod)
-	assert.Equal(t, 102, config.Recommend.SearchEpoch)
-	assert.Equal(t, 9, config.Recommend.SearchTrials)
+	assert.Equal(t, 365, config.Recommend.PopularWindow)
+	assert.Equal(t, 10, config.Recommend.FitPeriod)
+	assert.Equal(t, 60, config.Recommend.SearchPeriod)
+	assert.Equal(t, 100, config.Recommend.SearchEpoch)
+	assert.Equal(t, 10, config.Recommend.SearchTrials)
+	assert.Equal(t, 1, config.Recommend.MaxRecommendPeriod)
 	assert.Equal(t, "latest", config.Recommend.FallbackRecommend)
 }
 

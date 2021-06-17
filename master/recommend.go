@@ -262,7 +262,7 @@ func (m *Master) analyze() error {
 		if !existed.Has(date.String()) {
 			// click through clickThroughRate
 			startTime := time.Now()
-			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, "like", "read")
+			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.ClickFeedbackTypes, m.GorseConfig.Database.ReadFeedbackType)
 			if err != nil {
 				return err
 			}

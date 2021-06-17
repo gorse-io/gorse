@@ -125,7 +125,7 @@ func (NoDatabase) GetMeasurements(name string, n int) ([]Measurement, error) {
 }
 
 // GetClickThroughRate method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetClickThroughRate(date time.Time, positiveType, readType string) (float64, error) {
+func (NoDatabase) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
 	return 0, ErrNoDatabase
 }
 

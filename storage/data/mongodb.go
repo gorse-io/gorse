@@ -595,53 +595,86 @@ func (db *MongoDB) CountActiveUsers(date time.Time) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	// db.feedback.distinct("feedbackkey.itemid",{"timestamp":{"$gte":new Date("2020-01-01"),"$lt":new Date("2020-01-02")}}).length
 	return len(distinct), nil
 }
 
 // GetClickThroughRate computes the click-through-rate of a specified date.
-func (db *MongoDB) GetClickThroughRate(date time.Time, positiveType, readType string) (float64, error) {
+func (db *MongoDB) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
-	aggregate, err := c.Aggregate(ctx, mongo.Pipeline{
+	// count read feedbacks
+	readCountAgg, err := c.Aggregate(ctx, mongo.Pipeline{
 		{{"$match", bson.M{
 			"timestamp": bson.M{
 				"$gte": time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
 				"$lt":  time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC),
 			},
+			"feedbackkey.feedbacktype": bson.M{
+				"$in": append([]string{readType}, positiveTypes...),
+			},
 		}}},
 		{{"$project", bson.M{
-			"feedbackkey": 1,
-			"is_positive": bson.M{"$cond": bson.A{bson.M{"$eq": bson.A{"$feedbackkey.feedbacktype", positiveType}}, 1, 0}},
-			"is_read":     bson.M{"$cond": bson.A{bson.M{"$eq": bson.A{"$feedbackkey.feedbacktype", readType}}, 1, 0}},
+			"feedbackkey.userid": 1,
+			"feedbackkey.itemid": 1,
 		}}},
 		{{"$group", bson.M{
-			"_id":            "$feedbackkey.userid",
-			"positive_count": bson.M{"$sum": "$is_positive"},
-			"read_count":     bson.M{"$sum": "$is_read"},
-		}}},
-		{{"$match", bson.M{
-			"positive_count": bson.M{"$gt": 0}},
-		}},
-		{{"$project", bson.M{
-			"_id":                1,
-			"click_through_rate": bson.M{"$divide": bson.A{"$positive_count", "$read_count"}},
+			"_id": "$feedbackkey",
 		}}},
 		{{"$group", bson.M{
-			"_id":                nil,
-			"click_through_rate": bson.M{"$avg": "$click_through_rate"},
+			"_id":        "$_id.userid",
+			"read_count": bson.M{"$sum": 1},
 		}}},
 	})
 	if err != nil {
 		return 0, err
 	}
-	if aggregate.Next(ctx) {
+	readCount := make(map[string]int32)
+	for readCountAgg.Next(ctx) {
 		var ret bson.D
-		err = aggregate.Decode(&ret)
+		err = readCountAgg.Decode(&ret)
 		if err != nil {
 			return 0, err
 		}
-		return ret.Map()["click_through_rate"].(float64), nil
+		readCount[ret.Map()["_id"].(string)] = ret.Map()["read_count"].(int32)
 	}
-	return 0, nil
+	// count positive feedbacks
+	feedbackCountAgg, err := c.Aggregate(ctx, mongo.Pipeline{
+		{{"$match", bson.M{
+			"timestamp": bson.M{
+				"$gte": time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
+				"$lt":  time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC),
+			},
+			"feedbackkey.feedbacktype": bson.M{
+				"$in": positiveTypes,
+			},
+		}}},
+		{{"$project", bson.M{
+			"feedbackkey.userid": 1,
+			"feedbackkey.itemid": 1,
+		}}},
+		{{"$group", bson.M{
+			"_id": "$feedbackkey",
+		}}},
+		{{"$group", bson.M{
+			"_id":            "$_id.userid",
+			"positive_count": bson.M{"$sum": 1},
+		}}},
+	})
+	if err != nil {
+		return 0, err
+	}
+	sum, count := 0.0, 0.0
+	for feedbackCountAgg.Next(ctx) {
+		var ret bson.D
+		err = feedbackCountAgg.Decode(&ret)
+		if err != nil {
+			return 0, err
+		}
+		count++
+		sum += float64(ret.Map()["positive_count"].(int32)) / float64(readCount[ret.Map()["_id"].(string)])
+	}
+	if count > 0 {
+		sum /= count
+	}
+	return sum, err
 }
