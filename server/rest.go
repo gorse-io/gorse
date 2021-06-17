@@ -309,16 +309,18 @@ func ParseInt(request *restful.Request, name string, fallback int) (value int, e
 }
 
 func (s *RestServer) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
-	var begin, end int
+	var n, begin, end int
 	var err error
-	if begin, err = ParseInt(request, "begin", 0); err != nil {
+	// read arguments
+	if begin, err = ParseInt(request, "offset", 0); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	if end, err = ParseInt(request, "end", s.GorseConfig.Server.DefaultN-1); err != nil {
+	if n, err = ParseInt(request, "n", s.GorseConfig.Server.DefaultN); err != nil {
 		BadRequest(response, err)
 		return
 	}
+	end = begin + n - 1
 	// Get the popular list
 	items, err := s.CacheClient.GetScores(prefix, name, begin, end)
 	if err != nil {

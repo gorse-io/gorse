@@ -367,8 +367,8 @@ func TestServer_List(t *testing.T) {
 			Get(operator.Get).
 			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
-				"begin": "0",
-				"end":   "2"}).
+				"offset": "0",
+				"n":      "3"}).
 			Expect(t).
 			Status(http.StatusOK).
 			Body(marshal(t, []cache.ScoredItem{items[0], items[1], items[2]})).
@@ -378,23 +378,22 @@ func TestServer_List(t *testing.T) {
 			Get(operator.Get).
 			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
-				"begin": "1",
-				"end":   "3"}).
+				"offset": "1",
+				"n":      "3"}).
 			Expect(t).
 			Status(http.StatusOK).
 			Body(marshal(t, []cache.ScoredItem{items[1], items[2], items[3]})).
 			End()
-		// get empty
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
 			Header("X-API-Key", apiKey).
 			QueryParams(map[string]string{
-				"begin": "0",
-				"end":   "-1"}).
+				"offset": "0",
+				"n":      "0"}).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(``).
+			Body(marshal(t, items)).
 			End()
 	}
 }
