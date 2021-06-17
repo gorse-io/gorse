@@ -4,35 +4,44 @@
 cache_store = "redis://redis:6379"
 # database for persist data (support MySQL/MongoDB/Redis)
 data_store = "mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse?parseTime=true"
+# cache size for intermediate recommendation
+cache_size = 200
 # insert new users while inserting feedback
 auto_insert_user = true
 # insert new items while inserting feedback
 auto_insert_item = false
-# types of positive feedback
-positive_feedback_types = ["star"]
-## positive feedback time-to-live (days)
-positive_feedback_ttl = 1200
-## item time-to-live (days)
-item_ttl = 1000
+# feedback type for positive event
+positive_feedback_types = ["star","like"]
+# feedback type for click event
+click_feedback_types = ["like"]
+# feedback type for read event
+read_feedback_type = "read"
+# positive feedback time-to-live (days), 0 means disabled.
+positive_feedback_ttl = 3650
+# item time-to-live (days), 0 means disabled.
+item_ttl = 3650
 
 # This section declares settings for the master node.
 [master]
-port = 8086                 # master port
-host = "0.0.0.0"          # master host
-http_port = 8088            # HTTP API port
-http_host = "0.0.0.0"     # HTTP API host
-search_jobs = 1             # number of jobs for model search
-fit_jobs = 1                # number of jobs for model fitting
-meta_timeout = 10           # cluster meta timeout (second)
+port = 8086                     # master port
+host = "0.0.0.0"                # master host
+http_port = 8088                # HTTP API port
+http_host = "0.0.0.0"           # HTTP API host
+search_jobs = 1                 # number of jobs for model search
+fit_jobs = 2                    # number of jobs for model fitting
+meta_timeout = 10               # cluster meta timeout (second)
 
 # This section declares settings for the server node.
 [server]
-default_n = 10              # default number of returned items
-api_key = ""                # secret key for RESTful APIs (SSL required)
+default_n = 10                  # default number of returned items
+api_key = ""                    # secret key for RESTful APIs (SSL required)
 
 # This section declares settings for recommendation.
 [recommend]
-popular_window = 365        # timw window of popular items (days)
-fit_period = 10             # time period for model fitting (minutes)
-search_period = 60          # time period for model searching (minutes)
-max_recommend_period = 1    # time period for inactive user recommendation (days)
+popular_window = 365            # time window of popular items (days)
+fit_period = 10                 # time period for model fitting (minutes)
+search_period = 60              # time period for model searching (minutes)
+search_epoch = 100              # number of epochs for model searching
+search_trials = 10              # number of trials for model searching
+max_recommend_period = 1        # time period for inactive user recommendation (days)
+fallback_recommend = "latest"   # fallback method for recommendation (popular/latest)
