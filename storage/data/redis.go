@@ -490,7 +490,7 @@ func (r *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...s
 }
 
 // GetClickThroughRate method of Redis returns ErrUnsupported.
-func (r *Redis) GetClickThroughRate(date time.Time, positiveType, readType string) (float64, error) {
+func (r *Redis) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
 	return 0, ErrUnsupported
 }
 
