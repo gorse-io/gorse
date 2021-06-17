@@ -311,16 +311,18 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 }
 
 func (m *Master) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
-	var begin, end int
+	var n, begin, end int
 	var err error
-	if begin, err = server.ParseInt(request, "begin", 0); err != nil {
+	// read arguments
+	if begin, err = server.ParseInt(request, "offset", 0); err != nil {
 		server.BadRequest(response, err)
 		return
 	}
-	if end, err = server.ParseInt(request, "end", m.GorseConfig.Server.DefaultN-1); err != nil {
+	if n, err = server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN); err != nil {
 		server.BadRequest(response, err)
 		return
 	}
+	end = begin + n - 1
 	// Get the popular list
 	items, err := m.CacheClient.GetScores(prefix, name, begin, end)
 	if err != nil {
