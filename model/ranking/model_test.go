@@ -23,7 +23,7 @@ import (
 
 const (
 	benchEpsilon = 0.01
-	incrEpsilon  = 1e-6
+	incrEpsilon  = 1e-5
 )
 
 var fitConfig = &FitConfig{
