@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package ctr
 
 import (
@@ -97,6 +98,10 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
+	// if the number of combination is less than number of trials, use grid search
+	if paramGrid.NumCombinations() < numTrials {
+		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig)
+	}
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
 		Scores: make([]Score, 0, numTrials),

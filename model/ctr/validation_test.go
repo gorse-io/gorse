@@ -57,7 +57,7 @@ func (m *mockFactorizationMachineForSearch) GetParamsGrid() model.ParamsGrid {
 	return model.ParamsGrid{
 		model.NFactors:   []interface{}{1, 2, 3, 4},
 		model.InitMean:   []interface{}{4, 3, 2, 1},
-		model.InitStdDev: []interface{}{4, 3, 2, 1},
+		model.InitStdDev: []interface{}{4, 4, 4, 4},
 	}
 }
 
@@ -74,7 +74,7 @@ func TestGridSearchCV(t *testing.T) {
 
 func TestRandomSearchCV(t *testing.T) {
 	m := &mockFactorizationMachineForSearch{}
-	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 100, 0, nil)
+	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 63, 0, nil)
 	assert.Equal(t, float32(12), r.BestScore.Precision)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
