@@ -145,6 +145,8 @@ func (m *Master) Serve() {
 	base.Logger().Info("start model fit", zap.Int("period", m.GorseConfig.Recommend.FitPeriod))
 	go m.SearchLoop()
 	base.Logger().Info("start model searcher", zap.Int("period", m.GorseConfig.Recommend.SearchPeriod))
+	go m.AnalyzeLoop()
+	base.Logger().Info("start analyze")
 
 	// start rpc server
 	base.Logger().Info("start rpc server",
@@ -273,6 +275,15 @@ func (m *Master) SearchLoop() {
 		}
 	sleep:
 		time.Sleep(time.Duration(m.GorseConfig.Recommend.SearchPeriod) * time.Minute)
+	}
+}
+
+func (m *Master) AnalyzeLoop() {
+	for {
+		if err := m.analyze(); err != nil {
+			base.Logger().Error("failed to analyze", zap.Error(err))
+		}
+		time.Sleep(time.Hour)
 	}
 }
 
