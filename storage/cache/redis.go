@@ -17,9 +17,10 @@ package cache
 import (
 	"context"
 	"encoding/json"
-	"github.com/araddon/dateparse"
 	"strconv"
 	"time"
+
+	"github.com/araddon/dateparse"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -104,9 +105,7 @@ func (r *Redis) GetList(prefix, name string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, s := range data {
-		res = append(res, s)
-	}
+	res = append(res, data...)
 	return res, err
 }
 
