@@ -16,14 +16,15 @@ package server
 
 import (
 	"fmt"
-	"github.com/zhenghaoz/gorse/base"
-	"go.uber.org/zap"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/zhenghaoz/gorse/base"
+	"go.uber.org/zap"
 
 	"github.com/haxii/go-swagger-ui/static"
 	jsoniter "github.com/json-iterator/go"
@@ -169,9 +170,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	// replace the target swagger file in index
 	indexHTML := string(staticFile)
-	indexHTML = strings.Replace(indexHTML,
-		"https://petstore.swagger.io/v2/swagger.json",
-		targetSwagger, -1)
+	indexHTML = strings.ReplaceAll(indexHTML, "https://petstore.swagger.io/v2/swagger.json", targetSwagger)
 	w.Header().Set("Content-Length", strconv.Itoa(len(indexHTML)))
 	if _, err := fmt.Fprint(w, indexHTML); err != nil {
 		base.Logger().Error("failed to print HTML", zap.Error(err))
