@@ -17,6 +17,12 @@ package master
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -28,11 +34,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 )
 
 func (m *Master) CreateWebService() {
@@ -360,7 +361,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 	case http.MethodGet:
 		var err error
 		response.Header().Set("Content-Type", "text/csv")
-		response.Header().Set("Content-Disposition", fmt.Sprint("attachment;filename=items.csv"))
+		response.Header().Set("Content-Disposition", "attachment;filename=items.csv")
 		// write header
 		if _, err = response.Write([]byte("item_id,time_stamp,labels,description\r\n")); err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
@@ -511,7 +512,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 	case http.MethodGet:
 		var err error
 		response.Header().Set("Content-Type", "text/csv")
-		response.Header().Set("Content-Disposition", fmt.Sprint("attachment;filename=feedback.csv"))
+		response.Header().Set("Content-Disposition", "attachment;filename=feedback.csv")
 		// write header
 		if _, err = response.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n")); err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
