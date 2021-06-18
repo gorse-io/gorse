@@ -20,15 +20,16 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/scylladb/go-set"
-	"github.com/zhenghaoz/gorse/model/ranking"
-	"go.uber.org/zap"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/scylladb/go-set"
+	"github.com/zhenghaoz/gorse/model/ranking"
+	"go.uber.org/zap"
 
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -379,11 +380,11 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
 		for itemIndex, itemId := range itemIds {
 			if !historySet.Has(itemId) {
-				switch m.(type) {
+				switch m := m.(type) {
 				case ranking.MatrixFactorization:
-					recItems.Push(itemId, m.(ranking.MatrixFactorization).InternalPredict(userIndex, itemIndex))
+					recItems.Push(itemId, m.InternalPredict(userIndex, itemIndex))
 				case *ranking.KNN:
-					recItems.Push(itemId, m.(*ranking.KNN).InternalPredict(positiveItemIndices, itemIndex))
+					recItems.Push(itemId, m.InternalPredict(positiveItemIndices, itemIndex))
 				default:
 					base.Logger().Error("unknown model type")
 				}
