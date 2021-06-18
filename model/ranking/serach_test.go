@@ -14,10 +14,11 @@
 package ranking
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"testing"
 )
 
 type mockMatrixFactorizationForSearch struct {
@@ -32,7 +33,7 @@ func (m *mockMatrixFactorizationForSearch) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score {
+func (m *mockMatrixFactorizationForSearch) Fit(trainSet, validateSet *DataSet, config *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.NEpochs, 0.0)

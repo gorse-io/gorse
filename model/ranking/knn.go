@@ -16,14 +16,15 @@ package ranking
 
 import (
 	"fmt"
+	"sort"
+	"sync"
+	"time"
+
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"sort"
-	"sync"
-	"time"
 )
 
 type KNN struct {
@@ -84,7 +85,7 @@ func NewKNN(params model.Params) *KNN {
 	return knn
 }
 
-func (knn *KNN) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
+func (knn *KNN) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	knn.ItemIndex = trainSet.ItemIndex
 	base.Logger().Info("fit knn",

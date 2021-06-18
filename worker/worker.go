@@ -80,7 +80,7 @@ type Worker struct {
 }
 
 // NewWorker creates a new worker node.
-func NewWorker(masterHost string, masterPort int, httpHost string, httpPort int, jobs int) *Worker {
+func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int) *Worker {
 	return &Worker{
 		// database
 		dataClient:  data.NoDatabase{},

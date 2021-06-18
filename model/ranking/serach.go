@@ -16,11 +16,12 @@ package ranking
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"sync"
-	"time"
 )
 
 // ParamsSearchResult contains the return of grid search.
@@ -172,7 +173,7 @@ func (searcher *ModelSearcher) GetBestSimilarity() string {
 	return searcher.bestSimilarity
 }
 
-func (searcher *ModelSearcher) Fit(trainSet *DataSet, valSet *DataSet) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet) error {
 	base.Logger().Info("model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))

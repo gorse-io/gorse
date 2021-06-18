@@ -124,7 +124,7 @@ func (r *Redis) GetString(prefix, name string) (string, error) {
 }
 
 // SetString saves a string to Redis.
-func (r *Redis) SetString(prefix, name string, val string) error {
+func (r *Redis) SetString(prefix, name, val string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	if err := r.client.Set(ctx, key, val, 0).Err(); err != nil {

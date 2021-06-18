@@ -19,8 +19,9 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"github.com/barkimedes/go-deepcopy"
 	"time"
+
+	"github.com/barkimedes/go-deepcopy"
 
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
@@ -84,7 +85,7 @@ func (model *BaseMatrixFactorization) Init(trainSet *DataSet) {
 	model.ItemIndex = trainSet.ItemIndex
 }
 
-func (model *BaseMatrixFactorization) Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score {
+func (model *BaseMatrixFactorization) Fit(trainSet, validateSet *DataSet, config *FitConfig) Score {
 	panic("not implemented")
 }
 
@@ -257,7 +258,7 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 }
 
 // Fit the BPR model.
-func (bpr *BPR) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
+func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit bpr",
 		zap.Any("params", bpr.GetParams()),
@@ -473,7 +474,7 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 }
 
 // Fit the ALS model.
-func (als *ALS) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
+func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit als",
 		zap.Any("params", als.GetParams()),
@@ -723,7 +724,7 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 	ccd.BaseMatrixFactorization.Init(trainSet)
 }
 
-func (ccd *CCD) Fit(trainSet *DataSet, valSet *DataSet, config *FitConfig) Score {
+func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit ccd",
 		zap.Any("params", ccd.GetParams()),

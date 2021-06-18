@@ -18,12 +18,13 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"time"
+
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"time"
 )
 
 type Score struct {
@@ -212,7 +213,7 @@ func (fm *FM) InternalPredict(x []int) float32 {
 	return pred
 }
 
-func (fm *FM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
+func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit FM",
 		zap.Int("train_size", trainSet.PositiveCount),

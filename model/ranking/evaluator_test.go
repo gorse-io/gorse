@@ -14,19 +14,20 @@
 package ranking
 
 import (
+	"strconv"
+	"testing"
+
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/iset"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"strconv"
-	"testing"
 )
 
 const evalEpsilon = 0.00001
 
-func EqualEpsilon(t *testing.T, expect float32, actual float32, epsilon float32) {
+func EqualEpsilon(t *testing.T, expect, actual, epsilon float32) {
 	if math32.Abs(expect-actual) > evalEpsilon {
 		t.Fatalf("Expect %f ± %f, Actual: %f\n", expect, epsilon, actual)
 	}
@@ -82,7 +83,7 @@ func (m *mockMatrixFactorizationForEval) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score {
+func (m *mockMatrixFactorizationForEval) Fit(trainSet, validateSet *DataSet, config *FitConfig) Score {
 	panic("don't call me")
 }
 
