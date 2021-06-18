@@ -23,7 +23,7 @@ import (
 // Parallel schedules and runs tasks in parallel. nTask is the number of tasks. nJob is
 // the number of executors. worker is the executed function which passed a range of task
 // Names (begin, end).
-func Parallel(nJobs int, nWorkers int, worker func(workerId, jobId int) error) error {
+func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error {
 	if nWorkers == 1 {
 		for i := 0; i < nJobs; i++ {
 			if err := worker(0, i); err != nil {
@@ -87,7 +87,7 @@ type batchJob struct {
 }
 
 // BatchParallel run parallel jobs in batches to reduce the cost of context switch.
-func BatchParallel(nJobs int, nWorkers int, batchSize int, worker func(workerId, beginJobId, endJobId int) error) error {
+func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJobId, endJobId int) error) error {
 	if nWorkers == 1 {
 		return worker(0, 0, nJobs)
 	}

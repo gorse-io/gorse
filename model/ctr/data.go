@@ -15,11 +15,12 @@ package ctr
 
 import (
 	"bufio"
-	"github.com/scylladb/go-set"
-	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/scylladb/go-set"
+	"go.uber.org/zap"
 
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
@@ -104,7 +105,7 @@ func LoadLibFMFile(path string) (labels [][]int, targets []float32, maxLabel int
 	return
 }
 
-func LoadDataFromBuiltIn(name string) (train *Dataset, test *Dataset, err error) {
+func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 	trainFilePath, testFilePath, err := model.LocateBuiltInDataset(name, model.FormatLibFM)
 	if err != nil {
 		return nil, nil, err

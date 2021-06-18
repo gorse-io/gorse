@@ -309,7 +309,7 @@ func ParseInt(request *restful.Request, name string, fallback int) (value int, e
 	return
 }
 
-func (s *RestServer) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
+func (s *RestServer) getList(prefix, name string, request *restful.Request, response *restful.Response) {
 	var n, begin, end int
 	var err error
 	// read arguments

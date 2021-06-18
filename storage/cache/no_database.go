@@ -30,7 +30,7 @@ func (NoDatabase) SetScores(prefix, name string, items []ScoredItem) error {
 }
 
 // GetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetScores(prefix, name string, begin int, end int) ([]ScoredItem, error) {
+func (NoDatabase) GetScores(prefix, name string, begin, end int) ([]ScoredItem, error) {
 	return nil, ErrNoDatabase
 }
 
@@ -55,7 +55,7 @@ func (NoDatabase) GetString(prefix, name string) (string, error) {
 }
 
 // SetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetString(prefix, name string, val string) error {
+func (NoDatabase) SetString(prefix, name, val string) error {
 	return ErrNoDatabase
 }
 

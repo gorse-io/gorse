@@ -311,7 +311,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 	server.Ok(response, details)
 }
 
-func (m *Master) getList(prefix string, name string, request *restful.Request, response *restful.Response) {
+func (m *Master) getList(prefix, name string, request *restful.Request, response *restful.Response) {
 	var n, begin, end int
 	var err error
 	// read arguments
@@ -478,7 +478,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
-func format(inFmt string, outFmt string, s []string, lineCount int) ([]string, error) {
+func format(inFmt, outFmt string, s []string, lineCount int) ([]string, error) {
 	if len(s) < len(inFmt) {
 		base.Logger().Error("number of fields mismatch",
 			zap.Int("expect", len(inFmt)),

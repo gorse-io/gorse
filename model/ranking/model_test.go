@@ -14,11 +14,12 @@
 package ranking
 
 import (
+	"runtime"
+	"testing"
+
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
-	"runtime"
-	"testing"
 )
 
 const (
@@ -33,7 +34,7 @@ var fitConfig = &FitConfig{
 	TopK:       10,
 }
 
-func assertEpsilon(t *testing.T, expect float32, actual float32, eps float32) {
+func assertEpsilon(t *testing.T, expect, actual, eps float32) {
 	if math32.Abs(expect-actual) > eps {
 		t.Fatalf("|%v - %v| > %v", expect, actual, eps)
 	}

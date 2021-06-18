@@ -16,14 +16,15 @@ package model
 import (
 	"archive/zip"
 	"fmt"
-	"github.com/zhenghaoz/gorse/base"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/zhenghaoz/gorse/base"
+	"go.uber.org/zap"
 )
 
 type DatasetFormat int
@@ -117,7 +118,7 @@ func LocateBuiltInDataset(name string, format DatasetFormat) (string, string, er
 }
 
 // downloadFromUrl downloads file from URL.
-func downloadFromUrl(src string, dst string) (string, error) {
+func downloadFromUrl(src, dst string) (string, error) {
 	base.Logger().Info("Download dataset", zap.String("source", src))
 	// Extract file name
 	tokens := strings.Split(src, "/")
@@ -149,7 +150,7 @@ func downloadFromUrl(src string, dst string) (string, error) {
 }
 
 // unzip zip file.
-func unzip(src string, dst string) ([]string, error) {
+func unzip(src, dst string) ([]string, error) {
 	var fileNames []string
 	// Open zip file
 	r, err := zip.OpenReader(src)

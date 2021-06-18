@@ -17,14 +17,15 @@ package ranking
 import (
 	"bufio"
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"os"
-	"strings"
-	"time"
 )
 
 const batchSize = 1000
@@ -240,7 +241,7 @@ func (dataset *DataSet) GetIndex(i int) (int, int) {
 //  196\t242\t3\t881250949
 //  186\t302\t3\t891717742
 //  22\t377\t1\t878887116
-func LoadDataFromCSV(fileName string, sep string, hasHeader bool) *DataSet {
+func LoadDataFromCSV(fileName, sep string, hasHeader bool) *DataSet {
 	dataset := NewMapIndexDataset()
 	// Open file
 	file, err := os.Open(fileName)

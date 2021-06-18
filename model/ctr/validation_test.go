@@ -14,10 +14,11 @@
 package ctr
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"testing"
 )
 
 type mockFactorizationMachineForSearch struct {
@@ -32,7 +33,7 @@ func (m *mockFactorizationMachineForSearch) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
+func (m *mockFactorizationMachineForSearch) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.NEpochs, 0.0)

@@ -14,17 +14,18 @@
 package ctr
 
 import (
+	"testing"
+
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
-	"testing"
 )
 
 const (
 	epsilon = 0.01
 )
 
-func assertEpsilon(t *testing.T, expect float32, actual float32) {
+func assertEpsilon(t *testing.T, expect, actual float32) {
 	if math32.Abs(expect-actual) > epsilon {
 		t.Fatalf("|%v - %v| > %v", expect, actual, epsilon)
 	}
