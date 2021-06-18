@@ -16,12 +16,13 @@ package server
 
 import (
 	"fmt"
-	"github.com/araddon/dateparse"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/scylladb/go-set"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/araddon/dateparse"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/scylladb/go-set"
 
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -1013,7 +1014,7 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	itemId := request.PathParameter("item-id")
 	if feedback, err := s.DataClient.GetUserItemFeedback(userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
-	} else if len(feedbackType) == 0 {
+	} else if feedbackType == "" {
 		Text(response, "{}")
 	} else {
 		Ok(response, feedback[0])
