@@ -51,9 +51,8 @@ func serveLocalFile(localFilePath string, w http.ResponseWriter, r *http.Request
 	switch filepath.Ext(localFilePath) {
 	case ".json":
 		isJSON = true
-	case ".yaml":
-		fallthrough
-	case ".yml":
+
+	case ".yml", ".yaml":
 		isJSON = false
 	default:
 		http.Error(w, "unknown swagger file: "+localFilePath, http.StatusBadRequest)
