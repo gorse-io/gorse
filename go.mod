@@ -8,7 +8,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.14.3
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/barkimedes/go-deepcopy v0.0.0-20200817023428-a044a1957ca4
-	github.com/chewxy/math32 v1.0.6
+	github.com/chewxy/math32 v1.0.8
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.4.0
 	github.com/go-redis/redis/v8 v8.8.0
