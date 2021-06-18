@@ -17,11 +17,12 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"time"
+
 	"github.com/scylladb/go-set/strset"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"time"
 )
 
 func feedbackKeyFromString(s string) (*FeedbackKey, error) {
@@ -539,8 +540,7 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackTypes ...s
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
-	var filter bson.M
-	filter = bson.M{
+	var filter bson.M = bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},
 		"feedbackkey.itemid": bson.M{"$eq": itemId},
 	}
@@ -567,8 +567,7 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackTypes ...s
 func (db *MongoDB) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
-	var filter bson.M
-	filter = bson.M{
+	var filter bson.M = bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},
 		"feedbackkey.itemid": bson.M{"$eq": itemId},
 	}
