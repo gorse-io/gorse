@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ctr
+package click
 
 import (
 	"fmt"
@@ -53,54 +53,62 @@ func TestLoadDataFromDatabase(t *testing.T) {
 	// create database
 	database := newMockDatastore(t)
 	defer database.Close(t)
-	numUsers, numTotalItems, numUsedItems, numUserLabels, numItemLabels := 3, 100, 7, 11, 15
+	numUsers, numItems := 5, 6
 	for i := 0; i < numUsers; i++ {
 		err := database.InsertUser(data.User{
 			UserId: fmt.Sprintf("user%v", i),
 			Labels: []string{
-				fmt.Sprintf("user_label%v", i%numUserLabels),
-				fmt.Sprintf("user_label%v", (i*2)%numUserLabels),
+				fmt.Sprintf("user_label%v", i),
+				fmt.Sprintf("user_label%v", i*2),
 			},
 		})
 		assert.Nil(t, err)
 	}
-	for i := 0; i < numTotalItems; i++ {
+	for i := 0; i < numItems; i++ {
 		err := database.InsertItem(data.Item{
 			ItemId: fmt.Sprintf("item%v", i),
 			Labels: []string{
-				fmt.Sprintf("item_label%v", i%numItemLabels),
-				fmt.Sprintf("item_label%v", (i*2)%numItemLabels),
+				fmt.Sprintf("item_label%v", i),
+				fmt.Sprintf("item_label%v", i*2),
 			},
 		})
 		assert.Nil(t, err)
 	}
 	for i := 0; i < numUsers; i++ {
-		for j := i + 1; j < numUsedItems; j++ {
-			err := database.InsertFeedback(data.Feedback{
+		for j := 0; j < numItems; j++ {
+			var err error
+			err = database.InsertFeedback(data.Feedback{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       fmt.Sprintf("user%v", i),
 					ItemId:       fmt.Sprintf("item%v", j),
-					FeedbackType: "FeedbackType",
+					FeedbackType: "read",
 				},
 			}, false, false)
 			assert.Nil(t, err)
+			if i+j > 4 {
+				err = database.InsertFeedback(data.Feedback{
+					FeedbackKey: data.FeedbackKey{
+						UserId:       fmt.Sprintf("user%v", i),
+						ItemId:       fmt.Sprintf("item%v", j),
+						FeedbackType: "click",
+					},
+				}, false, false)
+				assert.Nil(t, err)
+			}
 		}
 	}
 	// load data
-	dataset, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"})
+	dataset, err := LoadDataFromDatabase(database.Database, []string{"click"}, "read")
 	assert.Nil(t, err)
-	assert.Equal(t, 15, dataset.PositiveCount)
+	assert.Equal(t, numUsers*numItems, dataset.Count())
 	assert.Equal(t, numUsers, dataset.UserCount())
-	assert.Equal(t, numTotalItems, dataset.ItemCount())
+	assert.Equal(t, numItems, dataset.ItemCount())
 	// split
 	train, test := dataset.Split(0.2, 0)
 	assert.Equal(t, numUsers, train.UserCount())
-	assert.Equal(t, numTotalItems, train.ItemCount())
-	assert.Equal(t, 12, train.PositiveCount)
+	assert.Equal(t, numItems, train.ItemCount())
+	assert.Equal(t, 24, train.Count())
 	assert.Equal(t, numUsers, test.UserCount())
-	assert.Equal(t, numTotalItems, test.ItemCount())
-	assert.Equal(t, 3, test.PositiveCount)
-	// negative sample
-	train.NegativeSample(2, nil, 0)
-	assert.Equal(t, 36, train.Count())
+	assert.Equal(t, numItems, test.ItemCount())
+	assert.Equal(t, 6, test.Count())
 }

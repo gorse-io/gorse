@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ctr
+package click
 
 import (
 	"fmt"
@@ -24,27 +24,11 @@ import (
 // ParamsSearchResult contains the return of grid search.
 type ParamsSearchResult struct {
 	BestScore  Score
+	BestModel  FactorizationMachine
 	BestParams model.Params
 	BestIndex  int
 	Scores     []Score
 	Params     []model.Params
-}
-
-func NewParamsSearchResult() *ParamsSearchResult {
-	return &ParamsSearchResult{
-		Scores: make([]Score, 0),
-		Params: make([]model.Params, 0),
-	}
-}
-
-func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
-	r.Scores = append(r.Scores, score)
-	r.Params = append(r.Params, params.Copy())
-	if len(r.Scores) == 0 || score.BetterThan(r.BestScore) {
-		r.BestScore = score
-		r.BestParams = params.Copy()
-		r.BestIndex = len(r.Params) - 1
-	}
 }
 
 // GridSearchCV finds the best parameters for a model.
@@ -80,6 +64,7 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 				results.BestScore = score
 				results.BestParams = params.Copy()
 				results.BestIndex = len(results.Params) - 1
+				results.BestModel = Clone(estimator)
 			}
 		} else {
 			paramName := paramNames[deep]
@@ -126,6 +111,7 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 			results.BestScore = score
 			results.BestParams = params.Copy()
 			results.BestIndex = len(results.Params) - 1
+			results.BestModel = Clone(estimator)
 		}
 	}
 	return results

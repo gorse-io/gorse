@@ -17,6 +17,7 @@ package master
 import (
 	"encoding/gob"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"os"
 	"path/filepath"
@@ -30,6 +31,9 @@ type LocalCache struct {
 	RankingModel        ranking.Model
 	RankingScore        ranking.Score
 	UserIndex           base.Index
+	ClickModelVersion   int64
+	ClickModelScore     click.Score
+	ClickModel          click.FactorizationMachine
 }
 
 // LoadLocalCache loads local cache from a file.
@@ -80,6 +84,23 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	if err != nil {
 		return state, err
 	}
+	// 6. click model version
+	err = decoder.Decode(&state.ClickModelVersion)
+	if err != nil {
+		return state, err
+	}
+	// 7. click model score
+	err = decoder.Decode(&state.ClickModelScore)
+	if err != nil {
+		return state, err
+	}
+	// 8. click model
+	state.ClickModel = click.NewFM(click.FMClassification, nil)
+	err = decoder.Decode(state.ClickModel)
+	if err != nil {
+		return state, err
+	}
+	state.ClickModel.SetParams(state.ClickModel.GetParams())
 	return state, nil
 }
 
@@ -120,5 +141,20 @@ func (c *LocalCache) WriteLocalCache() error {
 		return err
 	}
 	// 5. user index
-	return encoder.Encode(c.UserIndex)
+	err = encoder.Encode(c.UserIndex)
+	if err != nil {
+		return err
+	}
+	// 6. click model version
+	err = encoder.Encode(c.ClickModelVersion)
+	if err != nil {
+		return err
+	}
+	// 7. click model score
+	err = encoder.Encode(c.ClickModelScore)
+	if err != nil {
+		return err
+	}
+	// 8. click model
+	return encoder.Encode(c.ClickModel)
 }

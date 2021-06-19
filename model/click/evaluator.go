@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ctr
+package click
 
 import (
 	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
 )
 
+// EvaluateRegression evaluates factorization machines in regression task.
 func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score {
 	sum := float32(0)
 	// For all UserFeedback
@@ -33,6 +34,7 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 	}
 }
 
+// EvaluateClassification evaluates factorization machines in classification task.
 func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Score {
 	correct := float32(0)
 	// For all UserFeedback
