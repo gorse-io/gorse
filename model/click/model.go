@@ -11,13 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ctr
+
+package click
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/barkimedes/go-deepcopy"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -91,9 +93,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 
 type FactorizationMachine interface {
 	model.Model
-	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId string, labels []string) float32
-	// InternalPredict
 	InternalPredict(x []int) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 }
@@ -104,7 +104,7 @@ type BaseFactorizationMachine struct {
 }
 
 func (b *BaseFactorizationMachine) Init(trainSet *Dataset) {
-	b.Index = trainSet.UnifiedIndex
+	b.Index = trainSet.Index
 }
 
 type FMTask string
@@ -153,7 +153,7 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachine.SetParams(params)
 	// Setup hyper-parameters
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 128)
-	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 20)
+	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.01)
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
@@ -216,7 +216,7 @@ func (fm *FM) InternalPredict(x []int) float32 {
 func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit FM",
-		zap.Int("train_size", trainSet.PositiveCount),
+		zap.Int("train_size", trainSet.Count()),
 		zap.Int("test_size", testSet.Count()),
 		zap.String("task", string(fm.Task)),
 		zap.Any("params", fm.GetParams()),
@@ -226,8 +226,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
 	snapshots := SnapshotManger{}
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
-		trainSet.NegativeSample(1, nil, fm.GetRandomGenerator().Int63())
-		for _, target := range trainSet.FeedbackTarget {
+		for _, target := range trainSet.Target {
 			fm.MinTarget = math32.Min(fm.MinTarget, target)
 			fm.MaxTarget = math32.Max(fm.MaxTarget, target)
 		}
@@ -282,7 +281,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 				base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 			}
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs),
+			base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
@@ -296,11 +295,11 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		}
 	}
 	// restore best snapshot
-	if len(snapshots.BestWeights) > 0 {
-		fm.V = snapshots.BestWeights[0].([][]float32)
-		fm.W = snapshots.BestWeights[1].([]float32)
-		fm.B = snapshots.BestWeights[2].(float32)
-	}
+	fm.V = snapshots.BestWeights[0].([][]float32)
+	fm.W = snapshots.BestWeights[1].([]float32)
+	fm.B = snapshots.BestWeights[2].(float32)
+	base.Logger().Info("fit fm complete",
+		zap.Float32(snapshots.BestScore.GetName(), snapshots.BestScore.GetValue()))
 	return snapshots.BestScore
 }
 
@@ -312,32 +311,32 @@ func (fm *FM) Clear() {
 }
 
 func (fm *FM) Init(trainSet *Dataset) {
-	newV := fm.GetRandomGenerator().NormalMatrix(trainSet.UnifiedIndex.Len(), fm.nFactors, fm.initMean, fm.initStdDev)
-	newW := make([]float32, trainSet.UnifiedIndex.Len())
+	newV := fm.GetRandomGenerator().NormalMatrix(trainSet.Index.Len(), fm.nFactors, fm.initMean, fm.initStdDev)
+	newW := make([]float32, trainSet.Index.Len())
 	// Relocate parameters
 	if fm.Index != nil {
 		// users
-		for _, userId := range trainSet.UnifiedIndex.GetUsers() {
+		for _, userId := range trainSet.Index.GetUsers() {
 			oldIndex := fm.Index.EncodeUser(userId)
-			newIndex := trainSet.UnifiedIndex.EncodeUser(userId)
+			newIndex := trainSet.Index.EncodeUser(userId)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// items
-		for _, itemId := range trainSet.UnifiedIndex.GetItems() {
+		for _, itemId := range trainSet.Index.GetItems() {
 			oldIndex := fm.Index.EncodeItem(itemId)
-			newIndex := trainSet.UnifiedIndex.EncodeItem(itemId)
+			newIndex := trainSet.Index.EncodeItem(itemId)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// labels
-		for _, label := range trainSet.UnifiedIndex.GetContextLabels() {
+		for _, label := range trainSet.Index.GetContextLabels() {
 			oldIndex := fm.Index.EncodeContextLabel(label)
-			newIndex := trainSet.UnifiedIndex.EncodeContextLabel(label)
+			newIndex := trainSet.Index.EncodeContextLabel(label)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
@@ -372,4 +371,15 @@ func DecodeModel(buf []byte) (FactorizationMachine, error) {
 		return nil, err
 	}
 	return &fm, nil
+}
+
+// Clone a model with deep copy.
+func Clone(m FactorizationMachine) FactorizationMachine {
+	if temp, err := deepcopy.Anything(m); err != nil {
+		panic(err)
+	} else {
+		copied := temp.(FactorizationMachine)
+		copied.SetParams(copied.GetParams())
+		return copied
+	}
 }
