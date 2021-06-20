@@ -22,7 +22,7 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/scylladb/go-set v1.0.2
 	github.com/spf13/cobra v0.0.7
-	github.com/steinfletcher/apitest v1.5.3
+	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.5.1
 	go.uber.org/zap v1.17.0
