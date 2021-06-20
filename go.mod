@@ -11,7 +11,7 @@ require (
 	github.com/chewxy/math32 v1.0.8
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.4.0
-	github.com/go-redis/redis/v8 v8.8.0
+	github.com/go-redis/redis/v8 v8.10.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/gorse-io/dashboard v0.0.0-20210617071223-310b8c2d7b7a
@@ -25,7 +25,7 @@ require (
 	github.com/steinfletcher/apitest v1.5.3
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.5.1
-	go.uber.org/zap v1.16.0
+	go.uber.org/zap v1.17.0
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
 	google.golang.org/grpc v1.37.0
 	google.golang.org/protobuf v1.26.0
