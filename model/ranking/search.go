@@ -142,6 +142,7 @@ type ModelSearcher struct {
 	// arguments
 	numEpochs int
 	numTrials int
+	numJobs   int
 	// results
 	bestMutex      sync.Mutex
 	bestModelName  string
@@ -151,10 +152,11 @@ type ModelSearcher struct {
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
-func NewModelSearcher(nEpoch, nTrials int) *ModelSearcher {
+func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
 	return &ModelSearcher{
 		numTrials:      nTrials,
 		numEpochs:      nEpoch,
+		numJobs:        nJobs,
 		bestSimilarity: model.SimilarityCosine,
 	}
 }
@@ -184,7 +186,8 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet) error {
 		if err != nil {
 			return err
 		}
-		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0, nil)
+		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0,
+			NewFitConfig().SetJobs(searcher.numJobs))
 		searcher.bestMutex.Lock()
 		if name == "knn" {
 			searcher.bestSimilarity = r.BestModel.GetParams()[model.Similarity].(string)

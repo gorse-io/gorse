@@ -81,12 +81,21 @@ type FitConfig struct {
 	Verbose int
 }
 
+func NewFitConfig() *FitConfig {
+	return &FitConfig{
+		Jobs:    1,
+		Verbose: 10,
+	}
+}
+
+func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
+	config.Jobs = nJobs
+	return config
+}
+
 func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 	if config == nil {
-		return &FitConfig{
-			Jobs:    1,
-			Verbose: 10,
-		}
+		return NewFitConfig()
 	}
 	return config
 }
