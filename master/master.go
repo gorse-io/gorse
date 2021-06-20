@@ -84,8 +84,8 @@ func NewMaster(cfg *config.Config) *Master {
 		nodesInfo: make(map[string]*Node),
 		// init versions
 		rankingModelVersion: rand.Int63(),
-		// ctrVersion:       rand.Int63(),
-		userIndexVersion: rand.Int63(),
+		clickModelVersion:   rand.Int63(),
+		userIndexVersion:    rand.Int63(),
 		// default ranking model
 		rankingModelName: "bpr",
 		rankingModel:     ranking.NewBPR(nil),
