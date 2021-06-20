@@ -87,9 +87,12 @@ func NewMaster(cfg *config.Config) *Master {
 		// ctrVersion:       rand.Int63(),
 		userIndexVersion: rand.Int63(),
 		// default ranking model
-		rankingModelName:     "bpr",
-		rankingModel:         ranking.NewBPR(nil),
-		rankingModelSearcher: ranking.NewModelSearcher(cfg.Recommend.SearchEpoch, cfg.Recommend.SearchTrials),
+		rankingModelName: "bpr",
+		rankingModel:     ranking.NewBPR(nil),
+		rankingModelSearcher: ranking.NewModelSearcher(
+			cfg.Recommend.SearchEpoch,
+			cfg.Recommend.SearchTrials,
+			cfg.Master.SearchJobs),
 		// default click model
 		clickModel: click.NewFM(click.FMClassification, nil),
 		RestServer: server.RestServer{

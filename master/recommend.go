@@ -215,12 +215,7 @@ func (m *Master) fitRankingModel(dataSet *ranking.DataSet, rankingModel ranking.
 	base.Logger().Info("fit ranking model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
 	// training model
 	trainSet, testSet := dataSet.Split(0, 0)
-	score := rankingModel.Fit(trainSet, testSet, &ranking.FitConfig{
-		Jobs:       m.GorseConfig.Master.FitJobs,
-		Verbose:    (*ranking.FitConfig)(nil).Verbose,
-		Candidates: (*ranking.FitConfig)(nil).Candidates,
-		TopK:       (*ranking.FitConfig)(nil).TopK,
-	})
+	score := rankingModel.Fit(trainSet, testSet, ranking.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
 	// update match model
 	m.rankingModelMutex.Lock()
 	m.rankingModel = rankingModel
@@ -366,10 +361,7 @@ func (m *Master) fitClickModel(fm click.FactorizationMachine) {
 	}
 	// training model
 	trainSet, testSet := dataset.Split(0.2, 0)
-	score := fm.Fit(trainSet, testSet, &click.FitConfig{
-		Jobs:    m.GorseConfig.Master.FitJobs,
-		Verbose: (*ranking.FitConfig)(nil).Verbose,
-	})
+	score := fm.Fit(trainSet, testSet, click.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
 	// update match model
 	m.clickModelMutex.Lock()
 	m.clickModel = fm
@@ -406,10 +398,8 @@ func (m *Master) searchClickModel() (click.FactorizationMachine, click.Score, er
 	trainSet, testSet := dataset.Split(0.2, 0)
 	fm := click.NewFM(click.FMClassification, nil)
 	startTime := time.Now()
-	r := click.RandomSearchCV(fm, trainSet, testSet, fm.GetParamsGrid(), 10, 0, &click.FitConfig{
-		Jobs:    m.GorseConfig.Master.FitJobs,
-		Verbose: (*ranking.FitConfig)(nil).Verbose,
-	})
+	r := click.RandomSearchCV(fm, trainSet, testSet, fm.GetParamsGrid(), 10, 0,
+		click.NewFitConfig().SetJobs(m.GorseConfig.Master.SearchJobs))
 	base.Logger().Info("complete click model search",
 		zap.Float32("Precision", r.BestScore.Precision),
 		zap.Any("params", r.BestParams),
