@@ -20,6 +20,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/zhenghaoz/gorse/model/click"
 	"math/rand"
 	"net/http"
 	"os"
@@ -68,6 +69,11 @@ type Worker struct {
 	latestRankingModelVersion  int64
 	currentRankingModelVersion int64
 	rankingModel               ranking.Model
+
+	// click model
+	latestClickModelVersion  int64
+	currentClickModelVersion int64
+	clickModel               click.FactorizationMachine
 
 	// peers
 	peers []string
@@ -152,6 +158,15 @@ func (w *Worker) Sync() {
 			w.syncedChan <- true
 		}
 
+		// check click model version
+		w.latestClickModelVersion = meta.ClickModelVersion
+		if w.latestClickModelVersion != w.currentClickModelVersion {
+			base.Logger().Info("new click model found",
+				zap.String("old_version", base.Hex(w.currentClickModelVersion)),
+				zap.String("new_version", base.Hex(w.latestClickModelVersion)))
+			w.syncedChan <- true
+		}
+
 		// check user index version
 		w.latestUserIndexVersion = meta.UserIndexVersion
 		if w.latestUserIndexVersion != w.currentUserIndexVersion {
@@ -201,19 +216,41 @@ func (w *Worker) Pull() {
 		// pull ranking model
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
 			base.Logger().Info("start pull ranking model")
-			if mfResponse, err := w.masterClient.GetRankingModel(context.Background(),
+			if rankingResponse, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.NodeInfo{
 					NodeType: protocol.NodeType_WorkerNode,
 					NodeName: w.workerName,
 				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
-				w.rankingModel, err = ranking.DecodeModel(mfResponse.Name, mfResponse.Model)
+				w.rankingModel, err = ranking.DecodeModel(rankingResponse.Name, rankingResponse.Model)
 				if err != nil {
 					base.Logger().Error("failed to decode ranking model", zap.Error(err))
 				} else {
-					w.currentRankingModelVersion = mfResponse.Version
+					w.currentRankingModelVersion = rankingResponse.Version
 					base.Logger().Info("synced ranking model",
+						zap.String("version", base.Hex(w.currentRankingModelVersion)))
+					pulled = true
+				}
+			}
+		}
+
+		// pull click model
+		if w.latestClickModelVersion != w.currentClickModelVersion {
+			base.Logger().Info("start pull click model")
+			if clickResponse, err := w.masterClient.GetClickModel(context.Background(),
+				&protocol.NodeInfo{
+					NodeType: protocol.NodeType_WorkerNode,
+					NodeName: w.workerName,
+				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
+				base.Logger().Error("failed to pull click model", zap.Error(err))
+			} else {
+				w.clickModel, err = click.DecodeModel(clickResponse.Model)
+				if err != nil {
+					base.Logger().Error("failed to decode click model", zap.Error(err))
+				} else {
+					w.currentClickModelVersion = clickResponse.Version
+					base.Logger().Info("synced click model",
 						zap.String("version", base.Hex(w.currentRankingModelVersion)))
 					pulled = true
 				}
@@ -421,7 +458,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	// check cache
 	items, err := w.cacheClient.GetScores(cache.RecommendItems, userId, 0, -1)
 	if err != nil {
-		base.Logger().Error("failed to read meta", zap.Error(err))
+		base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {
 		return true
