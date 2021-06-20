@@ -102,7 +102,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 
 type FactorizationMachine interface {
 	model.Model
-	Predict(userId, itemId string, labels []string) float32
+	Predict(userId, itemId string, itemLabels []string) float32
 	InternalPredict(x []int) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 }
@@ -169,7 +169,7 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 }
 
-func (fm *FM) Predict(userId, itemId string, labels []string) float32 {
+func (fm *FM) Predict(userId, itemId string, itemLabels []string) float32 {
 	x := make([]int, 0)
 	if userIndex := fm.Index.EncodeUser(userId); userIndex != base.NotId {
 		x = append(x, userIndex)
@@ -177,9 +177,9 @@ func (fm *FM) Predict(userId, itemId string, labels []string) float32 {
 	if itemIndex := fm.Index.EncodeItem(itemId); itemIndex != base.NotId {
 		x = append(x, itemIndex)
 	}
-	for _, label := range labels {
-		if labelIndex := fm.Index.EncodeContextLabel(label); labelIndex != base.NotId {
-			x = append(x, labelIndex)
+	for _, itemLabel := range itemLabels {
+		if itemLabelIndex := fm.Index.EncodeItemLabel(itemLabel); itemLabelIndex != base.NotId {
+			x = append(x, itemLabelIndex)
 		}
 	}
 	return fm.InternalPredict(x)
