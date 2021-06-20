@@ -270,6 +270,8 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit bpr",
+		zap.Int("train_set_size", trainSet.Count()),
+		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", bpr.GetParams()),
 		zap.Any("config", config))
 	bpr.Init(trainSet)
@@ -492,6 +494,8 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit als",
+		zap.Int("train_set_size", trainSet.Count()),
+		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", als.GetParams()),
 		zap.Any("config", config))
 	als.Init(trainSet)
@@ -748,6 +752,8 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit ccd",
+		zap.Int("train_set_size", trainSet.Count()),
+		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", ccd.GetParams()),
 		zap.Any("config", config))
 	ccd.Init(trainSet)

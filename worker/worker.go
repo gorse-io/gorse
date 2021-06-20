@@ -428,8 +428,12 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			}
 		}
 		// save result
-		elems, scores := recItems.PopAll()
-		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
+		elems, _ := recItems.PopAll()
+		topItems, err := w.rankByClickTroughRate(userId, elems)
+		if err != nil {
+			return err
+		}
+		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, topItems); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return err
 		}
@@ -447,6 +451,26 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 	close(completed)
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
+}
+
+// rankByClickTroughRate ranks items by predicted click-through-rate.
+func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache.ScoredItem, error) {
+	// download items
+	var err error
+	items := make([]data.Item, len(itemIds))
+	for i, itemId := range itemIds {
+		items[i], err = w.dataClient.GetItem(itemId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// rank by CTR
+	topItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+	for _, item := range items {
+		topItems.Push(item.ItemId, w.clickModel.Predict(userId, item.ItemId, item.Labels))
+	}
+	elems, scores := topItems.PopAll()
+	return cache.CreateScoredItems(elems, scores), nil
 }
 
 // checkRecommendCacheTimeout checks if recommend cache stale.

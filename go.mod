@@ -14,7 +14,7 @@ require (
 	github.com/go-redis/redis/v8 v8.10.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
-	github.com/gorse-io/dashboard v0.0.0-20210620024103-524355185539
+	github.com/gorse-io/dashboard v0.0.0-20210625080444-9e1288209f35
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.10
 	github.com/pkg/errors v0.9.1
