@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/ReneKroon/ttlcache/v2 v2.4.0
+	github.com/ReneKroon/ttlcache/v2 v2.7.0
 	github.com/alicebob/miniredis/v2 v2.14.3
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/barkimedes/go-deepcopy v0.0.0-20200817023428-a044a1957ca4
@@ -22,7 +22,7 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/scylladb/go-set v1.0.2
 	github.com/spf13/cobra v0.0.7
-	github.com/steinfletcher/apitest v1.5.3
+	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.5.1
 	go.uber.org/zap v1.17.0
