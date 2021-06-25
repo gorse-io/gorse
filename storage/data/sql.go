@@ -71,14 +71,26 @@ func (d *SQLDatabase) Init() error {
 		return err
 	}
 	// create index
-	if _, err := d.db.Exec("ALTER TABLE feedback ADD INDEX (user_id)"); err != nil {
+	if exist, err := d.checkIfIndexExists("feedback", "user_id"); err != nil {
 		return err
+	} else if !exist {
+		if _, err = d.db.Exec("CREATE INDEX user_id ON feedback(user_id)"); err != nil {
+			return err
+		}
 	}
 	// change settings
 	_, err := d.db.Exec("SET SESSION sql_mode=\"" +
 		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
 		"NO_ENGINE_SUBSTITUTION\"")
 	return err
+}
+
+func (d *SQLDatabase) checkIfIndexExists(table, index string) (bool, error) {
+	r, err := d.db.Query("SHOW INDEX IN "+table+" WHERE Key_name = ?", index)
+	if err != nil {
+		return false, err
+	}
+	return r.Next(), nil
 }
 
 // Close MySQL connection.
