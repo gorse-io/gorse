@@ -4,7 +4,7 @@
 cache_store = "redis://localhost:6379"
 # database for persist data (support MySQL/MongoDB)
 data_store = "mysql://root@tcp(localhost:3306)/gorse?parseTime=true"
-# cache size for intermediate recommendation
+# cache size for recommended/popular/latest items
 cache_size = 200
 # insert new users while inserting feedback
 auto_insert_user = true
@@ -24,16 +24,16 @@ item_ttl = 3650
 # This section declares settings for the master node.
 [master]
 port = 8086                     # master port
-host = "127.0.0.1"              # master host
+host = "0.0.0.0"                # master host
 http_port = 8088                # HTTP API port
-http_host = "127.0.0.1"         # HTTP API host
-search_jobs = 1                 # number of jobs for model search
+http_host = "0.0.0.0"           # HTTP API host
+search_jobs = 2                 # number of jobs for model search
 fit_jobs = 2                    # number of jobs for model fitting
 meta_timeout = 10               # cluster meta timeout (second)
 
 # This section declares settings for the server node.
 [server]
-default_n = 10                  # default number of returned items
+default_n = 20                  # default number of returned items
 api_key = ""                    # secret key for RESTful APIs (SSL required)
 
 # This section declares settings for recommendation.
@@ -43,5 +43,6 @@ fit_period = 10                 # time period for model fitting (minutes)
 search_period = 60              # time period for model searching (minutes)
 search_epoch = 100              # number of epochs for model searching
 search_trials = 10              # number of trials for model searching
-max_recommend_period = 1        # time period for inactive user recommendation (days)
-fallback_recommend = "latest"   # fallback method for recommendation (popular/latest)
+refresh_recommend_period = 1    # time period to refresh recommendation for inactive users (days)
+fallback_recommend = "latest"   # fallback recommendation method for cold-start users (popular/latest)
+explore_latest_num = 20         # number of latest (cold-start) items insert to recommended items cache

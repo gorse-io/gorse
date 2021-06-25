@@ -38,15 +38,15 @@ func TestLoadConfig(t *testing.T) {
 
 	// master configuration
 	assert.Equal(t, 8086, config.Master.Port)
-	assert.Equal(t, "127.0.0.1", config.Master.Host)
+	assert.Equal(t, "0.0.0.0", config.Master.Host)
 	assert.Equal(t, 8088, config.Master.HttpPort)
-	assert.Equal(t, "127.0.0.1", config.Master.HttpHost)
-	assert.Equal(t, 1, config.Master.SearchJobs)
+	assert.Equal(t, "0.0.0.0", config.Master.HttpHost)
+	assert.Equal(t, 2, config.Master.SearchJobs)
 	assert.Equal(t, 2, config.Master.FitJobs)
 	assert.Equal(t, 10, config.Master.MetaTimeout)
 
 	// server configuration
-	assert.Equal(t, 10, config.Server.DefaultN)
+	assert.Equal(t, 20, config.Server.DefaultN)
 	assert.Equal(t, "", config.Server.APIKey)
 
 	// recommend configuration
@@ -55,8 +55,9 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 60, config.Recommend.SearchPeriod)
 	assert.Equal(t, 100, config.Recommend.SearchEpoch)
 	assert.Equal(t, 10, config.Recommend.SearchTrials)
-	assert.Equal(t, 1, config.Recommend.MaxRecommendPeriod)
+	assert.Equal(t, 1, config.Recommend.RefreshRecommendPeriod)
 	assert.Equal(t, "latest", config.Recommend.FallbackRecommend)
+	assert.Equal(t, 20, config.Recommend.ExploreLatestNum)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

@@ -45,12 +45,12 @@ type DatabaseConfig struct {
 	CacheStore           string   `toml:"cache_store"`             // database for cache store
 	AutoInsertUser       bool     `toml:"auto_insert_user"`        // insert new users while inserting feedback
 	AutoInsertItem       bool     `toml:"auto_insert_item"`        // insert new items while inserting feedback
-	CacheSize            int      `toml:"cache_size"`              // cache size for intermediate recommendation
+	CacheSize            int      `toml:"cache_size"`              // cache size for recommended/popular/latest items
 	PositiveFeedbackType []string `toml:"positive_feedback_types"` // positive feedback type
 	ClickFeedbackTypes   []string `toml:"click_feedback_types"`    // feedback types for click event
 	ReadFeedbackType     string   `toml:"read_feedback_type"`      // feedback type for read event
-	PositiveFeedbackTTL  uint     `toml:"positive_feedback_ttl"`
-	ItemTTL              uint     `toml:"item_ttl"`
+	PositiveFeedbackTTL  uint     `toml:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
+	ItemTTL              uint     `toml:"item_ttl"`                // item-to-live of items
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -67,13 +67,13 @@ func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port        int    `toml:"port"`
-	Host        string `toml:"host"`
-	HttpPort    int    `toml:"http_port"`
-	HttpHost    string `toml:"http_host"`
-	SearchJobs  int    `toml:"search_jobs"`
-	FitJobs     int    `toml:"fit_jobs"`
-	MetaTimeout int    `toml:"meta_timeout"`
+	Port        int    `toml:"port"`         // master port
+	Host        string `toml:"host"`         // master host
+	HttpPort    int    `toml:"http_port"`    // HTTP port
+	HttpHost    string `toml:"http_host"`    // HTTP host
+	SearchJobs  int    `toml:"search_jobs"`  // number of working jobs to search model
+	FitJobs     int    `toml:"fit_jobs"`     // number of working jobs to fit model
+	MetaTimeout int    `toml:"meta_timeout"` // cluster meta timeout (second)
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -94,26 +94,28 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	PopularWindow      int    `toml:"popular_window"`
-	FitPeriod          int    `toml:"fit_period"`
-	MaxRecommendPeriod int    `toml:"max_recommend_period"`
-	SearchPeriod       int    `toml:"search_period"`
-	SearchEpoch        int    `toml:"search_epoch"`
-	SearchTrials       int    `toml:"search_trials"`
-	FallbackRecommend  string `toml:"fallback_recommend"`
+	PopularWindow          int    `toml:"popular_window"`
+	FitPeriod              int    `toml:"fit_period"`
+	SearchPeriod           int    `toml:"search_period"`
+	SearchEpoch            int    `toml:"search_epoch"`
+	SearchTrials           int    `toml:"search_trials"`
+	RefreshRecommendPeriod int    `toml:"refresh_recommend_period"`
+	FallbackRecommend      string `toml:"fallback_recommend"`
+	ExploreLatestNum       int    `toml:"explore_latest_num"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
 func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 	if config == nil {
 		return &RecommendConfig{
-			PopularWindow:      1,
-			FitPeriod:          60,
-			MaxRecommendPeriod: 1,
-			SearchPeriod:       60,
-			SearchEpoch:        100,
-			SearchTrials:       10,
-			FallbackRecommend:  "latest",
+			PopularWindow:          180,
+			FitPeriod:              60,
+			SearchPeriod:           180,
+			SearchEpoch:            100,
+			SearchTrials:           10,
+			RefreshRecommendPeriod: 5,
+			FallbackRecommend:      "latest",
+			ExploreLatestNum:       10,
 		}
 	}
 	return config
@@ -121,15 +123,14 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 
 // ServerConfig is the configuration for the server.
 type ServerConfig struct {
-	APIKey   string `toml:"api_key"`
-	DefaultN int    `toml:"default_n"`
+	APIKey   string `toml:"api_key"`   // default number of returned items
+	DefaultN int    `toml:"default_n"` // secret key for RESTful APIs (SSL required)
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
 func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
 	if config == nil {
 		return &ServerConfig{
-			APIKey:   "",
 			DefaultN: 10,
 		}
 	}
@@ -188,9 +189,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("recommend", "fit_period") {
 		config.Recommend.FitPeriod = defaultRecommendConfig.FitPeriod
 	}
-	if !meta.IsDefined("recommend", "max_recommend_period") {
-		config.Recommend.MaxRecommendPeriod = defaultRecommendConfig.MaxRecommendPeriod
-	}
 	if !meta.IsDefined("recommend", "search_period") {
 		config.Recommend.SearchPeriod = defaultRecommendConfig.SearchPeriod
 	}
@@ -200,8 +198,14 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("recommend", "search_trials") {
 		config.Recommend.SearchTrials = defaultRecommendConfig.SearchTrials
 	}
+	if !meta.IsDefined("recommend", "refresh_recommend_period") {
+		config.Recommend.RefreshRecommendPeriod = defaultRecommendConfig.RefreshRecommendPeriod
+	}
 	if !meta.IsDefined("recommend", "fallback_recommend") {
 		config.Recommend.FallbackRecommend = defaultRecommendConfig.FallbackRecommend
+	}
+	if !meta.IsDefined("recommend", "explore_latest_num") {
+		config.Recommend.ExploreLatestNum = defaultRecommendConfig.ExploreLatestNum
 	}
 }
 
