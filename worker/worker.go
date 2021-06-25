@@ -20,6 +20,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/model/click"
 	"math/rand"
 	"net/http"
@@ -342,7 +343,9 @@ func (w *Worker) Serve() {
 // 3. Load positive items if KNN used.
 // 4. Generate recommendation.
 // 5. Save result.
-// 6. Refresh cache.
+// 6. Insert cold-start items into results.
+// 7. Rank items in results by click-through-rate.
+// 8. Refresh cache.
 func (w *Worker) Recommend(m ranking.Model, users []string) {
 	var userIndexer base.Index
 	// load user index
@@ -428,8 +431,22 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			}
 		}
 		// save result
-		elems, _ := recItems.PopAll()
-		topItems, err := w.rankByClickTroughRate(userId, elems)
+		candidates, _ := recItems.PopAll()
+		// insert cold-start items
+		if w.cfg.Recommend.ExploreLatestNum > 0 {
+			candidateSet := strset.New(candidates...)
+			latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Recommend.ExploreLatestNum-1)
+			if err != nil {
+				return err
+			}
+			for _, latestItem := range latestItems {
+				if !candidateSet.Has(latestItem.ItemId) {
+					candidates = append(candidates, latestItem.ItemId)
+				}
+			}
+		}
+		// rank items in result by click-through-rate
+		topItems, err := w.rankByClickTroughRate(userId, candidates)
 		if err != nil {
 			return err
 		}
@@ -501,7 +518,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	}
 	// check time
 	if activeTime.Unix() < recommendTime.Unix() {
-		timeoutTime := recommendTime.Add(time.Hour * 24 * time.Duration(w.cfg.Recommend.MaxRecommendPeriod))
+		timeoutTime := recommendTime.Add(time.Hour * 24 * time.Duration(w.cfg.Recommend.RefreshRecommendPeriod))
 		return timeoutTime.Unix() < time.Now().Unix()
 	}
 	return true
