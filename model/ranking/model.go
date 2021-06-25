@@ -94,18 +94,6 @@ func (model *BaseMatrixFactorization) Init(trainSet *DataSet) {
 	model.ItemIndex = trainSet.ItemIndex
 }
 
-func (model *BaseMatrixFactorization) Fit(trainSet, validateSet *DataSet, config *FitConfig) Score {
-	panic("not implemented")
-}
-
-func (model *BaseMatrixFactorization) Predict(userId, itemId string) float32 {
-	panic("not implemented")
-}
-
-func (model *BaseMatrixFactorization) InternalPredict(userId, itemId int) float32 {
-	panic("not implemented")
-}
-
 func (model *BaseMatrixFactorization) GetUserIndex() base.Index {
 	return model.UserIndex
 }
@@ -381,6 +369,14 @@ func (bpr *BPR) Clear() {
 	bpr.ItemFactor = nil
 }
 
+func (bpr *BPR) Invalid() bool {
+	return bpr == nil ||
+		bpr.UserIndex == nil ||
+		bpr.ItemIndex == nil ||
+		bpr.UserFactor == nil ||
+		bpr.ItemFactor == nil
+}
+
 func (bpr *BPR) Init(trainSet *DataSet) {
 	// Initialize parameters
 	newUserFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
@@ -615,6 +611,14 @@ func (als *ALS) Clear() {
 	als.UserFactor = nil
 }
 
+func (als *ALS) Invalid() bool {
+	return als == nil ||
+		als.ItemIndex == nil ||
+		als.UserIndex == nil ||
+		als.ItemFactor == nil ||
+		als.UserFactor == nil
+}
+
 func (als *ALS) Init(trainSet *DataSet) {
 	// Initialize
 	newUserFactor := mat.NewDense(trainSet.UserCount(), als.nFactors,
@@ -718,6 +722,14 @@ func (ccd *CCD) Clear() {
 	ccd.ItemIndex = nil
 	ccd.ItemFactor = nil
 	ccd.UserFactor = nil
+}
+
+func (ccd *CCD) Invalid() bool {
+	return ccd == nil ||
+		ccd.UserIndex == nil ||
+		ccd.ItemIndex == nil ||
+		ccd.ItemFactor == nil ||
+		ccd.UserFactor == nil
 }
 
 func (ccd *CCD) Init(trainSet *DataSet) {

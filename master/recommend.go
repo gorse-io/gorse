@@ -89,12 +89,14 @@ func (m *Master) latest(items []data.Item) {
 	latestItems[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 	// find latest items
 	for _, item := range items {
-		latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
-		for _, label := range item.Labels {
-			if _, exist := latestItems[label]; !exist {
-				latestItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+		if !item.Timestamp.IsZero() {
+			latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
+			for _, label := range item.Labels {
+				if _, exist := latestItems[label]; !exist {
+					latestItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+				}
+				latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
 			}
-			latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
 		}
 	}
 	for label, topItems := range latestItems {
@@ -245,7 +247,9 @@ func (m *Master) fitRankingModel(dataSet *ranking.DataSet, rankingModel ranking.
 	m.localCache.RankingModel = rankingModel
 	m.localCache.RankingScore = score
 	m.localCache.UserIndex = m.userIndex
-	if err := m.localCache.WriteLocalCache(); err != nil {
+	if m.localCache.ClickModel.Invalid() {
+		base.Logger().Info("wait click model")
+	} else if err := m.localCache.WriteLocalCache(); err != nil {
 		base.Logger().Error("failed to write local cache", zap.Error(err))
 	} else {
 		base.Logger().Info("write model to local cache",
@@ -352,13 +356,16 @@ func (m *Master) analyze() error {
 // 3. Click model, version and score are persisted to local cache.
 func (m *Master) fitClickModel(fm click.FactorizationMachine) {
 	base.Logger().Info("fit click model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+
 	// pull dataset
 	dataset, err := click.LoadDataFromDatabase(m.DataClient,
 		m.GorseConfig.Database.PositiveFeedbackType,
 		m.GorseConfig.Database.ReadFeedbackType)
 	if err != nil {
 		base.Logger().Error("failed to pull dataset", zap.Error(err))
+		return
 	}
+
 	// training model
 	trainSet, testSet := dataset.Split(0.2, 0)
 	score := fm.Fit(trainSet, testSet, click.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
@@ -373,11 +380,14 @@ func (m *Master) fitClickModel(fm click.FactorizationMachine) {
 	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: ClickPrecision, Value: score.Precision, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
+
 	// caching model
 	m.localCache.ClickModelScore = m.clickScore
 	m.localCache.ClickModelVersion = m.clickModelVersion
 	m.localCache.ClickModel = fm
-	if err := m.localCache.WriteLocalCache(); err != nil {
+	if m.localCache.RankingModel.Invalid() {
+		base.Logger().Info("wait ranking model")
+	} else if err = m.localCache.WriteLocalCache(); err != nil {
 		base.Logger().Error("failed to write local cache", zap.Error(err))
 	} else {
 		base.Logger().Info("write model to local cache",
@@ -387,22 +397,15 @@ func (m *Master) fitClickModel(fm click.FactorizationMachine) {
 	}
 }
 
-func (m *Master) searchClickModel() (click.FactorizationMachine, click.Score, error) {
-	base.Logger().Info("search click model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+// searchClickModel searches best hyper-parameters for factorization machines.
+func (m *Master) searchClickModel() error {
 	dataset, err := click.LoadDataFromDatabase(m.DataClient,
 		m.GorseConfig.Database.ClickFeedbackTypes,
 		m.GorseConfig.Database.ReadFeedbackType)
 	if err != nil {
-		return nil, click.Score{}, err
+		base.Logger().Error("failed to pull data from click model search", zap.Error(err))
+		return err
 	}
 	trainSet, testSet := dataset.Split(0.2, 0)
-	fm := click.NewFM(click.FMClassification, nil)
-	startTime := time.Now()
-	r := click.RandomSearchCV(fm, trainSet, testSet, fm.GetParamsGrid(), 10, 0,
-		click.NewFitConfig().SetJobs(m.GorseConfig.Master.SearchJobs))
-	base.Logger().Info("complete click model search",
-		zap.Float32("Precision", r.BestScore.Precision),
-		zap.Any("params", r.BestParams),
-		zap.String("fit_time", time.Since(startTime).String()))
-	return r.BestModel, r.BestScore, nil
+	return m.clickModelSearcher.Fit(trainSet, testSet)
 }

@@ -33,8 +33,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, []string{"star", "like"}, config.Database.PositiveFeedbackType)
 	assert.Equal(t, []string{"like"}, config.Database.ClickFeedbackTypes)
 	assert.Equal(t, "read", config.Database.ReadFeedbackType)
-	assert.Equal(t, uint(3650), config.Database.PositiveFeedbackTTL)
-	assert.Equal(t, uint(3650), config.Database.ItemTTL)
+	assert.Equal(t, uint(0), config.Database.PositiveFeedbackTTL)
+	assert.Equal(t, uint(0), config.Database.ItemTTL)
 
 	// master configuration
 	assert.Equal(t, 8086, config.Master.Port)

@@ -17,9 +17,9 @@ click_feedback_types = ["like"]
 # feedback type for read event
 read_feedback_type = "read"
 # positive feedback time-to-live (days), 0 means disabled.
-positive_feedback_ttl = 3650
+positive_feedback_ttl = 0
 # item time-to-live (days), 0 means disabled.
-item_ttl = 3650
+item_ttl = 0
 
 # This section declares settings for the master node.
 [master]

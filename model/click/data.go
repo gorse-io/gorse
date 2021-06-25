@@ -261,7 +261,7 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	numTestSize := int(float32(dataset.Count()) * ratio)
 	rng := base.NewRandomGenerator(seed)
 	sampledIndex := set.NewIntSet(rng.Sample(0, dataset.Count(), numTestSize)...)
-	for i, _ := range dataset.Inputs {
+	for i := range dataset.Inputs {
 		if sampledIndex.Has(i) {
 			// add samples into test set
 			testSet.Inputs = append(testSet.Inputs, dataset.Inputs[i])

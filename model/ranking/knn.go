@@ -46,7 +46,12 @@ func (knn *KNN) GetParamsGrid() model.ParamsGrid {
 }
 
 func (knn *KNN) Clear() {
-	// do nothing
+	knn.ItemIndex = nil
+	knn.Similarity = nil
+}
+
+func (knn *KNN) Invalid() bool {
+	return knn == nil || knn.ItemIndex == nil || knn.Similarity == nil
 }
 
 func (knn *KNN) Predict(userProfile []string, itemId string) float32 {

@@ -59,6 +59,18 @@ func TestParams_GetFloat32(t *testing.T) {
 	assert.Equal(t, float32(0.1), p.GetFloat32(Lr, 0.1))
 }
 
+func TestParams_GetBool(t *testing.T) {
+	p := Params{}
+	// Empty case
+	assert.True(t, p.GetBool(UseFeature, true))
+	// Normal case
+	p[UseFeature] = false
+	assert.False(t, p.GetBool(UseFeature, true))
+	// Wrong type case
+	p[UseFeature] = true
+	assert.True(t, p.GetBool(UseFeature, false))
+}
+
 func TestParams_GetInt(t *testing.T) {
 	p := Params{}
 	// Empty case

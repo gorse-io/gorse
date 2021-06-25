@@ -16,9 +16,11 @@ package master
 
 import (
 	"encoding/gob"
+	"github.com/pkg/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 )
@@ -37,68 +39,68 @@ type LocalCache struct {
 }
 
 // LoadLocalCache loads local cache from a file.
+// If the ranking model is invalid, RankingModel == nil.
+// If the click model is invalid, ClickModel == nil.
 func LoadLocalCache(path string) (*LocalCache, error) {
+	base.Logger().Info("load cache", zap.String("path", path))
 	state := &LocalCache{path: path}
 	// check if file exists
 	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return state, nil
-		} else {
-			return nil, err
-		}
+		return state, err
 	}
 	// open file
 	f, err := os.Open(path)
 	if err != nil {
 		return state, err
 	}
+	defer f.Close()
 	decoder := gob.NewDecoder(f)
-	// 1. model name
+	// 1. ranking model name
 	err = decoder.Decode(&state.RankingModelName)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to load ranking model name")
 	}
-	// 2. model version
+	// 2. ranking model version
 	err = decoder.Decode(&state.RankingModelVersion)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to load ranking model version")
 	}
-	// 3. model
+	// 3. ranking model
 	state.RankingModel, err = ranking.NewModel(state.RankingModelName, nil)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to create ranking model")
 	}
 	err = decoder.Decode(state.RankingModel)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to decode ranking model")
 	}
 	state.RankingModel.SetParams(state.RankingModel.GetParams())
-	// 4. model score
+	// 4. ranking model score
 	err = decoder.Decode(&state.RankingScore)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to ranking model score")
 	}
 	// 5. user index
 	state.UserIndex = base.NewMapIndex()
 	err = decoder.Decode(state.UserIndex)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to load user index")
 	}
 	// 6. click model version
 	err = decoder.Decode(&state.ClickModelVersion)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to load click model version")
 	}
 	// 7. click model score
 	err = decoder.Decode(&state.ClickModelScore)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to load click model score")
 	}
 	// 8. click model
 	state.ClickModel = click.NewFM(click.FMClassification, nil)
 	err = decoder.Decode(state.ClickModel)
 	if err != nil {
-		return state, err
+		return state, errors.Wrap(err, "failed to load click model")
 	}
 	state.ClickModel.SetParams(state.ClickModel.GetParams())
 	return state, nil
@@ -119,23 +121,24 @@ func (c *LocalCache) WriteLocalCache() error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	encoder := gob.NewEncoder(f)
-	// 1. model name
+	// 1. ranking model name
 	err = encoder.Encode(c.RankingModelName)
 	if err != nil {
 		return err
 	}
-	// 2. model version
+	// 2. ranking model version
 	err = encoder.Encode(c.RankingModelVersion)
 	if err != nil {
 		return err
 	}
-	// 3. model
+	// 3. ranking model
 	err = encoder.Encode(c.RankingModel)
 	if err != nil {
 		return err
 	}
-	// 4. model score
+	// 4. ranking model score
 	err = encoder.Encode(c.RankingScore)
 	if err != nil {
 		return err

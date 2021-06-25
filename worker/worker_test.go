@@ -71,6 +71,18 @@ type mockMatrixFactorizationForRecommend struct {
 	ranking.BaseMatrixFactorization
 }
 
+func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
+	panic("implement me")
+}
+
+func (m *mockMatrixFactorizationForRecommend) Fit(trainSet, validateSet *ranking.DataSet, config *ranking.FitConfig) ranking.Score {
+	panic("implement me")
+}
+
+func (m *mockMatrixFactorizationForRecommend) Predict(userId, itemId string) float32 {
+	panic("implement me")
+}
+
 func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixFactorizationForRecommend {
 	m := new(mockMatrixFactorizationForRecommend)
 	m.UserIndex = base.NewMapIndex()

@@ -139,6 +139,8 @@ type FM struct {
 	reg        float32
 	initMean   float32
 	initStdDev float32
+	// Special options
+	useFeature bool
 }
 
 func (fm *FM) GetParamsGrid() model.ParamsGrid {
@@ -167,6 +169,7 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
+	fm.useFeature = fm.Params.GetBool(model.UseFeature, true)
 }
 
 func (fm *FM) Predict(userId, itemId string, itemLabels []string) float32 {
@@ -186,6 +189,10 @@ func (fm *FM) Predict(userId, itemId string, itemLabels []string) float32 {
 }
 
 func (fm *FM) internalPredict(x []int) float32 {
+	if !fm.useFeature {
+		// The input vector must be formatted as [user_id, item_id, ...]
+		x = x[:2]
+	}
 	// w_0
 	pred := fm.B
 	// \sum^n_{i=1} w_i x_i
@@ -211,8 +218,7 @@ func (fm *FM) internalPredict(x []int) float32 {
 
 func (fm *FM) InternalPredict(x []int) float32 {
 	pred := fm.internalPredict(x)
-	switch fm.Task {
-	case FMRegression:
+	if fm.Task == FMRegression {
 		if pred < fm.MinTarget {
 			pred = fm.MinTarget
 		} else if pred > fm.MaxTarget {
@@ -244,6 +250,10 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		_ = base.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				labels, target := trainSet.Get(i)
+				if !fm.useFeature {
+					// The input vector must be formatted as [user_id, item_id, ...]
+					labels = labels[:2]
+				}
 				prediction := fm.internalPredict(labels)
 				var grad float32
 				switch fm.Task {
@@ -297,7 +307,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 				zap.Float32(score.GetName(), score.GetValue()))
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
-				base.Logger().Error("model diverged", zap.Float32("lr", fm.lr))
+				base.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
 				break
 			}
 			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
@@ -317,6 +327,13 @@ func (fm *FM) Clear() {
 	fm.V = nil
 	fm.W = nil
 	fm.Index = nil
+}
+
+func (fm *FM) Invalid() bool {
+	return fm == nil ||
+		fm.V == nil ||
+		fm.W == nil ||
+		fm.Index == nil
 }
 
 func (fm *FM) Init(trainSet *Dataset) {

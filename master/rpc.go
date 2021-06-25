@@ -126,7 +126,7 @@ func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol
 	m.rankingModelMutex.Lock()
 	defer m.rankingModelMutex.Unlock()
 	// skip empty model
-	if m.rankingModel == nil {
+	if m.rankingModel.Invalid() {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
@@ -146,7 +146,7 @@ func (m *Master) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.M
 	m.clickModelMutex.Lock()
 	defer m.clickModelMutex.Unlock()
 	// skip empty model
-	if m.clickModel == nil {
+	if m.clickModel.Invalid() {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
