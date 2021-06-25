@@ -485,6 +485,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		}
 	}
 	removeReadTime += time.Since(removeReadStart)
+	numFromCache := len(results)
 
 	// 2. return similar items
 	if len(results) < n {
@@ -526,6 +527,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		results = append(results, ids...)
 		knnTime = time.Since(knnStart)
 	}
+	numFromKNN := len(results) - numFromCache
 
 	// 3. return fallback recommendation
 	if len(results) < n {
@@ -548,6 +550,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		removeReadTime += time.Since(removeReadStart)
 		fallbackTime = time.Since(fallbackStart)
 	}
+	numFromFallback := len(results) - numFromKNN - numFromCache
 
 	// return recommendations
 	if len(results) > n {
@@ -555,6 +558,9 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	}
 	spent := time.Since(start)
 	base.Logger().Info("complete recommendation",
+		zap.Int("num_from_cache", numFromCache),
+		zap.Int("num_from_knn", numFromKNN),
+		zap.Int("num_from_fallback", numFromFallback),
 		zap.Duration("load_cache_read_time", loadCachedReadTime),
 		zap.Duration("load_arch_read_time", loadArchReadTime),
 		zap.Duration("remove_read_time", removeReadTime),

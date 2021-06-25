@@ -25,6 +25,10 @@ type mockFactorizationMachineForSearch struct {
 	model.BaseModel
 }
 
+func (m *mockFactorizationMachineForSearch) Invalid() bool {
+	panic("implement me")
+}
+
 func (m *mockFactorizationMachineForSearch) GetUserIndex() base.Index {
 	panic("don't call me")
 }

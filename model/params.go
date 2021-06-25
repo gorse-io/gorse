@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package model
 
 import (
@@ -36,6 +37,7 @@ const (
 	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
 	Alpha       ParamName = "Alpha"       // weight for negative samples in ALS
 	Similarity  ParamName = "Similarity"
+	UseFeature  ParamName = "UseFeature"
 )
 
 const (
@@ -61,6 +63,21 @@ func (parameters Params) Copy() Params {
 		newParams[k] = v
 	}
 	return newParams
+}
+
+// GetBool gets a boolean parameter by name. Returns _default if not exists or type doesn't match.
+func (parameters Params) GetBool(name ParamName, _default bool) bool {
+	if val, exist := parameters[name]; exist {
+		switch val := val.(type) {
+		case bool:
+			return val
+		default:
+			base.Logger().Error("type mismatch",
+				zap.String("param_name", string(name)),
+				zap.String("actual_type", reflect.TypeOf(name).Name()))
+		}
+	}
+	return _default
 }
 
 // GetInt gets a integer parameter by name. Returns _default if not exists or type doesn't match.

@@ -19,6 +19,8 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
+	"sync"
+	"time"
 )
 
 // ParamsSearchResult contains the return of grid search.
@@ -115,4 +117,82 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 		}
 	}
 	return results
+}
+
+// ModelSearcher is a thread-safe click model searcher.
+type ModelSearcher struct {
+	// arguments
+	numEpochs int
+	numTrials int
+	numJobs   int
+	// results
+	bestMutex     sync.Mutex
+	useClickModel bool
+	bestModel     FactorizationMachine
+	bestScore     Score
+}
+
+// NewModelSearcher creates a thread-safe personal ranking model searcher.
+func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
+	return &ModelSearcher{
+		numTrials: nTrials,
+		numEpochs: nEpoch,
+		numJobs:   nJobs,
+	}
+}
+
+// GetBestModel returns the best click model with its score.
+func (searcher *ModelSearcher) GetBestModel() (FactorizationMachine, Score) {
+	searcher.bestMutex.Lock()
+	defer searcher.bestMutex.Unlock()
+	return searcher.bestModel, searcher.bestScore
+}
+
+// IsClickModelHelpful check if click model helps to improve recommendation. Click model helps if:
+// 1. There are item labels or user labels.
+// 2. Labels improve test precision.
+func (searcher *ModelSearcher) IsClickModelHelpful() bool {
+	searcher.bestMutex.Lock()
+	defer searcher.bestMutex.Unlock()
+	return searcher.useClickModel
+}
+
+func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset) error {
+	base.Logger().Info("click model search",
+		zap.Int("n_users", trainSet.UserCount()),
+		zap.Int("n_items", trainSet.ItemCount()),
+		zap.Int("n_user_labels", trainSet.Index.CountUserLabels()),
+		zap.Int("n_item_labels", trainSet.Index.CountItemLabels()))
+	startTime := time.Now()
+
+	// Check number of labels
+	if trainSet.Index.CountItemLabels() == 0 && trainSet.Index.CountUserLabels() == 0 {
+		base.Logger().Warn("click model doesn't work if there are no labels for items or users")
+		return nil
+	}
+
+	// Random search
+	fm := NewFM(FMClassification, nil)
+	grid := fm.GetParamsGrid()
+	grid[model.UseFeature] = []interface{}{true, false}
+	r := RandomSearchCV(fm, trainSet, valSet, grid, searcher.numTrials*2, 0,
+		NewFitConfig().SetJobs(searcher.numJobs))
+	if !r.BestParams[model.UseFeature].(bool) {
+		// If model searcher found it's better to ignore features, just don't use features.
+		searcher.useClickModel = false
+		base.Logger().Info("it seems worse to use features")
+		return nil
+	}
+	searcher.bestMutex.Lock()
+	defer searcher.bestMutex.Unlock()
+	searcher.useClickModel = true
+	searcher.bestModel = r.BestModel
+	searcher.bestScore = r.BestScore
+
+	searchTime := time.Since(startTime)
+	base.Logger().Info("complete ranking model search",
+		zap.Float32("precision", searcher.bestScore.Precision),
+		zap.Any("params", searcher.bestModel.GetParams()),
+		zap.String("search_time", searchTime.String()))
+	return nil
 }

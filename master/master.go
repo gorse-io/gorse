@@ -67,8 +67,7 @@ type Master struct {
 	clickScore         click.Score
 	clickModelVersion  int64
 	clickModelMutex    sync.Mutex
-	clickSearchedModel click.FactorizationMachine
-	clickSearchedScore click.Score
+	clickModelSearcher *click.ModelSearcher
 
 	localCache *LocalCache
 
@@ -95,6 +94,11 @@ func NewMaster(cfg *config.Config) *Master {
 			cfg.Master.SearchJobs),
 		// default click model
 		clickModel: click.NewFM(click.FMClassification, nil),
+		clickModelSearcher: click.NewModelSearcher(
+			cfg.Recommend.SearchEpoch,
+			cfg.Recommend.SearchTrials,
+			cfg.Master.SearchJobs,
+		),
 		RestServer: server.RestServer{
 			GorseConfig: cfg,
 			HttpHost:    cfg.Master.HttpHost,
@@ -114,10 +118,10 @@ func (m *Master) Serve() {
 	var err error
 	m.localCache, err = LoadLocalCache(filepath.Join(os.TempDir(), "gorse-master"))
 	if err != nil {
-		base.Logger().Error("failed to load local cache", zap.Error(err))
+		base.Logger().Warn("failed to load local cache", zap.Error(err))
 	}
 	if m.localCache.RankingModel != nil {
-		base.Logger().Info("load cached model",
+		base.Logger().Info("load cached ranking model",
 			zap.String("model_name", m.localCache.RankingModelName),
 			zap.String("model_version", base.Hex(m.localCache.RankingModelVersion)),
 			zap.Float32("model_score", m.localCache.RankingScore.NDCG),
@@ -128,6 +132,10 @@ func (m *Master) Serve() {
 		m.rankingScore = m.localCache.RankingScore
 	}
 	if m.localCache.ClickModel != nil {
+		base.Logger().Info("load cached click model",
+			zap.String("model_version", base.Hex(m.localCache.ClickModelVersion)),
+			zap.Float32("model_score", m.localCache.ClickModelScore.Precision),
+			zap.Any("params", m.localCache.ClickModel.GetParams()))
 		m.clickModel = m.localCache.ClickModel
 		m.clickScore = m.localCache.ClickModelScore
 		m.clickModelVersion = m.localCache.ClickModelVersion
@@ -185,10 +193,19 @@ func (m *Master) Serve() {
 
 func (m *Master) FitLoop() {
 	defer base.CheckPanic()
-	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
-	var bestName string
-	var bestModel ranking.Model
-	var bestScore ranking.Score
+	var (
+		lastNumUsers          int
+		lastNumItems          int
+		lastNumFeedback       int
+		datasetChanged        bool
+		bestRankingName       string
+		bestRankingModel      ranking.Model
+		bestRankingScore      ranking.Score
+		bestRankingModelFound bool
+		bestClickModel        click.FactorizationMachine
+		bestClickScore        click.Score
+		bestClickModelFound   bool
+	)
 	go func() {
 		m.insertedChan <- true
 		for {
@@ -211,6 +228,7 @@ func (m *Master) FitLoop() {
 			base.Logger().Error("failed to load database", zap.Error(err))
 			continue
 		}
+
 		// save stats
 		if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(dataSet.UserCount())); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
@@ -221,58 +239,85 @@ func (m *Master) FitLoop() {
 		if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, strconv.Itoa(dataSet.Count())); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
+
 		// sleep if empty
 		if dataSet.Count() == 0 {
 			base.Logger().Warn("empty dataset", zap.Strings("feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 			continue
 		}
-		// check best model
-		bestName, bestModel, bestScore = m.rankingModelSearcher.GetBestModel()
+
+		// check best ranking model
+		bestRankingName, bestRankingModel, bestRankingScore = m.rankingModelSearcher.GetBestModel()
 		m.rankingModelMutex.Lock()
-		if bestName != "" &&
-			(bestName != m.rankingModelName || bestModel.GetParams().ToString() != m.rankingModel.GetParams().ToString()) &&
-			(bestScore.NDCG > m.rankingScore.NDCG) {
+		if bestRankingModel != nil && !bestRankingModel.Invalid() &&
+			(bestRankingName != m.rankingModelName || bestRankingModel.GetParams().ToString() != m.rankingModel.GetParams().ToString()) &&
+			(bestRankingScore.NDCG > m.rankingScore.NDCG) {
 			// 1. best ranking model must have been found.
 			// 2. best ranking model must be different from current model
 			// 3. best ranking model must perform better than current model
-			m.rankingModel = bestModel
-			m.rankingModelName = bestName
-			m.rankingScore = bestScore
+			m.rankingModel = bestRankingModel
+			m.rankingModelName = bestRankingName
+			m.rankingScore = bestRankingScore
+			bestRankingModelFound = true
 			base.Logger().Info("find better ranking model",
-				zap.String("name", bestName),
+				zap.Any("score", bestRankingScore),
+				zap.String("name", bestRankingName),
 				zap.Any("params", m.rankingModel.GetParams()))
-		} else if m.clickSearchedModel != nil &&
-			m.clickSearchedModel.GetParams().ToString() != m.clickModel.GetParams().ToString() &&
-			m.clickSearchedScore.Precision > m.clickScore.Precision {
+		}
+		m.rankingModelMutex.Unlock()
+
+		// check best click model
+		bestClickModel, bestClickScore = m.clickModelSearcher.GetBestModel()
+		m.clickModelMutex.Lock()
+		if bestClickModel != nil && !bestClickModel.Invalid() &&
+			bestClickModel.GetParams().ToString() != m.clickModel.GetParams().ToString() &&
+			bestClickScore.Precision > m.clickScore.Precision {
 			// 1. best click model must have been found.
 			// 2. best click model must be different from current model
 			// 3. best click model must perform better than current model
-			m.clickModel = m.clickSearchedModel
-			m.clickScore = m.clickSearchedScore
+			m.clickModel = bestClickModel
+			m.clickScore = bestClickScore
+			bestClickModelFound = true
 			base.Logger().Info("find better click model",
+				zap.Float32("score", bestClickScore.Precision),
 				zap.Any("params", m.clickModel.GetParams()))
-		} else if dataSet.UserCount() == lastNumUsers && dataSet.ItemCount() == lastNumItems && dataSet.Count() == lastNumFeedback {
-			// sleep if nothing changed
-			m.rankingModelMutex.Unlock()
-			continue
 		}
-		m.rankingModelMutex.Unlock()
-		lastNumUsers, lastNumItems, lastNumFeedback = dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count()
-		// update user index
-		m.userIndexMutex.Lock()
-		m.userIndex = dataSet.UserIndex
-		m.userIndexVersion++
-		m.userIndexMutex.Unlock()
+		m.clickModelMutex.Unlock()
+
+		// check has dataset changed
+		if dataSet.UserCount() != lastNumUsers ||
+			dataSet.ItemCount() != lastNumItems ||
+			dataSet.Count() != lastNumFeedback {
+			datasetChanged = true
+			lastNumUsers, lastNumItems, lastNumFeedback = dataSet.UserCount(), dataSet.ItemCount(), dataSet.Count()
+			base.Logger().Info("dataset changed",
+				zap.Int("n_users", dataSet.UserCount()),
+				zap.Int("n_items", dataSet.ItemCount()))
+		}
+
+		if datasetChanged {
+			// update user index
+			m.userIndexMutex.Lock()
+			m.userIndex = dataSet.UserIndex
+			m.userIndexVersion++
+			m.userIndexMutex.Unlock()
+			// collect similar items
+			m.similar(items, dataSet, model.SimilarityDot)
+			// collect popular items
+			m.popItem(items, feedbacks)
+			// collect latest items
+			m.latest(items)
+		}
+
 		// fit ranking model
-		m.fitRankingModel(dataSet, m.rankingModel)
-		// collect similar items
-		m.similar(items, dataSet, model.SimilarityDot)
-		// collect popular items
-		m.popItem(items, feedbacks)
-		// collect latest items
-		m.latest(items)
+		if datasetChanged || bestRankingModelFound {
+			m.fitRankingModel(dataSet, m.rankingModel)
+		}
+
 		// fit click model
-		m.fitClickModel(m.clickModel)
+		if datasetChanged || bestClickModelFound {
+			m.fitClickModel(m.clickModel)
+		}
 	}
 }
 
@@ -283,8 +328,6 @@ func (m *Master) SearchLoop() {
 	lastNumUsers, lastNumItems, lastNumFeedback := 0, 0, 0
 	for {
 		var trainSet, valSet *ranking.DataSet
-		var clickModel click.FactorizationMachine
-		var clickScore click.Score
 		// download dataset
 		base.Logger().Info("load dataset for model search", zap.Strings("feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
 		dataSet, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
@@ -306,17 +349,13 @@ func (m *Master) SearchLoop() {
 		trainSet, valSet = dataSet.Split(0, 0)
 		err = m.rankingModelSearcher.Fit(trainSet, valSet)
 		if err != nil {
-			base.Logger().Error("failed to search model", zap.Error(err))
+			base.Logger().Error("failed to search ranking model", zap.Error(err))
 		}
 		// start search click model
-		clickModel, clickScore, err = m.searchClickModel()
+		err = m.searchClickModel()
 		if err != nil {
-			base.Logger().Error("failed to search model", zap.Error(err))
+			base.Logger().Error("failed to search click model", zap.Error(err))
 		}
-		m.clickModelMutex.Lock()
-		m.clickSearchedModel = clickModel
-		m.clickSearchedScore = clickScore
-		m.clickModelMutex.Unlock()
 	sleep:
 		time.Sleep(time.Duration(m.GorseConfig.Recommend.SearchPeriod) * time.Minute)
 	}

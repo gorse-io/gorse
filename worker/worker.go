@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -426,31 +427,37 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				case *ranking.KNN:
 					recItems.Push(itemId, m.InternalPredict(positiveItemIndices, itemIndex))
 				default:
-					base.Logger().Error("unknown model type")
+					base.Logger().Error("unknown model type",
+						zap.String("type", reflect.TypeOf(m).String()))
 				}
 			}
 		}
 		// save result
-		candidates, _ := recItems.PopAll()
+		candidateItems, candidateScores := recItems.PopAll()
 		// insert cold-start items
 		if w.cfg.Recommend.ExploreLatestNum > 0 {
-			candidateSet := strset.New(candidates...)
+			candidateSet := strset.New(candidateItems...)
 			latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Recommend.ExploreLatestNum-1)
 			if err != nil {
 				return err
 			}
 			for _, latestItem := range latestItems {
 				if !candidateSet.Has(latestItem.ItemId) {
-					candidates = append(candidates, latestItem.ItemId)
+					candidateItems = append(candidateItems, latestItem.ItemId)
 				}
 			}
 		}
 		// rank items in result by click-through-rate
-		topItems, err := w.rankByClickTroughRate(userId, candidates)
-		if err != nil {
-			return err
+		var result []cache.ScoredItem
+		if w.clickModel != nil {
+			result, err = w.rankByClickTroughRate(userId, candidateItems)
+			if err != nil {
+				return err
+			}
+		} else {
+			result = w.randomInsertLatestItem(candidateItems, candidateScores)
 		}
-		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, topItems); err != nil {
+		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, result); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return err
 		}
@@ -468,6 +475,19 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 	close(completed)
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
+}
+
+// randomInsertLatestItem inserts latest items to the recommendation list randomly. Latest items
+// are located at itemIds[len(scores):len(itemIds)]
+func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []cache.ScoredItem {
+	numPersonalized := len(scores)
+	for i := numPersonalized; i < len(itemIds); i++ {
+		scores = append(scores, 0)
+		replaced := rand.Intn(numPersonalized)
+		itemIds[i], itemIds[replaced] = itemIds[replaced], itemIds[i]
+		scores[i], scores[replaced] = scores[replaced], scores[i]
+	}
+	return cache.CreateScoredItems(itemIds, scores)
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
