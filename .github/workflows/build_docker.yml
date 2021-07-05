@@ -30,5 +30,5 @@ jobs:
         with:
           context: .
           file: docker/${{ matrix.image }}/Dockerfile
-          push: false
+          push: true
           tags: zhenghaoz/${{ matrix.image }}:latest
