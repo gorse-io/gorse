@@ -24,7 +24,7 @@ jobs:
 
       - name: Build master image
         id: docker_build_master
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v2.6.1
         with:
           context: .
           file: docker/gorse-master/Dockerfile
@@ -33,7 +33,7 @@ jobs:
 
       - name: Build server image
         id: docker_build_server
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v2.6.1
         with:
           context: .
           file: docker/gorse-server/Dockerfile
@@ -42,7 +42,7 @@ jobs:
 
       - name: Build worker image
         id: docker_build_worker
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v2.6.1
         with:
           context: .
           file: docker/gorse-worker/Dockerfile
