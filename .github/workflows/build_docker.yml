@@ -9,6 +9,9 @@ jobs:
   docker_images:
     name: Docker Images
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [gorse-master, gorse-server, gorse-worker]
     steps:
       - name: Pull source
         uses: actions/checkout@v1
@@ -22,36 +25,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build master image
-        id: docker_build_master
-        uses: docker/build-push-action@v2
+      - name: Build docker image
+        uses: docker/build-push-action@v2.6.1
         with:
           context: .
-          file: docker/gorse-master/Dockerfile
+          file: docker/${{ matrix.image }}/Dockerfile
           push: true
-          tags: zhenghaoz/gorse-master:latest
-
-      - name: Build server image
-        id: docker_build_server
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          file: docker/gorse-server/Dockerfile
-          push: true
-          tags: zhenghaoz/gorse-server:latest
-
-      - name: Build worker image
-        id: docker_build_worker
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          file: docker/gorse-worker/Dockerfile
-          push: true
-          tags: zhenghaoz/gorse-worker:latest
-
-      - name: Image digest
-        run: |
-          echo ${{ steps.docker_build_master.outputs.digest }}
-          echo ${{ steps.docker_build_server.outputs.digest }}
-          echo ${{ steps.docker_build_worker.outputs.digest }}
-
+          tags: zhenghaoz/${{ matrix.image }}:latest
