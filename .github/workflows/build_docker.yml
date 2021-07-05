@@ -47,6 +47,7 @@ jobs:
           context: .
           file: docker/gorse-worker/Dockerfile
           push: false
+          no-cache: true
           tags: zhenghaoz/gorse-worker:latest
 
       - name: Image digest
