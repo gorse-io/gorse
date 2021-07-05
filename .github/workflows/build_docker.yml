@@ -16,11 +16,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#       - name: Login to DockerHub
+#         uses: docker/login-action@v1
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build master image
         id: docker_build_master
@@ -28,7 +28,7 @@ jobs:
         with:
           context: .
           file: docker/gorse-master/Dockerfile
-          push: true
+          push: false
           tags: zhenghaoz/gorse-master:latest
 
       - name: Build server image
@@ -37,7 +37,7 @@ jobs:
         with:
           context: .
           file: docker/gorse-server/Dockerfile
-          push: true
+          push: false
           tags: zhenghaoz/gorse-server:latest
 
       - name: Build worker image
@@ -46,7 +46,7 @@ jobs:
         with:
           context: .
           file: docker/gorse-worker/Dockerfile
-          push: true
+          push: false
           tags: zhenghaoz/gorse-worker:latest
 
       - name: Image digest
