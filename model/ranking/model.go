@@ -250,9 +250,9 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 	ret := float32(0.0)
 	// + q_i^Tp_u
 	if itemIndex != base.NotId && userIndex != base.NotId {
-		userFactor := bpr.UserFactor[userIndex]
-		itemFactor := bpr.ItemFactor[itemIndex]
-		ret += floats.Dot(userFactor, itemFactor)
+		ret += floats.Dot(bpr.UserFactor[userIndex], bpr.ItemFactor[itemIndex])
+	} else {
+		base.Logger().Warn("unknown user or item")
 	}
 	return ret
 }
@@ -469,8 +469,14 @@ func (als *ALS) Predict(userId, itemId string) float32 {
 }
 
 func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
-	return float32(mat.Dot(als.UserFactor.RowView(userIndex),
-		als.ItemFactor.RowView(itemIndex)))
+	ret := float32(0.0)
+	if itemIndex != base.NotId && userIndex != base.NotId {
+		ret = float32(mat.Dot(als.UserFactor.RowView(userIndex),
+			als.ItemFactor.RowView(itemIndex)))
+	} else {
+		base.Logger().Warn("unknown user or item")
+	}
+	return ret
 }
 
 // Fit the ALS model.
@@ -685,7 +691,13 @@ func (ccd *CCD) Predict(userId, itemId string) float32 {
 }
 
 func (ccd *CCD) InternalPredict(userIndex, itemIndex int) float32 {
-	return floats.Dot(ccd.UserFactor[userIndex], ccd.ItemFactor[itemIndex])
+	ret := float32(0.0)
+	if itemIndex != base.NotId && userIndex != base.NotId {
+		ret = floats.Dot(ccd.UserFactor[userIndex], ccd.ItemFactor[itemIndex])
+	} else {
+		base.Logger().Warn("unknown user or item")
+	}
+	return ret
 }
 
 func (ccd *CCD) Clear() {
