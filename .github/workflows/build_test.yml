@@ -30,6 +30,11 @@ jobs:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password
 
+      clickhouse:
+        image: yandex/clickhouse-server
+        ports:
+          - 9000
+
     steps:
     - name: Set up dataset
       run: |
@@ -71,6 +76,8 @@ jobs:
         MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mysql.ports[3306] }})/
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
+        # ClickHouse
+        CLICK_HOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[9000] }}
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
