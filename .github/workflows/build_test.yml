@@ -77,7 +77,7 @@ jobs:
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
         # ClickHouse
-        CLICK_HOUSE_URI: clickhouse://localhost:${{ job.services.mongo.ports[9000] }}
+        CLICK_HOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[9000] }}
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
