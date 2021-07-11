@@ -239,7 +239,24 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	fm.Init(trainSet)
 	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
+
 	snapshots := SnapshotManger{}
+	evalStart := time.Now()
+	var score Score
+	switch fm.Task {
+	case FMRegression:
+		score = EvaluateRegression(fm, testSet)
+	case FMClassification:
+		score = EvaluateClassification(fm, testSet)
+	default:
+		base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
+	}
+	evalTime := time.Since(evalStart)
+	base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs),
+		zap.String("eval_time", evalTime.String()),
+		zap.Float32(score.GetName(), score.GetValue()))
+	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
+
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		for _, target := range trainSet.Target {
 			fm.MinTarget = math32.Min(fm.MinTarget, target)
