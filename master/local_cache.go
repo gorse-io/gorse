@@ -31,7 +31,7 @@ type LocalCache struct {
 	RankingModelName    string
 	RankingModelVersion int64
 	RankingModel        ranking.Model
-	RankingScore        ranking.Score
+	RankingModelScore   ranking.Score
 	UserIndex           base.Index
 	ClickModelVersion   int64
 	ClickModelScore     click.Score
@@ -76,7 +76,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	}
 	state.RankingModel.SetParams(state.RankingModel.GetParams())
 	// 4. ranking model score
-	err = decoder.Decode(&state.RankingScore)
+	err = decoder.Decode(&state.RankingModelScore)
 	if err != nil {
 		return state, errors.Wrap(err, "failed to ranking model score")
 	}
@@ -119,45 +119,49 @@ func (c *LocalCache) WriteLocalCache() error {
 	// create file
 	f, err := os.Create(c.path)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create file")
 	}
 	defer f.Close()
 	encoder := gob.NewEncoder(f)
 	// 1. ranking model name
 	err = encoder.Encode(c.RankingModelName)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write ranking model name")
 	}
 	// 2. ranking model version
 	err = encoder.Encode(c.RankingModelVersion)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write ranking model version")
 	}
 	// 3. ranking model
 	err = encoder.Encode(c.RankingModel)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write ranking model")
 	}
 	// 4. ranking model score
-	err = encoder.Encode(c.RankingScore)
+	err = encoder.Encode(c.RankingModelScore)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write ranking model score")
 	}
 	// 5. user index
 	err = encoder.Encode(c.UserIndex)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write user index")
 	}
 	// 6. click model version
 	err = encoder.Encode(c.ClickModelVersion)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write click model version")
 	}
 	// 7. click model score
 	err = encoder.Encode(c.ClickModelScore)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to write click model score")
 	}
 	// 8. click model
-	return encoder.Encode(c.ClickModel)
+	err = encoder.Encode(c.ClickModel)
+	if err != nil {
+		return errors.Wrap(err, "failed to write click model")
+	}
+	return nil
 }

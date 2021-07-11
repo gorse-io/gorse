@@ -124,12 +124,12 @@ func (m *Master) Serve() {
 		base.Logger().Info("load cached ranking model",
 			zap.String("model_name", m.localCache.RankingModelName),
 			zap.String("model_version", base.Hex(m.localCache.RankingModelVersion)),
-			zap.Float32("model_score", m.localCache.RankingScore.NDCG),
+			zap.Float32("model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("params", m.localCache.RankingModel.GetParams()))
 		m.rankingModel = m.localCache.RankingModel
 		m.rankingModelName = m.localCache.RankingModelName
 		m.rankingModelVersion = m.localCache.RankingModelVersion
-		m.rankingScore = m.localCache.RankingScore
+		m.rankingScore = m.localCache.RankingModelScore
 	}
 	if m.localCache.ClickModel != nil {
 		base.Logger().Info("load cached click model",

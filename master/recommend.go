@@ -245,7 +245,7 @@ func (m *Master) fitRankingModel(dataSet *ranking.DataSet, rankingModel ranking.
 	m.localCache.RankingModelName = m.rankingModelName
 	m.localCache.RankingModelVersion = m.rankingModelVersion
 	m.localCache.RankingModel = rankingModel
-	m.localCache.RankingScore = score
+	m.localCache.RankingModelScore = score
 	m.localCache.UserIndex = m.userIndex
 	if m.localCache.ClickModel.Invalid() {
 		base.Logger().Info("wait click model")
@@ -255,7 +255,7 @@ func (m *Master) fitRankingModel(dataSet *ranking.DataSet, rankingModel ranking.
 		base.Logger().Info("write model to local cache",
 			zap.String("ranking_model_name", m.localCache.RankingModelName),
 			zap.String("ranking_model_version", base.Hex(m.localCache.RankingModelVersion)),
-			zap.Float32("ranking_model_score", m.localCache.RankingScore.NDCG),
+			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
 	}
 }
