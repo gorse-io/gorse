@@ -392,7 +392,7 @@ func (db *MongoDB) InsertFeedback(feedback Feedback, insertUser, insertItem bool
 			return err
 		}
 	} else {
-		_, err := db.GetItem(feedback.UserId)
+		_, err := db.GetItem(feedback.ItemId)
 		if err != nil {
 			if err == ErrItemNotExist {
 				return nil
