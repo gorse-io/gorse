@@ -42,6 +42,7 @@ type Server struct {
 	serverName   string
 	masterHost   string
 	masterPort   int
+	testMode     bool
 }
 
 // NewServer creates a server node.
@@ -141,6 +142,9 @@ func (s *Server) Sync() {
 		}
 
 	sleep:
+		if s.testMode {
+			return
+		}
 		time.Sleep(time.Duration(s.GorseConfig.Master.MetaTimeout) * time.Second)
 	}
 }
