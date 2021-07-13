@@ -52,6 +52,7 @@ type Worker struct {
 	httpPort   int
 	masterHost string
 	masterPort int
+	testMode   bool
 
 	// database connection
 	cachePath   string
@@ -181,6 +182,9 @@ func (w *Worker) Sync() {
 		w.peers = meta.Workers
 		w.me = meta.Me
 	sleep:
+		if w.testMode {
+			return
+		}
 		time.Sleep(time.Duration(w.cfg.Master.MetaTimeout) * time.Second)
 	}
 }
@@ -259,6 +263,9 @@ func (w *Worker) Pull() {
 			}
 		}
 
+		if w.testMode {
+			return
+		}
 		if pulled {
 			w.syncedChan <- true
 		}

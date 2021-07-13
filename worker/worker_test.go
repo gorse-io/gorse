@@ -14,14 +14,23 @@
 package worker
 
 import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/gob"
+	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"google.golang.org/grpc"
+	"net"
 	"strconv"
 	"testing"
 	"time"
@@ -173,4 +182,154 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	read, err := w.cacheClient.GetList(cache.IgnoreItems, "0")
 	assert.Nil(t, err)
 	assert.Equal(t, []string{"4", "6", "8"}, read)
+}
+
+func marshal(t *testing.T, v interface{}) string {
+	s, err := json.Marshal(v)
+	assert.Nil(t, err)
+	return string(s)
+}
+
+func newRankingDataset() (*ranking.DataSet, *ranking.DataSet) {
+	dataset := &ranking.DataSet{
+		UserIndex: base.NewMapIndex(),
+		ItemIndex: base.NewMapIndex(),
+	}
+	return dataset, dataset
+}
+
+func newClickDataset() (*click.Dataset, *click.Dataset) {
+	dataset := &click.Dataset{
+		Index: click.NewUnifiedMapIndexBuilder().Build(),
+	}
+	return dataset, dataset
+}
+
+type mockMaster struct {
+	protocol.UnimplementedMasterServer
+	addr         chan string
+	grpcServer   *grpc.Server
+	cacheStore   *miniredis.Miniredis
+	dataStore    *miniredis.Miniredis
+	meta         *protocol.Meta
+	rankingModel *protocol.Model
+	clickModel   *protocol.Model
+	userIndex    *protocol.UserIndex
+}
+
+func newMockMaster(t *testing.T) *mockMaster {
+	cacheStore, err := miniredis.Run()
+	assert.NoError(t, err)
+	dataStore, err := miniredis.Run()
+	assert.NoError(t, err)
+	cfg := (*config.Config)(nil).LoadDefaultIfNil()
+	cfg.Database.DataStore = "redis://" + dataStore.Addr()
+	cfg.Database.CacheStore = "redis://" + cacheStore.Addr()
+
+	// create click model
+	train, test := newClickDataset()
+	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
+	fm.Fit(train, test, nil)
+	clickModelPB := &protocol.Model{}
+	clickModelPB.Model, err = click.EncodeModel(fm)
+	assert.NoError(t, err)
+	clickModelPB.Version = 1
+
+	// create ranking model
+	trainSet, testSet := newRankingDataset()
+	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
+	bpr.Fit(trainSet, testSet, nil)
+	rankingModelPB := &protocol.Model{}
+	rankingModelPB.Model, err = ranking.EncodeModel(bpr)
+	assert.NoError(t, err)
+	rankingModelPB.Name = "bpr"
+	rankingModelPB.Version = 2
+
+	// create user index
+	buf := bytes.NewBuffer(nil)
+	writer := bufio.NewWriter(buf)
+	encoder := gob.NewEncoder(writer)
+	err = encoder.Encode(base.NewMapIndex())
+	assert.NoError(t, err)
+	err = writer.Flush()
+	assert.NoError(t, err)
+	userIndexPB := &protocol.UserIndex{}
+	userIndexPB.Version = 3
+	userIndexPB.UserIndex = buf.Bytes()
+
+	return &mockMaster{
+		addr: make(chan string),
+		meta: &protocol.Meta{
+			Config:              marshal(t, cfg),
+			ClickModelVersion:   1,
+			RankingModelVersion: 2,
+			UserIndexVersion:    3,
+		},
+		cacheStore:   cacheStore,
+		dataStore:    dataStore,
+		userIndex:    userIndexPB,
+		clickModel:   clickModelPB,
+		rankingModel: rankingModelPB,
+	}
+}
+
+func (m *mockMaster) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*protocol.Meta, error) {
+	return m.meta, nil
+}
+
+func (m *mockMaster) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+	return m.rankingModel, nil
+}
+
+func (m *mockMaster) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+	return m.clickModel, nil
+}
+
+func (m *mockMaster) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.UserIndex, error) {
+	return m.userIndex, nil
+}
+
+func (m *mockMaster) Start(t *testing.T) {
+	listen, err := net.Listen("tcp", ":0")
+	assert.NoError(t, err)
+	m.addr <- listen.Addr().String()
+	var opts []grpc.ServerOption
+	m.grpcServer = grpc.NewServer(opts...)
+	protocol.RegisterMasterServer(m.grpcServer, m)
+	err = m.grpcServer.Serve(listen)
+	assert.NoError(t, err)
+}
+
+func (m *mockMaster) Stop() {
+	m.grpcServer.Stop()
+	m.dataStore.Close()
+	m.cacheStore.Close()
+}
+
+func TestWorker_Sync(t *testing.T) {
+	master := newMockMaster(t)
+	go master.Start(t)
+	address := <-master.addr
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	assert.NoError(t, err)
+	serv := &Worker{
+		testMode:     true,
+		masterClient: protocol.NewMasterClient(conn),
+		cfg:          (*config.Config)(nil).LoadDefaultIfNil(),
+		syncedChan:   make(chan bool, 1024),
+	}
+	serv.Sync()
+	assert.Equal(t, "redis://"+master.dataStore.Addr(), serv.dataPath)
+	assert.Equal(t, "redis://"+master.cacheStore.Addr(), serv.cachePath)
+	assert.Equal(t, int64(1), serv.latestClickModelVersion)
+	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
+	assert.Equal(t, int64(3), serv.latestUserIndexVersion)
+	assert.Zero(t, serv.currentClickModelVersion)
+	assert.Zero(t, serv.currentRankingModelVersion)
+	assert.Zero(t, serv.currentUserIndexVersion)
+	serv.Pull()
+	assert.Equal(t, int64(1), serv.currentClickModelVersion)
+	assert.Equal(t, int64(2), serv.currentRankingModelVersion)
+	assert.Equal(t, int64(3), serv.currentUserIndexVersion)
+	master.Stop()
 }
