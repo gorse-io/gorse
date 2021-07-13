@@ -66,12 +66,19 @@ func (s *RestServer) StartHttpServer() {
 		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), nil)))
 }
 
+func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	chain.ProcessFilter(req, resp)
+	base.Logger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
+		zap.Int("status_code", resp.StatusCode()))
+}
+
 // CreateWebService creates web service.
 func (s *RestServer) CreateWebService() {
 	// Create a server
 	ws := s.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
+	ws.Filter(LogFilter)
 
 	/* Interactions with data store */
 
