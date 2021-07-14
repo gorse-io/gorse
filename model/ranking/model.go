@@ -44,14 +44,23 @@ type FitConfig struct {
 	TopK       int
 }
 
+func NewFitConfig() *FitConfig {
+	return &FitConfig{
+		Jobs:       1,
+		Verbose:    10,
+		Candidates: 100,
+		TopK:       10,
+	}
+}
+
+func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
+	config.Jobs = nJobs
+	return config
+}
+
 func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 	if config == nil {
-		return &FitConfig{
-			Jobs:       1,
-			Verbose:    10,
-			Candidates: 100,
-			TopK:       10,
-		}
+		return NewFitConfig()
 	}
 	return config
 }
@@ -83,18 +92,6 @@ type BaseMatrixFactorization struct {
 func (model *BaseMatrixFactorization) Init(trainSet *DataSet) {
 	model.UserIndex = trainSet.UserIndex
 	model.ItemIndex = trainSet.ItemIndex
-}
-
-func (model *BaseMatrixFactorization) Fit(trainSet, validateSet *DataSet, config *FitConfig) Score {
-	panic("not implemented")
-}
-
-func (model *BaseMatrixFactorization) Predict(userId, itemId string) float32 {
-	panic("not implemented")
-}
-
-func (model *BaseMatrixFactorization) InternalPredict(userId, itemId int) float32 {
-	panic("not implemented")
 }
 
 func (model *BaseMatrixFactorization) GetUserIndex() base.Index {
@@ -261,6 +258,8 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit bpr",
+		zap.Int("train_set_size", trainSet.Count()),
+		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", bpr.GetParams()),
 		zap.Any("config", config))
 	bpr.Init(trainSet)
@@ -368,6 +367,14 @@ func (bpr *BPR) Clear() {
 	bpr.ItemIndex = nil
 	bpr.UserFactor = nil
 	bpr.ItemFactor = nil
+}
+
+func (bpr *BPR) Invalid() bool {
+	return bpr == nil ||
+		bpr.UserIndex == nil ||
+		bpr.ItemIndex == nil ||
+		bpr.UserFactor == nil ||
+		bpr.ItemFactor == nil
 }
 
 func (bpr *BPR) Init(trainSet *DataSet) {
@@ -483,6 +490,8 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit als",
+		zap.Int("train_set_size", trainSet.Count()),
+		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", als.GetParams()),
 		zap.Any("config", config))
 	als.Init(trainSet)
@@ -602,6 +611,14 @@ func (als *ALS) Clear() {
 	als.UserFactor = nil
 }
 
+func (als *ALS) Invalid() bool {
+	return als == nil ||
+		als.ItemIndex == nil ||
+		als.UserIndex == nil ||
+		als.ItemFactor == nil ||
+		als.UserFactor == nil
+}
+
 func (als *ALS) Init(trainSet *DataSet) {
 	// Initialize
 	newUserFactor := mat.NewDense(trainSet.UserCount(), als.nFactors,
@@ -707,6 +724,14 @@ func (ccd *CCD) Clear() {
 	ccd.UserFactor = nil
 }
 
+func (ccd *CCD) Invalid() bool {
+	return ccd == nil ||
+		ccd.UserIndex == nil ||
+		ccd.ItemIndex == nil ||
+		ccd.ItemFactor == nil ||
+		ccd.UserFactor == nil
+}
+
 func (ccd *CCD) Init(trainSet *DataSet) {
 	// Initialize
 	newUserFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.UserCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
@@ -739,6 +764,8 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit ccd",
+		zap.Int("train_set_size", trainSet.Count()),
+		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", ccd.GetParams()),
 		zap.Any("config", config))
 	ccd.Init(trainSet)

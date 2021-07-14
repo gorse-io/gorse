@@ -11,13 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ctr
+
+package click
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/barkimedes/go-deepcopy"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -79,21 +81,28 @@ type FitConfig struct {
 	Verbose int
 }
 
+func NewFitConfig() *FitConfig {
+	return &FitConfig{
+		Jobs:    1,
+		Verbose: 10,
+	}
+}
+
+func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
+	config.Jobs = nJobs
+	return config
+}
+
 func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 	if config == nil {
-		return &FitConfig{
-			Jobs:    1,
-			Verbose: 10,
-		}
+		return NewFitConfig()
 	}
 	return config
 }
 
 type FactorizationMachine interface {
 	model.Model
-	// Predict the rating given by a user (userId) to a item (itemId).
-	Predict(userId, itemId string, labels []string) float32
-	// InternalPredict
+	Predict(userId, itemId string, itemLabels []string) float32
 	InternalPredict(x []int) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 }
@@ -104,7 +113,7 @@ type BaseFactorizationMachine struct {
 }
 
 func (b *BaseFactorizationMachine) Init(trainSet *Dataset) {
-	b.Index = trainSet.UnifiedIndex
+	b.Index = trainSet.Index
 }
 
 type FMTask string
@@ -130,6 +139,8 @@ type FM struct {
 	reg        float32
 	initMean   float32
 	initStdDev float32
+	// Special options
+	useFeature bool
 }
 
 func (fm *FM) GetParamsGrid() model.ParamsGrid {
@@ -153,14 +164,15 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachine.SetParams(params)
 	// Setup hyper-parameters
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 128)
-	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 20)
+	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.01)
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
+	fm.useFeature = fm.Params.GetBool(model.UseFeature, true)
 }
 
-func (fm *FM) Predict(userId, itemId string, labels []string) float32 {
+func (fm *FM) Predict(userId, itemId string, itemLabels []string) float32 {
 	x := make([]int, 0)
 	if userIndex := fm.Index.EncodeUser(userId); userIndex != base.NotId {
 		x = append(x, userIndex)
@@ -168,15 +180,19 @@ func (fm *FM) Predict(userId, itemId string, labels []string) float32 {
 	if itemIndex := fm.Index.EncodeItem(itemId); itemIndex != base.NotId {
 		x = append(x, itemIndex)
 	}
-	for _, label := range labels {
-		if labelIndex := fm.Index.EncodeContextLabel(label); labelIndex != base.NotId {
-			x = append(x, labelIndex)
+	for _, itemLabel := range itemLabels {
+		if itemLabelIndex := fm.Index.EncodeItemLabel(itemLabel); itemLabelIndex != base.NotId {
+			x = append(x, itemLabelIndex)
 		}
 	}
 	return fm.InternalPredict(x)
 }
 
 func (fm *FM) internalPredict(x []int) float32 {
+	if !fm.useFeature {
+		// The input vector must be formatted as [user_id, item_id, ...]
+		x = x[:2]
+	}
 	// w_0
 	pred := fm.B
 	// \sum^n_{i=1} w_i x_i
@@ -202,8 +218,7 @@ func (fm *FM) internalPredict(x []int) float32 {
 
 func (fm *FM) InternalPredict(x []int) float32 {
 	pred := fm.internalPredict(x)
-	switch fm.Task {
-	case FMRegression:
+	if fm.Task == FMRegression {
 		if pred < fm.MinTarget {
 			pred = fm.MinTarget
 		} else if pred > fm.MaxTarget {
@@ -216,7 +231,7 @@ func (fm *FM) InternalPredict(x []int) float32 {
 func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	base.Logger().Info("fit FM",
-		zap.Int("train_size", trainSet.PositiveCount),
+		zap.Int("train_size", trainSet.Count()),
 		zap.Int("test_size", testSet.Count()),
 		zap.String("task", string(fm.Task)),
 		zap.Any("params", fm.GetParams()),
@@ -224,10 +239,26 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	fm.Init(trainSet)
 	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
 	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
+
 	snapshots := SnapshotManger{}
+	evalStart := time.Now()
+	var score Score
+	switch fm.Task {
+	case FMRegression:
+		score = EvaluateRegression(fm, testSet)
+	case FMClassification:
+		score = EvaluateClassification(fm, testSet)
+	default:
+		base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
+	}
+	evalTime := time.Since(evalStart)
+	base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs),
+		zap.String("eval_time", evalTime.String()),
+		zap.Float32(score.GetName(), score.GetValue()))
+	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
+
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
-		trainSet.NegativeSample(1, nil, fm.GetRandomGenerator().Int63())
-		for _, target := range trainSet.FeedbackTarget {
+		for _, target := range trainSet.Target {
 			fm.MinTarget = math32.Min(fm.MinTarget, target)
 			fm.MaxTarget = math32.Max(fm.MaxTarget, target)
 		}
@@ -236,6 +267,10 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		_ = base.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				labels, target := trainSet.Get(i)
+				if !fm.useFeature {
+					// The input vector must be formatted as [user_id, item_id, ...]
+					labels = labels[:2]
+				}
 				prediction := fm.internalPredict(labels)
 				var grad float32
 				switch fm.Task {
@@ -282,25 +317,25 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 				base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 			}
 			evalTime := time.Since(evalStart)
-			base.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs),
+			base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 				zap.Float32(score.GetName(), score.GetValue()))
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
-				base.Logger().Error("model diverged", zap.Float32("lr", fm.lr))
+				base.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
 				break
 			}
 			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 		}
 	}
 	// restore best snapshot
-	if len(snapshots.BestWeights) > 0 {
-		fm.V = snapshots.BestWeights[0].([][]float32)
-		fm.W = snapshots.BestWeights[1].([]float32)
-		fm.B = snapshots.BestWeights[2].(float32)
-	}
+	fm.V = snapshots.BestWeights[0].([][]float32)
+	fm.W = snapshots.BestWeights[1].([]float32)
+	fm.B = snapshots.BestWeights[2].(float32)
+	base.Logger().Info("fit fm complete",
+		zap.Float32(snapshots.BestScore.GetName(), snapshots.BestScore.GetValue()))
 	return snapshots.BestScore
 }
 
@@ -311,33 +346,40 @@ func (fm *FM) Clear() {
 	fm.Index = nil
 }
 
+func (fm *FM) Invalid() bool {
+	return fm == nil ||
+		fm.V == nil ||
+		fm.W == nil ||
+		fm.Index == nil
+}
+
 func (fm *FM) Init(trainSet *Dataset) {
-	newV := fm.GetRandomGenerator().NormalMatrix(trainSet.UnifiedIndex.Len(), fm.nFactors, fm.initMean, fm.initStdDev)
-	newW := make([]float32, trainSet.UnifiedIndex.Len())
+	newV := fm.GetRandomGenerator().NormalMatrix(trainSet.Index.Len(), fm.nFactors, fm.initMean, fm.initStdDev)
+	newW := make([]float32, trainSet.Index.Len())
 	// Relocate parameters
 	if fm.Index != nil {
 		// users
-		for _, userId := range trainSet.UnifiedIndex.GetUsers() {
+		for _, userId := range trainSet.Index.GetUsers() {
 			oldIndex := fm.Index.EncodeUser(userId)
-			newIndex := trainSet.UnifiedIndex.EncodeUser(userId)
+			newIndex := trainSet.Index.EncodeUser(userId)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// items
-		for _, itemId := range trainSet.UnifiedIndex.GetItems() {
+		for _, itemId := range trainSet.Index.GetItems() {
 			oldIndex := fm.Index.EncodeItem(itemId)
-			newIndex := trainSet.UnifiedIndex.EncodeItem(itemId)
+			newIndex := trainSet.Index.EncodeItem(itemId)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// labels
-		for _, label := range trainSet.UnifiedIndex.GetContextLabels() {
+		for _, label := range trainSet.Index.GetContextLabels() {
 			oldIndex := fm.Index.EncodeContextLabel(label)
-			newIndex := trainSet.UnifiedIndex.EncodeContextLabel(label)
+			newIndex := trainSet.Index.EncodeContextLabel(label)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
@@ -372,4 +414,15 @@ func DecodeModel(buf []byte) (FactorizationMachine, error) {
 		return nil, err
 	}
 	return &fm, nil
+}
+
+// Clone a model with deep copy.
+func Clone(m FactorizationMachine) FactorizationMachine {
+	if temp, err := deepcopy.Anything(m); err != nil {
+		panic(err)
+	} else {
+		copied := temp.(FactorizationMachine)
+		copied.SetParams(copied.GetParams())
+		return copied
+	}
 }

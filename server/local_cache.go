@@ -31,17 +31,14 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	state := &LocalCache{path: path}
 	// check if file exists
 	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return state, nil
-		} else {
-			return nil, err
-		}
+		return state, err
 	}
 	// open file
 	f, err := os.Open(path)
 	if err != nil {
 		return state, err
 	}
+	defer f.Close()
 	decoder := gob.NewDecoder(f)
 	if err = decoder.Decode(&state.ServerName); err != nil {
 		return nil, err
@@ -64,6 +61,7 @@ func (s *LocalCache) WriteLocalCache() error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	// write file
 	encoder := gob.NewEncoder(f)
 	return encoder.Encode(s.ServerName)

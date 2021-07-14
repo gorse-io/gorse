@@ -75,6 +75,10 @@ type mockMatrixFactorizationForEval struct {
 	negative []*iset.Set
 }
 
+func (m *mockMatrixFactorizationForEval) Invalid() bool {
+	panic("implement me")
+}
+
 func (m *mockMatrixFactorizationForEval) GetUserIndex() base.Index {
 	panic("don't call me")
 }

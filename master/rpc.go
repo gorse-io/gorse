@@ -21,6 +21,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
@@ -89,6 +90,13 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		rankingModelVersion = m.rankingModelVersion
 	}
 	m.rankingModelMutex.Unlock()
+	// save click model version
+	m.clickModelMutex.Lock()
+	var clickModelVersion int64
+	if m.clickModel != nil {
+		clickModelVersion = m.clickModelVersion
+	}
+	m.clickModelMutex.Unlock()
 	// collect nodes
 	workers := make([]string, 0)
 	servers := make([]string, 0)
@@ -106,6 +114,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		Config:              string(s),
 		UserIndexVersion:    userIndexVersion,
 		RankingModelVersion: rankingModelVersion,
+		ClickModelVersion:   clickModelVersion,
 		Me:                  nodeInfo.NodeName,
 		Workers:             workers,
 		Servers:             servers,
@@ -117,7 +126,7 @@ func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol
 	m.rankingModelMutex.Lock()
 	defer m.rankingModelMutex.Unlock()
 	// skip empty model
-	if m.rankingModel == nil {
+	if m.rankingModel.Invalid() {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
@@ -128,6 +137,25 @@ func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol
 	return &protocol.Model{
 		Name:    m.rankingModelName,
 		Version: m.rankingModelVersion,
+		Model:   modelData,
+	}, nil
+}
+
+// GetClickModel returns latest click model.
+func (m *Master) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+	m.clickModelMutex.Lock()
+	defer m.clickModelMutex.Unlock()
+	// skip empty model
+	if m.clickModel.Invalid() {
+		return &protocol.Model{Version: 0}, nil
+	}
+	// encode model
+	modelData, err := click.EncodeModel(m.clickModel)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.Model{
+		Version: m.clickModelVersion,
 		Model:   modelData,
 	}, nil
 }

@@ -20,10 +20,13 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/scylladb/go-set/strset"
+	"github.com/zhenghaoz/gorse/model/click"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -49,6 +52,7 @@ type Worker struct {
 	httpPort   int
 	masterHost string
 	masterPort int
+	testMode   bool
 
 	// database connection
 	cachePath   string
@@ -68,6 +72,11 @@ type Worker struct {
 	latestRankingModelVersion  int64
 	currentRankingModelVersion int64
 	rankingModel               ranking.Model
+
+	// click model
+	latestClickModelVersion  int64
+	currentClickModelVersion int64
+	clickModel               click.FactorizationMachine
 
 	// peers
 	peers []string
@@ -152,6 +161,15 @@ func (w *Worker) Sync() {
 			w.syncedChan <- true
 		}
 
+		// check click model version
+		w.latestClickModelVersion = meta.ClickModelVersion
+		if w.latestClickModelVersion != w.currentClickModelVersion {
+			base.Logger().Info("new click model found",
+				zap.String("old_version", base.Hex(w.currentClickModelVersion)),
+				zap.String("new_version", base.Hex(w.latestClickModelVersion)))
+			w.syncedChan <- true
+		}
+
 		// check user index version
 		w.latestUserIndexVersion = meta.UserIndexVersion
 		if w.latestUserIndexVersion != w.currentUserIndexVersion {
@@ -164,6 +182,9 @@ func (w *Worker) Sync() {
 		w.peers = meta.Workers
 		w.me = meta.Me
 	sleep:
+		if w.testMode {
+			return
+		}
 		time.Sleep(time.Duration(w.cfg.Master.MetaTimeout) * time.Second)
 	}
 }
@@ -201,18 +222,18 @@ func (w *Worker) Pull() {
 		// pull ranking model
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
 			base.Logger().Info("start pull ranking model")
-			if mfResponse, err := w.masterClient.GetRankingModel(context.Background(),
+			if rankingResponse, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.NodeInfo{
 					NodeType: protocol.NodeType_WorkerNode,
 					NodeName: w.workerName,
 				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
-				w.rankingModel, err = ranking.DecodeModel(mfResponse.Name, mfResponse.Model)
+				w.rankingModel, err = ranking.DecodeModel(rankingResponse.Name, rankingResponse.Model)
 				if err != nil {
 					base.Logger().Error("failed to decode ranking model", zap.Error(err))
 				} else {
-					w.currentRankingModelVersion = mfResponse.Version
+					w.currentRankingModelVersion = rankingResponse.Version
 					base.Logger().Info("synced ranking model",
 						zap.String("version", base.Hex(w.currentRankingModelVersion)))
 					pulled = true
@@ -220,6 +241,31 @@ func (w *Worker) Pull() {
 			}
 		}
 
+		// pull click model
+		if w.latestClickModelVersion != w.currentClickModelVersion {
+			base.Logger().Info("start pull click model")
+			if clickResponse, err := w.masterClient.GetClickModel(context.Background(),
+				&protocol.NodeInfo{
+					NodeType: protocol.NodeType_WorkerNode,
+					NodeName: w.workerName,
+				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
+				base.Logger().Error("failed to pull click model", zap.Error(err))
+			} else {
+				w.clickModel, err = click.DecodeModel(clickResponse.Model)
+				if err != nil {
+					base.Logger().Error("failed to decode click model", zap.Error(err))
+				} else {
+					w.currentClickModelVersion = clickResponse.Version
+					base.Logger().Info("synced click model",
+						zap.String("version", base.Hex(w.currentRankingModelVersion)))
+					pulled = true
+				}
+			}
+		}
+
+		if w.testMode {
+			return
+		}
 		if pulled {
 			w.syncedChan <- true
 		}
@@ -305,7 +351,9 @@ func (w *Worker) Serve() {
 // 3. Load positive items if KNN used.
 // 4. Generate recommendation.
 // 5. Save result.
-// 6. Refresh cache.
+// 6. Insert cold-start items into results.
+// 7. Rank items in results by click-through-rate.
+// 8. Refresh cache.
 func (w *Worker) Recommend(m ranking.Model, users []string) {
 	var userIndexer base.Index
 	// load user index
@@ -386,13 +434,37 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				case *ranking.KNN:
 					recItems.Push(itemId, m.InternalPredict(positiveItemIndices, itemIndex))
 				default:
-					base.Logger().Error("unknown model type")
+					base.Logger().Error("unknown model type",
+						zap.String("type", reflect.TypeOf(m).String()))
 				}
 			}
 		}
 		// save result
-		elems, scores := recItems.PopAll()
-		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, cache.CreateScoredItems(elems, scores)); err != nil {
+		candidateItems, candidateScores := recItems.PopAll()
+		// insert cold-start items
+		if w.cfg.Recommend.ExploreLatestNum > 0 {
+			candidateSet := strset.New(candidateItems...)
+			latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Recommend.ExploreLatestNum-1)
+			if err != nil {
+				return err
+			}
+			for _, latestItem := range latestItems {
+				if !candidateSet.Has(latestItem.ItemId) {
+					candidateItems = append(candidateItems, latestItem.ItemId)
+				}
+			}
+		}
+		// rank items in result by click-through-rate
+		var result []cache.ScoredItem
+		if w.clickModel != nil {
+			result, err = w.rankByClickTroughRate(userId, candidateItems)
+			if err != nil {
+				return err
+			}
+		} else {
+			result = w.randomInsertLatestItem(candidateItems, candidateScores)
+		}
+		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, result); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return err
 		}
@@ -412,6 +484,39 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		zap.String("used_time", time.Since(startTime).String()))
 }
 
+// randomInsertLatestItem inserts latest items to the recommendation list randomly. Latest items
+// are located at itemIds[len(scores):len(itemIds)]
+func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []cache.ScoredItem {
+	numPersonalized := len(scores)
+	for i := numPersonalized; i < len(itemIds); i++ {
+		scores = append(scores, 0)
+		replaced := rand.Intn(numPersonalized)
+		itemIds[i], itemIds[replaced] = itemIds[replaced], itemIds[i]
+		scores[i], scores[replaced] = scores[replaced], scores[i]
+	}
+	return cache.CreateScoredItems(itemIds, scores)
+}
+
+// rankByClickTroughRate ranks items by predicted click-through-rate.
+func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache.ScoredItem, error) {
+	// download items
+	var err error
+	items := make([]data.Item, len(itemIds))
+	for i, itemId := range itemIds {
+		items[i], err = w.dataClient.GetItem(itemId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// rank by CTR
+	topItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+	for _, item := range items {
+		topItems.Push(item.ItemId, w.clickModel.Predict(userId, item.ItemId, item.Labels))
+	}
+	elems, scores := topItems.PopAll()
+	return cache.CreateScoredItems(elems, scores), nil
+}
+
 // checkRecommendCacheTimeout checks if recommend cache stale.
 // 1. if cache is empty, stale.
 // 2. if active time > recommend time, stale.
@@ -421,7 +526,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	// check cache
 	items, err := w.cacheClient.GetScores(cache.RecommendItems, userId, 0, -1)
 	if err != nil {
-		base.Logger().Error("failed to read meta", zap.Error(err))
+		base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {
 		return true
@@ -440,7 +545,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	}
 	// check time
 	if activeTime.Unix() < recommendTime.Unix() {
-		timeoutTime := recommendTime.Add(time.Hour * 24 * time.Duration(w.cfg.Recommend.MaxRecommendPeriod))
+		timeoutTime := recommendTime.Add(time.Hour * 24 * time.Duration(w.cfg.Recommend.RefreshRecommendPeriod))
 		return timeoutTime.Unix() < time.Now().Unix()
 	}
 	return true

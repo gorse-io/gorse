@@ -21,12 +21,23 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"sort"
 	"time"
+)
+
+const (
+	RankingTop10NDCG      = "NDCG@10"
+	RankingTop10Precision = "Precision@10"
+	RankingTop10Recall    = "Recall@10"
+	ClickPrecision        = "Precision"
+	ClickThroughRate      = "ClickThroughRate"
+	ActiveUsersYesterday  = "ActiveUsersYesterday"
+	ActiveUsersMonthly    = "ActiveUsersMonthly"
 )
 
 // popItem updates popular items for the database.
@@ -78,12 +89,14 @@ func (m *Master) latest(items []data.Item) {
 	latestItems[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 	// find latest items
 	for _, item := range items {
-		latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
-		for _, label := range item.Labels {
-			if _, exist := latestItems[label]; !exist {
-				latestItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+		if !item.Timestamp.IsZero() {
+			latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
+			for _, label := range item.Labels {
+				if _, exist := latestItems[label]; !exist {
+					latestItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+				}
+				latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
 			}
-			latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
 		}
 	}
 	for label, topItems := range latestItems {
@@ -196,26 +209,30 @@ func dotInt(a, b []int) float32 {
 	return sum
 }
 
-func (m *Master) fitRankingModel(dataSet *ranking.DataSet, prModel ranking.Model) {
-	base.Logger().Info("fit personal ranking model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+// fitRankingModel fits ranking model using passed dataset. After model fitted, following states are changed:
+// 1. Ranking model version are increased.
+// 2. Ranking model score are updated.
+// 3. Ranking model, version and score are persisted to local cache.
+func (m *Master) fitRankingModel(dataSet *ranking.DataSet, rankingModel ranking.Model) {
+	base.Logger().Info("fit ranking model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
 	// training model
 	trainSet, testSet := dataSet.Split(0, 0)
-	score := prModel.Fit(trainSet, testSet, nil)
+	score := rankingModel.Fit(trainSet, testSet, ranking.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
 	// update match model
 	m.rankingModelMutex.Lock()
-	m.rankingModel = prModel
+	m.rankingModel = rankingModel
 	m.rankingModelVersion++
 	m.rankingScore = score
 	m.rankingModelMutex.Unlock()
-	base.Logger().Info("fit personal ranking model complete",
+	base.Logger().Info("fit ranking model complete",
 		zap.String("version", fmt.Sprintf("%x", m.rankingModelVersion)))
-	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: "NDCG@10", Value: score.NDCG, Timestamp: time.Now()}); err != nil {
+	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: RankingTop10NDCG, Value: score.NDCG, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
-	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: "Recall@10", Value: score.Recall, Timestamp: time.Now()}); err != nil {
+	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: RankingTop10Recall, Value: score.Recall, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
-	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: "Precision@10", Value: score.Precision, Timestamp: time.Now()}); err != nil {
+	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: RankingTop10Precision, Value: score.Precision, Timestamp: time.Now()}); err != nil {
 		base.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
 	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastFitRankingModelTime, base.Now()); err != nil {
@@ -227,23 +244,21 @@ func (m *Master) fitRankingModel(dataSet *ranking.DataSet, prModel ranking.Model
 	// caching model
 	m.localCache.RankingModelName = m.rankingModelName
 	m.localCache.RankingModelVersion = m.rankingModelVersion
-	m.localCache.RankingModel = prModel
-	m.localCache.RankingScore = score
+	m.localCache.RankingModel = rankingModel
+	m.localCache.RankingModelScore = score
 	m.localCache.UserIndex = m.userIndex
-	if err := m.localCache.WriteLocalCache(); err != nil {
+	if m.localCache.ClickModel.Invalid() {
+		base.Logger().Info("wait click model")
+	} else if err := m.localCache.WriteLocalCache(); err != nil {
 		base.Logger().Error("failed to write local cache", zap.Error(err))
 	} else {
 		base.Logger().Info("write model to local cache",
-			zap.String("model_name", m.localCache.RankingModelName),
-			zap.String("model_version", base.Hex(m.localCache.RankingModelVersion)),
-			zap.Float32("model_score", m.localCache.RankingScore.NDCG),
-			zap.Any("params", m.localCache.RankingModel.GetParams()))
+			zap.String("ranking_model_name", m.localCache.RankingModelName),
+			zap.String("ranking_model_version", base.Hex(m.localCache.RankingModelVersion)),
+			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
+			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
 	}
 }
-
-const ClickThroughRate = "ClickThroughRate"
-const ActiveUsersYesterday = "ActiveUsersYesterday"
-const ActiveUsersMonthly = "ActiveUsersMonthly"
 
 func (m *Master) analyze() error {
 	// pull existed click through rates
@@ -333,4 +348,64 @@ func (m *Master) analyze() error {
 	}
 
 	return nil
+}
+
+// fitClickModel fits click model using latest data. After model fitted, following states are changed:
+// 1. Click model version are increased.
+// 2. Click model score are updated.
+// 3. Click model, version and score are persisted to local cache.
+func (m *Master) fitClickModel(fm click.FactorizationMachine) {
+	base.Logger().Info("fit click model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+
+	// pull dataset
+	dataset, err := click.LoadDataFromDatabase(m.DataClient,
+		m.GorseConfig.Database.PositiveFeedbackType,
+		m.GorseConfig.Database.ReadFeedbackType)
+	if err != nil {
+		base.Logger().Error("failed to pull dataset", zap.Error(err))
+		return
+	}
+
+	// training model
+	trainSet, testSet := dataset.Split(0.2, 0)
+	score := fm.Fit(trainSet, testSet, click.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
+	// update match model
+	m.clickModelMutex.Lock()
+	m.clickModel = fm
+	m.clickScore = score
+	m.clickModelVersion++
+	m.clickModelMutex.Unlock()
+	base.Logger().Info("fit click model complete",
+		zap.String("version", fmt.Sprintf("%x", m.clickModelVersion)))
+	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: ClickPrecision, Value: score.Precision, Timestamp: time.Now()}); err != nil {
+		base.Logger().Error("failed to insert measurement", zap.Error(err))
+	}
+
+	// caching model
+	m.localCache.ClickModelScore = m.clickScore
+	m.localCache.ClickModelVersion = m.clickModelVersion
+	m.localCache.ClickModel = fm
+	if m.localCache.RankingModel.Invalid() {
+		base.Logger().Info("wait ranking model")
+	} else if err = m.localCache.WriteLocalCache(); err != nil {
+		base.Logger().Error("failed to write local cache", zap.Error(err))
+	} else {
+		base.Logger().Info("write model to local cache",
+			zap.String("click_model_version", base.Hex(m.localCache.ClickModelVersion)),
+			zap.Float32("click_model_score", score.Precision),
+			zap.Any("click_model_params", m.localCache.ClickModel.GetParams()))
+	}
+}
+
+// searchClickModel searches best hyper-parameters for factorization machines.
+func (m *Master) searchClickModel() error {
+	dataset, err := click.LoadDataFromDatabase(m.DataClient,
+		m.GorseConfig.Database.ClickFeedbackTypes,
+		m.GorseConfig.Database.ReadFeedbackType)
+	if err != nil {
+		base.Logger().Error("failed to pull data from click model search", zap.Error(err))
+		return err
+	}
+	trainSet, testSet := dataset.Split(0.2, 0)
+	return m.clickModelSearcher.Fit(trainSet, testSet)
 }

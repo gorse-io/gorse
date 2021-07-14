@@ -22,6 +22,7 @@ type MasterClient interface {
 	// data distribute
 	GetUserIndex(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*UserIndex, error)
 	GetRankingModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
+	GetClickModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
 }
 
 type masterClient struct {
@@ -59,6 +60,15 @@ func (c *masterClient) GetRankingModel(ctx context.Context, in *NodeInfo, opts .
 	return out, nil
 }
 
+func (c *masterClient) GetClickModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
+	out := new(Model)
+	err := c.cc.Invoke(ctx, "/protocol.Master/GetClickModel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MasterServer is the server API for Master service.
 // All implementations must embed UnimplementedMasterServer
 // for forward compatibility
@@ -68,6 +78,7 @@ type MasterServer interface {
 	// data distribute
 	GetUserIndex(context.Context, *NodeInfo) (*UserIndex, error)
 	GetRankingModel(context.Context, *NodeInfo) (*Model, error)
+	GetClickModel(context.Context, *NodeInfo) (*Model, error)
 	mustEmbedUnimplementedMasterServer()
 }
 
@@ -83,6 +94,9 @@ func (UnimplementedMasterServer) GetUserIndex(context.Context, *NodeInfo) (*User
 }
 func (UnimplementedMasterServer) GetRankingModel(context.Context, *NodeInfo) (*Model, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRankingModel not implemented")
+}
+func (UnimplementedMasterServer) GetClickModel(context.Context, *NodeInfo) (*Model, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetClickModel not implemented")
 }
 func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
 
@@ -151,6 +165,24 @@ func _Master_GetRankingModel_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Master_GetClickModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeInfo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MasterServer).GetClickModel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Master/GetClickModel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MasterServer).GetClickModel(ctx, req.(*NodeInfo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Master_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "protocol.Master",
 	HandlerType: (*MasterServer)(nil),
@@ -166,6 +198,10 @@ var _Master_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRankingModel",
 			Handler:    _Master_GetRankingModel_Handler,
+		},
+		{
+			MethodName: "GetClickModel",
+			Handler:    _Master_GetClickModel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

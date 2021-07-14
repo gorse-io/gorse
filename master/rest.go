@@ -160,8 +160,8 @@ type Status struct {
 	NumUsers       string
 	NumItems       string
 	NumPosFeedback string
-	RankingModel   string
-	ClickModel     string
+	RankingScore   float32
+	ClickScore     float32
 }
 
 func (m *Master) getStats(request *restful.Request, response *restful.Response) {
@@ -185,7 +185,8 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 		server.InternalServerError(response, err)
 		return
 	}
-	status.RankingModel = m.rankingModelName
+	status.RankingScore = m.rankingScore.Precision
+	status.ClickScore = m.clickScore.Precision
 	server.Ok(response, status)
 }
 

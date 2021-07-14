@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2021 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ranking
+package click
 
 import (
 	"testing"
@@ -21,40 +21,44 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 )
 
-type mockMatrixFactorizationForSearch struct {
+type mockFactorizationMachineForSearch struct {
 	model.BaseModel
 }
 
-func (m *mockMatrixFactorizationForSearch) GetUserIndex() base.Index {
+func (m *mockFactorizationMachineForSearch) Invalid() bool {
+	panic("implement me")
+}
+
+func (m *mockFactorizationMachineForSearch) GetUserIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) GetItemIndex() base.Index {
+func (m *mockFactorizationMachineForSearch) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) Fit(trainSet, validateSet *DataSet, config *FitConfig) Score {
+func (m *mockFactorizationMachineForSearch) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.NEpochs, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)
 	score += m.Params.GetFloat32(model.InitStdDev, 0.0)
-	return Score{NDCG: score}
+	return Score{Task: FMClassification, Precision: score}
 }
 
-func (m *mockMatrixFactorizationForSearch) Predict(userId, itemId string) float32 {
+func (m *mockFactorizationMachineForSearch) Predict(userId, itemId string, labels []string) float32 {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) InternalPredict(userId, itemId int) float32 {
+func (m *mockFactorizationMachineForSearch) InternalPredict(x []int) float32 {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) Clear() {
+func (m *mockFactorizationMachineForSearch) Clear() {
 	// do nothing
 }
 
-func (m *mockMatrixFactorizationForSearch) GetParamsGrid() model.ParamsGrid {
+func (m *mockFactorizationMachineForSearch) GetParamsGrid() model.ParamsGrid {
 	return model.ParamsGrid{
 		model.NFactors:   []interface{}{1, 2, 3, 4},
 		model.InitMean:   []interface{}{4, 3, 2, 1},
@@ -63,9 +67,9 @@ func (m *mockMatrixFactorizationForSearch) GetParamsGrid() model.ParamsGrid {
 }
 
 func TestGridSearchCV(t *testing.T) {
-	m := &mockMatrixFactorizationForSearch{}
+	m := &mockFactorizationMachineForSearch{}
 	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0, nil)
-	assert.Equal(t, float32(12), r.BestScore.NDCG)
+	assert.Equal(t, float32(12), r.BestScore.Precision)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
 		model.InitMean:   4,
@@ -74,9 +78,9 @@ func TestGridSearchCV(t *testing.T) {
 }
 
 func TestRandomSearchCV(t *testing.T) {
-	m := &mockMatrixFactorizationForSearch{}
+	m := &mockFactorizationMachineForSearch{}
 	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 63, 0, nil)
-	assert.Equal(t, float32(12), r.BestScore.NDCG)
+	assert.Equal(t, float32(12), r.BestScore.Precision)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
 		model.InitMean:   4,

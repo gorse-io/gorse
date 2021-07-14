@@ -300,6 +300,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 			break
 		}
 	}
+	base.Logger().Debug("pulled users from database", zap.Int("n_users", dataset.UserCount()))
 	// pull items
 	itemLabelIndex := base.NewMapIndex()
 	for {
@@ -323,6 +324,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		}
 	}
 	dataset.NumItemLabels = itemLabelIndex.Len()
+	base.Logger().Debug("pulled items from database", zap.Int("n_items", dataset.UserCount()))
 	// pull database
 	for {
 		var feedback []data.Feedback

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package model
 
 import (
@@ -20,14 +21,11 @@ import (
 // Model is the interface for all models. Any model in this
 // package should implement it.
 type Model interface {
-	// Set parameters.
 	SetParams(params Params)
-	// Get parameters.
 	GetParams() Params
-	// Get parameters grid
 	GetParamsGrid() ParamsGrid
-	// Clear model weights
 	Clear()
+	Invalid() bool
 }
 
 // BaseModel model must be included by every recommendation model. Hyper-parameters,

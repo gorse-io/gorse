@@ -31,6 +31,7 @@ service Master {
   /* data distribute */
   rpc GetUserIndex(NodeInfo) returns(UserIndex) {}
   rpc GetRankingModel(NodeInfo) returns (Model) {}
+  rpc GetClickModel(NodeInfo) returns (Model) {}
 
 }
 
@@ -38,6 +39,7 @@ message Meta {
   string config = 1;
   int64 user_index_version = 2;
   int64 ranking_model_version = 3;
+  int64 click_model_version = 4;
   string me = 5;
   repeated string servers = 6;
   repeated string workers = 7;

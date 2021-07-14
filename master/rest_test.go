@@ -22,6 +22,8 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -284,7 +286,8 @@ func TestMaster_GetStats(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// set stats
-	s.rankingModelName = "ccd"
+	s.rankingScore = ranking.Score{Precision: 0.1}
+	s.clickScore = click.Score{Precision: 0.2}
 	err := s.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, "123")
 	assert.Nil(t, err)
 	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, "234")
@@ -301,7 +304,8 @@ func TestMaster_GetStats(t *testing.T) {
 			NumUsers:       "234",
 			NumItems:       "123",
 			NumPosFeedback: "345",
-			RankingModel:   "ccd",
+			RankingScore:   0.1,
+			ClickScore:     0.2,
 		})).
 		End()
 }
