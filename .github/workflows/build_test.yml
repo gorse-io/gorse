@@ -70,7 +70,7 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -timeout 20m -v ./config/ -coverprofile=coverage.txt -covermode=atomic
+      run: go test -timeout 20m -v ./... -coverprofile=coverage.txt -covermode=atomic
       env:
         # MySQL
         MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mysql.ports[3306] }})/
