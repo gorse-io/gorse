@@ -24,7 +24,7 @@ require (
 	github.com/spf13/cobra v0.0.7
 	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.0
-	go.mongodb.org/mongo-driver v1.5.1
+	go.mongodb.org/mongo-driver v1.6.0
 	go.uber.org/zap v1.17.0
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
 	google.golang.org/grpc v1.37.0
