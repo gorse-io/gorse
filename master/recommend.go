@@ -385,7 +385,7 @@ func (m *Master) fitClickModel(fm click.FactorizationMachine) {
 	m.localCache.ClickModelScore = m.clickScore
 	m.localCache.ClickModelVersion = m.clickModelVersion
 	m.localCache.ClickModel = fm
-	if m.localCache.RankingModel == null || m.localCache.RankingModel.Invalid() {
+	if m.localCache.RankingModel == nil || m.localCache.RankingModel.Invalid() {
 		base.Logger().Info("wait ranking model")
 	} else if err = m.localCache.WriteLocalCache(); err != nil {
 		base.Logger().Error("failed to write local cache", zap.Error(err))
