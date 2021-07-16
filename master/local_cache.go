@@ -32,6 +32,7 @@ type LocalCache struct {
 	RankingModelVersion int64
 	RankingModel        ranking.Model
 	RankingModelScore   ranking.Score
+	UserIndexVersion    int64
 	UserIndex           base.Index
 	ClickModelVersion   int64
 	ClickModelScore     click.Score
@@ -78,25 +79,30 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	// 4. ranking model score
 	err = decoder.Decode(&state.RankingModelScore)
 	if err != nil {
-		return state, errors.Wrap(err, "failed to ranking model score")
+		return state, errors.Wrap(err, "failed to decode ranking model score")
 	}
-	// 5. user index
+	// 5. user index version
+	err = decoder.Decode(&state.UserIndexVersion)
+	if err != nil {
+		return state, errors.Wrap(err, "failed to decode user index version")
+	}
+	// 6. user index
 	state.UserIndex = base.NewMapIndex()
 	err = decoder.Decode(state.UserIndex)
 	if err != nil {
 		return state, errors.Wrap(err, "failed to load user index")
 	}
-	// 6. click model version
+	// 7. click model version
 	err = decoder.Decode(&state.ClickModelVersion)
 	if err != nil {
 		return state, errors.Wrap(err, "failed to load click model version")
 	}
-	// 7. click model score
+	// 8. click model score
 	err = decoder.Decode(&state.ClickModelScore)
 	if err != nil {
 		return state, errors.Wrap(err, "failed to load click model score")
 	}
-	// 8. click model
+	// 9. click model
 	state.ClickModel = click.NewFM(click.FMClassification, nil)
 	err = decoder.Decode(state.ClickModel)
 	if err != nil {
@@ -143,22 +149,27 @@ func (c *LocalCache) WriteLocalCache() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to write ranking model score")
 	}
-	// 5. user index
+	// 5. user index version
+	err = encoder.Encode(c.UserIndexVersion)
+	if err != nil {
+		return errors.Wrap(err, "failed to write user index version")
+	}
+	// 6. user index
 	err = encoder.Encode(c.UserIndex)
 	if err != nil {
 		return errors.Wrap(err, "failed to write user index")
 	}
-	// 6. click model version
+	// 7. click model version
 	err = encoder.Encode(c.ClickModelVersion)
 	if err != nil {
 		return errors.Wrap(err, "failed to write click model version")
 	}
-	// 7. click model score
+	// 8. click model score
 	err = encoder.Encode(c.ClickModelScore)
 	if err != nil {
 		return errors.Wrap(err, "failed to write click model score")
 	}
-	// 8. click model
+	// 9. click model
 	err = encoder.Encode(c.ClickModel)
 	if err != nil {
 		return errors.Wrap(err, "failed to write click model")
