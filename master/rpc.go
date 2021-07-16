@@ -77,30 +77,30 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		return nil, err
 	}
 	// collect user index version
-	m.userIndexMutex.Lock()
+	m.userIndexMutex.RLock()
 	var userIndexVersion int64
 	if m.userIndex != nil {
 		userIndexVersion = m.userIndexVersion
 	}
-	m.userIndexMutex.Unlock()
+	m.userIndexMutex.RUnlock()
 	// save ranking model version
-	m.rankingModelMutex.Lock()
+	m.rankingModelMutex.RLock()
 	var rankingModelVersion int64
 	if m.rankingModel != nil {
 		rankingModelVersion = m.rankingModelVersion
 	}
-	m.rankingModelMutex.Unlock()
+	m.rankingModelMutex.RUnlock()
 	// save click model version
-	m.clickModelMutex.Lock()
+	m.clickModelMutex.RLock()
 	var clickModelVersion int64
 	if m.clickModel != nil {
 		clickModelVersion = m.clickModelVersion
 	}
-	m.clickModelMutex.Unlock()
+	m.clickModelMutex.RUnlock()
 	// collect nodes
 	workers := make([]string, 0)
 	servers := make([]string, 0)
-	m.nodesInfoMutex.Lock()
+	m.nodesInfoMutex.RLock()
 	for name, info := range m.nodesInfo {
 		switch info.Type {
 		case WorkerNode:
@@ -109,7 +109,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 			servers = append(servers, name)
 		}
 	}
-	m.nodesInfoMutex.Unlock()
+	m.nodesInfoMutex.RUnlock()
 	return &protocol.Meta{
 		Config:              string(s),
 		UserIndexVersion:    userIndexVersion,
@@ -123,8 +123,8 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 
 // GetRankingModel returns latest ranking model.
 func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
-	m.rankingModelMutex.Lock()
-	defer m.rankingModelMutex.Unlock()
+	m.rankingModelMutex.RLock()
+	defer m.rankingModelMutex.RUnlock()
 	// skip empty model
 	if m.rankingModel.Invalid() {
 		return &protocol.Model{Version: 0}, nil
@@ -143,8 +143,8 @@ func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol
 
 // GetClickModel returns latest click model.
 func (m *Master) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
-	m.clickModelMutex.Lock()
-	defer m.clickModelMutex.Unlock()
+	m.clickModelMutex.RLock()
+	defer m.clickModelMutex.RUnlock()
 	// skip empty model
 	if m.clickModel.Invalid() {
 		return &protocol.Model{Version: 0}, nil
@@ -162,8 +162,8 @@ func (m *Master) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.M
 
 // GetUserIndex returns latest user index.
 func (m *Master) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.UserIndex, error) {
-	m.userIndexMutex.Lock()
-	defer m.userIndexMutex.Unlock()
+	m.userIndexMutex.RLock()
+	defer m.userIndexMutex.RUnlock()
 	// skip empty model
 	if m.userIndex == nil {
 		return &protocol.UserIndex{Version: 0}, nil

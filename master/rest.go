@@ -135,7 +135,7 @@ func (m *Master) getCluster(request *restful.Request, response *restful.Response
 	// collect nodes
 	workers := make([]*Node, 0)
 	servers := make([]*Node, 0)
-	m.nodesInfoMutex.Lock()
+	m.nodesInfoMutex.RLock()
 	for _, info := range m.nodesInfo {
 		switch info.Type {
 		case WorkerNode:
@@ -144,7 +144,7 @@ func (m *Master) getCluster(request *restful.Request, response *restful.Response
 			servers = append(servers, info)
 		}
 	}
-	m.nodesInfoMutex.Unlock()
+	m.nodesInfoMutex.RUnlock()
 	// return nodes
 	nodes := make([]*Node, 0)
 	nodes = append(nodes, workers...)

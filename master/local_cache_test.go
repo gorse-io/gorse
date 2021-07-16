@@ -53,6 +53,8 @@ func TestLocalCache(t *testing.T) {
 	assert.Zero(t, cache.RankingModelVersion)
 	assert.Zero(t, cache.RankingModelScore)
 	assert.Nil(t, cache.RankingModel)
+	assert.Zero(t, cache.UserIndexVersion)
+	assert.Nil(t, cache.UserIndex)
 	assert.Zero(t, cache.ClickModelVersion)
 	assert.Zero(t, cache.ClickModelScore)
 	assert.Nil(t, cache.ClickModel)
@@ -66,6 +68,7 @@ func TestLocalCache(t *testing.T) {
 	cache.RankingModelVersion = 123
 	cache.RankingModelScore = ranking.Score{Precision: 1, NDCG: 2, Recall: 3}
 	cache.UserIndex = bpr.UserIndex
+	cache.UserIndexVersion = 789
 
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
@@ -81,6 +84,8 @@ func TestLocalCache(t *testing.T) {
 	assert.Equal(t, "bpr", read.RankingModelName)
 	assert.Equal(t, int64(123), read.RankingModelVersion)
 	assert.Equal(t, ranking.Score{Precision: 1, NDCG: 2, Recall: 3}, read.RankingModelScore)
+	assert.Equal(t, int64(789), read.UserIndexVersion)
+	assert.NotNil(t, read.UserIndex)
 	assert.NotNil(t, read.ClickModel)
 	assert.Equal(t, int64(456), read.ClickModelVersion)
 	assert.Equal(t, click.Score{Precision: 1, RMSE: 100, Task: click.FMClassification}, read.ClickModelScore)
