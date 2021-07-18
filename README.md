@@ -30,10 +30,10 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be a 
 
 Gorse is a single node training and distributed prediction recommender system. Gorse stores data in MySQL or MongoDB, with intermediate data cached in Redis. 
 
-The cluster consists of a master node, multiple worker nodes, and server nodes.
-The master node is responsible for model training, non-personalized item recommendation, configuration management, and membership management.
-The server node is responsible for exposing the RESTful APIs and online real-time recommendations.
-Worker nodes are responsible for offline recommendations for each user. 
+1. The cluster consists of a master node, multiple worker nodes, and server nodes.
+1. The master node is responsible for model training, non-personalized item recommendation, configuration management, and membership management.
+1. The server node is responsible for exposing the RESTful APIs and online real-time recommendations.
+1. Worker nodes are responsible for offline recommendations for each user. 
 
 In addition, the administrator can perform system monitoring, data import and export, and system status checking via the dashboard on the master node.
 
