@@ -9,7 +9,7 @@
 [![Discord](https://img.shields.io/discord/830635934210588743)](https://discord.gg/x6gAtNNkAE)
 <a target="_blank" href="https://qm.qq.com/cgi-bin/qm/qr?k=lOERnxfAM2U2rj4C9Htv9T68SLIXg6uk&jump_from=webapi"><img border="0" src="https://pub.idqqimg.com/wpa/images/group.png" alt="Gorse推荐系统交流群" title="Gorse推荐系统交流群"></a>
 
-Gorse is an open-source recommendation system written in Go. Gorse aims to be a universal open-source recommender system that can be quickly introduced into a wide variety of online services. By importing items, users and interaction data into Gorse, the system will automatically train models to generate recommendations for each user. Project features are as follows.
+Gorse is an open-source recommendation system written in Go. Gorse aims to be an universal open-source recommender system that can be quickly introduced into a wide variety of online services. By importing items, users and interaction data into Gorse, the system will automatically train models to generate recommendations for each user. Project features are as follows.
 
 - **AutoML**: Choose the best recommendation model and strategy automatically by model searching in the background.
 - **Distributed Recommendation**: Single node training, distributed prediction, and ability to achieve horizontal scaling in the recommendation stage.
