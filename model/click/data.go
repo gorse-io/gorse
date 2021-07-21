@@ -232,10 +232,10 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 				dataSet.Inputs = append(dataSet.Inputs, input)
 				// positive or negative
 				if v.FeedbackType == readType {
-					dataSet.Target = append(dataSet.Target, 1)
+					dataSet.Target = append(dataSet.Target, -1)
 				} else {
 					positiveSet[userId].Add(int32(itemId))
-					dataSet.Target = append(dataSet.Target, -1)
+					dataSet.Target = append(dataSet.Target, 1)
 				}
 			}
 		}
