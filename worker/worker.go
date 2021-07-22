@@ -449,7 +449,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				return err
 			}
 			for _, latestItem := range latestItems {
-				if !candidateSet.Has(latestItem.ItemId) {
+				if !candidateSet.Has(latestItem.ItemId) && !historySet.Has(latestItem.ItemId) {
 					candidateItems = append(candidateItems, latestItem.ItemId)
 				}
 			}
