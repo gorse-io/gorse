@@ -20,7 +20,7 @@ jobs:
         run: go get -v github.com/mitchellh/gox
         
       - name: Build release
-        run: gox -osarch='darwin/arm64 darwin/amd64 windows/amd64 linux/amd64' ./...
+        run: gox -osarch='darwin/arm64 darwin/amd64 windows/amd64 linux/arm64 linux/amd64' ./...
 
       - name: Install zip
         uses: montudor/action-zip@v0.1.1
@@ -28,6 +28,7 @@ jobs:
       - name: Zip binaries
         run: |
           zip gorse_linux_amd64.zip gorse-*_linux_amd64
+          zip gorse_linux_arm64.zip gorse-*_linux_arm64
           zip gorse_windows_amd64.zip gorse-*_windows_amd64.exe
           zip gorse_darwin_amd64.zip gorse-*_darwin_amd64
           zip gorse_darwin_arm64.zip gorse-*_darwin_arm64
@@ -67,6 +68,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           file: docker/${{ matrix.image }}/Dockerfile
           push: true
           tags: zhenghaoz/${{ matrix.image }}:${{ steps.tag_name.outputs.tag }}
