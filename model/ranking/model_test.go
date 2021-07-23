@@ -45,7 +45,7 @@ func assertEpsilon(t *testing.T, expect, actual, eps float32) {
 
 func TestBPR_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	m := NewBPR(model.Params{
 		model.NFactors:   8,
 		model.Reg:        0.01,
@@ -73,7 +73,7 @@ func TestBPR_MovieLens(t *testing.T) {
 
 //func TestBPR_Pinterest(t *testing.T) {
 //	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-//	assert.Nil(t, err)
+//	assert.NoError(t, err)
 //	m := NewBPR(model.Params{
 //		model.NFactors:   8,
 //		model.Reg:        0.005,
@@ -88,7 +88,7 @@ func TestBPR_MovieLens(t *testing.T) {
 
 func TestALS_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	m := NewALS(model.Params{
 		model.NFactors: 8,
 		model.Reg:      0.015,
@@ -114,7 +114,7 @@ func TestALS_MovieLens(t *testing.T) {
 
 //func TestALS_Pinterest(t *testing.T) {
 //	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-//	assert.Nil(t, err)
+//	assert.NoError(t, err)
 //	m := NewALS(model.Params{
 //		model.NFactors:   8,
 //		model.Reg:        0.01,
@@ -128,7 +128,7 @@ func TestALS_MovieLens(t *testing.T) {
 
 func TestCCD_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	m := NewCCD(model.Params{
 		model.NFactors: 8,
 		model.Reg:      0.015,
@@ -154,7 +154,7 @@ func TestCCD_MovieLens(t *testing.T) {
 
 //func TestCCD_Pinterest(t *testing.T) {
 //	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-//	assert.Nil(t, err)
+//	assert.NoError(t, err)
 //	m := NewCCD(model.Params{
 //		model.NFactors:   8,
 //		model.Reg:        0.01,

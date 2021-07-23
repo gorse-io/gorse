@@ -17,7 +17,7 @@ package cache
 import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	"github.com/pkg/errors"
+	"github.com/juju/errors"
 	"strings"
 	"time"
 )

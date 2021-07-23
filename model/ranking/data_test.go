@@ -57,15 +57,15 @@ func newMockDatastore(t *testing.T) *mockDatastore {
 	var err error
 	db := new(mockDatastore)
 	db.server, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	db.Database, err = data.Open("redis://" + db.server.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return db
 }
 
 func (db *mockDatastore) Close(t *testing.T) {
 	err := db.Database.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	db.server.Close()
 }
 
@@ -78,13 +78,13 @@ func TestLoadDataFromDatabase(t *testing.T) {
 		err := database.InsertUser(data.User{
 			UserId: fmt.Sprintf("user%v", i),
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	for i := 0; i < numItems; i++ {
 		err := database.InsertItem(data.Item{
 			ItemId: fmt.Sprintf("item%v", i),
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := i + 1; j < numItems; j++ {
@@ -95,12 +95,12 @@ func TestLoadDataFromDatabase(t *testing.T) {
 					FeedbackType: "FeedbackType",
 				},
 			}, false, false)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 		}
 	}
 	// load data
 	dataset, _, _, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"}, 0, 0)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 9, dataset.Count())
 	// split
 	train, test := dataset.Split(0, 0)

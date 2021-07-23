@@ -49,7 +49,7 @@ func splitLines(t *testing.T, text string) [][]string {
 		lines = append(lines, i2)
 		return i2[0] != "STOP"
 	})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return lines
 }
 

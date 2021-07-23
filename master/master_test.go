@@ -43,14 +43,14 @@ func newMockMaster(t *testing.T) *mockMaster {
 	// create mock database
 	var err error
 	s.dataStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.cacheStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// open database
 	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return s
 }
 
@@ -77,21 +77,21 @@ func TestMaster_CollectLatest(t *testing.T) {
 	m.latest(items)
 	// check latest items
 	latest, err := m.CacheClient.GetScores(cache.LatestItems, "", 0, 100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 	}, latest)
 	latest, err = m.CacheClient.GetScores(cache.LatestItems, "even", 0, 100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 		{items[4].ItemId, float32(items[4].Timestamp.Unix())},
 	}, latest)
 	latest, err = m.CacheClient.GetScores(cache.LatestItems, "odd", 0, 100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
@@ -144,21 +144,21 @@ func TestMaster_CollectPopItem(t *testing.T) {
 	m.popItem(items, feedbacks)
 	// check popular items
 	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{ItemId: items[9].ItemId, Score: 10},
 		{ItemId: items[8].ItemId, Score: 9},
 		{ItemId: items[7].ItemId, Score: 8},
 	}, popular)
 	popular, err = m.CacheClient.GetScores(cache.PopularItems, "even", 0, 100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{ItemId: items[8].ItemId, Score: 9},
 		{ItemId: items[6].ItemId, Score: 7},
 		{ItemId: items[4].ItemId, Score: 5},
 	}, popular)
 	popular, err = m.CacheClient.GetScores(cache.PopularItems, "odd", 0, 100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{ItemId: items[9].ItemId, Score: 10},
 		{ItemId: items[7].ItemId, Score: 8},
@@ -202,14 +202,14 @@ func TestMaster_FitCFModel(t *testing.T) {
 	}
 	var err error
 	err = m.DataClient.BatchInsertItem(items)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// similar items (common users)
 	m.similar(items, dataset, model.SimilarityDot)
 	similar, err := m.CacheClient.GetScores(cache.SimilarItems, "9", 0, 100)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
 }

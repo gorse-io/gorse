@@ -23,7 +23,7 @@ import (
 
 func TestLoadDataFromBuiltIn(t *testing.T) {
 	train, test, err := LoadDataFromBuiltIn("frappe")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 202027, train.Count())
 	assert.Equal(t, 28860, test.Count())
 }
@@ -37,15 +37,15 @@ func newMockDatastore(t *testing.T) *mockDatastore {
 	var err error
 	db := new(mockDatastore)
 	db.server, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	db.Database, err = data.Open("redis://" + db.server.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return db
 }
 
 func (db *mockDatastore) Close(t *testing.T) {
 	err := db.Database.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	db.server.Close()
 }
 
@@ -62,7 +62,7 @@ func TestLoadDataFromDatabase(t *testing.T) {
 				fmt.Sprintf("user_label%v", i*2),
 			},
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	for i := 0; i < numItems; i++ {
 		err := database.InsertItem(data.Item{
@@ -72,7 +72,7 @@ func TestLoadDataFromDatabase(t *testing.T) {
 				fmt.Sprintf("item_label%v", i*2),
 			},
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := 0; j < numItems; j++ {
@@ -84,7 +84,7 @@ func TestLoadDataFromDatabase(t *testing.T) {
 					FeedbackType: "read",
 				},
 			}, false, false)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			if i+j > 4 {
 				err = database.InsertFeedback(data.Feedback{
 					FeedbackKey: data.FeedbackKey{
@@ -93,13 +93,13 @@ func TestLoadDataFromDatabase(t *testing.T) {
 						FeedbackType: "click",
 					},
 				}, false, false)
-				assert.Nil(t, err)
+				assert.NoError(t, err)
 			}
 		}
 	}
 	// load data
 	dataset, err := LoadDataFromDatabase(database.Database, []string{"click"}, "read")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, numUsers*numItems, dataset.Count())
 	assert.Equal(t, numUsers, dataset.UserCount())
 	assert.Equal(t, numItems, dataset.ItemCount())

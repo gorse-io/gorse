@@ -33,7 +33,7 @@ func TestUnzip(t *testing.T) {
 
 func TestLocateBuiltInDataset(t *testing.T) {
 	trainFilePath, testFilePath, err := LocateBuiltInDataset("ml-1m", FormatNCF)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, filepath.Join(DataSetDir, "ml-1m", "train.txt"), trainFilePath)
 	assert.Equal(t, filepath.Join(DataSetDir, "ml-1m", "test.txt"), testFilePath)
 }

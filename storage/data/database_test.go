@@ -32,7 +32,7 @@ func getUsers(t *testing.T, db Database) []User {
 	cursor := ""
 	for {
 		cursor, data, err = db.GetUsers(cursor, 2)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		users = append(users, data...)
 		if cursor == "" {
 			if _, ok := db.(*Redis); !ok {
@@ -54,7 +54,7 @@ func getItems(t *testing.T, db Database) []Item {
 	cursor := ""
 	for {
 		cursor, data, err = db.GetItems(cursor, 2, nil)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		items = append(items, data...)
 		if cursor == "" {
 			if _, ok := db.(*Redis); !ok {
@@ -76,7 +76,7 @@ func getFeedback(t *testing.T, db Database, feedbackTypes ...string) []Feedback 
 	cursor := ""
 	for {
 		cursor, data, err = db.GetFeedback(cursor, 2, nil, feedbackTypes...)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
 			if _, ok := db.(*Redis); !ok {
@@ -99,7 +99,7 @@ func testUsers(t *testing.T, db Database) {
 			Labels:  []string{strconv.Itoa(i + 100)},
 			Comment: fmt.Sprintf("comment %d", i),
 		})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	// Get users
 	users := getUsers(t, db)
@@ -111,28 +111,28 @@ func testUsers(t *testing.T, db Database) {
 	}
 	// Get this user
 	user, err := db.GetUser("0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "0", user.UserId)
 	// Delete this user
 	err = db.DeleteUser("0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = db.GetUser("0")
 	assert.ErrorIs(t, err, ErrUserNotExist)
 	// test override
 	err = db.InsertUser(User{UserId: "1", Comment: "override"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	user, err = db.GetUser("1")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "override", user.Comment)
 }
 
 func testFeedback(t *testing.T, db Database) {
 	// users that already exists
 	err := db.InsertUser(User{"0", []string{"a"}, []string{"x"}, "comment"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// items that already exists
 	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// Insert ret
 	feedback := []Feedback{
 		{FeedbackKey{positiveFeedbackType, "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
@@ -142,14 +142,14 @@ func testFeedback(t *testing.T, db Database) {
 		{FeedbackKey{positiveFeedbackType, "4", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err = db.BatchInsertFeedback(feedback[1:], true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = db.InsertFeedback(feedback[0], true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// other type
 	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{negativeFeedbackType, "2", "4"}}, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// Get feedback
 	ret := getFeedback(t, db, positiveFeedbackType)
 	assert.Equal(t, feedback, ret)
@@ -160,49 +160,59 @@ func testFeedback(t *testing.T, db Database) {
 	assert.Equal(t, 5, len(items))
 	for i, item := range items {
 		assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
+		if item.ItemId != "0" {
+			assert.Zero(t, item.Timestamp)
+			assert.Empty(t, item.Labels)
+			assert.Empty(t, item.Comment)
+		}
 	}
 	// Get users
 	users := getUsers(t, db)
 	assert.Equal(t, 5, len(users))
 	for i, user := range users {
 		assert.Equal(t, strconv.Itoa(i), user.UserId)
+		if user.UserId != "0" {
+			assert.Empty(t, user.Labels)
+			assert.Empty(t, user.Subscribe)
+			assert.Empty(t, user.Comment)
+		}
 	}
 	// check users that already exists
 	user, err := db.GetUser("0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, User{"0", []string{"a"}, []string{"x"}, "comment"}, user)
 	// check items that already exists
 	item, err := db.GetItem("0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, Item{ItemId: "0", Labels: []string{"b"}}, item)
 	// Get typed feedback by user
 	ret, err = db.GetUserFeedback("2", positiveFeedbackType)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
 	// Get all feedback by user
 	ret, err = db.GetUserFeedback("2")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(ret))
 	// Get typed feedback by item
 	ret, err = db.GetItemFeedback("4", positiveFeedbackType)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
 	// Get all feedback by item
 	ret, err = db.GetItemFeedback("4")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(ret))
 	// test override
 	err = db.InsertFeedback(Feedback{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "0"},
 		Comment:     "override",
 	}, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	ret, err = db.GetUserFeedback("0", positiveFeedbackType)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
 }
@@ -243,28 +253,28 @@ func testItems(t *testing.T, db Database) {
 	}
 	// Insert item
 	err := db.BatchInsertItem(items[1:])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = db.InsertItem(items[0])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// Get items
 	totalItems := getItems(t, db)
 	assert.Equal(t, items, totalItems)
 	// Get item
 	for _, item := range items {
 		ret, err := db.GetItem(item.ItemId)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, item, ret)
 	}
 	// Delete item
 	err = db.DeleteItem("0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = db.GetItem("0")
 	assert.ErrorIs(t, err, ErrItemNotExist)
 	// test override
 	err = db.InsertItem(Item{ItemId: "2", Comment: "override"})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	item, err := db.GetItem("2")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, "override", item.Comment)
 }
 
@@ -278,17 +288,17 @@ func testDeleteUser(t *testing.T, db Database) {
 		{FeedbackKey{positiveFeedbackType, "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := db.BatchInsertFeedback(feedback, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// Delete user
 	err = db.DeleteUser("0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = db.GetUser("0")
 	assert.NotNil(t, err, "failed to delete user")
 	ret, err := db.GetUserFeedback("0", positiveFeedbackType)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
 	_, ret, err = db.GetFeedback("", 100, nil, positiveFeedbackType)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Empty(t, ret)
 }
 
@@ -302,17 +312,17 @@ func testDeleteItem(t *testing.T, db Database) {
 		{FeedbackKey{positiveFeedbackType, "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := db.BatchInsertFeedback(feedbacks, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// Delete item
 	err = db.DeleteItem("0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = db.GetItem("0")
 	assert.NotNil(t, err, "failed to delete item")
 	ret, err := db.GetItemFeedback("0", positiveFeedbackType)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
 	_, ret, err = db.GetFeedback("", 100, nil, positiveFeedbackType)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Empty(t, ret)
 }
 
@@ -325,28 +335,28 @@ func testDeleteFeedback(t *testing.T, db Database) {
 		{FeedbackKey{"type1", "1", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := db.BatchInsertFeedback(feedbacks, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// get user-item feedback
 	ret, err := db.GetUserItemFeedback("2", "3")
-	assert.Nil(t, err)
-	assert.Equal(t, []Feedback{feedbacks[0], feedbacks[1], feedbacks[2]}, ret)
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []Feedback{feedbacks[0], feedbacks[1], feedbacks[2]}, ret)
 	feedbackType2 := "type2"
 	ret, err = db.GetUserItemFeedback("2", "3", feedbackType2)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []Feedback{feedbacks[1]}, ret)
 	// delete user-item feedback
 	deleteCount, err := db.DeleteUserItemFeedback("2", "3")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 3, deleteCount)
 	ret, err = db.GetUserItemFeedback("2", "3")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Empty(t, ret)
 	feedbackType1 := "type1"
 	deleteCount, err = db.DeleteUserItemFeedback("1", "3", feedbackType1)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, deleteCount)
 	ret, err = db.GetUserItemFeedback("1", "3", feedbackType2)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Empty(t, ret)
 }
 
@@ -361,10 +371,10 @@ func testMeasurements(t *testing.T, db Database) {
 	}
 	for _, measurement := range measurements {
 		err := db.InsertMeasurement(measurement)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	ret, err := db.GetMeasurements("Test_NDCG", 3)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []Measurement{
 		measurements[4],
 		measurements[3],
@@ -407,10 +417,10 @@ func testTimeLimit(t *testing.T, db Database) {
 		},
 	}
 	err := db.BatchInsertItem(items[1:])
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	timeLimit := time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC)
 	_, ret, err := db.GetItems("", 100, &timeLimit)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []Item{items[2], items[3], items[4]}, ret)
 
 	// insert feedback
@@ -422,13 +432,13 @@ func testTimeLimit(t *testing.T, db Database) {
 		{FeedbackKey{"type1", "1", "3"}, time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err = db.BatchInsertFeedback(feedbacks, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, retFeedback, err := db.GetFeedback("", 100, &timeLimit)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []Feedback{feedbacks[4], feedbacks[3], feedbacks[2]}, retFeedback)
 	typeFilter := "type1"
 	_, retFeedback, err = db.GetFeedback("", 100, &timeLimit, typeFilter)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []Feedback{feedbacks[4], feedbacks[3]}, retFeedback)
 }
 
@@ -448,10 +458,10 @@ func testGetClickThroughRate(t *testing.T, db Database) {
 		{FeedbackKey: FeedbackKey{"read", "3", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// get click-through-rate
 	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 0.375, rate)
 }
 
@@ -464,9 +474,9 @@ func testCountActiveUsers(t *testing.T, db Database) {
 		{FeedbackKey: FeedbackKey{"star", "4", "4"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"star", "5", "5"}, Timestamp: time.Date(1999, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// get exposed items
 	count, err := db.CountActiveUsers(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 3, count)
 }

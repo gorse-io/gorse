@@ -46,14 +46,14 @@ func newMockServer(t *testing.T) *mockServer {
 	// create mock redis server
 	var err error
 	s.dataStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.cacheStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// open database
 	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// create server
 	s.GorseConfig = (*config.Config)(nil).LoadDefaultIfNil()
 	s.WebService = new(restful.WebService)
@@ -66,16 +66,16 @@ func newMockServer(t *testing.T) *mockServer {
 
 func (s *mockServer) Close(t *testing.T) {
 	err := s.DataClient.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = s.CacheClient.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.dataStoreServer.Close()
 	s.cacheStoreServer.Close()
 }
 
 func marshal(t *testing.T, v interface{}) string {
 	s, err := json.Marshal(v)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return string(s)
 }
 
@@ -89,7 +89,7 @@ func TestMaster_ExportItems(t *testing.T) {
 		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}
 	err := s.DataClient.BatchInsertItem(items)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
 	w := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestMaster_ExportFeedback(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
 	}
 	err := s.DataClient.BatchInsertFeedback(feedbacks, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
 	w := httptest.NewRecorder()
@@ -134,21 +134,21 @@ func TestMaster_ImportItems(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	err := writer.WriteField("has-header", "false")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.WriteField("sep", "\t")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.WriteField("label-sep", "::")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.WriteField("format", "ilct")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	file, err := writer.CreateFormFile("file", "items.csv")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = file.Write([]byte("1\ta::b\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\n" +
 		"2\tb::c\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\n" +
 		"3\tc::d\t\"\"\"three\"\"\"\t2022-01-01 01:01:01.000000001 +0000 UTC\n"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
@@ -157,7 +157,7 @@ func TestMaster_ImportItems(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
 	_, items, err := s.DataClient.GetItems("", 100, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
 		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
 		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
@@ -172,14 +172,14 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "items.csv")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n" +
 		"1,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\r\n" +
 		"2,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\r\n" +
 		"3,2022-01-01 01:01:01.000000001 +0000 UTC,c|d,three\r\n"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
@@ -188,7 +188,7 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
 	_, items, err := s.DataClient.GetItems("", 100, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
 		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
 		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
@@ -203,19 +203,19 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	err := writer.WriteField("format", "uift")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.WriteField("sep", "\t")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.WriteField("has-header", "false")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	file, err := writer.CreateFormFile("file", "feedback.csv")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = file.Write([]byte("0\t2\tclick\t0001-01-01 00:00:00 +0000 UTC\n" +
 		"2\t6\tread\t0001-01-01 00:00:00 +0000 UTC\n" +
 		"1\t4\tshare\t0001-01-01 00:00:00 +0000 UTC\n"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
@@ -224,7 +224,7 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
 	_, feedback, err := s.DataClient.GetFeedback("", 100, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
@@ -239,14 +239,14 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "feedback.csv")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n" +
 		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n" +
 		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n" +
 		"share,1,4,0001-01-01 00:00:00 +0000 UTC\r\n"))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = writer.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
@@ -255,7 +255,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
 	_, feedback, err := s.DataClient.GetFeedback("", 100, nil)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
@@ -289,11 +289,11 @@ func TestMaster_GetStats(t *testing.T) {
 	s.rankingScore = ranking.Score{Precision: 0.1}
 	s.clickScore = click.Score{Precision: 0.2}
 	err := s.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, "123")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, "234")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, "345")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// get stats
 	apitest.New().
 		Handler(s.handler).
@@ -321,11 +321,11 @@ func TestMaster_GetUsers(t *testing.T) {
 	}
 	for _, user := range users {
 		err := s.DataClient.InsertUser(user.User)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		err = s.CacheClient.SetString(cache.LastActiveTime, user.UserId, user.LastActiveTime)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		err = s.CacheClient.SetString(cache.LastUpdateRecommendTime, user.UserId, user.LastUpdateTime)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	// get users
 	apitest.New().
@@ -372,12 +372,12 @@ func TestServer_List(t *testing.T) {
 			{"4", 96},
 		}
 		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, itemIds)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		items := make([]data.Item, 0)
 		for _, item := range itemIds {
 			items = append(items, data.Item{ItemId: item.ItemId})
 			err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 		}
 		apitest.New().
 			Handler(s.handler).
@@ -404,7 +404,7 @@ func TestServer_Feedback(t *testing.T) {
 		err := s.DataClient.InsertFeedback(data.Feedback{
 			FeedbackKey: data.FeedbackKey{FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId},
 		}, true, true)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	// get feedback
 	apitest.New().
@@ -431,18 +431,18 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"8", 92},
 	}
 	err := s.CacheClient.SetScores(cache.RecommendItems, "0", itemIds)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}
 	err = s.RestServer.InsertFeedbackToCache(feedback)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// insert items
 	for _, item := range itemIds {
 		err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	apitest.New().
 		Handler(s.handler).

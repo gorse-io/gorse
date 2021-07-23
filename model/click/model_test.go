@@ -42,7 +42,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
 	//   -learn_rate 0.01 -regular 0,0,0.0001
 	train, test, err := LoadDataFromBuiltIn("frappe")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	m := NewFM(FMClassification, model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
@@ -60,7 +60,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 //	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
 //	//   -learn_rate 0.01 -regular 0,0,0.0001
 //	train, test, err := LoadDataFromBuiltIn("ml-tag")
-//	assert.Nil(t, err)
+//	assert.NoError(t, err)
 //	m := NewFM(FMClassification, model.Params{
 //		model.InitStdDev: 0.01,
 //		model.NFactors:   8,
@@ -78,7 +78,7 @@ func TestFM_Regression_Frappe(t *testing.T) {
 	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
 	//   -learn_rate 0.01 -regular 0,0,0.0001
 	train, test, err := LoadDataFromBuiltIn("frappe")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	m := NewFM(FMRegression, model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
@@ -96,7 +96,7 @@ func TestFM_Regression_Frappe(t *testing.T) {
 //	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
 //	//   -learn_rate 0.01 -regular 0,0,0.0001
 //	train, test, err := LoadDataFromBuiltIn("ml-tag")
-//	assert.Nil(t, err)
+//	assert.NoError(t, err)
 //	m := NewFM(FMRegression, model.Params{
 //		model.InitStdDev: 0.01,
 //		model.NFactors:   8,
