@@ -22,6 +22,19 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
+      postgres:
+        image: postgres
+        ports:
+          - 5432
+        env:
+          POSTGRES_USER: gorse
+          POSTGRES_PASSWORD: gorse_pass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
       mongo:
         image: healthcheck/mongo
         ports:
@@ -74,6 +87,8 @@ jobs:
       env:
         # MySQL
         MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mysql.ports[3306] }})/
+        # Postgres
+        POSTGRES_URI: postgres://gorse:gorse_pass@localhost:${{ job.services.postgres.ports[5432] }}/
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
         # ClickHouse

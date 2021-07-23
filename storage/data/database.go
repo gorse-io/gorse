@@ -19,7 +19,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	"github.com/pkg/errors"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -97,9 +97,12 @@ type Database interface {
 	CountActiveUsers(date time.Time) (int, error)
 }
 
-const mySQLPrefix = "mysql://"
-const mongoPredix = "mongodb://"
-const redisPrefix = "redis://"
+const (
+	mySQLPrefix    = "mysql://"
+	mongoPrefix    = "mongodb://"
+	redisPrefix    = "redis://"
+	postgresPrefix = "postgres://"
+)
 
 // Open a connection to a database.
 func Open(path string) (Database, error) {
@@ -107,19 +110,27 @@ func Open(path string) (Database, error) {
 	if strings.HasPrefix(path, mySQLPrefix) {
 		name := path[len(mySQLPrefix):]
 		database := new(SQLDatabase)
-		if database.db, err = sql.Open("mysql", name); err != nil {
-			return nil, err
+		database.driver = MySQL
+		if database.client, err = sql.Open("mysql", name); err != nil {
+			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, mongoPredix) {
+	} else if strings.HasPrefix(path, postgresPrefix) {
+		database := new(SQLDatabase)
+		database.driver = Postgres
+		if database.client, err = sql.Open("postgres", path); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, mongoPrefix) {
 		// connect to database
 		database := new(MongoDB)
 		if database.client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(path)); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 		// parse DSN and extract database name
 		if cs, err := connstring.ParseAndValidate(path); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		} else {
 			database.dbName = cs.Database
 		}

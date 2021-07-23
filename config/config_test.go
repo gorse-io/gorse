@@ -22,7 +22,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	config, _, err := LoadConfig("config.toml.template")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// database configuration
 	assert.Equal(t, "redis://localhost:6379", config.Database.CacheStore)
@@ -63,7 +63,7 @@ func TestLoadConfig(t *testing.T) {
 func TestConfig_FillDefault(t *testing.T) {
 	var config Config
 	meta, err := toml.Decode("", &config)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	config.FillDefault(meta)
 	assert.Equal(t, *(*Config)(nil).LoadDefaultIfNil(), config)
 }

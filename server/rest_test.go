@@ -42,14 +42,14 @@ func newMockServer(t *testing.T) *mockServer {
 	// create mock redis server
 	var err error
 	s.dataStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.cacheStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// open database
 	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// configuration
 	s.GorseConfig = (*config.Config)(nil).LoadDefaultIfNil()
 	s.GorseConfig.Server.APIKey = apiKey
@@ -63,16 +63,16 @@ func newMockServer(t *testing.T) *mockServer {
 
 func (s *mockServer) Close(t *testing.T) {
 	err := s.DataClient.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = s.CacheClient.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	s.dataStoreServer.Close()
 	s.cacheStoreServer.Close()
 }
 
 func marshal(t *testing.T, v interface{}) string {
 	s, err := json.Marshal(v)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return string(s)
 }
 
@@ -353,7 +353,7 @@ func TestServer_List(t *testing.T) {
 			{"4", 96},
 		}
 		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, items)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
@@ -469,7 +469,7 @@ func TestServer_Measurement(t *testing.T) {
 	}
 	for _, measurement := range measurements {
 		err := s.DataClient.InsertMeasurement(measurement)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 	apitest.New().
 		Handler(s.handler).
@@ -501,7 +501,7 @@ func TestServer_GetRecommends(t *testing.T) {
 			{"7", 93},
 			{"8", 92},
 		})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
@@ -558,7 +558,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	// insert recommendation
 	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}},
@@ -580,20 +580,20 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 		{"2", 100000},
 		{"9", 1},
 	})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = s.CacheClient.SetScores(cache.SimilarItems, "2", []cache.ScoredItem{
 		{"3", 100000},
 		{"8", 1},
 		{"9", 1},
 	})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = s.CacheClient.SetScores(cache.SimilarItems, "3", []cache.ScoredItem{
 		{"4", 100000},
 		{"7", 1},
 		{"8", 1},
 		{"9", 1},
 	})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = s.CacheClient.SetScores(cache.SimilarItems, "4", []cache.ScoredItem{
 		{"1", 100000},
 		{"6", 1},
@@ -601,7 +601,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 		{"8", 1},
 		{"9", 1},
 	})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// test fallback
 	s.GorseConfig.Recommend.FallbackRecommend = "popular"
 	apitest.New().
@@ -623,15 +623,15 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 	// insert recommendation
 	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
 		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// insert latest
 	err = s.CacheClient.SetScores(cache.LatestItems, "",
 		[]cache.ScoredItem{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// insert popular
 	err = s.CacheClient.SetScores(cache.PopularItems, "",
 		[]cache.ScoredItem{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// test popular fallback
 	s.GorseConfig.Recommend.FallbackRecommend = "popular"
 	apitest.New().

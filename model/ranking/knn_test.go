@@ -20,7 +20,7 @@ import (
 
 func TestKNN_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	m := NewKNN(nil)
 	score := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, 0.311, score.NDCG, benchEpsilon)
@@ -29,7 +29,7 @@ func TestKNN_MovieLens(t *testing.T) {
 
 //func TestKNN_Pinterest(t *testing.T) {
 //	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-//	assert.Nil(t, err)
+//	assert.NoError(t, err)
 //	m := NewKNN(nil)
 //	score := m.Fit(trainSet, testSet, fitConfig)
 //	assertEpsilon(t, 0.570, score.NDCG, benchEpsilon)

@@ -28,15 +28,15 @@ func newMockRedis(t *testing.T) *mockRedis {
 	var err error
 	db := new(mockRedis)
 	db.server, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	db.Database, err = Open(redisPrefix + db.server.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return db
 }
 
 func (db *mockRedis) Close(t *testing.T) {
 	err := db.Database.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	db.server.Close()
 }
 

@@ -49,7 +49,7 @@ func (db *testMongoDatabase) GetMongoDB(t *testing.T) *MongoDB {
 
 func (db *testMongoDatabase) Close(t *testing.T) {
 	err := db.Database.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func newTestMongoDatabase(t *testing.T, dbName string) *testMongoDatabase {
@@ -58,21 +58,21 @@ func newTestMongoDatabase(t *testing.T, dbName string) *testMongoDatabase {
 	var err error
 	// create database
 	database.Database, err = Open(mongoUri)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	dbName = "gorse_" + dbName
 	databaseComm := database.GetMongoDB(t)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = databaseComm.client.Database(dbName).Drop(ctx)
 	if err == nil {
 		t.Log("delete existed database:", dbName)
 	}
 	err = database.Database.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// create schema
 	database.Database, err = Open(mongoUri + dbName + "?authSource=admin&connect=direct")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = database.Init()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return database
 }
 

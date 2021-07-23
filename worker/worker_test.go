@@ -51,7 +51,7 @@ func TestSplit(t *testing.T) {
 	nodes := []string{"a", "b", "c"}
 
 	users, err := split(userIndex, nodes, "b")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []string{"2", "5", "8"}, users)
 
 	users, err = split(userIndex, nodes, "d")
@@ -64,7 +64,7 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	defer w.Close(t)
 	// insert cache
 	err := w.cacheClient.SetScores(cache.RecommendItems, "0", []cache.ScoredItem{{"0", 0}})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.SetTime(cache.LastActiveTime, "0", time.Now().Add(-time.Hour))
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
@@ -128,14 +128,14 @@ func newMockWorker(t *testing.T) *mockWorker {
 	// create mock redis server
 	var err error
 	w.dataStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	w.cacheStoreServer, err = miniredis.Run()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// open database
 	w.dataClient, err = data.Open("redis://" + w.dataStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	w.cacheClient, err = cache.Open("redis://" + w.cacheStoreServer.Addr())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// configuration
 	w.cfg = (*config.Config)(nil).LoadDefaultIfNil()
 	w.jobs = 1
@@ -144,9 +144,9 @@ func newMockWorker(t *testing.T) *mockWorker {
 
 func (w *mockWorker) Close(t *testing.T) {
 	err := w.dataClient.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = w.cacheClient.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	w.dataStoreServer.Close()
 	w.cacheStoreServer.Close()
 }
@@ -165,13 +165,13 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "5"}, Timestamp: now.Add(-time.Hour)},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "4"}, Timestamp: now.Add(time.Hour)},
 	}, true, true)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	// create mock model
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
 
 	recommends, err := w.cacheClient.GetScores(cache.RecommendItems, "0", 0, -1)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []cache.ScoredItem{
 		{"3", 3},
 		{"2", 2},
@@ -180,13 +180,13 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	}, recommends)
 
 	read, err := w.cacheClient.GetList(cache.IgnoreItems, "0")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []string{"4", "6", "8"}, read)
 }
 
 func marshal(t *testing.T, v interface{}) string {
 	s, err := json.Marshal(v)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	return string(s)
 }
 
