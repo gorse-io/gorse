@@ -15,6 +15,7 @@
 package base
 
 import (
+	"github.com/juju/errors"
 	"sync"
 )
 
@@ -27,7 +28,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 	if nWorkers == 1 {
 		for i := 0; i < nJobs; i++ {
 			if err := worker(0, i); err != nil {
-				return err
+				return errors.Trace(err)
 			}
 		}
 	} else {
@@ -74,7 +75,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		// check errors
 		for _, err := range errs {
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 		}
 	}
@@ -133,7 +134,7 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	// check errors
 	for _, err := range errs {
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil

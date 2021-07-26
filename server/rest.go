@@ -16,6 +16,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/juju/errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -1138,11 +1139,11 @@ func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 	for _, v := range feedback {
 		err := s.CacheClient.AppendList(cache.IgnoreItems, v.UserId, v.ItemId)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		err = s.CacheClient.IncrInt(cache.GlobalMeta, cache.NumInserted)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil
