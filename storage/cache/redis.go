@@ -17,6 +17,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"github.com/juju/errors"
 	"strconv"
 	"time"
 
@@ -41,16 +42,16 @@ func (r *Redis) SetScores(prefix, name string, items []ScoredItem) error {
 	key := prefix + "/" + name
 	err := r.client.Del(ctx, key).Err()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	for _, item := range items {
 		data, err := json.Marshal(item)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		err = r.client.RPush(ctx, key, data).Err()
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil
@@ -90,7 +91,7 @@ func (r *Redis) AppendList(prefix, name string, items ...string) error {
 	for _, item := range items {
 		err := r.client.RPush(ctx, key, item).Err()
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil
@@ -128,7 +129,7 @@ func (r *Redis) SetString(prefix, name, val string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	if err := r.client.Set(ctx, key, val, 0).Err(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	return nil
 }
@@ -156,7 +157,7 @@ func (r *Redis) IncrInt(prefix, name string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	if err := r.client.Incr(ctx, key).Err(); err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	return nil
 }

@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/juju/errors"
 	"time"
 
 	"github.com/barkimedes/go-deepcopy"
@@ -546,7 +547,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			err := temp1[workerId].Inverse(a[workerId])
 			temp2[workerId].MulVec(temp1[workerId], b)
 			als.UserFactor.SetRow(userIndex, temp2[workerId].RawVector().Data)
-			return err
+			return errors.Trace(err)
 		})
 		if err != nil {
 			base.Logger().Error("failed to inverse matrix", zap.Error(err))
@@ -570,7 +571,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			err = temp1[workerId].Inverse(a[workerId])
 			temp2[workerId].MulVec(temp1[workerId], b)
 			als.ItemFactor.SetRow(itemIndex, temp2[workerId].RawVector().Data)
-			return err
+			return errors.Trace(err)
 		})
 		if err != nil {
 			base.Logger().Error("failed to inverse matrix", zap.Error(err))

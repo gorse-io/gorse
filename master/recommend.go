@@ -17,6 +17,7 @@ package master
 import (
 	"fmt"
 	"github.com/chewxy/math32"
+	"github.com/juju/errors"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
@@ -166,7 +167,7 @@ func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity
 			recommends[i] = dataset.ItemIndex.ToName(elem[i])
 		}
 		if err := m.CacheClient.SetScores(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), cache.CreateScoredItems(recommends, scores)); err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		completed <- nil
 		return nil
@@ -335,7 +336,7 @@ func (m *Master) analyze() error {
 	// pull existed click through rates
 	clickThroughRates, err := m.DataClient.GetMeasurements(ClickThroughRate, 30)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	existed := strset.New()
 	for _, clickThroughRate := range clickThroughRates {
@@ -350,7 +351,7 @@ func (m *Master) analyze() error {
 			startTime := time.Now()
 			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.ClickFeedbackTypes, m.GorseConfig.Database.ReadFeedbackType)
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 			err = m.DataClient.InsertMeasurement(data.Measurement{
 				Name:      ClickThroughRate,
@@ -358,7 +359,7 @@ func (m *Master) analyze() error {
 				Value:     float32(clickThroughRate),
 			})
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 			base.Logger().Info("update click through rate",
 				zap.String("date", date.String()),
@@ -370,7 +371,7 @@ func (m *Master) analyze() error {
 	// pull existed active users
 	yesterdayActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersYesterday, 1)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	yesterdayDatetime := time.Now().AddDate(0, 0, -1)
 	yesterdayDate := time.Date(yesterdayDatetime.Year(), yesterdayDatetime.Month(), yesterdayDatetime.Day(), 0, 0, 0, 0, time.UTC)
@@ -378,7 +379,7 @@ func (m *Master) analyze() error {
 		startTime := time.Now()
 		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -1))
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		err = m.DataClient.InsertMeasurement(data.Measurement{
 			Name:      ActiveUsersYesterday,
@@ -386,7 +387,7 @@ func (m *Master) analyze() error {
 			Value:     float32(activeUsers),
 		})
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		base.Logger().Info("update active users of yesterday",
 			zap.String("date", yesterdayDate.String()),
@@ -396,13 +397,13 @@ func (m *Master) analyze() error {
 
 	monthActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersMonthly, 1)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	if len(monthActiveUsers) == 0 || !monthActiveUsers[0].Timestamp.Equal(yesterdayDate) {
 		startTime := time.Now()
 		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -30))
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		err = m.DataClient.InsertMeasurement(data.Measurement{
 			Name:      ActiveUsersMonthly,
@@ -410,7 +411,7 @@ func (m *Master) analyze() error {
 			Value:     float32(activeUsers),
 		})
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		base.Logger().Info("update active users of this month",
 			zap.String("date", yesterdayDate.String()),

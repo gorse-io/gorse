@@ -16,6 +16,7 @@ package ranking
 
 import (
 	"fmt"
+	"github.com/juju/errors"
 	"sync"
 	"time"
 
@@ -184,7 +185,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet) error {
 	for _, name := range models {
 		m, err := NewModel(name, model.Params{model.NEpochs: searcher.numEpochs})
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0,
 			NewFitConfig().SetJobs(searcher.numJobs))

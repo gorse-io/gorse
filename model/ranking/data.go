@@ -17,6 +17,7 @@ package ranking
 import (
 	"bufio"
 	"fmt"
+	"github.com/juju/errors"
 	"os"
 	"strings"
 	"time"
@@ -347,7 +348,7 @@ func loadTest(dataset *DataSet, path string) error {
 	// Open
 	file, err := os.Open(path)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	defer file.Close()
 	// Read lines
