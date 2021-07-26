@@ -20,6 +20,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/model/click"
 	"math/rand"
@@ -406,7 +407,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		if err != nil {
 			base.Logger().Error("failed to pull user feedback",
 				zap.String("user_id", userId), zap.Error(err))
-			return err
+			return errors.Trace(err)
 		}
 		// load positive items
 		var positiveItemIndices []int
@@ -415,7 +416,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
 					zap.String("user_id", userId), zap.Error(err))
-				return err
+				return errors.Trace(err)
 			}
 			for _, itemId := range favoredItems {
 				itemIndex := m.GetItemIndex().ToNumber(itemId)
@@ -446,7 +447,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			candidateSet := strset.New(candidateItems...)
 			latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Recommend.ExploreLatestNum-1)
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 			for _, latestItem := range latestItems {
 				if !candidateSet.Has(latestItem.ItemId) && !historySet.Has(latestItem.ItemId) {
@@ -459,14 +460,14 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		if w.clickModel != nil {
 			result, err = w.rankByClickTroughRate(userId, candidateItems)
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 		} else {
 			result = w.randomInsertLatestItem(candidateItems, candidateScores)
 		}
 		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, result); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
-			return err
+			return errors.Trace(err)
 		}
 		if err = w.cacheClient.SetString(cache.LastUpdateRecommendTime, userId, base.Now()); err != nil {
 			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
@@ -474,7 +475,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		// refresh cache
 		err = w.refreshCache(userId)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		completed <- nil
 		return nil
@@ -570,17 +571,17 @@ func (w *Worker) refreshCache(userId string) error {
 	if err == nil {
 		timeLimit = &recommendTime
 	} else {
-		return err
+		return errors.Trace(err)
 	}
 	// clear cache
 	err = w.cacheClient.ClearList(cache.IgnoreItems, userId)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	// load cache
 	feedback, err := w.dataClient.GetUserFeedback(userId)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	var items []string
 	for _, v := range feedback {
@@ -590,7 +591,7 @@ func (w *Worker) refreshCache(userId string) error {
 	}
 	err = w.cacheClient.AppendList(cache.IgnoreItems, userId, items...)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	return nil
 }

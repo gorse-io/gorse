@@ -17,6 +17,7 @@ package master
 import (
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
@@ -334,7 +335,7 @@ func (m *Master) loadRankingDataset() error {
 	rankingDataset, rankingItems, rankingFeedbacks, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
 		m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(rankingDataset.UserCount())); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
@@ -362,7 +363,7 @@ func (m *Master) loadClickDataset() error {
 		m.GorseConfig.Database.ClickFeedbackTypes,
 		m.GorseConfig.Database.ReadFeedbackType)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	m.clickModelMutex.Lock()
 	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
