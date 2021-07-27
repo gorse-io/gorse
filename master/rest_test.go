@@ -79,6 +79,32 @@ func marshal(t *testing.T, v interface{}) string {
 	return string(s)
 }
 
+func TestMaster_ExportUsers(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// insert users
+	users := []data.User{
+		{UserId: "1", Labels: []string{"a", "b"}},
+		{UserId: "2", Labels: []string{"b", "c"}},
+		{UserId: "3", Labels: []string{"c", "d"}},
+	}
+	for _, user := range users {
+		err := s.DataClient.InsertUser(user)
+		assert.NoError(t, err)
+	}
+	// send request
+	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	w := httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment;filename=users.csv", w.Header().Get("Content-Disposition"))
+	assert.Equal(t, "user_id,labels\r\n"+
+		"1,a|b\r\n"+
+		"2,b|c\r\n"+
+		"3,c|d\r\n", w.Body.String())
+}
+
 func TestMaster_ExportItems(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
@@ -125,6 +151,75 @@ func TestMaster_ExportFeedback(t *testing.T) {
 		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n"+
 		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n"+
 		"share,1,4,0001-01-01 00:00:00 +0000 UTC\r\n", w.Body.String())
+}
+
+func TestMaster_ImportUsers(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// send request
+	buf := bytes.NewBuffer(nil)
+	writer := multipart.NewWriter(buf)
+	err := writer.WriteField("has-header", "false")
+	assert.NoError(t, err)
+	err = writer.WriteField("sep", "\t")
+	assert.NoError(t, err)
+	err = writer.WriteField("label-sep", "::")
+	assert.NoError(t, err)
+	err = writer.WriteField("format", "lu")
+	assert.NoError(t, err)
+	file, err := writer.CreateFormFile("file", "users.csv")
+	assert.NoError(t, err)
+	_, err = file.Write([]byte("a::b\t1\n" +
+		"b::c\t2\n" +
+		"c::d\t3\n"))
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	// check
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
+	_, items, err := s.DataClient.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []data.User{
+		{UserId: "1", Labels: []string{"a", "b"}},
+		{UserId: "2", Labels: []string{"b", "c"}},
+		{UserId: "3", Labels: []string{"c", "d"}},
+	}, items)
+}
+
+func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// send request
+	buf := bytes.NewBuffer(nil)
+	writer := multipart.NewWriter(buf)
+	file, err := writer.CreateFormFile("file", "users.csv")
+	assert.NoError(t, err)
+	_, err = file.Write([]byte("user_id,labels\r\n" +
+		"1,a|b\r\n" +
+		"2,b|c\r\n" +
+		"3,c|d\r\n"))
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	// check
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
+	_, items, err := s.DataClient.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []data.User{
+		{UserId: "1", Labels: []string{"a", "b"}},
+		{UserId: "2", Labels: []string{"b", "c"}},
+		{UserId: "3", Labels: []string{"c", "d"}},
+	}, items)
 }
 
 func TestMaster_ImportItems(t *testing.T) {

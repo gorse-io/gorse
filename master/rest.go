@@ -126,6 +126,7 @@ func (m *Master) StartHttpServer() {
 		base.Logger().Fatal("failed to load statik files", zap.Error(err))
 	}
 	http.Handle("/", http.FileServer(&SinglePageAppFileSystem{statikFS}))
+	http.HandleFunc("/api/bulk/users", m.importExportUsers)
 	http.HandleFunc("/api/bulk/items", m.importExportItems)
 	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
 	m.RestServer.StartHttpServer()
@@ -357,6 +358,111 @@ func (m *Master) getNeighbors(request *restful.Request, response *restful.Respon
 	m.getList(cache.SimilarItems, itemId, request, response)
 }
 
+func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case http.MethodGet:
+		var err error
+		response.Header().Set("Content-Type", "text/csv")
+		response.Header().Set("Content-Disposition", "attachment;filename=users.csv")
+		// write header
+		if _, err = response.Write([]byte("user_id,labels\r\n")); err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
+		// write rows
+		var cursor string
+		const batchSize = 1024
+		for {
+			var users []data.User
+			cursor, users, err = m.DataClient.GetUsers(cursor, batchSize)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			}
+			for _, user := range users {
+				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
+					base.Escape(user.UserId), base.Escape(strings.Join(user.Labels, "|"))))); err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
+			}
+			if cursor == "" {
+				break
+			}
+		}
+	case http.MethodPost:
+		hasHeader := formValue(request, "has-header", "true") == "true"
+		sep := formValue(request, "sep", ",")
+		// field separator must be a single character
+		if len(sep) != 1 {
+			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
+			return
+		}
+		labelSep := formValue(request, "label-sep", "|")
+		fmtString := formValue(request, "format", "ul")
+		file, _, err := request.FormFile("file")
+		if err != nil {
+			server.BadRequest(restful.NewResponse(response), err)
+			return
+		}
+		defer file.Close()
+		m.importUsers(response, file, hasHeader, sep, labelSep, fmtString)
+	}
+}
+
+func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
+	lineCount := 0
+	timeStart := time.Now()
+	//users := make([]data.User, 0)
+	err := base.ReadLines(bufio.NewScanner(file), sep[0], func(lineNumber int, splits []string) bool {
+		var err error
+		// skip header
+		if hasHeader {
+			hasHeader = false
+			return true
+		}
+		splits, err = format(fmtString, "ul", splits, lineNumber)
+		if err != nil {
+			server.BadRequest(restful.NewResponse(response), err)
+			return false
+		}
+		// 1. user id
+		if err = base.ValidateId(splits[0]); err != nil {
+			server.BadRequest(restful.NewResponse(response),
+				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+			return false
+		}
+		user := data.User{UserId: splits[0]}
+		// 2. labels
+		if splits[1] != "" {
+			user.Labels = strings.Split(splits[1], labelSep)
+			for _, label := range user.Labels {
+				if err = base.ValidateLabel(label); err != nil {
+					server.BadRequest(restful.NewResponse(response),
+						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
+					return false
+				}
+			}
+		}
+		err = m.DataClient.InsertUser(user)
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return false
+		}
+		lineCount++
+		return true
+	})
+	if err != nil {
+		server.BadRequest(restful.NewResponse(response), err)
+		return
+	}
+	timeUsed := time.Since(timeStart)
+	base.Logger().Info("complete import users",
+		zap.Duration("time_used", timeUsed),
+		zap.Int("num_users", lineCount))
+	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
+}
+
 func (m *Master) importExportItems(response http.ResponseWriter, request *http.Request) {
 	switch request.Method {
 	case http.MethodGet:
@@ -447,7 +553,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 			for _, label := range item.Labels {
 				if err = base.ValidateLabel(label); err != nil {
 					server.BadRequest(restful.NewResponse(response),
-						fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
 					return false
 				}
 			}
