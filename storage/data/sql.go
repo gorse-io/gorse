@@ -52,7 +52,7 @@ func (d *SQLDatabase) Init() error {
 			"labels json NOT NULL," +
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY(item_id)" +
-			")"); err != nil {
+			")  ENGINE=InnoDB"); err != nil {
 			return errors.Trace(err)
 		}
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS users (" +
@@ -61,7 +61,7 @@ func (d *SQLDatabase) Init() error {
 			"subscribe json NOT NULL," +
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY (user_id)" +
-			")"); err != nil {
+			")  ENGINE=InnoDB"); err != nil {
 			return errors.Trace(err)
 		}
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS feedback (" +
@@ -72,7 +72,7 @@ func (d *SQLDatabase) Init() error {
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY(feedback_type, user_id, item_id)," +
 			"INDEX (user_id)" +
-			")"); err != nil {
+			")  ENGINE=InnoDB"); err != nil {
 			return errors.Trace(err)
 		}
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
@@ -81,7 +81,7 @@ func (d *SQLDatabase) Init() error {
 			"value double NOT NULL," +
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY(name, time_stamp)" +
-			")"); err != nil {
+			")  ENGINE=InnoDB"); err != nil {
 			return errors.Trace(err)
 		}
 		// change settings
