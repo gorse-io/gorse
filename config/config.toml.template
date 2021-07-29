@@ -1,6 +1,10 @@
 # This section declares settings for the database.
 [database]
 # database for caching (support Redis only)
+# Tcp connection:
+# redis://<user>:<password>@<host>:<port>/<db_number>
+# Unix connection:
+# unix://<user>:<password>@</path/to/redis.sock>?db=<db_number>
 cache_store = "redis://localhost:6379"
 # database for persist data (support MySQL/MongoDB)
 data_store = "mysql://root@tcp(localhost:3306)/gorse?parseTime=true"

@@ -98,9 +98,12 @@ const redisPrefix = "redis://"
 // Open a connection to a database.
 func Open(path string) (Database, error) {
 	if strings.HasPrefix(path, redisPrefix) {
-		addr := path[len(redisPrefix):]
+		opt, err := redis.ParseURL(path)
+		if err != nil {
+			return nil, err
+		}
 		database := new(Redis)
-		database.client = redis.NewClient(&redis.Options{Addr: addr})
+		database.client = redis.NewClient(opt)
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
