@@ -28,6 +28,12 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 		prediction := estimator.InternalPredict(labels)
 		sum += (target - prediction) * (target - prediction)
 	}
+	if 0 == testSet.Count() {
+		return Score{
+			Task: FMRegression,
+			RMSE: 0,
+		}
+	}
 	return Score{
 		Task: FMRegression,
 		RMSE: math32.Sqrt(sum / float32(testSet.Count())),
@@ -43,6 +49,12 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 		prediction := estimator.InternalPredict(labels)
 		if target*prediction > 0 {
 			correct++
+		}
+	}
+	if 0 == testSet.Count() {
+		return Score{
+			Task:      FMClassification,
+			Precision: 0,
 		}
 	}
 	return Score{
