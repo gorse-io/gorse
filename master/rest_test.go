@@ -383,11 +383,13 @@ func TestMaster_GetStats(t *testing.T) {
 	// set stats
 	s.rankingScore = ranking.Score{Precision: 0.1}
 	s.clickScore = click.Score{Precision: 0.2}
-	err := s.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, "123")
+	err := s.DataClient.InsertMeasurement(data.Measurement{Name: NumUsers, Timestamp: time.Now(), Value: 123})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, "234")
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumItems, Timestamp: time.Now(), Value: 234})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, "345")
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumPositiveFeedbacks, Timestamp: time.Now(), Value: 345})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumNegativeFeedbacks, Timestamp: time.Now(), Value: 456})
 	assert.NoError(t, err)
 	// get stats
 	apitest.New().
@@ -396,9 +398,10 @@ func TestMaster_GetStats(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, Status{
-			NumUsers:       "234",
-			NumItems:       "123",
-			NumPosFeedback: "345",
+			NumUsers:       123,
+			NumItems:       234,
+			NumPosFeedback: 345,
+			NumNegFeedback: 456,
 			RankingScore:   0.1,
 			ClickScore:     0.2,
 		})).

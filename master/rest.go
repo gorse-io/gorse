@@ -158,33 +158,43 @@ func (m *Master) getConfig(request *restful.Request, response *restful.Response)
 }
 
 type Status struct {
-	NumUsers       string
-	NumItems       string
-	NumPosFeedback string
+	NumUsers       int
+	NumItems       int
+	NumPosFeedback int
+	NumNegFeedback int
 	RankingScore   float32
 	ClickScore     float32
 }
 
 func (m *Master) getStats(request *restful.Request, response *restful.Response) {
 	status := Status{}
-	var err error
 	// read number of users
-	status.NumUsers, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumUsers)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if measurements, err := m.DataClient.GetMeasurements(NumUsers, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumUsers = int(measurements[0].Value)
 	}
 	// read number of items
-	status.NumItems, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumItems)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if measurements, err := m.DataClient.GetMeasurements(NumItems, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumItems = int(measurements[0].Value)
 	}
 	// read number of positive feedback
-	status.NumPosFeedback, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumPositiveFeedback)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if measurements, err := m.DataClient.GetMeasurements(NumPositiveFeedbacks, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumPosFeedback = int(measurements[0].Value)
+	}
+	// read number of negative feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumNegativeFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumNegFeedback = int(measurements[0].Value)
 	}
 	status.RankingScore = m.rankingScore.Precision
 	status.ClickScore = m.clickScore.Precision

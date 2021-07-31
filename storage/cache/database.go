@@ -35,9 +35,6 @@ const (
 	// GlobalMeta is global meta information
 	GlobalMeta              = "global_meta"
 	NumInserted             = "num_inserted"
-	NumUsers                = "num_users"
-	NumItems                = "num_items"
-	NumPositiveFeedback     = "num_pos_feedback"
 	LastUpdatePopularTime   = "last_update_popular_time"
 	LastUpdateLatestTime    = "last_update_latest_time"
 	LastUpdateNeighborTime  = "last_update_similar_time"

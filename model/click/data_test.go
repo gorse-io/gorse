@@ -103,12 +103,18 @@ func TestLoadDataFromDatabase(t *testing.T) {
 	assert.Equal(t, numUsers*numItems, dataset.Count())
 	assert.Equal(t, numUsers, dataset.UserCount())
 	assert.Equal(t, numItems, dataset.ItemCount())
+	assert.Equal(t, numUsers*numItems/2, dataset.PositiveCount)
+	assert.Equal(t, numUsers*numItems/2, dataset.NegativeCount)
 	// split
 	train, test := dataset.Split(0.2, 0)
 	assert.Equal(t, numUsers, train.UserCount())
 	assert.Equal(t, numItems, train.ItemCount())
 	assert.Equal(t, 24, train.Count())
+	assert.Equal(t, 12, train.PositiveCount)
+	assert.Equal(t, 12, train.NegativeCount)
 	assert.Equal(t, numUsers, test.UserCount())
 	assert.Equal(t, numItems, test.ItemCount())
 	assert.Equal(t, 6, test.Count())
+	assert.Equal(t, 3, test.PositiveCount)
+	assert.Equal(t, 3, test.NegativeCount)
 }

@@ -33,10 +33,12 @@ const batchSize = 1024
 
 // Dataset for click-through-rate models.
 type Dataset struct {
-	Index  UnifiedIndex
-	Labels [][]int
-	Inputs [][]int
-	Target []float32
+	Index         UnifiedIndex
+	Labels        [][]int
+	Inputs        [][]int
+	Target        []float32
+	PositiveCount int
+	NegativeCount int
 }
 
 // UserCount returns the number of users.
@@ -233,9 +235,11 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 				// positive or negative
 				if v.FeedbackType == readType {
 					dataSet.Target = append(dataSet.Target, -1)
+					dataSet.NegativeCount++
 				} else {
 					positiveSet[userId].Add(int32(itemId))
 					dataSet.Target = append(dataSet.Target, 1)
+					dataSet.PositiveCount++
 				}
 			}
 		}
@@ -266,10 +270,20 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			// add samples into test set
 			testSet.Inputs = append(testSet.Inputs, dataset.Inputs[i])
 			testSet.Target = append(testSet.Target, dataset.Target[i])
+			if dataset.Target[i] > 0 {
+				testSet.PositiveCount++
+			} else {
+				testSet.NegativeCount++
+			}
 		} else {
 			// add samples into train set
 			trainSet.Inputs = append(trainSet.Inputs, dataset.Inputs[i])
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
+			if dataset.Target[i] > 0 {
+				trainSet.PositiveCount++
+			} else {
+				trainSet.NegativeCount++
+			}
 		}
 	}
 	return trainSet, testSet

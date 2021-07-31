@@ -26,7 +26,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -37,6 +36,15 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+)
+
+const (
+	NumUsers             = "NumUsers"
+	NumItems             = "NumItems"
+	NumUserLabels        = "NumUserLabels"
+	NumItemLabels        = "NumItemLabels"
+	NumPositiveFeedbacks = "NumPositiveFeedbacks"
+	NumNegativeFeedbacks = "NumNegativeFeedbacks"
 )
 
 // Master is the master node.
@@ -337,14 +345,21 @@ func (m *Master) loadRankingDataset() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(rankingDataset.UserCount())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
+	loadDataTime := time.Now()
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumUsers, Timestamp: loadDataTime, Value: float32(rankingDataset.UserCount()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of users", zap.Error(err))
 	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, strconv.Itoa(rankingDataset.ItemCount())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumItems, Timestamp: loadDataTime, Value: float32(rankingDataset.ItemCount()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, strconv.Itoa(rankingDataset.Count())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumPositiveFeedbacks, Timestamp: loadDataTime, Value: float32(rankingDataset.Count()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
 	m.rankingModelMutex.Lock()
 	m.rankingItems = rankingItems
@@ -364,6 +379,22 @@ func (m *Master) loadClickDataset() error {
 		m.GorseConfig.Database.ReadFeedbackType)
 	if err != nil {
 		return errors.Trace(err)
+	}
+	loadDataTime := time.Now()
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumUserLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountUserLabels()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of user labels", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumItemLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountItemLabels()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of item labels", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumNegativeFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
+	}); err != nil {
+		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
 	m.clickModelMutex.Lock()
 	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
