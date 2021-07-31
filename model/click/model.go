@@ -33,16 +33,20 @@ type Score struct {
 	Task      FMTask
 	RMSE      float32
 	Precision float32
+	Recall    float32
 }
 
-func (score Score) GetName() string {
+func (score Score) ZapFields() []zap.Field {
 	switch score.Task {
 	case FMRegression:
-		return "RMSE"
+		return []zap.Field{zap.Float32("RMSE", score.RMSE)}
 	case FMClassification:
-		return "Precision"
+		return []zap.Field{
+			zap.Float32("Precision", score.Precision),
+			zap.Float32("Recall", score.Recall),
+		}
 	default:
-		return "NaN"
+		return nil
 	}
 }
 
@@ -252,9 +256,8 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 	}
 	evalTime := time.Since(evalStart)
-	base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs),
-		zap.String("eval_time", evalTime.String()),
-		zap.Float32(score.GetName(), score.GetValue()))
+	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
+	base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
 	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
@@ -306,8 +309,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		fitTime := time.Since(fitStart)
 		// Cross validation
 		if epoch%config.Verbose == 0 || epoch == fm.nEpochs {
-			evalStart := time.Now()
-			var score Score
+			evalStart = time.Now()
 			switch fm.Task {
 			case FMRegression:
 				score = EvaluateRegression(fm, testSet)
@@ -316,12 +318,13 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 			default:
 				base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 			}
-			evalTime := time.Since(evalStart)
-			base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs),
+			evalTime = time.Since(evalStart)
+			fields = append([]zap.Field{
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
-				zap.Float32(score.GetName(), score.GetValue()))
+			}, score.ZapFields()...)
+			base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				base.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
@@ -334,8 +337,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	fm.V = snapshots.BestWeights[0].([][]float32)
 	fm.W = snapshots.BestWeights[1].([]float32)
 	fm.B = snapshots.BestWeights[2].(float32)
-	base.Logger().Info("fit fm complete",
-		zap.Float32(snapshots.BestScore.GetName(), snapshots.BestScore.GetValue()))
+	base.Logger().Info("fit fm complete", snapshots.BestScore.ZapFields()...)
 	return snapshots.BestScore
 }
 

@@ -42,13 +42,15 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 
 // EvaluateClassification evaluates factorization machines in classification task.
 func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Score {
-	correct := float32(0)
 	// For all UserFeedback
+	var posPrediction, negPrediction []float32
 	for i := 0; i < testSet.Count(); i++ {
 		labels, target := testSet.Get(i)
 		prediction := estimator.InternalPredict(labels)
-		if target*prediction > 0 {
-			correct++
+		if target > 0 {
+			posPrediction = append(posPrediction, prediction)
+		} else {
+			negPrediction = append(negPrediction, prediction)
 		}
 	}
 	if 0 == testSet.Count() {
@@ -59,8 +61,52 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 	}
 	return Score{
 		Task:      FMClassification,
-		Precision: correct / float32(testSet.Count()),
+		Precision: Precision(posPrediction, negPrediction),
+		Recall:    Recall(posPrediction, negPrediction),
+		Accuracy:  Accuracy(posPrediction, negPrediction),
 	}
+}
+
+func Precision(posPrediction, negPrediction []float32) float32 {
+	var tp, fp float32
+	for _, p := range posPrediction {
+		if p > 0 { // true positive
+			tp++
+		}
+	}
+	for _, p := range negPrediction {
+		if p > 0 { // false positive
+			fp++
+		}
+	}
+	return tp / (tp + fp)
+}
+
+func Recall(posPrediction, _ []float32) float32 {
+	var tp, fn float32
+	for _, p := range posPrediction {
+		if p > 0 { // true positive
+			tp++
+		} else { // false negative
+			fn++
+		}
+	}
+	return tp / (tp + fn)
+}
+
+func Accuracy(posPrediction, negPrediction []float32) float32 {
+	var correct float32
+	for _, p := range posPrediction {
+		if p > 0 {
+			correct++
+		}
+	}
+	for _, p := range negPrediction {
+		if p < 0 {
+			correct++
+		}
+	}
+	return correct / float32(len(posPrediction)+len(negPrediction))
 }
 
 // SnapshotManger manages the best snapshot.

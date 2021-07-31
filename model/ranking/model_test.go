@@ -17,14 +17,13 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
 )
 
 const (
-	benchEpsilon = 0.01
-	incrEpsilon  = 1e-5
+	benchDelta = 0.01
+	incrDelta  = 1e-5
 )
 
 var fitConfig = &FitConfig{
@@ -32,12 +31,6 @@ var fitConfig = &FitConfig{
 	Verbose:    1,
 	Candidates: 100,
 	TopK:       10,
-}
-
-func assertEpsilon(t *testing.T, expect, actual, eps float32) {
-	if math32.Abs(expect-actual) > eps {
-		t.Fatalf("|%v - %v| > %v", expect, actual, eps)
-	}
 }
 
 // He, Xiangnan, et al. "Neural collaborative filtering." Proceedings
@@ -55,7 +48,7 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitStdDev: 0.001,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
+	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
@@ -63,7 +56,7 @@ func TestBPR_MovieLens(t *testing.T) {
 	// test increment test
 	m.nEpochs = 0
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
+	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
 	// test clear
 	m.Clear()
@@ -83,7 +76,7 @@ func TestBPR_MovieLens(t *testing.T) {
 //		model.InitStdDev: 0.001,
 //	})
 //	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.53, score.NDCG, benchEpsilon)
+//	assertEpsilon(t, 0.53, score.NDCG, benchDelta)
 //}
 
 func TestALS_MovieLens(t *testing.T) {
@@ -96,7 +89,7 @@ func TestALS_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
+	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
@@ -104,7 +97,7 @@ func TestALS_MovieLens(t *testing.T) {
 	// test increment test
 	m.nEpochs = 0
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
+	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
 	// test clear
 	m.Clear()
@@ -123,7 +116,7 @@ func TestALS_MovieLens(t *testing.T) {
 //		model.Alpha:      0.001,
 //	})
 //	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
+//	assertEpsilon(t, 0.52, score.NDCG, benchDelta)
 //}
 
 func TestCCD_MovieLens(t *testing.T) {
@@ -136,7 +129,7 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
+	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
@@ -144,7 +137,7 @@ func TestCCD_MovieLens(t *testing.T) {
 	// test increment test
 	m.nEpochs = 0
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
+	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
 	// test clear
 	m.Clear()
@@ -163,5 +156,5 @@ func TestCCD_MovieLens(t *testing.T) {
 //		model.Alpha:      0.001,
 //	})
 //	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
+//	assertEpsilon(t, 0.52, score.NDCG, benchDelta)
 //}

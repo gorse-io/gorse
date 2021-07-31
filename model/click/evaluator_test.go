@@ -11,26 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ranking
+
+package click
 
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestKNN_MovieLens(t *testing.T) {
-	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
-	assert.NoError(t, err)
-	m := NewKNN(nil)
-	score := m.Fit(trainSet, testSet, fitConfig)
-	assert.InDelta(t, 0.311, score.NDCG, benchDelta)
-	assert.Equal(t, m.Predict([]string{"1"}, "1"), m.InternalPredict([]int{1}, 1))
+func TestPrecision(t *testing.T) {
+	posPrediction := []float32{1, 1, 1}
+	negPrediction := []float32{1}
+	precision := Precision(posPrediction, negPrediction)
+	assert.Equal(t, float32(0.75), precision)
 }
 
-//func TestKNN_Pinterest(t *testing.T) {
-//	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-//	assert.NoError(t, err)
-//	m := NewKNN(nil)
-//	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.570, score.NDCG, benchDelta)
-//}
+func TestRecall(t *testing.T) {
+	posPrediction := []float32{1, -1, -1, -1}
+	recall := Recall(posPrediction, nil)
+	assert.Equal(t, float32(0.25), recall)
+}
+
+func TestAccuracy(t *testing.T) {
+	posPrediction := []float32{1, 1, -1, -1}
+	negPrediction := []float32{1, 1, -1, -1}
+	accuracy := Accuracy(posPrediction, negPrediction)
+	assert.Equal(t, float32(0.5), accuracy)
+}

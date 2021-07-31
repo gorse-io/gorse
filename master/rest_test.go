@@ -402,8 +402,8 @@ func TestMaster_GetStats(t *testing.T) {
 			NumItems:       234,
 			NumPosFeedback: 345,
 			NumNegFeedback: 456,
-			RankingScore:   0.1,
-			ClickScore:     0.2,
+			RankingScore:   ranking.Score{Precision: 0.1},
+			ClickScore:     click.Score{Precision: 0.2},
 		})).
 		End()
 }

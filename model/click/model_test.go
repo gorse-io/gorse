@@ -16,20 +16,13 @@ package click
 import (
 	"testing"
 
-	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
 )
 
 const (
-	epsilon = 0.01
+	delta = 0.01
 )
-
-func assertEpsilon(t *testing.T, expect, actual float32) {
-	if math32.Abs(expect-actual) > epsilon {
-		t.Fatalf("|%v - %v| > %v", expect, actual, epsilon)
-	}
-}
 
 var fitConfig = &FitConfig{
 	Jobs:    1,
@@ -51,7 +44,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 		model.Reg:        0.0001,
 	})
 	score := m.Fit(train, test, fitConfig)
-	assertEpsilon(t, 0.91684, score.Precision)
+	assert.InDelta(t, 0.91684, score.Accuracy, delta)
 }
 
 //func TestFM_Classification_MovieLens(t *testing.T) {
@@ -87,7 +80,7 @@ func TestFM_Regression_Frappe(t *testing.T) {
 		model.Reg:        0.0001,
 	})
 	score := m.Fit(train, test, fitConfig)
-	assertEpsilon(t, 0.494435, score.RMSE)
+	assert.InDelta(t, 0.494435, score.RMSE, delta)
 }
 
 //func TestFM_Regression_MovieLens(t *testing.T) {

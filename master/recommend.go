@@ -459,7 +459,8 @@ func (m *Master) fitClickModel(
 		m.clickScore = bestClickScore
 		shouldFit = true
 		base.Logger().Info("find better click model",
-			zap.Float32("score", bestClickScore.Precision),
+			zap.Float32("Precision", bestClickScore.Precision),
+			zap.Float32("Recall", bestClickScore.Recall),
 			zap.Any("params", m.clickModel.GetParams()))
 	}
 	clickModel := m.clickModel

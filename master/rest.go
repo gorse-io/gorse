@@ -17,6 +17,8 @@ package master
 import (
 	"bufio"
 	"fmt"
+	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"io"
 	"net/http"
 	"os"
@@ -162,8 +164,8 @@ type Status struct {
 	NumItems       int
 	NumPosFeedback int
 	NumNegFeedback int
-	RankingScore   float32
-	ClickScore     float32
+	RankingScore   ranking.Score
+	ClickScore     click.Score
 }
 
 func (m *Master) getStats(request *restful.Request, response *restful.Response) {
@@ -196,8 +198,8 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	} else if len(measurements) > 0 {
 		status.NumNegFeedback = int(measurements[0].Value)
 	}
-	status.RankingScore = m.rankingScore.Precision
-	status.ClickScore = m.clickScore.Precision
+	status.RankingScore = m.rankingScore
+	status.ClickScore = m.clickScore
 	server.Ok(response, status)
 }
 
