@@ -469,6 +469,9 @@ func testTimeLimit(t *testing.T, db Database) {
 
 func testGetClickThroughRate(t *testing.T, db Database) {
 	// insert feedback
+	// user 1: star(1,1), like(1,1), read(1,1), read(1,2), read(1,3), read(1,4) - 0.25
+	// user 2: star(2,1), star(2,3), read(2,1), read(2,2) - 0.5
+	// user 3: read(3,2), star(3,3) - 0.0
 	err := db.BatchInsertFeedback([]Feedback{
 		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},

@@ -349,7 +349,7 @@ func (m *Master) analyze() error {
 		if !existed.Has(date.String()) {
 			// click through clickThroughRate
 			startTime := time.Now()
-			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.ClickFeedbackTypes, m.GorseConfig.Database.ReadFeedbackType)
+			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.PositiveFeedbackType, m.GorseConfig.Database.ReadFeedbackType)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -545,7 +545,7 @@ func (m *Master) searchClickModel(
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty click dataset",
-			zap.Strings("click_feedback_type", m.GorseConfig.Database.ClickFeedbackTypes))
+			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 		return
 	} else if numUsers == lastNumUsers &&
 		numItems == lastNumItems &&
