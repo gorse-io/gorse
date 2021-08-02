@@ -121,6 +121,8 @@ func testUsers(t *testing.T, db Database) {
 	// test override
 	err = db.InsertUser(User{UserId: "1", Comment: "override"})
 	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
 	user, err = db.GetUser("1")
 	assert.NoError(t, err)
 	assert.Equal(t, "override", user.Comment)
@@ -131,7 +133,7 @@ func testFeedback(t *testing.T, db Database) {
 	err := db.InsertUser(User{"0", []string{"a"}, []string{"x"}, "comment"})
 	assert.NoError(t, err)
 	// items that already exists
-	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}})
+	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)})
 	assert.NoError(t, err)
 	// Insert ret
 	feedback := []Feedback{
@@ -156,12 +158,19 @@ func testFeedback(t *testing.T, db Database) {
 	ret = getFeedback(t, db)
 	assert.Equal(t, len(feedback)+2, len(ret))
 	// Get items
+	err = db.Optimize()
+	assert.NoError(t, err)
 	items := getItems(t, db)
 	assert.Equal(t, 5, len(items))
 	for i, item := range items {
 		assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
-			assert.Zero(t, item.Timestamp)
+			if isClickHouse(db) {
+				// ClickHouse returns 1970-01-01 as zero date.
+				assert.Zero(t, item.Timestamp.Unix())
+			} else {
+				assert.Zero(t, item.Timestamp)
+			}
 			assert.Empty(t, item.Labels)
 			assert.Empty(t, item.Comment)
 		}
@@ -184,7 +193,7 @@ func testFeedback(t *testing.T, db Database) {
 	// check items that already exists
 	item, err := db.GetItem("0")
 	assert.NoError(t, err)
-	assert.Equal(t, Item{ItemId: "0", Labels: []string{"b"}}, item)
+	assert.Equal(t, Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
 	ret, err = db.GetUserFeedback("2", positiveFeedbackType)
 	assert.NoError(t, err)
@@ -210,6 +219,8 @@ func testFeedback(t *testing.T, db Database) {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "0"},
 		Comment:     "override",
 	}, true, true)
+	assert.NoError(t, err)
+	err = db.Optimize()
 	assert.NoError(t, err)
 	ret, err = db.GetUserFeedback("0", positiveFeedbackType)
 	assert.NoError(t, err)
@@ -268,10 +279,14 @@ func testItems(t *testing.T, db Database) {
 	// Delete item
 	err = db.DeleteItem("0")
 	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
 	_, err = db.GetItem("0")
 	assert.ErrorIs(t, err, ErrItemNotExist)
 	// test override
 	err = db.InsertItem(Item{ItemId: "2", Comment: "override"})
+	assert.NoError(t, err)
+	err = db.Optimize()
 	assert.NoError(t, err)
 	item, err := db.GetItem("2")
 	assert.NoError(t, err)
@@ -347,14 +362,22 @@ func testDeleteFeedback(t *testing.T, db Database) {
 	// delete user-item feedback
 	deleteCount, err := db.DeleteUserItemFeedback("2", "3")
 	assert.NoError(t, err)
-	assert.Equal(t, 3, deleteCount)
+	if !isClickHouse(db) {
+		// RowAffected isn't supported by ClickHouse,
+		assert.Equal(t, 3, deleteCount)
+	}
+	err = db.Optimize()
+	assert.NoError(t, err)
 	ret, err = db.GetUserItemFeedback("2", "3")
 	assert.NoError(t, err)
 	assert.Empty(t, ret)
 	feedbackType1 := "type1"
 	deleteCount, err = db.DeleteUserItemFeedback("1", "3", feedbackType1)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, deleteCount)
+	if !isClickHouse(db) {
+		// RowAffected isn't supported by ClickHouse,
+		assert.Equal(t, 1, deleteCount)
+	}
 	ret, err = db.GetUserItemFeedback("1", "3", feedbackType2)
 	assert.NoError(t, err)
 	assert.Empty(t, ret)
@@ -479,4 +502,12 @@ func testCountActiveUsers(t *testing.T, db Database) {
 	count, err := db.CountActiveUsers(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, count)
+}
+
+func isClickHouse(db Database) bool {
+	if sqlDB, isSQL := db.(*SQLDatabase); !isSQL {
+		return false
+	} else {
+		return sqlDB.driver == ClickHouse
+	}
 }
