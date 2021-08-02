@@ -37,6 +37,11 @@ type Redis struct {
 	client *redis.Client
 }
 
+// Optimize is used by ClickHouse only.
+func (r *Redis) Optimize() error {
+	return nil
+}
+
 // Init does nothing.
 func (r *Redis) Init() error {
 	return nil

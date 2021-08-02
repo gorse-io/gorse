@@ -46,7 +46,7 @@ jobs:
       clickhouse:
         image: yandex/clickhouse-server
         ports:
-          - 9000
+          - 8123
 
     steps:
     - name: Set up dataset
@@ -92,7 +92,7 @@ jobs:
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
         # ClickHouse
-        CLICK_HOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[9000] }}
+        CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
