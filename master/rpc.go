@@ -86,14 +86,14 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	// save ranking model version
 	m.rankingModelMutex.RLock()
 	var rankingModelVersion int64
-	if m.rankingModel != nil {
+	if m.rankingModel != nil && !m.rankingModel.Invalid() {
 		rankingModelVersion = m.rankingModelVersion
 	}
 	m.rankingModelMutex.RUnlock()
 	// save click model version
 	m.clickModelMutex.RLock()
 	var clickModelVersion int64
-	if m.clickModel != nil {
+	if m.clickModel != nil && !m.clickModel.Invalid() {
 		clickModelVersion = m.clickModelVersion
 	}
 	m.clickModelMutex.RUnlock()
@@ -126,7 +126,7 @@ func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol
 	m.rankingModelMutex.RLock()
 	defer m.rankingModelMutex.RUnlock()
 	// skip empty model
-	if m.rankingModel.Invalid() {
+	if m.rankingModel == nil || m.rankingModel.Invalid() {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
@@ -146,7 +146,7 @@ func (m *Master) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.M
 	m.clickModelMutex.RLock()
 	defer m.clickModelMutex.RUnlock()
 	// skip empty model
-	if m.clickModel.Invalid() {
+	if m.clickModel == nil || m.clickModel.Invalid() {
 		return &protocol.Model{Version: 0}, nil
 	}
 	// encode model
