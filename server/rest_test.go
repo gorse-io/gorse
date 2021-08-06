@@ -336,9 +336,9 @@ func TestServer_List(t *testing.T) {
 		{cache.RecommendItems, "0", "/api/intermediate/recommend/0"},
 		//{cache.SubscribeItems, "0", "/subscribe/0"},
 		{cache.LatestItems, "", "/api/latest/"},
-		{cache.LatestItems, "0", "/api/latest/0"},
+		//{cache.LatestItems, "0", "/api/latest/0"},
 		{cache.PopularItems, "", "/api/popular/"},
-		{cache.PopularItems, "0", "/api/popular/0"},
+		//{cache.PopularItems, "0", "/api/popular/0"},
 		{cache.SimilarItems, "0", "/api/neighbors/0"},
 	}
 

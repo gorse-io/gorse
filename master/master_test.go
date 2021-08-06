@@ -83,20 +83,20 @@ func TestMaster_CollectLatest(t *testing.T) {
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 	}, latest)
-	latest, err = m.CacheClient.GetScores(cache.LatestItems, "even", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []cache.ScoredItem{
-		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
-		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
-		{items[4].ItemId, float32(items[4].Timestamp.Unix())},
-	}, latest)
-	latest, err = m.CacheClient.GetScores(cache.LatestItems, "odd", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []cache.ScoredItem{
-		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
-		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
-		{items[5].ItemId, float32(items[5].Timestamp.Unix())},
-	}, latest)
+	//latest, err = m.CacheClient.GetScores(cache.LatestItems, "even", 0, 100)
+	//assert.NoError(t, err)
+	//assert.Equal(t, []cache.ScoredItem{
+	//	{items[8].ItemId, float32(items[8].Timestamp.Unix())},
+	//	{items[6].ItemId, float32(items[6].Timestamp.Unix())},
+	//	{items[4].ItemId, float32(items[4].Timestamp.Unix())},
+	//}, latest)
+	//latest, err = m.CacheClient.GetScores(cache.LatestItems, "odd", 0, 100)
+	//assert.NoError(t, err)
+	//assert.Equal(t, []cache.ScoredItem{
+	//	{items[9].ItemId, float32(items[9].Timestamp.Unix())},
+	//	{items[7].ItemId, float32(items[7].Timestamp.Unix())},
+	//	{items[5].ItemId, float32(items[5].Timestamp.Unix())},
+	//}, latest)
 }
 
 func TestMaster_CollectPopItem(t *testing.T) {
@@ -150,20 +150,20 @@ func TestMaster_CollectPopItem(t *testing.T) {
 		{ItemId: items[8].ItemId, Score: 9},
 		{ItemId: items[7].ItemId, Score: 8},
 	}, popular)
-	popular, err = m.CacheClient.GetScores(cache.PopularItems, "even", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []cache.ScoredItem{
-		{ItemId: items[8].ItemId, Score: 9},
-		{ItemId: items[6].ItemId, Score: 7},
-		{ItemId: items[4].ItemId, Score: 5},
-	}, popular)
-	popular, err = m.CacheClient.GetScores(cache.PopularItems, "odd", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []cache.ScoredItem{
-		{ItemId: items[9].ItemId, Score: 10},
-		{ItemId: items[7].ItemId, Score: 8},
-		{ItemId: items[5].ItemId, Score: 6},
-	}, popular)
+	//popular, err = m.CacheClient.GetScores(cache.PopularItems, "even", 0, 100)
+	//assert.NoError(t, err)
+	//assert.Equal(t, []cache.ScoredItem{
+	//	{ItemId: items[8].ItemId, Score: 9},
+	//	{ItemId: items[6].ItemId, Score: 7},
+	//	{ItemId: items[4].ItemId, Score: 5},
+	//}, popular)
+	//popular, err = m.CacheClient.GetScores(cache.PopularItems, "odd", 0, 100)
+	//assert.NoError(t, err)
+	//assert.Equal(t, []cache.ScoredItem{
+	//	{ItemId: items[9].ItemId, Score: 10},
+	//	{ItemId: items[7].ItemId, Score: 8},
+	//	{ItemId: items[5].ItemId, Score: 6},
+	//}, popular)
 }
 
 func TestMaster_FitCFModel(t *testing.T) {

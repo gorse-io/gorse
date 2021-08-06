@@ -309,6 +309,8 @@ func testDeleteUser(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	_, err = db.GetUser("0")
 	assert.NotNil(t, err, "failed to delete user")
+	err = db.Optimize()
+	assert.NoError(t, err)
 	ret, err := db.GetUserFeedback("0", positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
