@@ -257,13 +257,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
-	ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
-		Doc("get popular items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]string{}))
+	// Disable popular items under labels temporarily
+	//ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
+	//	Doc("get popular items").
+	//	Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+	//	Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+	//	Writes([]string{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("get latest items").
@@ -272,13 +273,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
-	ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
-		Doc("get latest items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]string{}))
+	// Disable the latest items under labels temporarily
+	//ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
+	//	Doc("get latest items").
+	//	Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+	//	Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+	//	Writes([]string{}))
 	// Get neighbors
 	ws.Route(ws.GET("/neighbors/{item-id}").To(s.getNeighbors).
 		Doc("get neighbors of a item").

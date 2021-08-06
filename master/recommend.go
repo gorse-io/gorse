@@ -61,13 +61,14 @@ func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
 	popItems[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 	for itemId, f := range count {
 		popItems[""].Push(itemId, float32(f))
-		item := itemMap[itemId]
-		for _, label := range item.Labels {
-			if _, exists := popItems[label]; !exists {
-				popItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-			}
-			popItems[label].Push(itemId, float32(f))
-		}
+		// Disable popular items under labels temporarily
+		//item := itemMap[itemId]
+		//for _, label := range item.Labels {
+		//	if _, exists := popItems[label]; !exists {
+		//		popItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+		//	}
+		//	popItems[label].Push(itemId, float32(f))
+		//}
 	}
 	// write back
 	for label, topItems := range popItems {
@@ -87,16 +88,17 @@ func (m *Master) latest(items []data.Item) {
 	var err error
 	latestItems := make(map[string]*base.TopKStringFilter)
 	latestItems[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-	// find latest items
+	// find the latest items
 	for _, item := range items {
 		if !item.Timestamp.IsZero() {
 			latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
-			for _, label := range item.Labels {
-				if _, exist := latestItems[label]; !exist {
-					latestItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-				}
-				latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
-			}
+			// Disable the latest items under labels temporarily
+			//for _, label := range item.Labels {
+			//	if _, exist := latestItems[label]; !exist {
+			//		latestItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+			//	}
+			//	latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
+			//}
 		}
 	}
 	for label, topItems := range latestItems {
