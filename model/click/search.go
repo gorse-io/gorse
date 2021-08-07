@@ -157,7 +157,10 @@ func (searcher *ModelSearcher) IsClickModelHelpful() bool {
 	return searcher.useClickModel
 }
 
-func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Tracker) error {
+	if tracker != nil {
+		tracker.Start(searcher.numTrials * searcher.numEpochs)
+	}
 	base.Logger().Info("click model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()),
@@ -175,8 +178,9 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset) error {
 	fm := NewFM(FMClassification, nil)
 	grid := fm.GetParamsGrid()
 	grid[model.UseFeature] = []interface{}{true, false}
-	r := RandomSearchCV(fm, trainSet, valSet, grid, searcher.numTrials*2, 0,
-		NewFitConfig().SetJobs(searcher.numJobs))
+	r := RandomSearchCV(fm, trainSet, valSet, grid, searcher.numTrials*2, 0, NewFitConfig().
+		SetJobs(searcher.numJobs).
+		SetTracker(tracker.SubTracker()))
 	if !r.BestParams[model.UseFeature].(bool) {
 		// If model searcher found it's better to ignore features, just don't use features.
 		searcher.useClickModel = false
@@ -194,5 +198,8 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset) error {
 		zap.Float32("precision", searcher.bestScore.Precision),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
+	if tracker != nil {
+		tracker.Finish()
+	}
 	return nil
 }

@@ -50,11 +50,15 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Writes(config.Config{}))
 	ws.Route(ws.GET("/dashboard/stats").To(m.getStats).
-		Doc("Get global statistics.").
+		Doc("Get global status.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(Status{}))
+	ws.Route(ws.GET("/dashboard/tasks").To(m.getTasks).
+		Doc("Get tasks.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Writes([]Task{}))
 	// Get a user
 	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
 		Doc("Get a user.").
@@ -189,6 +193,11 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	status.RankingScore = m.rankingScore.Precision
 	status.ClickScore = m.clickScore.Precision
 	server.Ok(response, status)
+}
+
+func (m *Master) getTasks(request *restful.Request, response *restful.Response) {
+	tasks := m.taskMonitor.List()
+	server.Ok(response, tasks)
 }
 
 type UserIterator struct {

@@ -43,6 +43,7 @@ type FitConfig struct {
 	Verbose    int
 	Candidates int
 	TopK       int
+	Tracker    model.Tracker
 }
 
 func NewFitConfig() *FitConfig {
@@ -56,6 +57,11 @@ func NewFitConfig() *FitConfig {
 
 func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
 	config.Jobs = nJobs
+	return config
+}
+
+func (config *FitConfig) SetTracker(tracker model.Tracker) *FitConfig {
+	config.Tracker = tracker
 	return config
 }
 
@@ -258,6 +264,9 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the BPR model.
 func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
+	if config.Tracker != nil {
+		config.Tracker.Start(bpr.nEpochs)
+	}
 	base.Logger().Info("fit bpr",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -352,10 +361,16 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
+		if config.Tracker != nil {
+			config.Tracker.Update(epoch)
+		}
 	}
 	// restore best snapshot
 	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
 	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	if config.Tracker != nil {
+		config.Tracker.Finish()
+	}
 	base.Logger().Info("fit bpr complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
@@ -490,6 +505,9 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the ALS model.
 func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
+	if config.Tracker != nil {
+		config.Tracker.Start(als.nEpochs)
+	}
 	base.Logger().Info("fit als",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -594,10 +612,16 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			itemFactorCopy.Copy(als.ItemFactor)
 			snapshots.AddSnapshotNoCopy(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, userFactorCopy, itemFactorCopy)
 		}
+		if config.Tracker != nil {
+			config.Tracker.Update(ep)
+		}
 	}
 	// restore best snapshot
 	als.UserFactor = snapshots.BestWeights[0].(*mat.Dense)
 	als.ItemFactor = snapshots.BestWeights[1].(*mat.Dense)
+	if config.Tracker != nil {
+		config.Tracker.Finish()
+	}
 	base.Logger().Info("fit als complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
@@ -764,6 +788,9 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 
 func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
+	if config.Tracker != nil {
+		config.Tracker.Start(ccd.nEpochs)
+	}
 	base.Logger().Info("fit ccd",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -887,10 +914,16 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
+		if config.Tracker != nil {
+			config.Tracker.Update(ep)
+		}
 	}
 	// restore best snapshot
 	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
 	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	if config.Tracker != nil {
+		config.Tracker.Finish()
+	}
 	base.Logger().Info("fit ccd complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),

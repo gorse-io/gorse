@@ -38,6 +38,7 @@ func (m *mockMaster) Close() {
 
 func newMockMaster(t *testing.T) *mockMaster {
 	s := new(mockMaster)
+	s.taskMonitor = NewTaskMonitor()
 	// create mock database
 	var err error
 	s.dataStoreServer, err = miniredis.Run()
@@ -52,7 +53,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	return s
 }
 
-func TestMaster_CollectLatest(t *testing.T) {
+func TestMaster_RunFindLatestItemsTask(t *testing.T) {
 	// create mock master
 	m := newMockMaster(t)
 	defer m.Close()
@@ -72,10 +73,12 @@ func TestMaster_CollectLatest(t *testing.T) {
 		{"8", time.Date(2008, 1, 1, 1, 1, 0, 0, time.UTC), []string{"even"}, ""},
 		{"9", time.Date(2009, 1, 1, 1, 1, 0, 0, time.UTC), []string{"odd"}, ""},
 	}
-	m.latest(items)
+	m.runFindLatestItemsTask(items)
 	// check latest items
 	latest, err := m.CacheClient.GetScores(cache.LatestItems, "", 0, 100)
 	assert.NoError(t, err)
+	assert.Equal(t, 1, m.taskMonitor.Tasks[TaskFindLatest].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindLatest].Status)
 	assert.Equal(t, []cache.ScoredItem{
 		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
@@ -97,7 +100,7 @@ func TestMaster_CollectLatest(t *testing.T) {
 	//}, latest)
 }
 
-func TestMaster_CollectPopItem(t *testing.T) {
+func TestMaster_RunFindPopularItemsTask(t *testing.T) {
 	// create mock master
 	m := newMockMaster(t)
 	defer m.Close()
@@ -139,10 +142,12 @@ func TestMaster_CollectPopItem(t *testing.T) {
 			Timestamp: time.Now().AddDate(-100, 0, 0),
 		})
 	}
-	m.popItem(items, feedbacks)
+	m.runFindPopularItemsTask(items, feedbacks)
 	// check popular items
 	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
 	assert.NoError(t, err)
+	assert.Equal(t, 1, m.taskMonitor.Tasks[TaskFindPopular].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindPopular].Status)
 	assert.Equal(t, []cache.ScoredItem{
 		{ItemId: items[9].ItemId, Score: 10},
 		{ItemId: items[8].ItemId, Score: 9},

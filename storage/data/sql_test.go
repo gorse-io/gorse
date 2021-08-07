@@ -239,7 +239,7 @@ func newTestClickHouseDatabase(t *testing.T, dbName string) *testSQLDatabase {
 	err = database.Database.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(clickhouseDSN + dbName)
+	database.Database, err = Open(clickhouseDSN + dbName + "?mutations_sync=2")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()

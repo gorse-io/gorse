@@ -44,6 +44,8 @@ type Master struct {
 	protocol.UnimplementedMasterServer
 	server.RestServer
 
+	taskMonitor *TaskMonitor
+
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache
 	nodesInfo      map[string]*Node
@@ -93,7 +95,8 @@ type Master struct {
 func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
 	return &Master{
-		nodesInfo: make(map[string]*Node),
+		nodesInfo:   make(map[string]*Node),
+		taskMonitor: NewTaskMonitor(),
 		// init versions
 		rankingModelVersion: rand.Int63(),
 		clickModelVersion:   rand.Int63(),
@@ -288,14 +291,14 @@ func (m *Master) SearchLoop() {
 	)
 	for {
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
-			m.searchRankingModel(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
+			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search ranking model", zap.Error(err))
 			time.Sleep(time.Minute)
 			continue
 		}
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks, err =
-			m.searchClickModel(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
+			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search click model", zap.Error(err))
 			time.Sleep(time.Minute)
@@ -307,7 +310,7 @@ func (m *Master) SearchLoop() {
 
 func (m *Master) AnalyzeLoop() {
 	for {
-		if err := m.analyze(); err != nil {
+		if err := m.runAnalyzeTask(); err != nil {
 			base.Logger().Error("failed to analyze", zap.Error(err))
 		}
 		time.Sleep(time.Hour)

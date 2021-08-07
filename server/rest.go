@@ -69,7 +69,8 @@ func (s *RestServer) StartHttpServer() {
 
 func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	chain.ProcessFilter(req, resp)
-	if req.Request.URL.Path != "/api/dashboard/cluster" {
+	if req.Request.URL.Path != "/api/dashboard/cluster" &&
+		req.Request.URL.Path != "/api/dashboard/tasks" {
 		base.Logger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
 			zap.Int("status_code", resp.StatusCode()))
 	}
