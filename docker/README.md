@@ -25,6 +25,12 @@ docker-compose up -d
 mysql -h 127.0.0.1 -u root -proot_pass gorse < github.sql
 ```
 
+- Restart the master node to apply imported data.
+
+```bash
+docker-compose restart
+```
+
 - Play with Gorse: 
 
 | Entry | Link |

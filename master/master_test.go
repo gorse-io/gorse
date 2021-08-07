@@ -17,8 +17,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"math/rand"
@@ -164,52 +162,4 @@ func TestMaster_CollectPopItem(t *testing.T) {
 	//	{ItemId: items[7].ItemId, Score: 8},
 	//	{ItemId: items[5].ItemId, Score: 6},
 	//}, popular)
-}
-
-func TestMaster_FitCFModel(t *testing.T) {
-	// create mock master
-	m := newMockMaster(t)
-	defer m.Close()
-	// create config
-	m.GorseConfig = &config.Config{}
-	m.GorseConfig.Database.CacheSize = 3
-	m.GorseConfig.Master.FitJobs = 4
-	// collect similar
-	items := []data.Item{
-		{"0", time.Now(), []string{"even"}, ""},
-		{"1", time.Now(), []string{"odd"}, ""},
-		{"2", time.Now(), []string{"even"}, ""},
-		{"3", time.Now(), []string{"odd"}, ""},
-		{"4", time.Now(), []string{"even"}, ""},
-		{"5", time.Now(), []string{"odd"}, ""},
-		{"6", time.Now(), []string{"even"}, ""},
-		{"7", time.Now(), []string{"odd"}, ""},
-		{"8", time.Now(), []string{"even"}, ""},
-		{"9", time.Now(), []string{"odd"}, ""},
-	}
-	feedbacks := make([]data.Feedback, 0)
-	for i := 0; i < 10; i++ {
-		for j := 0; j <= i; j++ {
-			feedbacks = append(feedbacks, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					ItemId:       strconv.Itoa(i),
-					UserId:       strconv.Itoa(j),
-					FeedbackType: "FeedbackType",
-				},
-				Timestamp: time.Now(),
-			})
-		}
-	}
-	var err error
-	err = m.DataClient.BatchInsertItem(items)
-	assert.NoError(t, err)
-	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
-	assert.NoError(t, err)
-	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
-	assert.NoError(t, err)
-	// similar items (common users)
-	m.similar(items, dataset, model.SimilarityDot)
-	similar, err := m.CacheClient.GetScores(cache.SimilarItems, "9", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
 }

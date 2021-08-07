@@ -43,6 +43,12 @@ cache_store = "redis://localhost:6379"
 data_store = "mysql://root@tcp(localhost:3306)/gorse?parseTime=true"
 ```
 
+- Download the SQL file [github.sql](https://cdn.gorse.io/example/github.sql) and import to the MySQL instance.
+
+```bash
+mysql -h 127.0.0.1 -u root -proot_pass gorse < github.sql
+```
+
 - Start the master node
 
 ```bash
@@ -66,14 +72,6 @@ data_store = "mysql://root@tcp(localhost:3306)/gorse?parseTime=true"
 ```
 
 `--master-host` and `--master-port` are the RPC host and port of the master node. `--http-host` and `--http-port` are the HTTP host and port for metrics reporting of this worker node. `-j` is the number of working threads.
-
-
-- Download the SQL file [github.sql](https://cdn.gorse.io/example/github.sql) and import to the MySQL instance.
-
-```bash
-mysql -h 127.0.0.1 -u root -proot_pass gorse < github.sql
-```
-
 
 - Play with Gorse:
 
