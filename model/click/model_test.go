@@ -31,9 +31,35 @@ func assertEpsilon(t *testing.T, expect, actual float32) {
 	}
 }
 
-var fitConfig = &FitConfig{
-	Jobs:    1,
-	Verbose: 1,
+type testTracker struct {
+	total  int
+	done   int
+	finish bool
+}
+
+func (t *testTracker) Start(total int) {
+	t.total = total
+}
+
+func (t *testTracker) Update(done int) {
+	t.done = done
+}
+
+func (t *testTracker) Finish() {
+	t.finish = true
+}
+
+func (t *testTracker) SubTracker() model.Tracker {
+	return nil
+}
+
+func newFitConfigWithTestTracker() (*FitConfig, *testTracker) {
+	tracker := new(testTracker)
+	return &FitConfig{
+		Jobs:    1,
+		Verbose: 1,
+		Tracker: tracker,
+	}, tracker
 }
 
 func TestFM_Classification_Frappe(t *testing.T) {
@@ -50,7 +76,11 @@ func TestFM_Classification_Frappe(t *testing.T) {
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
+	fitConfig, tracker := newFitConfigWithTestTracker()
 	score := m.Fit(train, test, fitConfig)
+	assert.Equal(t, 20, tracker.total)
+	assert.Equal(t, 20, tracker.done)
+	assert.True(t, tracker.finish)
 	assertEpsilon(t, 0.91684, score.Precision)
 }
 
@@ -86,7 +116,11 @@ func TestFM_Regression_Frappe(t *testing.T) {
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
+	fitConfig, tracker := newFitConfigWithTestTracker()
 	score := m.Fit(train, test, fitConfig)
+	assert.Equal(t, 20, tracker.total)
+	assert.Equal(t, 20, tracker.done)
+	assert.True(t, tracker.finish)
 	assertEpsilon(t, 0.494435, score.RMSE)
 }
 

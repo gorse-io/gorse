@@ -51,3 +51,10 @@ func (model *BaseModel) GetParams() Params {
 func (model *BaseModel) GetRandomGenerator() base.RandomGenerator {
 	return model.rng
 }
+
+type Tracker interface {
+	Start(total int)
+	Update(done int)
+	Finish()
+	SubTracker() Tracker
+}

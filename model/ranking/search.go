@@ -176,19 +176,24 @@ func (searcher *ModelSearcher) GetBestSimilarity() string {
 	return searcher.bestSimilarity
 }
 
-func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Tracker) error {
 	base.Logger().Info("ranking model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
 	startTime := time.Now()
 	models := []string{"bpr", "ccd", "knn"}
+	if tracker != nil {
+		tracker.Start(len(models) * searcher.numEpochs * searcher.numTrials)
+	}
 	for _, name := range models {
 		m, err := NewModel(name, model.Params{model.NEpochs: searcher.numEpochs})
 		if err != nil {
 			return errors.Trace(err)
 		}
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0,
-			NewFitConfig().SetJobs(searcher.numJobs))
+			NewFitConfig().
+				SetJobs(searcher.numJobs).
+				SetTracker(tracker.SubTracker()))
 		searcher.bestMutex.Lock()
 		if name == "knn" {
 			searcher.bestSimilarity = r.BestModel.GetParams()[model.Similarity].(string)
@@ -208,5 +213,8 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet) error {
 		zap.String("model", searcher.bestModelName),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
+	if tracker != nil {
+		tracker.Finish()
+	}
 	return nil
 }

@@ -40,8 +40,9 @@ const (
 	ActiveUsersMonthly    = "ActiveUsersMonthly"
 )
 
-// popItem updates popular items for the database.
-func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
+// runFindPopularItemsTask updates popular items for the database.
+func (m *Master) runFindPopularItemsTask(items []data.Item, feedback []data.Feedback) {
+	m.taskMonitor.Start(TaskFindPopular, 1)
 	base.Logger().Info("collect popular items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create item mapping
 	itemMap := make(map[string]data.Item)
@@ -80,10 +81,12 @@ func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
 	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
+	m.taskMonitor.Finish(TaskFindPopular)
 }
 
-// latest updates latest items.
-func (m *Master) latest(items []data.Item) {
+// runFindLatestItemsTask updates the latest items.
+func (m *Master) runFindLatestItemsTask(items []data.Item) {
+	m.taskMonitor.Start(TaskFindLatest, 1)
 	base.Logger().Info("collect latest items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	var err error
 	latestItems := make(map[string]*base.TopKStringFilter)
@@ -110,10 +113,12 @@ func (m *Master) latest(items []data.Item) {
 	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache latest items time", zap.Error(err))
 	}
+	m.taskMonitor.Finish(TaskFindLatest)
 }
 
-// similar updates neighbors for the database.
-func (m *Master) similar(dataset *ranking.DataSet) {
+// runFindNeighborsTask updates neighbors for the database.
+func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
+	m.taskMonitor.Start(TaskFindNeighbor, dataset.ItemCount())
 	base.Logger().Info("start collecting similar items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create progress tracker
 	completed := make(chan []interface{}, 1000)
@@ -128,6 +133,7 @@ func (m *Master) similar(dataset *ranking.DataSet) {
 				}
 				completedCount++
 			case <-ticker.C:
+				m.taskMonitor.Update(TaskFindNeighbor, completedCount)
 				base.Logger().Debug("collect similar items",
 					zap.Int("n_complete_items", completedCount),
 					zap.Int("n_items", dataset.ItemCount()))
@@ -164,7 +170,7 @@ func (m *Master) similar(dataset *ranking.DataSet) {
 			}
 			for j := range itemSet.List() {
 				if j != itemId {
-					score := dotInt(dataset.ItemLabels[itemId], dataset.ItemLabels[j])
+					score := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j])
 					if score > 0 {
 						nearItems.Push(j, score)
 					}
@@ -181,7 +187,7 @@ func (m *Master) similar(dataset *ranking.DataSet) {
 			}
 			for j := range itemSet.List() {
 				if j != itemId {
-					score := dotInt(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j])
+					score := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j])
 					if score > 0 {
 						nearItems.Push(j, score)
 					}
@@ -206,9 +212,10 @@ func (m *Master) similar(dataset *ranking.DataSet) {
 		base.Logger().Error("failed to cache similar items", zap.Error(err))
 	}
 	base.Logger().Info("finish collecting similar items")
+	m.taskMonitor.Finish(TaskFindNeighbor)
 }
 
-func dotInt(a, b []int) float32 {
+func commonElements(a, b []int) float32 {
 	i, j, sum := 0, 0, float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
@@ -276,12 +283,12 @@ func (m *Master) fitRankingModelAndNonPersonalized(
 		m.userIndex = m.rankingTrainSet.UserIndex
 		m.userIndexVersion++
 		m.userIndexMutex.Unlock()
-		// collect similar items
-		m.similar(m.rankingFullSet)
 		// collect popular items
-		m.popItem(m.rankingItems, m.rankingFeedbacks)
+		m.runFindPopularItemsTask(m.rankingItems, m.rankingFeedbacks)
 		// collect latest items
-		m.latest(m.rankingItems)
+		m.runFindLatestItemsTask(m.rankingItems)
+		// collect similar items
+		m.runFindNeighborsTask(m.rankingFullSet)
 		// release dataset
 		m.rankingFeedbacks = nil
 		m.rankingItems = nil
@@ -293,7 +300,9 @@ func (m *Master) fitRankingModelAndNonPersonalized(
 		base.Logger().Info("nothing changed")
 		return
 	}
-	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
+	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().
+		SetJobs(m.GorseConfig.Master.FitJobs).
+		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitRankingModel)))
 
 	// update ranking model
 	m.rankingModelMutex.Lock()
@@ -344,8 +353,9 @@ func (m *Master) fitRankingModelAndNonPersonalized(
 	return
 }
 
-func (m *Master) analyze() error {
-	// pull existed click through rates
+func (m *Master) runAnalyzeTask() error {
+	m.taskMonitor.Start(TaskAnalyze, 30)
+	// pull existed click-through rates
 	clickThroughRates, err := m.DataClient.GetMeasurements(ClickThroughRate, 30)
 	if err != nil {
 		return errors.Trace(err)
@@ -354,8 +364,8 @@ func (m *Master) analyze() error {
 	for _, clickThroughRate := range clickThroughRates {
 		existed.Add(clickThroughRate.Timestamp.String())
 	}
-	// update click through rate
-	for i := 30; i > 0; i-- {
+	// update click-through rate
+	for i := 1; i <= 30; i++ {
 		dateTime := time.Now().AddDate(0, 0, -i)
 		date := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC)
 		if !existed.Has(date.String()) {
@@ -378,6 +388,7 @@ func (m *Master) analyze() error {
 				zap.Duration("time_used", time.Since(startTime)),
 				zap.Float64("click_through_rate", clickThroughRate))
 		}
+		m.taskMonitor.Update(TaskAnalyze, i)
 	}
 
 	// pull existed active users
@@ -431,6 +442,7 @@ func (m *Master) analyze() error {
 			zap.Int("active_users", activeUsers))
 	}
 
+	m.taskMonitor.Finish(TaskAnalyze)
 	return nil
 }
 
@@ -482,7 +494,9 @@ func (m *Master) fitClickModel(
 		base.Logger().Info("nothing changed")
 		return
 	}
-	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
+	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().
+		SetJobs(m.GorseConfig.Master.FitJobs).
+		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitClickModel)))
 
 	// update match model
 	m.clickModelMutex.Lock()
@@ -515,9 +529,9 @@ func (m *Master) fitClickModel(
 	return
 }
 
-// searchRankingModel searches best hyper-parameters for ranking models.
+// runSearchRankingModelTask searches best hyper-parameters for ranking models.
 // It requires read lock on the ranking dataset.
-func (m *Master) searchRankingModel(
+func (m *Master) runSearchRankingModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
 	base.Logger().Info("prepare to search ranking model")
@@ -538,13 +552,14 @@ func (m *Master) searchRankingModel(
 		return
 	}
 
-	err = m.rankingModelSearcher.Fit(m.rankingTrainSet, m.rankingTestSet)
+	err = m.rankingModelSearcher.Fit(m.rankingTrainSet, m.rankingTestSet,
+		m.taskMonitor.NewTaskTracker(TaskSearchRankingModel))
 	return
 }
 
-// searchClickModel searches best hyper-parameters for factorization machines.
+// runSearchClickModelTask searches best hyper-parameters for factorization machines.
 // It requires read lock on the click dataset.
-func (m *Master) searchClickModel(
+func (m *Master) runSearchClickModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
 	base.Logger().Info("prepare to search click model")
@@ -565,6 +580,7 @@ func (m *Master) searchClickModel(
 		return
 	}
 
-	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet)
+	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet,
+		m.taskMonitor.NewTaskTracker(TaskSearchClickModel))
 	return
 }

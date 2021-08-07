@@ -33,6 +33,11 @@ service Master {
   rpc GetRankingModel(NodeInfo) returns (Model) {}
   rpc GetClickModel(NodeInfo) returns (Model) {}
 
+  /* task management */
+  rpc StartTask(StartTaskRequest) returns(StartTaskResponse) {}
+  rpc UpdateTask(UpdateTaskRequest) returns(UpdateTaskResponse) {}
+  rpc FinishTask(FinishTaskRequest) returns(FinishTaskResponse) {}
+
 }
 
 message Meta {
@@ -61,3 +66,23 @@ message NodeInfo {
   string node_name = 2;
   int64 http_port = 3;
 }
+
+message StartTaskRequest {
+  string name = 1;
+  int64 total = 2;
+}
+
+message UpdateTaskRequest {
+  string name = 1;
+  int64 done = 2;
+}
+
+message FinishTaskRequest {
+  string name = 1;
+}
+
+message StartTaskResponse {}
+
+message UpdateTaskResponse {}
+
+message FinishTaskResponse {}
