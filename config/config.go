@@ -18,6 +18,12 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+const (
+	NeighborTypeAuto    = "auto"
+	NeighborTypeSimilar = "similar"
+	NeighborTypeRelated = "related"
+)
+
 // Config is the configuration for the engine.
 type Config struct {
 	Database  DatabaseConfig  `toml:"database"`
@@ -102,6 +108,7 @@ type RecommendConfig struct {
 	RefreshRecommendPeriod int    `toml:"refresh_recommend_period"`
 	FallbackRecommend      string `toml:"fallback_recommend"`
 	ExploreLatestNum       int    `toml:"explore_latest_num"`
+	NeighborType           string `toml:"neighbor_type"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -116,6 +123,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			RefreshRecommendPeriod: 5,
 			FallbackRecommend:      "latest",
 			ExploreLatestNum:       10,
+			NeighborType:           "auto",
 		}
 	}
 	return config
@@ -206,6 +214,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "explore_latest_num") {
 		config.Recommend.ExploreLatestNum = defaultRecommendConfig.ExploreLatestNum
+	}
+	if !meta.IsDefined("recommend", "neighbor_type") {
+		config.Recommend.NeighborType = defaultRecommendConfig.NeighborType
 	}
 }
 

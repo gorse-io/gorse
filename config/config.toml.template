@@ -1,26 +1,39 @@
 # This section declares settings for the database.
 [database]
-# database for caching (support Redis only)
-# Tcp connection:
-# redis://<user>:<password>@<host>:<port>/<db_number>
+
+# The database for caching, support Redis only:
+#   redis://<user>:<password>@<host>:<port>/<db_number>
 cache_store = "redis://localhost:6379"
-# database for persist data (support MySQL/MongoDB)
+
+# The database for persist data, support MySQL, Postgres, ClickHouse and MongoDB:
+#   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
+#   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 data_store = "mysql://root@tcp(localhost:3306)/gorse?parseTime=true"
-# cache size for recommended/popular/latest items
+
+# The cache size for recommended/popular/latest items. The default value is 100.
 cache_size = 200
-# insert new users while inserting feedback
+
+# Insert new users while inserting feedback. The default value is true.
 auto_insert_user = true
-# insert new items while inserting feedback
+
+# Insert new items while inserting feedback. The default value is true.
 auto_insert_item = false
-# feedback type for positive event
+
+# The feedback types for positive events.
 positive_feedback_types = ["star","like"]
-# feedback type for click event
+
+# The feedback types for click events.
 click_feedback_types = ["like"]
-# feedback type for read event
+
+# The feedback type for read event.
 read_feedback_type = "read"
-# positive feedback time-to-live (days), 0 means disabled.
+
+# The time-to-live (days) of positive feedback, 0 means disabled. The default value is 0.
 positive_feedback_ttl = 0
-# item time-to-live (days), 0 means disabled.
+
+# The time-to-live (days) of items, 0 means disabled. The default value is 0.
 item_ttl = 0
 
 # This section declares settings for the master node.
@@ -40,11 +53,38 @@ api_key = ""                    # secret key for RESTful APIs (SSL required)
 
 # This section declares settings for recommendation.
 [recommend]
-popular_window = 365            # time window of popular items (days)
-fit_period = 10                 # time period for model fitting (minutes)
-search_period = 60              # time period for model searching (minutes)
-search_epoch = 100              # number of epochs for model searching
-search_trials = 10              # number of trials for model searching
-refresh_recommend_period = 1    # time period to refresh recommendation for inactive users (days)
-fallback_recommend = "latest"   # fallback recommendation method for cold-start users (popular/latest)
-explore_latest_num = 20         # number of latest (cold-start) items insert to recommended items cache
+
+# The time window of popular items (days). The default values is 180.
+popular_window = 365
+
+# The time period for model fitting (minutes). The default values is 60.
+fit_period = 10
+
+# The time period for model searching (minutes). The default values is 100.
+search_period = 60
+
+# The number of epochs for model searching. The default values is 100.
+search_epoch = 100
+
+# The number of trials for model searching. The default values is 10.
+search_trials = 10
+
+# The time period to refresh recommendation for inactive users (days). The default values is 5.
+refresh_recommend_period = 1
+
+# The fallback recommendation method for cold-start users:
+#   popular: Recommend popular items to cold-start users.
+#   latest: Recommend latest items to cold-start users.
+# The default values is "latest".
+fallback_recommend = "latest"
+
+# The number of latest (cold-start) items insert to recommended items cache. The default values is 10.
+explore_latest_num = 20
+
+# The type of neighbors. There are three types:
+#   similar: Neighbors are found by number of common labels.
+#   related: Neighbors are found by number of common users.
+#   auto: If a item have labels, neighbors are found by number of common labels.
+#         If this item have no labels, neighbors are found by number of common users.
+# The default values is "auto".
+neighbor_type = "similar"
