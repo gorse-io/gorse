@@ -14,6 +14,7 @@
 package click
 
 import (
+	"github.com/stretchr/testify/mock"
 	"testing"
 
 	"github.com/chewxy/math32"
@@ -31,30 +32,36 @@ func assertEpsilon(t *testing.T, expect, actual float32) {
 	}
 }
 
-type testTracker struct {
-	total  int
-	done   int
-	finish bool
+type mockTracker struct {
+	mock.Mock
 }
 
-func (t *testTracker) Start(total int) {
-	t.total = total
+func (t *mockTracker) Start(total int) {
+	t.Called(total)
 }
 
-func (t *testTracker) Update(done int) {
-	t.done = done
+func (t *mockTracker) Update(done int) {
+	t.Called()
 }
 
-func (t *testTracker) Finish() {
-	t.finish = true
+func (t *mockTracker) Finish() {
+	t.Called()
 }
 
-func (t *testTracker) SubTracker() model.Tracker {
+func (t *mockTracker) Suspend(flag bool) {
+	t.Called()
+}
+
+func (t *mockTracker) SubTracker() model.Tracker {
+	t.Called()
 	return nil
 }
 
-func newFitConfigWithTestTracker() (*FitConfig, *testTracker) {
-	tracker := new(testTracker)
+func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
+	tracker := new(mockTracker)
+	tracker.On("Start", numEpoch)
+	tracker.On("Update", mock.Anything)
+	tracker.On("Finish")
 	return &FitConfig{
 		Jobs:    1,
 		Verbose: 1,
@@ -76,11 +83,9 @@ func TestFM_Classification_Frappe(t *testing.T) {
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker()
+	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	assert.Equal(t, 20, tracker.total)
-	assert.Equal(t, 20, tracker.done)
-	assert.True(t, tracker.finish)
+	tracker.AssertExpectations(t)
 	assertEpsilon(t, 0.91684, score.Precision)
 }
 
@@ -116,11 +121,9 @@ func TestFM_Regression_Frappe(t *testing.T) {
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker()
+	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	assert.Equal(t, 20, tracker.total)
-	assert.Equal(t, 20, tracker.done)
-	assert.True(t, tracker.finish)
+	tracker.AssertExpectations(t)
 	assertEpsilon(t, 0.494435, score.RMSE)
 }
 

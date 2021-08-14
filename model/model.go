@@ -56,5 +56,11 @@ type Tracker interface {
 	Start(total int)
 	Update(done int)
 	Finish()
+	Suspend(flag bool)
 	SubTracker() Tracker
+}
+
+type Runner interface {
+	Lock()
+	UnLock()
 }

@@ -22,11 +22,9 @@ func TestKNN_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
 	assert.NoError(t, err)
 	m := NewKNN(nil)
-	fitConfig, tracker := newFitConfigWithTestTracker()
+	fitConfig, tracker := newFitConfigWithTestTracker(trainSet.ItemCount())
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assert.Equal(t, trainSet.ItemCount(), tracker.total)
-	assert.Equal(t, trainSet.ItemCount(), tracker.done)
-	assert.True(t, tracker.finish)
+	tracker.AssertExpectations(t)
 	assertEpsilon(t, 0.311, score.NDCG, benchEpsilon)
 	assert.Equal(t, m.Predict([]string{"1"}, "1"), m.InternalPredict([]int{1}, 1))
 }

@@ -38,6 +38,15 @@ const (
 	ClickThroughRate      = "ClickThroughRate"
 	ActiveUsersYesterday  = "ActiveUsersYesterday"
 	ActiveUsersMonthly    = "ActiveUsersMonthly"
+
+	TaskFindLatest         = "Find latest items"
+	TaskFindPopular        = "Find popular items"
+	TaskFindNeighbor       = "Find neighbors of items"
+	TaskAnalyze            = "Analyze click-through rate"
+	TaskFitRankingModel    = "Fit ranking model"
+	TaskFitClickModel      = "Fit click model"
+	TaskSearchRankingModel = "Search ranking model"
+	TaskSearchClickModel   = "Search click model"
 )
 
 // runFindPopularItemsTask updates popular items for the database.
@@ -158,7 +167,7 @@ func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
 		}
 	}
 
-	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.FitJobs, func(workerId, itemId int) error {
+	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		nearItems := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
 		if m.GorseConfig.Recommend.NeighborType == config.NeighborTypeSimilar ||
@@ -235,10 +244,10 @@ func commonElements(a, b []int) float32 {
 // 1. Ranking model version are increased.
 // 2. Ranking model score are updated.
 // 3. Ranking model, version and score are persisted to local cache.
-func (m *Master) fitRankingModelAndNonPersonalized(
+func (m *Master) runRankingRelatedTasks(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to fit ranking model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+	base.Logger().Info("prepare to fit ranking model", zap.Int("n_jobs", m.GorseConfig.Master.NumJobs))
 	m.rankingDataMutex.RLock()
 	defer m.rankingDataMutex.RUnlock()
 	numUsers = m.rankingTrainSet.UserCount()
@@ -300,8 +309,13 @@ func (m *Master) fitRankingModelAndNonPersonalized(
 		base.Logger().Info("nothing changed")
 		return
 	}
+	m.runFitRankingModelTask(rankingModel)
+	return
+}
+
+func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
 	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().
-		SetJobs(m.GorseConfig.Master.FitJobs).
+		SetJobs(m.GorseConfig.Master.NumJobs).
 		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitRankingModel)))
 
 	// update ranking model
@@ -350,10 +364,12 @@ func (m *Master) fitRankingModelAndNonPersonalized(
 			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
 	}
-	return
 }
 
 func (m *Master) runAnalyzeTask() error {
+	m.taskScheduler.Lock(TaskAnalyze)
+	defer m.taskScheduler.UnLock(TaskAnalyze)
+	base.Logger().Info("start analyzing click-through-rate")
 	m.taskMonitor.Start(TaskAnalyze, 30)
 	// pull existed click-through rates
 	clickThroughRates, err := m.DataClient.GetMeasurements(ClickThroughRate, 30)
@@ -442,18 +458,19 @@ func (m *Master) runAnalyzeTask() error {
 			zap.Int("active_users", activeUsers))
 	}
 
+	base.Logger().Info("complete analyzing click-through-rate")
 	m.taskMonitor.Finish(TaskAnalyze)
 	return nil
 }
 
-// fitClickModel fits click model using latest data. After model fitted, following states are changed:
+// runFitClickModelTask fits click model using latest data. After model fitted, following states are changed:
 // 1. Click model version are increased.
 // 2. Click model score are updated.
 // 3. Click model, version and score are persisted to local cache.
-func (m *Master) fitClickModel(
+func (m *Master) runFitClickModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to fit click model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+	base.Logger().Info("prepare to fit click model", zap.Int("n_jobs", m.GorseConfig.Master.NumJobs))
 	m.clickDataMutex.RLock()
 	defer m.clickDataMutex.RUnlock()
 	numUsers = m.clickTrainSet.UserCount()
@@ -495,7 +512,7 @@ func (m *Master) fitClickModel(
 		return
 	}
 	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().
-		SetJobs(m.GorseConfig.Master.FitJobs).
+		SetJobs(m.GorseConfig.Master.NumJobs).
 		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitClickModel)))
 
 	// update match model
@@ -534,7 +551,7 @@ func (m *Master) fitClickModel(
 func (m *Master) runSearchRankingModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to search ranking model")
+	base.Logger().Info("start searching ranking model")
 	m.rankingDataMutex.RLock()
 	defer m.rankingDataMutex.RUnlock()
 	numUsers = m.rankingTrainSet.UserCount()
@@ -553,7 +570,7 @@ func (m *Master) runSearchRankingModelTask(
 	}
 
 	err = m.rankingModelSearcher.Fit(m.rankingTrainSet, m.rankingTestSet,
-		m.taskMonitor.NewTaskTracker(TaskSearchRankingModel))
+		m.taskMonitor.NewTaskTracker(TaskSearchRankingModel), m.taskScheduler.NewRunner(TaskSearchRankingModel))
 	return
 }
 
@@ -562,7 +579,7 @@ func (m *Master) runSearchRankingModelTask(
 func (m *Master) runSearchClickModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to search click model")
+	base.Logger().Info("start searching click model")
 	m.clickDataMutex.RLock()
 	defer m.clickDataMutex.RUnlock()
 	numUsers = m.clickTrainSet.UserCount()
@@ -581,6 +598,6 @@ func (m *Master) runSearchClickModelTask(
 	}
 
 	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet,
-		m.taskMonitor.NewTaskTracker(TaskSearchClickModel))
+		m.taskMonitor.NewTaskTracker(TaskSearchClickModel), m.taskScheduler.NewRunner(TaskSearchClickModel))
 	return
 }

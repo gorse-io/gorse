@@ -17,12 +17,11 @@ package ranking
 import (
 	"fmt"
 	"github.com/juju/errors"
-	"sync"
-	"time"
-
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
+	"sync"
+	"time"
 )
 
 // ParamsSearchResult contains the return of grid search.
@@ -33,13 +32,6 @@ type ParamsSearchResult struct {
 	BestIndex  int
 	Scores     []Score
 	Params     []model.Params
-}
-
-func NewParamsSearchResult() *ParamsSearchResult {
-	return &ParamsSearchResult{
-		Scores: make([]Score, 0),
-		Params: make([]model.Params, 0),
-	}
 }
 
 func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
@@ -54,7 +46,7 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
-	seed int64, fitConfig *FitConfig) ParamsSearchResult {
+	seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
 	count := 1
@@ -77,7 +69,11 @@ func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGri
 			// Cross validate
 			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Overwrite(params))
+			fitConfig.Tracker.Suspend(true)
+			runner.Lock()
+			fitConfig.Tracker.Suspend(false)
 			score := estimator.Fit(trainSet, testSet, fitConfig)
+			runner.UnLock()
 			// Create GridSearch result
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
@@ -103,10 +99,10 @@ func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGri
 
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
-	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
+	numTrials int, seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() < numTrials {
-		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig)
+		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig, runner)
 	}
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
@@ -125,7 +121,11 @@ func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramG
 			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
+		fitConfig.Tracker.Suspend(true)
+		runner.Lock()
+		fitConfig.Tracker.Suspend(false)
 		score := estimator.Fit(trainSet, testSet, fitConfig)
+		runner.UnLock()
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
 		if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
@@ -176,15 +176,16 @@ func (searcher *ModelSearcher) GetBestSimilarity() string {
 	return searcher.bestSimilarity
 }
 
-func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Tracker) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Tracker, runner model.Runner) error {
+	if tracker == nil {
+		return errors.New("tracker is required")
+	}
 	base.Logger().Info("ranking model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
 	startTime := time.Now()
 	models := []string{"bpr", "ccd", "knn"}
-	if tracker != nil {
-		tracker.Start(len(models) * searcher.numEpochs * searcher.numTrials)
-	}
+	tracker.Start(len(models) * searcher.numEpochs * searcher.numTrials)
 	for _, name := range models {
 		m, err := NewModel(name, model.Params{model.NEpochs: searcher.numEpochs})
 		if err != nil {
@@ -193,7 +194,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Trac
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0,
 			NewFitConfig().
 				SetJobs(searcher.numJobs).
-				SetTracker(tracker.SubTracker()))
+				SetTracker(tracker.SubTracker()), runner)
 		searcher.bestMutex.Lock()
 		if name == "knn" {
 			searcher.bestSimilarity = r.BestModel.GetParams()[model.Similarity].(string)
@@ -213,8 +214,6 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Trac
 		zap.String("model", searcher.bestModelName),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
-	if tracker != nil {
-		tracker.Finish()
-	}
+	tracker.Finish()
 	return nil
 }

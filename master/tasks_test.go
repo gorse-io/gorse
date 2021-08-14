@@ -32,7 +32,7 @@ func TestMaster_RunFindNeighborsTask(t *testing.T) {
 	// create config
 	m.GorseConfig = &config.Config{}
 	m.GorseConfig.Database.CacheSize = 3
-	m.GorseConfig.Master.FitJobs = 4
+	m.GorseConfig.Master.NumJobs = 4
 	// collect similar
 	items := []data.Item{
 		{"0", time.Now(), []string{"a", "b", "c", "d"}, ""},

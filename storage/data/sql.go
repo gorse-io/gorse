@@ -46,7 +46,7 @@ type SQLDatabase struct {
 // Optimize is used by ClickHouse only.
 func (d *SQLDatabase) Optimize() error {
 	if d.driver == ClickHouse {
-		for _, tableName := range []string{"users", "items", "feedback"} {
+		for _, tableName := range []string{"users", "items", "feedback", "measurements"} {
 			_, err := d.client.Exec("OPTIMIZE TABLE " + tableName)
 			if err != nil {
 				return errors.Trace(err)
@@ -196,11 +196,16 @@ func (d *SQLDatabase) Close() error {
 func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
 	var err error
 	switch d.driver {
-	case MySQL, ClickHouse:
-		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
+	case MySQL:
+		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?) AS new "+
+			"ON DUPLICATE KEY UPDATE value = new.value, `comment` = new.comment",
 			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
 	case Postgres:
-		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, comment) VALUES ($1, $2, $3, $4)",
+		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, comment) VALUES ($1, $2, $3, $4)  "+
+			"ON CONFLICT (name, time_stamp) DO UPDATE SET value = EXCLUDED.value, comment = EXCLUDED.comment",
+			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
+	case ClickHouse:
+		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
 			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
 	}
 	return errors.Trace(err)

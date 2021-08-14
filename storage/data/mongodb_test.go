@@ -32,7 +32,7 @@ func init() {
 		}
 		return defaultValue
 	}
-	mongoUri = env("MONGO_URI", "mongodb://127.0.0.1:27017/")
+	mongoUri = env("MONGO_URI", "mongodb://root:password@127.0.0.1:27017/")
 }
 
 type testMongoDatabase struct {

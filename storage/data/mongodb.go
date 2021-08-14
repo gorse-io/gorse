@@ -136,7 +136,11 @@ func (db *MongoDB) Close() error {
 func (db *MongoDB) InsertMeasurement(measurement Measurement) error {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("measurements")
-	_, err := c.InsertOne(ctx, measurement)
+	opt := options.Update()
+	opt.SetUpsert(true)
+	_, err := c.UpdateOne(ctx,
+		bson.M{"name": bson.M{"$eq": measurement.Name}, "timestamp": bson.M{"$eq": measurement.Timestamp}},
+		bson.M{"$set": measurement}, opt)
 	return errors.Trace(err)
 }
 

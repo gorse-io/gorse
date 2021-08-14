@@ -14,6 +14,7 @@
 package click
 
 import (
+	"github.com/stretchr/testify/mock"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,10 +67,39 @@ func (m *mockFactorizationMachineForSearch) GetParamsGrid() model.ParamsGrid {
 	}
 }
 
+type mockRunner struct {
+	mock.Mock
+}
+
+func (r *mockRunner) Lock() {
+	r.Called()
+}
+
+func (r *mockRunner) UnLock() {
+	r.Called()
+}
+
+func newFitConfigForSearch() (*FitConfig, *mockTracker) {
+	tracker := new(mockTracker)
+	tracker.On("Suspend", mock.Anything)
+	return &FitConfig{
+		Jobs:    1,
+		Verbose: 1,
+		Tracker: tracker,
+	}, tracker
+}
+
 func TestGridSearchCV(t *testing.T) {
 	m := &mockFactorizationMachineForSearch{}
-	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0, nil)
+	fitConfig, tracker := newFitConfigForSearch()
+	runner := new(mockRunner)
+	runner.On("Lock")
+	runner.On("UnLock")
+	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0, fitConfig, runner)
 	assert.Equal(t, float32(12), r.BestScore.Precision)
+	tracker.AssertExpectations(t)
+	runner.AssertCalled(t, "Lock")
+	runner.AssertCalled(t, "UnLock")
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
 		model.InitMean:   4,
@@ -79,7 +109,14 @@ func TestGridSearchCV(t *testing.T) {
 
 func TestRandomSearchCV(t *testing.T) {
 	m := &mockFactorizationMachineForSearch{}
-	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 63, 0, nil)
+	fitConfig, tracker := newFitConfigForSearch()
+	runner := new(mockRunner)
+	runner.On("Lock")
+	runner.On("UnLock")
+	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 63, 0, fitConfig, runner)
+	tracker.AssertExpectations(t)
+	runner.AssertCalled(t, "Lock")
+	runner.AssertCalled(t, "UnLock")
 	assert.Equal(t, float32(12), r.BestScore.Precision)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,

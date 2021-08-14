@@ -14,6 +14,7 @@
 package ranking
 
 import (
+	"github.com/stretchr/testify/mock"
 	"runtime"
 	"testing"
 
@@ -27,30 +28,36 @@ const (
 	incrEpsilon  = 1e-5
 )
 
-type testTracker struct {
-	total  int
-	done   int
-	finish bool
+type mockTracker struct {
+	mock.Mock
 }
 
-func (t *testTracker) Start(total int) {
-	t.total = total
+func (t *mockTracker) Start(total int) {
+	t.Called(total)
 }
 
-func (t *testTracker) Update(done int) {
-	t.done = done
+func (t *mockTracker) Update(done int) {
+	t.Called(done)
 }
 
-func (t *testTracker) Finish() {
-	t.finish = true
+func (t *mockTracker) Finish() {
+	t.Called()
 }
 
-func (t *testTracker) SubTracker() model.Tracker {
+func (t *mockTracker) Suspend(flag bool) {
+	t.Called(flag)
+}
+
+func (t *mockTracker) SubTracker() model.Tracker {
+	t.Called()
 	return nil
 }
 
-func newFitConfigWithTestTracker() (*FitConfig, *testTracker) {
-	tracker := new(testTracker)
+func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
+	tracker := new(mockTracker)
+	tracker.On("Start", numEpoch)
+	tracker.On("Update", mock.Anything)
+	tracker.On("Finish")
 	return &FitConfig{
 		Jobs:       runtime.NumCPU(),
 		Verbose:    1,
@@ -80,11 +87,9 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitMean:   0,
 		model.InitStdDev: 0.001,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker()
+	fitConfig, tracker := newFitConfigWithTestTracker(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assert.Equal(t, 30, tracker.total)
-	assert.Equal(t, 30, tracker.done)
-	assert.True(t, tracker.finish)
+	tracker.AssertExpectations(t)
 	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
@@ -92,6 +97,7 @@ func TestBPR_MovieLens(t *testing.T) {
 
 	// test increment test
 	m.nEpochs = 0
+	tracker.On("Start", 0)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
@@ -125,11 +131,9 @@ func TestALS_MovieLens(t *testing.T) {
 		model.NEpochs:  10,
 		model.Alpha:    0.05,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker()
+	fitConfig, tracker := newFitConfigWithTestTracker(10)
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assert.Equal(t, 10, tracker.total)
-	assert.Equal(t, 10, tracker.done)
-	assert.True(t, tracker.finish)
+	tracker.AssertExpectations(t)
 	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
@@ -137,6 +141,7 @@ func TestALS_MovieLens(t *testing.T) {
 
 	// test increment test
 	m.nEpochs = 0
+	tracker.On("Start", 0)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 
@@ -169,11 +174,9 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.NEpochs:  30,
 		model.Alpha:    0.05,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker()
+	fitConfig, tracker := newFitConfigWithTestTracker(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
-	assert.Equal(t, 30, tracker.total)
-	assert.Equal(t, 30, tracker.done)
-	assert.True(t, tracker.finish)
+	tracker.AssertExpectations(t)
 	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 
 	// test predict
@@ -181,6 +184,7 @@ func TestCCD_MovieLens(t *testing.T) {
 
 	// test increment test
 	m.nEpochs = 0
+	tracker.On("Start", 0)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
 

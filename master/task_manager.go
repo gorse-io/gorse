@@ -15,31 +15,26 @@
 package master
 
 import (
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/model"
 	"sort"
 	"sync"
 	"time"
 )
 
-const (
-	TaskStatusPending  = "Pending"
-	TaskStatusComplete = "Complete"
-	TaskStatusRunning  = "Running"
+type TaskStatus string
 
-	TaskFindLatest         = "Find latest items"
-	TaskFindPopular        = "Find popular items"
-	TaskFindNeighbor       = "Find neighbors of items"
-	TaskAnalyze            = "Analyze click-through rate"
-	TaskFitRankingModel    = "Fit ranking model"
-	TaskFitClickModel      = "Fit click model"
-	TaskSearchRankingModel = "Search ranking model"
-	TaskSearchClickModel   = "Search click model"
+const (
+	TaskStatusPending   TaskStatus = "Pending"
+	TaskStatusComplete  TaskStatus = "Complete"
+	TaskStatusRunning   TaskStatus = "Running"
+	TaskStatusSuspended TaskStatus = "Suspended"
 )
 
 // Task progress information.
 type Task struct {
 	Name       string
-	Status     string
+	Status     TaskStatus
 	Done       int
 	Total      int
 	StartTime  time.Time
@@ -54,23 +49,19 @@ type TaskMonitor struct {
 
 // NewTaskMonitor creates a TaskMonitor and add pending tasks.
 func NewTaskMonitor() *TaskMonitor {
-	task := make(map[string]*Task)
-	for _, taskName := range []string{
-		TaskFindLatest,
-		TaskFindPopular,
-		TaskFindNeighbor,
-		TaskAnalyze,
-		TaskFitRankingModel,
-		TaskFitClickModel,
-		TaskSearchRankingModel,
-		TaskSearchClickModel,
-	} {
-		task[taskName] = &Task{
-			Name:   taskName,
-			Status: TaskStatusPending,
-		}
+	return &TaskMonitor{
+		Tasks: make(map[string]*Task),
 	}
-	return &TaskMonitor{Tasks: task}
+}
+
+// Pending a task.
+func (tm *TaskMonitor) Pending(name string) {
+	tm.TaskLock.Lock()
+	defer tm.TaskLock.Unlock()
+	tm.Tasks[name] = &Task{
+		Name:   name,
+		Status: TaskStatusPending,
+	}
 }
 
 // Start a task.
@@ -109,6 +100,21 @@ func (tm *TaskMonitor) Update(name string, done int) {
 	task, exist := tm.Tasks[name]
 	if exist {
 		task.Done = done
+		task.Status = TaskStatusRunning
+	}
+}
+
+// Suspend a task.
+func (tm *TaskMonitor) Suspend(name string, flag bool) {
+	tm.TaskLock.Lock()
+	defer tm.TaskLock.Unlock()
+	task, exist := tm.Tasks[name]
+	if exist {
+		if flag {
+			task.Status = TaskStatusSuspended
+		} else {
+			task.Status = TaskStatusRunning
+		}
 	}
 }
 
@@ -163,31 +169,35 @@ func (t Tasks) Less(i, j int) bool {
 
 // TaskTracker tracks the progress of a task.
 type TaskTracker struct {
-	Name    string
-	Monitor *TaskMonitor
+	name    string
+	monitor *TaskMonitor
 }
 
 // NewTaskTracker creates a TaskTracker from TaskMonitor.
 func (tm *TaskMonitor) NewTaskTracker(name string) *TaskTracker {
 	return &TaskTracker{
-		Name:    name,
-		Monitor: tm,
+		name:    name,
+		monitor: tm,
 	}
 }
 
 // Start the task.
 func (tt *TaskTracker) Start(total int) {
-	tt.Monitor.Start(tt.Name, total)
+	tt.monitor.Start(tt.name, total)
 }
 
 // Update the progress of this task.
 func (tt *TaskTracker) Update(done int) {
-	tt.Monitor.Update(tt.Name, done)
+	tt.monitor.Update(tt.name, done)
+}
+
+func (tt *TaskTracker) Suspend(flag bool) {
+	tt.monitor.Suspend(tt.name, flag)
 }
 
 // Finish the task.
 func (tt *TaskTracker) Finish() {
-	tt.Monitor.Finish(tt.Name)
+	tt.monitor.Finish(tt.name)
 }
 
 // SubTracker creates a sub tracker
@@ -206,18 +216,22 @@ type SubTaskTracker struct {
 
 // Start a task.
 func (tt *SubTaskTracker) Start(total int) {
-	tt.Offset = tt.Monitor.Get(tt.Name)
+	tt.Offset = tt.monitor.Get(tt.name)
 	tt.Total = total
 }
 
 // Update the progress of current task.
 func (tt *SubTaskTracker) Update(done int) {
-	tt.Monitor.Update(tt.Name, tt.Offset+done)
+	tt.monitor.Update(tt.name, tt.Offset+done)
+}
+
+func (tt *SubTaskTracker) Suspend(flag bool) {
+	tt.monitor.Suspend(tt.name, flag)
 }
 
 // Finish a task.
 func (tt *SubTaskTracker) Finish() {
-	tt.Monitor.Update(tt.Name, tt.Offset+tt.Total)
+	tt.monitor.Update(tt.name, tt.Offset+tt.Total)
 }
 
 // SubTracker creates a sub tracker of a sub tracker.
@@ -225,4 +239,69 @@ func (tt *SubTaskTracker) SubTracker() model.Tracker {
 	return &SubTaskTracker{
 		TaskTracker: tt.TaskTracker,
 	}
+}
+
+// TaskScheduler schedules that pre-locked tasks are executed first.
+type TaskScheduler struct {
+	*sync.Cond
+	Privileged *strset.Set
+	Running    bool
+}
+
+// NewTaskScheduler creates a TaskScheduler.
+func NewTaskScheduler() *TaskScheduler {
+	return &TaskScheduler{
+		Cond:       sync.NewCond(&sync.Mutex{}),
+		Privileged: strset.New(),
+	}
+}
+
+// PreLock a task, the task has the privilege to run first than un-pre-clocked tasks.
+func (t *TaskScheduler) PreLock(name string) {
+	t.L.Lock()
+	defer t.L.Unlock()
+	t.Privileged.Add(name)
+}
+
+// Lock gets the permission to run task.
+func (t *TaskScheduler) Lock(name string) {
+	t.L.Lock()
+	defer t.L.Unlock()
+	for t.Running || (!t.Privileged.IsEmpty() && !t.Privileged.Has(name)) {
+		t.Wait()
+	}
+	t.Running = true
+}
+
+// UnLock returns the permission to run task.
+func (t *TaskScheduler) UnLock(name string) {
+	t.L.Lock()
+	defer t.L.Unlock()
+	t.Running = false
+	t.Privileged.Remove(name)
+	t.Broadcast()
+}
+
+// NewRunner
+func (t *TaskScheduler) NewRunner(name string) *TaskRunner {
+	return &TaskRunner{
+		TaskScheduler: t,
+		Name:          name,
+	}
+}
+
+// TaskRunner is a TaskScheduler bounded with a task.
+type TaskRunner struct {
+	*TaskScheduler
+	Name string
+}
+
+// Lock gets the permission to run task.
+func (locker *TaskRunner) Lock() {
+	locker.TaskScheduler.Lock(locker.Name)
+}
+
+// UnLock returns the permission to run task.
+func (locker *TaskRunner) UnLock() {
+	locker.TaskScheduler.UnLock(locker.Name)
 }
