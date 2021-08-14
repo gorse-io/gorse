@@ -44,7 +44,8 @@ type Master struct {
 	protocol.UnimplementedMasterServer
 	server.RestServer
 
-	taskMonitor *TaskMonitor
+	taskMonitor   *TaskMonitor
+	taskScheduler *TaskScheduler
 
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache
@@ -94,9 +95,17 @@ type Master struct {
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
+	// create task monitor
+	taskMonitor := NewTaskMonitor()
+	for _, taskName := range []string{TaskFindLatest, TaskFindPopular, TaskFindNeighbor, TaskFitRankingModel,
+		TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel} {
+		taskMonitor.Pending(taskName)
+	}
 	return &Master{
-		nodesInfo:   make(map[string]*Node),
-		taskMonitor: NewTaskMonitor(),
+		nodesInfo: make(map[string]*Node),
+		// create task monitor
+		taskMonitor:   taskMonitor,
+		taskScheduler: NewTaskScheduler(),
 		// init versions
 		rankingModelVersion: rand.Int63(),
 		clickModelVersion:   rand.Int63(),
@@ -107,13 +116,13 @@ func NewMaster(cfg *config.Config) *Master {
 		rankingModelSearcher: ranking.NewModelSearcher(
 			cfg.Recommend.SearchEpoch,
 			cfg.Recommend.SearchTrials,
-			cfg.Master.SearchJobs),
+			cfg.Master.NumJobs),
 		// default click model
 		clickModel: click.NewFM(click.FMClassification, nil),
 		clickModelSearcher: click.NewModelSearcher(
 			cfg.Recommend.SearchEpoch,
 			cfg.Recommend.SearchTrials,
-			cfg.Master.SearchJobs,
+			cfg.Master.NumJobs,
 		),
 		RestServer: server.RestServer{
 			GorseConfig: cfg,
@@ -196,12 +205,10 @@ func (m *Master) Serve() {
 	}
 
 	go m.StartHttpServer()
-	go m.FitLoop()
+	go m.RunPrivilegedTasksLoop()
 	base.Logger().Info("start model fit", zap.Int("period", m.GorseConfig.Recommend.FitPeriod))
-	go m.SearchLoop()
+	go m.RunRagtagTasksLoop()
 	base.Logger().Info("start model searcher", zap.Int("period", m.GorseConfig.Recommend.SearchPeriod))
-	go m.AnalyzeLoop()
-	base.Logger().Info("start analyze")
 
 	// start rpc server
 	base.Logger().Info("start rpc server",
@@ -219,7 +226,7 @@ func (m *Master) Serve() {
 	}
 }
 
-func (m *Master) FitLoop() {
+func (m *Master) RunPrivilegedTasksLoop() {
 	defer base.CheckPanic()
 	var (
 		lastNumRankingUsers    int
@@ -258,9 +265,15 @@ func (m *Master) FitLoop() {
 			continue
 		}
 
+		// pre-lock tasks
+		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskFindNeighbor, TaskFitRankingModel, TaskFitClickModel}
+		for _, taskName := range tasksNames {
+			m.taskScheduler.PreLock(taskName)
+		}
+
 		// fit ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback, err =
-			m.fitRankingModelAndNonPersonalized(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback)
+			m.runRankingRelatedTasks(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback)
 		if err != nil {
 			base.Logger().Error("failed to fit ranking model", zap.Error(err))
 			continue
@@ -268,17 +281,22 @@ func (m *Master) FitLoop() {
 
 		// fit click model
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedback, err =
-			m.fitClickModel(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
+			m.runFitClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
 		if err != nil {
 			base.Logger().Error("failed to fit click model", zap.Error(err))
 			continue
 		}
+
+		// release locks
+		for _, taskName := range tasksNames {
+			m.taskScheduler.UnLock(taskName)
+		}
 	}
 }
 
-// SearchLoop searches optimal recommendation model in background. It never modifies variables other than
+// RunRagtagTasksLoop searches optimal recommendation model in background. It never modifies variables other than
 // rankingModelSearcher, clickSearchedModel and clickSearchedScore.
-func (m *Master) SearchLoop() {
+func (m *Master) RunRagtagTasksLoop() {
 	defer base.CheckPanic()
 	var (
 		lastNumRankingUsers     int
@@ -290,6 +308,11 @@ func (m *Master) SearchLoop() {
 		err                     error
 	)
 	for {
+		// analyze click-through-rate
+		if err := m.runAnalyzeTask(); err != nil {
+			base.Logger().Error("failed to analyze", zap.Error(err))
+		}
+		// search optimal ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
 			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
 		if err != nil {
@@ -297,6 +320,7 @@ func (m *Master) SearchLoop() {
 			time.Sleep(time.Minute)
 			continue
 		}
+		// search optimal click model
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks, err =
 			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
 		if err != nil {
@@ -305,15 +329,6 @@ func (m *Master) SearchLoop() {
 			continue
 		}
 		time.Sleep(time.Duration(m.GorseConfig.Recommend.SearchPeriod) * time.Minute)
-	}
-}
-
-func (m *Master) AnalyzeLoop() {
-	for {
-		if err := m.runAnalyzeTask(); err != nil {
-			base.Logger().Error("failed to analyze", zap.Error(err))
-		}
-		time.Sleep(time.Hour)
 	}
 }
 

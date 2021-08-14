@@ -380,6 +380,8 @@ func testDeleteFeedback(t *testing.T, db Database) {
 }
 
 func testMeasurements(t *testing.T, db Database) {
+	err := db.InsertMeasurement(Measurement{"Test_NDCG", time.Date(2004, 1, 1, 1, 1, 1, 0, time.UTC), 100, "a"})
+	assert.NoError(t, err)
 	measurements := []Measurement{
 		{"Test_NDCG", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 0, "a"},
 		{"Test_NDCG", time.Date(2001, 1, 1, 1, 1, 1, 0, time.UTC), 1, "b"},
@@ -392,6 +394,8 @@ func testMeasurements(t *testing.T, db Database) {
 		err := db.InsertMeasurement(measurement)
 		assert.NoError(t, err)
 	}
+	err = db.Optimize()
+	assert.NoError(t, err)
 	ret, err := db.GetMeasurements("Test_NDCG", 3)
 	assert.NoError(t, err)
 	assert.Equal(t, []Measurement{

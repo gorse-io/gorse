@@ -77,8 +77,7 @@ type MasterConfig struct {
 	Host        string `toml:"host"`         // master host
 	HttpPort    int    `toml:"http_port"`    // HTTP port
 	HttpHost    string `toml:"http_host"`    // HTTP host
-	SearchJobs  int    `toml:"search_jobs"`  // number of working jobs to search model
-	FitJobs     int    `toml:"fit_jobs"`     // number of working jobs to fit model
+	NumJobs     int    `toml:"n_jobs"`       // number of working jobs
 	MetaTimeout int    `toml:"meta_timeout"` // cluster meta timeout (second)
 }
 
@@ -90,8 +89,7 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 			Host:        "127.0.0.1",
 			HttpPort:    8088,
 			HttpHost:    "127.0.0.1",
-			SearchJobs:  1,
-			FitJobs:     1,
+			NumJobs:     1,
 			MetaTimeout: 60,
 		}
 	}
@@ -172,11 +170,8 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("master", "http_host") {
 		config.Master.HttpHost = defaultMasterConfig.HttpHost
 	}
-	if !meta.IsDefined("master", "fit_jobs") {
-		config.Master.FitJobs = defaultMasterConfig.FitJobs
-	}
-	if !meta.IsDefined("master", "search_jobs") {
-		config.Master.SearchJobs = defaultMasterConfig.SearchJobs
+	if !meta.IsDefined("master", "n_jobs") {
+		config.Master.NumJobs = defaultMasterConfig.NumJobs
 	}
 	if !meta.IsDefined("master", "meta_timeout") {
 		config.Master.MetaTimeout = defaultMasterConfig.MetaTimeout
