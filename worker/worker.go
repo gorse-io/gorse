@@ -463,13 +463,13 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				return errors.Trace(err)
 			}
 			for _, latestItem := range latestItems {
-				if !candidateSet.Has(latestItem.ItemId) && !historySet.Has(latestItem.ItemId) {
-					candidateItems = append(candidateItems, latestItem.ItemId)
+				if !candidateSet.Has(latestItem.Id) && !historySet.Has(latestItem.Id) {
+					candidateItems = append(candidateItems, latestItem.Id)
 				}
 			}
 		}
 		// rank items in result by click-through-rate
-		var result []cache.ScoredItem
+		var result []cache.Scored
 		if w.clickModel != nil {
 			result, err = w.rankByClickTroughRate(userId, candidateItems)
 			if err != nil {
@@ -506,7 +506,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 
 // randomInsertLatestItem inserts latest items to the recommendation list randomly. Latest items
 // are located at itemIds[len(scores):len(itemIds)]
-func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []cache.ScoredItem {
+func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []cache.Scored {
 	numPersonalized := len(scores)
 	for i := numPersonalized; i < len(itemIds); i++ {
 		scores = append(scores, 0)
@@ -518,7 +518,7 @@ func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []ca
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache.ScoredItem, error) {
+func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache.Scored, error) {
 	// download items
 	var err error
 	items := make([]data.Item, len(itemIds))

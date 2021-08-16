@@ -24,7 +24,8 @@ import (
 
 const (
 	IgnoreItems             = "ignore_items"
-	SimilarItems            = "similar_items"
+	ItemNeighbors           = "item_neighbors"
+	UserNeighbors           = "user_neighbors"
 	RecommendItems          = "collaborative_items"
 	SubscribeItems          = "subscribe_items"
 	PopularItems            = "popular_items"
@@ -33,54 +34,55 @@ const (
 	LastUpdateRecommendTime = "last_update_recommend_time"
 
 	// GlobalMeta is global meta information
-	GlobalMeta              = "global_meta"
-	NumInserted             = "num_inserted"
-	NumUsers                = "num_users"
-	NumItems                = "num_items"
-	NumPositiveFeedback     = "num_pos_feedback"
-	LastUpdatePopularTime   = "last_update_popular_time"
-	LastUpdateLatestTime    = "last_update_latest_time"
-	LastUpdateNeighborTime  = "last_update_similar_time"
-	LastFitRankingModelTime = "last_fit_match_model_time"
-	LastRankingModelVersion = "latest_match_model_version"
+	GlobalMeta                  = "global_meta"
+	NumInserted                 = "num_inserted"
+	NumUsers                    = "num_users"
+	NumItems                    = "num_items"
+	NumPositiveFeedback         = "num_pos_feedback"
+	LastUpdatePopularTime       = "last_update_popular_time"
+	LastUpdateLatestTime        = "last_update_latest_time"
+	LastUpdateItemNeighborsTime = "last_update_item_neighbors_time"
+	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time"
+	LastFitRankingModelTime     = "last_fit_match_model_time"
+	LastRankingModelVersion     = "latest_match_model_version"
 )
 
 var ErrObjectNotExist = fmt.Errorf("object not exists")
 var ErrNoDatabase = fmt.Errorf("no database specified")
 
-// ScoredItem associate a item with a score.
-type ScoredItem struct {
-	ItemId string
-	Score  float32
+// Scored associate a id with a score.
+type Scored struct {
+	Id    string
+	Score float32
 }
 
 // CreateScoredItems from items and scores.
-func CreateScoredItems(itemIds []string, scores []float32) []ScoredItem {
+func CreateScoredItems(itemIds []string, scores []float32) []Scored {
 	if len(itemIds) != len(scores) {
 		panic("the length of itemIds and scores should be equal")
 	}
-	items := make([]ScoredItem, len(itemIds))
+	items := make([]Scored, len(itemIds))
 	for i := range items {
-		items[i].ItemId = itemIds[i]
+		items[i].Id = itemIds[i]
 		items[i].Score = scores[i]
 	}
 	return items
 }
 
 // RemoveScores resolve items for a slice of ScoredItems.
-func RemoveScores(items []ScoredItem) []string {
-	itemIds := make([]string, len(items))
-	for i := range itemIds {
-		itemIds[i] = items[i].ItemId
+func RemoveScores(items []Scored) []string {
+	ids := make([]string, len(items))
+	for i := range ids {
+		ids[i] = items[i].Id
 	}
-	return itemIds
+	return ids
 }
 
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
-	SetScores(prefix, name string, items []ScoredItem) error
-	GetScores(prefix, name string, begin int, end int) ([]ScoredItem, error)
+	SetScores(prefix, name string, items []Scored) error
+	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
 	ClearList(prefix, name string) error
 	AppendList(prefix, name string, items ...string) error
 	GetList(prefix, name string) ([]string, error)

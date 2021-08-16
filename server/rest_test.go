@@ -339,20 +339,21 @@ func TestServer_List(t *testing.T) {
 		//{cache.LatestItems, "0", "/api/latest/0"},
 		{cache.PopularItems, "", "/api/popular/"},
 		//{cache.PopularItems, "0", "/api/popular/0"},
-		{cache.SimilarItems, "0", "/api/neighbors/0"},
+		{cache.ItemNeighbors, "0", "/api/item/0/neighbors"},
+		{cache.UserNeighbors, "0", "/api/user/0/neighbors"},
 	}
 
 	for _, operator := range operators {
 		t.Logf("test RESTful API: %v", operator.Get)
-		// Put items
-		items := []cache.ScoredItem{
+		// Put scores
+		scores := []cache.Scored{
 			{"0", 100},
 			{"1", 99},
 			{"2", 98},
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, items)
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
 		assert.NoError(t, err)
 		apitest.New().
 			Handler(s.handler).
@@ -360,7 +361,7 @@ func TestServer_List(t *testing.T) {
 			Header("X-API-Key", apiKey).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(marshal(t, items)).
+			Body(marshal(t, scores)).
 			End()
 		apitest.New().
 			Handler(s.handler).
@@ -371,7 +372,7 @@ func TestServer_List(t *testing.T) {
 				"n":      "3"}).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(marshal(t, []cache.ScoredItem{items[0], items[1], items[2]})).
+			Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2]})).
 			End()
 		apitest.New().
 			Handler(s.handler).
@@ -382,7 +383,7 @@ func TestServer_List(t *testing.T) {
 				"n":      "3"}).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(marshal(t, []cache.ScoredItem{items[1], items[2], items[3]})).
+			Body(marshal(t, []cache.Scored{scores[1], scores[2], scores[3]})).
 			End()
 		apitest.New().
 			Handler(s.handler).
@@ -393,7 +394,7 @@ func TestServer_List(t *testing.T) {
 				"n":      "0"}).
 			Expect(t).
 			Status(http.StatusOK).
-			Body(marshal(t, items)).
+			Body(marshal(t, scores)).
 			End()
 	}
 }
@@ -491,7 +492,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	defer s.Close(t)
 	// insert recommendation
 	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
-		[]cache.ScoredItem{
+		[]cache.Scored{
 			{"1", 99},
 			{"2", 98},
 			{"3", 97},
@@ -557,7 +558,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	defer s.Close(t)
 	// insert recommendation
 	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
-		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
+		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -576,25 +577,25 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 		Body(`{"RowAffected": 4}`).
 		End()
 	// insert similar items
-	err = s.CacheClient.SetScores(cache.SimilarItems, "1", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.ItemNeighbors, "1", []cache.Scored{
 		{"2", 100000},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.SimilarItems, "2", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.ItemNeighbors, "2", []cache.Scored{
 		{"3", 100000},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.SimilarItems, "3", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.ItemNeighbors, "3", []cache.Scored{
 		{"4", 100000},
 		{"7", 1},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.SimilarItems, "4", []cache.ScoredItem{
+	err = s.CacheClient.SetScores(cache.ItemNeighbors, "4", []cache.Scored{
 		{"1", 100000},
 		{"6", 1},
 		{"7", 1},
@@ -622,15 +623,15 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 	defer s.Close(t)
 	// insert recommendation
 	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
-		[]cache.ScoredItem{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
+		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert latest
 	err = s.CacheClient.SetScores(cache.LatestItems, "",
-		[]cache.ScoredItem{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
+		[]cache.Scored{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
 	assert.NoError(t, err)
 	// insert popular
 	err = s.CacheClient.SetScores(cache.PopularItems, "",
-		[]cache.ScoredItem{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
+		[]cache.Scored{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
 	assert.NoError(t, err)
 	// test popular fallback
 	s.GorseConfig.Recommend.FallbackRecommend = "popular"

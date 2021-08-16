@@ -443,7 +443,7 @@ func TestMaster_GetUsers(t *testing.T) {
 		End()
 }
 
-func TestServer_List(t *testing.T) {
+func TestServer_ItemList(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
@@ -454,24 +454,24 @@ func TestServer_List(t *testing.T) {
 	operators := []ListOperator{
 		{cache.LatestItems, "", "/api/dashboard/latest/"},
 		{cache.PopularItems, "", "/api/dashboard/popular/"},
-		{cache.SimilarItems, "0", "/api/dashboard/neighbors/0"},
+		{cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
 	}
 	for _, operator := range operators {
 		t.Logf("test RESTful API: %v", operator.Get)
-		// Put itemIds
-		itemIds := []cache.ScoredItem{
+		// Put scores
+		scores := []cache.Scored{
 			{"0", 100},
 			{"1", 99},
 			{"2", 98},
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, itemIds)
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
 		assert.NoError(t, err)
 		items := make([]data.Item, 0)
-		for _, item := range itemIds {
-			items = append(items, data.Item{ItemId: item.ItemId})
-			err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
+		for _, score := range scores {
+			items = append(items, data.Item{ItemId: score.Id})
+			err = s.DataClient.InsertItem(data.Item{ItemId: score.Id})
 			assert.NoError(t, err)
 		}
 		apitest.New().
@@ -480,6 +480,45 @@ func TestServer_List(t *testing.T) {
 			Expect(t).
 			Status(http.StatusOK).
 			Body(marshal(t, items)).
+			End()
+	}
+}
+
+func TestServer_UserList(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	type ListOperator struct {
+		Prefix string
+		Label  string
+		Get    string
+	}
+	operators := []ListOperator{
+		{cache.UserNeighbors, "0", "/api/dashboard/user/0/neighbors"},
+	}
+	for _, operator := range operators {
+		t.Logf("test RESTful API: %v", operator.Get)
+		// Put scores
+		scores := []cache.Scored{
+			{"0", 100},
+			{"1", 99},
+			{"2", 98},
+			{"3", 97},
+			{"4", 96},
+		}
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
+		assert.NoError(t, err)
+		users := make([]data.User, 0)
+		for _, score := range scores {
+			users = append(users, data.User{UserId: score.Id})
+			err = s.DataClient.InsertUser(data.User{UserId: score.Id})
+			assert.NoError(t, err)
+		}
+		apitest.New().
+			Handler(s.handler).
+			Get(operator.Get).
+			Expect(t).
+			Status(http.StatusOK).
+			Body(marshal(t, users)).
 			End()
 	}
 }
@@ -515,7 +554,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// inset recommendation
-	itemIds := []cache.ScoredItem{
+	itemIds := []cache.Scored{
 		{"1", 99},
 		{"2", 98},
 		{"3", 97},
@@ -536,7 +575,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	assert.NoError(t, err)
 	// insert items
 	for _, item := range itemIds {
-		err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
+		err = s.DataClient.InsertItem(data.Item{ItemId: item.Id})
 		assert.NoError(t, err)
 	}
 	apitest.New().

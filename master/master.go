@@ -97,8 +97,8 @@ func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
 	taskMonitor := NewTaskMonitor()
-	for _, taskName := range []string{TaskFindLatest, TaskFindPopular, TaskFindNeighbor, TaskFitRankingModel,
-		TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel} {
+	for _, taskName := range []string{TaskFindLatest, TaskFindPopular, TaskFindItemNeighbors, TaskFindUserNeighbors,
+		TaskFitRankingModel, TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel} {
 		taskMonitor.Pending(taskName)
 	}
 	return &Master{
@@ -266,7 +266,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		}
 
 		// pre-lock tasks
-		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskFindNeighbor, TaskFitRankingModel, TaskFitClickModel}
+		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
 		for _, taskName := range tasksNames {
 			m.taskScheduler.PreLock(taskName)
 		}

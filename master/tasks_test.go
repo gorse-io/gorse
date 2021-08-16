@@ -25,7 +25,7 @@ import (
 	"time"
 )
 
-func TestMaster_RunFindNeighborsTask(t *testing.T) {
+func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	// create mock master
 	m := newMockMaster(t)
 	defer m.Close()
@@ -68,32 +68,107 @@ func TestMaster_RunFindNeighborsTask(t *testing.T) {
 	assert.NoError(t, err)
 
 	// similar items (common users)
-	m.GorseConfig.Recommend.NeighborType = config.NeighborTypeRelated
-	m.runFindNeighborsTask(dataset)
-	similar, err := m.CacheClient.GetScores(cache.SimilarItems, "9", 0, 100)
+	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeRelated
+	m.runFindItemNeighborsTask(dataset)
+	similar, err := m.CacheClient.GetScores(cache.ItemNeighbors, "9", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindNeighbor].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindNeighbor].Status)
+	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (common labels)
-	m.GorseConfig.Recommend.NeighborType = config.NeighborTypeSimilar
-	m.runFindNeighborsTask(dataset)
-	similar, err = m.CacheClient.GetScores(cache.SimilarItems, "8", 0, 100)
+	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeSimilar
+	m.runFindItemNeighborsTask(dataset)
+	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindNeighbor].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindNeighbor].Status)
+	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (auto)
-	m.GorseConfig.Recommend.NeighborType = config.NeighborTypeAuto
-	m.runFindNeighborsTask(dataset)
-	similar, err = m.CacheClient.GetScores(cache.SimilarItems, "8", 0, 100)
+	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeAuto
+	m.runFindItemNeighborsTask(dataset)
+	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
-	similar, err = m.CacheClient.GetScores(cache.SimilarItems, "9", 0, 100)
+	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "9", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindNeighbor].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindNeighbor].Status)
+	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
+}
+
+func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+	// create config
+	m.GorseConfig = &config.Config{}
+	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Master.NumJobs = 4
+	// collect similar
+	users := []data.User{
+		{"0", []string{"a", "b", "c", "d"}, nil, ""},
+		{"1", []string{"b", "c", "d"}, nil, ""},
+		{"2", []string{"b", "c"}, nil, ""},
+		{"3", []string{"c"}, nil, ""},
+		{"4", []string{}, nil, ""},
+		{"5", []string{}, nil, ""},
+		{"6", []string{}, nil, ""},
+		{"7", []string{}, nil, ""},
+		{"8", []string{"a", "b", "c", "d", "e"}, nil, ""},
+		{"9", []string{}, nil, ""},
+	}
+	feedbacks := make([]data.Feedback, 0)
+	for i := 0; i < 10; i++ {
+		for j := 0; j <= i; j++ {
+			feedbacks = append(feedbacks, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					ItemId:       strconv.Itoa(j),
+					UserId:       strconv.Itoa(i),
+					FeedbackType: "FeedbackType",
+				},
+				Timestamp: time.Now(),
+			})
+		}
+	}
+	var err error
+	for _, user := range users {
+		err = m.DataClient.InsertUser(user)
+		assert.NoError(t, err)
+	}
+	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
+	assert.NoError(t, err)
+	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
+	assert.NoError(t, err)
+
+	// similar items (common users)
+	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeRelated
+	m.runFindUserNeighborsTask(dataset)
+	similar, err := m.CacheClient.GetScores(cache.UserNeighbors, "9", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+
+	// similar items (common labels)
+	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeSimilar
+	m.runFindUserNeighborsTask(dataset)
+	similar, err = m.CacheClient.GetScores(cache.UserNeighbors, "8", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+
+	// similar items (auto)
+	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeAuto
+	m.runFindUserNeighborsTask(dataset)
+	similar, err = m.CacheClient.GetScores(cache.UserNeighbors, "8", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	similar, err = m.CacheClient.GetScores(cache.UserNeighbors, "9", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
+	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
