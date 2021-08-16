@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -100,13 +101,20 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Item{}))
-	ws.Route(ws.GET("/dashboard/neighbors/{item-id}").To(m.getNeighbors).
+	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/user/{user-id}/neighbors").To(m.getUserNeighbors).
+		Doc("get neighbors of a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]data.User{}))
 }
 
 // SinglePageAppFileSystem is the file system for single page app.
@@ -322,7 +330,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 	server.Ok(response, details)
 }
 
-func (m *Master) getList(prefix, name string, request *restful.Request, response *restful.Response) {
+func (m *Master) getList(prefix, name string, request *restful.Request, response *restful.Response, retType interface{}) {
 	var n, begin, end int
 	var err error
 	// read arguments
@@ -336,35 +344,55 @@ func (m *Master) getList(prefix, name string, request *restful.Request, response
 	}
 	end = begin + n - 1
 	// Get the popular list
-	items, err := m.CacheClient.GetScores(prefix, name, begin, end)
+	scores, err := m.CacheClient.GetScores(prefix, name, begin, end)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
 	}
 	// Send result
-	details := make([]data.Item, len(items))
-	for i := range items {
-		details[i], err = m.DataClient.GetItem(items[i].ItemId)
-		if err != nil {
-			server.InternalServerError(response, err)
-			return
+	switch retType.(type) {
+	case data.Item:
+		details := make([]data.Item, len(scores))
+		for i := range scores {
+			details[i], err = m.DataClient.GetItem(scores[i].Id)
+			if err != nil {
+				server.InternalServerError(response, err)
+				return
+			}
 		}
+		server.Ok(response, details)
+	case data.User:
+		details := make([]data.User, len(scores))
+		for i := range scores {
+			details[i], err = m.DataClient.GetUser(scores[i].Id)
+			if err != nil {
+				server.InternalServerError(response, err)
+				return
+			}
+		}
+		server.Ok(response, details)
+	default:
+		base.Logger().Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
 	}
-	server.Ok(response, details)
 }
 
 // getPopular gets popular items from database.
 func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
-	m.getList(cache.PopularItems, "", request, response)
+	m.getList(cache.PopularItems, "", request, response, data.Item{})
 }
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
-	m.getList(cache.LatestItems, "", request, response)
+	m.getList(cache.LatestItems, "", request, response, data.Item{})
 }
 
-func (m *Master) getNeighbors(request *restful.Request, response *restful.Response) {
+func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	m.getList(cache.SimilarItems, itemId, request, response)
+	m.getList(cache.ItemNeighbors, itemId, request, response, data.Item{})
+}
+
+func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
+	userId := request.PathParameter("user-id")
+	m.getList(cache.UserNeighbors, userId, request, response, data.User{})
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {

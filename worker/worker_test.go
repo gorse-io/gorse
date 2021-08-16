@@ -63,7 +63,7 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	w := newMockWorker(t)
 	defer w.Close(t)
 	// insert cache
-	err := w.cacheClient.SetScores(cache.RecommendItems, "0", []cache.ScoredItem{{"0", 0}})
+	err := w.cacheClient.SetScores(cache.RecommendItems, "0", []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.SetTime(cache.LastActiveTime, "0", time.Now().Add(-time.Hour))
@@ -172,7 +172,7 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 
 	recommends, err := w.cacheClient.GetScores(cache.RecommendItems, "0", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.ScoredItem{
+	assert.Equal(t, []cache.Scored{
 		{"3", 3},
 		{"2", 2},
 		{"1", 1},

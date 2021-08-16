@@ -16,6 +16,7 @@ package master
 
 import (
 	"fmt"
+	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
@@ -41,12 +42,15 @@ const (
 
 	TaskFindLatest         = "Find latest items"
 	TaskFindPopular        = "Find popular items"
-	TaskFindNeighbor       = "Find neighbors of items"
+	TaskFindItemNeighbors  = "Find neighbors of items"
+	TaskFindUserNeighbors  = "Find neighbors of users"
 	TaskAnalyze            = "Analyze click-through rate"
 	TaskFitRankingModel    = "Fit ranking model"
 	TaskFitClickModel      = "Fit click model"
 	TaskSearchRankingModel = "Search ranking model"
 	TaskSearchClickModel   = "Search click model"
+
+	SimilarityShrink = 100
 )
 
 // runFindPopularItemsTask updates popular items for the database.
@@ -125,10 +129,10 @@ func (m *Master) runFindLatestItemsTask(items []data.Item) {
 	m.taskMonitor.Finish(TaskFindLatest)
 }
 
-// runFindNeighborsTask updates neighbors for the database.
-func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
-	m.taskMonitor.Start(TaskFindNeighbor, dataset.ItemCount())
-	base.Logger().Info("start collecting similar items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+// runFindItemNeighborsTask updates neighbors of items.
+func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
+	m.taskMonitor.Start(TaskFindItemNeighbors, dataset.ItemCount())
+	base.Logger().Info("start collecting neighbors of items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create progress tracker
 	completed := make(chan []interface{}, 1000)
 	go func() {
@@ -142,23 +146,23 @@ func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
 				}
 				completedCount++
 			case <-ticker.C:
-				m.taskMonitor.Update(TaskFindNeighbor, completedCount)
-				base.Logger().Debug("collect similar items",
+				m.taskMonitor.Update(TaskFindItemNeighbors, completedCount)
+				base.Logger().Debug("collecting neighbors of items",
 					zap.Int("n_complete_items", completedCount),
 					zap.Int("n_items", dataset.ItemCount()))
 			}
 		}
 	}()
 
-	if m.GorseConfig.Recommend.NeighborType == config.NeighborTypeRelated ||
-		m.GorseConfig.Recommend.NeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		for _, feedbacks := range dataset.ItemFeedback {
 			sort.Ints(feedbacks)
 		}
 	}
 	labeledItems := make([][]int, dataset.NumItemLabels)
-	if m.GorseConfig.Recommend.NeighborType == config.NeighborTypeSimilar ||
-		m.GorseConfig.Recommend.NeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		for i, itemLabels := range dataset.ItemLabels {
 			sort.Ints(itemLabels)
 			for _, label := range itemLabels {
@@ -170,8 +174,8 @@ func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
 	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		nearItems := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
-		if m.GorseConfig.Recommend.NeighborType == config.NeighborTypeSimilar ||
-			(m.GorseConfig.Recommend.NeighborType == config.NeighborTypeAuto) {
+		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
+			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto) {
 			labels := dataset.ItemLabels[itemId]
 			itemSet := set.NewIntSet()
 			for _, label := range labels {
@@ -179,16 +183,20 @@ func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
 			}
 			for j := range itemSet.List() {
 				if j != itemId {
-					score := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j])
-					if score > 0 {
+					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j])
+					if commonLabels > 0 {
+						score := commonLabels * commonLabels /
+							math32.Sqrt(float32(len(dataset.ItemLabels[itemId]))) /
+							math32.Sqrt(float32(len(dataset.ItemLabels[j]))) /
+							(commonLabels + SimilarityShrink)
 						nearItems.Push(j, score)
 					}
 				}
 			}
 		}
 
-		if m.GorseConfig.Recommend.NeighborType == config.NeighborTypeRelated ||
-			(m.GorseConfig.Recommend.NeighborType == config.NeighborTypeAuto && nearItems.Len() == 0) {
+		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
+			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && nearItems.Len() == 0) {
 			users := dataset.ItemFeedback[itemId]
 			itemSet := set.NewIntSet()
 			for _, u := range users {
@@ -196,8 +204,12 @@ func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
 			}
 			for j := range itemSet.List() {
 				if j != itemId {
-					score := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j])
-					if score > 0 {
+					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j])
+					if commonUsers > 0 {
+						score := commonUsers * commonUsers /
+							math32.Sqrt(float32(len(dataset.ItemFeedback[itemId]))) /
+							math32.Sqrt(float32(len(dataset.ItemFeedback[j]))) /
+							(commonUsers + SimilarityShrink)
 						nearItems.Push(j, score)
 					}
 				}
@@ -208,20 +220,127 @@ func (m *Master) runFindNeighborsTask(dataset *ranking.DataSet) {
 		for i := range recommends {
 			recommends[i] = dataset.ItemIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetScores(cache.SimilarItems, dataset.ItemIndex.ToName(itemId), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.SetScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(itemId), cache.CreateScoredItems(recommends, scores)); err != nil {
 			return errors.Trace(err)
 		}
 		completed <- nil
 		return nil
 	}); err != nil {
-		base.Logger().Error("failed to cache similar items", zap.Error(err))
+		base.Logger().Error("failed to cache neighbors of items", zap.Error(err))
 	}
 	close(completed)
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateNeighborTime, base.Now()); err != nil {
-		base.Logger().Error("failed to cache similar items", zap.Error(err))
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime, base.Now()); err != nil {
+		base.Logger().Error("failed to cache neighbors of items", zap.Error(err))
 	}
-	base.Logger().Info("finish collecting similar items")
-	m.taskMonitor.Finish(TaskFindNeighbor)
+	base.Logger().Info("finish collecting neighbors of items")
+	m.taskMonitor.Finish(TaskFindItemNeighbors)
+}
+
+// runFindUserNeighborsTask updates neighbors of users.
+func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
+	m.taskMonitor.Start(TaskFindUserNeighbors, dataset.UserCount())
+	base.Logger().Info("start collecting neighbors of users", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+	// create progress tracker
+	completed := make(chan []interface{}, 1000)
+	go func() {
+		completedCount := 0
+		ticker := time.NewTicker(time.Second)
+		for {
+			select {
+			case _, ok := <-completed:
+				if !ok {
+					return
+				}
+				completedCount++
+			case <-ticker.C:
+				m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
+				base.Logger().Debug("collecting neighbors of users",
+					zap.Int("n_complete_users", completedCount),
+					zap.Int("n_users", dataset.UserCount()))
+			}
+		}
+	}()
+
+	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+		for _, feedbacks := range dataset.UserFeedback {
+			sort.Ints(feedbacks)
+		}
+	}
+	labeledUsers := make([][]int, dataset.NumUserLabels)
+	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+		for i, userLabels := range dataset.UserLabels {
+			sort.Ints(userLabels)
+			for _, label := range userLabels {
+				labeledUsers[label] = append(labeledUsers[label], i)
+			}
+		}
+	}
+
+	if err := base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		nearUsers := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+
+		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
+			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto) {
+			labels := dataset.UserLabels[userId]
+			userSet := set.NewIntSet()
+			for _, label := range labels {
+				userSet.Add(labeledUsers[label]...)
+			}
+			for j := range userSet.List() {
+				if j != userId {
+					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j])
+					if commonLabels > 0 {
+						score := commonLabels * commonLabels /
+							math32.Sqrt(float32(len(dataset.UserLabels[userId]))) /
+							math32.Sqrt(float32(len(dataset.UserLabels[j]))) /
+							(commonLabels + SimilarityShrink)
+						nearUsers.Push(j, score)
+					}
+				}
+			}
+		}
+
+		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
+			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
+			users := dataset.UserFeedback[userId]
+			userSet := set.NewIntSet()
+			for _, u := range users {
+				userSet.Add(dataset.UserFeedback[u]...)
+			}
+			for j := range userSet.List() {
+				if j != userId {
+					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j])
+					if commonItems > 0 {
+						score := commonItems * commonItems /
+							math32.Sqrt(float32(len(dataset.UserFeedback[userId]))) /
+							math32.Sqrt(float32(len(dataset.UserFeedback[j]))) /
+							(commonItems + SimilarityShrink)
+						nearUsers.Push(j, score)
+					}
+				}
+			}
+		}
+		elem, scores := nearUsers.PopAll()
+		recommends := make([]string, len(elem))
+		for i := range recommends {
+			recommends[i] = dataset.UserIndex.ToName(elem[i])
+		}
+		if err := m.CacheClient.SetScores(cache.UserNeighbors, dataset.UserIndex.ToName(userId), cache.CreateScoredItems(recommends, scores)); err != nil {
+			return errors.Trace(err)
+		}
+		completed <- nil
+		return nil
+	}); err != nil {
+		base.Logger().Error("failed to cache neighbors of users", zap.Error(err))
+	}
+	close(completed)
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime, base.Now()); err != nil {
+		base.Logger().Error("failed to cache neighbors of users", zap.Error(err))
+	}
+	base.Logger().Info("finish collecting neighbors of users")
+	m.taskMonitor.Finish(TaskFindUserNeighbors)
 }
 
 func commonElements(a, b []int) float32 {
@@ -296,8 +415,10 @@ func (m *Master) runRankingRelatedTasks(
 		m.runFindPopularItemsTask(m.rankingItems, m.rankingFeedbacks)
 		// collect latest items
 		m.runFindLatestItemsTask(m.rankingItems)
-		// collect similar items
-		m.runFindNeighborsTask(m.rankingFullSet)
+		// collect neighbors of items
+		m.runFindItemNeighborsTask(m.rankingFullSet)
+		// collect neighbors of users
+		m.runFindUserNeighborsTask(m.rankingFullSet)
 		// release dataset
 		m.rankingFeedbacks = nil
 		m.rankingItems = nil

@@ -57,7 +57,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 1, config.Recommend.RefreshRecommendPeriod)
 	assert.Equal(t, "latest", config.Recommend.FallbackRecommend)
 	assert.Equal(t, 20, config.Recommend.ExploreLatestNum)
-	assert.Equal(t, "similar", config.Recommend.NeighborType)
+	assert.Equal(t, "similar", config.Recommend.ItemNeighborType)
+	assert.Equal(t, "similar", config.Recommend.UserNeighborType)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

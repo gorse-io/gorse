@@ -79,21 +79,21 @@ func TestMaster_RunFindLatestItemsTask(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, m.taskMonitor.Tasks[TaskFindLatest].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindLatest].Status)
-	assert.Equal(t, []cache.ScoredItem{
+	assert.Equal(t, []cache.Scored{
 		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 	}, latest)
 	//latest, err = m.CacheClient.GetScores(cache.LatestItems, "even", 0, 100)
 	//assert.NoError(t, err)
-	//assert.Equal(t, []cache.ScoredItem{
+	//assert.Equal(t, []cache.Scored{
 	//	{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 	//	{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 	//	{items[4].ItemId, float32(items[4].Timestamp.Unix())},
 	//}, latest)
 	//latest, err = m.CacheClient.GetScores(cache.LatestItems, "odd", 0, 100)
 	//assert.NoError(t, err)
-	//assert.Equal(t, []cache.ScoredItem{
+	//assert.Equal(t, []cache.Scored{
 	//	{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 	//	{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 	//	{items[5].ItemId, float32(items[5].Timestamp.Unix())},
@@ -148,21 +148,21 @@ func TestMaster_RunFindPopularItemsTask(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, m.taskMonitor.Tasks[TaskFindPopular].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindPopular].Status)
-	assert.Equal(t, []cache.ScoredItem{
-		{ItemId: items[9].ItemId, Score: 10},
-		{ItemId: items[8].ItemId, Score: 9},
-		{ItemId: items[7].ItemId, Score: 8},
+	assert.Equal(t, []cache.Scored{
+		{Id: items[9].ItemId, Score: 10},
+		{Id: items[8].ItemId, Score: 9},
+		{Id: items[7].ItemId, Score: 8},
 	}, popular)
 	//popular, err = m.CacheClient.GetScores(cache.PopularItems, "even", 0, 100)
 	//assert.NoError(t, err)
-	//assert.Equal(t, []cache.ScoredItem{
+	//assert.Equal(t, []cache.Scored{
 	//	{ItemId: items[8].ItemId, Score: 9},
 	//	{ItemId: items[6].ItemId, Score: 7},
 	//	{ItemId: items[4].ItemId, Score: 5},
 	//}, popular)
 	//popular, err = m.CacheClient.GetScores(cache.PopularItems, "odd", 0, 100)
 	//assert.NoError(t, err)
-	//assert.Equal(t, []cache.ScoredItem{
+	//assert.Equal(t, []cache.Scored{
 	//	{ItemId: items[9].ItemId, Score: 10},
 	//	{ItemId: items[7].ItemId, Score: 8},
 	//	{ItemId: items[5].ItemId, Score: 6},

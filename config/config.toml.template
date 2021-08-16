@@ -80,10 +80,18 @@ fallback_recommend = "latest"
 # The number of latest (cold-start) items insert to recommended items cache. The default values is 10.
 explore_latest_num = 20
 
-# The type of neighbors. There are three types:
+# The type of neighbors for items. There are three types:
 #   similar: Neighbors are found by number of common labels.
 #   related: Neighbors are found by number of common users.
 #   auto: If a item have labels, neighbors are found by number of common labels.
 #         If this item have no labels, neighbors are found by number of common users.
 # The default values is "auto".
-neighbor_type = "similar"
+item_neighbor_type = "similar"
+
+# The type of neighbors for users. There are three types:
+#   similar: Neighbors are found by number of common labels.
+#   related: Neighbors are found by number of common liked items.
+#   auto: If a user have labels, neighbors are found by number of common labels.
+#         If this user have no labels, neighbors are found by number of common liked items.
+# The default values is "auto".
+user_neighbor_type = "similar"
