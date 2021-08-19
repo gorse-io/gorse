@@ -366,25 +366,23 @@ func commonElements(a, b []int) float32 {
 func (m *Master) runRankingRelatedTasks(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to fit ranking model", zap.Int("n_jobs", m.GorseConfig.Master.NumJobs))
+	base.Logger().Info("start fitting ranking model", zap.Int("n_jobs", m.GorseConfig.Master.NumJobs))
 	m.rankingDataMutex.RLock()
 	defer m.rankingDataMutex.RUnlock()
 	numUsers = m.rankingTrainSet.UserCount()
 	numItems = m.rankingTrainSet.ItemCount()
 	numFeedback = m.rankingTrainSet.Count()
-	var dataChanged bool
-	var modelChanged bool
 
-	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
+	if numUsers == 0 && numItems == 0 && numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
 			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 		return
-	} else if numUsers != lastNumUsers ||
-		numItems != lastNumItems ||
-		numFeedback != lastNumFeedback {
-		dataChanged = true
 	}
+	numFeedbackChanged := numFeedback != lastNumFeedback
+	numUsersChanged := numUsers != lastNumUsers
+	numItemsChanged := numItems != lastNumItems
 
+	var modelChanged bool
 	bestRankingName, bestRankingModel, bestRankingScore := m.rankingModelSearcher.GetBestModel()
 	m.rankingModelMutex.Lock()
 	if bestRankingModel != nil && !bestRankingModel.Invalid() &&
@@ -405,28 +403,47 @@ func (m *Master) runRankingRelatedTasks(
 	rankingModel := m.rankingModel
 	m.rankingModelMutex.Unlock()
 
-	if dataChanged {
-		// update user index
+	// update user index
+	if numUsersChanged {
 		m.userIndexMutex.Lock()
 		m.userIndex = m.rankingTrainSet.UserIndex
 		m.userIndexVersion++
 		m.userIndexMutex.Unlock()
-		// collect popular items
-		m.runFindPopularItemsTask(m.rankingItems, m.rankingFeedbacks)
-		// collect latest items
-		m.runFindLatestItemsTask(m.rankingItems)
-		// collect neighbors of items
-		m.runFindItemNeighborsTask(m.rankingFullSet)
-		// collect neighbors of users
-		m.runFindUserNeighborsTask(m.rankingFullSet)
-		// release dataset
-		m.rankingFeedbacks = nil
-		m.rankingItems = nil
-		m.rankingFullSet = nil
 	}
+	// collect popular items
+	if numFeedback == 0 {
+		m.taskMonitor.Fail(TaskFindPopular, "No feedback found.")
+	} else if numFeedbackChanged {
+		m.runFindPopularItemsTask(m.rankingItems, m.rankingFeedbacks)
+	}
+	// collect latest items
+	if numItems == 0 {
+		m.taskMonitor.Fail(TaskFindLatest, "No item found.")
+	} else if numItemsChanged {
+		m.runFindLatestItemsTask(m.rankingItems)
+	}
+	// collect neighbors of items
+	if numItems == 0 {
+		m.taskMonitor.Fail(TaskFindItemNeighbors, "No item found.")
+	} else if numItemsChanged || numFeedbackChanged {
+		m.runFindItemNeighborsTask(m.rankingFullSet)
+	}
+	// collect neighbors of users
+	if numUsers == 0 {
+		m.taskMonitor.Fail(TaskFindUserNeighbors, "No user found.")
+	} else if numUsersChanged || numFeedbackChanged {
+		m.runFindUserNeighborsTask(m.rankingFullSet)
+	}
+	// release dataset
+	m.rankingFeedbacks = nil
+	m.rankingItems = nil
+	m.rankingFullSet = nil
 
 	// training model
-	if !dataChanged && !modelChanged {
+	if numFeedback == 0 {
+		m.taskMonitor.Fail(TaskFitRankingModel, "No feedback found.")
+		return
+	} else if !numFeedbackChanged && !modelChanged {
 		base.Logger().Info("nothing changed")
 		return
 	}
@@ -602,6 +619,7 @@ func (m *Master) runFitClickModelTask(
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
 			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+		m.taskMonitor.Fail(TaskFitClickModel, "No feedback found.")
 		return
 	} else if numUsers != lastNumUsers ||
 		numItems != lastNumItems ||
@@ -682,6 +700,7 @@ func (m *Master) runSearchRankingModelTask(
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
 			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+		m.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&
 		numItems == lastNumItems &&
@@ -710,6 +729,7 @@ func (m *Master) runSearchClickModelTask(
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty click dataset",
 			zap.Strings("click_feedback_type", m.GorseConfig.Database.ClickFeedbackTypes))
+		m.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&
 		numItems == lastNumItems &&
