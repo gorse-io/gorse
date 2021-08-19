@@ -29,6 +29,7 @@ const (
 	TaskStatusComplete  TaskStatus = "Complete"
 	TaskStatusRunning   TaskStatus = "Running"
 	TaskStatusSuspended TaskStatus = "Suspended"
+	TaskStatusFailed    TaskStatus = "Failed"
 )
 
 // Task progress information.
@@ -39,6 +40,7 @@ type Task struct {
 	Total      int
 	StartTime  time.Time
 	FinishTime time.Time
+	Error      string
 }
 
 // TaskMonitor monitors the progress of all tasks.
@@ -115,6 +117,16 @@ func (tm *TaskMonitor) Suspend(name string, flag bool) {
 		} else {
 			task.Status = TaskStatusRunning
 		}
+	}
+}
+
+func (tm *TaskMonitor) Fail(name, err string) {
+	tm.TaskLock.Lock()
+	defer tm.TaskLock.Unlock()
+	task, exist := tm.Tasks[name]
+	if exist {
+		task.Error = err
+		task.Status = TaskStatusFailed
 	}
 }
 

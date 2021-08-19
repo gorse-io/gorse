@@ -195,6 +195,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 		// If model searcher found it's better to ignore features, just don't use features.
 		searcher.useClickModel = false
 		base.Logger().Info("it seems worse to use features")
+		tracker.Finish()
 		return nil
 	}
 	searcher.bestMutex.Lock()
