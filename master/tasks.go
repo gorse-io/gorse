@@ -154,13 +154,19 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		}
 	}()
 
+	userIDF := make([]float32, dataset.UserCount())
 	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
 		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		for _, feedbacks := range dataset.ItemFeedback {
 			sort.Ints(feedbacks)
 		}
+		// inverse document frequency of users
+		for i := range dataset.UserFeedback {
+			userIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(dataset.UserFeedback[i])))
+		}
 	}
 	labeledItems := make([][]int, dataset.NumItemLabels)
+	labelIDF := make([]float32, dataset.NumItemLabels)
 	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
 		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		for i, itemLabels := range dataset.ItemLabels {
@@ -168,6 +174,10 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 			for _, label := range itemLabels {
 				labeledItems[label] = append(labeledItems[label], i)
 			}
+		}
+		// inverse document frequency of labels
+		for i := range labeledItems {
+			labelIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
 		}
 	}
 
@@ -183,11 +193,11 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 			}
 			for j := range itemSet.List() {
 				if j != itemId {
-					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j])
+					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
 					if commonLabels > 0 {
 						score := commonLabels * commonLabels /
-							math32.Sqrt(float32(len(dataset.ItemLabels[itemId]))) /
-							math32.Sqrt(float32(len(dataset.ItemLabels[j]))) /
+							math32.Sqrt(weightedSum(dataset.ItemLabels[itemId], labelIDF)) /
+							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
 							(commonLabels + SimilarityShrink)
 						nearItems.Push(j, score)
 					}
@@ -204,11 +214,11 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 			}
 			for j := range itemSet.List() {
 				if j != itemId {
-					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j])
+					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
 					if commonUsers > 0 {
 						score := commonUsers * commonUsers /
-							math32.Sqrt(float32(len(dataset.ItemFeedback[itemId]))) /
-							math32.Sqrt(float32(len(dataset.ItemFeedback[j]))) /
+							math32.Sqrt(weightedSum(dataset.ItemFeedback[itemId], userIDF)) /
+							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
 							(commonUsers + SimilarityShrink)
 						nearItems.Push(j, score)
 					}
@@ -261,13 +271,19 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		}
 	}()
 
+	itemIDF := make([]float32, dataset.ItemCount())
 	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
 		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
 		for _, feedbacks := range dataset.UserFeedback {
 			sort.Ints(feedbacks)
 		}
+		// inverse document frequency of items
+		for i := range dataset.ItemFeedback {
+			itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
+		}
 	}
 	labeledUsers := make([][]int, dataset.NumUserLabels)
+	labelIDF := make([]float32, dataset.NumUserLabels)
 	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
 		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
 		for i, userLabels := range dataset.UserLabels {
@@ -275,6 +291,10 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 			for _, label := range userLabels {
 				labeledUsers[label] = append(labeledUsers[label], i)
 			}
+		}
+		// inverse document frequency of labels
+		for i := range labeledUsers {
+			labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
 		}
 	}
 
@@ -290,11 +310,11 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 			}
 			for j := range userSet.List() {
 				if j != userId {
-					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j])
+					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
 					if commonLabels > 0 {
 						score := commonLabels * commonLabels /
-							math32.Sqrt(float32(len(dataset.UserLabels[userId]))) /
-							math32.Sqrt(float32(len(dataset.UserLabels[j]))) /
+							math32.Sqrt(weightedSum(dataset.UserLabels[userId], labelIDF)) /
+							math32.Sqrt(weightedSum(dataset.UserLabels[j], labelIDF)) /
 							(commonLabels + SimilarityShrink)
 						nearUsers.Push(j, score)
 					}
@@ -311,11 +331,11 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 			}
 			for j := range userSet.List() {
 				if j != userId {
-					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j])
+					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
 					if commonItems > 0 {
 						score := commonItems * commonItems /
-							math32.Sqrt(float32(len(dataset.UserFeedback[userId]))) /
-							math32.Sqrt(float32(len(dataset.UserFeedback[j]))) /
+							math32.Sqrt(weightedSum(dataset.UserFeedback[userId], itemIDF)) /
+							math32.Sqrt(weightedSum(dataset.UserFeedback[j], itemIDF)) /
 							(commonItems + SimilarityShrink)
 						nearUsers.Push(j, score)
 					}
@@ -343,18 +363,26 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	m.taskMonitor.Finish(TaskFindUserNeighbors)
 }
 
-func commonElements(a, b []int) float32 {
+func commonElements(a, b []int, weights []float32) float32 {
 	i, j, sum := 0, 0, float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
+			sum += weights[a[i]]
 			i++
 			j++
-			sum++
 		} else if a[i] < b[j] {
 			i++
 		} else if a[i] > b[j] {
 			j++
 		}
+	}
+	return sum
+}
+
+func weightedSum(a []int, weights []float32) float32 {
+	var sum float32
+	for _, i := range a {
+		sum += weights[i]
 	}
 	return sum
 }
