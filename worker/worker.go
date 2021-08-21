@@ -370,6 +370,13 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		zap.Int("cache_size", w.cfg.Database.CacheSize))
 	// progress tracker
 	completed := make(chan interface{}, 1000)
+	taskName := fmt.Sprintf("Generate offline recommendation [%s]", w.workerName)
+	if w.masterClient != nil {
+		if _, err := w.masterClient.StartTask(context.Background(),
+			&protocol.StartTaskRequest{Name: taskName, Total: int64(len(users))}); err != nil {
+			base.Logger().Error("failed to report start task", zap.Error(err))
+		}
+	}
 	go func() {
 		defer base.CheckPanic()
 		completedCount := 0
@@ -382,6 +389,12 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				}
 				completedCount++
 			case <-ticker.C:
+				if w.masterClient != nil {
+					if _, err := w.masterClient.UpdateTask(context.Background(),
+						&protocol.UpdateTaskRequest{Name: taskName, Done: int64(completedCount)}); err != nil {
+						base.Logger().Error("failed to report update task", zap.Error(err))
+					}
+				}
 				base.Logger().Info("ranking recommendation",
 					zap.Int("n_complete_users", completedCount),
 					zap.Int("n_working_users", len(users)))
@@ -450,13 +463,13 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				return errors.Trace(err)
 			}
 			for _, latestItem := range latestItems {
-				if !candidateSet.Has(latestItem.ItemId) && !historySet.Has(latestItem.ItemId) {
-					candidateItems = append(candidateItems, latestItem.ItemId)
+				if !candidateSet.Has(latestItem.Id) && !historySet.Has(latestItem.Id) {
+					candidateItems = append(candidateItems, latestItem.Id)
 				}
 			}
 		}
 		// rank items in result by click-through-rate
-		var result []cache.ScoredItem
+		var result []cache.Scored
 		if w.clickModel != nil {
 			result, err = w.rankByClickTroughRate(userId, candidateItems)
 			if err != nil {
@@ -481,13 +494,19 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		return nil
 	})
 	close(completed)
+	if w.masterClient != nil {
+		if _, err := w.masterClient.FinishTask(context.Background(),
+			&protocol.FinishTaskRequest{Name: taskName}); err != nil {
+			base.Logger().Error("failed to report finish task", zap.Error(err))
+		}
+	}
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 }
 
 // randomInsertLatestItem inserts latest items to the recommendation list randomly. Latest items
 // are located at itemIds[len(scores):len(itemIds)]
-func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []cache.ScoredItem {
+func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []cache.Scored {
 	numPersonalized := len(scores)
 	for i := numPersonalized; i < len(itemIds); i++ {
 		scores = append(scores, 0)
@@ -499,7 +518,7 @@ func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []ca
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache.ScoredItem, error) {
+func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache.Scored, error) {
 	// download items
 	var err error
 	items := make([]data.Item, len(itemIds))

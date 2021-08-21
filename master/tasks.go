@@ -21,7 +21,7 @@ import (
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -39,10 +39,23 @@ const (
 	ClickThroughRate      = "ClickThroughRate"
 	ActiveUsersYesterday  = "ActiveUsersYesterday"
 	ActiveUsersMonthly    = "ActiveUsersMonthly"
+
+	TaskFindLatest         = "Find latest items"
+	TaskFindPopular        = "Find popular items"
+	TaskFindItemNeighbors  = "Find neighbors of items"
+	TaskFindUserNeighbors  = "Find neighbors of users"
+	TaskAnalyze            = "Analyze click-through rate"
+	TaskFitRankingModel    = "Fit ranking model"
+	TaskFitClickModel      = "Fit click model"
+	TaskSearchRankingModel = "Search ranking model"
+	TaskSearchClickModel   = "Search click model"
+
+	SimilarityShrink = 100
 )
 
-// popItem updates popular items for the database.
-func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
+// runFindPopularItemsTask updates popular items for the database.
+func (m *Master) runFindPopularItemsTask(items []data.Item, feedback []data.Feedback) {
+	m.taskMonitor.Start(TaskFindPopular, 1)
 	base.Logger().Info("collect popular items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create item mapping
 	itemMap := make(map[string]data.Item)
@@ -81,10 +94,12 @@ func (m *Master) popItem(items []data.Item, feedback []data.Feedback) {
 	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
+	m.taskMonitor.Finish(TaskFindPopular)
 }
 
-// latest updates latest items.
-func (m *Master) latest(items []data.Item) {
+// runFindLatestItemsTask updates the latest items.
+func (m *Master) runFindLatestItemsTask(items []data.Item) {
+	m.taskMonitor.Start(TaskFindLatest, 1)
 	base.Logger().Info("collect latest items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	var err error
 	latestItems := make(map[string]*base.TopKStringFilter)
@@ -111,11 +126,13 @@ func (m *Master) latest(items []data.Item) {
 	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, base.Now()); err != nil {
 		base.Logger().Error("failed to cache latest items time", zap.Error(err))
 	}
+	m.taskMonitor.Finish(TaskFindLatest)
 }
 
-// similar updates neighbors for the database.
-func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity string) {
-	base.Logger().Info("collect similar items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+// runFindItemNeighborsTask updates neighbors of items.
+func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
+	m.taskMonitor.Start(TaskFindItemNeighbors, dataset.ItemCount())
+	base.Logger().Info("start collecting neighbors of items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create progress tracker
 	completed := make(chan []interface{}, 1000)
 	go func() {
@@ -129,36 +146,83 @@ func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity
 				}
 				completedCount++
 			case <-ticker.C:
-				base.Logger().Debug("collect similar items",
+				m.taskMonitor.Update(TaskFindItemNeighbors, completedCount)
+				base.Logger().Debug("collecting neighbors of items",
 					zap.Int("n_complete_items", completedCount),
 					zap.Int("n_items", dataset.ItemCount()))
 			}
 		}
 	}()
 
-	// pre-ranking
-	for _, feedbacks := range dataset.ItemFeedback {
-		sort.Ints(feedbacks)
+	userIDF := make([]float32, dataset.UserCount())
+	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+		for _, feedbacks := range dataset.ItemFeedback {
+			sort.Ints(feedbacks)
+		}
+		// inverse document frequency of users
+		for i := range dataset.UserFeedback {
+			userIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(dataset.UserFeedback[i])))
+		}
+	}
+	labeledItems := make([][]int, dataset.NumItemLabels)
+	labelIDF := make([]float32, dataset.NumItemLabels)
+	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+		for i, itemLabels := range dataset.ItemLabels {
+			sort.Ints(itemLabels)
+			for _, label := range itemLabels {
+				labeledItems[label] = append(labeledItems[label], i)
+			}
+		}
+		// inverse document frequency of labels
+		for i := range labeledItems {
+			labelIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
+		}
 	}
 
-	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.FitJobs, func(workerId, jobId int) error {
-		users := dataset.ItemFeedback[jobId]
-		// Collect candidates
-		itemSet := set.NewIntSet()
-		for _, u := range users {
-			itemSet.Add(dataset.UserFeedback[u]...)
-		}
-		// Ranking
+	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		nearItems := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
-		for j := range itemSet.List() {
-			if j != jobId {
-				var score float32
-				score = dotInt(dataset.ItemFeedback[jobId], dataset.ItemFeedback[j])
-				if similarity == model.SimilarityCosine {
-					score /= math32.Sqrt(float32(len(dataset.ItemFeedback[jobId])))
-					score /= math32.Sqrt(float32(len(dataset.ItemFeedback[j])))
+
+		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
+			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto) {
+			labels := dataset.ItemLabels[itemId]
+			itemSet := set.NewIntSet()
+			for _, label := range labels {
+				itemSet.Add(labeledItems[label]...)
+			}
+			for j := range itemSet.List() {
+				if j != itemId {
+					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
+					if commonLabels > 0 {
+						score := commonLabels * commonLabels /
+							math32.Sqrt(weightedSum(dataset.ItemLabels[itemId], labelIDF)) /
+							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
+							(commonLabels + SimilarityShrink)
+						nearItems.Push(j, score)
+					}
 				}
-				nearItems.Push(j, score)
+			}
+		}
+
+		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
+			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && nearItems.Len() == 0) {
+			users := dataset.ItemFeedback[itemId]
+			itemSet := set.NewIntSet()
+			for _, u := range users {
+				itemSet.Add(dataset.UserFeedback[u]...)
+			}
+			for j := range itemSet.List() {
+				if j != itemId {
+					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
+					if commonUsers > 0 {
+						score := commonUsers * commonUsers /
+							math32.Sqrt(weightedSum(dataset.ItemFeedback[itemId], userIDF)) /
+							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
+							(commonUsers + SimilarityShrink)
+						nearItems.Push(j, score)
+					}
+				}
 			}
 		}
 		elem, scores := nearItems.PopAll()
@@ -166,27 +230,146 @@ func (m *Master) similar(items []data.Item, dataset *ranking.DataSet, similarity
 		for i := range recommends {
 			recommends[i] = dataset.ItemIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetScores(cache.SimilarItems, dataset.ItemIndex.ToName(jobId), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.SetScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(itemId), cache.CreateScoredItems(recommends, scores)); err != nil {
 			return errors.Trace(err)
 		}
 		completed <- nil
 		return nil
 	}); err != nil {
-		base.Logger().Error("failed to cache similar items", zap.Error(err))
+		base.Logger().Error("failed to cache neighbors of items", zap.Error(err))
 	}
 	close(completed)
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateNeighborTime, base.Now()); err != nil {
-		base.Logger().Error("failed to cache similar items", zap.Error(err))
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime, base.Now()); err != nil {
+		base.Logger().Error("failed to cache neighbors of items", zap.Error(err))
 	}
+	base.Logger().Info("finish collecting neighbors of items")
+	m.taskMonitor.Finish(TaskFindItemNeighbors)
 }
 
-func dotString(a, b []string) float32 {
+// runFindUserNeighborsTask updates neighbors of users.
+func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
+	m.taskMonitor.Start(TaskFindUserNeighbors, dataset.UserCount())
+	base.Logger().Info("start collecting neighbors of users", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+	// create progress tracker
+	completed := make(chan []interface{}, 1000)
+	go func() {
+		completedCount := 0
+		ticker := time.NewTicker(time.Second)
+		for {
+			select {
+			case _, ok := <-completed:
+				if !ok {
+					return
+				}
+				completedCount++
+			case <-ticker.C:
+				m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
+				base.Logger().Debug("collecting neighbors of users",
+					zap.Int("n_complete_users", completedCount),
+					zap.Int("n_users", dataset.UserCount()))
+			}
+		}
+	}()
+
+	itemIDF := make([]float32, dataset.ItemCount())
+	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+		for _, feedbacks := range dataset.UserFeedback {
+			sort.Ints(feedbacks)
+		}
+		// inverse document frequency of items
+		for i := range dataset.ItemFeedback {
+			itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
+		}
+	}
+	labeledUsers := make([][]int, dataset.NumUserLabels)
+	labelIDF := make([]float32, dataset.NumUserLabels)
+	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+		for i, userLabels := range dataset.UserLabels {
+			sort.Ints(userLabels)
+			for _, label := range userLabels {
+				labeledUsers[label] = append(labeledUsers[label], i)
+			}
+		}
+		// inverse document frequency of labels
+		for i := range labeledUsers {
+			labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
+		}
+	}
+
+	if err := base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		nearUsers := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+
+		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
+			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto) {
+			labels := dataset.UserLabels[userId]
+			userSet := set.NewIntSet()
+			for _, label := range labels {
+				userSet.Add(labeledUsers[label]...)
+			}
+			for j := range userSet.List() {
+				if j != userId {
+					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
+					if commonLabels > 0 {
+						score := commonLabels * commonLabels /
+							math32.Sqrt(weightedSum(dataset.UserLabels[userId], labelIDF)) /
+							math32.Sqrt(weightedSum(dataset.UserLabels[j], labelIDF)) /
+							(commonLabels + SimilarityShrink)
+						nearUsers.Push(j, score)
+					}
+				}
+			}
+		}
+
+		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
+			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
+			users := dataset.UserFeedback[userId]
+			userSet := set.NewIntSet()
+			for _, u := range users {
+				userSet.Add(dataset.UserFeedback[u]...)
+			}
+			for j := range userSet.List() {
+				if j != userId {
+					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
+					if commonItems > 0 {
+						score := commonItems * commonItems /
+							math32.Sqrt(weightedSum(dataset.UserFeedback[userId], itemIDF)) /
+							math32.Sqrt(weightedSum(dataset.UserFeedback[j], itemIDF)) /
+							(commonItems + SimilarityShrink)
+						nearUsers.Push(j, score)
+					}
+				}
+			}
+		}
+		elem, scores := nearUsers.PopAll()
+		recommends := make([]string, len(elem))
+		for i := range recommends {
+			recommends[i] = dataset.UserIndex.ToName(elem[i])
+		}
+		if err := m.CacheClient.SetScores(cache.UserNeighbors, dataset.UserIndex.ToName(userId), cache.CreateScoredItems(recommends, scores)); err != nil {
+			return errors.Trace(err)
+		}
+		completed <- nil
+		return nil
+	}); err != nil {
+		base.Logger().Error("failed to cache neighbors of users", zap.Error(err))
+	}
+	close(completed)
+	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime, base.Now()); err != nil {
+		base.Logger().Error("failed to cache neighbors of users", zap.Error(err))
+	}
+	base.Logger().Info("finish collecting neighbors of users")
+	m.taskMonitor.Finish(TaskFindUserNeighbors)
+}
+
+func commonElements(a, b []int, weights []float32) float32 {
 	i, j, sum := 0, 0, float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
+			sum += weights[a[i]]
 			i++
 			j++
-			sum++
 		} else if a[i] < b[j] {
 			i++
 		} else if a[i] > b[j] {
@@ -196,18 +379,10 @@ func dotString(a, b []string) float32 {
 	return sum
 }
 
-func dotInt(a, b []int) float32 {
-	i, j, sum := 0, 0, float32(0)
-	for i < len(a) && j < len(b) {
-		if a[i] == b[j] {
-			i++
-			j++
-			sum++
-		} else if a[i] < b[j] {
-			i++
-		} else if a[i] > b[j] {
-			j++
-		}
+func weightedSum(a []int, weights []float32) float32 {
+	var sum float32
+	for _, i := range a {
+		sum += weights[i]
 	}
 	return sum
 }
@@ -216,28 +391,26 @@ func dotInt(a, b []int) float32 {
 // 1. Ranking model version are increased.
 // 2. Ranking model score are updated.
 // 3. Ranking model, version and score are persisted to local cache.
-func (m *Master) fitRankingModelAndNonPersonalized(
+func (m *Master) runRankingRelatedTasks(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to fit ranking model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+	base.Logger().Info("start fitting ranking model", zap.Int("n_jobs", m.GorseConfig.Master.NumJobs))
 	m.rankingDataMutex.RLock()
 	defer m.rankingDataMutex.RUnlock()
 	numUsers = m.rankingTrainSet.UserCount()
 	numItems = m.rankingTrainSet.ItemCount()
 	numFeedback = m.rankingTrainSet.Count()
-	var dataChanged bool
-	var modelChanged bool
 
-	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
+	if numUsers == 0 && numItems == 0 && numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
 			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 		return
-	} else if numUsers != lastNumUsers ||
-		numItems != lastNumItems ||
-		numFeedback != lastNumFeedback {
-		dataChanged = true
 	}
+	numFeedbackChanged := numFeedback != lastNumFeedback
+	numUsersChanged := numUsers != lastNumUsers
+	numItemsChanged := numItems != lastNumItems
 
+	var modelChanged bool
 	bestRankingName, bestRankingModel, bestRankingScore := m.rankingModelSearcher.GetBestModel()
 	m.rankingModelMutex.Lock()
 	if bestRankingModel != nil && !bestRankingModel.Invalid() &&
@@ -258,30 +431,58 @@ func (m *Master) fitRankingModelAndNonPersonalized(
 	rankingModel := m.rankingModel
 	m.rankingModelMutex.Unlock()
 
-	if dataChanged {
-		// update user index
+	// update user index
+	if numUsersChanged {
 		m.userIndexMutex.Lock()
 		m.userIndex = m.rankingTrainSet.UserIndex
 		m.userIndexVersion++
 		m.userIndexMutex.Unlock()
-		// collect similar items
-		m.similar(m.rankingItems, m.rankingFullSet, model.SimilarityDot)
-		// collect popular items
-		m.popItem(m.rankingItems, m.rankingFeedbacks)
-		// collect latest items
-		m.latest(m.rankingItems)
-		// release dataset
-		m.rankingFeedbacks = nil
-		m.rankingItems = nil
-		m.rankingFullSet = nil
 	}
+	// collect popular items
+	if numFeedback == 0 {
+		m.taskMonitor.Fail(TaskFindPopular, "No feedback found.")
+	} else if numFeedbackChanged {
+		m.runFindPopularItemsTask(m.rankingItems, m.rankingFeedbacks)
+	}
+	// collect latest items
+	if numItems == 0 {
+		m.taskMonitor.Fail(TaskFindLatest, "No item found.")
+	} else if numItemsChanged {
+		m.runFindLatestItemsTask(m.rankingItems)
+	}
+	// collect neighbors of items
+	if numItems == 0 {
+		m.taskMonitor.Fail(TaskFindItemNeighbors, "No item found.")
+	} else if numItemsChanged || numFeedbackChanged {
+		m.runFindItemNeighborsTask(m.rankingFullSet)
+	}
+	// collect neighbors of users
+	if numUsers == 0 {
+		m.taskMonitor.Fail(TaskFindUserNeighbors, "No user found.")
+	} else if numUsersChanged || numFeedbackChanged {
+		m.runFindUserNeighborsTask(m.rankingFullSet)
+	}
+	// release dataset
+	m.rankingFeedbacks = nil
+	m.rankingItems = nil
+	m.rankingFullSet = nil
 
 	// training model
-	if !dataChanged && !modelChanged {
+	if numFeedback == 0 {
+		m.taskMonitor.Fail(TaskFitRankingModel, "No feedback found.")
+		return
+	} else if !numFeedbackChanged && !modelChanged {
 		base.Logger().Info("nothing changed")
 		return
 	}
-	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
+	m.runFitRankingModelTask(rankingModel)
+	return
+}
+
+func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
+	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().
+		SetJobs(m.GorseConfig.Master.NumJobs).
+		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitRankingModel)))
 
 	// update ranking model
 	m.rankingModelMutex.Lock()
@@ -329,11 +530,14 @@ func (m *Master) fitRankingModelAndNonPersonalized(
 			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
 	}
-	return
 }
 
-func (m *Master) analyze() error {
-	// pull existed click through rates
+func (m *Master) runAnalyzeTask() error {
+	m.taskScheduler.Lock(TaskAnalyze)
+	defer m.taskScheduler.UnLock(TaskAnalyze)
+	base.Logger().Info("start analyzing click-through-rate")
+	m.taskMonitor.Start(TaskAnalyze, 30)
+	// pull existed click-through rates
 	clickThroughRates, err := m.DataClient.GetMeasurements(ClickThroughRate, 30)
 	if err != nil {
 		return errors.Trace(err)
@@ -342,8 +546,8 @@ func (m *Master) analyze() error {
 	for _, clickThroughRate := range clickThroughRates {
 		existed.Add(clickThroughRate.Timestamp.String())
 	}
-	// update click through rate
-	for i := 30; i > 0; i-- {
+	// update click-through rate
+	for i := 1; i <= 30; i++ {
 		dateTime := time.Now().AddDate(0, 0, -i)
 		date := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC)
 		if !existed.Has(date.String()) {
@@ -366,6 +570,7 @@ func (m *Master) analyze() error {
 				zap.Duration("time_used", time.Since(startTime)),
 				zap.Float64("click_through_rate", clickThroughRate))
 		}
+		m.taskMonitor.Update(TaskAnalyze, i)
 	}
 
 	// pull existed active users
@@ -419,17 +624,19 @@ func (m *Master) analyze() error {
 			zap.Int("active_users", activeUsers))
 	}
 
+	base.Logger().Info("complete analyzing click-through-rate")
+	m.taskMonitor.Finish(TaskAnalyze)
 	return nil
 }
 
-// fitClickModel fits click model using latest data. After model fitted, following states are changed:
+// runFitClickModelTask fits click model using latest data. After model fitted, following states are changed:
 // 1. Click model version are increased.
 // 2. Click model score are updated.
 // 3. Click model, version and score are persisted to local cache.
-func (m *Master) fitClickModel(
+func (m *Master) runFitClickModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to fit click model", zap.Int("n_jobs", m.GorseConfig.Master.FitJobs))
+	base.Logger().Info("prepare to fit click model", zap.Int("n_jobs", m.GorseConfig.Master.NumJobs))
 	m.clickDataMutex.RLock()
 	defer m.clickDataMutex.RUnlock()
 	numUsers = m.clickTrainSet.UserCount()
@@ -440,6 +647,7 @@ func (m *Master) fitClickModel(
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
 			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+		m.taskMonitor.Fail(TaskFitClickModel, "No feedback found.")
 		return
 	} else if numUsers != lastNumUsers ||
 		numItems != lastNumItems ||
@@ -471,7 +679,9 @@ func (m *Master) fitClickModel(
 		base.Logger().Info("nothing changed")
 		return
 	}
-	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().SetJobs(m.GorseConfig.Master.FitJobs))
+	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().
+		SetJobs(m.GorseConfig.Master.NumJobs).
+		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitClickModel)))
 
 	// update match model
 	m.clickModelMutex.Lock()
@@ -504,12 +714,12 @@ func (m *Master) fitClickModel(
 	return
 }
 
-// searchRankingModel searches best hyper-parameters for ranking models.
+// runSearchRankingModelTask searches best hyper-parameters for ranking models.
 // It requires read lock on the ranking dataset.
-func (m *Master) searchRankingModel(
+func (m *Master) runSearchRankingModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to search ranking model")
+	base.Logger().Info("start searching ranking model")
 	m.rankingDataMutex.RLock()
 	defer m.rankingDataMutex.RUnlock()
 	numUsers = m.rankingTrainSet.UserCount()
@@ -519,6 +729,7 @@ func (m *Master) searchRankingModel(
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
 			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+		m.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&
 		numItems == lastNumItems &&
@@ -527,16 +738,17 @@ func (m *Master) searchRankingModel(
 		return
 	}
 
-	err = m.rankingModelSearcher.Fit(m.rankingTrainSet, m.rankingTestSet)
+	err = m.rankingModelSearcher.Fit(m.rankingTrainSet, m.rankingTestSet,
+		m.taskMonitor.NewTaskTracker(TaskSearchRankingModel), m.taskScheduler.NewRunner(TaskSearchRankingModel))
 	return
 }
 
-// searchClickModel searches best hyper-parameters for factorization machines.
+// runSearchClickModelTask searches best hyper-parameters for factorization machines.
 // It requires read lock on the click dataset.
-func (m *Master) searchClickModel(
+func (m *Master) runSearchClickModelTask(
 	lastNumUsers, lastNumItems, lastNumFeedback int,
 ) (numUsers, numItems, numFeedback int, err error) {
-	base.Logger().Info("prepare to search click model")
+	base.Logger().Info("start searching click model")
 	m.clickDataMutex.RLock()
 	defer m.clickDataMutex.RUnlock()
 	numUsers = m.clickTrainSet.UserCount()
@@ -545,7 +757,8 @@ func (m *Master) searchClickModel(
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty click dataset",
-			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+			zap.Strings("click_feedback_type", m.GorseConfig.Database.ClickFeedbackTypes))
+		m.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&
 		numItems == lastNumItems &&
@@ -554,6 +767,7 @@ func (m *Master) searchClickModel(
 		return
 	}
 
-	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet)
+	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet,
+		m.taskMonitor.NewTaskTracker(TaskSearchClickModel), m.taskScheduler.NewRunner(TaskSearchClickModel))
 	return
 }

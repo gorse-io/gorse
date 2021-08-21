@@ -207,3 +207,24 @@ func (m *Master) nodeDown(key string, value interface{}) {
 	defer m.nodesInfoMutex.Unlock()
 	delete(m.nodesInfo, key)
 }
+
+func (m *Master) StartTask(
+	ctx context.Context,
+	in *protocol.StartTaskRequest) (*protocol.StartTaskResponse, error) {
+	m.taskMonitor.Start(in.Name, int(in.Total))
+	return &protocol.StartTaskResponse{}, nil
+}
+
+func (m *Master) UpdateTask(
+	ctx context.Context,
+	in *protocol.UpdateTaskRequest) (*protocol.UpdateTaskResponse, error) {
+	m.taskMonitor.Update(in.Name, int(in.Done))
+	return &protocol.UpdateTaskResponse{}, nil
+}
+
+func (m *Master) FinishTask(
+	ctx context.Context,
+	in *protocol.FinishTaskRequest) (*protocol.FinishTaskResponse, error) {
+	m.taskMonitor.Finish(in.Name)
+	return &protocol.FinishTaskResponse{}, nil
+}

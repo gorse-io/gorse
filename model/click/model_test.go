@@ -14,6 +14,7 @@
 package click
 
 import (
+	"github.com/stretchr/testify/mock"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,9 +25,41 @@ const (
 	delta = 0.01
 )
 
-var fitConfig = &FitConfig{
-	Jobs:    1,
-	Verbose: 1,
+type mockTracker struct {
+	mock.Mock
+}
+
+func (t *mockTracker) Start(total int) {
+	t.Called(total)
+}
+
+func (t *mockTracker) Update(done int) {
+	t.Called()
+}
+
+func (t *mockTracker) Finish() {
+	t.Called()
+}
+
+func (t *mockTracker) Suspend(flag bool) {
+	t.Called()
+}
+
+func (t *mockTracker) SubTracker() model.Tracker {
+	t.Called()
+	return nil
+}
+
+func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
+	tracker := new(mockTracker)
+	tracker.On("Start", numEpoch)
+	tracker.On("Update", mock.Anything)
+	tracker.On("Finish")
+	return &FitConfig{
+		Jobs:    1,
+		Verbose: 1,
+		Tracker: tracker,
+	}, tracker
 }
 
 func TestFM_Classification_Frappe(t *testing.T) {
@@ -43,7 +76,9 @@ func TestFM_Classification_Frappe(t *testing.T) {
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
+	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
+	tracker.AssertExpectations(t)
 	assert.InDelta(t, 0.91684, score.Accuracy, delta)
 }
 
@@ -79,7 +114,9 @@ func TestFM_Regression_Frappe(t *testing.T) {
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
+	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
+	tracker.AssertExpectations(t)
 	assert.InDelta(t, 0.494435, score.RMSE, delta)
 }
 

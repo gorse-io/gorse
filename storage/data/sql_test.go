@@ -36,8 +36,8 @@ func init() {
 		}
 		return defaultValue
 	}
-	mySqlDSN = env("MYSQL_URI", "mysql://root@tcp(127.0.0.1:3306)/")
-	postgresDSN = env("POSTGRES_URI", "postgres://postgres:pg_pass@127.0.0.1/")
+	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
+	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
 	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://192.168.199.166:8123/")
 }
 
@@ -239,7 +239,7 @@ func newTestClickHouseDatabase(t *testing.T, dbName string) *testSQLDatabase {
 	err = database.Database.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(clickhouseDSN + dbName)
+	database.Database, err = Open(clickhouseDSN + dbName + "?mutations_sync=2")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()

@@ -69,7 +69,8 @@ func (s *RestServer) StartHttpServer() {
 
 func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	chain.ProcessFilter(req, resp)
-	if req.Request.URL.Path != "/api/dashboard/cluster" {
+	if req.Request.URL.Path != "/api/dashboard/cluster" &&
+		req.Request.URL.Path != "/api/dashboard/tasks" {
 		base.Logger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
 			zap.Int("status_code", resp.StatusCode()))
 	}
@@ -283,12 +284,20 @@ func (s *RestServer) CreateWebService() {
 	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 	//	Writes([]string{}))
 	// Get neighbors
-	ws.Route(ws.GET("/neighbors/{item-id}").To(s.getNeighbors).
+	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]string{}))
+	ws.Route(ws.GET("/user/{user-id}/neighbors/").To(s.getUserNeighbors).
+		Doc("get neighbors of a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
@@ -414,15 +423,26 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 	Ok(response, feedback)
 }
 
-// getNeighbors gets neighbors of a item from database.
-func (s *RestServer) getNeighbors(request *restful.Request, response *restful.Response) {
+// getItemNeighbors gets neighbors of a item from database.
+func (s *RestServer) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	// Authorize
 	if !s.auth(request, response) {
 		return
 	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
-	s.getList(cache.SimilarItems, itemId, request, response)
+	s.getList(cache.ItemNeighbors, itemId, request, response)
+}
+
+// getUserNeighbors gets neighbors of a user from database.
+func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Get item id
+	userId := request.PathParameter("user-id")
+	s.getList(cache.UserNeighbors, userId, request, response)
 }
 
 // getSubscribe gets subscribed items of a user from database.
@@ -460,7 +480,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	itemsChan := make(chan []string, 1)
 	errChan := make(chan error, 1)
 	go func() {
-		var collaborativeFilteringItems []cache.ScoredItem
+		var collaborativeFilteringItems []cache.Scored
 		collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.RecommendItems, userId, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			itemsChan <- nil
@@ -516,15 +536,15 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		candidates := make(map[string]float32)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.GetScores(cache.SimilarItems, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
+			similarItems, err := s.CacheClient.GetScores(cache.ItemNeighbors, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {
 				return nil, err
 			}
 			// add unseen items
 			removeReadStart = time.Now()
 			for _, item := range similarItems {
-				if !excludeSet.Has(item.ItemId) {
-					candidates[item.ItemId] += item.Score
+				if !excludeSet.Has(item.Id) {
+					candidates[item.Id] += item.Score
 				}
 			}
 			removeReadTime += time.Since(removeReadStart)
@@ -544,7 +564,7 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 	// 3. return fallback recommendation
 	if len(results) < n {
 		fallbackStart := time.Now()
-		var fallbacks []cache.ScoredItem
+		var fallbacks []cache.Scored
 		switch s.GorseConfig.Recommend.FallbackRecommend {
 		case "latest":
 			fallbacks, err = s.CacheClient.GetScores(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
@@ -555,8 +575,8 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		}
 		removeReadStart = time.Now()
 		for _, item := range fallbacks {
-			if !excludeSet.Has(item.ItemId) {
-				results = append(results, item.ItemId)
+			if !excludeSet.Has(item.Id) {
+				results = append(results, item.Id)
 			}
 		}
 		removeReadTime += time.Since(removeReadStart)

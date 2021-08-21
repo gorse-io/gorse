@@ -83,6 +83,7 @@ func (score Score) BetterThan(s Score) bool {
 type FitConfig struct {
 	Jobs    int
 	Verbose int
+	Tracker model.Tracker
 }
 
 func NewFitConfig() *FitConfig {
@@ -94,6 +95,11 @@ func NewFitConfig() *FitConfig {
 
 func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
 	config.Jobs = nJobs
+	return config
+}
+
+func (config *FitConfig) SetTracker(tracker model.Tracker) *FitConfig {
+	config.Tracker = tracker
 	return config
 }
 
@@ -234,6 +240,9 @@ func (fm *FM) InternalPredict(x []int) float32 {
 
 func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
+	if config.Tracker != nil {
+		config.Tracker.Start(fm.nEpochs)
+	}
 	base.Logger().Info("fit FM",
 		zap.Int("train_size", trainSet.Count()),
 		zap.Int("test_size", testSet.Count()),
@@ -332,12 +341,20 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 			}
 			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 		}
+		if config.Tracker != nil {
+			config.Tracker.Update(epoch)
+		}
 	}
 	// restore best snapshot
 	fm.V = snapshots.BestWeights[0].([][]float32)
 	fm.W = snapshots.BestWeights[1].([]float32)
 	fm.B = snapshots.BestWeights[2].(float32)
 	base.Logger().Info("fit fm complete", snapshots.BestScore.ZapFields()...)
+	if config.Tracker != nil {
+		config.Tracker.Finish()
+	}
+	base.Logger().Info("fit fm complete",
+		zap.Float32(snapshots.BestScore.GetName(), snapshots.BestScore.GetValue()))
 	return snapshots.BestScore
 }
 

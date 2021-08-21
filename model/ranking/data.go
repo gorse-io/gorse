@@ -41,8 +41,10 @@ type DataSet struct {
 	ItemFeedback  [][]int
 	Negatives     [][]int
 	ItemLabels    [][]int
+	UserLabels    [][]int
 	// statistics
 	NumItemLabels int
+	NumUserLabels int
 }
 
 // NewMapIndexDataset creates a data set.
@@ -169,7 +171,9 @@ func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [
 func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet) {
 	trainSet, testSet := new(DataSet), new(DataSet)
 	trainSet.NumItemLabels, testSet.NumItemLabels = dataset.NumItemLabels, dataset.NumItemLabels
-	trainSet.ItemLabels, trainSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
+	trainSet.NumUserLabels, testSet.NumUserLabels = dataset.NumUserLabels, dataset.NumUserLabels
+	trainSet.ItemLabels, testSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
+	trainSet.UserLabels, testSet.UserLabels = dataset.UserLabels, dataset.UserLabels
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex
 	trainSet.ItemIndex, testSet.ItemIndex = dataset.ItemIndex, dataset.ItemIndex
 	trainSet.UserFeedback, testSet.UserFeedback = createSliceOfSlice(dataset.UserCount()), createSliceOfSlice(dataset.UserCount())
@@ -288,6 +292,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 	allItems := make([]data.Item, 0)
 	allFeedback := make([]data.Feedback, 0)
 	// pull users
+	userLabelIndex := base.NewMapIndex()
 	for {
 		var users []data.User
 		cursor, users, err = database.GetUsers(cursor, batchSize)
@@ -296,11 +301,18 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		}
 		for _, user := range users {
 			dataset.AddUser(user.UserId)
+			userIndex := dataset.UserIndex.ToNumber(user.UserId)
+			dataset.UserLabels = append(dataset.UserLabels, make([]int, len(user.Labels)))
+			for i, label := range user.Labels {
+				userLabelIndex.Add(label)
+				dataset.UserLabels[userIndex][i] = userLabelIndex.ToNumber(label)
+			}
 		}
 		if cursor == "" {
 			break
 		}
 	}
+	dataset.NumUserLabels = userLabelIndex.Len()
 	base.Logger().Debug("pulled users from database", zap.Int("n_users", dataset.UserCount()))
 	// pull items
 	itemLabelIndex := base.NewMapIndex()

@@ -14,6 +14,7 @@
 package ranking
 
 import (
+	"github.com/stretchr/testify/mock"
 	"runtime"
 	"testing"
 
@@ -26,11 +27,43 @@ const (
 	incrDelta  = 1e-5
 )
 
-var fitConfig = &FitConfig{
-	Jobs:       runtime.NumCPU(),
-	Verbose:    1,
-	Candidates: 100,
-	TopK:       10,
+type mockTracker struct {
+	mock.Mock
+}
+
+func (t *mockTracker) Start(total int) {
+	t.Called(total)
+}
+
+func (t *mockTracker) Update(done int) {
+	t.Called(done)
+}
+
+func (t *mockTracker) Finish() {
+	t.Called()
+}
+
+func (t *mockTracker) Suspend(flag bool) {
+	t.Called(flag)
+}
+
+func (t *mockTracker) SubTracker() model.Tracker {
+	t.Called()
+	return nil
+}
+
+func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
+	tracker := new(mockTracker)
+	tracker.On("Start", numEpoch)
+	tracker.On("Update", mock.Anything)
+	tracker.On("Finish")
+	return &FitConfig{
+		Jobs:       runtime.NumCPU(),
+		Verbose:    1,
+		Candidates: 100,
+		TopK:       10,
+		Tracker:    tracker,
+	}, tracker
 }
 
 // He, Xiangnan, et al. "Neural collaborative filtering." Proceedings
@@ -47,7 +80,9 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitMean:   0,
 		model.InitStdDev: 0.001,
 	})
+	fitConfig, tracker := newFitConfigWithTestTracker(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
+	tracker.AssertExpectations(t)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
@@ -55,6 +90,7 @@ func TestBPR_MovieLens(t *testing.T) {
 
 	// test increment test
 	m.nEpochs = 0
+	tracker.On("Start", 0)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
@@ -88,7 +124,10 @@ func TestALS_MovieLens(t *testing.T) {
 		model.NEpochs:  10,
 		model.Alpha:    0.05,
 	})
+	fitConfig, tracker := newFitConfigWithTestTracker(10)
 	score := m.Fit(trainSet, testSet, fitConfig)
+	tracker.AssertExpectations(t)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
@@ -96,6 +135,7 @@ func TestALS_MovieLens(t *testing.T) {
 
 	// test increment test
 	m.nEpochs = 0
+	tracker.On("Start", 0)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
@@ -128,7 +168,10 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.NEpochs:  30,
 		model.Alpha:    0.05,
 	})
+	fitConfig, tracker := newFitConfigWithTestTracker(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
+	tracker.AssertExpectations(t)
+	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
@@ -136,6 +179,7 @@ func TestCCD_MovieLens(t *testing.T) {
 
 	// test increment test
 	m.nEpochs = 0
+	tracker.On("Start", 0)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
