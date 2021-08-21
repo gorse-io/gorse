@@ -127,7 +127,6 @@ func TestALS_MovieLens(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(10)
 	score := m.Fit(trainSet, testSet, fitConfig)
 	tracker.AssertExpectations(t)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
@@ -171,7 +170,6 @@ func TestCCD_MovieLens(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
 	tracker.AssertExpectations(t)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict

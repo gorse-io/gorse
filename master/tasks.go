@@ -45,10 +45,10 @@ const (
 	TaskFindItemNeighbors  = "Find neighbors of items"
 	TaskFindUserNeighbors  = "Find neighbors of users"
 	TaskAnalyze            = "Analyze click-through rate"
-	TaskFitRankingModel    = "Fit ranking model"
-	TaskFitClickModel      = "Fit click model"
-	TaskSearchRankingModel = "Search ranking model"
-	TaskSearchClickModel   = "Search click model"
+	TaskFitRankingModel    = "Fit collaborative filtering model"
+	TaskFitClickModel      = "Fit click-through rate prediction model"
+	TaskSearchRankingModel = "Search collaborative filtering  model"
+	TaskSearchClickModel   = "Search click-through rate prediction model"
 
 	SimilarityShrink = 100
 )
@@ -757,7 +757,7 @@ func (m *Master) runSearchClickModelTask(
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty click dataset",
-			zap.Strings("click_feedback_type", m.GorseConfig.Database.ClickFeedbackTypes))
+			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 		m.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&

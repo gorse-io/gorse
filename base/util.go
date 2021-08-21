@@ -101,6 +101,11 @@ func Now() string {
 	return time.Now().Format("2006-01-02T15:04:05Z07:00")
 }
 
+func DateNow() time.Time {
+	timestamp := time.Now()
+	return time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 0, 0, 0, 0, time.UTC)
+}
+
 // CheckPanic catches panic.
 func CheckPanic() {
 	if r := recover(); r != nil {

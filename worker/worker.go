@@ -258,7 +258,7 @@ func (w *Worker) Pull() {
 				} else {
 					w.currentClickModelVersion = clickResponse.Version
 					base.Logger().Info("synced click model",
-						zap.String("version", base.Hex(w.currentRankingModelVersion)))
+						zap.String("version", base.Hex(w.currentClickModelVersion)))
 					pulled = true
 				}
 			}
@@ -414,6 +414,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		if !w.checkRecommendCacheTimeout(userId) {
 			return nil
 		}
+
 		// load historical items
 		historyItems, err := loadUserHistoricalItems(w.dataClient, userId)
 		historySet := set.NewStringSet(historyItems...)
@@ -455,6 +456,11 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		}
 		// save result
 		candidateItems, candidateScores := recItems.PopAll()
+		if err = w.cacheClient.SetScores(cache.CollaborativeRecommend, userId, cache.CreateScoredItems(candidateItems, candidateScores)); err != nil {
+			base.Logger().Error("failed to cache recommendation", zap.Error(err))
+			return errors.Trace(err)
+		}
+
 		// insert cold-start items
 		if w.cfg.Recommend.ExploreLatestNum > 0 {
 			candidateSet := strset.New(candidateItems...)
@@ -478,7 +484,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		} else {
 			result = w.randomInsertLatestItem(candidateItems, candidateScores)
 		}
-		if err = w.cacheClient.SetScores(cache.RecommendItems, userId, result); err != nil {
+		if err = w.cacheClient.SetScores(cache.FinalRecommend, userId, result); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return errors.Trace(err)
 		}
@@ -544,7 +550,7 @@ func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache
 func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	var activeTime, recommendTime time.Time
 	// check cache
-	items, err := w.cacheClient.GetScores(cache.RecommendItems, userId, 0, -1)
+	items, err := w.cacheClient.GetScores(cache.FinalRecommend, userId, 0, -1)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
 		return true

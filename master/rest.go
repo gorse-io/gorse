@@ -97,10 +97,11 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
-	ws.Route(ws.GET("/dashboard/recommend/{user-id}").To(m.getRecommend).
+	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
@@ -172,12 +173,17 @@ func (m *Master) getConfig(request *restful.Request, response *restful.Response)
 }
 
 type Status struct {
-	NumUsers       int
-	NumItems       int
-	NumPosFeedback int
-	NumNegFeedback int
-	RankingScore   ranking.Score
-	ClickScore     click.Score
+	NumServers          int
+	NumWorkers          int
+	NumUsers            int
+	NumItems            int
+	NumUserLabels       int
+	NumItemLabels       int
+	NumTotalPosFeedback int
+	NumValidPosFeedback int
+	NumValidNegFeedback int
+	RankingScore        ranking.Score
+	ClickScore          click.Score
 }
 
 func (m *Master) getStats(request *restful.Request, response *restful.Response) {
@@ -196,20 +202,52 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	} else if len(measurements) > 0 {
 		status.NumItems = int(measurements[0].Value)
 	}
-	// read number of positive feedback
-	if measurements, err := m.DataClient.GetMeasurements(NumPositiveFeedbacks, 1); err != nil {
+	// read number of user labels
+	if measurements, err := m.DataClient.GetMeasurements(NumUserLabels, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
 	} else if len(measurements) > 0 {
-		status.NumPosFeedback = int(measurements[0].Value)
+		status.NumUserLabels = int(measurements[0].Value)
 	}
-	// read number of negative feedback
-	if measurements, err := m.DataClient.GetMeasurements(NumNegativeFeedbacks, 1); err != nil {
+	// read number of item labels
+	if measurements, err := m.DataClient.GetMeasurements(NumItemLabels, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
 	} else if len(measurements) > 0 {
-		status.NumNegFeedback = int(measurements[0].Value)
+		status.NumItemLabels = int(measurements[0].Value)
 	}
+	// read number of total positive feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumTotalPosFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumTotalPosFeedback = int(measurements[0].Value)
+	}
+	// read number of valid positive feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumValidPosFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumValidPosFeedback = int(measurements[0].Value)
+	}
+	// read number of valid negative feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumValidNegFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumValidNegFeedback = int(measurements[0].Value)
+	}
+	// count the number of workers and servers
+	m.nodesInfoMutex.Lock()
+	for _, node := range m.nodesInfo {
+		switch node.Type {
+		case ServerNode:
+			status.NumServers++
+		case WorkerNode:
+			status.NumWorkers++
+		}
+	}
+	m.nodesInfoMutex.Unlock()
 	status.RankingScore = m.rankingScore
 	status.ClickScore = m.clickScore
 	server.Ok(response, status)
@@ -287,13 +325,24 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 
 func (m *Master) getRecommend(request *restful.Request, response *restful.Response) {
 	// parse arguments
+	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
 	n, err := server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
 		return
 	}
-	results, err := m.Recommend(userId, n)
+	var results []string
+	switch recommender {
+	case "final":
+		results, err = m.Recommend(userId, n, server.FinalRecommender)
+	case "collaborative":
+		results, err = m.Recommend(userId, n, server.CollaborativeRecommender)
+	case "user_based":
+		results, err = m.Recommend(userId, n, server.UserBasedRecommender)
+	case "item_based":
+		results, err = m.Recommend(userId, n, server.ItemBasedRecommender)
+	}
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -405,111 +454,6 @@ func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Re
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
 	m.getList(cache.UserNeighbors, userId, request, response, data.User{})
-}
-
-func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
-	switch request.Method {
-	case http.MethodGet:
-		var err error
-		response.Header().Set("Content-Type", "text/csv")
-		response.Header().Set("Content-Disposition", "attachment;filename=users.csv")
-		// write header
-		if _, err = response.Write([]byte("user_id,labels\r\n")); err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-		// write rows
-		var cursor string
-		const batchSize = 1024
-		for {
-			var users []data.User
-			cursor, users, err = m.DataClient.GetUsers(cursor, batchSize)
-			if err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			}
-			for _, user := range users {
-				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
-					base.Escape(user.UserId), base.Escape(strings.Join(user.Labels, "|"))))); err != nil {
-					server.InternalServerError(restful.NewResponse(response), err)
-					return
-				}
-			}
-			if cursor == "" {
-				break
-			}
-		}
-	case http.MethodPost:
-		hasHeader := formValue(request, "has-header", "true") == "true"
-		sep := formValue(request, "sep", ",")
-		// field separator must be a single character
-		if len(sep) != 1 {
-			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
-			return
-		}
-		labelSep := formValue(request, "label-sep", "|")
-		fmtString := formValue(request, "format", "ul")
-		file, _, err := request.FormFile("file")
-		if err != nil {
-			server.BadRequest(restful.NewResponse(response), err)
-			return
-		}
-		defer file.Close()
-		m.importUsers(response, file, hasHeader, sep, labelSep, fmtString)
-	}
-}
-
-func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
-	lineCount := 0
-	timeStart := time.Now()
-	//users := make([]data.User, 0)
-	err := base.ReadLines(bufio.NewScanner(file), sep[0], func(lineNumber int, splits []string) bool {
-		var err error
-		// skip header
-		if hasHeader {
-			hasHeader = false
-			return true
-		}
-		splits, err = format(fmtString, "ul", splits, lineNumber)
-		if err != nil {
-			server.BadRequest(restful.NewResponse(response), err)
-			return false
-		}
-		// 1. user id
-		if err = base.ValidateId(splits[0]); err != nil {
-			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
-			return false
-		}
-		user := data.User{UserId: splits[0]}
-		// 2. labels
-		if splits[1] != "" {
-			user.Labels = strings.Split(splits[1], labelSep)
-			for _, label := range user.Labels {
-				if err = base.ValidateLabel(label); err != nil {
-					server.BadRequest(restful.NewResponse(response),
-						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
-					return false
-				}
-			}
-		}
-		err = m.DataClient.InsertUser(user)
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return false
-		}
-		lineCount++
-		return true
-	})
-	if err != nil {
-		server.BadRequest(restful.NewResponse(response), err)
-		return
-	}
-	timeUsed := time.Since(timeStart)
-	base.Logger().Info("complete import users",
-		zap.Duration("time_used", timeUsed),
-		zap.Int("num_users", lineCount))
-	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {

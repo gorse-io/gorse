@@ -17,6 +17,7 @@ package click
 import (
 	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
+	"sort"
 )
 
 // EvaluateRegression evaluates factorization machines in regression task.
@@ -64,6 +65,7 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 		Precision: Precision(posPrediction, negPrediction),
 		Recall:    Recall(posPrediction, negPrediction),
 		Accuracy:  Accuracy(posPrediction, negPrediction),
+		AUC:       AUC(posPrediction, negPrediction),
 	}
 }
 
@@ -107,6 +109,22 @@ func Accuracy(posPrediction, negPrediction []float32) float32 {
 		}
 	}
 	return correct / float32(len(posPrediction)+len(negPrediction))
+}
+
+func AUC(posPrediction, negPrediction []float32) float32 {
+	sort.Slice(posPrediction, func(i, j int) bool { return posPrediction[i] < posPrediction[j] })
+	sort.Slice(negPrediction, func(i, j int) bool { return negPrediction[i] < negPrediction[j] })
+	var sum float32
+	var nPos int
+	for pPos := range posPrediction {
+		// find the negative sample with the greatest prediction less than current positive sample
+		for nPos < len(negPrediction) && negPrediction[nPos] < posPrediction[pPos] {
+			nPos++
+		}
+		// add the number of negative samples have less prediction than current positive sample
+		sum += float32(nPos)
+	}
+	return sum / float32(len(posPrediction)*len(negPrediction))
 }
 
 // SnapshotManger manages the best snapshot.

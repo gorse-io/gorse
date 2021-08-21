@@ -34,6 +34,8 @@ type Score struct {
 	RMSE      float32
 	Precision float32
 	Recall    float32
+	Accuracy  float32
+	AUC       float32
 }
 
 func (score Score) ZapFields() []zap.Field {
@@ -44,6 +46,7 @@ func (score Score) ZapFields() []zap.Field {
 		return []zap.Field{
 			zap.Float32("Precision", score.Precision),
 			zap.Float32("Recall", score.Recall),
+			zap.Float32("AUC", score.AUC),
 		}
 	default:
 		return nil
@@ -245,7 +248,11 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	}
 	base.Logger().Info("fit FM",
 		zap.Int("train_size", trainSet.Count()),
+		zap.Int("train_positive_count", trainSet.PositiveCount),
+		zap.Int("train_negative_count", trainSet.NegativeCount),
 		zap.Int("test_size", testSet.Count()),
+		zap.Int("test_positive_count", testSet.PositiveCount),
+		zap.Int("test_negative_count", testSet.NegativeCount),
 		zap.String("task", string(fm.Task)),
 		zap.Any("params", fm.GetParams()),
 		zap.Any("config", config))
@@ -353,8 +360,6 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Finish()
 	}
-	base.Logger().Info("fit fm complete",
-		zap.Float32(snapshots.BestScore.GetName(), snapshots.BestScore.GetValue()))
 	return snapshots.BestScore
 }
 

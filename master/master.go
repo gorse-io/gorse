@@ -43,8 +43,9 @@ const (
 	NumItems             = "NumItems"
 	NumUserLabels        = "NumUserLabels"
 	NumItemLabels        = "NumItemLabels"
-	NumPositiveFeedbacks = "NumPositiveFeedbacks"
-	NumNegativeFeedbacks = "NumNegativeFeedbacks"
+	NumTotalPosFeedbacks = "NumTotalPosFeedbacks"
+	NumValidPosFeedbacks = "NumValidPosFeedbacks"
+	NumValidNegFeedbacks = "NumValidNegFeedbacks"
 )
 
 // Master is the master node.
@@ -292,6 +293,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			m.runFitClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
 		if err != nil {
 			base.Logger().Error("failed to fit click model", zap.Error(err))
+			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
 			continue
 		}
 
@@ -319,12 +321,14 @@ func (m *Master) RunRagtagTasksLoop() {
 		// analyze click-through-rate
 		if err := m.runAnalyzeTask(); err != nil {
 			base.Logger().Error("failed to analyze", zap.Error(err))
+			m.taskMonitor.Fail(TaskAnalyze, err.Error())
 		}
 		// search optimal ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
 			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search ranking model", zap.Error(err))
+			m.taskMonitor.Fail(TaskSearchRankingModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
 		}
@@ -333,6 +337,7 @@ func (m *Master) RunRagtagTasksLoop() {
 			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search click model", zap.Error(err))
+			m.taskMonitor.Fail(TaskSearchClickModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
 		}
@@ -363,7 +368,7 @@ func (m *Master) loadRankingDataset() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	loadDataTime := time.Now()
+	loadDataTime := base.DateNow()
 	if err = m.DataClient.InsertMeasurement(data.Measurement{
 		Name: NumUsers, Timestamp: loadDataTime, Value: float32(rankingDataset.UserCount()),
 	}); err != nil {
@@ -375,7 +380,7 @@ func (m *Master) loadRankingDataset() error {
 		base.Logger().Error("failed to write number of items", zap.Error(err))
 	}
 	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumPositiveFeedbacks, Timestamp: loadDataTime, Value: float32(rankingDataset.Count()),
+		Name: NumTotalPosFeedbacks, Timestamp: loadDataTime, Value: float32(rankingDataset.Count()),
 	}); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
@@ -390,16 +395,15 @@ func (m *Master) loadRankingDataset() error {
 
 func (m *Master) loadClickDataset() error {
 	base.Logger().Info("load click dataset",
-		zap.Strings("click_feedback_types", m.GorseConfig.Database.ClickFeedbackTypes),
+		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
 		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType))
 	clickDataset, err := click.LoadDataFromDatabase(m.DataClient,
-		m.GorseConfig.Database.ClickFeedbackTypes,
+		m.GorseConfig.Database.PositiveFeedbackType,
 		m.GorseConfig.Database.ReadFeedbackType)
 	if err != nil {
 		return errors.Trace(err)
-		return errors.Trace(err)
 	}
-	loadDataTime := time.Now()
+	loadDataTime := base.DateNow()
 	if err = m.DataClient.InsertMeasurement(data.Measurement{
 		Name: NumUserLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountUserLabels()),
 	}); err != nil {
@@ -411,7 +415,12 @@ func (m *Master) loadClickDataset() error {
 		base.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
 	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumNegativeFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
+		Name: NumValidPosFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.PositiveCount),
+	}); err != nil {
+		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumValidNegFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
 	}); err != nil {
 		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
