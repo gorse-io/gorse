@@ -47,11 +47,11 @@ func (m *mockFactorizationMachineForSearch) Fit(trainSet, testSet *Dataset, conf
 	return Score{Task: FMClassification, Precision: score}
 }
 
-func (m *mockFactorizationMachineForSearch) Predict(userId, itemId string, labels []string) float32 {
+func (m *mockFactorizationMachineForSearch) Predict(userId, itemId string, userLabels, itemLabels []string) float32 {
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) InternalPredict(x []int) float32 {
+func (m *mockFactorizationMachineForSearch) InternalPredict(features []int, values []float32) float32 {
 	panic("don't call me")
 }
 

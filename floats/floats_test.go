@@ -104,6 +104,15 @@ func TestMulConstAddTo(t *testing.T) {
 	assert.Equal(t, target, dst)
 }
 
+func TestMulAddTo(t *testing.T) {
+	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
+	c := []float32{0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30}
+	target := []float32{0, 5, 14, 27, 44, 65, 90, 119, 152, 189, 230}
+	MulAddTo(a, b, c)
+	assert.Equal(t, target, c)
+}
+
 func TestAddTo(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}

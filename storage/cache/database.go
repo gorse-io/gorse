@@ -27,7 +27,7 @@ const (
 	ItemNeighbors           = "item_neighbors"
 	UserNeighbors           = "user_neighbors"
 	CollaborativeRecommend  = "collaborative_recommend"
-	FinalRecommend          = "final_recommend"
+	CTRRecommend            = "ctr_recommend"
 	SubscribeItems          = "subscribe_items"
 	PopularItems            = "popular_items"
 	LatestItems             = "latest_items"

@@ -464,13 +464,13 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	}
 	// Get user id
 	userId := request.PathParameter("user-id")
-	s.getList(cache.FinalRecommend, userId, request, response)
+	s.getList(cache.CTRRecommend, userId, request, response)
 }
 
 type Recommender byte
 
 const (
-	FinalRecommender         Recommender = 0x1
+	CTRRecommender           Recommender = 0x1
 	CollaborativeRecommender Recommender = 0x2
 	UserBasedRecommender     Recommender = 0x4
 	ItemBasedRecommender     Recommender = 0x8
@@ -500,7 +500,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 	// create recommender mask
 	var recommenderMask Recommender
 	if len(recommenders) == 0 {
-		recommenderMask |= FinalRecommender | ItemBasedRecommender | PopularRecommender
+		recommenderMask |= CTRRecommender | ItemBasedRecommender | PopularRecommender
 	} else {
 		for _, recommender := range recommenders {
 			recommenderMask |= recommender
@@ -509,13 +509,13 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 	initStart := time.Now()
 
-	if recommenderMask&FinalRecommender > 0 {
+	if recommenderMask&CTRRecommender > 0 {
 		// read recommendations in cache.
 		itemsChan := make(chan []string, 1)
 		errChan := make(chan error, 1)
 		go func() {
 			var collaborativeFilteringItems []cache.Scored
-			collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.FinalRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
+			collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.CTRRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {
 				itemsChan <- nil
 				errChan <- err
@@ -558,7 +558,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 	// 2. There are recommenders other than CollaborativeRecommender.
 	if len(results) < n && recommenderMask&CollaborativeRecommender > 0 {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.GetScores(cache.FinalRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.GetScores(cache.CollaborativeRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return nil, err
 		}
@@ -575,9 +575,9 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 	// Load historical feedback. The running condition is:
 	// 1. The number of current results is less than n.
-	// 2. There are recommenders other than FinalRecommender.
+	// 2. There are recommenders other than CTRRecommender.
 	var userFeedback []data.Feedback
-	if len(results) < n && recommenderMask-FinalRecommender > 0 {
+	if len(results) < n && recommenderMask-CTRRecommender > 0 {
 		start := time.Now()
 		userFeedback, err = s.DataClient.GetUserFeedback(userId)
 		if err != nil {
@@ -591,7 +591,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 	// Item-based recommendation. The running condition is:
 	// 1. The number of current results is less than n.
-	// 2. Recommenders includes FinalRecommender.
+	// 2. Recommenders includes CTRRecommender.
 	if len(results) < n && recommenderMask&ItemBasedRecommender > 0 {
 		start := time.Now()
 		// collect candidates
@@ -736,7 +736,21 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	writeBackFeedback := request.QueryParameter("write-back")
-	results, err := s.Recommend(userId, n)
+	// online recommendation
+	recommenders := []Recommender{CTRRecommender}
+	for _, recommender := range s.GorseConfig.Recommend.FallbackRecommend {
+		switch recommender {
+		case "user_based":
+			recommenders = append(recommenders, UserBasedRecommender)
+		case "item_based":
+			recommenders = append(recommenders, ItemBasedRecommender)
+		case "latest":
+			recommenders = append(recommenders, LatestRecommender)
+		case "popular":
+			recommenders = append(recommenders, PopularRecommender)
+		}
+	}
+	results, err := s.Recommend(userId, n, recommenders...)
 	if err != nil {
 		InternalServerError(response, err)
 		return

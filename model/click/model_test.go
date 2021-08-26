@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	delta = 0.01
+	regressionDelta     = 0.001
+	classificationDelta = 0.01
 )
 
 type mockTracker struct {
@@ -79,7 +80,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
 	tracker.AssertExpectations(t)
-	assert.InDelta(t, 0.91684, score.Accuracy, delta)
+	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
 }
 
 //func TestFM_Classification_MovieLens(t *testing.T) {
@@ -100,6 +101,26 @@ func TestFM_Classification_Frappe(t *testing.T) {
 //	assertEpsilon(t, 0.901777, score.Precision)
 //}
 
+func TestFM_Regression_Criteo(t *testing.T) {
+	// LibFM command:
+	// libfm.exe -train train.libfm -test test.libfm -task r \
+	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
+	//   -learn_rate 0.001 -regular 0,0,0.0001
+	train, test, err := LoadDataFromBuiltIn("criteo")
+	assert.NoError(t, err)
+	m := NewFM(FMRegression, model.Params{
+		model.InitStdDev: 0.01,
+		model.NFactors:   8,
+		model.NEpochs:    20,
+		model.Lr:         0.001,
+		model.Reg:        0.0001,
+	})
+	fitConfig, tracker := newFitConfigWithTestTracker(20)
+	score := m.Fit(train, test, fitConfig)
+	tracker.AssertExpectations(t)
+	assert.InDelta(t, 0.839194, score.RMSE, regressionDelta)
+}
+
 func TestFM_Regression_Frappe(t *testing.T) {
 	// LibFM command:
 	// libfm.exe -train train.libfm -test test.libfm -task r \
@@ -117,7 +138,7 @@ func TestFM_Regression_Frappe(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
 	tracker.AssertExpectations(t)
-	assert.InDelta(t, 0.494435, score.RMSE, delta)
+	assert.InDelta(t, 0.494435, score.RMSE, regressionDelta)
 }
 
 //func TestFM_Regression_MovieLens(t *testing.T) {

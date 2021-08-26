@@ -335,8 +335,8 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	var results []string
 	switch recommender {
-	case "final":
-		results, err = m.Recommend(userId, n, server.FinalRecommender)
+	case "ctr":
+		results, err = m.Recommend(userId, n, server.CTRRecommender)
 	case "collaborative":
 		results, err = m.Recommend(userId, n, server.CollaborativeRecommender)
 	case "user_based":
@@ -850,10 +850,10 @@ func (m *Master) exportToLibFM(response http.ResponseWriter, request *http.Reque
 	// write dataset
 	response.Header().Set("Content-Type", "text/plain")
 	response.Header().Set("Content-Disposition", "attachment;filename=libfm.txt")
-	for i := range dataSet.Inputs {
+	for i := range dataSet.Features {
 		builder := strings.Builder{}
 		builder.WriteString(fmt.Sprintf("%f", dataSet.Target[i]))
-		for _, j := range dataSet.Inputs[i] {
+		for _, j := range dataSet.Features[i] {
 			builder.WriteString(fmt.Sprintf(" %d:1", j))
 		}
 		builder.WriteString("\r\n")

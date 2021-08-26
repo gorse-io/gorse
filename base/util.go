@@ -78,6 +78,15 @@ func RangeInt(n int) []int {
 	return a
 }
 
+// RepeatFloat32s repeats value n times.
+func RepeatFloat32s(n int, value float32) []float32 {
+	a := make([]float32, n)
+	for i := range a {
+		a[i] = value
+	}
+	return a
+}
+
 // NewMatrix32 creates a 2D matrix of 32-bit floats.
 func NewMatrix32(row, col int) [][]float32 {
 	ret := make([][]float32, row)

@@ -25,8 +25,8 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 	sum := float32(0)
 	// For all UserFeedback
 	for i := 0; i < testSet.Count(); i++ {
-		labels, target := testSet.Get(i)
-		prediction := estimator.InternalPredict(labels)
+		features, values, target := testSet.Get(i)
+		prediction := estimator.InternalPredict(features, values)
 		sum += (target - prediction) * (target - prediction)
 	}
 	if 0 == testSet.Count() {
@@ -46,8 +46,8 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 	// For all UserFeedback
 	var posPrediction, negPrediction []float32
 	for i := 0; i < testSet.Count(); i++ {
-		labels, target := testSet.Get(i)
-		prediction := estimator.InternalPredict(labels)
+		features, values, target := testSet.Get(i)
+		prediction := estimator.InternalPredict(features, values)
 		if target > 0 {
 			posPrediction = append(posPrediction, prediction)
 		} else {
@@ -81,6 +81,9 @@ func Precision(posPrediction, negPrediction []float32) float32 {
 			fp++
 		}
 	}
+	if tp+fp == 0 {
+		return 0
+	}
 	return tp / (tp + fp)
 }
 
@@ -92,6 +95,9 @@ func Recall(posPrediction, _ []float32) float32 {
 		} else { // false negative
 			fn++
 		}
+	}
+	if tp+fn == 0 {
+		return 0
 	}
 	return tp / (tp + fn)
 }
@@ -108,6 +114,9 @@ func Accuracy(posPrediction, negPrediction []float32) float32 {
 			correct++
 		}
 	}
+	if len(posPrediction)+len(negPrediction) == 0 {
+		return 0
+	}
 	return correct / float32(len(posPrediction)+len(negPrediction))
 }
 
@@ -123,6 +132,9 @@ func AUC(posPrediction, negPrediction []float32) float32 {
 		}
 		// add the number of negative samples have less prediction than current positive sample
 		sum += float32(nPos)
+	}
+	if len(posPrediction)*len(negPrediction) == 0 {
+		return 0
 	}
 	return sum / float32(len(posPrediction)*len(negPrediction))
 }

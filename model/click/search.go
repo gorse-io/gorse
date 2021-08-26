@@ -135,10 +135,9 @@ type ModelSearcher struct {
 	numTrials int
 	numJobs   int
 	// results
-	bestMutex     sync.Mutex
-	useClickModel bool
-	bestModel     FactorizationMachine
-	bestScore     Score
+	bestMutex sync.Mutex
+	bestModel FactorizationMachine
+	bestScore Score
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
@@ -155,15 +154,6 @@ func (searcher *ModelSearcher) GetBestModel() (FactorizationMachine, Score) {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	return searcher.bestModel, searcher.bestScore
-}
-
-// IsClickModelHelpful check if click model helps to improve recommendation. Click model helps if:
-// 1. There are item labels or user labels.
-// 2. Labels improve test precision.
-func (searcher *ModelSearcher) IsClickModelHelpful() bool {
-	searcher.bestMutex.Lock()
-	defer searcher.bestMutex.Unlock()
-	return searcher.useClickModel
 }
 
 func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Tracker, runner model.Runner) error {
@@ -187,26 +177,17 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 	// Random search
 	fm := NewFM(FMClassification, nil)
 	grid := fm.GetParamsGrid()
-	grid[model.UseFeature] = []interface{}{true, false}
-	r := RandomSearchCV(fm, trainSet, valSet, grid, searcher.numTrials*2, 0, NewFitConfig().
+	r := RandomSearchCV(fm, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().
 		SetJobs(searcher.numJobs).
 		SetTracker(tracker.SubTracker()), runner)
-	if !r.BestParams[model.UseFeature].(bool) {
-		// If model searcher found it's better to ignore features, just don't use features.
-		searcher.useClickModel = false
-		base.Logger().Info("it seems worse to use features")
-		tracker.Finish()
-		return nil
-	}
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
-	searcher.useClickModel = true
 	searcher.bestModel = r.BestModel
 	searcher.bestScore = r.BestScore
 
 	searchTime := time.Since(startTime)
 	base.Logger().Info("complete ranking model search",
-		zap.Float32("precision", searcher.bestScore.Precision),
+		zap.Float32("auc", searcher.bestScore.AUC),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
 	tracker.Finish()

@@ -49,6 +49,11 @@ func TestRangeInt(t *testing.T) {
 	}
 }
 
+func TestRepeatFloat32s(t *testing.T) {
+	a := RepeatFloat32s(3, 0.1)
+	assert.Equal(t, []float32{0.1, 0.1, 0.1}, a)
+}
+
 func TestNewMatrixInt(t *testing.T) {
 	m := NewMatrixInt(4, 3)
 	assert.Equal(t, 4, len(m))

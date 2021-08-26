@@ -24,12 +24,16 @@ func TestPrecision(t *testing.T) {
 	negPrediction := []float32{1}
 	precision := Precision(posPrediction, negPrediction)
 	assert.Equal(t, float32(0.75), precision)
+	precision = Precision(nil, nil)
+	assert.Zero(t, precision)
 }
 
 func TestRecall(t *testing.T) {
 	posPrediction := []float32{1, -1, -1, -1}
 	recall := Recall(posPrediction, nil)
 	assert.Equal(t, float32(0.25), recall)
+	recall = Recall(nil, nil)
+	assert.Zero(t, recall)
 }
 
 func TestAccuracy(t *testing.T) {
@@ -37,4 +41,6 @@ func TestAccuracy(t *testing.T) {
 	negPrediction := []float32{1, 1, -1, -1}
 	accuracy := Accuracy(posPrediction, negPrediction)
 	assert.Equal(t, float32(0.5), accuracy)
+	accuracy = Accuracy(nil, nil)
+	assert.Zero(t, accuracy)
 }

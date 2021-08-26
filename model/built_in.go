@@ -68,6 +68,12 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		testFile:    "frappe/test.libfm",
 		format:      FormatLibFM,
 	},
+	"criteo": {
+		downloadURL: "https://cdn.sine-x.com/datasets/criteo.zip",
+		trainFile:   "criteo/train.libfm",
+		testFile:    "criteo/test.libfm",
+		format:      FormatLibFM,
+	},
 }
 
 // The Data directories
