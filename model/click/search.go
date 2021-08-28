@@ -168,12 +168,6 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 		zap.Int("n_item_labels", trainSet.Index.CountItemLabels()))
 	startTime := time.Now()
 
-	// Check number of labels
-	if trainSet.Index.CountItemLabels() == 0 && trainSet.Index.CountUserLabels() == 0 {
-		base.Logger().Warn("click model doesn't work if there are no labels for items or users")
-		return nil
-	}
-
 	// Random search
 	fm := NewFM(FMClassification, nil)
 	grid := fm.GetParamsGrid()
