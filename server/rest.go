@@ -531,7 +531,9 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 		// read ignore items
 		loadCachedReadStart := time.Now()
 		ignoreItems, err := s.CacheClient.GetList(cache.IgnoreItems, userId)
-
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 		for _, item := range ignoreItems {
 			excludeSet.Add(item)
 		}
@@ -686,7 +688,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 	// 2. Recommenders includes PopularRecommender.
 	if len(results) < n && recommenderMask&PopularRecommender > 0 {
 		start := time.Now()
-		items, err := s.CacheClient.GetScores(cache.LatestItems, "", 0, n-len(results))
+		items, err := s.CacheClient.GetScores(cache.PopularItems, "", 0, n-len(results))
 		if err != nil {
 			return nil, err
 		}
@@ -748,6 +750,9 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			recommenders = append(recommenders, LatestRecommender)
 		case "popular":
 			recommenders = append(recommenders, PopularRecommender)
+		default:
+			InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
+			return
 		}
 	}
 	results, err := s.Recommend(userId, n, recommenders...)

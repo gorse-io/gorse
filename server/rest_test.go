@@ -333,7 +333,7 @@ func TestServer_List(t *testing.T) {
 		Get    string
 	}
 	operators := []ListOperator{
-		{cache.RecommendItems, "0", "/api/intermediate/recommend/0"},
+		{cache.CTRRecommend, "0", "/api/intermediate/recommend/0"},
 		//{cache.SubscribeItems, "0", "/subscribe/0"},
 		{cache.LatestItems, "", "/api/latest/"},
 		//{cache.LatestItems, "0", "/api/latest/0"},
@@ -491,7 +491,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
+	err := s.CacheClient.SetScores(cache.CTRRecommend, "0",
 		[]cache.Scored{
 			{"1", 99},
 			{"2", 98},
@@ -557,7 +557,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
+	err := s.CacheClient.SetScores(cache.CTRRecommend, "0",
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert feedback
@@ -604,7 +604,7 @@ func TestServer_GetRecommends_Fallback_Similar(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	// test fallback
-	s.GorseConfig.Recommend.FallbackRecommend = "popular"
+	s.GorseConfig.Recommend.FallbackRecommend = []string{"item_based"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -622,7 +622,7 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.RecommendItems, "0",
+	err := s.CacheClient.SetScores(cache.CTRRecommend, "0",
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert latest
@@ -634,7 +634,7 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 		[]cache.Scored{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
 	assert.NoError(t, err)
 	// test popular fallback
-	s.GorseConfig.Recommend.FallbackRecommend = "popular"
+	s.GorseConfig.Recommend.FallbackRecommend = []string{"popular"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -647,7 +647,7 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 		Body(marshal(t, []string{"1", "2", "3", "4", "9", "10", "11", "12"})).
 		End()
 	// test latest fallback
-	s.GorseConfig.Recommend.FallbackRecommend = "latest"
+	s.GorseConfig.Recommend.FallbackRecommend = []string{"latest"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -660,7 +660,7 @@ func TestServer_GetRecommends_Fallback_NonPersonalized(t *testing.T) {
 		Body(marshal(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"})).
 		End()
 	// test wrong fallback
-	s.GorseConfig.Recommend.FallbackRecommend = ""
+	s.GorseConfig.Recommend.FallbackRecommend = []string{""}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").

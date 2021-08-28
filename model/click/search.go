@@ -36,7 +36,7 @@ type ParamsSearchResult struct {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
-	seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
+	_ int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
 	count := 1

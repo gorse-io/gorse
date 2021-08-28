@@ -10,7 +10,7 @@ cache_store = "redis://localhost:6379/0"
 #   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-data_store = "mysql://root:password@tcp(localhost:3306)/gorse?parseTime=true"
+data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true"
 
 # The cache size for recommended/popular/latest items. The default value is 100.
 cache_size = 200
@@ -75,7 +75,7 @@ refresh_recommend_period = 1
 #   popular: Recommend popular items to cold-start users.
 #   latest: Recommend latest items to cold-start users.
 # The default values is "latest".
-fallback_recommend = "latest"
+fallback_recommend = ["latest"]
 
 # The number of latest (cold-start) items insert to recommended items cache. The default values is 10.
 explore_latest_num = 20

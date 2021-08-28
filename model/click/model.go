@@ -215,7 +215,7 @@ func (fm *FM) Predict(userId, itemId string, userLabels, itemLabels []string) fl
 	return fm.InternalPredict(features, values)
 }
 
-func (fm *FM) internalPredict(features []int, values []float32) float32 {
+func (fm *FM) internalPredictImpl(features []int, values []float32) float32 {
 	// w_0
 	pred := fm.B
 	// \sum^n_{i=1} w_i x_i
@@ -240,7 +240,7 @@ func (fm *FM) internalPredict(features []int, values []float32) float32 {
 }
 
 func (fm *FM) InternalPredict(features []int, values []float32) float32 {
-	pred := fm.internalPredict(features, values)
+	pred := fm.internalPredictImpl(features, values)
 	if fm.Task == FMRegression {
 		if pred < fm.MinTarget {
 			pred = fm.MinTarget
@@ -296,7 +296,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		_ = base.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
-				prediction := fm.internalPredict(features, values)
+				prediction := fm.internalPredictImpl(features, values)
 				var grad float32
 				switch fm.Task {
 				case FMRegression:

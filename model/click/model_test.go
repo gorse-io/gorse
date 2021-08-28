@@ -34,7 +34,7 @@ func (t *mockTracker) Start(total int) {
 	t.Called(total)
 }
 
-func (t *mockTracker) Update(done int) {
+func (t *mockTracker) Update(_ int) {
 	t.Called()
 }
 
@@ -42,7 +42,7 @@ func (t *mockTracker) Finish() {
 	t.Called()
 }
 
-func (t *mockTracker) Suspend(flag bool) {
+func (t *mockTracker) Suspend(_ bool) {
 	t.Called()
 }
 

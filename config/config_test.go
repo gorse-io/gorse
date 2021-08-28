@@ -26,12 +26,11 @@ func TestLoadConfig(t *testing.T) {
 
 	// database configuration
 	assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
-	assert.Equal(t, "mysql://root:password@tcp(localhost:3306)/gorse?parseTime=true", config.Database.DataStore)
+	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true", config.Database.DataStore)
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
 	assert.Equal(t, 200, config.Database.CacheSize)
 	assert.Equal(t, []string{"star", "like"}, config.Database.PositiveFeedbackType)
-	assert.Equal(t, []string{"like"}, config.Database.ClickFeedbackTypes)
 	assert.Equal(t, "read", config.Database.ReadFeedbackType)
 	assert.Equal(t, uint(0), config.Database.PositiveFeedbackTTL)
 	assert.Equal(t, uint(0), config.Database.ItemTTL)
@@ -55,8 +54,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 100, config.Recommend.SearchEpoch)
 	assert.Equal(t, 10, config.Recommend.SearchTrials)
 	assert.Equal(t, 1, config.Recommend.RefreshRecommendPeriod)
-	assert.Equal(t, "latest", config.Recommend.FallbackRecommend)
-	assert.Equal(t, 20, config.Recommend.ExploreLatestNum)
+	assert.Equal(t, []string{"latest"}, config.Recommend.FallbackRecommend)
 	assert.Equal(t, "similar", config.Recommend.ItemNeighborType)
 	assert.Equal(t, "similar", config.Recommend.UserNeighborType)
 }

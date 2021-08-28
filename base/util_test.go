@@ -64,7 +64,7 @@ func TestNewMatrixInt(t *testing.T) {
 
 func TestNow(t *testing.T) {
 	s := Now()
-	assert.Regexp(t, "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\+\\d{2}:\\d{2}", s)
+	assert.Regexp(t, "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\+\\d{2}:\\d{2}|Z)", s)
 }
 
 func TestDateNow(t *testing.T) {

@@ -148,7 +148,7 @@ func (m *Master) StartHttpServer() {
 	m.RestServer.StartHttpServer()
 }
 
-func (m *Master) getCluster(request *restful.Request, response *restful.Response) {
+func (m *Master) getCluster(_ *restful.Request, response *restful.Response) {
 	// collect nodes
 	workers := make([]*Node, 0)
 	servers := make([]*Node, 0)
@@ -169,7 +169,7 @@ func (m *Master) getCluster(request *restful.Request, response *restful.Response
 	server.Ok(response, nodes)
 }
 
-func (m *Master) getConfig(request *restful.Request, response *restful.Response) {
+func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	server.Ok(response, m.GorseConfig)
 }
 
@@ -187,7 +187,7 @@ type Status struct {
 	ClickScore          click.Score
 }
 
-func (m *Master) getStats(request *restful.Request, response *restful.Response) {
+func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	status := Status{}
 	// read number of users
 	if measurements, err := m.DataClient.GetMeasurements(NumUsers, 1); err != nil {
@@ -254,7 +254,7 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	server.Ok(response, status)
 }
 
-func (m *Master) getTasks(request *restful.Request, response *restful.Response) {
+func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 	tasks := m.taskMonitor.List()
 	server.Ok(response, tasks)
 }
@@ -839,7 +839,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
-func (m *Master) exportToLibFM(response http.ResponseWriter, request *http.Request) {
+func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
 	// load dataset
 	dataSet, err := click.LoadDataFromDatabase(m.DataClient,
 		m.GorseConfig.Database.PositiveFeedbackType,
