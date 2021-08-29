@@ -26,7 +26,7 @@ func TestMax(t *testing.T) {
 }
 
 func TestMin(t *testing.T) {
-	assert.Equal(t, 2, Min(2, 4, 6, 8, 10))
+	assert.Equal(t, 4, Min(12, 4, 6, 8, 10))
 }
 
 func TestNewMatrix32(t *testing.T) {

@@ -229,7 +229,7 @@ func (w *Worker) Pull() {
 				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
 				base.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
-				w.rankingModel, err = ranking.DecodeModel(rankingResponse.Name, rankingResponse.Model)
+				w.rankingModel, err = ranking.DecodeModel(rankingResponse.Model)
 				if err != nil {
 					base.Logger().Error("failed to decode ranking model", zap.Error(err))
 				} else {
@@ -425,43 +425,38 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 
 		// load positive items
 		var positiveItems []string
-		var positiveItemIndices []int
-		if _, ok := m.(*ranking.KNN); ok || w.cfg.Recommend.EnableItemBasedRecommend {
+		if w.cfg.Recommend.EnableItemBasedRecommend {
 			positiveItems, err = loadUserHistoricalItems(w.dataClient, userId, w.cfg.Database.PositiveFeedbackType...)
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
 					zap.String("user_id", userId), zap.Error(err))
 				return errors.Trace(err)
 			}
-			for _, itemId := range positiveItems {
-				itemIndex := m.GetItemIndex().ToNumber(itemId)
-				if itemIndex != base.NotId {
-					positiveItemIndices = append(positiveItemIndices, itemIndex)
-				}
-			}
 		}
 
 		// generate recommendation
-		recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
-		for itemIndex, itemId := range itemIds {
-			if !excludeSet.Has(itemId) {
-				switch m := m.(type) {
-				case ranking.MatrixFactorization:
-					recItems.Push(itemId, m.InternalPredict(userIndex, itemIndex))
-				case *ranking.KNN:
-					recItems.Push(itemId, m.InternalPredict(positiveItemIndices, itemIndex))
-				default:
-					base.Logger().Error("unknown model type",
-						zap.String("type", reflect.TypeOf(m).String()))
+		var candidateItems []string
+		var candidateScores []float32
+		if w.cfg.Recommend.EnableColRecommend {
+			recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+			for itemIndex, itemId := range itemIds {
+				if !excludeSet.Has(itemId) {
+					switch m := m.(type) {
+					case ranking.MatrixFactorization:
+						recItems.Push(itemId, m.InternalPredict(userIndex, itemIndex))
+					default:
+						base.Logger().Error("unknown model type",
+							zap.String("type", reflect.TypeOf(m).String()))
+					}
 				}
 			}
-		}
-		// save result
-		candidateItems, candidateScores := recItems.PopAll()
-		excludeSet.Add(candidateItems...)
-		if err = w.cacheClient.SetScores(cache.CollaborativeRecommend, userId, cache.CreateScoredItems(candidateItems, candidateScores)); err != nil {
-			base.Logger().Error("failed to cache recommendation", zap.Error(err))
-			return errors.Trace(err)
+			// save result
+			candidateItems, candidateScores = recItems.PopAll()
+			excludeSet.Add(candidateItems...)
+			if err = w.cacheClient.SetScores(cache.CollaborativeRecommend, userId, cache.CreateScoredItems(candidateItems, candidateScores)); err != nil {
+				base.Logger().Error("failed to cache recommendation", zap.Error(err))
+				return errors.Trace(err)
+			}
 		}
 
 		// insert item-based items
@@ -558,7 +553,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 				return errors.Trace(err)
 			}
 		} else {
-			result = w.randomInsertLatestItem(candidateItems, candidateScores)
+			result = cache.CreateScoredItems(candidateItems, base.RepeatFloat32s(len(candidateItems), 0))
 		}
 		if err = w.cacheClient.SetScores(cache.CTRRecommend, userId, result); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
@@ -584,19 +579,6 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 	}
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
-}
-
-// randomInsertLatestItem inserts latest items to the recommendation list randomly. Latest items
-// are located at itemIds[len(scores):len(itemIds)]
-func (w *Worker) randomInsertLatestItem(itemIds []string, scores []float32) []cache.Scored {
-	numPersonalized := len(scores)
-	for i := numPersonalized; i < len(itemIds); i++ {
-		scores = append(scores, 0)
-		replaced := rand.Intn(numPersonalized)
-		itemIds[i], itemIds[replaced] = itemIds[replaced], itemIds[i]
-		scores[i], scores[replaced] = scores[replaced], scores[i]
-	}
-	return cache.CreateScoredItems(itemIds, scores)
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.

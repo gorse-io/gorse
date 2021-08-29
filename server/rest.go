@@ -372,25 +372,25 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 	s.getList(cache.LatestItems, "", request, response)
 }
 
-func (s *RestServer) getLabelPopular(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
-	label := request.PathParameter("label")
-	base.Logger().Debug("get label popular items", zap.String("label", label))
-	s.getList(cache.PopularItems, label, request, response)
-}
-
-func (s *RestServer) getLabelLatest(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
-	label := request.PathParameter("label")
-	base.Logger().Debug("get label latest items", zap.String("label", label))
-	s.getList(cache.LatestItems, label, request, response)
-}
+//func (s *RestServer) getLabelPopular(request *restful.Request, response *restful.Response) {
+//	// Authorize
+//	if !s.auth(request, response) {
+//		return
+//	}
+//	label := request.PathParameter("label")
+//	base.Logger().Debug("get label popular items", zap.String("label", label))
+//	s.getList(cache.PopularItems, label, request, response)
+//}
+//
+//func (s *RestServer) getLabelLatest(request *restful.Request, response *restful.Response) {
+//	// Authorize
+//	if !s.auth(request, response) {
+//		return
+//	}
+//	label := request.PathParameter("label")
+//	base.Logger().Debug("get label latest items", zap.String("label", label))
+//	s.getList(cache.LatestItems, label, request, response)
+//}
 
 // get feedback by item-id with feedback type
 func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *restful.Response) {
@@ -446,15 +446,15 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 }
 
 // getSubscribe gets subscribed items of a user from database.
-func (s *RestServer) getSubscribe(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
-	// Get user id
-	userId := request.PathParameter("user-id")
-	s.getList(cache.SubscribeItems, userId, request, response)
-}
+//func (s *RestServer) getSubscribe(request *restful.Request, response *restful.Response) {
+//	// Authorize
+//	if !s.auth(request, response) {
+//		return
+//	}
+//	// Get user id
+//	userId := request.PathParameter("user-id")
+//	s.getList(cache.SubscribeItems, userId, request, response)
+//}
 
 // getCollaborative gets cached recommended items from database.
 func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
@@ -593,7 +593,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 	// Item-based recommendation. The running condition is:
 	// 1. The number of current results is less than n.
-	// 2. Recommenders includes CTRRecommender.
+	// 2. Recommenders include CTRRecommender.
 	if len(results) < n && recommenderMask&ItemBasedRecommender > 0 {
 		start := time.Now()
 		// collect candidates
@@ -627,7 +627,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 	// User-based recommendation. The running condition is:
 	// 1. The number of current results is less than n.
-	// 2. Recommenders includes UserBasedRecommender.
+	// 2. Recommenders include UserBasedRecommender.
 	if len(results) < n && recommenderMask&UserBasedRecommender > 0 {
 		start := time.Now()
 		candidates := make(map[string]float32)
@@ -665,7 +665,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 	// Latest recommendation. The running condition is:
 	// 1. The number of current results is less than n.
-	// 2. Recommenders includes LatestRecommender.
+	// 2. Recommenders include LatestRecommender.
 	if len(results) < n && recommenderMask&LatestRecommender > 0 {
 		start := time.Now()
 		items, err := s.CacheClient.GetScores(cache.LatestItems, "", 0, n-len(results))
@@ -685,7 +685,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 	// Popular recommendation. The running condition is:
 	// 1. The number of current results is less than n.
-	// 2. Recommenders includes PopularRecommender.
+	// 2. Recommenders include PopularRecommender.
 	if len(results) < n && recommenderMask&PopularRecommender > 0 {
 		start := time.Now()
 		items, err := s.CacheClient.GetScores(cache.PopularItems, "", 0, n-len(results))
@@ -742,6 +742,8 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	recommenders := []Recommender{CTRRecommender}
 	for _, recommender := range s.GorseConfig.Recommend.FallbackRecommend {
 		switch recommender {
+		case "collaborative":
+			recommenders = append(recommenders, CollaborativeRecommender)
 		case "user_based":
 			recommenders = append(recommenders, UserBasedRecommender)
 		case "item_based":

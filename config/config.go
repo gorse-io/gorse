@@ -130,7 +130,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnablePopularRecommend:   false,
 			EnableUserBasedRecommend: false,
 			EnableItemBasedRecommend: false,
-			EnableColRecommend:       false,
+			EnableColRecommend:       true,
 		}
 	}
 	return config

@@ -30,6 +30,7 @@ type Index interface {
 
 func init() {
 	gob.Register(&MapIndex{})
+	gob.Register(&DirectIndex{})
 }
 
 // MapIndex manages the map between sparse Names and dense indices. A sparse ID is

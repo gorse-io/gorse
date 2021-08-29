@@ -97,6 +97,11 @@ func NewFitConfig() *FitConfig {
 	}
 }
 
+func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
+	config.Verbose = verbose
+	return config
+}
+
 func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
 	config.Jobs = nJobs
 	return config
@@ -407,7 +412,25 @@ func (fm *FM) Init(trainSet *Dataset) {
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
-		// labels
+		// user labels
+		for _, label := range trainSet.Index.GetUserLabels() {
+			oldIndex := fm.Index.EncodeUserLabel(label)
+			newIndex := trainSet.Index.EncodeUserLabel(label)
+			if oldIndex != base.NotId {
+				newW[newIndex] = fm.W[oldIndex]
+				newV[newIndex] = fm.V[oldIndex]
+			}
+		}
+		// item labels
+		for _, label := range trainSet.Index.GetItemLabels() {
+			oldIndex := fm.Index.EncodeItemLabel(label)
+			newIndex := trainSet.Index.EncodeItemLabel(label)
+			if oldIndex != base.NotId {
+				newW[newIndex] = fm.W[oldIndex]
+				newV[newIndex] = fm.V[oldIndex]
+			}
+		}
+		// context labels
 		for _, label := range trainSet.Index.GetContextLabels() {
 			oldIndex := fm.Index.EncodeContextLabel(label)
 			newIndex := trainSet.Index.EncodeContextLabel(label)
@@ -444,6 +467,7 @@ func DecodeModel(buf []byte) (FactorizationMachine, error) {
 	if err := decoder.Decode(&fm); err != nil {
 		return nil, err
 	}
+	fm.SetParams(fm.GetParams())
 	return &fm, nil
 }
 

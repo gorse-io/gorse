@@ -38,7 +38,7 @@ type mockMasterRPC struct {
 	grpcServer *grpc.Server
 }
 
-func newMockMasterRPC(t *testing.T) *mockMasterRPC {
+func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	// create click model
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
@@ -130,7 +130,7 @@ func TestRPC(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "bpr", rankingModelResp.Name)
 	assert.Equal(t, int64(123), rankingModelResp.Version)
-	_, err = ranking.DecodeModel("bpr", rankingModelResp.Model)
+	_, err = ranking.DecodeModel(rankingModelResp.Model)
 	assert.NoError(t, err)
 
 	// test get user index

@@ -42,31 +42,23 @@ func SetDevelopmentLogger() {
 }
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.
-func Max(a ...int) int {
-	if len(a) == 0 {
-		panic("can't get the maximum from empty vec")
-	}
-	maximum := a[0]
-	for _, m := range a {
-		if m > maximum {
-			maximum = m
+func Max(a int, b ...int) int {
+	for _, value := range b {
+		if value > a {
+			a = value
 		}
 	}
-	return maximum
+	return a
 }
 
 // Min finds the minimum in a vector of integers. Panic if the slice is empty.
-func Min(a ...int) int {
-	if len(a) == 0 {
-		panic("can't get the minimum from empty vec")
-	}
-	minimum := a[0]
-	for _, m := range a {
-		if m < minimum {
-			minimum = m
+func Min(a int, b ...int) int {
+	for _, value := range b {
+		if value < a {
+			a = value
 		}
 	}
-	return minimum
+	return a
 }
 
 // RangeInt generate a slice [0, ..., n-1].

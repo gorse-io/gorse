@@ -22,6 +22,13 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 )
 
+// NewMapIndexDataset creates a data set.
+func NewMapIndexDataset() *Dataset {
+	s := new(Dataset)
+	s.Index = NewUnifiedDirectIndex(0)
+	return s
+}
+
 type mockFactorizationMachineForSearch struct {
 	model.BaseModel
 }
@@ -123,4 +130,25 @@ func TestRandomSearchCV(t *testing.T) {
 		model.InitMean:   4,
 		model.InitStdDev: 4,
 	}, r.BestParams)
+}
+
+func TestModelSearcher(t *testing.T) {
+	tracker := new(mockTracker)
+	tracker.On("Start", 63*2)
+	tracker.On("SubTracker")
+	tracker.On("Finish")
+	runner := new(mockRunner)
+	runner.On("Lock")
+	runner.On("UnLock")
+	searcher := NewModelSearcher(2, 63, 1)
+	searcher.model = &mockFactorizationMachineForSearch{}
+	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tracker, runner)
+	assert.NoError(t, err)
+	m, score := searcher.GetBestModel()
+	assert.Equal(t, float32(12), score.AUC)
+	assert.Equal(t, model.Params{
+		model.NFactors:   4,
+		model.InitMean:   4,
+		model.InitStdDev: 4,
+	}, m.GetParams())
 }

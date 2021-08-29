@@ -39,11 +39,13 @@ func TestZero(t *testing.T) {
 func TestMin(t *testing.T) {
 	a := []float32{3, 2, 5, 6, 0, 0}
 	assert.Equal(t, float32(0), Min(a))
+	assert.Panics(t, func() { Min(nil) })
 }
 
 func TestMax(t *testing.T) {
 	a := []float32{3, 2, 5, 6, 0, 0}
 	assert.Equal(t, float32(6), Max(a))
+	assert.Panics(t, func() { Max(nil) })
 }
 
 func TestAdd(t *testing.T) {
@@ -51,6 +53,7 @@ func TestAdd(t *testing.T) {
 	b := []float32{5, 6, 7, 8}
 	Add(a, b)
 	assert.Equal(t, []float32{6, 8, 10, 12}, a)
+	assert.Panics(t, func() { Add([]float32{1}, nil) })
 }
 
 func TestSub(t *testing.T) {
@@ -58,6 +61,7 @@ func TestSub(t *testing.T) {
 	b := []float32{5, 6, 7, 8}
 	Sub(a, b)
 	assert.Equal(t, []float32{-4, -4, -4, -4}, a)
+	assert.Panics(t, func() { Sub([]float32{1}, nil) })
 }
 
 func TestSubTo(t *testing.T) {
@@ -66,6 +70,7 @@ func TestSubTo(t *testing.T) {
 	c := make([]float32, 4)
 	SubTo(a, b, c)
 	assert.Equal(t, []float32{-4, -4, -4, -4}, c)
+	assert.Panics(t, func() { SubTo([]float32{1}, nil, nil) })
 }
 
 func TestMul(t *testing.T) {
@@ -73,6 +78,7 @@ func TestMul(t *testing.T) {
 	b := []float32{5, 6, 7, 8}
 	Mul(a, b)
 	assert.Equal(t, []float32{5, 12, 21, 32}, a)
+	assert.Panics(t, func() { Mul([]float32{1}, nil) })
 }
 
 func TestMulConst(t *testing.T) {
@@ -86,6 +92,7 @@ func TestDiv(t *testing.T) {
 	b := []float32{1, 2, 3, 4}
 	Div(a, b)
 	assert.Equal(t, []float32{1, 2, 3, 4}, a)
+	assert.Panics(t, func() { Div([]float32{1}, nil) })
 }
 
 func TestMulConstTo(t *testing.T) {
@@ -94,6 +101,7 @@ func TestMulConstTo(t *testing.T) {
 	target := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	MulConstTo(a, 2, dst)
 	assert.Equal(t, target, dst)
+	assert.Panics(t, func() { MulConstTo(nil, 2, dst) })
 }
 
 func TestMulConstAddTo(t *testing.T) {
@@ -102,6 +110,7 @@ func TestMulConstAddTo(t *testing.T) {
 	target := []float32{0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30}
 	MulConstAddTo(a, 2, dst)
 	assert.Equal(t, target, dst)
+	assert.Panics(t, func() { MulConstAddTo(nil, 1, dst) })
 }
 
 func TestMulAddTo(t *testing.T) {
@@ -111,6 +120,7 @@ func TestMulAddTo(t *testing.T) {
 	target := []float32{0, 5, 14, 27, 44, 65, 90, 119, 152, 189, 230}
 	MulAddTo(a, b, c)
 	assert.Equal(t, target, c)
+	assert.Panics(t, func() { MulAddTo(nil, nil, c) })
 }
 
 func TestAddTo(t *testing.T) {
@@ -120,12 +130,14 @@ func TestAddTo(t *testing.T) {
 	target := []float32{0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30}
 	AddTo(a, b, dst)
 	assert.Equal(t, target, dst)
+	assert.Panics(t, func() { AddTo(nil, nil, dst) })
 }
 
 func TestDot(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	assert.Equal(t, float32(770), Dot(a, b))
+	assert.Panics(t, func() { Dot([]float32{1}, nil) })
 }
 
 func TestSum(t *testing.T) {

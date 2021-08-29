@@ -120,3 +120,11 @@ func testList(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Empty(t, totalItems)
 }
+
+func TestScored(t *testing.T) {
+	itemIds := []string{"2", "4", "6"}
+	scores := []float32{2, 4, 6}
+	scored := []Scored{{Id: "2", Score: 2}, {Id: "4", Score: 4}, {Id: "6", Score: 6}}
+	assert.Equal(t, scored, CreateScoredItems(itemIds, scores))
+	assert.Equal(t, itemIds, RemoveScores(scored))
+}

@@ -111,11 +111,9 @@ func MulConstAddTo(a []float32, c float32, dst []float32) {
 	}
 }
 
-// MulConstAddTo multiplies a vector and a vector, then adds to a vector: c += a * b
+// MulAddTo multiplies a vector and a vector, then adds to a vector: c += a * b
 func MulAddTo(a, b, c []float32) {
-	if len(a) != len(b) {
-		panic("floats: slice lengths do not match")
-	} else if len(a) != len(c) {
+	if len(a) != len(b) || len(a) != len(c) {
 		panic("floats: slice lengths do not match")
 	}
 	for i := range a {

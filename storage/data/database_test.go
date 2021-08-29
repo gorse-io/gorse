@@ -491,22 +491,6 @@ func testGetClickThroughRate(t *testing.T, db Database) {
 	assert.Equal(t, 0.375, rate)
 }
 
-func testCountActiveUsers(t *testing.T, db Database) {
-	// insert feedback
-	err := db.BatchInsertFeedback([]Feedback{
-		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "1", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "4", "4"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "5", "5"}, Timestamp: time.Date(1999, 10, 1, 0, 0, 0, 0, time.UTC)},
-	}, true, true)
-	assert.NoError(t, err)
-	// get exposed items
-	count, err := db.CountActiveUsers(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC))
-	assert.NoError(t, err)
-	assert.Equal(t, 3, count)
-}
-
 func isClickHouse(db Database) bool {
 	if sqlDB, isSQL := db.(*SQLDatabase); !isSQL {
 		return false

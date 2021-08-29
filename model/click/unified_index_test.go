@@ -78,3 +78,28 @@ func TestUnifiedMapIndex(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("ctx_label%v", i), ctxLabels[i])
 	}
 }
+
+func TestUnifiedDirectIndex(t *testing.T) {
+	index := NewUnifiedDirectIndex(10)
+	assert.Equal(t, 10, index.Len())
+	assert.Equal(t, []string{"0", "1"}, index.GetItems())
+	assert.Equal(t, []string{"2", "3"}, index.GetUsers())
+	assert.Equal(t, []string{"4", "5"}, index.GetItemLabels())
+	assert.Equal(t, []string{"6", "7"}, index.GetUserLabels())
+	assert.Equal(t, []string{"8", "9"}, index.GetContextLabels())
+	assert.Equal(t, 2, index.CountItems())
+	assert.Equal(t, 2, index.CountUsers())
+	assert.Equal(t, 2, index.CountItemLabels())
+	assert.Equal(t, 2, index.CountUserLabels())
+	assert.Equal(t, 2, index.CountContextLabels())
+	assert.Panics(t, func() { index.EncodeItem("abc") })
+	assert.Panics(t, func() { index.EncodeUser("abc") })
+	assert.Panics(t, func() { index.EncodeItemLabel("abc") })
+	assert.Panics(t, func() { index.EncodeUserLabel("abc") })
+	assert.Panics(t, func() { index.EncodeContextLabel("abc") })
+	assert.Equal(t, 1, index.EncodeItem("1"))
+	assert.Equal(t, 2, index.EncodeUser("2"))
+	assert.Equal(t, 3, index.EncodeItemLabel("3"))
+	assert.Equal(t, 4, index.EncodeUserLabel("4"))
+	assert.Equal(t, 5, index.EncodeContextLabel("5"))
+}

@@ -38,7 +38,7 @@ func init() {
 	}
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
-	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://192.168.199.166:8123/")
+	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
 }
 
 type testSQLDatabase struct {
@@ -135,12 +135,6 @@ func TestMySQL_GetClickThroughRate(t *testing.T) {
 	testGetClickThroughRate(t, db.Database)
 }
 
-func TestMySQL_CountActiveUsers(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_CountActiveUsers")
-	defer db.Close(t)
-	testCountActiveUsers(t, db.Database)
-}
-
 func newTestPostgresDatabase(t *testing.T, dbName string) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
@@ -218,12 +212,6 @@ func TestPostgres_GetClickThroughRate(t *testing.T) {
 	testGetClickThroughRate(t, db.Database)
 }
 
-func TestPostgres_CountActiveUsers(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_CountActiveUsers")
-	defer db.Close(t)
-	testCountActiveUsers(t, db.Database)
-}
-
 func newTestClickHouseDatabase(t *testing.T, dbName string) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
@@ -299,10 +287,4 @@ func TestClickHouse_GetClickThroughRate(t *testing.T) {
 	db := newTestClickHouseDatabase(t, "TestClickHouse_GetClickThroughRate")
 	defer db.Close(t)
 	testGetClickThroughRate(t, db.Database)
-}
-
-func TestClickHouse_CountActiveUsers(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_CountActiveUsers")
-	defer db.Close(t)
-	testCountActiveUsers(t, db.Database)
 }

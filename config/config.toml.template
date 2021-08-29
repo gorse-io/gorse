@@ -95,3 +95,18 @@ item_neighbor_type = "similar"
 #         If this user have no labels, neighbors are found by number of common liked items.
 # The default values is "auto".
 user_neighbor_type = "similar"
+
+# Enable latest recommendation during offline recommendation. The default values is false.
+enable_latest_recommend = true
+
+# Enable popular recommendation during offline recommendation. The default values is false.
+enable_popular_recommend = true
+
+# Enable user-based similarity recommendation during offline recommendation. The default values is false.
+enable_user_based_recommend = true
+
+# Enable item-based similarity recommendation during offline recommendation. The default values is false.
+enable_item_based_recommend = true
+
+# Enable collaborative filtering recommendation during offline recommendation. The default values is true.
+enable_collaborative_recommend = true

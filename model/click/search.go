@@ -130,6 +130,7 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 
 // ModelSearcher is a thread-safe click model searcher.
 type ModelSearcher struct {
+	model FactorizationMachine
 	// arguments
 	numEpochs int
 	numTrials int
@@ -143,6 +144,7 @@ type ModelSearcher struct {
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
 	return &ModelSearcher{
+		model:     NewFM(FMClassification, model.Params{model.NEpochs: nEpoch}),
 		numTrials: nTrials,
 		numEpochs: nEpoch,
 		numJobs:   nJobs,
@@ -169,9 +171,8 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 	startTime := time.Now()
 
 	// Random search
-	fm := NewFM(FMClassification, nil)
-	grid := fm.GetParamsGrid()
-	r := RandomSearchCV(fm, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().
+	grid := searcher.model.GetParamsGrid()
+	r := RandomSearchCV(searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().
 		SetJobs(searcher.numJobs).
 		SetTracker(tracker.SubTracker()), runner)
 	searcher.bestMutex.Lock()

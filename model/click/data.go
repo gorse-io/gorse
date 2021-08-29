@@ -108,7 +108,7 @@ func LoadLibFMFile(path string) (features [][]int, values [][]float32, targets [
 					return nil, nil, nil, 0, errors.Trace(err)
 				}
 				lineValues = append(lineValues, float32(value))
-				maxLabel = base.Max(maxLabel, base.Max(lineFeatures...))
+				maxLabel = base.Max(maxLabel, lineFeatures...)
 			}
 		}
 		features = append(features, lineFeatures)

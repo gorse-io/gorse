@@ -37,8 +37,6 @@ const (
 	RankingTop10Recall    = "Recall@10"
 	ClickPrecision        = "Precision"
 	ClickThroughRate      = "ClickThroughRate"
-	ActiveUsersYesterday  = "ActiveUsersYesterday"
-	ActiveUsersMonthly    = "ActiveUsersMonthly"
 
 	TaskFindLatest         = "Find latest items"
 	TaskFindPopular        = "Find popular items"
@@ -572,58 +570,6 @@ func (m *Master) runAnalyzeTask() error {
 		}
 		m.taskMonitor.Update(TaskAnalyze, i)
 	}
-
-	// pull existed active users
-	yesterdayActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersYesterday, 1)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	yesterdayDatetime := time.Now().AddDate(0, 0, -1)
-	yesterdayDate := time.Date(yesterdayDatetime.Year(), yesterdayDatetime.Month(), yesterdayDatetime.Day(), 0, 0, 0, 0, time.UTC)
-	if len(yesterdayActiveUsers) == 0 || !yesterdayActiveUsers[0].Timestamp.Equal(yesterdayDate) {
-		startTime := time.Now()
-		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -1))
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = m.DataClient.InsertMeasurement(data.Measurement{
-			Name:      ActiveUsersYesterday,
-			Timestamp: yesterdayDate,
-			Value:     float32(activeUsers),
-		})
-		if err != nil {
-			return errors.Trace(err)
-		}
-		base.Logger().Info("update active users of yesterday",
-			zap.String("date", yesterdayDate.String()),
-			zap.Duration("time_used", time.Since(startTime)),
-			zap.Int("active_users", activeUsers))
-	}
-
-	monthActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersMonthly, 1)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if len(monthActiveUsers) == 0 || !monthActiveUsers[0].Timestamp.Equal(yesterdayDate) {
-		startTime := time.Now()
-		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -30))
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = m.DataClient.InsertMeasurement(data.Measurement{
-			Name:      ActiveUsersMonthly,
-			Timestamp: yesterdayDate,
-			Value:     float32(activeUsers),
-		})
-		if err != nil {
-			return errors.Trace(err)
-		}
-		base.Logger().Info("update active users of this month",
-			zap.String("date", yesterdayDate.String()),
-			zap.Duration("time_used", time.Since(startTime)),
-			zap.Int("active_users", activeUsers))
-	}
-
 	base.Logger().Info("complete analyzing click-through-rate")
 	m.taskMonitor.Finish(TaskAnalyze)
 	return nil
