@@ -11,12 +11,15 @@
 
 Gorse is an open-source recommendation system written in Go. Gorse aims to be an universal open-source recommender system that can be quickly introduced into a wide variety of online services. By importing items, users and interaction data into Gorse, the system will automatically train models to generate recommendations for each user. Project features are as follows.
 
+<img width=520 src="assets/workflow.png"/>
+
+- **Multi-source Recommendation:** For a user, recommended items are collected from different ways (popular, latest, user-based, item-based and collaborative filtering) and ranked by click-through rate prediction.
 - **AutoML**: Choose the best recommendation model and strategy automatically by model searching in the background.
 - **Distributed Recommendation**: Single node training, distributed prediction, and ability to achieve horizontal scaling in the recommendation stage.
 - **RESTful API**: Provide RESTful APIs for data CRUD and recommendation requests.
 - **Dashboard**: Provide dashboard for data import and export, monitoring, and cluster status checking.
 
-<img width=640 src="assets/dashboard.jpg"/>
+<img width=720 src="assets/dashboard.png"/>
 
 ## Quick Start
 
@@ -28,7 +31,7 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be an
 
 ## Architecture
 
-Gorse is a single node training and distributed prediction recommender system. Gorse stores data in MySQL or MongoDB, with intermediate data cached in Redis. 
+Gorse is a single node training and distributed prediction recommender system. Gorse stores data in MySQL, MongoDB, PostgresSQL or ClickHouse, with intermediate data cached in Redis. 
 
 1. The cluster consists of a master node, multiple worker nodes, and server nodes.
 1. The master node is responsible for model training, non-personalized item recommendation, configuration management, and membership management.
@@ -37,7 +40,7 @@ Gorse is a single node training and distributed prediction recommender system. G
 
 In addition, the administrator can perform system monitoring, data import and export, and system status checking via the dashboard on the master node.
 
-<img width=480 src="assets/architecture.png"/>
+<img width=520 src="assets/architecture.png"/>
 
 ## Contributors
 
