@@ -611,15 +611,15 @@ func (db *MongoDB) CountActiveUsers(date time.Time) (int, error) {
 func (db *MongoDB) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
-	// count read feedbacks
 	readCountAgg, err := c.Aggregate(ctx, mongo.Pipeline{
+		// collect read feedbacks
 		{{"$match", bson.M{
 			"timestamp": bson.M{
 				"$gte": time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
 				"$lt":  time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC),
 			},
 			"feedbackkey.feedbacktype": bson.M{
-				"$in": append([]string{readType}, positiveTypes...),
+				"$eq": readType,
 			},
 		}}},
 		{{"$project", bson.M{
@@ -629,61 +629,71 @@ func (db *MongoDB) GetClickThroughRate(date time.Time, positiveTypes []string, r
 		{{"$group", bson.M{
 			"_id": "$feedbackkey",
 		}}},
+		// collect positive feedback
+		{{"$lookup", bson.M{
+			"from": "feedback",
+			"let":  bson.M{"feedbackkey": "$_id"},
+			"pipeline": mongo.Pipeline{
+				{{"$match", bson.M{
+					"$expr": bson.M{
+						"$and": []bson.M{
+							{"$gte": []interface{}{"$timestamp", time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)}},
+							{"$lt": []interface{}{"$timestamp", time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC)}},
+							{"$in": []interface{}{"$feedbackkey.feedbacktype", positiveTypes}},
+							{"$eq": []string{"$feedbackkey.userid", "$$feedbackkey.userid"}},
+							{"$eq": []string{"$feedbackkey.itemid", "$$feedbackkey.itemid"}},
+						},
+					},
+				}}},
+				{{"$project", bson.M{
+					"feedbackkey.userid": 1,
+					"feedbackkey.itemid": 1,
+				}}},
+				{{"$group", bson.M{
+					"_id": "$feedbackkey",
+				}}},
+			},
+			"as": "positive_feedback",
+		}}},
+		{{"$unwind", bson.M{
+			"path":                       "$positive_feedback",
+			"preserveNullAndEmptyArrays": true,
+		}}},
+		{{"$project", bson.M{
+			"is_positive": bson.M{"$cond": []interface{}{bson.M{"$not": []string{"$positive_feedback"}}, 0, 1}},
+		}}},
 		{{"$group", bson.M{
-			"_id":        "$_id.userid",
-			"read_count": bson.M{"$sum": 1},
+			"_id":            "$_id.userid",
+			"positive_count": bson.M{"$sum": "$is_positive"},
+			"read_count":     bson.M{"$sum": 1},
+		}}},
+		// users must have at least one positive feedback
+		{{"$match", bson.M{
+			"positive_count": bson.M{
+				"$gt": 0,
+			},
+		}}},
+		// get click-through rates
+		{{"$project", bson.M{
+			"ctr": bson.M{"$divide": []interface{}{"$positive_count", "$read_count"}},
+		}}},
+		// get the average of click-through rates
+		{{"$group", bson.M{
+			"_id":     nil,
+			"avg_ctr": bson.M{"$avg": "$ctr"},
 		}}},
 	})
 	if err != nil {
 		return 0, err
 	}
-	readCount := make(map[string]int32)
-	for readCountAgg.Next(ctx) {
+	var result float64
+	if readCountAgg.Next(ctx) {
 		var ret bson.D
 		err = readCountAgg.Decode(&ret)
 		if err != nil {
 			return 0, err
 		}
-		readCount[ret.Map()["_id"].(string)] = ret.Map()["read_count"].(int32)
+		result = ret.Map()["avg_ctr"].(float64)
 	}
-	// count positive feedbacks
-	feedbackCountAgg, err := c.Aggregate(ctx, mongo.Pipeline{
-		{{"$match", bson.M{
-			"timestamp": bson.M{
-				"$gte": time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
-				"$lt":  time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC),
-			},
-			"feedbackkey.feedbacktype": bson.M{
-				"$in": positiveTypes,
-			},
-		}}},
-		{{"$project", bson.M{
-			"feedbackkey.userid": 1,
-			"feedbackkey.itemid": 1,
-		}}},
-		{{"$group", bson.M{
-			"_id": "$feedbackkey",
-		}}},
-		{{"$group", bson.M{
-			"_id":            "$_id.userid",
-			"positive_count": bson.M{"$sum": 1},
-		}}},
-	})
-	if err != nil {
-		return 0, err
-	}
-	sum, count := 0.0, 0.0
-	for feedbackCountAgg.Next(ctx) {
-		var ret bson.D
-		err = feedbackCountAgg.Decode(&ret)
-		if err != nil {
-			return 0, err
-		}
-		count++
-		sum += float64(ret.Map()["positive_count"].(int32)) / float64(readCount[ret.Map()["_id"].(string)])
-	}
-	if count > 0 {
-		sum /= count
-	}
-	return sum, err
+	return result, err
 }
