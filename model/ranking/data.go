@@ -302,7 +302,10 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		for _, user := range users {
 			dataset.AddUser(user.UserId)
 			userIndex := dataset.UserIndex.ToNumber(user.UserId)
-			dataset.UserLabels = append(dataset.UserLabels, make([]int, len(user.Labels)))
+			if len(dataset.UserLabels) == userIndex {
+				dataset.UserLabels = append(dataset.UserLabels, make([]int, 0))
+			}
+			dataset.UserLabels[userIndex] = make([]int, len(user.Labels))
 			for i, label := range user.Labels {
 				userLabelIndex.Add(label)
 				dataset.UserLabels[userIndex][i] = userLabelIndex.ToNumber(label)
@@ -326,7 +329,10 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		for _, item := range items {
 			dataset.AddItem(item.ItemId)
 			itemIndex := dataset.ItemIndex.ToNumber(item.ItemId)
-			dataset.ItemLabels = append(dataset.ItemLabels, make([]int, len(item.Labels)))
+			if len(dataset.ItemLabels) == itemIndex {
+				dataset.ItemLabels = append(dataset.ItemLabels, make([]int, len(item.Labels)))
+			}
+			dataset.ItemLabels[itemIndex] = make([]int, len(item.Labels))
 			for i, label := range item.Labels {
 				itemLabelIndex.Add(label)
 				dataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
