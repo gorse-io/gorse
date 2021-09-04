@@ -1041,12 +1041,13 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 // GetClickThroughRate computes the click-through-rate of a specified date.
 func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
 	builder := strings.Builder{}
+	builder.WriteString("SELECT AVG(user_ctr) FROM (")
 	var args []interface{}
 	switch d.driver {
 	case MySQL, ClickHouse:
-		builder.WriteString("SELECT positive_count.positive_count / read_count.read_count FROM (")
+		builder.WriteString("SELECT positive_feedback_count.positive_count / read_feedback_count.read_count AS user_ctr FROM (")
 	case Postgres:
-		builder.WriteString("SELECT positive_count.positive_count :: DOUBLE PRECISION / read_count.read_count :: DOUBLE PRECISION FROM (")
+		builder.WriteString("SELECT positive_feedback_count.positive_count :: DOUBLE PRECISION / read_feedback_count.read_count :: DOUBLE PRECISION AS user_ctr FROM (")
 	}
 	builder.WriteString("SELECT user_id, COUNT(*) AS positive_count FROM (")
 	switch d.driver {
@@ -1069,7 +1070,7 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 		}
 		args = append(args, positiveType)
 	}
-	builder.WriteString(")) AS positive_feedback GROUP BY user_id) AS positive_count ")
+	builder.WriteString(")) AS positive_feedback GROUP BY user_id) AS positive_feedback_count ")
 	builder.WriteString("JOIN (")
 	builder.WriteString("SELECT user_id, COUNT(*) AS read_count FROM (")
 	switch d.driver {
@@ -1089,26 +1090,21 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 		}
 		args = append(args, positiveType)
 	}
-	builder.WriteString(")) AS read_feedback GROUP BY user_id) AS read_count ")
-	builder.WriteString("ON positive_count.user_id = read_count.user_id")
+	builder.WriteString(")) AS read_feedback GROUP BY user_id) AS read_feedback_count ")
+	builder.WriteString("ON positive_feedback_count.user_id = read_feedback_count.user_id) AS user_ctr")
 	base.Logger().Info("get click through rate from MySQL", zap.String("query", builder.String()))
 	rs, err := d.client.Query(builder.String(), args...)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
-	var sum, count float64
-	for rs.Next() {
-		var temp float64
-		if err = rs.Scan(&temp); err != nil {
+	if rs.Next() {
+		var ctr float64
+		if err = rs.Scan(&ctr); err != nil {
 			return 0, errors.Trace(err)
 		}
-		sum += temp
-		count++
+		return ctr, nil
 	}
-	if count > 0 {
-		sum /= count
-	}
-	return sum, errors.Trace(err)
+	return 0, nil
 }
 
 // CountActiveUsers returns the number active users starting from a specified date.

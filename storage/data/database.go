@@ -95,7 +95,6 @@ type Database interface {
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)
 	GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error)
-	CountActiveUsers(date time.Time) (int, error)
 }
 
 const (

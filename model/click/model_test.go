@@ -17,44 +17,49 @@ import (
 	"github.com/stretchr/testify/mock"
 	"testing"
 
-	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
 )
 
 const (
-	epsilon = 0.01
+	regressionDelta     = 0.001
+	classificationDelta = 0.01
 )
-
-func assertEpsilon(t *testing.T, expect, actual float32) {
-	if math32.Abs(expect-actual) > epsilon {
-		t.Fatalf("|%v - %v| > %v", expect, actual, epsilon)
-	}
-}
 
 type mockTracker struct {
 	mock.Mock
+	notTracking bool
 }
 
 func (t *mockTracker) Start(total int) {
-	t.Called(total)
+	if !t.notTracking {
+		t.Called(total)
+	}
 }
 
-func (t *mockTracker) Update(done int) {
-	t.Called()
+func (t *mockTracker) Update(_ int) {
+	if !t.notTracking {
+		t.Called()
+	}
 }
 
 func (t *mockTracker) Finish() {
-	t.Called()
+	if !t.notTracking {
+		t.Called()
+	}
 }
 
-func (t *mockTracker) Suspend(flag bool) {
-	t.Called()
+func (t *mockTracker) Suspend(_ bool) {
+	if !t.notTracking {
+		t.Called()
+	}
 }
 
 func (t *mockTracker) SubTracker() model.Tracker {
-	t.Called()
-	return nil
+	if !t.notTracking {
+		t.Called()
+	}
+	return &mockTracker{notTracking: true}
 }
 
 func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
@@ -62,11 +67,11 @@ func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
 	tracker.On("Start", numEpoch)
 	tracker.On("Update", mock.Anything)
 	tracker.On("Finish")
-	return &FitConfig{
-		Jobs:    1,
-		Verbose: 1,
-		Tracker: tracker,
-	}, tracker
+	cfg := NewFitConfig().
+		SetVerbose(1).
+		SetJobs(1).
+		SetTracker(tracker)
+	return cfg, tracker
 }
 
 func TestFM_Classification_Frappe(t *testing.T) {
@@ -86,7 +91,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
 	tracker.AssertExpectations(t)
-	assertEpsilon(t, 0.91684, score.Precision)
+	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
 }
 
 //func TestFM_Classification_MovieLens(t *testing.T) {
@@ -107,25 +112,64 @@ func TestFM_Classification_Frappe(t *testing.T) {
 //	assertEpsilon(t, 0.901777, score.Precision)
 //}
 
-func TestFM_Regression_Frappe(t *testing.T) {
+func TestFM_Regression_Criteo(t *testing.T) {
 	// LibFM command:
 	// libfm.exe -train train.libfm -test test.libfm -task r \
 	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
-	//   -learn_rate 0.01 -regular 0,0,0.0001
-	train, test, err := LoadDataFromBuiltIn("frappe")
+	//   -learn_rate 0.001 -regular 0,0,0.0001
+	train, test, err := LoadDataFromBuiltIn("criteo")
 	assert.NoError(t, err)
 	m := NewFM(FMRegression, model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
 		model.NEpochs:    20,
-		model.Lr:         0.01,
+		model.Lr:         0.001,
 		model.Reg:        0.0001,
 	})
 	fitConfig, tracker := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
 	tracker.AssertExpectations(t)
-	assertEpsilon(t, 0.494435, score.RMSE)
+	assert.InDelta(t, 0.839194, score.RMSE, regressionDelta)
+
+	// test prediction
+	assert.Equal(t, m.InternalPredict([]int{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.5, 0.5, 0.5, 0.5}),
+		m.Predict("1", "2", []string{"3", "4"}, []string{"5", "6"}))
+
+	// test increment test
+	buf, err := EncodeModel(m)
+	assert.NoError(t, err)
+	tmp, err := DecodeModel(buf)
+	assert.NoError(t, err)
+	m = tmp.(*FM)
+	m.nEpochs = 1
+	fitConfig, _ = newFitConfigWithTestTracker(1)
+	scoreInc := m.Fit(train, test, fitConfig)
+	assert.InDelta(t, 0.839194, scoreInc.RMSE, regressionDelta)
+
+	// test clear
+	m.Clear()
+	assert.True(t, m.Invalid())
 }
+
+//func TestFM_Regression_Frappe(t *testing.T) {
+//	// LibFM command:
+//	// libfm.exe -train train.libfm -test test.libfm -task r \
+//	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
+//	//   -learn_rate 0.01 -regular 0,0,0.0001
+//	train, test, err := LoadDataFromBuiltIn("frappe")
+//	assert.NoError(t, err)
+//	m := NewFM(FMRegression, model.Params{
+//		model.InitStdDev: 0.01,
+//		model.NFactors:   8,
+//		model.NEpochs:    20,
+//		model.Lr:         0.01,
+//		model.Reg:        0.0001,
+//	})
+//	fitConfig, tracker := newFitConfigWithTestTracker(20)
+//	score := m.Fit(train, test, fitConfig)
+//	tracker.AssertExpectations(t)
+//	assert.InDelta(t, 0.494435, score.RMSE, regressionDelta)
+//}
 
 //func TestFM_Regression_MovieLens(t *testing.T) {
 //	// LibFM command:

@@ -36,7 +36,7 @@ type ParamsSearchResult struct {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
-	seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
+	_ int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
 	count := 1
@@ -130,20 +130,21 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 
 // ModelSearcher is a thread-safe click model searcher.
 type ModelSearcher struct {
+	model FactorizationMachine
 	// arguments
 	numEpochs int
 	numTrials int
 	numJobs   int
 	// results
-	bestMutex     sync.Mutex
-	useClickModel bool
-	bestModel     FactorizationMachine
-	bestScore     Score
+	bestMutex sync.Mutex
+	bestModel FactorizationMachine
+	bestScore Score
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
 	return &ModelSearcher{
+		model:     NewFM(FMClassification, model.Params{model.NEpochs: nEpoch}),
 		numTrials: nTrials,
 		numEpochs: nEpoch,
 		numJobs:   nJobs,
@@ -155,15 +156,6 @@ func (searcher *ModelSearcher) GetBestModel() (FactorizationMachine, Score) {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	return searcher.bestModel, searcher.bestScore
-}
-
-// IsClickModelHelpful check if click model helps to improve recommendation. Click model helps if:
-// 1. There are item labels or user labels.
-// 2. Labels improve test precision.
-func (searcher *ModelSearcher) IsClickModelHelpful() bool {
-	searcher.bestMutex.Lock()
-	defer searcher.bestMutex.Unlock()
-	return searcher.useClickModel
 }
 
 func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Tracker, runner model.Runner) error {
@@ -178,35 +170,19 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 		zap.Int("n_item_labels", trainSet.Index.CountItemLabels()))
 	startTime := time.Now()
 
-	// Check number of labels
-	if trainSet.Index.CountItemLabels() == 0 && trainSet.Index.CountUserLabels() == 0 {
-		base.Logger().Warn("click model doesn't work if there are no labels for items or users")
-		return nil
-	}
-
 	// Random search
-	fm := NewFM(FMClassification, nil)
-	grid := fm.GetParamsGrid()
-	grid[model.UseFeature] = []interface{}{true, false}
-	r := RandomSearchCV(fm, trainSet, valSet, grid, searcher.numTrials*2, 0, NewFitConfig().
+	grid := searcher.model.GetParamsGrid()
+	r := RandomSearchCV(searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().
 		SetJobs(searcher.numJobs).
 		SetTracker(tracker.SubTracker()), runner)
-	if !r.BestParams[model.UseFeature].(bool) {
-		// If model searcher found it's better to ignore features, just don't use features.
-		searcher.useClickModel = false
-		base.Logger().Info("it seems worse to use features")
-		tracker.Finish()
-		return nil
-	}
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
-	searcher.useClickModel = true
 	searcher.bestModel = r.BestModel
 	searcher.bestScore = r.BestScore
 
 	searchTime := time.Since(startTime)
 	base.Logger().Info("complete ranking model search",
-		zap.Float32("precision", searcher.bestScore.Precision),
+		zap.Float32("auc", searcher.bestScore.AUC),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
 	tracker.Finish()

@@ -17,6 +17,8 @@ package master
 import (
 	"bufio"
 	"fmt"
+	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"io"
 	"net/http"
 	"os"
@@ -95,10 +97,11 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
-	ws.Route(ws.GET("/dashboard/recommend/{user-id}").To(m.getRecommend).
+	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
@@ -141,10 +144,11 @@ func (m *Master) StartHttpServer() {
 	http.HandleFunc("/api/bulk/users", m.importExportUsers)
 	http.HandleFunc("/api/bulk/items", m.importExportItems)
 	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
+	http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
 	m.RestServer.StartHttpServer()
 }
 
-func (m *Master) getCluster(request *restful.Request, response *restful.Response) {
+func (m *Master) getCluster(_ *restful.Request, response *restful.Response) {
 	// collect nodes
 	workers := make([]*Node, 0)
 	servers := make([]*Node, 0)
@@ -165,45 +169,92 @@ func (m *Master) getCluster(request *restful.Request, response *restful.Response
 	server.Ok(response, nodes)
 }
 
-func (m *Master) getConfig(request *restful.Request, response *restful.Response) {
+func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	server.Ok(response, m.GorseConfig)
 }
 
 type Status struct {
-	NumUsers       string
-	NumItems       string
-	NumPosFeedback string
-	RankingScore   float32
-	ClickScore     float32
+	NumServers          int
+	NumWorkers          int
+	NumUsers            int
+	NumItems            int
+	NumUserLabels       int
+	NumItemLabels       int
+	NumTotalPosFeedback int
+	NumValidPosFeedback int
+	NumValidNegFeedback int
+	RankingScore        ranking.Score
+	ClickScore          click.Score
 }
 
-func (m *Master) getStats(request *restful.Request, response *restful.Response) {
+func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	status := Status{}
-	var err error
 	// read number of users
-	status.NumUsers, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumUsers)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if measurements, err := m.DataClient.GetMeasurements(NumUsers, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumUsers = int(measurements[0].Value)
 	}
 	// read number of items
-	status.NumItems, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumItems)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if measurements, err := m.DataClient.GetMeasurements(NumItems, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumItems = int(measurements[0].Value)
 	}
-	// read number of positive feedback
-	status.NumPosFeedback, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumPositiveFeedback)
-	if err != nil && err != cache.ErrObjectNotExist {
+	// read number of user labels
+	if measurements, err := m.DataClient.GetMeasurements(NumUserLabels, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumUserLabels = int(measurements[0].Value)
 	}
-	status.RankingScore = m.rankingScore.Precision
-	status.ClickScore = m.clickScore.Precision
+	// read number of item labels
+	if measurements, err := m.DataClient.GetMeasurements(NumItemLabels, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumItemLabels = int(measurements[0].Value)
+	}
+	// read number of total positive feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumTotalPosFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumTotalPosFeedback = int(measurements[0].Value)
+	}
+	// read number of valid positive feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumValidPosFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumValidPosFeedback = int(measurements[0].Value)
+	}
+	// read number of valid negative feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumValidNegFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumValidNegFeedback = int(measurements[0].Value)
+	}
+	// count the number of workers and servers
+	m.nodesInfoMutex.Lock()
+	for _, node := range m.nodesInfo {
+		switch node.Type {
+		case ServerNode:
+			status.NumServers++
+		case WorkerNode:
+			status.NumWorkers++
+		}
+	}
+	m.nodesInfoMutex.Unlock()
+	status.RankingScore = m.rankingScore
+	status.ClickScore = m.clickScore
 	server.Ok(response, status)
 }
 
-func (m *Master) getTasks(request *restful.Request, response *restful.Response) {
+func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 	tasks := m.taskMonitor.List()
 	server.Ok(response, tasks)
 }
@@ -275,13 +326,24 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 
 func (m *Master) getRecommend(request *restful.Request, response *restful.Response) {
 	// parse arguments
+	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
 	n, err := server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
 		return
 	}
-	results, err := m.Recommend(userId, n)
+	var results []string
+	switch recommender {
+	case "ctr":
+		results, err = m.Recommend(userId, n, server.CTRRecommender)
+	case "collaborative":
+		results, err = m.Recommend(userId, n, server.CollaborativeRecommender)
+	case "user_based":
+		results, err = m.Recommend(userId, n, server.UserBasedRecommender)
+	case "item_based":
+		results, err = m.Recommend(userId, n, server.ItemBasedRecommender)
+	}
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -775,4 +837,29 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 		zap.Duration("time_used", timeUsed),
 		zap.Int("num_items", lineCount))
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
+}
+
+func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
+	// load dataset
+	dataSet, err := click.LoadDataFromDatabase(m.DataClient,
+		m.GorseConfig.Database.PositiveFeedbackType,
+		m.GorseConfig.Database.ReadFeedbackType)
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(response), err)
+	}
+	// write dataset
+	response.Header().Set("Content-Type", "text/plain")
+	response.Header().Set("Content-Disposition", "attachment;filename=libfm.txt")
+	for i := range dataSet.Features {
+		builder := strings.Builder{}
+		builder.WriteString(fmt.Sprintf("%f", dataSet.Target[i]))
+		for _, j := range dataSet.Features[i] {
+			builder.WriteString(fmt.Sprintf(" %d:1", j))
+		}
+		builder.WriteString("\r\n")
+		_, err = response.Write([]byte(builder.String()))
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+		}
+	}
 }

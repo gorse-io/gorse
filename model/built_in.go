@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package model
 
 import (
@@ -30,8 +31,7 @@ import (
 type DatasetFormat int
 
 const (
-	FormatUnknown DatasetFormat = iota
-	FormatNCF
+	FormatNCF DatasetFormat = iota
 	FormatLibFM
 )
 
@@ -66,6 +66,12 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		downloadURL: "https://cdn.sine-x.com/datasets/frappe.zip",
 		trainFile:   "frappe/train.libfm",
 		testFile:    "frappe/test.libfm",
+		format:      FormatLibFM,
+	},
+	"criteo": {
+		downloadURL: "https://cdn.sine-x.com/datasets/criteo.zip",
+		trainFile:   "criteo/train.libfm",
+		testFile:    "criteo/test.libfm",
 		format:      FormatLibFM,
 	},
 }

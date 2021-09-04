@@ -20,6 +20,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/juju/errors"
+	"reflect"
 	"time"
 
 	"github.com/barkimedes/go-deepcopy"
@@ -53,6 +54,11 @@ func NewFitConfig() *FitConfig {
 		Candidates: 100,
 		TopK:       10,
 	}
+}
+
+func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
+	config.Verbose = verbose
+	return config
 }
 
 func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
@@ -117,8 +123,6 @@ func NewModel(name string, params model.Params) (Model, error) {
 		return NewBPR(params), nil
 	case "ccd":
 		return NewCCD(params), nil
-	case "knn":
-		return NewKNN(params), nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
@@ -134,10 +138,32 @@ func Clone(m Model) Model {
 	}
 }
 
+const (
+	CollaborativeBPR = "bpr"
+	CollaborativeALS = "als"
+	CollaborativeCCD = "ccd"
+)
+
+func GetModelName(m Model) string {
+	switch m.(type) {
+	case *BPR:
+		return CollaborativeBPR
+	case *CCD:
+		return CollaborativeCCD
+	case *ALS:
+		return CollaborativeALS
+	default:
+		return reflect.TypeOf(m).String()
+	}
+}
+
 func EncodeModel(m Model) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	writer := bufio.NewWriter(buf)
 	encoder := gob.NewEncoder(writer)
+	if err := encoder.Encode(GetModelName(m)); err != nil {
+		return nil, err
+	}
 	if err := encoder.Encode(m); err != nil {
 		return nil, err
 	}
@@ -147,34 +173,35 @@ func EncodeModel(m Model) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecodeModel(name string, buf []byte) (Model, error) {
+func DecodeModel(buf []byte) (Model, error) {
 	reader := bytes.NewReader(buf)
 	decoder := gob.NewDecoder(reader)
+	var name string
+	if err := decoder.Decode(&name); err != nil {
+		return nil, err
+	}
 	switch name {
 	case "als":
 		var als ALS
 		if err := decoder.Decode(&als); err != nil {
 			return nil, err
 		}
+		als.SetParams(als.GetParams())
 		return &als, nil
 	case "bpr":
 		var bpr BPR
 		if err := decoder.Decode(&bpr); err != nil {
 			return nil, err
 		}
+		bpr.SetParams(bpr.GetParams())
 		return &bpr, nil
 	case "ccd":
 		var ccd CCD
 		if err := decoder.Decode(&ccd); err != nil {
 			return nil, err
 		}
+		ccd.SetParams(ccd.GetParams())
 		return &ccd, nil
-	case "knn":
-		var knn KNN
-		if err := decoder.Decode(&knn); err != nil {
-			return nil, err
-		}
-		return &knn, nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }

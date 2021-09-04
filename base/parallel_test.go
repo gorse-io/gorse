@@ -14,6 +14,7 @@
 package base
 
 import (
+	"fmt"
 	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -21,10 +22,7 @@ import (
 )
 
 func TestParallel(t *testing.T) {
-	a := make([]int, 10000)
-	for i := range a {
-		a[i] = i
-	}
+	a := RangeInt(10000)
 	b := make([]int, len(a))
 	workerIds := make([]int, len(a))
 	// multiple threads
@@ -50,10 +48,7 @@ func TestParallel(t *testing.T) {
 }
 
 func TestBatchParallel(t *testing.T) {
-	a := make([]int, 10000)
-	for i := range a {
-		a[i] = i
-	}
+	a := RangeInt(10000)
 	b := make([]int, len(a))
 	workerIds := make([]int, len(a))
 	// multiple threads
@@ -78,4 +73,42 @@ func TestBatchParallel(t *testing.T) {
 	workersSet = set.NewIntSet(workerIds...)
 	assert.Equal(t, a, b)
 	assert.Equal(t, 1, workersSet.Size())
+}
+
+func TestParallelFail(t *testing.T) {
+	// multiple threads
+	err := Parallel(10000, 4, func(workerId, jobId int) error {
+		if jobId%2 == 1 {
+			return fmt.Errorf("error from %d", jobId)
+		}
+		return nil
+	})
+	assert.Error(t, err)
+	// single thread
+	err = Parallel(10000, 1, func(workerId, jobId int) error {
+		if jobId%2 == 1 {
+			return fmt.Errorf("error from %d", jobId)
+		}
+		return nil
+	})
+	assert.Error(t, err)
+}
+
+func TestBatchParallelFail(t *testing.T) {
+	// multiple threads
+	err := BatchParallel(10000, 4, 10, func(workerId, beginJobId, endJobId int) error {
+		if workerId%2 == 1 {
+			return fmt.Errorf("error from %d", workerId)
+		}
+		return nil
+	})
+	assert.Error(t, err)
+	// single thread
+	err = BatchParallel(10000, 4, 10, func(workerId, beginJobId, endJobId int) error {
+		if workerId%2 == 1 {
+			return fmt.Errorf("error from %d", workerId)
+		}
+		return nil
+	})
+	assert.Error(t, err)
 }

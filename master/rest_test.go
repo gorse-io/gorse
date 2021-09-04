@@ -383,11 +383,13 @@ func TestMaster_GetStats(t *testing.T) {
 	// set stats
 	s.rankingScore = ranking.Score{Precision: 0.1}
 	s.clickScore = click.Score{Precision: 0.2}
-	err := s.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, "123")
+	err := s.DataClient.InsertMeasurement(data.Measurement{Name: NumUsers, Timestamp: time.Now(), Value: 123})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, "234")
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumItems, Timestamp: time.Now(), Value: 234})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, "345")
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumValidPosFeedbacks, Timestamp: time.Now(), Value: 345})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumValidNegFeedbacks, Timestamp: time.Now(), Value: 456})
 	assert.NoError(t, err)
 	// get stats
 	apitest.New().
@@ -396,11 +398,12 @@ func TestMaster_GetStats(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, Status{
-			NumUsers:       "234",
-			NumItems:       "123",
-			NumPosFeedback: "345",
-			RankingScore:   0.1,
-			ClickScore:     0.2,
+			NumUsers:            123,
+			NumItems:            234,
+			NumValidPosFeedback: 345,
+			NumValidNegFeedback: 456,
+			RankingScore:        ranking.Score{Precision: 0.1},
+			ClickScore:          click.Score{Precision: 0.2},
 		})).
 		End()
 }
@@ -564,7 +567,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.CacheClient.SetScores(cache.RecommendItems, "0", itemIds)
+	err := s.CacheClient.SetScores(cache.CTRRecommend, "0", itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -580,7 +583,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	}
 	apitest.New().
 		Handler(s.handler).
-		Get("/api/dashboard/recommend/0").
+		Get("/api/dashboard/recommend/0/ctr").
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []data.Item{

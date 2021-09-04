@@ -129,9 +129,3 @@ func TestMongoDatabase_GetClickThroughRate(t *testing.T) {
 	defer db.Close(t)
 	testGetClickThroughRate(t, db.Database)
 }
-
-func TestMongoDatabase_CountActiveUsers(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestMongoDatabase_CountActiveUsers")
-	defer db.Close(t)
-	testCountActiveUsers(t, db.Database)
-}

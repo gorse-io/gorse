@@ -37,18 +37,16 @@ const (
 	RankingTop10Recall    = "Recall@10"
 	ClickPrecision        = "Precision"
 	ClickThroughRate      = "ClickThroughRate"
-	ActiveUsersYesterday  = "ActiveUsersYesterday"
-	ActiveUsersMonthly    = "ActiveUsersMonthly"
 
 	TaskFindLatest         = "Find latest items"
 	TaskFindPopular        = "Find popular items"
 	TaskFindItemNeighbors  = "Find neighbors of items"
 	TaskFindUserNeighbors  = "Find neighbors of users"
 	TaskAnalyze            = "Analyze click-through rate"
-	TaskFitRankingModel    = "Fit ranking model"
-	TaskFitClickModel      = "Fit click model"
-	TaskSearchRankingModel = "Search ranking model"
-	TaskSearchClickModel   = "Search click model"
+	TaskFitRankingModel    = "Fit collaborative filtering model"
+	TaskFitClickModel      = "Fit click-through rate prediction model"
+	TaskSearchRankingModel = "Search collaborative filtering  model"
+	TaskSearchClickModel   = "Search click-through rate prediction model"
 
 	SimilarityShrink = 100
 )
@@ -553,7 +551,7 @@ func (m *Master) runAnalyzeTask() error {
 		if !existed.Has(date.String()) {
 			// click through clickThroughRate
 			startTime := time.Now()
-			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.ClickFeedbackTypes, m.GorseConfig.Database.ReadFeedbackType)
+			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.PositiveFeedbackType, m.GorseConfig.Database.ReadFeedbackType)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -572,58 +570,6 @@ func (m *Master) runAnalyzeTask() error {
 		}
 		m.taskMonitor.Update(TaskAnalyze, i)
 	}
-
-	// pull existed active users
-	yesterdayActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersYesterday, 1)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	yesterdayDatetime := time.Now().AddDate(0, 0, -1)
-	yesterdayDate := time.Date(yesterdayDatetime.Year(), yesterdayDatetime.Month(), yesterdayDatetime.Day(), 0, 0, 0, 0, time.UTC)
-	if len(yesterdayActiveUsers) == 0 || !yesterdayActiveUsers[0].Timestamp.Equal(yesterdayDate) {
-		startTime := time.Now()
-		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -1))
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = m.DataClient.InsertMeasurement(data.Measurement{
-			Name:      ActiveUsersYesterday,
-			Timestamp: yesterdayDate,
-			Value:     float32(activeUsers),
-		})
-		if err != nil {
-			return errors.Trace(err)
-		}
-		base.Logger().Info("update active users of yesterday",
-			zap.String("date", yesterdayDate.String()),
-			zap.Duration("time_used", time.Since(startTime)),
-			zap.Int("active_users", activeUsers))
-	}
-
-	monthActiveUsers, err := m.DataClient.GetMeasurements(ActiveUsersMonthly, 1)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if len(monthActiveUsers) == 0 || !monthActiveUsers[0].Timestamp.Equal(yesterdayDate) {
-		startTime := time.Now()
-		activeUsers, err := m.DataClient.CountActiveUsers(time.Now().AddDate(0, 0, -30))
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = m.DataClient.InsertMeasurement(data.Measurement{
-			Name:      ActiveUsersMonthly,
-			Timestamp: yesterdayDate,
-			Value:     float32(activeUsers),
-		})
-		if err != nil {
-			return errors.Trace(err)
-		}
-		base.Logger().Info("update active users of this month",
-			zap.String("date", yesterdayDate.String()),
-			zap.Duration("time_used", time.Since(startTime)),
-			zap.Int("active_users", activeUsers))
-	}
-
 	base.Logger().Info("complete analyzing click-through-rate")
 	m.taskMonitor.Finish(TaskAnalyze)
 	return nil
@@ -667,7 +613,8 @@ func (m *Master) runFitClickModelTask(
 		m.clickScore = bestClickScore
 		shouldFit = true
 		base.Logger().Info("find better click model",
-			zap.Float32("score", bestClickScore.Precision),
+			zap.Float32("Precision", bestClickScore.Precision),
+			zap.Float32("Recall", bestClickScore.Recall),
 			zap.Any("params", m.clickModel.GetParams()))
 	}
 	clickModel := m.clickModel
@@ -756,7 +703,7 @@ func (m *Master) runSearchClickModelTask(
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty click dataset",
-			zap.Strings("click_feedback_type", m.GorseConfig.Database.ClickFeedbackTypes))
+			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
 		m.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&

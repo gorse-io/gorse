@@ -18,39 +18,49 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
 )
 
 const (
-	benchEpsilon = 0.01
-	incrEpsilon  = 1e-5
+	benchDelta = 0.01
+	incrDelta  = 1e-3
 )
 
 type mockTracker struct {
 	mock.Mock
+	notTracking bool
 }
 
 func (t *mockTracker) Start(total int) {
-	t.Called(total)
+	if !t.notTracking {
+		t.Called(total)
+	}
 }
 
 func (t *mockTracker) Update(done int) {
-	t.Called(done)
+	if !t.notTracking {
+		t.Called(done)
+	}
 }
 
 func (t *mockTracker) Finish() {
-	t.Called()
+	if !t.notTracking {
+		t.Called()
+	}
 }
 
 func (t *mockTracker) Suspend(flag bool) {
-	t.Called(flag)
+	if !t.notTracking {
+		t.Called(flag)
+	}
 }
 
 func (t *mockTracker) SubTracker() model.Tracker {
-	t.Called()
-	return nil
+	if !t.notTracking {
+		t.Called()
+	}
+	return &mockTracker{notTracking: true}
 }
 
 func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
@@ -58,19 +68,8 @@ func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
 	tracker.On("Start", numEpoch)
 	tracker.On("Update", mock.Anything)
 	tracker.On("Finish")
-	return &FitConfig{
-		Jobs:       runtime.NumCPU(),
-		Verbose:    1,
-		Candidates: 100,
-		TopK:       10,
-		Tracker:    tracker,
-	}, tracker
-}
-
-func assertEpsilon(t *testing.T, expect, actual, eps float32) {
-	if math32.Abs(expect-actual) > eps {
-		t.Fatalf("|%v - %v| > %v", expect, actual, eps)
-	}
+	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU()).SetTracker(tracker)
+	return cfg, tracker
 }
 
 // He, Xiangnan, et al. "Neural collaborative filtering." Proceedings
@@ -90,21 +89,27 @@ func TestBPR_MovieLens(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
 	tracker.AssertExpectations(t)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
+	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
+	assert.Equal(t, trainSet.UserIndex, m.GetUserIndex())
+	assert.Equal(t, testSet.ItemIndex, m.GetItemIndex())
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
-	// test increment test
-	m.nEpochs = 0
-	tracker.On("Start", 0)
+	// test encode/decode model and increment training
+	buf, err := EncodeModel(m)
+	assert.NoError(t, err)
+	tmp, err := DecodeModel(buf)
+	assert.NoError(t, err)
+	m = tmp.(*BPR)
+	m.nEpochs = 1
+	fitConfig, _ = newFitConfigWithTestTracker(1)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
+	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
 	// test clear
 	m.Clear()
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assert.Less(t, score.NDCG, float32(0.2))
+	assert.True(t, m.Invalid())
 }
 
 //func TestBPR_Pinterest(t *testing.T) {
@@ -119,7 +124,7 @@ func TestBPR_MovieLens(t *testing.T) {
 //		model.InitStdDev: 0.001,
 //	})
 //	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.53, score.NDCG, benchEpsilon)
+//	assertEpsilon(t, 0.53, score.NDCG, benchDelta)
 //}
 
 func TestALS_MovieLens(t *testing.T) {
@@ -134,21 +139,25 @@ func TestALS_MovieLens(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(10)
 	score := m.Fit(trainSet, testSet, fitConfig)
 	tracker.AssertExpectations(t)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
+	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
-	// test increment test
-	m.nEpochs = 0
-	tracker.On("Start", 0)
+	// test encode/decode model and increment training
+	buf, err := EncodeModel(m)
+	assert.NoError(t, err)
+	tmp, err := DecodeModel(buf)
+	assert.NoError(t, err)
+	m = tmp.(*ALS)
+	m.nEpochs = 1
+	fitConfig, _ = newFitConfigWithTestTracker(1)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
+	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
 	// test clear
 	m.Clear()
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assert.Less(t, score.NDCG, float32(0.2))
+	assert.True(t, m.Invalid())
 }
 
 //func TestALS_Pinterest(t *testing.T) {
@@ -162,7 +171,7 @@ func TestALS_MovieLens(t *testing.T) {
 //		model.Alpha:      0.001,
 //	})
 //	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
+//	assertEpsilon(t, 0.52, score.NDCG, benchDelta)
 //}
 
 func TestCCD_MovieLens(t *testing.T) {
@@ -177,21 +186,25 @@ func TestCCD_MovieLens(t *testing.T) {
 	fitConfig, tracker := newFitConfigWithTestTracker(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
 	tracker.AssertExpectations(t)
-	assertEpsilon(t, 0.36, score.NDCG, benchEpsilon)
+	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
-	// test increment test
-	m.nEpochs = 0
-	tracker.On("Start", 0)
+	// test encode/decode model and increment training
+	buf, err := EncodeModel(m)
+	assert.NoError(t, err)
+	tmp, err := DecodeModel(buf)
+	assert.NoError(t, err)
+	m = tmp.(*CCD)
+	m.nEpochs = 1
+	fitConfig, _ = newFitConfigWithTestTracker(1)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
-	assertEpsilon(t, score.NDCG, scoreInc.NDCG, incrEpsilon)
+	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
 
 	// test clear
 	m.Clear()
-	score = m.Fit(trainSet, testSet, fitConfig)
-	assert.Less(t, score.NDCG, float32(0.2))
+	assert.True(t, m.Invalid())
 }
 
 //func TestCCD_Pinterest(t *testing.T) {
@@ -205,5 +218,5 @@ func TestCCD_MovieLens(t *testing.T) {
 //		model.Alpha:      0.001,
 //	})
 //	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.52, score.NDCG, benchEpsilon)
+//	assertEpsilon(t, 0.52, score.NDCG, benchDelta)
 //}

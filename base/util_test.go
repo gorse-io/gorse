@@ -18,10 +18,15 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 func TestMax(t *testing.T) {
 	assert.Equal(t, 10, Max(2, 4, 6, 8, 10))
+}
+
+func TestMin(t *testing.T) {
+	assert.Equal(t, 4, Min(12, 4, 6, 8, 10))
 }
 
 func TestNewMatrix32(t *testing.T) {
@@ -44,10 +49,29 @@ func TestRangeInt(t *testing.T) {
 	}
 }
 
+func TestRepeatFloat32s(t *testing.T) {
+	a := RepeatFloat32s(3, 0.1)
+	assert.Equal(t, []float32{0.1, 0.1, 0.1}, a)
+}
+
 func TestNewMatrixInt(t *testing.T) {
 	m := NewMatrixInt(4, 3)
 	assert.Equal(t, 4, len(m))
 	for _, v := range m {
 		assert.Equal(t, 3, len(v))
 	}
+}
+
+func TestNow(t *testing.T) {
+	s := Now()
+	assert.Regexp(t, "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\+\\d{2}:\\d{2}|Z)", s)
+}
+
+func TestDateNow(t *testing.T) {
+	date := DateNow()
+	assert.Zero(t, date.Hour())
+	assert.Zero(t, date.Minute())
+	assert.Zero(t, date.Second())
+	assert.Zero(t, date.Nanosecond())
+	assert.Equal(t, time.UTC, date.Location())
 }

@@ -22,6 +22,13 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 )
 
+// NewMapIndexDataset creates a data set.
+func NewMapIndexDataset() *Dataset {
+	s := new(Dataset)
+	s.Index = NewUnifiedDirectIndex(0)
+	return s
+}
+
 type mockFactorizationMachineForSearch struct {
 	model.BaseModel
 }
@@ -38,20 +45,20 @@ func (m *mockFactorizationMachineForSearch) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
+func (m *mockFactorizationMachineForSearch) Fit(_, _ *Dataset, _ *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.NEpochs, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)
 	score += m.Params.GetFloat32(model.InitStdDev, 0.0)
-	return Score{Task: FMClassification, Precision: score}
+	return Score{Task: FMClassification, AUC: score}
 }
 
-func (m *mockFactorizationMachineForSearch) Predict(userId, itemId string, labels []string) float32 {
+func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []string) float32 {
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) InternalPredict(x []int) float32 {
+func (m *mockFactorizationMachineForSearch) InternalPredict(_ []int, _ []float32) float32 {
 	panic("don't call me")
 }
 
@@ -96,7 +103,7 @@ func TestGridSearchCV(t *testing.T) {
 	runner.On("Lock")
 	runner.On("UnLock")
 	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0, fitConfig, runner)
-	assert.Equal(t, float32(12), r.BestScore.Precision)
+	assert.Equal(t, float32(12), r.BestScore.AUC)
 	tracker.AssertExpectations(t)
 	runner.AssertCalled(t, "Lock")
 	runner.AssertCalled(t, "UnLock")
@@ -117,10 +124,31 @@ func TestRandomSearchCV(t *testing.T) {
 	tracker.AssertExpectations(t)
 	runner.AssertCalled(t, "Lock")
 	runner.AssertCalled(t, "UnLock")
-	assert.Equal(t, float32(12), r.BestScore.Precision)
+	assert.Equal(t, float32(12), r.BestScore.AUC)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
 		model.InitMean:   4,
 		model.InitStdDev: 4,
 	}, r.BestParams)
+}
+
+func TestModelSearcher(t *testing.T) {
+	tracker := new(mockTracker)
+	tracker.On("Start", 63*2)
+	tracker.On("SubTracker")
+	tracker.On("Finish")
+	runner := new(mockRunner)
+	runner.On("Lock")
+	runner.On("UnLock")
+	searcher := NewModelSearcher(2, 63, 1)
+	searcher.model = &mockFactorizationMachineForSearch{}
+	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tracker, runner)
+	assert.NoError(t, err)
+	m, score := searcher.GetBestModel()
+	assert.Equal(t, float32(12), score.AUC)
+	assert.Equal(t, model.Params{
+		model.NFactors:   4,
+		model.InitMean:   4,
+		model.InitStdDev: 4,
+	}, m.GetParams())
 }

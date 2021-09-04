@@ -26,7 +26,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -37,6 +36,16 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+)
+
+const (
+	NumUsers             = "NumUsers"
+	NumItems             = "NumItems"
+	NumUserLabels        = "NumUserLabels"
+	NumItemLabels        = "NumItemLabels"
+	NumTotalPosFeedbacks = "NumTotalPosFeedbacks"
+	NumValidPosFeedbacks = "NumValidPosFeedbacks"
+	NumValidNegFeedbacks = "NumValidNegFeedbacks"
 )
 
 // Master is the master node.
@@ -284,6 +293,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			m.runFitClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
 		if err != nil {
 			base.Logger().Error("failed to fit click model", zap.Error(err))
+			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
 			continue
 		}
 
@@ -311,12 +321,14 @@ func (m *Master) RunRagtagTasksLoop() {
 		// analyze click-through-rate
 		if err := m.runAnalyzeTask(); err != nil {
 			base.Logger().Error("failed to analyze", zap.Error(err))
+			m.taskMonitor.Fail(TaskAnalyze, err.Error())
 		}
 		// search optimal ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
 			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search ranking model", zap.Error(err))
+			m.taskMonitor.Fail(TaskSearchRankingModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
 		}
@@ -325,6 +337,7 @@ func (m *Master) RunRagtagTasksLoop() {
 			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search click model", zap.Error(err))
+			m.taskMonitor.Fail(TaskSearchClickModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
 		}
@@ -355,14 +368,21 @@ func (m *Master) loadRankingDataset() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(rankingDataset.UserCount())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
+	loadDataTime := base.DateNow()
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumUsers, Timestamp: loadDataTime, Value: float32(rankingDataset.UserCount()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of users", zap.Error(err))
 	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, strconv.Itoa(rankingDataset.ItemCount())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumItems, Timestamp: loadDataTime, Value: float32(rankingDataset.ItemCount()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, strconv.Itoa(rankingDataset.Count())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumTotalPosFeedbacks, Timestamp: loadDataTime, Value: float32(rankingDataset.Count()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
 	m.rankingModelMutex.Lock()
 	m.rankingItems = rankingItems
@@ -375,13 +395,34 @@ func (m *Master) loadRankingDataset() error {
 
 func (m *Master) loadClickDataset() error {
 	base.Logger().Info("load click dataset",
-		zap.Strings("click_feedback_types", m.GorseConfig.Database.ClickFeedbackTypes),
+		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
 		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType))
 	clickDataset, err := click.LoadDataFromDatabase(m.DataClient,
-		m.GorseConfig.Database.ClickFeedbackTypes,
+		m.GorseConfig.Database.PositiveFeedbackType,
 		m.GorseConfig.Database.ReadFeedbackType)
 	if err != nil {
 		return errors.Trace(err)
+	}
+	loadDataTime := base.DateNow()
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumUserLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountUserLabels()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of user labels", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumItemLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountItemLabels()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of item labels", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumValidPosFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.PositiveCount),
+	}); err != nil {
+		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumValidNegFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
+	}); err != nil {
+		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
 	m.clickModelMutex.Lock()
 	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)

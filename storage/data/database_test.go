@@ -467,6 +467,9 @@ func testTimeLimit(t *testing.T, db Database) {
 
 func testGetClickThroughRate(t *testing.T, db Database) {
 	// insert feedback
+	// user 1: star(1,1), like(1,1), read(1,1), read(1,2), read(1,3), read(1,4) - 0.25
+	// user 2: star(2,1), star(2,3), read(2,1), read(2,2) - 0.5
+	// user 3: read(3,2), star(3,3) - 0.0
 	err := db.BatchInsertFeedback([]Feedback{
 		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
@@ -486,22 +489,6 @@ func testGetClickThroughRate(t *testing.T, db Database) {
 	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
 	assert.NoError(t, err)
 	assert.Equal(t, 0.375, rate)
-}
-
-func testCountActiveUsers(t *testing.T, db Database) {
-	// insert feedback
-	err := db.BatchInsertFeedback([]Feedback{
-		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "1", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "4", "4"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "5", "5"}, Timestamp: time.Date(1999, 10, 1, 0, 0, 0, 0, time.UTC)},
-	}, true, true)
-	assert.NoError(t, err)
-	// get exposed items
-	count, err := db.CountActiveUsers(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC))
-	assert.NoError(t, err)
-	assert.Equal(t, 3, count)
 }
 
 func isClickHouse(db Database) bool {
