@@ -1041,21 +1041,31 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 // GetClickThroughRate computes the click-through-rate of a specified date.
 func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
 	builder := strings.Builder{}
-	builder.WriteString("SELECT AVG(user_ctr) FROM (")
-	var args []interface{}
+	// Get the average of click-through rates
 	switch d.driver {
-	case MySQL, ClickHouse:
-		builder.WriteString("SELECT positive_feedback_count.positive_count / read_feedback_count.read_count AS user_ctr FROM (")
+	case MySQL:
+		builder.WriteString("SELECT IFNULL(AVG(user_ctr),0) FROM (")
+	case ClickHouse:
+		builder.WriteString("SELECT IF(isFinite(AVG(user_ctr)),AVG(user_ctr),0) FROM (")
 	case Postgres:
-		builder.WriteString("SELECT positive_feedback_count.positive_count :: DOUBLE PRECISION / read_feedback_count.read_count :: DOUBLE PRECISION AS user_ctr FROM (")
+		builder.WriteString("SELECT COALESCE(AVG(user_ctr),0) FROM (")
 	}
-	builder.WriteString("SELECT user_id, COUNT(*) AS positive_count FROM (")
+	var args []interface{}
+	// Get click-through rates
+	switch d.driver {
+	case MySQL:
+		builder.WriteString("SELECT COUNT(positive_feedback.user_id) / COUNT(read_feedback.user_id) AS user_ctr FROM (")
+	case ClickHouse:
+		builder.WriteString("SELECT SUM(notEmpty(positive_feedback.user_id)) / SUM(notEmpty(read_feedback.user_id)) AS user_ctr FROM (")
+	case Postgres:
+		builder.WriteString("SELECT COUNT(positive_feedback.user_id) :: DOUBLE PRECISION / COUNT(read_feedback.user_id) :: DOUBLE PRECISION AS user_ctr FROM (")
+	}
+	// Get positive feedback
 	switch d.driver {
 	case MySQL, ClickHouse:
 		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type IN (")
 	case Postgres:
-		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback "+
-			"WHERE DATE(time_stamp) = DATE($%d) AND feedback_type IN (", len(args)+1))
+		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE($%d) AND feedback_type IN (", len(args)+1))
 	}
 	args = append(args, date)
 	for i, positiveType := range positiveTypes {
@@ -1070,28 +1080,25 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 		}
 		args = append(args, positiveType)
 	}
-	builder.WriteString(")) AS positive_feedback GROUP BY user_id) AS positive_feedback_count ")
-	builder.WriteString("JOIN (")
-	builder.WriteString("SELECT user_id, COUNT(*) AS read_count FROM (")
+	builder.WriteString(")) AS positive_feedback RIGHT JOIN (")
+	// Get read feedback
 	switch d.driver {
 	case MySQL, ClickHouse:
-		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type IN (?")
+		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type = ?) AS read_feedback ")
 	case Postgres:
-		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback "+
-			"WHERE DATE(time_stamp) = DATE($%d) AND feedback_type IN ($%d", len(args)+1, len(args)+2))
+		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE($%d) AND feedback_type = $%d) AS read_feedback ", len(args)+1, len(args)+2))
 	}
 	args = append(args, date, readType)
-	for _, positiveType := range positiveTypes {
-		switch d.driver {
-		case MySQL, ClickHouse:
-			builder.WriteString(",?")
-		case Postgres:
-			builder.WriteString(fmt.Sprintf(",$%d", len(args)+1))
-		}
-		args = append(args, positiveType)
+	builder.WriteString("ON positive_feedback.user_id = read_feedback.user_id AND positive_feedback.item_id = read_feedback.item_id GROUP BY read_feedback.user_id ")
+	// users must have at least one positive feedback
+	switch d.driver {
+	case MySQL:
+		builder.WriteString("HAVING COUNT(positive_feedback.user_id) > 0) AS user_ctr")
+	case ClickHouse:
+		builder.WriteString("HAVING SUM(notEmpty(positive_feedback.user_id)) > 0) AS user_ctr")
+	case Postgres:
+		builder.WriteString("HAVING COUNT(positive_feedback.user_id) > 0) AS user_ctr")
 	}
-	builder.WriteString(")) AS read_feedback GROUP BY user_id) AS read_feedback_count ")
-	builder.WriteString("ON positive_feedback_count.user_id = read_feedback_count.user_id) AS user_ctr")
 	base.Logger().Info("get click through rate from MySQL", zap.String("query", builder.String()))
 	rs, err := d.client.Query(builder.String(), args...)
 	if err != nil {
@@ -1105,26 +1112,4 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 		return ctr, nil
 	}
 	return 0, nil
-}
-
-// CountActiveUsers returns the number active users starting from a specified date.
-func (d *SQLDatabase) CountActiveUsers(date time.Time) (int, error) {
-	var rs *sql.Rows
-	var err error
-	switch d.driver {
-	case MySQL, ClickHouse:
-		rs, err = d.client.Query("SELECT COUNT(DISTINCT user_id) FROM feedback WHERE DATE(time_stamp) >= DATE(?)", date)
-	case Postgres:
-		rs, err = d.client.Query("SELECT COUNT(DISTINCT user_id) FROM feedback WHERE DATE(time_stamp) >= DATE($1)", date)
-	}
-	if err != nil {
-		return 0, err
-	}
-	var count int
-	if rs.Next() {
-		if err = rs.Scan(&count); err != nil {
-			return 0, err
-		}
-	}
-	return count, nil
 }
