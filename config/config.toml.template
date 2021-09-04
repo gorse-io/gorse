@@ -24,9 +24,6 @@ auto_insert_item = false
 # The feedback types for positive events.
 positive_feedback_types = ["star","like"]
 
-# The feedback types for click events.
-click_feedback_types = ["like"]
-
 # The feedback type for read event.
 read_feedback_type = "read"
 
@@ -72,10 +69,11 @@ search_trials = 10
 refresh_recommend_period = 1
 
 # The fallback recommendation method for cold-start users:
+#   item_based: Recommend similar items to cold-start users.
 #   popular: Recommend popular items to cold-start users.
 #   latest: Recommend latest items to cold-start users.
-# The default values is "latest".
-fallback_recommend = ["latest"]
+# The default values is ["latest"].
+fallback_recommend = ["item_based", "latest"]
 
 # The number of latest (cold-start) items insert to recommended items cache. The default values is 10.
 explore_latest_num = 20
@@ -106,7 +104,7 @@ enable_popular_recommend = true
 enable_user_based_recommend = true
 
 # Enable item-based similarity recommendation during offline recommendation. The default values is false.
-enable_item_based_recommend = true
+enable_item_based_recommend = false
 
 # Enable collaborative filtering recommendation during offline recommendation. The default values is true.
 enable_collaborative_recommend = true
