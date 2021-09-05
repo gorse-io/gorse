@@ -98,7 +98,7 @@ user_neighbor_type = "similar"
 enable_latest_recommend = true
 
 # Enable popular recommendation during offline recommendation. The default values is false.
-enable_popular_recommend = true
+enable_popular_recommend = false
 
 # Enable user-based similarity recommendation during offline recommendation. The default values is false.
 enable_user_based_recommend = true

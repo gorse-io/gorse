@@ -60,7 +60,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.True(t, config.Recommend.EnableColRecommend)
 	assert.False(t, config.Recommend.EnableItemBasedRecommend)
 	assert.True(t, config.Recommend.EnableUserBasedRecommend)
-	assert.True(t, config.Recommend.EnablePopularRecommend)
+	assert.False(t, config.Recommend.EnablePopularRecommend)
 	assert.True(t, config.Recommend.EnableLatestRecommend)
 }
 
