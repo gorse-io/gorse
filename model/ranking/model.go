@@ -852,10 +852,12 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Update user factors
 		// S^q <- \sum^N_{itemIndex=1} c_i q_i q_i^T
 		floats.MatZero(s)
-		for i := 0; i < ccd.nFactors; i++ {
-			for j := 0; j < ccd.nFactors; j++ {
-				for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
-					s[i][j] += ccd.ItemFactor[itemIndex][i] * ccd.ItemFactor[itemIndex][j]
+		for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
+			if len(trainSet.ItemFeedback[itemIndex]) > 0 {
+				for i := 0; i < ccd.nFactors; i++ {
+					for j := 0; j < ccd.nFactors; j++ {
+						s[i][j] += ccd.ItemFactor[itemIndex][i] * ccd.ItemFactor[itemIndex][j]
+					}
 				}
 			}
 		}
@@ -891,10 +893,12 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Update item factors
 		// S^p <- P^T P
 		floats.MatZero(s)
-		for i := 0; i < ccd.nFactors; i++ {
-			for j := 0; j < ccd.nFactors; j++ {
-				for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
-					s[i][j] += ccd.UserFactor[userIndex][i] * ccd.UserFactor[userIndex][j]
+		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
+			if len(trainSet.UserFeedback[userIndex]) > 0 {
+				for i := 0; i < ccd.nFactors; i++ {
+					for j := 0; j < ccd.nFactors; j++ {
+						s[i][j] += ccd.UserFactor[userIndex][i] * ccd.UserFactor[userIndex][j]
+					}
 				}
 			}
 		}
