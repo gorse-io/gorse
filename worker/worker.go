@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
+	cmap "github.com/orcaman/concurrent-map"
 	"github.com/zhenghaoz/gorse/model/click"
 	"math/rand"
 	"net/http"
@@ -376,6 +377,8 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			base.Logger().Error("failed to report start task", zap.Error(err))
 		}
 	}
+	// create item cache
+	itemCache := cmap.New()
 	go func() {
 		defer base.CheckPanic()
 		completedCount := 0
@@ -548,7 +551,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 		// rank items in result by click-through-rate
 		var result []cache.Scored
 		if w.clickModel != nil {
-			result, err = w.rankByClickTroughRate(userId, candidateItems)
+			result, err = w.rankByClickTroughRate(userId, candidateItems, itemCache)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -582,7 +585,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache.Scored, error) {
+func (w *Worker) rankByClickTroughRate(userId string, itemIds []string, itemCache cmap.ConcurrentMap) ([]cache.Scored, error) {
 	var err error
 	// download user
 	var user data.User
@@ -593,10 +596,19 @@ func (w *Worker) rankByClickTroughRate(userId string, itemIds []string) ([]cache
 	// download items
 	items := make([]data.Item, len(itemIds))
 	for i, itemId := range itemIds {
-		items[i], err = w.dataClient.GetItem(itemId)
-		if err != nil {
-			return nil, err
+		var tmp interface{}
+		if itemCache.Has(itemId) {
+			// get item from cache
+			tmp, _ = itemCache.Get(itemId)
+		} else {
+			// get item from database
+			tmp, err = w.dataClient.GetItem(itemId)
+			if err != nil {
+				return nil, err
+			}
+			itemCache.Set(itemId, tmp)
 		}
+		items[i] = tmp.(data.Item)
 	}
 	// rank by CTR
 	topItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
