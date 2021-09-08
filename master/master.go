@@ -22,6 +22,7 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"math"
 	"math/rand"
 	"net"
 	"os"
@@ -227,8 +228,7 @@ func (m *Master) Serve() {
 	if err != nil {
 		base.Logger().Fatal("failed to listen", zap.Error(err))
 	}
-	var opts []grpc.ServerOption
-	grpcServer := grpc.NewServer(opts...)
+	grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
 	protocol.RegisterMasterServer(grpcServer, m)
 	if err = grpcServer.Serve(lis); err != nil {
 		base.Logger().Fatal("failed to start rpc server", zap.Error(err))

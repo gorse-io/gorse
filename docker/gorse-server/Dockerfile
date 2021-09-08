@@ -1,7 +1,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.16
+FROM golang:1.17
 
 ENV GOPROXY=https://goproxy.io,direct
 

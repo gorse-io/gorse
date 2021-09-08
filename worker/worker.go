@@ -23,6 +23,7 @@ import (
 	"github.com/juju/errors"
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/zhenghaoz/gorse/model/click"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -201,7 +202,7 @@ func (w *Worker) Pull() {
 			base.Logger().Info("start pull user index")
 			if userIndexResponse, err := w.masterClient.GetUserIndex(context.Background(),
 				&protocol.NodeInfo{NodeType: protocol.NodeType_WorkerNode, NodeName: w.workerName},
-				grpc.MaxCallRecvMsgSize(10e8)); err != nil {
+				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				base.Logger().Error("failed to pull user index", zap.Error(err))
 			} else {
 				// encode user index
@@ -227,7 +228,7 @@ func (w *Worker) Pull() {
 				&protocol.NodeInfo{
 					NodeType: protocol.NodeType_WorkerNode,
 					NodeName: w.workerName,
-				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
+				}, grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				base.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
 				w.rankingModel, err = ranking.DecodeModel(rankingResponse.Model)
@@ -249,7 +250,7 @@ func (w *Worker) Pull() {
 				&protocol.NodeInfo{
 					NodeType: protocol.NodeType_WorkerNode,
 					NodeName: w.workerName,
-				}, grpc.MaxCallRecvMsgSize(10e8)); err != nil {
+				}, grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				base.Logger().Error("failed to pull click model", zap.Error(err))
 			} else {
 				w.clickModel, err = click.DecodeModel(clickResponse.Model)
