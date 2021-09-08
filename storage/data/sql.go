@@ -197,8 +197,8 @@ func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
 	var err error
 	switch d.driver {
 	case MySQL:
-		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?) AS new "+
-			"ON DUPLICATE KEY UPDATE value = new.value, `comment` = new.comment",
+		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?) "+
+			"ON DUPLICATE KEY UPDATE value = VALUES(value), `comment` = VALUES(`comment`)",
 			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
 	case Postgres:
 		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, comment) VALUES ($1, $2, $3, $4)  "+
@@ -297,8 +297,8 @@ func (d *SQLDatabase) BatchInsertItem(items []Item) error {
 		}
 		switch d.driver {
 		case MySQL:
-			builder.WriteString(" AS new ON DUPLICATE KEY " +
-				"UPDATE time_stamp = new.time_stamp, labels = new.labels, `comment` = new.comment")
+			builder.WriteString(" ON DUPLICATE KEY " +
+				"UPDATE time_stamp = VALUES(time_stamp), labels = VALUES(labels), `comment` = VALUES(`comment`)")
 		case Postgres:
 			builder.WriteString(" ON CONFLICT (item_id) " +
 				"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
@@ -867,7 +867,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		}
 		switch d.driver {
 		case MySQL:
-			builder.WriteString(" AS new ON DUPLICATE KEY UPDATE time_stamp = new.time_stamp, `comment` = new.`comment`")
+			builder.WriteString(" ON DUPLICATE KEY UPDATE time_stamp = VALUES(time_stamp), `comment` = VALUES(`comment`)")
 		case Postgres:
 			builder.WriteString(" ON CONFLICT (feedback_type, user_id, item_id) DO UPDATE SET time_stamp = EXCLUDED.time_stamp, comment = EXCLUDED.comment")
 		}
