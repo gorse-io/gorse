@@ -64,10 +64,10 @@ jobs:
         unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
 
-    - name: Set up Go 1.x
+    - name: Set up Go 1.17.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.13
+        go-version: 1.17.x
       id: go
 
     - name: Check out code into the Go module directory
