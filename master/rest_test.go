@@ -200,9 +200,9 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	file, err := writer.CreateFormFile("file", "users.csv")
 	assert.NoError(t, err)
 	_, err = file.Write([]byte("user_id,labels\r\n" +
-		"1,a|b\r\n" +
-		"2,b|c\r\n" +
-		"3,c|d\r\n"))
+		"1,a|用例\r\n" +
+		"2,b|乱码\r\n" +
+		"3,c|测试\r\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -216,9 +216,9 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	_, items, err := s.DataClient.GetUsers("", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.User{
-		{UserId: "1", Labels: []string{"a", "b"}},
-		{UserId: "2", Labels: []string{"b", "c"}},
-		{UserId: "3", Labels: []string{"c", "d"}},
+		{UserId: "1", Labels: []string{"a", "用例"}},
+		{UserId: "2", Labels: []string{"b", "乱码"}},
+		{UserId: "3", Labels: []string{"c", "测试"}},
 	}, items)
 }
 

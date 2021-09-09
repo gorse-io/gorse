@@ -68,21 +68,22 @@ func Escape(text string) string {
 }
 
 // ReadLines parse fields of each line for csv file.
-func ReadLines(sc *bufio.Scanner, sep uint8, handler func(int, []string) bool) error {
+func ReadLines(sc *bufio.Scanner, sep string, handler func(int, []string) bool) error {
 	lineCount := 0               // line number of current position
 	fields := make([]string, 0)  // fields for current line
 	builder := strings.Builder{} // string builder for current field
 	quoted := false              // whether current position in quote
 	for sc.Scan() {
 		// read line
-		line := sc.Text()
+		lineStr := sc.Text()
+		line := []rune(lineStr)
 		// start of line
 		if quoted {
 			builder.WriteString("\r\n")
 		}
 		// parse line
 		for i := 0; i < len(line); i++ {
-			if line[i] == sep && !quoted {
+			if string(line[i]) == sep && !quoted {
 				// end of field
 				fields = append(fields, builder.String())
 				builder.Reset()
@@ -100,7 +101,7 @@ func ReadLines(sc *bufio.Scanner, sep uint8, handler func(int, []string) bool) e
 					quoted = true
 				}
 			} else {
-				builder.WriteRune(rune(line[i]))
+				builder.WriteRune(line[i])
 			}
 		}
 		// end of line
