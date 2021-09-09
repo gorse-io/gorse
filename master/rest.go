@@ -513,7 +513,7 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 	lineCount := 0
 	timeStart := time.Now()
 	//users := make([]data.User, 0)
-	err := base.ReadLines(bufio.NewScanner(file), sep[0], func(lineNumber int, splits []string) bool {
+	err := base.ReadLines(bufio.NewScanner(file), sep, func(lineNumber int, splits []string) bool {
 		var err error
 		// skip header
 		if hasHeader {
@@ -618,7 +618,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 	lineCount := 0
 	timeStart := time.Now()
 	items := make([]data.Item, 0)
-	err := base.ReadLines(bufio.NewScanner(file), sep[0], func(lineNumber int, splits []string) bool {
+	err := base.ReadLines(bufio.NewScanner(file), sep, func(lineNumber int, splits []string) bool {
 		var err error
 		// skip header
 		if hasHeader {
