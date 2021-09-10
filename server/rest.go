@@ -1280,7 +1280,7 @@ func Text(response *restful.Response, content string) {
 }
 
 func (s *RestServer) auth(request *restful.Request, response *restful.Response) bool {
-	if s.GorseConfig.Server.APIKey == "" {
+	if !s.EnableAuth || s.GorseConfig.Server.APIKey == "" {
 		return true
 	}
 	apikey := request.HeaderParameter("X-API-Key")
