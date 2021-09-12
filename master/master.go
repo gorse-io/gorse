@@ -17,7 +17,6 @@ package master
 import (
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
@@ -202,16 +201,11 @@ func (m *Master) Serve() {
 			zap.String("database", m.GorseConfig.Database.CacheStore))
 	}
 
-	// download ranking dataset
-	err = m.loadRankingDataset()
-	if err != nil {
-		base.Logger().Error("failed to load ranking dataset", zap.Error(err))
-	}
-
-	// download click dataset
-	err = m.loadClickDataset()
-	if err != nil {
-		base.Logger().Error("failed to load click dataset", zap.Error(err))
+	// pre-lock privileged tasks
+	tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
+		TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+	for _, taskName := range tasksNames {
+		m.taskScheduler.PreLock(taskName)
 	}
 
 	go m.StartHttpServer()
@@ -260,24 +254,25 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		case <-m.fitTicker.C:
 		case <-m.insertedChan:
 		}
+		// pre-lock privileged tasks
+		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
+			TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+		for _, taskName := range tasksNames {
+			m.taskScheduler.PreLock(taskName)
+		}
+
 		// download ranking dataset
-		err = m.loadRankingDataset()
+		err = m.runLoadRankingDatasetTask()
 		if err != nil {
 			base.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
 
 		// download click dataset
-		err = m.loadClickDataset()
+		err = m.runLoadClickDatasetTask()
 		if err != nil {
 			base.Logger().Error("failed to load click dataset", zap.Error(err))
 			continue
-		}
-
-		// pre-lock tasks
-		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
-		for _, taskName := range tasksNames {
-			m.taskScheduler.PreLock(taskName)
 		}
 
 		// fit ranking model
@@ -358,74 +353,4 @@ func (m *Master) hasFeedbackInserted() bool {
 		return true
 	}
 	return false
-}
-
-func (m *Master) loadRankingDataset() error {
-	base.Logger().Info("load ranking dataset",
-		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-	rankingDataset, rankingItems, rankingFeedbacks, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	loadDataTime := base.DateNow()
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumUsers, Timestamp: loadDataTime, Value: float32(rankingDataset.UserCount()),
-	}); err != nil {
-		base.Logger().Error("failed to write number of users", zap.Error(err))
-	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumItems, Timestamp: loadDataTime, Value: float32(rankingDataset.ItemCount()),
-	}); err != nil {
-		base.Logger().Error("failed to write number of items", zap.Error(err))
-	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumTotalPosFeedbacks, Timestamp: loadDataTime, Value: float32(rankingDataset.Count()),
-	}); err != nil {
-		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
-	}
-	m.rankingModelMutex.Lock()
-	m.rankingItems = rankingItems
-	m.rankingFeedbacks = rankingFeedbacks
-	m.rankingFullSet = rankingDataset
-	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
-	m.rankingModelMutex.Unlock()
-	return nil
-}
-
-func (m *Master) loadClickDataset() error {
-	base.Logger().Info("load click dataset",
-		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
-		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType))
-	clickDataset, err := click.LoadDataFromDatabase(m.DataClient,
-		m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ReadFeedbackType)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	loadDataTime := base.DateNow()
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumUserLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountUserLabels()),
-	}); err != nil {
-		base.Logger().Error("failed to write number of user labels", zap.Error(err))
-	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumItemLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountItemLabels()),
-	}); err != nil {
-		base.Logger().Error("failed to write number of item labels", zap.Error(err))
-	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumValidPosFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.PositiveCount),
-	}); err != nil {
-		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
-	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumValidNegFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
-	}); err != nil {
-		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
-	}
-	m.clickModelMutex.Lock()
-	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
-	m.clickModelMutex.Unlock()
-	return nil
 }

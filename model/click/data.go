@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/scylladb/go-set"
 	"go.uber.org/zap"
@@ -31,7 +32,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
-const batchSize = 1024
+const batchSize = 10000
 
 // Dataset for click-through-rate models.
 type Dataset struct {
@@ -148,14 +149,15 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 	// pull users
 	cursor := ""
 	users := make([]data.User, 0)
+	start := time.Now()
 	for {
 		var batchUsers []data.User
 		cursor, batchUsers, err = database.GetUsers(cursor, batchSize)
 		if err != nil {
 			return nil, err
 		}
+		users = append(users, batchUsers...)
 		for _, user := range batchUsers {
-			users = append(users, user)
 			unifiedIndex.AddUser(user.UserId)
 			for _, label := range user.Labels {
 				unifiedIndex.AddUserLabel(label)
@@ -165,17 +167,21 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 			break
 		}
 	}
+	base.Logger().Debug("pulled users from database",
+		zap.Int("n_users", unifiedIndex.UserIndex.Len()),
+		zap.Duration("used_time", time.Since(start)))
 	// pull items
 	cursor = ""
 	items := make([]data.Item, 0)
+	start = time.Now()
 	for {
 		var batchItems []data.Item
 		cursor, batchItems, err = database.GetItems(cursor, batchSize, nil)
 		if err != nil {
 			return nil, err
 		}
+		items = append(items, batchItems...)
 		for _, item := range batchItems {
-			items = append(items, item)
 			unifiedIndex.AddItem(item.ItemId)
 			for _, label := range item.Labels {
 				unifiedIndex.AddItemLabel(label)
@@ -185,6 +191,9 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 			break
 		}
 	}
+	base.Logger().Debug("pulled items from database",
+		zap.Int("n_items", unifiedIndex.ItemIndex.Len()),
+		zap.Duration("used_time", time.Since(start)))
 	// create dataset
 	dataSet := &Dataset{
 		Index:  unifiedIndex.Build(),
@@ -218,6 +227,7 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 	cursor = ""
 	feedbackTypes := append([]string{readType}, clickTypes...)
 	positiveSet := make([]i32set.Set, len(users))
+	start = time.Now()
 	for {
 		var batchFeedback []data.Feedback
 		cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, nil, feedbackTypes...)
@@ -263,6 +273,10 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 			break
 		}
 	}
+	base.Logger().Debug("pull feedback from database",
+		zap.Int("n_positive", dataSet.PositiveCount),
+		zap.Int("n_negative", dataSet.NegativeCount),
+		zap.Duration("used_time", time.Since(start)))
 	return dataSet, nil
 }
 

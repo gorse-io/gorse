@@ -18,6 +18,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
+	_ "net/http/pprof"
 )
 
 var workerCommand = &cobra.Command{

@@ -638,7 +638,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(user.Id)
+			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, s.GorseConfig.Database.PositiveFeedbackType...)
 			if err != nil {
 				return nil, err
 			}

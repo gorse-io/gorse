@@ -29,7 +29,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const batchSize = 1000
+const batchSize = 10000
 
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
@@ -293,17 +293,18 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 	allFeedback := make([]data.Feedback, 0)
 	// pull users
 	userLabelIndex := base.NewMapIndex()
+	start := time.Now()
 	for {
 		var users []data.User
 		cursor, users, err = database.GetUsers(cursor, batchSize)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Trace(err)
 		}
 		for _, user := range users {
 			dataset.AddUser(user.UserId)
 			userIndex := dataset.UserIndex.ToNumber(user.UserId)
 			if len(dataset.UserLabels) == userIndex {
-				dataset.UserLabels = append(dataset.UserLabels, make([]int, 0))
+				dataset.UserLabels = append(dataset.UserLabels, nil)
 			}
 			dataset.UserLabels[userIndex] = make([]int, len(user.Labels))
 			for i, label := range user.Labels {
@@ -316,21 +317,24 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		}
 	}
 	dataset.NumUserLabels = userLabelIndex.Len()
-	base.Logger().Debug("pulled users from database", zap.Int("n_users", dataset.UserCount()))
+	base.Logger().Debug("pulled users from database",
+		zap.Int("n_users", dataset.UserCount()),
+		zap.Duration("used_time", time.Since(start)))
 	// pull items
 	itemLabelIndex := base.NewMapIndex()
+	start = time.Now()
 	for {
 		var items []data.Item
 		cursor, items, err = database.GetItems(cursor, batchSize, itemTimeLimit)
 		allItems = append(allItems, items...)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Trace(err)
 		}
 		for _, item := range items {
 			dataset.AddItem(item.ItemId)
 			itemIndex := dataset.ItemIndex.ToNumber(item.ItemId)
 			if len(dataset.ItemLabels) == itemIndex {
-				dataset.ItemLabels = append(dataset.ItemLabels, make([]int, len(item.Labels)))
+				dataset.ItemLabels = append(dataset.ItemLabels, nil)
 			}
 			dataset.ItemLabels[itemIndex] = make([]int, len(item.Labels))
 			for i, label := range item.Labels {
@@ -343,22 +347,28 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		}
 	}
 	dataset.NumItemLabels = itemLabelIndex.Len()
-	base.Logger().Debug("pulled items from database", zap.Int("n_items", dataset.UserCount()))
+	base.Logger().Debug("pulled items from database",
+		zap.Int("n_items", dataset.ItemCount()),
+		zap.Duration("used_time", time.Since(start)))
 	// pull database
+	start = time.Now()
 	for {
 		var feedback []data.Feedback
 		cursor, feedback, err = database.GetFeedback(cursor, batchSize, feedbackTimeLimit, feedbackTypes...)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Trace(err)
 		}
+		allFeedback = append(allFeedback, feedback...)
 		for _, v := range feedback {
 			dataset.AddFeedback(v.UserId, v.ItemId, false)
-			allFeedback = append(allFeedback, v)
 		}
 		if cursor == "" {
 			break
 		}
 	}
+	base.Logger().Debug("pull feedback from database",
+		zap.Int("n_feedback", dataset.Count()),
+		zap.Duration("used_time", time.Since(start)))
 	return dataset, allItems, allFeedback, nil
 }
 

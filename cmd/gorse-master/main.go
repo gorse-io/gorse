@@ -21,6 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/master"
 	"go.uber.org/zap"
+	_ "net/http/pprof"
 )
 
 var masterCommand = &cobra.Command{

@@ -38,6 +38,8 @@ const (
 	ClickPrecision        = "Precision"
 	ClickThroughRate      = "ClickThroughRate"
 
+	TaskLoadRankingDataset = "Load collaborative filtering dataset"
+	TaskLoadClickDataset   = "Load click-through rate prediction dataset"
 	TaskFindLatest         = "Find latest items"
 	TaskFindPopular        = "Find popular items"
 	TaskFindItemNeighbors  = "Find neighbors of items"
@@ -50,6 +52,82 @@ const (
 
 	SimilarityShrink = 100
 )
+
+// runLoadRankingDatasetTask loads dataset for collaborative filtering task
+func (m *Master) runLoadRankingDatasetTask() error {
+	m.taskMonitor.Start(TaskLoadRankingDataset, 1)
+	base.Logger().Info("load ranking dataset",
+		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
+	rankingDataset, rankingItems, rankingFeedbacks, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
+		m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	loadDataTime := base.DateNow()
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumUsers, Timestamp: loadDataTime, Value: float32(rankingDataset.UserCount()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of users", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumItems, Timestamp: loadDataTime, Value: float32(rankingDataset.ItemCount()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of items", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumTotalPosFeedbacks, Timestamp: loadDataTime, Value: float32(rankingDataset.Count()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
+	}
+	m.rankingModelMutex.Lock()
+	m.rankingItems = rankingItems
+	m.rankingFeedbacks = rankingFeedbacks
+	m.rankingFullSet = rankingDataset
+	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
+	m.rankingModelMutex.Unlock()
+	m.taskMonitor.Finish(TaskLoadRankingDataset)
+	return nil
+}
+
+// runLoadClickDatasetTask loads dataset for click-through rate prediction task.
+func (m *Master) runLoadClickDatasetTask() error {
+	m.taskMonitor.Start(TaskLoadClickDataset, 1)
+	base.Logger().Info("load click dataset",
+		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
+		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType))
+	clickDataset, err := click.LoadDataFromDatabase(m.DataClient,
+		m.GorseConfig.Database.PositiveFeedbackType,
+		m.GorseConfig.Database.ReadFeedbackType)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	loadDataTime := base.DateNow()
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumUserLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountUserLabels()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of user labels", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumItemLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountItemLabels()),
+	}); err != nil {
+		base.Logger().Error("failed to write number of item labels", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumValidPosFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.PositiveCount),
+	}); err != nil {
+		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
+	}
+	if err = m.DataClient.InsertMeasurement(data.Measurement{
+		Name: NumValidNegFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
+	}); err != nil {
+		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
+	}
+	m.clickModelMutex.Lock()
+	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
+	m.clickModelMutex.Unlock()
+	m.taskMonitor.Finish(TaskLoadClickDataset)
+	return nil
+}
 
 // runFindPopularItemsTask updates popular items for the database.
 func (m *Master) runFindPopularItemsTask(items []data.Item, feedback []data.Feedback) {

@@ -20,6 +20,7 @@ import (
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
+	_ "net/http/pprof"
 )
 
 var serverCommand = &cobra.Command{
