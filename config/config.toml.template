@@ -54,7 +54,7 @@ api_key = ""                    # secret key for RESTful APIs (SSL required)
 popular_window = 365
 
 # The time period for model fitting (minutes). The default values is 60.
-fit_period = 10
+fit_period = 360
 
 # The time period for model searching (minutes). The default values is 100.
 search_period = 60

@@ -16,9 +16,9 @@ package master
 
 import (
 	"fmt"
+	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
-	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -214,6 +214,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	go func() {
 		completedCount := 0
 		ticker := time.NewTicker(time.Second)
+		start := time.Now()
 		for {
 			select {
 			case _, ok := <-completed:
@@ -225,7 +226,8 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				m.taskMonitor.Update(TaskFindItemNeighbors, completedCount)
 				base.Logger().Debug("collecting neighbors of items",
 					zap.Int("n_complete_items", completedCount),
-					zap.Int("n_items", dataset.ItemCount()))
+					zap.Int("n_items", dataset.ItemCount()),
+					zap.Float64("throughput", float64(completedCount)/time.Since(start).Seconds()))
 			}
 		}
 	}()
@@ -263,11 +265,17 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
 			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto) {
 			labels := dataset.ItemLabels[itemId]
-			itemSet := set.NewIntSet()
+			itemSet := bitset.New(uint(dataset.ItemCount()))
+			var adjacencyItems []int
 			for _, label := range labels {
-				itemSet.Add(labeledItems[label]...)
+				for _, adjacencyItemId := range labeledItems[label] {
+					if !itemSet.Test(uint(adjacencyItemId)) {
+						itemSet.Set(uint(adjacencyItemId))
+						adjacencyItems = append(adjacencyItems, adjacencyItemId)
+					}
+				}
 			}
-			for j := range itemSet.List() {
+			for j := range adjacencyItems {
 				if j != itemId {
 					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
 					if commonLabels > 0 {
@@ -284,11 +292,17 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
 			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && nearItems.Len() == 0) {
 			users := dataset.ItemFeedback[itemId]
-			itemSet := set.NewIntSet()
+			itemSet := bitset.New(uint(dataset.ItemCount()))
+			var adjacencyItems []int
 			for _, u := range users {
-				itemSet.Add(dataset.UserFeedback[u]...)
+				for _, adjacencyItemId := range dataset.UserFeedback[u] {
+					if !itemSet.Test(uint(adjacencyItemId)) {
+						itemSet.Set(uint(adjacencyItemId))
+						adjacencyItems = append(adjacencyItems, adjacencyItemId)
+					}
+				}
 			}
-			for j := range itemSet.List() {
+			for j := range adjacencyItems {
 				if j != itemId {
 					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
 					if commonUsers > 0 {
@@ -331,6 +345,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	go func() {
 		completedCount := 0
 		ticker := time.NewTicker(time.Second)
+		start := time.Now()
 		for {
 			select {
 			case _, ok := <-completed:
@@ -342,7 +357,8 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 				m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
 				base.Logger().Debug("collecting neighbors of users",
 					zap.Int("n_complete_users", completedCount),
-					zap.Int("n_users", dataset.UserCount()))
+					zap.Int("n_users", dataset.UserCount()),
+					zap.Float64("throughput", float64(completedCount)/time.Since(start).Seconds()))
 			}
 		}
 	}()
@@ -380,11 +396,17 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
 			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto) {
 			labels := dataset.UserLabels[userId]
-			userSet := set.NewIntSet()
+			userSet := bitset.New(uint(dataset.UserCount()))
+			var adjacencyUsers []int
 			for _, label := range labels {
-				userSet.Add(labeledUsers[label]...)
+				for _, adjacencyUserId := range labeledUsers[label] {
+					if !userSet.Test(uint(adjacencyUserId)) {
+						userSet.Set(uint(adjacencyUserId))
+						adjacencyUsers = append(adjacencyUsers, adjacencyUserId)
+					}
+				}
 			}
-			for j := range userSet.List() {
+			for j := range adjacencyUsers {
 				if j != userId {
 					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
 					if commonLabels > 0 {
@@ -401,11 +423,17 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
 			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
 			users := dataset.UserFeedback[userId]
-			userSet := set.NewIntSet()
+			userSet := bitset.New(uint(dataset.UserCount()))
+			var adjacencyUsers []int
 			for _, u := range users {
-				userSet.Add(dataset.UserFeedback[u]...)
+				for _, adjacencyUserId := range dataset.UserFeedback[u] {
+					if !userSet.Test(uint(adjacencyUserId)) {
+						userSet.Set(uint(adjacencyUserId))
+						adjacencyUsers = append(adjacencyUsers, adjacencyUserId)
+					}
+				}
 			}
-			for j := range userSet.List() {
+			for j := range adjacencyUsers {
 				if j != userId {
 					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
 					if commonItems > 0 {

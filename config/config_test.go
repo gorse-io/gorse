@@ -49,7 +49,7 @@ func TestLoadConfig(t *testing.T) {
 
 	// recommend configuration
 	assert.Equal(t, 365, config.Recommend.PopularWindow)
-	assert.Equal(t, 10, config.Recommend.FitPeriod)
+	assert.Equal(t, 360, config.Recommend.FitPeriod)
 	assert.Equal(t, 60, config.Recommend.SearchPeriod)
 	assert.Equal(t, 100, config.Recommend.SearchEpoch)
 	assert.Equal(t, 10, config.Recommend.SearchTrials)
