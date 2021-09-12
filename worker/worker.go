@@ -500,7 +500,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			}
 			for _, user := range similarUsers {
 				// load historical feedback
-				feedbacks, err := w.dataClient.GetUserFeedback(user.Id)
+				feedbacks, err := w.dataClient.GetUserFeedback(user.Id, w.cfg.Database.PositiveFeedbackType...)
 				if err != nil {
 					return err
 				}

@@ -297,7 +297,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		var users []data.User
 		cursor, users, err = database.GetUsers(cursor, batchSize)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Trace(err)
 		}
 		for _, user := range users {
 			dataset.AddUser(user.UserId)
@@ -324,7 +324,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		cursor, items, err = database.GetItems(cursor, batchSize, itemTimeLimit)
 		allItems = append(allItems, items...)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Trace(err)
 		}
 		for _, item := range items {
 			dataset.AddItem(item.ItemId)
@@ -349,7 +349,7 @@ func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTT
 		var feedback []data.Feedback
 		cursor, feedback, err = database.GetFeedback(cursor, batchSize, feedbackTimeLimit, feedbackTypes...)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, errors.Trace(err)
 		}
 		for _, v := range feedback {
 			dataset.AddFeedback(v.UserId, v.ItemId, false)

@@ -38,6 +38,8 @@ const (
 	ClickPrecision        = "Precision"
 	ClickThroughRate      = "ClickThroughRate"
 
+	TaskLoadRankingDataset = "Load collaborative filtering dataset"
+	TaskLoadClickDataset   = "Load click-through rate prediction dataset"
 	TaskFindLatest         = "Find latest items"
 	TaskFindPopular        = "Find popular items"
 	TaskFindItemNeighbors  = "Find neighbors of items"
