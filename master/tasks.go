@@ -422,11 +422,11 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
 			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
-			users := dataset.UserFeedback[userId]
+			items := dataset.UserFeedback[userId]
 			userSet := bitset.New(uint(dataset.UserCount()))
 			var adjacencyUsers []int
-			for _, u := range users {
-				for _, adjacencyUserId := range dataset.UserFeedback[u] {
+			for _, item := range items {
+				for _, adjacencyUserId := range dataset.ItemFeedback[item] {
 					if !userSet.Test(uint(adjacencyUserId)) {
 						userSet.Set(uint(adjacencyUserId))
 						adjacencyUsers = append(adjacencyUsers, adjacencyUserId)
