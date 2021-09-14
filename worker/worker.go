@@ -563,7 +563,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return errors.Trace(err)
 		}
-		if err = w.cacheClient.SetString(cache.LastUpdateRecommendTime, userId, base.Now()); err != nil {
+		if err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, userId, time.Now()); err != nil {
 			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
 		// refresh cache
@@ -635,13 +635,13 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 		return true
 	}
 	// read active time
-	activeTime, err = w.cacheClient.GetTime(cache.LastActiveTime, userId)
+	activeTime, err = w.cacheClient.GetTime(cache.LastModifyUserTime, userId)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
 	}
 	// read recommend time
-	recommendTime, err = w.cacheClient.GetTime(cache.LastUpdateRecommendTime, userId)
+	recommendTime, err = w.cacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
@@ -669,7 +669,7 @@ func loadUserHistoricalItems(database data.Database, userId string, feedbackType
 func (w *Worker) refreshCache(userId string) error {
 	var timeLimit *time.Time
 	// read recommend time
-	recommendTime, err := w.cacheClient.GetTime(cache.LastUpdateRecommendTime, userId)
+	recommendTime, err := w.cacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId)
 	if err == nil {
 		timeLimit = &recommendTime
 	} else {

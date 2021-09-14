@@ -323,6 +323,9 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		if err := m.CacheClient.SetScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(itemId), cache.CreateScoredItems(recommends, scores)); err != nil {
 			return errors.Trace(err)
 		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(itemId), time.Now()); err != nil {
+			return errors.Trace(err)
+		}
 		completed <- nil
 		return nil
 	}); err != nil {
@@ -452,6 +455,9 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
 		if err := m.CacheClient.SetScores(cache.UserNeighbors, dataset.UserIndex.ToName(userId), cache.CreateScoredItems(recommends, scores)); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(userId), time.Now()); err != nil {
 			return errors.Trace(err)
 		}
 		completed <- nil
