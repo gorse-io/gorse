@@ -838,6 +838,10 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 		InternalServerError(response, err)
 		return
 	}
+	// insert modify timestamp
+	if err := s.CacheClient.SetTime(cache.LastModifyUserTime, temp.UserId, time.Now()); err != nil {
+		return
+	}
 	Ok(response, Success{RowAffected: 1})
 }
 
@@ -877,6 +881,10 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	for _, user := range *temp {
 		if err := s.DataClient.InsertUser(user); err != nil {
 			InternalServerError(response, err)
+			return
+		}
+		// insert modify timestamp
+		if err := s.CacheClient.SetTime(cache.LastModifyUserTime, user.UserId, time.Now()); err != nil {
 			return
 		}
 		count++
@@ -989,6 +997,10 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 			InternalServerError(response, err)
 			return
 		}
+		// insert modify timestamp
+		if err = s.CacheClient.SetTime(cache.LastModifyItemTime, item.ItemId, time.Now()); err != nil {
+			return
+		}
 	}
 	Ok(response, Success{RowAffected: count})
 }
@@ -1012,6 +1024,10 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 	}
 	if err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}); err != nil {
 		InternalServerError(response, err)
+		return
+	}
+	// insert modify timestamp
+	if err = s.CacheClient.SetTime(cache.LastModifyItemTime, item.ItemId, time.Now()); err != nil {
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
@@ -1097,8 +1113,10 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 	var err error
 	feedback := make([]data.Feedback, len(*feedbackLiterTime))
 	users := set.NewStringSet()
+	items := set.NewStringSet()
 	for i := range feedback {
 		users.Add((*feedbackLiterTime)[i].UserId)
+		items.Add((*feedbackLiterTime)[i].ItemId)
 		feedback[i].FeedbackKey = (*feedbackLiterTime)[i].FeedbackKey
 		feedback[i].Comment = (*feedbackLiterTime)[i].Comment
 		feedback[i].Timestamp, err = dateparse.ParseAny((*feedbackLiterTime)[i].Timestamp)
@@ -1124,7 +1142,14 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 	}
 
 	for _, userId := range users.List() {
-		err = s.CacheClient.SetString(cache.LastActiveTime, userId, base.Now())
+		err = s.CacheClient.SetTime(cache.LastModifyUserTime, userId, time.Now())
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
+	for _, itemId := range items.List() {
+		err = s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now())
 		if err != nil {
 			InternalServerError(response, err)
 			return
