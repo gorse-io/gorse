@@ -29,9 +29,7 @@ func TestNoDatabase(t *testing.T) {
 	err = database.Init()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	err = database.InsertItem(Item{})
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.BatchInsertItem(nil)
+	err = database.BatchInsertItems(nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetItem("")
 	assert.ErrorIs(t, err, ErrNoDatabase)
@@ -39,8 +37,10 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.DeleteItem("")
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, c := database.GetItemStream(0, nil)
+	assert.ErrorIs(t, <-c, ErrNoDatabase)
 
-	err = database.InsertUser(User{})
+	err = database.BatchInsertUsers(nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetUser("")
 	assert.ErrorIs(t, err, ErrNoDatabase)
@@ -48,8 +48,10 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.DeleteUser("")
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, c = database.GetUserStream(0)
+	assert.ErrorIs(t, <-c, ErrNoDatabase)
 
-	err = database.InsertFeedback(Feedback{}, false, false)
+	err = database.BatchInsertFeedback(nil, false, false)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.BatchInsertFeedback(nil, false, false)
 	assert.ErrorIs(t, err, ErrNoDatabase)
@@ -63,6 +65,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.DeleteUserItemFeedback("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, c = database.GetFeedbackStream(0, nil)
+	assert.ErrorIs(t, <-c, ErrNoDatabase)
 
 	err = database.InsertMeasurement(Measurement{})
 	assert.ErrorIs(t, err, ErrNoDatabase)

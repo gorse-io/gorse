@@ -543,7 +543,7 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 				}
 			}
 		}
-		err = m.DataClient.InsertUser(user)
+		err = m.DataClient.BatchInsertUsers([]data.User{user})
 		if err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return false
@@ -660,7 +660,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		// 4. comment
 		item.Comment = splits[3]
 		items = append(items, item)
-		//err = m.DataClient.InsertItem(item)
+		//err = m.DataClient.insertItem(item)
 		//if err != nil {
 		//	server.InternalServerError(restful.NewResponse(response), err)
 		//	return false
@@ -672,7 +672,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
-	err = m.DataClient.BatchInsertItem(items)
+	err = m.DataClient.BatchInsertItems(items)
 	if err != nil {
 		server.InternalServerError(restful.NewResponse(response), err)
 		return

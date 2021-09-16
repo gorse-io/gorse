@@ -60,11 +60,11 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 		}
 	}
 	var err error
-	err = m.DataClient.BatchInsertItem(items)
+	err = m.DataClient.BatchInsertItems(items)
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
+	dataset, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -133,13 +133,11 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 		}
 	}
 	var err error
-	for _, user := range users {
-		err = m.DataClient.InsertUser(user)
-		assert.NoError(t, err)
-	}
+	err = m.DataClient.BatchInsertUsers(users)
+	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
+	dataset, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
 	assert.NoError(t, err)
 
 	// similar items (common users)
