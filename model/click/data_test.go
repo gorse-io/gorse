@@ -55,44 +55,44 @@ func TestLoadDataFromDatabase(t *testing.T) {
 	defer database.Close(t)
 	numUsers, numItems := 5, 6
 	for i := 0; i < numUsers; i++ {
-		err := database.InsertUser(data.User{
+		err := database.BatchInsertUsers([]data.User{{
 			UserId: fmt.Sprintf("user%v", i),
 			Labels: []string{
 				fmt.Sprintf("user_label%v", i),
 				fmt.Sprintf("user_label%v", i*2),
 			},
-		})
+		}})
 		assert.NoError(t, err)
 	}
 	for i := 0; i < numItems; i++ {
-		err := database.InsertItem(data.Item{
+		err := database.BatchInsertItems([]data.Item{{
 			ItemId: fmt.Sprintf("item%v", i),
 			Labels: []string{
 				fmt.Sprintf("item_label%v", i),
 				fmt.Sprintf("item_label%v", i*2),
 			},
-		})
+		}})
 		assert.NoError(t, err)
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := 0; j < numItems; j++ {
 			var err error
-			err = database.InsertFeedback(data.Feedback{
+			err = database.BatchInsertFeedback([]data.Feedback{{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       fmt.Sprintf("user%v", i),
 					ItemId:       fmt.Sprintf("item%v", j),
 					FeedbackType: "read",
 				},
-			}, false, false)
+			}}, false, false)
 			assert.NoError(t, err)
 			if i+j > 4 {
-				err = database.InsertFeedback(data.Feedback{
+				err = database.BatchInsertFeedback([]data.Feedback{{
 					FeedbackKey: data.FeedbackKey{
 						UserId:       fmt.Sprintf("user%v", i),
 						ItemId:       fmt.Sprintf("item%v", j),
 						FeedbackType: "click",
 					},
-				}, false, false)
+				}}, false, false)
 				assert.NoError(t, err)
 			}
 		}

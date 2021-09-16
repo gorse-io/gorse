@@ -39,13 +39,8 @@ func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
-// InsertItem method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) InsertItem(_ Item) error {
-	return ErrNoDatabase
-}
-
-// BatchInsertItem method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) BatchInsertItem(_ []Item) error {
+// BatchInsertItems method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) BatchInsertItems(_ []Item) error {
 	return ErrNoDatabase
 }
 
@@ -64,13 +59,25 @@ func (NoDatabase) GetItems(_ string, _ int, _ *time.Time) (string, []Item, error
 	return "", nil, ErrNoDatabase
 }
 
+// GetItemStream method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetItemStream(_ int, _ *time.Time) (chan []Item, chan error) {
+	itemChan := make(chan []Item, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(itemChan)
+		defer close(errChan)
+		errChan <- ErrNoDatabase
+	}()
+	return itemChan, errChan
+}
+
 // GetItemFeedback method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetItemFeedback(_ string, _ ...string) ([]Feedback, error) {
 	return nil, ErrNoDatabase
 }
 
-// InsertUser method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) InsertUser(_ User) error {
+// BatchInsertUsers method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) BatchInsertUsers(_ []User) error {
 	return ErrNoDatabase
 }
 
@@ -89,6 +96,18 @@ func (NoDatabase) GetUsers(_ string, _ int) (string, []User, error) {
 	return "", nil, ErrNoDatabase
 }
 
+// GetUserStream method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetUserStream(_ int) (chan []User, chan error) {
+	userChan := make(chan []User, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(userChan)
+		defer close(errChan)
+		errChan <- ErrNoDatabase
+	}()
+	return userChan, errChan
+}
+
 // GetUserFeedback method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetUserFeedback(_ string, _ ...string) ([]Feedback, error) {
 	return nil, ErrNoDatabase
@@ -104,11 +123,6 @@ func (NoDatabase) DeleteUserItemFeedback(_, _ string, _ ...string) (int, error) 
 	return 0, ErrNoDatabase
 }
 
-// InsertFeedback method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) InsertFeedback(_ Feedback, _, _ bool) error {
-	return ErrNoDatabase
-}
-
 // BatchInsertFeedback method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) BatchInsertFeedback(_ []Feedback, _, _ bool) error {
 	return ErrNoDatabase
@@ -117,6 +131,18 @@ func (NoDatabase) BatchInsertFeedback(_ []Feedback, _, _ bool) error {
 // GetFeedback method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetFeedback(_ string, _ int, _ *time.Time, _ ...string) (string, []Feedback, error) {
 	return "", nil, ErrNoDatabase
+}
+
+// GetFeedbackStream method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetFeedbackStream(_ int, _ *time.Time, _ ...string) (chan []Feedback, chan error) {
+	feedbackChan := make(chan []Feedback, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(feedbackChan)
+		defer close(errChan)
+		errChan <- ErrNoDatabase
+	}()
+	return feedbackChan, errChan
 }
 
 // InsertMeasurement method of NoDatabase returns ErrNoDatabase.

@@ -75,31 +75,31 @@ func TestLoadDataFromDatabase(t *testing.T) {
 	defer database.Close(t)
 	numUsers, numItems := 3, 5
 	for i := 0; i < numUsers; i++ {
-		err := database.InsertUser(data.User{
-			UserId: fmt.Sprintf("user%v", i),
+		err := database.BatchInsertUsers([]data.User{
+			{UserId: fmt.Sprintf("user%v", i)},
 		})
 		assert.NoError(t, err)
 	}
 	for i := 0; i < numItems; i++ {
-		err := database.InsertItem(data.Item{
-			ItemId: fmt.Sprintf("item%v", i),
+		err := database.BatchInsertItems([]data.Item{
+			{ItemId: fmt.Sprintf("item%v", i)},
 		})
 		assert.NoError(t, err)
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := i + 1; j < numItems; j++ {
-			err := database.InsertFeedback(data.Feedback{
+			err := database.BatchInsertFeedback([]data.Feedback{{
 				FeedbackKey: data.FeedbackKey{
 					UserId:       fmt.Sprintf("user%v", i),
 					ItemId:       fmt.Sprintf("item%v", j),
 					FeedbackType: "FeedbackType",
 				},
-			}, false, false)
+			}}, false, false)
 			assert.NoError(t, err)
 		}
 	}
 	// load data
-	dataset, _, _, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"}, 0, 0)
+	dataset, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"}, 0, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, 9, dataset.Count())
 	// split

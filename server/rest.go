@@ -801,7 +801,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 				},
 				Timestamp: time.Now(),
 			}
-			err = s.DataClient.InsertFeedback(feedback, false, false)
+			err = s.DataClient.BatchInsertFeedback([]data.Feedback{feedback}, false, false)
 			if err != nil {
 				InternalServerError(response, err)
 				return
@@ -834,7 +834,7 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
-	if err := s.DataClient.InsertUser(temp); err != nil {
+	if err := s.DataClient.BatchInsertUsers([]data.User{temp}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -878,11 +878,11 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	}
 	var count int
 	// range temp and achieve user
+	if err := s.DataClient.BatchInsertUsers(*temp); err != nil {
+		InternalServerError(response, err)
+		return
+	}
 	for _, user := range *temp {
-		if err := s.DataClient.InsertUser(user); err != nil {
-			InternalServerError(response, err)
-			return
-		}
 		// insert modify timestamp
 		if err := s.CacheClient.SetTime(cache.LastModifyUserTime, user.UserId, time.Now()); err != nil {
 			return
@@ -991,7 +991,7 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 			BadRequest(response, err)
 			return
 		}
-		err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment})
+		err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}})
 		count++
 		if err != nil {
 			InternalServerError(response, err)
@@ -1022,7 +1022,7 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
-	if err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}); err != nil {
+	if err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1126,14 +1126,12 @@ func (s *RestServer) insertFeedback(request *restful.Request, response *restful.
 		}
 	}
 	// insert feedback to data store
-	for _, v := range feedback {
-		err = s.DataClient.InsertFeedback(v,
-			s.GorseConfig.Database.AutoInsertUser,
-			s.GorseConfig.Database.AutoInsertItem)
-		if err != nil {
-			InternalServerError(response, err)
-			return
-		}
+	err = s.DataClient.BatchInsertFeedback(feedback,
+		s.GorseConfig.Database.AutoInsertUser,
+		s.GorseConfig.Database.AutoInsertItem)
+	if err != nil {
+		InternalServerError(response, err)
+		return
 	}
 	// insert feedback to cache store
 	if err = s.InsertFeedbackToCache(feedback); err != nil {
