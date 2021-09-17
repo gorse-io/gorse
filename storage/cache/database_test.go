@@ -57,45 +57,45 @@ func testMeta(t *testing.T, db Database) {
 }
 
 func testScores(t *testing.T, db Database) {
-	// Put items
-	items := []ScoredItem{
+	// Put scores
+	scores := []Scored{
 		{"0", 0},
 		{"1", 1.1},
 		{"2", 1.2},
 		{"3", 1.3},
 		{"4", 1.4},
 	}
-	err := db.SetScores("list", "0", items)
+	err := db.SetScores("list", "0", scores)
 	assert.NoError(t, err)
-	// Get items
+	// Get scores
 	totalItems, err := db.GetScores("list", "0", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, items, totalItems)
-	// Get n items
+	assert.Equal(t, scores, totalItems)
+	// Get n scores
 	headItems, err := db.GetScores("list", "0", 0, 2)
 	assert.NoError(t, err)
-	assert.Equal(t, items[:3], headItems)
-	// Get n items with offset
+	assert.Equal(t, scores[:3], headItems)
+	// Get n scores with offset
 	offsetItems, err := db.GetScores("list", "0", 1, 3)
 	assert.NoError(t, err)
-	assert.Equal(t, items[1:4], offsetItems)
+	assert.Equal(t, scores[1:4], offsetItems)
 	// Get empty
 	noItems, err := db.GetScores("list", "1", 0, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(noItems))
 	// test overwrite
-	overwriteItems := []ScoredItem{
+	overwriteScores := []Scored{
 		{"10", 10.0},
 		{"11", 10.1},
 		{"12", 10.2},
 		{"13", 10.3},
 		{"14", 10.4},
 	}
-	err = db.SetScores("list", "0", overwriteItems)
+	err = db.SetScores("list", "0", overwriteScores)
 	assert.NoError(t, err)
 	totalItems, err = db.GetScores("list", "0", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, overwriteItems, totalItems)
+	assert.Equal(t, overwriteScores, totalItems)
 }
 
 func testList(t *testing.T, db Database) {
@@ -119,4 +119,12 @@ func testList(t *testing.T, db Database) {
 	totalItems, err = db.GetList("list", "0")
 	assert.NoError(t, err)
 	assert.Empty(t, totalItems)
+}
+
+func TestScored(t *testing.T) {
+	itemIds := []string{"2", "4", "6"}
+	scores := []float32{2, 4, 6}
+	scored := []Scored{{Id: "2", Score: 2}, {Id: "4", Score: 4}, {Id: "6", Score: 6}}
+	assert.Equal(t, scored, CreateScoredItems(itemIds, scores))
+	assert.Equal(t, itemIds, RemoveScores(scored))
 }

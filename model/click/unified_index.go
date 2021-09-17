@@ -17,10 +17,12 @@ package click
 import (
 	"encoding/gob"
 	"github.com/zhenghaoz/gorse/base"
+	"strconv"
 )
 
 func init() {
 	gob.Register(&UnifiedMapIndex{})
+	gob.Register(&UnifiedDirectIndex{})
 }
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.
@@ -213,44 +215,67 @@ type UnifiedDirectIndex struct {
 	N int
 }
 
-// EncodeUserLabel is not supported by UnifiedDirectIndex.
+// EncodeUserLabel should be used by unit testing only.
 func (unified *UnifiedDirectIndex) EncodeUserLabel(userLabel string) int {
-	panic("implement me")
+	if val, err := strconv.Atoi(userLabel); err != nil {
+		panic(err)
+	} else {
+		return val
+	}
 }
 
-// EncodeItemLabel is not supported by UnifiedDirectIndex.
+// EncodeItemLabel should be used by unit testing only.
 func (unified *UnifiedDirectIndex) EncodeItemLabel(itemLabel string) int {
-	panic("implement me")
+	if val, err := strconv.Atoi(itemLabel); err != nil {
+		panic(err)
+	} else {
+		return val
+	}
 }
 
-// GetUserLabels is not supported by UnifiedDirectIndex.
+// GetUserLabels should be used by unit testing only.
 func (unified *UnifiedDirectIndex) GetUserLabels() []string {
-	panic("implement me")
+	var names []string
+	begin, end := unified.N/5*3, unified.N/5*4
+	for i := begin; i < end; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+	return names
 }
 
-// GetItemLabels is not supported by UnifiedDirectIndex.
+// GetItemLabels should be used by unit testing only.
 func (unified *UnifiedDirectIndex) GetItemLabels() []string {
-	panic("implement me")
+	var names []string
+	begin, end := unified.N/5*2, unified.N/5*3
+	for i := begin; i < end; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+	return names
 }
 
-// GetContextLabels is not supported by UnifiedDirectIndex.
+// GetContextLabels should be used by unit testing only.
 func (unified *UnifiedDirectIndex) GetContextLabels() []string {
-	panic("implement me")
+	var names []string
+	begin, end := unified.N/5*4, unified.N
+	for i := begin; i < end; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+	return names
 }
 
-// CountUserLabels is not supported by UnifiedDirectIndex.
+// CountUserLabels should be used by unit testing only.
 func (unified *UnifiedDirectIndex) CountUserLabels() int {
-	panic("implement me")
+	return unified.N / 5
 }
 
-// CountItemLabels is not supported by UnifiedDirectIndex.
+// CountItemLabels should be used by unit testing only.
 func (unified *UnifiedDirectIndex) CountItemLabels() int {
-	panic("implement me")
+	return unified.N / 5
 }
 
-// CountContextLabels is not supported by UnifiedDirectIndex.
+// CountContextLabels should be used by unit testing only.
 func (unified *UnifiedDirectIndex) CountContextLabels() int {
-	panic("implement me")
+	return unified.N - unified.N/5*4
 }
 
 // NewUnifiedDirectIndex creates a UnifiedDirectIndex.
@@ -258,42 +283,65 @@ func NewUnifiedDirectIndex(n int) UnifiedIndex {
 	return &UnifiedDirectIndex{N: n}
 }
 
-// Len returns the size of unified index.
+// Len should be used by unit testing only.
 func (unified *UnifiedDirectIndex) Len() int {
 	return unified.N
 }
 
-// EncodeUser is not supported by UnifiedDirectIndex.
+// EncodeUser should be used by unit testing only.
 func (unified *UnifiedDirectIndex) EncodeUser(userId string) int {
-	panic("not implemented")
+	if val, err := strconv.Atoi(userId); err != nil {
+		panic(err)
+	} else {
+		return val
+	}
 }
 
-// EncodeItem is not supported by UnifiedDirectIndex.
+// EncodeItem should be used by unit testing only.
 func (unified *UnifiedDirectIndex) EncodeItem(itemId string) int {
-	panic("not implemented")
+	if val, err := strconv.Atoi(itemId); err != nil {
+		panic(err)
+	} else {
+		return val
+	}
 }
 
-// EncodeContextLabel is not supported by UnifiedDirectIndex.
+// EncodeContextLabel should be used by unit testing only.
 func (unified *UnifiedDirectIndex) EncodeContextLabel(label string) int {
-	panic("not implemented")
+	if val, err := strconv.Atoi(label); err != nil {
+		panic(err)
+	} else {
+		return val
+	}
 }
 
-// GetUsers is not supported by UnifiedDirectIndex.
+// GetUsers should be used by unit testing only.
 func (unified *UnifiedDirectIndex) GetUsers() []string {
-	panic("not implemented")
+	var names []string
+	begin, end := unified.N/5, unified.N/5*2
+	for i := begin; i < end; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+	return names
 }
 
-// GetItems is not supported by UnifiedDirectIndex.
+// GetItems should be used by unit testing only.
 func (unified *UnifiedDirectIndex) GetItems() []string {
-	panic("not implemented")
+	base.Logger().Warn("")
+	var names []string
+	begin, end := 0, unified.N/5
+	for i := begin; i < end; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+	return names
 }
 
-// CountUsers is not supported by UnifiedDirectIndex.
+// CountUsers should be used by unit testing only.
 func (unified *UnifiedDirectIndex) CountUsers() int {
-	panic("not implemented")
+	return unified.N / 5
 }
 
-// CountItems is not supported by UnifiedDirectIndex.
+// CountItems should be used by unit testing only.
 func (unified *UnifiedDirectIndex) CountItems() int {
-	panic("not implemented")
+	return unified.N / 5
 }

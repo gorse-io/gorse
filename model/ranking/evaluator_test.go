@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/iset"
 	"github.com/stretchr/testify/assert"
@@ -27,46 +26,40 @@ import (
 
 const evalEpsilon = 0.00001
 
-func EqualEpsilon(t *testing.T, expect, actual, epsilon float32) {
-	if math32.Abs(expect-actual) > evalEpsilon {
-		t.Fatalf("Expect %f ± %f, Actual: %f\n", expect, epsilon, actual)
-	}
-}
-
 func TestNDCG(t *testing.T) {
 	targetSet := set.NewIntSet(1, 3, 5, 7)
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, 0.6766372989, NDCG(targetSet, rankList), evalEpsilon)
+	assert.InDelta(t, 0.6766372989, NDCG(targetSet, rankList), evalEpsilon)
 }
 
 func TestPrecision(t *testing.T) {
 	targetSet := set.NewIntSet(1, 3, 5, 7)
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, 0.4, Precision(targetSet, rankList), evalEpsilon)
+	assert.InDelta(t, 0.4, Precision(targetSet, rankList), evalEpsilon)
 }
 
 func TestRecall(t *testing.T) {
 	targetSet := set.NewIntSet(1, 3, 15, 17, 19)
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, 0.4, Recall(targetSet, rankList), evalEpsilon)
+	assert.InDelta(t, 0.4, Recall(targetSet, rankList), evalEpsilon)
 }
 
 func TestAP(t *testing.T) {
 	targetSet := set.NewIntSet(1, 3, 7, 9)
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, 0.44375, MAP(targetSet, rankList), evalEpsilon)
+	assert.InDelta(t, 0.44375, MAP(targetSet, rankList), evalEpsilon)
 }
 
 func TestRR(t *testing.T) {
 	targetSet := set.NewIntSet(3)
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, 0.25, MRR(targetSet, rankList), evalEpsilon)
+	assert.InDelta(t, 0.25, MRR(targetSet, rankList), evalEpsilon)
 }
 
 func TestHR(t *testing.T) {
 	rankList := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	EqualEpsilon(t, 1, HR(set.NewIntSet(3), rankList), evalEpsilon)
-	EqualEpsilon(t, 0, HR(set.NewIntSet(30), rankList), evalEpsilon)
+	assert.InDelta(t, 1, HR(set.NewIntSet(3), rankList), evalEpsilon)
+	assert.InDelta(t, 0, HR(set.NewIntSet(30), rankList), evalEpsilon)
 }
 
 type mockMatrixFactorizationForEval struct {
@@ -87,11 +80,11 @@ func (m *mockMatrixFactorizationForEval) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) Fit(trainSet, validateSet *DataSet, config *FitConfig) Score {
+func (m *mockMatrixFactorizationForEval) Fit(_, _ *DataSet, _ *FitConfig) Score {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) Predict(userId, itemId string) float32 {
+func (m *mockMatrixFactorizationForEval) Predict(_, _ string) float32 {
 	panic("don't call me")
 }
 

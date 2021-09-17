@@ -16,12 +16,12 @@ package ranking
 
 import (
 	"fmt"
-	"sync"
-	"time"
-
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
+	"sync"
+	"time"
 )
 
 // ParamsSearchResult contains the return of grid search.
@@ -32,13 +32,6 @@ type ParamsSearchResult struct {
 	BestIndex  int
 	Scores     []Score
 	Params     []model.Params
-}
-
-func NewParamsSearchResult() *ParamsSearchResult {
-	return &ParamsSearchResult{
-		Scores: make([]Score, 0),
-		Params: make([]model.Params, 0),
-	}
 }
 
 func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
@@ -52,8 +45,8 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
-	seed int64, fitConfig *FitConfig) ParamsSearchResult {
+func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
+	_ int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
 	count := 1
@@ -76,7 +69,11 @@ func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGri
 			// Cross validate
 			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Overwrite(params))
+			fitConfig.Tracker.Suspend(true)
+			runner.Lock()
+			fitConfig.Tracker.Suspend(false)
 			score := estimator.Fit(trainSet, testSet, fitConfig)
+			runner.UnLock()
 			// Create GridSearch result
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
@@ -101,11 +98,11 @@ func GridSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGri
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
-	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
+func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
+	numTrials int, seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() < numTrials {
-		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig)
+		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig, runner)
 	}
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
@@ -124,7 +121,11 @@ func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramG
 			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
+		fitConfig.Tracker.Suspend(true)
+		runner.Lock()
+		fitConfig.Tracker.Suspend(false)
 		score := estimator.Fit(trainSet, testSet, fitConfig)
+		runner.UnLock()
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
 		if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
@@ -139,26 +140,28 @@ func RandomSearchCV(estimator Model, trainSet *DataSet, testSet *DataSet, paramG
 
 // ModelSearcher is a thread-safe personal ranking model searcher.
 type ModelSearcher struct {
+	models []MatrixFactorization
 	// arguments
 	numEpochs int
 	numTrials int
 	numJobs   int
 	// results
-	bestMutex      sync.Mutex
-	bestModelName  string
-	bestModel      Model
-	bestScore      Score
-	bestSimilarity string
+	bestMutex     sync.Mutex
+	bestModelName string
+	bestModel     Model
+	bestScore     Score
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
-	return &ModelSearcher{
-		numTrials:      nTrials,
-		numEpochs:      nEpoch,
-		numJobs:        nJobs,
-		bestSimilarity: model.SimilarityCosine,
+	searcher := &ModelSearcher{
+		numTrials: nTrials,
+		numEpochs: nEpoch,
+		numJobs:   nJobs,
 	}
+	searcher.models = append(searcher.models, NewBPR(model.Params{model.NEpochs: searcher.numEpochs}))
+	searcher.models = append(searcher.models, NewCCD(model.Params{model.NEpochs: searcher.numEpochs}))
+	return searcher
 }
 
 // GetBestModel returns the optimal personal ranking model.
@@ -168,32 +171,22 @@ func (searcher *ModelSearcher) GetBestModel() (string, Model, Score) {
 	return searcher.bestModelName, searcher.bestModel, searcher.bestScore
 }
 
-// GetBestSimilarity returns the optimal similarity for neighborhood recommendations.
-func (searcher *ModelSearcher) GetBestSimilarity() string {
-	searcher.bestMutex.Lock()
-	defer searcher.bestMutex.Unlock()
-	return searcher.bestSimilarity
-}
-
-func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Tracker, runner model.Runner) error {
+	if tracker == nil {
+		return errors.New("tracker is required")
+	}
 	base.Logger().Info("ranking model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
 	startTime := time.Now()
-	models := []string{"bpr", "ccd", "knn"}
-	for _, name := range models {
-		m, err := NewModel(name, model.Params{model.NEpochs: searcher.numEpochs})
-		if err != nil {
-			return err
-		}
+	tracker.Start(len(searcher.models) * searcher.numEpochs * searcher.numTrials)
+	for _, m := range searcher.models {
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0,
-			NewFitConfig().SetJobs(searcher.numJobs))
+			NewFitConfig().
+				SetJobs(searcher.numJobs).
+				SetTracker(tracker.SubTracker()), runner)
 		searcher.bestMutex.Lock()
-		if name == "knn" {
-			searcher.bestSimilarity = r.BestModel.GetParams()[model.Similarity].(string)
-		}
 		if searcher.bestModel == nil || r.BestScore.NDCG > searcher.bestScore.NDCG {
-			searcher.bestModelName = name
 			searcher.bestModel = r.BestModel
 			searcher.bestScore = r.BestScore
 		}
@@ -204,8 +197,9 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet) error {
 		zap.Float32("NDCG@10", searcher.bestScore.NDCG),
 		zap.Float32("Precision@10", searcher.bestScore.Precision),
 		zap.Float32("Recall@10", searcher.bestScore.Recall),
-		zap.String("model", searcher.bestModelName),
+		zap.String("model", GetModelName(searcher.bestModel)),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
+	tracker.Finish()
 	return nil
 }

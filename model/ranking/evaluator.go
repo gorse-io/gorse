@@ -21,7 +21,6 @@ import (
 	"github.com/scylladb/go-set/iset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
-	"github.com/zhenghaoz/gorse/model"
 )
 
 /* Evaluate Item Ranking */
@@ -30,7 +29,7 @@ import (
 type Metric func(targetSet *iset.Set, rankList []int) float32
 
 // Evaluate evaluates a model in top-n tasks.
-func Evaluate(estimator model.Model, testSet, trainSet *DataSet, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
+func Evaluate(estimator MatrixFactorization, testSet, trainSet *DataSet, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
 	partSum := make([][]float32, nJobs)
 	partCount := make([]float32, nJobs)
 	for i := 0; i < nJobs; i++ {
@@ -50,7 +49,7 @@ func Evaluate(estimator model.Model, testSet, trainSet *DataSet, topK, numCandid
 			candidates = append(candidates, testSet.UserFeedback[userIndex]...)
 			candidates = append(candidates, negativeSample...)
 			// Find top-n ItemFeedback in predictions
-			rankList, _ := Rank(estimator, userIndex, trainSet.UserFeedback[userIndex], candidates, topK)
+			rankList, _ := Rank(estimator, userIndex, candidates, topK)
 			partCount[workerId]++
 			for i, metric := range scorers {
 				partSum[workerId][i] += metric(targetSet, rankList)
@@ -155,18 +154,11 @@ func MRR(targetSet *iset.Set, rankList []int) float32 {
 	return 0
 }
 
-func Rank(model model.Model, userId int, userProfile, candidates []int, topN int) ([]int, []float32) {
+func Rank(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
 	// Get top-n list
 	itemsHeap := base.NewTopKFilter(topN)
 	for _, itemId := range candidates {
-		switch model := model.(type) {
-		case MatrixFactorization:
-			itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
-		case *KNN:
-			itemsHeap.Push(itemId, model.InternalPredict(userProfile, itemId))
-		default:
-			panic("unknown model")
-		}
+		itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
 	}
 	elem, scores := itemsHeap.PopAll()
 	recommends := make([]int, len(elem))

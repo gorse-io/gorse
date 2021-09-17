@@ -16,6 +16,7 @@ package server
 
 import (
 	"encoding/gob"
+	"github.com/juju/errors"
 	"os"
 	"path/filepath"
 )
@@ -53,13 +54,13 @@ func (s *LocalCache) WriteLocalCache() error {
 	if _, err := os.Stat(parent); os.IsNotExist(err) {
 		err = os.MkdirAll(parent, os.ModePerm)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	// create file
 	f, err := os.Create(s.path)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	defer f.Close()
 	// write file

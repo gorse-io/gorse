@@ -67,8 +67,8 @@ func TestParams_GetBool(t *testing.T) {
 	p[UseFeature] = false
 	assert.False(t, p.GetBool(UseFeature, true))
 	// Wrong type case
-	p[UseFeature] = true
-	assert.True(t, p.GetBool(UseFeature, false))
+	p[UseFeature] = 1
+	assert.True(t, p.GetBool(UseFeature, true))
 }
 
 func TestParams_GetInt(t *testing.T) {
@@ -97,6 +97,15 @@ func TestParams_GetInt64(t *testing.T) {
 	assert.Equal(t, int64(-1), p.GetInt64(RandomState, -1))
 }
 
+func TestParams_GetString(t *testing.T) {
+	p := Params{}
+	// Empty case
+	assert.Equal(t, "xyz", p.GetString(Similarity, "xyz"))
+	// Normal case
+	p[Similarity] = "abc"
+	assert.Equal(t, "abc", p.GetString(Similarity, "abc"))
+}
+
 func TestParams_Overwrite(t *testing.T) {
 	a := Params{
 		NFactors: 10,
@@ -122,4 +131,5 @@ func TestParamsGrid(t *testing.T) {
 	grid.Fill(defaultGrid)
 	assert.Equal(t, []interface{}{0, 1}, grid["a"])
 	assert.Equal(t, []interface{}{4, 5}, grid["b"])
+	assert.Equal(t, 4, grid.NumCombinations())
 }

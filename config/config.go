@@ -18,6 +18,12 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+const (
+	NeighborTypeAuto    = "auto"
+	NeighborTypeSimilar = "similar"
+	NeighborTypeRelated = "related"
+)
+
 // Config is the configuration for the engine.
 type Config struct {
 	Database  DatabaseConfig  `toml:"database"`
@@ -47,7 +53,6 @@ type DatabaseConfig struct {
 	AutoInsertItem       bool     `toml:"auto_insert_item"`        // insert new items while inserting feedback
 	CacheSize            int      `toml:"cache_size"`              // cache size for recommended/popular/latest items
 	PositiveFeedbackType []string `toml:"positive_feedback_types"` // positive feedback type
-	ClickFeedbackTypes   []string `toml:"click_feedback_types"`    // feedback types for click event
 	ReadFeedbackType     string   `toml:"read_feedback_type"`      // feedback type for read event
 	PositiveFeedbackTTL  uint     `toml:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
 	ItemTTL              uint     `toml:"item_ttl"`                // item-to-live of items
@@ -71,8 +76,7 @@ type MasterConfig struct {
 	Host        string `toml:"host"`         // master host
 	HttpPort    int    `toml:"http_port"`    // HTTP port
 	HttpHost    string `toml:"http_host"`    // HTTP host
-	SearchJobs  int    `toml:"search_jobs"`  // number of working jobs to search model
-	FitJobs     int    `toml:"fit_jobs"`     // number of working jobs to fit model
+	NumJobs     int    `toml:"n_jobs"`       // number of working jobs
 	MetaTimeout int    `toml:"meta_timeout"` // cluster meta timeout (second)
 }
 
@@ -84,8 +88,7 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 			Host:        "127.0.0.1",
 			HttpPort:    8088,
 			HttpHost:    "127.0.0.1",
-			SearchJobs:  1,
-			FitJobs:     1,
+			NumJobs:     1,
 			MetaTimeout: 60,
 		}
 	}
@@ -94,28 +97,40 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	PopularWindow          int    `toml:"popular_window"`
-	FitPeriod              int    `toml:"fit_period"`
-	SearchPeriod           int    `toml:"search_period"`
-	SearchEpoch            int    `toml:"search_epoch"`
-	SearchTrials           int    `toml:"search_trials"`
-	RefreshRecommendPeriod int    `toml:"refresh_recommend_period"`
-	FallbackRecommend      string `toml:"fallback_recommend"`
-	ExploreLatestNum       int    `toml:"explore_latest_num"`
+	PopularWindow            int      `toml:"popular_window"`
+	FitPeriod                int      `toml:"fit_period"`
+	SearchPeriod             int      `toml:"search_period"`
+	SearchEpoch              int      `toml:"search_epoch"`
+	SearchTrials             int      `toml:"search_trials"`
+	RefreshRecommendPeriod   int      `toml:"refresh_recommend_period"`
+	FallbackRecommend        []string `toml:"fallback_recommend"`
+	ItemNeighborType         string   `toml:"item_neighbor_type"`
+	UserNeighborType         string   `toml:"user_neighbor_type"`
+	EnableLatestRecommend    bool     `toml:"enable_latest_recommend"`
+	EnablePopularRecommend   bool     `toml:"enable_popular_recommend"`
+	EnableUserBasedRecommend bool     `toml:"enable_user_based_recommend"`
+	EnableItemBasedRecommend bool     `toml:"enable_item_based_recommend"`
+	EnableColRecommend       bool     `toml:"enable_collaborative_recommend"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
 func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 	if config == nil {
 		return &RecommendConfig{
-			PopularWindow:          180,
-			FitPeriod:              60,
-			SearchPeriod:           180,
-			SearchEpoch:            100,
-			SearchTrials:           10,
-			RefreshRecommendPeriod: 5,
-			FallbackRecommend:      "latest",
-			ExploreLatestNum:       10,
+			PopularWindow:            180,
+			FitPeriod:                60,
+			SearchPeriod:             180,
+			SearchEpoch:              100,
+			SearchTrials:             10,
+			RefreshRecommendPeriod:   5,
+			FallbackRecommend:        []string{"popular"},
+			ItemNeighborType:         "auto",
+			UserNeighborType:         "auto",
+			EnableLatestRecommend:    false,
+			EnablePopularRecommend:   false,
+			EnableUserBasedRecommend: false,
+			EnableItemBasedRecommend: false,
+			EnableColRecommend:       true,
 		}
 	}
 	return config
@@ -164,11 +179,8 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("master", "http_host") {
 		config.Master.HttpHost = defaultMasterConfig.HttpHost
 	}
-	if !meta.IsDefined("master", "fit_jobs") {
-		config.Master.FitJobs = defaultMasterConfig.FitJobs
-	}
-	if !meta.IsDefined("master", "search_jobs") {
-		config.Master.SearchJobs = defaultMasterConfig.SearchJobs
+	if !meta.IsDefined("master", "n_jobs") {
+		config.Master.NumJobs = defaultMasterConfig.NumJobs
 	}
 	if !meta.IsDefined("master", "meta_timeout") {
 		config.Master.MetaTimeout = defaultMasterConfig.MetaTimeout
@@ -204,8 +216,26 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("recommend", "fallback_recommend") {
 		config.Recommend.FallbackRecommend = defaultRecommendConfig.FallbackRecommend
 	}
-	if !meta.IsDefined("recommend", "explore_latest_num") {
-		config.Recommend.ExploreLatestNum = defaultRecommendConfig.ExploreLatestNum
+	if !meta.IsDefined("recommend", "item_neighbor_type") {
+		config.Recommend.ItemNeighborType = defaultRecommendConfig.ItemNeighborType
+	}
+	if !meta.IsDefined("recommend", "user_neighbor_type") {
+		config.Recommend.UserNeighborType = defaultRecommendConfig.UserNeighborType
+	}
+	if !meta.IsDefined("recommend", "enable_latest_recommend") {
+		config.Recommend.EnableLatestRecommend = defaultRecommendConfig.EnableLatestRecommend
+	}
+	if !meta.IsDefined("recommend", "enable_popular_recommend") {
+		config.Recommend.EnablePopularRecommend = defaultRecommendConfig.EnablePopularRecommend
+	}
+	if !meta.IsDefined("recommend", "enable_user_based_recommend") {
+		config.Recommend.EnableUserBasedRecommend = defaultRecommendConfig.EnableUserBasedRecommend
+	}
+	if !meta.IsDefined("recommend", "enable_item_based_recommend") {
+		config.Recommend.EnableItemBasedRecommend = defaultRecommendConfig.EnableItemBasedRecommend
+	}
+	if !meta.IsDefined("recommend", "enable_collaborative_recommend") {
+		config.Recommend.EnableColRecommend = defaultRecommendConfig.EnableColRecommend
 	}
 }
 

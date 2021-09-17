@@ -42,31 +42,23 @@ func SetDevelopmentLogger() {
 }
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.
-func Max(a ...int) int {
-	if len(a) == 0 {
-		panic("can't get the maximum from empty vec")
-	}
-	maximum := a[0]
-	for _, m := range a {
-		if m > maximum {
-			maximum = m
+func Max(a int, b ...int) int {
+	for _, value := range b {
+		if value > a {
+			a = value
 		}
 	}
-	return maximum
+	return a
 }
 
 // Min finds the minimum in a vector of integers. Panic if the slice is empty.
-func Min(a ...int) int {
-	if len(a) == 0 {
-		panic("can't get the minimum from empty vec")
-	}
-	minimum := a[0]
-	for _, m := range a {
-		if m < minimum {
-			minimum = m
+func Min(a int, b ...int) int {
+	for _, value := range b {
+		if value < a {
+			a = value
 		}
 	}
-	return minimum
+	return a
 }
 
 // RangeInt generate a slice [0, ..., n-1].
@@ -74,6 +66,15 @@ func RangeInt(n int) []int {
 	a := make([]int, n)
 	for i := range a {
 		a[i] = i
+	}
+	return a
+}
+
+// RepeatFloat32s repeats value n times.
+func RepeatFloat32s(n int, value float32) []float32 {
+	a := make([]float32, n)
+	for i := range a {
+		a[i] = value
 	}
 	return a
 }
@@ -99,6 +100,11 @@ func NewMatrixInt(row, col int) [][]int {
 // Now returns the current time in the format of `2006-01-02T15:04:05Z07:00`.
 func Now() string {
 	return time.Now().Format("2006-01-02T15:04:05Z07:00")
+}
+
+func DateNow() time.Time {
+	timestamp := time.Now()
+	return time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // CheckPanic catches panic.

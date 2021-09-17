@@ -16,6 +16,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/juju/errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -68,7 +69,8 @@ func (s *RestServer) StartHttpServer() {
 
 func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	chain.ProcessFilter(req, resp)
-	if req.Request.URL.Path != "/api/dashboard/cluster" {
+	if req.Request.URL.Path != "/api/dashboard/cluster" &&
+		req.Request.URL.Path != "/api/dashboard/tasks" {
 		base.Logger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
 			zap.Int("status_code", resp.StatusCode()))
 	}
@@ -257,13 +259,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
-	ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
-		Doc("get popular items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]string{}))
+	// Disable popular items under labels temporarily
+	//ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
+	//	Doc("get popular items").
+	//	Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+	//	Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+	//	Writes([]string{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("get latest items").
@@ -272,20 +275,29 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
-	ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
-		Doc("get latest items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]string{}))
+	// Disable the latest items under labels temporarily
+	//ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
+	//	Doc("get latest items").
+	//	Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+	//	Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+	//	Writes([]string{}))
 	// Get neighbors
-	ws.Route(ws.GET("/neighbors/{item-id}").To(s.getNeighbors).
+	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]string{}))
+	ws.Route(ws.GET("/user/{user-id}/neighbors/").To(s.getUserNeighbors).
+		Doc("get neighbors of a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]string{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
@@ -360,25 +372,25 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 	s.getList(cache.LatestItems, "", request, response)
 }
 
-func (s *RestServer) getLabelPopular(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
-	label := request.PathParameter("label")
-	base.Logger().Debug("get label popular items", zap.String("label", label))
-	s.getList(cache.PopularItems, label, request, response)
-}
-
-func (s *RestServer) getLabelLatest(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
-	label := request.PathParameter("label")
-	base.Logger().Debug("get label latest items", zap.String("label", label))
-	s.getList(cache.LatestItems, label, request, response)
-}
+//func (s *RestServer) getLabelPopular(request *restful.Request, response *restful.Response) {
+//	// Authorize
+//	if !s.auth(request, response) {
+//		return
+//	}
+//	label := request.PathParameter("label")
+//	base.Logger().Debug("get label popular items", zap.String("label", label))
+//	s.getList(cache.PopularItems, label, request, response)
+//}
+//
+//func (s *RestServer) getLabelLatest(request *restful.Request, response *restful.Response) {
+//	// Authorize
+//	if !s.auth(request, response) {
+//		return
+//	}
+//	label := request.PathParameter("label")
+//	base.Logger().Debug("get label latest items", zap.String("label", label))
+//	s.getList(cache.LatestItems, label, request, response)
+//}
 
 // get feedback by item-id with feedback type
 func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *restful.Response) {
@@ -411,27 +423,38 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 	Ok(response, feedback)
 }
 
-// getNeighbors gets neighbors of a item from database.
-func (s *RestServer) getNeighbors(request *restful.Request, response *restful.Response) {
+// getItemNeighbors gets neighbors of a item from database.
+func (s *RestServer) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	// Authorize
 	if !s.auth(request, response) {
 		return
 	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
-	s.getList(cache.SimilarItems, itemId, request, response)
+	s.getList(cache.ItemNeighbors, itemId, request, response)
 }
 
-// getSubscribe gets subscribed items of a user from database.
-func (s *RestServer) getSubscribe(request *restful.Request, response *restful.Response) {
+// getUserNeighbors gets neighbors of a user from database.
+func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	// Authorize
 	if !s.auth(request, response) {
 		return
 	}
-	// Get user id
+	// Get item id
 	userId := request.PathParameter("user-id")
-	s.getList(cache.SubscribeItems, userId, request, response)
+	s.getList(cache.UserNeighbors, userId, request, response)
 }
+
+// getSubscribe gets subscribed items of a user from database.
+//func (s *RestServer) getSubscribe(request *restful.Request, response *restful.Response) {
+//	// Authorize
+//	if !s.auth(request, response) {
+//		return
+//	}
+//	// Get user id
+//	userId := request.PathParameter("user-id")
+//	s.getList(cache.SubscribeItems, userId, request, response)
+//}
 
 // getCollaborative gets cached recommended items from database.
 func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
@@ -441,90 +464,152 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	}
 	// Get user id
 	userId := request.PathParameter("user-id")
-	s.getList(cache.RecommendItems, userId, request, response)
+	s.getList(cache.CTRRecommend, userId, request, response)
 }
+
+type Recommender byte
+
+const (
+	CTRRecommender           Recommender = 0x1
+	CollaborativeRecommender Recommender = 0x2
+	UserBasedRecommender     Recommender = 0x4
+	ItemBasedRecommender     Recommender = 0x8
+	LatestRecommender        Recommender = 0x10
+	PopularRecommender       Recommender = 0x20
+)
 
 // Recommend items to users.
 // 1. If there are recommendations in cache, return cached recommendations.
 // 2. If there are historical interactions of the users, return similar items.
 // 3. Otherwise, return fallback recommendation (popular/latest).
-func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
-	var err error
-	var knnTime, fallbackTime, loadArchReadTime, removeReadTime time.Duration
+func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender) ([]string, error) {
+	var (
+		err              error
+		loadFinalRecTime time.Duration
+		loadColRecTime   time.Duration
+		loadLoadHistTime time.Duration
+		itemBasedTime    time.Duration
+		userBasedTime    time.Duration
+		loadLatestTime   time.Duration
+		loadPopularTime  time.Duration
+		numPrevStage     int
+		results          []string
+		excludeSet       = set.NewStringSet()
+	)
 
-	// 1. read recommendations in cache.
-	start := time.Now()
-	itemsChan := make(chan []string, 1)
-	errChan := make(chan error, 1)
-	go func() {
-		var collaborativeFilteringItems []cache.ScoredItem
-		collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.RecommendItems, userId, 0, s.GorseConfig.Database.CacheSize)
+	// create recommender mask
+	var recommenderMask Recommender
+	if len(recommenders) == 0 {
+		recommenderMask |= CTRRecommender | ItemBasedRecommender | PopularRecommender
+	} else {
+		for _, recommender := range recommenders {
+			recommenderMask |= recommender
+		}
+	}
+
+	initStart := time.Now()
+
+	if recommenderMask&CTRRecommender > 0 {
+		// read recommendations in cache.
+		itemsChan := make(chan []string, 1)
+		errChan := make(chan error, 1)
+		go func() {
+			var collaborativeFilteringItems []cache.Scored
+			collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.CTRRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
+			if err != nil {
+				itemsChan <- nil
+				errChan <- err
+			} else {
+				itemsChan <- cache.RemoveScores(collaborativeFilteringItems)
+				errChan <- nil
+				if len(collaborativeFilteringItems) == 0 {
+					base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
+				}
+			}
+		}()
+
+		// read ignore items
+		loadCachedReadStart := time.Now()
+		ignoreItems, err := s.CacheClient.GetList(cache.IgnoreItems, userId)
 		if err != nil {
-			itemsChan <- nil
-			errChan <- err
-		} else {
-			itemsChan <- cache.RemoveScores(collaborativeFilteringItems)
-			errChan <- nil
-			if len(collaborativeFilteringItems) == 0 {
-				base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
+			return nil, errors.Trace(err)
+		}
+		for _, item := range ignoreItems {
+			excludeSet.Add(item)
+		}
+		loadFinalRecTime = time.Since(loadCachedReadStart)
+		// remove ignore items
+		items := <-itemsChan
+		err = <-errChan
+		if err != nil {
+			return nil, err
+		}
+		results = make([]string, 0, len(items))
+		for _, itemId := range items {
+			if !excludeSet.Has(itemId) {
+				results = append(results, itemId)
+				excludeSet.Add(itemId)
 			}
 		}
-	}()
-
-	// 0. load ignore items
-	loadCachedReadStart := time.Now()
-	ignoreItems, err := s.CacheClient.GetList(cache.IgnoreItems, userId)
-	excludeSet := set.NewStringSet()
-	for _, item := range ignoreItems {
-		excludeSet.Add(item)
 	}
-	loadCachedReadTime := time.Since(loadCachedReadStart)
+	numFromFinal := len(results) - numPrevStage
+	numPrevStage = len(results)
 
-	// *. remove ignore items
-	items := <-itemsChan
-	err = <-errChan
-	if err != nil {
-		return nil, err
-	}
-	results := make([]string, 0, len(items))
-	removeReadStart := time.Now()
-	for _, itemId := range items {
-		if !excludeSet.Has(itemId) {
-			results = append(results, itemId)
+	// Load collaborative recommendation.  The running condition is:
+	// 1. The number of current results is less than n.
+	// 2. There are recommenders other than CollaborativeRecommender.
+	if len(results) < n && recommenderMask&CollaborativeRecommender > 0 {
+		start := time.Now()
+		collaborativeRecommendation, err := s.CacheClient.GetScores(cache.CollaborativeRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
+		if err != nil {
+			return nil, err
 		}
+		for _, item := range collaborativeRecommendation {
+			if !excludeSet.Has(item.Id) {
+				results = append(results, item.Id)
+				excludeSet.Add(item.Id)
+			}
+		}
+		loadColRecTime = time.Since(start)
 	}
-	removeReadTime += time.Since(removeReadStart)
-	numFromCache := len(results)
+	numFromCollaborative := len(results) - numPrevStage
+	numPrevStage = len(results)
 
-	// 2. return similar items
-	if len(results) < n {
-		// load historical feedback
-		loadArchReadStart := time.Now()
-		userFeedback, err := s.DataClient.GetUserFeedback(userId)
+	// Load historical feedback. The running condition is:
+	// 1. The number of current results is less than n.
+	// 2. There are recommenders other than CTRRecommender.
+	var userFeedback []data.Feedback
+	if len(results) < n && recommenderMask-CTRRecommender > 0 {
+		start := time.Now()
+		userFeedback, err = s.DataClient.GetUserFeedback(userId)
 		if err != nil {
 			return nil, err
 		}
 		for _, feedback := range userFeedback {
 			excludeSet.Add(feedback.ItemId)
 		}
-		loadArchReadTime = time.Since(loadArchReadStart)
-		knnStart := time.Now()
+		loadLoadHistTime = time.Since(start)
+	}
+
+	// Item-based recommendation. The running condition is:
+	// 1. The number of current results is less than n.
+	// 2. Recommenders include CTRRecommender.
+	if len(results) < n && recommenderMask&ItemBasedRecommender > 0 {
+		start := time.Now()
 		// collect candidates
 		candidates := make(map[string]float32)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.GetScores(cache.SimilarItems, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
+			similarItems, err := s.CacheClient.GetScores(cache.ItemNeighbors, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {
 				return nil, err
 			}
 			// add unseen items
-			removeReadStart = time.Now()
 			for _, item := range similarItems {
-				if !excludeSet.Has(item.ItemId) {
-					candidates[item.ItemId] += item.Score
+				if !excludeSet.Has(item.Id) {
+					candidates[item.Id] += item.Score
 				}
 			}
-			removeReadTime += time.Since(removeReadStart)
 		}
 		// collect top k
 		k := n - len(results)
@@ -534,48 +619,109 @@ func (s *RestServer) Recommend(userId string, n int) ([]string, error) {
 		}
 		ids, _ := filter.PopAll()
 		results = append(results, ids...)
-		knnTime = time.Since(knnStart)
+		excludeSet.Add(ids...)
+		itemBasedTime = time.Since(start)
 	}
-	numFromKNN := len(results) - numFromCache
+	numFromItemBased := len(results) - numPrevStage
+	numPrevStage = len(results)
 
-	// 3. return fallback recommendation
-	if len(results) < n {
-		fallbackStart := time.Now()
-		var fallbacks []cache.ScoredItem
-		switch s.GorseConfig.Recommend.FallbackRecommend {
-		case "latest":
-			fallbacks, err = s.CacheClient.GetScores(cache.LatestItems, "", 0, s.GorseConfig.Database.CacheSize)
-		case "popular":
-			fallbacks, err = s.CacheClient.GetScores(cache.PopularItems, "", 0, s.GorseConfig.Database.CacheSize)
-		default:
-			return nil, fmt.Errorf("unknown fallback recommendation method `%s`", s.GorseConfig.Recommend.FallbackRecommend)
+	// User-based recommendation. The running condition is:
+	// 1. The number of current results is less than n.
+	// 2. Recommenders include UserBasedRecommender.
+	if len(results) < n && recommenderMask&UserBasedRecommender > 0 {
+		start := time.Now()
+		candidates := make(map[string]float32)
+		// load similar users
+		similarUsers, err := s.CacheClient.GetScores(cache.UserNeighbors, userId, 0, s.GorseConfig.Database.CacheSize)
+		if err != nil {
+			return nil, err
 		}
-		removeReadStart = time.Now()
-		for _, item := range fallbacks {
-			if !excludeSet.Has(item.ItemId) {
-				results = append(results, item.ItemId)
+		for _, user := range similarUsers {
+			// load historical feedback
+			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, s.GorseConfig.Database.PositiveFeedbackType...)
+			if err != nil {
+				return nil, err
+			}
+			// add unseen items
+			for _, feedback := range feedbacks {
+				if !excludeSet.Has(feedback.ItemId) {
+					candidates[feedback.ItemId] += user.Score
+				}
 			}
 		}
-		removeReadTime += time.Since(removeReadStart)
-		fallbackTime = time.Since(fallbackStart)
+		// collect top k
+		k := n - len(results)
+		filter := base.NewTopKStringFilter(k)
+		for id, score := range candidates {
+			filter.Push(id, score)
+		}
+		ids, _ := filter.PopAll()
+		results = append(results, ids...)
+		excludeSet.Add(ids...)
+		userBasedTime = time.Since(start)
 	}
-	numFromFallback := len(results) - numFromKNN - numFromCache
+	numFromUserBased := len(results) - numPrevStage
+	numPrevStage = len(results)
+
+	// Latest recommendation. The running condition is:
+	// 1. The number of current results is less than n.
+	// 2. Recommenders include LatestRecommender.
+	if len(results) < n && recommenderMask&LatestRecommender > 0 {
+		start := time.Now()
+		items, err := s.CacheClient.GetScores(cache.LatestItems, "", 0, n-len(results))
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items {
+			if !excludeSet.Has(item.Id) {
+				results = append(results, item.Id)
+				excludeSet.Add(item.Id)
+			}
+		}
+		loadLatestTime = time.Since(start)
+	}
+	numFromLatest := len(results) - numPrevStage
+	numPrevStage = len(results)
+
+	// Popular recommendation. The running condition is:
+	// 1. The number of current results is less than n.
+	// 2. Recommenders include PopularRecommender.
+	if len(results) < n && recommenderMask&PopularRecommender > 0 {
+		start := time.Now()
+		items, err := s.CacheClient.GetScores(cache.PopularItems, "", 0, n-len(results))
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items {
+			if !excludeSet.Has(item.Id) {
+				results = append(results, item.Id)
+				excludeSet.Add(item.Id)
+			}
+		}
+		loadLatestTime = time.Since(start)
+	}
+	numFromPopular := len(results) - numPrevStage
 
 	// return recommendations
 	if len(results) > n {
 		results = results[:n]
 	}
-	spent := time.Since(start)
+	totalTime := time.Since(initStart)
 	base.Logger().Info("complete recommendation",
-		zap.Int("num_from_cache", numFromCache),
-		zap.Int("num_from_knn", numFromKNN),
-		zap.Int("num_from_fallback", numFromFallback),
-		zap.Duration("load_cache_read_time", loadCachedReadTime),
-		zap.Duration("load_arch_read_time", loadArchReadTime),
-		zap.Duration("remove_read_time", removeReadTime),
-		zap.Duration("knn_time", knnTime),
-		zap.Duration("fallback_time", fallbackTime),
-		zap.Duration("total_time", spent))
+		zap.Int("num_from_final", numFromFinal),
+		zap.Int("num_from_collaborative", numFromCollaborative),
+		zap.Int("num_from_item_based", numFromItemBased),
+		zap.Int("num_from_user_based", numFromUserBased),
+		zap.Int("num_from_latest", numFromLatest),
+		zap.Int("num_from_poplar", numFromPopular),
+		zap.Duration("total_time", totalTime),
+		zap.Duration("load_final_recommend_time", loadFinalRecTime),
+		zap.Duration("load_col_recommend_time", loadColRecTime),
+		zap.Duration("load_hist_time", loadLoadHistTime),
+		zap.Duration("item_based_recommend_time", itemBasedTime),
+		zap.Duration("user_based_recommend_time", userBasedTime),
+		zap.Duration("load_latest_time", loadLatestTime),
+		zap.Duration("load_popular_time", loadPopularTime))
 	return results, nil
 }
 
@@ -592,7 +738,26 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	writeBackFeedback := request.QueryParameter("write-back")
-	results, err := s.Recommend(userId, n)
+	// online recommendation
+	recommenders := []Recommender{CTRRecommender}
+	for _, recommender := range s.GorseConfig.Recommend.FallbackRecommend {
+		switch recommender {
+		case "collaborative":
+			recommenders = append(recommenders, CollaborativeRecommender)
+		case "user_based":
+			recommenders = append(recommenders, UserBasedRecommender)
+		case "item_based":
+			recommenders = append(recommenders, ItemBasedRecommender)
+		case "latest":
+			recommenders = append(recommenders, LatestRecommender)
+		case "popular":
+			recommenders = append(recommenders, PopularRecommender)
+		default:
+			InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
+			return
+		}
+	}
+	results, err := s.Recommend(userId, n, recommenders...)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1115,7 +1280,7 @@ func Text(response *restful.Response, content string) {
 }
 
 func (s *RestServer) auth(request *restful.Request, response *restful.Response) bool {
-	if s.GorseConfig.Server.APIKey == "" {
+	if !s.EnableAuth || s.GorseConfig.Server.APIKey == "" {
 		return true
 	}
 	apikey := request.HeaderParameter("X-API-Key")
@@ -1136,11 +1301,11 @@ func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 	for _, v := range feedback {
 		err := s.CacheClient.AppendList(cache.IgnoreItems, v.UserId, v.ItemId)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		err = s.CacheClient.IncrInt(cache.GlobalMeta, cache.NumInserted)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil

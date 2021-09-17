@@ -32,7 +32,7 @@ func init() {
 		}
 		return defaultValue
 	}
-	mongoUri = env("MONGO_URI", "mongodb://127.0.0.1:27017/")
+	mongoUri = env("MONGO_URI", "mongodb://root:password@127.0.0.1:27017/")
 }
 
 type testMongoDatabase struct {
@@ -128,10 +128,4 @@ func TestMongoDatabase_GetClickThroughRate(t *testing.T) {
 	db := newTestMongoDatabase(t, "TestMongoDatabase_GetClickThroughRate")
 	defer db.Close(t)
 	testGetClickThroughRate(t, db.Database)
-}
-
-func TestMongoDatabase_CountActiveUsers(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestMongoDatabase_CountActiveUsers")
-	defer db.Close(t)
-	testCountActiveUsers(t, db.Database)
 }

@@ -25,13 +25,12 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// database configuration
-	assert.Equal(t, "redis://localhost:6379", config.Database.CacheStore)
-	assert.Equal(t, "mysql://root@tcp(localhost:3306)/gorse?parseTime=true", config.Database.DataStore)
+	assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
+	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true", config.Database.DataStore)
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
 	assert.Equal(t, 200, config.Database.CacheSize)
 	assert.Equal(t, []string{"star", "like"}, config.Database.PositiveFeedbackType)
-	assert.Equal(t, []string{"like"}, config.Database.ClickFeedbackTypes)
 	assert.Equal(t, "read", config.Database.ReadFeedbackType)
 	assert.Equal(t, uint(0), config.Database.PositiveFeedbackTTL)
 	assert.Equal(t, uint(0), config.Database.ItemTTL)
@@ -41,8 +40,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "0.0.0.0", config.Master.Host)
 	assert.Equal(t, 8088, config.Master.HttpPort)
 	assert.Equal(t, "0.0.0.0", config.Master.HttpHost)
-	assert.Equal(t, 2, config.Master.SearchJobs)
-	assert.Equal(t, 2, config.Master.FitJobs)
+	assert.Equal(t, 4, config.Master.NumJobs)
 	assert.Equal(t, 10, config.Master.MetaTimeout)
 
 	// server configuration
@@ -51,13 +49,19 @@ func TestLoadConfig(t *testing.T) {
 
 	// recommend configuration
 	assert.Equal(t, 365, config.Recommend.PopularWindow)
-	assert.Equal(t, 10, config.Recommend.FitPeriod)
+	assert.Equal(t, 360, config.Recommend.FitPeriod)
 	assert.Equal(t, 60, config.Recommend.SearchPeriod)
 	assert.Equal(t, 100, config.Recommend.SearchEpoch)
 	assert.Equal(t, 10, config.Recommend.SearchTrials)
 	assert.Equal(t, 1, config.Recommend.RefreshRecommendPeriod)
-	assert.Equal(t, "latest", config.Recommend.FallbackRecommend)
-	assert.Equal(t, 20, config.Recommend.ExploreLatestNum)
+	assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.FallbackRecommend)
+	assert.Equal(t, "similar", config.Recommend.ItemNeighborType)
+	assert.Equal(t, "similar", config.Recommend.UserNeighborType)
+	assert.True(t, config.Recommend.EnableColRecommend)
+	assert.False(t, config.Recommend.EnableItemBasedRecommend)
+	assert.True(t, config.Recommend.EnableUserBasedRecommend)
+	assert.False(t, config.Recommend.EnablePopularRecommend)
+	assert.True(t, config.Recommend.EnableLatestRecommend)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

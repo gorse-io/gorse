@@ -25,12 +25,12 @@ func (NoDatabase) Close() error {
 }
 
 // SetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetScores(prefix, name string, items []ScoredItem) error {
+func (NoDatabase) SetScores(prefix, name string, items []Scored) error {
 	return ErrNoDatabase
 }
 
 // GetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetScores(prefix, name string, begin, end int) ([]ScoredItem, error) {
+func (NoDatabase) GetScores(prefix, name string, begin, end int) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 

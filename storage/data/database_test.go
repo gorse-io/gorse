@@ -121,6 +121,8 @@ func testUsers(t *testing.T, db Database) {
 	// test override
 	err = db.InsertUser(User{UserId: "1", Comment: "override"})
 	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
 	user, err = db.GetUser("1")
 	assert.NoError(t, err)
 	assert.Equal(t, "override", user.Comment)
@@ -131,7 +133,7 @@ func testFeedback(t *testing.T, db Database) {
 	err := db.InsertUser(User{"0", []string{"a"}, []string{"x"}, "comment"})
 	assert.NoError(t, err)
 	// items that already exists
-	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}})
+	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)})
 	assert.NoError(t, err)
 	// Insert ret
 	feedback := []Feedback{
@@ -156,12 +158,19 @@ func testFeedback(t *testing.T, db Database) {
 	ret = getFeedback(t, db)
 	assert.Equal(t, len(feedback)+2, len(ret))
 	// Get items
+	err = db.Optimize()
+	assert.NoError(t, err)
 	items := getItems(t, db)
 	assert.Equal(t, 5, len(items))
 	for i, item := range items {
 		assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
-			assert.Zero(t, item.Timestamp)
+			if isClickHouse(db) {
+				// ClickHouse returns 1970-01-01 as zero date.
+				assert.Zero(t, item.Timestamp.Unix())
+			} else {
+				assert.Zero(t, item.Timestamp)
+			}
 			assert.Empty(t, item.Labels)
 			assert.Empty(t, item.Comment)
 		}
@@ -184,7 +193,7 @@ func testFeedback(t *testing.T, db Database) {
 	// check items that already exists
 	item, err := db.GetItem("0")
 	assert.NoError(t, err)
-	assert.Equal(t, Item{ItemId: "0", Labels: []string{"b"}}, item)
+	assert.Equal(t, Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
 	ret, err = db.GetUserFeedback("2", positiveFeedbackType)
 	assert.NoError(t, err)
@@ -210,6 +219,8 @@ func testFeedback(t *testing.T, db Database) {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "0"},
 		Comment:     "override",
 	}, true, true)
+	assert.NoError(t, err)
+	err = db.Optimize()
 	assert.NoError(t, err)
 	ret, err = db.GetUserFeedback("0", positiveFeedbackType)
 	assert.NoError(t, err)
@@ -273,6 +284,8 @@ func testItems(t *testing.T, db Database) {
 	// test override
 	err = db.InsertItem(Item{ItemId: "2", Comment: "override"})
 	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
 	item, err := db.GetItem("2")
 	assert.NoError(t, err)
 	assert.Equal(t, "override", item.Comment)
@@ -317,7 +330,7 @@ func testDeleteItem(t *testing.T, db Database) {
 	err = db.DeleteItem("0")
 	assert.NoError(t, err)
 	_, err = db.GetItem("0")
-	assert.NotNil(t, err, "failed to delete item")
+	assert.Error(t, err, "failed to delete item")
 	ret, err := db.GetItemFeedback("0", positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
@@ -347,20 +360,28 @@ func testDeleteFeedback(t *testing.T, db Database) {
 	// delete user-item feedback
 	deleteCount, err := db.DeleteUserItemFeedback("2", "3")
 	assert.NoError(t, err)
-	assert.Equal(t, 3, deleteCount)
+	if !isClickHouse(db) {
+		// RowAffected isn't supported by ClickHouse,
+		assert.Equal(t, 3, deleteCount)
+	}
 	ret, err = db.GetUserItemFeedback("2", "3")
 	assert.NoError(t, err)
 	assert.Empty(t, ret)
 	feedbackType1 := "type1"
 	deleteCount, err = db.DeleteUserItemFeedback("1", "3", feedbackType1)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, deleteCount)
+	if !isClickHouse(db) {
+		// RowAffected isn't supported by ClickHouse,
+		assert.Equal(t, 1, deleteCount)
+	}
 	ret, err = db.GetUserItemFeedback("1", "3", feedbackType2)
 	assert.NoError(t, err)
 	assert.Empty(t, ret)
 }
 
 func testMeasurements(t *testing.T, db Database) {
+	err := db.InsertMeasurement(Measurement{"Test_NDCG", time.Date(2004, 1, 1, 1, 1, 1, 0, time.UTC), 100, "a"})
+	assert.NoError(t, err)
 	measurements := []Measurement{
 		{"Test_NDCG", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 0, "a"},
 		{"Test_NDCG", time.Date(2001, 1, 1, 1, 1, 1, 0, time.UTC), 1, "b"},
@@ -373,6 +394,8 @@ func testMeasurements(t *testing.T, db Database) {
 		err := db.InsertMeasurement(measurement)
 		assert.NoError(t, err)
 	}
+	err = db.Optimize()
+	assert.NoError(t, err)
 	ret, err := db.GetMeasurements("Test_NDCG", 3)
 	assert.NoError(t, err)
 	assert.Equal(t, []Measurement{
@@ -443,40 +466,41 @@ func testTimeLimit(t *testing.T, db Database) {
 }
 
 func testGetClickThroughRate(t *testing.T, db Database) {
+	// get empty click-through-rate
+	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
+	assert.NoError(t, err)
+	assert.Zero(t, rate)
 	// insert feedback
-	err := db.BatchInsertFeedback([]Feedback{
+	// user 1: star(1,1), like(1,1), read(1,1), read(1,2), read(1,3), read(1,4) - 0.25
+	// user 2: star(2,1), star(2,3), read(2,1), read(2,2) - 0.5
+	// user 3: read(3,2), star(3,3) - 0.0
+	err = db.BatchInsertFeedback([]Feedback{
 		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "1", "4"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"read", "1", "5"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"star", "2", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "2", "3"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"star", "2", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "2", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "2", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"read", "2", "4"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"read", "3", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, true, true)
 	assert.NoError(t, err)
 	// get click-through-rate
-	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
+	rate, err = db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
 	assert.NoError(t, err)
 	assert.Equal(t, 0.375, rate)
 }
 
-func testCountActiveUsers(t *testing.T, db Database) {
-	// insert feedback
-	err := db.BatchInsertFeedback([]Feedback{
-		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "1", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "4", "4"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "5", "5"}, Timestamp: time.Date(1999, 10, 1, 0, 0, 0, 0, time.UTC)},
-	}, true, true)
-	assert.NoError(t, err)
-	// get exposed items
-	count, err := db.CountActiveUsers(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC))
-	assert.NoError(t, err)
-	assert.Equal(t, 3, count)
+func isClickHouse(db Database) bool {
+	if sqlDB, isSQL := db.(*SQLDatabase); !isSQL {
+		return false
+	} else {
+		return sqlDB.driver == ClickHouse
+	}
 }

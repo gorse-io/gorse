@@ -46,7 +46,7 @@ jobs:
       clickhouse:
         image: yandex/clickhouse-server
         ports:
-          - 9000
+          - 8123
 
     steps:
     - name: Set up dataset
@@ -57,15 +57,17 @@ jobs:
         wget https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
         wget https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
         wget https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
         unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
+        unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
 
-    - name: Set up Go 1.x
+    - name: Set up Go 1.17.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.13
+        go-version: 1.17.x
       id: go
 
     - name: Check out code into the Go module directory
@@ -92,7 +94,7 @@ jobs:
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
         # ClickHouse
-        CLICK_HOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[9000] }}
+        CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)

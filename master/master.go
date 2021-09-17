@@ -21,11 +21,11 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"math"
 	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -38,10 +38,23 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
+const (
+	NumUsers             = "NumUsers"
+	NumItems             = "NumItems"
+	NumUserLabels        = "NumUserLabels"
+	NumItemLabels        = "NumItemLabels"
+	NumTotalPosFeedbacks = "NumTotalPosFeedbacks"
+	NumValidPosFeedbacks = "NumValidPosFeedbacks"
+	NumValidNegFeedbacks = "NumValidNegFeedbacks"
+)
+
 // Master is the master node.
 type Master struct {
 	protocol.UnimplementedMasterServer
 	server.RestServer
+
+	taskMonitor   *TaskMonitor
+	taskScheduler *TaskScheduler
 
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache
@@ -91,8 +104,17 @@ type Master struct {
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
+	// create task monitor
+	taskMonitor := NewTaskMonitor()
+	for _, taskName := range []string{TaskFindLatest, TaskFindPopular, TaskFindItemNeighbors, TaskFindUserNeighbors,
+		TaskFitRankingModel, TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel} {
+		taskMonitor.Pending(taskName)
+	}
 	return &Master{
 		nodesInfo: make(map[string]*Node),
+		// create task monitor
+		taskMonitor:   taskMonitor,
+		taskScheduler: NewTaskScheduler(),
 		// init versions
 		rankingModelVersion: rand.Int63(),
 		clickModelVersion:   rand.Int63(),
@@ -103,13 +125,13 @@ func NewMaster(cfg *config.Config) *Master {
 		rankingModelSearcher: ranking.NewModelSearcher(
 			cfg.Recommend.SearchEpoch,
 			cfg.Recommend.SearchTrials,
-			cfg.Master.SearchJobs),
+			cfg.Master.NumJobs),
 		// default click model
 		clickModel: click.NewFM(click.FMClassification, nil),
 		clickModelSearcher: click.NewModelSearcher(
 			cfg.Recommend.SearchEpoch,
 			cfg.Recommend.SearchTrials,
-			cfg.Master.SearchJobs,
+			cfg.Master.NumJobs,
 		),
 		RestServer: server.RestServer{
 			GorseConfig: cfg,
@@ -179,25 +201,18 @@ func (m *Master) Serve() {
 			zap.String("database", m.GorseConfig.Database.CacheStore))
 	}
 
-	// download ranking dataset
-	err = m.loadRankingDataset()
-	if err != nil {
-		base.Logger().Error("failed to load ranking dataset", zap.Error(err))
-	}
-
-	// download click dataset
-	err = m.loadClickDataset()
-	if err != nil {
-		base.Logger().Error("failed to load click dataset", zap.Error(err))
+	// pre-lock privileged tasks
+	tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
+		TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+	for _, taskName := range tasksNames {
+		m.taskScheduler.PreLock(taskName)
 	}
 
 	go m.StartHttpServer()
-	go m.FitLoop()
+	go m.RunPrivilegedTasksLoop()
 	base.Logger().Info("start model fit", zap.Int("period", m.GorseConfig.Recommend.FitPeriod))
-	go m.SearchLoop()
+	go m.RunRagtagTasksLoop()
 	base.Logger().Info("start model searcher", zap.Int("period", m.GorseConfig.Recommend.SearchPeriod))
-	go m.AnalyzeLoop()
-	base.Logger().Info("start analyze")
 
 	// start rpc server
 	base.Logger().Info("start rpc server",
@@ -207,15 +222,14 @@ func (m *Master) Serve() {
 	if err != nil {
 		base.Logger().Fatal("failed to listen", zap.Error(err))
 	}
-	var opts []grpc.ServerOption
-	grpcServer := grpc.NewServer(opts...)
+	grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
 	protocol.RegisterMasterServer(grpcServer, m)
 	if err = grpcServer.Serve(lis); err != nil {
 		base.Logger().Fatal("failed to start rpc server", zap.Error(err))
 	}
 }
 
-func (m *Master) FitLoop() {
+func (m *Master) RunPrivilegedTasksLoop() {
 	defer base.CheckPanic()
 	var (
 		lastNumRankingUsers    int
@@ -240,15 +254,22 @@ func (m *Master) FitLoop() {
 		case <-m.fitTicker.C:
 		case <-m.insertedChan:
 		}
+		// pre-lock privileged tasks
+		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
+			TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+		for _, taskName := range tasksNames {
+			m.taskScheduler.PreLock(taskName)
+		}
+
 		// download ranking dataset
-		err = m.loadRankingDataset()
+		err = m.runLoadRankingDatasetTask()
 		if err != nil {
 			base.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
 
 		// download click dataset
-		err = m.loadClickDataset()
+		err = m.runLoadClickDatasetTask()
 		if err != nil {
 			base.Logger().Error("failed to load click dataset", zap.Error(err))
 			continue
@@ -256,7 +277,7 @@ func (m *Master) FitLoop() {
 
 		// fit ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback, err =
-			m.fitRankingModelAndNonPersonalized(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback)
+			m.runRankingRelatedTasks(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback)
 		if err != nil {
 			base.Logger().Error("failed to fit ranking model", zap.Error(err))
 			continue
@@ -264,17 +285,23 @@ func (m *Master) FitLoop() {
 
 		// fit click model
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedback, err =
-			m.fitClickModel(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
+			m.runFitClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
 		if err != nil {
 			base.Logger().Error("failed to fit click model", zap.Error(err))
+			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
 			continue
+		}
+
+		// release locks
+		for _, taskName := range tasksNames {
+			m.taskScheduler.UnLock(taskName)
 		}
 	}
 }
 
-// SearchLoop searches optimal recommendation model in background. It never modifies variables other than
+// RunRagtagTasksLoop searches optimal recommendation model in background. It never modifies variables other than
 // rankingModelSearcher, clickSearchedModel and clickSearchedScore.
-func (m *Master) SearchLoop() {
+func (m *Master) RunRagtagTasksLoop() {
 	defer base.CheckPanic()
 	var (
 		lastNumRankingUsers     int
@@ -286,30 +313,30 @@ func (m *Master) SearchLoop() {
 		err                     error
 	)
 	for {
+		// analyze click-through-rate
+		if err := m.runAnalyzeTask(); err != nil {
+			base.Logger().Error("failed to analyze", zap.Error(err))
+			m.taskMonitor.Fail(TaskAnalyze, err.Error())
+		}
+		// search optimal ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
-			m.searchRankingModel(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
+			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search ranking model", zap.Error(err))
+			m.taskMonitor.Fail(TaskSearchRankingModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
 		}
+		// search optimal click model
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks, err =
-			m.searchClickModel(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
+			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
 		if err != nil {
 			base.Logger().Error("failed to search click model", zap.Error(err))
+			m.taskMonitor.Fail(TaskSearchClickModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
 		}
 		time.Sleep(time.Duration(m.GorseConfig.Recommend.SearchPeriod) * time.Minute)
-	}
-}
-
-func (m *Master) AnalyzeLoop() {
-	for {
-		if err := m.analyze(); err != nil {
-			base.Logger().Error("failed to analyze", zap.Error(err))
-		}
-		time.Sleep(time.Hour)
 	}
 }
 
@@ -326,46 +353,4 @@ func (m *Master) hasFeedbackInserted() bool {
 		return true
 	}
 	return false
-}
-
-func (m *Master) loadRankingDataset() error {
-	base.Logger().Info("load ranking dataset",
-		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-	rankingDataset, rankingItems, rankingFeedbacks, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
-	if err != nil {
-		return err
-	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, strconv.Itoa(rankingDataset.UserCount())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
-	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, strconv.Itoa(rankingDataset.ItemCount())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
-	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, strconv.Itoa(rankingDataset.Count())); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
-	}
-	m.rankingModelMutex.Lock()
-	m.rankingItems = rankingItems
-	m.rankingFeedbacks = rankingFeedbacks
-	m.rankingFullSet = rankingDataset
-	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
-	m.rankingModelMutex.Unlock()
-	return nil
-}
-
-func (m *Master) loadClickDataset() error {
-	base.Logger().Info("load click dataset",
-		zap.Strings("click_feedback_types", m.GorseConfig.Database.ClickFeedbackTypes),
-		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType))
-	clickDataset, err := click.LoadDataFromDatabase(m.DataClient,
-		m.GorseConfig.Database.ClickFeedbackTypes,
-		m.GorseConfig.Database.ReadFeedbackType)
-	if err != nil {
-		return err
-	}
-	m.clickModelMutex.Lock()
-	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
-	m.clickModelMutex.Unlock()
-	return nil
 }

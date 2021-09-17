@@ -19,6 +19,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/juju/errors"
+	"reflect"
 	"time"
 
 	"github.com/barkimedes/go-deepcopy"
@@ -42,6 +44,7 @@ type FitConfig struct {
 	Verbose    int
 	Candidates int
 	TopK       int
+	Tracker    model.Tracker
 }
 
 func NewFitConfig() *FitConfig {
@@ -53,8 +56,18 @@ func NewFitConfig() *FitConfig {
 	}
 }
 
+func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
+	config.Verbose = verbose
+	return config
+}
+
 func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
 	config.Jobs = nJobs
+	return config
+}
+
+func (config *FitConfig) SetTracker(tracker model.Tracker) *FitConfig {
+	config.Tracker = tracker
 	return config
 }
 
@@ -110,8 +123,6 @@ func NewModel(name string, params model.Params) (Model, error) {
 		return NewBPR(params), nil
 	case "ccd":
 		return NewCCD(params), nil
-	case "knn":
-		return NewKNN(params), nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
@@ -127,10 +138,32 @@ func Clone(m Model) Model {
 	}
 }
 
+const (
+	CollaborativeBPR = "bpr"
+	CollaborativeALS = "als"
+	CollaborativeCCD = "ccd"
+)
+
+func GetModelName(m Model) string {
+	switch m.(type) {
+	case *BPR:
+		return CollaborativeBPR
+	case *CCD:
+		return CollaborativeCCD
+	case *ALS:
+		return CollaborativeALS
+	default:
+		return reflect.TypeOf(m).String()
+	}
+}
+
 func EncodeModel(m Model) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	writer := bufio.NewWriter(buf)
 	encoder := gob.NewEncoder(writer)
+	if err := encoder.Encode(GetModelName(m)); err != nil {
+		return nil, err
+	}
 	if err := encoder.Encode(m); err != nil {
 		return nil, err
 	}
@@ -140,34 +173,35 @@ func EncodeModel(m Model) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecodeModel(name string, buf []byte) (Model, error) {
+func DecodeModel(buf []byte) (Model, error) {
 	reader := bytes.NewReader(buf)
 	decoder := gob.NewDecoder(reader)
+	var name string
+	if err := decoder.Decode(&name); err != nil {
+		return nil, err
+	}
 	switch name {
 	case "als":
 		var als ALS
 		if err := decoder.Decode(&als); err != nil {
 			return nil, err
 		}
+		als.SetParams(als.GetParams())
 		return &als, nil
 	case "bpr":
 		var bpr BPR
 		if err := decoder.Decode(&bpr); err != nil {
 			return nil, err
 		}
+		bpr.SetParams(bpr.GetParams())
 		return &bpr, nil
 	case "ccd":
 		var ccd CCD
 		if err := decoder.Decode(&ccd); err != nil {
 			return nil, err
 		}
+		ccd.SetParams(ccd.GetParams())
 		return &ccd, nil
-	case "knn":
-		var knn KNN
-		if err := decoder.Decode(&knn); err != nil {
-			return nil, err
-		}
-		return &knn, nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
@@ -257,6 +291,9 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the BPR model.
 func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
+	if config.Tracker != nil {
+		config.Tracker.Start(bpr.nEpochs)
+	}
 	base.Logger().Info("fit bpr",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -351,10 +388,16 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
+		if config.Tracker != nil {
+			config.Tracker.Update(epoch)
+		}
 	}
 	// restore best snapshot
 	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
 	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	if config.Tracker != nil {
+		config.Tracker.Finish()
+	}
 	base.Logger().Info("fit bpr complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
@@ -489,6 +532,9 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
 // Fit the ALS model.
 func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
+	if config.Tracker != nil {
+		config.Tracker.Start(als.nEpochs)
+	}
 	base.Logger().Info("fit als",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -546,7 +592,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			err := temp1[workerId].Inverse(a[workerId])
 			temp2[workerId].MulVec(temp1[workerId], b)
 			als.UserFactor.SetRow(userIndex, temp2[workerId].RawVector().Data)
-			return err
+			return errors.Trace(err)
 		})
 		if err != nil {
 			base.Logger().Error("failed to inverse matrix", zap.Error(err))
@@ -570,7 +616,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			err = temp1[workerId].Inverse(a[workerId])
 			temp2[workerId].MulVec(temp1[workerId], b)
 			als.ItemFactor.SetRow(itemIndex, temp2[workerId].RawVector().Data)
-			return err
+			return errors.Trace(err)
 		})
 		if err != nil {
 			base.Logger().Error("failed to inverse matrix", zap.Error(err))
@@ -593,10 +639,16 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			itemFactorCopy.Copy(als.ItemFactor)
 			snapshots.AddSnapshotNoCopy(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, userFactorCopy, itemFactorCopy)
 		}
+		if config.Tracker != nil {
+			config.Tracker.Update(ep)
+		}
 	}
 	// restore best snapshot
 	als.UserFactor = snapshots.BestWeights[0].(*mat.Dense)
 	als.ItemFactor = snapshots.BestWeights[1].(*mat.Dense)
+	if config.Tracker != nil {
+		config.Tracker.Finish()
+	}
 	base.Logger().Info("fit als complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
@@ -763,6 +815,9 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 
 func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
+	if config.Tracker != nil {
+		config.Tracker.Start(ccd.nEpochs)
+	}
 	base.Logger().Info("fit ccd",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -797,10 +852,12 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Update user factors
 		// S^q <- \sum^N_{itemIndex=1} c_i q_i q_i^T
 		floats.MatZero(s)
-		for i := 0; i < ccd.nFactors; i++ {
-			for j := 0; j < ccd.nFactors; j++ {
-				for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
-					s[i][j] += ccd.ItemFactor[itemIndex][i] * ccd.ItemFactor[itemIndex][j]
+		for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
+			if len(trainSet.ItemFeedback[itemIndex]) > 0 {
+				for i := 0; i < ccd.nFactors; i++ {
+					for j := 0; j < ccd.nFactors; j++ {
+						s[i][j] += ccd.ItemFactor[itemIndex][i] * ccd.ItemFactor[itemIndex][j]
+					}
 				}
 			}
 		}
@@ -836,10 +893,12 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Update item factors
 		// S^p <- P^T P
 		floats.MatZero(s)
-		for i := 0; i < ccd.nFactors; i++ {
-			for j := 0; j < ccd.nFactors; j++ {
-				for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
-					s[i][j] += ccd.UserFactor[userIndex][i] * ccd.UserFactor[userIndex][j]
+		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
+			if len(trainSet.UserFeedback[userIndex]) > 0 {
+				for i := 0; i < ccd.nFactors; i++ {
+					for j := 0; j < ccd.nFactors; j++ {
+						s[i][j] += ccd.UserFactor[userIndex][i] * ccd.UserFactor[userIndex][j]
+					}
 				}
 			}
 		}
@@ -886,10 +945,16 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
+		if config.Tracker != nil {
+			config.Tracker.Update(ep)
+		}
 	}
 	// restore best snapshot
 	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
 	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
+	if config.Tracker != nil {
+		config.Tracker.Finish()
+	}
 	base.Logger().Info("fit ccd complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),

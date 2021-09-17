@@ -17,9 +17,12 @@ package master
 import (
 	"bufio"
 	"fmt"
+	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -50,11 +53,15 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Writes(config.Config{}))
 	ws.Route(ws.GET("/dashboard/stats").To(m.getStats).
-		Doc("Get global statistics.").
+		Doc("Get global status.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Writes(Status{}))
+	ws.Route(ws.GET("/dashboard/tasks").To(m.getTasks).
+		Doc("Get tasks.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Writes([]Task{}))
 	// Get a user
 	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
 		Doc("Get a user.").
@@ -90,19 +97,27 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
-	ws.Route(ws.GET("/dashboard/recommend/{user-id}").To(m.getRecommend).
+	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Item{}))
-	ws.Route(ws.GET("/dashboard/neighbors/{item-id}").To(m.getNeighbors).
+	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/user/{user-id}/neighbors").To(m.getUserNeighbors).
+		Doc("get neighbors of a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]data.User{}))
 }
 
 // SinglePageAppFileSystem is the file system for single page app.
@@ -126,12 +141,14 @@ func (m *Master) StartHttpServer() {
 		base.Logger().Fatal("failed to load statik files", zap.Error(err))
 	}
 	http.Handle("/", http.FileServer(&SinglePageAppFileSystem{statikFS}))
+	http.HandleFunc("/api/bulk/users", m.importExportUsers)
 	http.HandleFunc("/api/bulk/items", m.importExportItems)
 	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
+	http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
 	m.RestServer.StartHttpServer()
 }
 
-func (m *Master) getCluster(request *restful.Request, response *restful.Response) {
+func (m *Master) getCluster(_ *restful.Request, response *restful.Response) {
 	// collect nodes
 	workers := make([]*Node, 0)
 	servers := make([]*Node, 0)
@@ -152,42 +169,94 @@ func (m *Master) getCluster(request *restful.Request, response *restful.Response
 	server.Ok(response, nodes)
 }
 
-func (m *Master) getConfig(request *restful.Request, response *restful.Response) {
+func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	server.Ok(response, m.GorseConfig)
 }
 
 type Status struct {
-	NumUsers       string
-	NumItems       string
-	NumPosFeedback string
-	RankingScore   float32
-	ClickScore     float32
+	NumServers          int
+	NumWorkers          int
+	NumUsers            int
+	NumItems            int
+	NumUserLabels       int
+	NumItemLabels       int
+	NumTotalPosFeedback int
+	NumValidPosFeedback int
+	NumValidNegFeedback int
+	RankingScore        ranking.Score
+	ClickScore          click.Score
 }
 
-func (m *Master) getStats(request *restful.Request, response *restful.Response) {
+func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	status := Status{}
-	var err error
 	// read number of users
-	status.NumUsers, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumUsers)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if measurements, err := m.DataClient.GetMeasurements(NumUsers, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumUsers = int(measurements[0].Value)
 	}
 	// read number of items
-	status.NumItems, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumItems)
-	if err != nil && err != cache.ErrObjectNotExist {
+	if measurements, err := m.DataClient.GetMeasurements(NumItems, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumItems = int(measurements[0].Value)
 	}
-	// read number of positive feedback
-	status.NumPosFeedback, err = m.CacheClient.GetString(cache.GlobalMeta, cache.NumPositiveFeedback)
-	if err != nil && err != cache.ErrObjectNotExist {
+	// read number of user labels
+	if measurements, err := m.DataClient.GetMeasurements(NumUserLabels, 1); err != nil {
 		server.InternalServerError(response, err)
 		return
+	} else if len(measurements) > 0 {
+		status.NumUserLabels = int(measurements[0].Value)
 	}
-	status.RankingScore = m.rankingScore.Precision
-	status.ClickScore = m.clickScore.Precision
+	// read number of item labels
+	if measurements, err := m.DataClient.GetMeasurements(NumItemLabels, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumItemLabels = int(measurements[0].Value)
+	}
+	// read number of total positive feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumTotalPosFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumTotalPosFeedback = int(measurements[0].Value)
+	}
+	// read number of valid positive feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumValidPosFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumValidPosFeedback = int(measurements[0].Value)
+	}
+	// read number of valid negative feedback
+	if measurements, err := m.DataClient.GetMeasurements(NumValidNegFeedbacks, 1); err != nil {
+		server.InternalServerError(response, err)
+		return
+	} else if len(measurements) > 0 {
+		status.NumValidNegFeedback = int(measurements[0].Value)
+	}
+	// count the number of workers and servers
+	m.nodesInfoMutex.Lock()
+	for _, node := range m.nodesInfo {
+		switch node.Type {
+		case ServerNode:
+			status.NumServers++
+		case WorkerNode:
+			status.NumWorkers++
+		}
+	}
+	m.nodesInfoMutex.Unlock()
+	status.RankingScore = m.rankingScore
+	status.ClickScore = m.clickScore
 	server.Ok(response, status)
+}
+
+func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
+	tasks := m.taskMonitor.List()
+	server.Ok(response, tasks)
 }
 
 type UserIterator struct {
@@ -257,13 +326,24 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 
 func (m *Master) getRecommend(request *restful.Request, response *restful.Response) {
 	// parse arguments
+	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
 	n, err := server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
 		return
 	}
-	results, err := m.Recommend(userId, n)
+	var results []string
+	switch recommender {
+	case "ctr":
+		results, err = m.Recommend(userId, n, server.CTRRecommender)
+	case "collaborative":
+		results, err = m.Recommend(userId, n, server.CollaborativeRecommender)
+	case "user_based":
+		results, err = m.Recommend(userId, n, server.UserBasedRecommender)
+	case "item_based":
+		results, err = m.Recommend(userId, n, server.ItemBasedRecommender)
+	}
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -312,7 +392,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 	server.Ok(response, details)
 }
 
-func (m *Master) getList(prefix, name string, request *restful.Request, response *restful.Response) {
+func (m *Master) getList(prefix, name string, request *restful.Request, response *restful.Response, retType interface{}) {
 	var n, begin, end int
 	var err error
 	// read arguments
@@ -326,35 +406,160 @@ func (m *Master) getList(prefix, name string, request *restful.Request, response
 	}
 	end = begin + n - 1
 	// Get the popular list
-	items, err := m.CacheClient.GetScores(prefix, name, begin, end)
+	scores, err := m.CacheClient.GetScores(prefix, name, begin, end)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
 	}
 	// Send result
-	details := make([]data.Item, len(items))
-	for i := range items {
-		details[i], err = m.DataClient.GetItem(items[i].ItemId)
-		if err != nil {
-			server.InternalServerError(response, err)
-			return
+	switch retType.(type) {
+	case data.Item:
+		details := make([]data.Item, len(scores))
+		for i := range scores {
+			details[i], err = m.DataClient.GetItem(scores[i].Id)
+			if err != nil {
+				server.InternalServerError(response, err)
+				return
+			}
 		}
+		server.Ok(response, details)
+	case data.User:
+		details := make([]data.User, len(scores))
+		for i := range scores {
+			details[i], err = m.DataClient.GetUser(scores[i].Id)
+			if err != nil {
+				server.InternalServerError(response, err)
+				return
+			}
+		}
+		server.Ok(response, details)
+	default:
+		base.Logger().Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
 	}
-	server.Ok(response, details)
 }
 
 // getPopular gets popular items from database.
 func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
-	m.getList(cache.PopularItems, "", request, response)
+	m.getList(cache.PopularItems, "", request, response, data.Item{})
 }
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
-	m.getList(cache.LatestItems, "", request, response)
+	m.getList(cache.LatestItems, "", request, response, data.Item{})
 }
 
-func (m *Master) getNeighbors(request *restful.Request, response *restful.Response) {
+func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	m.getList(cache.SimilarItems, itemId, request, response)
+	m.getList(cache.ItemNeighbors, itemId, request, response, data.Item{})
+}
+
+func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
+	userId := request.PathParameter("user-id")
+	m.getList(cache.UserNeighbors, userId, request, response, data.User{})
+}
+
+func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case http.MethodGet:
+		var err error
+		response.Header().Set("Content-Type", "text/csv")
+		response.Header().Set("Content-Disposition", "attachment;filename=users.csv")
+		// write header
+		if _, err = response.Write([]byte("user_id,labels\r\n")); err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
+		// write rows
+		var cursor string
+		const batchSize = 1024
+		for {
+			var users []data.User
+			cursor, users, err = m.DataClient.GetUsers(cursor, batchSize)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			}
+			for _, user := range users {
+				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
+					base.Escape(user.UserId), base.Escape(strings.Join(user.Labels, "|"))))); err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
+			}
+			if cursor == "" {
+				break
+			}
+		}
+	case http.MethodPost:
+		hasHeader := formValue(request, "has-header", "true") == "true"
+		sep := formValue(request, "sep", ",")
+		// field separator must be a single character
+		if len(sep) != 1 {
+			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
+			return
+		}
+		labelSep := formValue(request, "label-sep", "|")
+		fmtString := formValue(request, "format", "ul")
+		file, _, err := request.FormFile("file")
+		if err != nil {
+			server.BadRequest(restful.NewResponse(response), err)
+			return
+		}
+		defer file.Close()
+		m.importUsers(response, file, hasHeader, sep, labelSep, fmtString)
+	}
+}
+
+func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
+	lineCount := 0
+	timeStart := time.Now()
+	//users := make([]data.User, 0)
+	err := base.ReadLines(bufio.NewScanner(file), sep, func(lineNumber int, splits []string) bool {
+		var err error
+		// skip header
+		if hasHeader {
+			hasHeader = false
+			return true
+		}
+		splits, err = format(fmtString, "ul", splits, lineNumber)
+		if err != nil {
+			server.BadRequest(restful.NewResponse(response), err)
+			return false
+		}
+		// 1. user id
+		if err = base.ValidateId(splits[0]); err != nil {
+			server.BadRequest(restful.NewResponse(response),
+				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+			return false
+		}
+		user := data.User{UserId: splits[0]}
+		// 2. labels
+		if splits[1] != "" {
+			user.Labels = strings.Split(splits[1], labelSep)
+			for _, label := range user.Labels {
+				if err = base.ValidateLabel(label); err != nil {
+					server.BadRequest(restful.NewResponse(response),
+						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
+					return false
+				}
+			}
+		}
+		err = m.DataClient.InsertUser(user)
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return false
+		}
+		lineCount++
+		return true
+	})
+	if err != nil {
+		server.BadRequest(restful.NewResponse(response), err)
+		return
+	}
+	timeUsed := time.Since(timeStart)
+	base.Logger().Info("complete import users",
+		zap.Duration("time_used", timeUsed),
+		zap.Int("num_users", lineCount))
+	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
 func (m *Master) importExportItems(response http.ResponseWriter, request *http.Request) {
@@ -413,7 +618,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 	lineCount := 0
 	timeStart := time.Now()
 	items := make([]data.Item, 0)
-	err := base.ReadLines(bufio.NewScanner(file), sep[0], func(lineNumber int, splits []string) bool {
+	err := base.ReadLines(bufio.NewScanner(file), sep, func(lineNumber int, splits []string) bool {
 		var err error
 		// skip header
 		if hasHeader {
@@ -447,7 +652,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 			for _, label := range item.Labels {
 				if err = base.ValidateLabel(label); err != nil {
 					server.BadRequest(restful.NewResponse(response),
-						fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
 					return false
 				}
 			}
@@ -632,4 +837,29 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 		zap.Duration("time_used", timeUsed),
 		zap.Int("num_items", lineCount))
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
+}
+
+func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
+	// load dataset
+	dataSet, err := click.LoadDataFromDatabase(m.DataClient,
+		m.GorseConfig.Database.PositiveFeedbackType,
+		m.GorseConfig.Database.ReadFeedbackType)
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(response), err)
+	}
+	// write dataset
+	response.Header().Set("Content-Type", "text/plain")
+	response.Header().Set("Content-Disposition", "attachment;filename=libfm.txt")
+	for i := range dataSet.Features {
+		builder := strings.Builder{}
+		builder.WriteString(fmt.Sprintf("%f", dataSet.Target[i]))
+		for _, j := range dataSet.Features[i] {
+			builder.WriteString(fmt.Sprintf(" %d:1", j))
+		}
+		builder.WriteString("\r\n")
+		_, err = response.Write([]byte(builder.String()))
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+		}
+	}
 }

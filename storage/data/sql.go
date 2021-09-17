@@ -21,6 +21,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
+	_ "github.com/mailru/go-clickhouse"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"go.uber.org/zap"
@@ -33,12 +34,26 @@ type SQLDriver int
 const (
 	MySQL SQLDriver = iota
 	Postgres
+	ClickHouse
 )
 
 // SQLDatabase use MySQL as data storage.
 type SQLDatabase struct {
 	client *sql.DB
 	driver SQLDriver
+}
+
+// Optimize is used by ClickHouse only.
+func (d *SQLDatabase) Optimize() error {
+	if d.driver == ClickHouse {
+		for _, tableName := range []string{"users", "items", "feedback", "measurements"} {
+			_, err := d.client.Exec("OPTIMIZE TABLE " + tableName)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+	}
+	return nil
 }
 
 // Init tables and indices in MySQL.
@@ -131,6 +146,43 @@ func (d *SQLDatabase) Init() error {
 			")"); err != nil {
 			return errors.Trace(err)
 		}
+	case ClickHouse:
+		// create tables
+		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS items (" +
+			"item_id String," +
+			"time_stamp Datetime," +
+			"labels String DEFAULT '[]'," +
+			"comment String," +
+			"version DateTime" +
+			") ENGINE = ReplacingMergeTree(version) ORDER BY item_id"); err != nil {
+			return errors.Trace(err)
+		}
+		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS users (" +
+			"user_id String," +
+			"labels String DEFAULT '[]'," +
+			"subscribe String DEFAULT '[]'," +
+			"comment String," +
+			"version DateTime" +
+			") ENGINE = ReplacingMergeTree(version) ORDER BY user_id"); err != nil {
+			return errors.Trace(err)
+		}
+		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS feedback (" +
+			"feedback_type String," +
+			"user_id String," +
+			"item_id String," +
+			"time_stamp Datetime," +
+			"comment String" +
+			") ENGINE = ReplacingMergeTree() ORDER BY (feedback_type, user_id, item_id)"); err != nil {
+			return errors.Trace(err)
+		}
+		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
+			"name String," +
+			"time_stamp Datetime," +
+			"value Float64," +
+			"comment String" +
+			") ENGINE = ReplacingMergeTree() ORDER BY (name, time_stamp)"); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }
@@ -145,10 +197,15 @@ func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
 	var err error
 	switch d.driver {
 	case MySQL:
-		_, err = d.client.Exec("INSERT measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
+		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?) "+
+			"ON DUPLICATE KEY UPDATE value = VALUES(value), `comment` = VALUES(`comment`)",
 			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
 	case Postgres:
-		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, comment) VALUES ($1, $2, $3, $4)",
+		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, comment) VALUES ($1, $2, $3, $4)  "+
+			"ON CONFLICT (name, time_stamp) DO UPDATE SET value = EXCLUDED.value, comment = EXCLUDED.comment",
+			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
+	case ClickHouse:
+		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
 			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
 	}
 	return errors.Trace(err)
@@ -160,7 +217,7 @@ func (d *SQLDatabase) GetMeasurements(name string, n int) ([]Measurement, error)
 	var result *sql.Rows
 	var err error
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		result, err = d.client.Query("SELECT name, time_stamp, value, `comment` FROM measurements WHERE name = ? ORDER BY time_stamp DESC LIMIT ?", name, n)
 	case Postgres:
 		result, err = d.client.Query("SELECT name, time_stamp, value, comment FROM measurements WHERE name = $1 ORDER BY time_stamp DESC LIMIT $2", name, n)
@@ -196,6 +253,9 @@ func (d *SQLDatabase) InsertItem(item Item) error {
 			"ON CONFLICT (item_id) "+
 			"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment",
 			item.ItemId, item.Timestamp, labels, item.Comment)
+	case ClickHouse:
+		_, err = d.client.Exec("INSERT INTO items(item_id, time_stamp, labels, `comment`, version) VALUES (?, ?, ?, ?, NOW())",
+			item.ItemId, item.Timestamp, string(labels), item.Comment)
 	}
 	InsertItemLatency.Observe(time.Since(startTime).Seconds())
 	return errors.Trace(err)
@@ -213,6 +273,8 @@ func (d *SQLDatabase) BatchInsertItem(items []Item) error {
 			builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, `comment`) VALUES ")
 		case Postgres:
 			builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment) VALUES ")
+		case ClickHouse:
+			builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment, version) VALUES ")
 		}
 		var args []interface{}
 		for i, item := range batchItems {
@@ -225,16 +287,18 @@ func (d *SQLDatabase) BatchInsertItem(items []Item) error {
 				builder.WriteString("(?,?,?,?)")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4))
+			case ClickHouse:
+				builder.WriteString("(?,?,?,?,NOW())")
 			}
 			if i+1 < len(batchItems) {
 				builder.WriteString(",")
 			}
-			args = append(args, item.ItemId, item.Timestamp, labels, item.Comment)
+			args = append(args, item.ItemId, item.Timestamp, string(labels), item.Comment)
 		}
 		switch d.driver {
 		case MySQL:
-			builder.WriteString(" AS new ON DUPLICATE KEY " +
-				"UPDATE time_stamp = new.time_stamp, labels = new.labels, `comment` = new.comment")
+			builder.WriteString(" ON DUPLICATE KEY " +
+				"UPDATE time_stamp = VALUES(time_stamp), labels = VALUES(labels), `comment` = VALUES(`comment`)")
 		case Postgres:
 			builder.WriteString(" ON CONFLICT (item_id) " +
 				"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
@@ -258,6 +322,8 @@ func (d *SQLDatabase) DeleteItem(itemId string) error {
 		_, err = txn.Exec("DELETE FROM items WHERE item_id = ?", itemId)
 	case Postgres:
 		_, err = txn.Exec("DELETE FROM items WHERE item_id = $1", itemId)
+	case ClickHouse:
+		_, err = txn.Exec("ALTER TABLE items DELETE WHERE item_id = ?", itemId)
 	}
 	if err != nil {
 		if err = txn.Rollback(); err != nil {
@@ -270,6 +336,8 @@ func (d *SQLDatabase) DeleteItem(itemId string) error {
 		_, err = txn.Exec("DELETE FROM feedback WHERE item_id = ?", itemId)
 	case Postgres:
 		_, err = txn.Exec("DELETE FROM feedback WHERE item_id = $1", itemId)
+	case ClickHouse:
+		_, err = txn.Exec("ALTER TABLE feedback DELETE WHERE item_id = ?", itemId)
 	}
 	if err != nil {
 		if err = txn.Rollback(); err != nil {
@@ -286,7 +354,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	var result *sql.Rows
 	var err error
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items WHERE item_id = ?", itemId)
 	case Postgres:
 		result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items WHERE item_id = $1", itemId)
@@ -315,7 +383,7 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 	var result *sql.Rows
 	var err error
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		if timeLimit == nil {
 			result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
 				"WHERE item_id >= ? ORDER BY item_id LIMIT ?", cursor, n+1)
@@ -361,7 +429,7 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 	var err error
 	var builder strings.Builder
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		builder.WriteString("SELECT user_id, item_id, feedback_type FROM feedback WHERE item_id = ?")
 	case Postgres:
 		builder.WriteString("SELECT user_id, item_id, feedback_type FROM feedback WHERE item_id = $1")
@@ -371,7 +439,7 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 		builder.WriteString(" AND feedback_type IN (")
 		for i, feedbackType := range feedbackTypes {
 			switch d.driver {
-			case MySQL:
+			case MySQL, ClickHouse:
 				builder.WriteString("?")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
@@ -419,6 +487,9 @@ func (d *SQLDatabase) InsertUser(user User) error {
 			"ON CONFLICT (user_id) "+
 			"DO UPDATE SET labels = EXCLUDED.labels, subscribe = EXCLUDED.subscribe, comment = EXCLUDED.comment",
 			user.UserId, labels, subscribe, user.Comment)
+	case ClickHouse:
+		_, err = d.client.Exec("INSERT INTO users(user_id, labels, subscribe, comment, version) VALUES (?, ?, ?, ?, NOW()) ",
+			user.UserId, string(labels), string(subscribe), user.Comment)
 	}
 	return errors.Trace(err)
 }
@@ -434,6 +505,8 @@ func (d *SQLDatabase) DeleteUser(userId string) error {
 		_, err = txn.Exec("DELETE FROM users WHERE user_id = ?", userId)
 	case Postgres:
 		_, err = txn.Exec("DELETE FROM users WHERE user_id = $1", userId)
+	case ClickHouse:
+		_, err = txn.Exec("ALTER TABLE users DELETE WHERE user_id = ?", userId)
 	}
 	if err != nil {
 		if err = txn.Rollback(); err != nil {
@@ -446,6 +519,8 @@ func (d *SQLDatabase) DeleteUser(userId string) error {
 		_, err = txn.Exec("DELETE FROM feedback WHERE user_id = ?", userId)
 	case Postgres:
 		_, err = txn.Exec("DELETE FROM feedback WHERE user_id = $1", userId)
+	case ClickHouse:
+		_, err = txn.Exec("ALTER TABLE feedback DELETE WHERE user_id = ?", userId)
 	}
 	if err != nil {
 		if err = txn.Rollback(); err != nil {
@@ -465,6 +540,8 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 		result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users WHERE user_id = ?", userId)
 	case Postgres:
 		result, err = d.client.Query("SELECT user_id, labels, subscribe, comment FROM users WHERE user_id = $1", userId)
+	case ClickHouse:
+		result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users WHERE user_id = ?", userId)
 	}
 	if err != nil {
 		return User{}, errors.Trace(err)
@@ -499,6 +576,9 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	case Postgres:
 		result, err = d.client.Query("SELECT user_id, labels, subscribe, comment FROM users "+
 			"WHERE user_id >= $1 ORDER BY user_id LIMIT $2", cursor, n+1)
+	case ClickHouse:
+		result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users "+
+			"WHERE user_id >= ? ORDER BY user_id LIMIT ?", cursor, n+1)
 	}
 	if err != nil {
 		return "", nil, errors.Trace(err)
@@ -533,7 +613,7 @@ func (d *SQLDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([
 	var err error
 	var builder strings.Builder
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE user_id = ?")
 	case Postgres:
 		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE user_id = $1")
@@ -543,7 +623,7 @@ func (d *SQLDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([
 		builder.WriteString(" AND feedback_type IN (")
 		for i, feedbackType := range feedbackTypes {
 			switch d.driver {
-			case MySQL:
+			case MySQL, ClickHouse:
 				builder.WriteString("?")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
@@ -584,6 +664,8 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 			_, err = d.client.Exec("INSERT IGNORE users(user_id) VALUES (?)", feedback.UserId)
 		case Postgres:
 			_, err = d.client.Exec("INSERT INTO users(user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", feedback.UserId)
+		case ClickHouse:
+			_, err = d.client.Exec("INSERT INTO users(user_id, version) VALUES (?,'0000-00-00 00:00:00')", feedback.UserId)
 		}
 		if err != nil {
 			return errors.Trace(err)
@@ -604,6 +686,8 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 			_, err = d.client.Exec("INSERT IGNORE items(item_id) VALUES (?)", feedback.ItemId)
 		case Postgres:
 			_, err = d.client.Exec("INSERT INTO items(item_id) VALUES ($1) ON CONFLICT (item_id) DO NOTHING", feedback.ItemId)
+		case ClickHouse:
+			_, err = d.client.Exec("INSERT INTO items(item_id, version) VALUES (?,'0000-00-00 00:00:00')", feedback.ItemId)
 		}
 		if err != nil {
 			return errors.Trace(err)
@@ -626,6 +710,9 @@ func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem b
 	case Postgres:
 		_, err = d.client.Exec("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, comment) VALUES ($1,$2,$3,$4,$5) "+
 			"ON CONFLICT (feedback_type, user_id, item_id) DO UPDATE SET time_stamp = EXCLUDED.time_stamp, comment = EXCLUDED.comment",
+			feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment)
+	case ClickHouse:
+		_, err = d.client.Exec("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES (?,?,?,?,?) ",
 			feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment)
 	}
 	InsertFeedbackLatency.Observe(time.Since(startTime).Seconds())
@@ -655,6 +742,8 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 				builder.WriteString("INSERT IGNORE users(user_id) VALUES ")
 			case Postgres:
 				builder.WriteString("INSERT INTO users(user_id) VALUES ")
+			case ClickHouse:
+				builder.WriteString("INSERT INTO users(user_id, version) VALUES ")
 			}
 			var args []interface{}
 			for i, user := range batchUsers {
@@ -663,6 +752,8 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 					builder.WriteString("(?)")
 				case Postgres:
 					builder.WriteString(fmt.Sprintf("($%d)", i+1))
+				case ClickHouse:
+					builder.WriteString("(?,'0000-00-00 00:00:00')")
 				}
 				if i+1 < len(batchUsers) {
 					builder.WriteString(",")
@@ -705,6 +796,8 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 				builder.WriteString("INSERT IGNORE items(item_id) VALUES ")
 			case Postgres:
 				builder.WriteString("INSERT INTO items(item_id) VALUES ")
+			case ClickHouse:
+				builder.WriteString("INSERT INTO items(item_id, version) VALUES ")
 			}
 			var args []interface{}
 			for i, item := range batchItems {
@@ -713,6 +806,8 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 					builder.WriteString("(?)")
 				case Postgres:
 					builder.WriteString(fmt.Sprintf("($%d)", i+1))
+				case ClickHouse:
+					builder.WriteString("(?,'0000-00-00 00:00:00')")
 				}
 				if i+1 < len(batchItems) {
 					builder.WriteString(",")
@@ -749,8 +844,8 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		batchFeedback := feedback[i:base.Min(i+batchSize, len(feedback))]
 		builder := strings.Builder{}
 		switch d.driver {
-		case MySQL:
-			builder.WriteString("INSERT feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
+		case MySQL, ClickHouse:
+			builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
 		case Postgres:
 			builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, comment) VALUES ")
 		}
@@ -758,7 +853,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		for i, f := range batchFeedback {
 			if users.Has(f.UserId) && items.Has(f.ItemId) {
 				switch d.driver {
-				case MySQL:
+				case MySQL, ClickHouse:
 					builder.WriteString("(?,?,?,?,?)")
 				case Postgres:
 					builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)",
@@ -772,7 +867,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		}
 		switch d.driver {
 		case MySQL:
-			builder.WriteString(" AS new ON DUPLICATE KEY UPDATE time_stamp = new.time_stamp, `comment` = new.`comment`")
+			builder.WriteString(" ON DUPLICATE KEY UPDATE time_stamp = VALUES(time_stamp), `comment` = VALUES(`comment`)")
 		case Postgres:
 			builder.WriteString(" ON CONFLICT (feedback_type, user_id, item_id) DO UPDATE SET time_stamp = EXCLUDED.time_stamp, comment = EXCLUDED.comment")
 		}
@@ -796,7 +891,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 	var err error
 	var builder strings.Builder
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ?")
 	case Postgres:
 		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE feedback_type >= $1 AND user_id >= $2 AND item_id >= $3")
@@ -806,7 +901,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 		builder.WriteString(" AND feedback_type IN (")
 		for i, feedbackType := range feedbackTypes {
 			switch d.driver {
-			case MySQL:
+			case MySQL, ClickHouse:
 				builder.WriteString("?")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
@@ -820,7 +915,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 	}
 	if timeLimit != nil {
 		switch d.driver {
-		case MySQL:
+		case MySQL, ClickHouse:
 			builder.WriteString(" AND time_stamp >= ?")
 		case Postgres:
 			builder.WriteString(fmt.Sprintf(" AND time_stamp >= $%d", len(args)+1))
@@ -828,7 +923,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 		args = append(args, *timeLimit)
 	}
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		builder.WriteString(" ORDER BY feedback_type, user_id, item_id LIMIT ?")
 	case Postgres:
 		builder.WriteString(fmt.Sprintf(" ORDER BY feedback_type, user_id, item_id LIMIT $%d", len(args)+1))
@@ -864,7 +959,7 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 	var err error
 	var builder strings.Builder
 	switch d.driver {
-	case MySQL:
+	case MySQL, ClickHouse:
 		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE user_id = ? AND item_id = ?")
 	case Postgres:
 		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE user_id = $1 AND item_id = $2")
@@ -874,7 +969,7 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 		builder.WriteString(" AND feedback_type IN (")
 		for i, feedbackType := range feedbackTypes {
 			switch d.driver {
-			case MySQL:
+			case MySQL, ClickHouse:
 				builder.WriteString("?")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("$%d", i+3))
@@ -912,13 +1007,15 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 		builder.WriteString("DELETE FROM feedback WHERE user_id = ? AND item_id = ?")
 	case Postgres:
 		builder.WriteString("DELETE FROM feedback WHERE user_id = $1 AND item_id = $2")
+	case ClickHouse:
+		builder.WriteString("ALTER TABLE feedback DELETE WHERE user_id = ? AND item_id = ?")
 	}
 	args := []interface{}{userId, itemId}
 	if len(feedbackTypes) > 0 {
 		builder.WriteString(" AND feedback_type IN (")
 		for i, feedbackType := range feedbackTypes {
 			switch d.driver {
-			case MySQL:
+			case MySQL, ClickHouse:
 				builder.WriteString("?")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
@@ -932,11 +1029,11 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 	}
 	rs, err = d.client.Exec(builder.String(), args...)
 	if err != nil {
-		return 0, err
+		return 0, errors.Trace(err)
 	}
 	deleteCount, err := rs.RowsAffected()
-	if err != nil {
-		return 0, err
+	if err != nil && d.driver != ClickHouse {
+		return 0, errors.Trace(err)
 	}
 	return int(deleteCount), nil
 }
@@ -944,20 +1041,31 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 // GetClickThroughRate computes the click-through-rate of a specified date.
 func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
 	builder := strings.Builder{}
-	var args []interface{}
+	// Get the average of click-through rates
 	switch d.driver {
 	case MySQL:
-		builder.WriteString("SELECT positive_count.positive_count / read_count.read_count FROM (")
+		builder.WriteString("SELECT IFNULL(AVG(user_ctr),0) FROM (")
+	case ClickHouse:
+		builder.WriteString("SELECT IF(isFinite(AVG(user_ctr)),AVG(user_ctr),0) FROM (")
 	case Postgres:
-		builder.WriteString("SELECT positive_count.positive_count :: DOUBLE PRECISION / read_count.read_count :: DOUBLE PRECISION FROM (")
+		builder.WriteString("SELECT COALESCE(AVG(user_ctr),0) FROM (")
 	}
-	builder.WriteString("SELECT user_id, COUNT(*) AS positive_count FROM (")
+	var args []interface{}
+	// Get click-through rates
 	switch d.driver {
 	case MySQL:
+		builder.WriteString("SELECT COUNT(positive_feedback.user_id) / COUNT(read_feedback.user_id) AS user_ctr FROM (")
+	case ClickHouse:
+		builder.WriteString("SELECT SUM(notEmpty(positive_feedback.user_id)) / SUM(notEmpty(read_feedback.user_id)) AS user_ctr FROM (")
+	case Postgres:
+		builder.WriteString("SELECT COUNT(positive_feedback.user_id) :: DOUBLE PRECISION / COUNT(read_feedback.user_id) :: DOUBLE PRECISION AS user_ctr FROM (")
+	}
+	// Get positive feedback
+	switch d.driver {
+	case MySQL, ClickHouse:
 		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type IN (")
 	case Postgres:
-		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback "+
-			"WHERE DATE(time_stamp) = DATE($%d) AND feedback_type IN (", len(args)+1))
+		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE($%d) AND feedback_type IN (", len(args)+1))
 	}
 	args = append(args, date)
 	for i, positiveType := range positiveTypes {
@@ -965,73 +1073,43 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 			builder.WriteString(",")
 		}
 		switch d.driver {
-		case MySQL:
+		case MySQL, ClickHouse:
 			builder.WriteString("?")
 		case Postgres:
 			builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
 		}
 		args = append(args, positiveType)
 	}
-	builder.WriteString(")) AS positive_feedback GROUP BY user_id) AS positive_count ")
-	builder.WriteString("JOIN (")
-	builder.WriteString("SELECT user_id, COUNT(*) AS read_count FROM (")
+	builder.WriteString(")) AS positive_feedback RIGHT JOIN (")
+	// Get read feedback
 	switch d.driver {
-	case MySQL:
-		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type IN (?")
+	case MySQL, ClickHouse:
+		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type = ?) AS read_feedback ")
 	case Postgres:
-		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback "+
-			"WHERE DATE(time_stamp) = DATE($%d) AND feedback_type IN ($%d", len(args)+1, len(args)+2))
+		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE($%d) AND feedback_type = $%d) AS read_feedback ", len(args)+1, len(args)+2))
 	}
 	args = append(args, date, readType)
-	for _, positiveType := range positiveTypes {
-		switch d.driver {
-		case MySQL:
-			builder.WriteString(",?")
-		case Postgres:
-			builder.WriteString(fmt.Sprintf(",$%d", len(args)+1))
-		}
-		args = append(args, positiveType)
+	builder.WriteString("ON positive_feedback.user_id = read_feedback.user_id AND positive_feedback.item_id = read_feedback.item_id GROUP BY read_feedback.user_id ")
+	// users must have at least one positive feedback
+	switch d.driver {
+	case MySQL:
+		builder.WriteString("HAVING COUNT(positive_feedback.user_id) > 0) AS user_ctr")
+	case ClickHouse:
+		builder.WriteString("HAVING SUM(notEmpty(positive_feedback.user_id)) > 0) AS user_ctr")
+	case Postgres:
+		builder.WriteString("HAVING COUNT(positive_feedback.user_id) > 0) AS user_ctr")
 	}
-	builder.WriteString(")) AS read_feedback GROUP BY user_id) AS read_count ")
-	builder.WriteString("ON positive_count.user_id = read_count.user_id")
 	base.Logger().Info("get click through rate from MySQL", zap.String("query", builder.String()))
 	rs, err := d.client.Query(builder.String(), args...)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
-	var sum, count float64
-	for rs.Next() {
-		var temp float64
-		if err = rs.Scan(&temp); err != nil {
+	if rs.Next() {
+		var ctr float64
+		if err = rs.Scan(&ctr); err != nil {
 			return 0, errors.Trace(err)
 		}
-		sum += temp
-		count++
+		return ctr, nil
 	}
-	if count > 0 {
-		sum /= count
-	}
-	return sum, errors.Trace(err)
-}
-
-// CountActiveUsers returns the number active users starting from a specified date.
-func (d *SQLDatabase) CountActiveUsers(date time.Time) (int, error) {
-	var rs *sql.Rows
-	var err error
-	switch d.driver {
-	case MySQL:
-		rs, err = d.client.Query("SELECT COUNT(DISTINCT user_id) FROM feedback WHERE DATE(time_stamp) >= DATE(?)", date)
-	case Postgres:
-		rs, err = d.client.Query("SELECT COUNT(DISTINCT user_id) FROM feedback WHERE DATE(time_stamp) >= DATE($1)", date)
-	}
-	if err != nil {
-		return 0, err
-	}
-	var count int
-	if rs.Next() {
-		if err = rs.Scan(&count); err != nil {
-			return 0, err
-		}
-	}
-	return count, nil
+	return 0, nil
 }

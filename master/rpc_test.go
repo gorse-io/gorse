@@ -38,7 +38,7 @@ type mockMasterRPC struct {
 	grpcServer *grpc.Server
 }
 
-func newMockMasterRPC(t *testing.T) *mockMasterRPC {
+func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	// create click model
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
@@ -51,6 +51,7 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	userIndex := base.NewMapIndex()
 	return &mockMasterRPC{
 		Master: Master{
+			taskMonitor:         NewTaskMonitor(),
 			nodesInfo:           make(map[string]*Node),
 			rankingModelName:    "bpr",
 			rankingModelVersion: 123,
@@ -97,6 +98,24 @@ func TestRPC(t *testing.T) {
 	client := protocol.NewMasterClient(conn)
 	ctx := context.Background()
 
+	_, err = client.StartTask(ctx, &protocol.StartTaskRequest{Name: "a", Total: 12})
+	assert.NoError(t, err)
+	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
+	assert.Equal(t, 0, rpcServer.taskMonitor.Tasks["a"].Done)
+	assert.Equal(t, TaskStatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
+
+	_, err = client.UpdateTask(ctx, &protocol.UpdateTaskRequest{Name: "a", Done: 10})
+	assert.NoError(t, err)
+	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
+	assert.Equal(t, 10, rpcServer.taskMonitor.Tasks["a"].Done)
+	assert.Equal(t, TaskStatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
+
+	_, err = client.FinishTask(ctx, &protocol.FinishTaskRequest{Name: "a"})
+	assert.NoError(t, err)
+	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
+	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Done)
+	assert.Equal(t, TaskStatusComplete, rpcServer.taskMonitor.Tasks["a"].Status)
+
 	// test get click model
 	clickModelResp, err := client.GetClickModel(ctx, &protocol.NodeInfo{
 		NodeType: protocol.NodeType_ServerNode, NodeName: "tester", HttpPort: 1234})
@@ -111,7 +130,7 @@ func TestRPC(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "bpr", rankingModelResp.Name)
 	assert.Equal(t, int64(123), rankingModelResp.Version)
-	_, err = ranking.DecodeModel("bpr", rankingModelResp.Model)
+	_, err = ranking.DecodeModel(rankingModelResp.Model)
 	assert.NoError(t, err)
 
 	// test get user index

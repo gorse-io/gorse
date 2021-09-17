@@ -75,6 +75,7 @@ type Measurement struct {
 type Database interface {
 	Init() error
 	Close() error
+	Optimize() error
 	InsertItem(item Item) error
 	BatchInsertItem(items []Item) error
 	DeleteItem(itemId string) error
@@ -94,14 +95,14 @@ type Database interface {
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)
 	GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error)
-	CountActiveUsers(date time.Time) (int, error)
 }
 
 const (
-	mySQLPrefix    = "mysql://"
-	mongoPrefix    = "mongodb://"
-	redisPrefix    = "redis://"
-	postgresPrefix = "postgres://"
+	mySQLPrefix      = "mysql://"
+	mongoPrefix      = "mongodb://"
+	redisPrefix      = "redis://"
+	postgresPrefix   = "postgres://"
+	clickhousePrefix = "clickhouse://"
 )
 
 // Open a connection to a database.
@@ -119,6 +120,14 @@ func Open(path string) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		if database.client, err = sql.Open("postgres", path); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, clickhousePrefix) {
+		uri := "http://" + path[len(clickhousePrefix):]
+		database := new(SQLDatabase)
+		database.driver = ClickHouse
+		if database.client, err = sql.Open("clickhouse", uri); err != nil {
 			return nil, errors.Trace(err)
 		}
 		return database, nil

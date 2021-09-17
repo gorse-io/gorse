@@ -16,10 +16,13 @@ package click
 
 import (
 	"bufio"
+	"github.com/chewxy/math32"
+	"github.com/juju/errors"
 	"github.com/scylladb/go-set/i32set"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/scylladb/go-set"
 	"go.uber.org/zap"
@@ -29,14 +32,17 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
-const batchSize = 1024
+const batchSize = 10000
 
 // Dataset for click-through-rate models.
 type Dataset struct {
-	Index  UnifiedIndex
-	Labels [][]int
-	Inputs [][]int
-	Target []float32
+	Index         UnifiedIndex
+	Labels        [][]int
+	Features      [][]int
+	Values        [][]float32
+	Target        []float32
+	PositiveCount int
+	NegativeCount int
 }
 
 // UserCount returns the number of users.
@@ -51,25 +57,26 @@ func (dataset *Dataset) ItemCount() int {
 
 // Count returns the number of samples.
 func (dataset *Dataset) Count() int {
-	if len(dataset.Inputs) != len(dataset.Target) {
-		panic("len(dataset.Inputs) != len(dataset.Target)")
+	if len(dataset.Features) != len(dataset.Values) {
+		panic("len(dataset.Features) != len(dataset.Values)")
+	}
+	if len(dataset.Features) != len(dataset.Target) {
+		panic("len(dataset.Features) != len(dataset.Target)")
 	}
 	return len(dataset.Target)
 }
 
 // Get returns the i-th sample.
-func (dataset *Dataset) Get(i int) ([]int, float32) {
-	return dataset.Inputs[i], dataset.Target[i]
+func (dataset *Dataset) Get(i int) ([]int, []float32, float32) {
+	return dataset.Features[i], dataset.Values[i], dataset.Target[i]
 }
 
 // LoadLibFMFile loads libFM format file.
-func LoadLibFMFile(path string) (labels [][]int, targets []float32, maxLabel int, err error) {
-	labels = make([][]int, 0)
-	targets = make([]float32, 0)
+func LoadLibFMFile(path string) (features [][]int, values [][]float32, targets []float32, maxLabel int, err error) {
 	// open file
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, nil, 0, errors.Trace(err)
 	}
 	defer file.Close()
 	// read lines
@@ -80,29 +87,37 @@ func LoadLibFMFile(path string) (labels [][]int, targets []float32, maxLabel int
 		// fetch target
 		target, err := strconv.ParseFloat(fields[0], 32)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, nil, 0, errors.Trace(err)
 		}
 		targets = append(targets, float32(target))
-		// fetch labels
-		lineLabels := make([]int, len(fields[1:]))
-		for i, field := range fields[1:] {
-			kv := strings.Split(field, ":")
-			k, v := kv[0], kv[1]
-			if v != "1" {
-				base.Logger().Error("support binary features only", zap.String("field", field))
+		// fetch features
+		lineFeatures := make([]int, 0, len(fields[1:]))
+		lineValues := make([]float32, 0, len(fields[1:]))
+		for _, field := range fields[1:] {
+			if len(strings.TrimSpace(field)) > 0 {
+				kv := strings.Split(field, ":")
+				k, v := kv[0], kv[1]
+				// append feature
+				feature, err := strconv.Atoi(k)
+				if err != nil {
+					return nil, nil, nil, 0, errors.Trace(err)
+				}
+				lineFeatures = append(lineFeatures, feature)
+				// append value
+				value, err := strconv.ParseFloat(v, 32)
+				if err != nil {
+					return nil, nil, nil, 0, errors.Trace(err)
+				}
+				lineValues = append(lineValues, float32(value))
+				maxLabel = base.Max(maxLabel, lineFeatures...)
 			}
-			label, err := strconv.Atoi(k)
-			if err != nil {
-				return nil, nil, 0, err
-			}
-			lineLabels[i] = label
-			maxLabel = base.Max(maxLabel, base.Max(lineLabels...))
 		}
-		labels = append(labels, lineLabels)
+		features = append(features, lineFeatures)
+		values = append(values, lineValues)
 	}
 	// check error
 	if err = scanner.Err(); err != nil {
-		return nil, nil, 0, err
+		return nil, nil, nil, 0, errors.Trace(err)
 	}
 	return
 }
@@ -115,10 +130,10 @@ func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 	}
 	train, test = &Dataset{}, &Dataset{}
 	trainMaxLabel, testMaxLabel := 0, 0
-	if train.Inputs, train.Target, trainMaxLabel, err = LoadLibFMFile(trainFilePath); err != nil {
+	if train.Features, train.Values, train.Target, trainMaxLabel, err = LoadLibFMFile(trainFilePath); err != nil {
 		return nil, nil, err
 	}
-	if test.Inputs, test.Target, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
+	if test.Features, test.Values, test.Target, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
 		return nil, nil, err
 	}
 	unifiedIndex := NewUnifiedDirectIndex(base.Max(trainMaxLabel, testMaxLabel) + 1)
@@ -134,14 +149,15 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 	// pull users
 	cursor := ""
 	users := make([]data.User, 0)
+	start := time.Now()
 	for {
 		var batchUsers []data.User
 		cursor, batchUsers, err = database.GetUsers(cursor, batchSize)
 		if err != nil {
 			return nil, err
 		}
+		users = append(users, batchUsers...)
 		for _, user := range batchUsers {
-			users = append(users, user)
 			unifiedIndex.AddUser(user.UserId)
 			for _, label := range user.Labels {
 				unifiedIndex.AddUserLabel(label)
@@ -151,17 +167,21 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 			break
 		}
 	}
+	base.Logger().Debug("pulled users from database",
+		zap.Int("n_users", unifiedIndex.UserIndex.Len()),
+		zap.Duration("used_time", time.Since(start)))
 	// pull items
 	cursor = ""
 	items := make([]data.Item, 0)
+	start = time.Now()
 	for {
 		var batchItems []data.Item
 		cursor, batchItems, err = database.GetItems(cursor, batchSize, nil)
 		if err != nil {
 			return nil, err
 		}
+		items = append(items, batchItems...)
 		for _, item := range batchItems {
-			items = append(items, item)
 			unifiedIndex.AddItem(item.ItemId)
 			for _, label := range item.Labels {
 				unifiedIndex.AddItemLabel(label)
@@ -171,6 +191,9 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 			break
 		}
 	}
+	base.Logger().Debug("pulled items from database",
+		zap.Int("n_items", unifiedIndex.ItemIndex.Len()),
+		zap.Duration("used_time", time.Since(start)))
 	// create dataset
 	dataSet := &Dataset{
 		Index:  unifiedIndex.Build(),
@@ -204,6 +227,7 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 	cursor = ""
 	feedbackTypes := append([]string{readType}, clickTypes...)
 	positiveSet := make([]i32set.Set, len(users))
+	start = time.Now()
 	for {
 		var batchFeedback []data.Feedback
 		cursor, batchFeedback, err = database.GetFeedback(cursor, batchSize, nil, feedbackTypes...)
@@ -225,17 +249,23 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 				positiveSet[userId].Clear()
 			}
 			if !positiveSet[userId].Has(int32(itemId)) {
-				// build input vector
-				input := []int{userId, itemId}
-				input = append(input, dataSet.Labels[userId]...)
-				input = append(input, dataSet.Labels[itemId]...)
-				dataSet.Inputs = append(dataSet.Inputs, input)
+				// build features vector
+				features := []int{userId, itemId}
+				features = append(features, dataSet.Labels[userId]...)
+				features = append(features, dataSet.Labels[itemId]...)
+				dataSet.Features = append(dataSet.Features, features)
+				// build values vector
+				values := []float32{1, 1}
+				values = append(values, base.RepeatFloat32s(len(features)-2, 1/math32.Sqrt(float32(len(features)-2)))...)
+				dataSet.Values = append(dataSet.Values, values)
 				// positive or negative
 				if v.FeedbackType == readType {
 					dataSet.Target = append(dataSet.Target, -1)
+					dataSet.NegativeCount++
 				} else {
 					positiveSet[userId].Add(int32(itemId))
 					dataSet.Target = append(dataSet.Target, 1)
+					dataSet.PositiveCount++
 				}
 			}
 		}
@@ -243,6 +273,10 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 			break
 		}
 	}
+	base.Logger().Debug("pull feedback from database",
+		zap.Int("n_positive", dataSet.PositiveCount),
+		zap.Int("n_negative", dataSet.NegativeCount),
+		zap.Duration("used_time", time.Since(start)))
 	return dataSet, nil
 }
 
@@ -261,15 +295,27 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	numTestSize := int(float32(dataset.Count()) * ratio)
 	rng := base.NewRandomGenerator(seed)
 	sampledIndex := set.NewIntSet(rng.Sample(0, dataset.Count(), numTestSize)...)
-	for i := range dataset.Inputs {
+	for i := range dataset.Features {
 		if sampledIndex.Has(i) {
 			// add samples into test set
-			testSet.Inputs = append(testSet.Inputs, dataset.Inputs[i])
+			testSet.Features = append(testSet.Features, dataset.Features[i])
+			testSet.Values = append(testSet.Values, dataset.Values[i])
 			testSet.Target = append(testSet.Target, dataset.Target[i])
+			if dataset.Target[i] > 0 {
+				testSet.PositiveCount++
+			} else {
+				testSet.NegativeCount++
+			}
 		} else {
 			// add samples into train set
-			trainSet.Inputs = append(trainSet.Inputs, dataset.Inputs[i])
+			trainSet.Features = append(trainSet.Features, dataset.Features[i])
+			trainSet.Values = append(trainSet.Values, dataset.Values[i])
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
+			if dataset.Target[i] > 0 {
+				trainSet.PositiveCount++
+			} else {
+				trainSet.NegativeCount++
+			}
 		}
 	}
 	return trainSet, testSet

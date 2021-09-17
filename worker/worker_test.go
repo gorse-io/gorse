@@ -63,7 +63,7 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	w := newMockWorker(t)
 	defer w.Close(t)
 	// insert cache
-	err := w.cacheClient.SetScores(cache.RecommendItems, "0", []cache.ScoredItem{{"0", 0}})
+	err := w.cacheClient.SetScores(cache.CTRRecommend, "0", []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.SetTime(cache.LastActiveTime, "0", time.Now().Add(-time.Hour))
@@ -72,7 +72,7 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.SetTime(cache.LastUpdateRecommendTime, "0", time.Now().Add(time.Hour*100))
 	assert.False(t, w.checkRecommendCacheTimeout("0"))
-	err = w.cacheClient.ClearList(cache.RecommendItems, "0")
+	err = w.cacheClient.ClearList(cache.CTRRecommend, "0")
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 }
 
@@ -84,11 +84,11 @@ func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
 	panic("implement me")
 }
 
-func (m *mockMatrixFactorizationForRecommend) Fit(trainSet, validateSet *ranking.DataSet, config *ranking.FitConfig) ranking.Score {
+func (m *mockMatrixFactorizationForRecommend) Fit(_, _ *ranking.DataSet, _ *ranking.FitConfig) ranking.Score {
 	panic("implement me")
 }
 
-func (m *mockMatrixFactorizationForRecommend) Predict(userId, itemId string) float32 {
+func (m *mockMatrixFactorizationForRecommend) Predict(_, _ string) float32 {
 	panic("implement me")
 }
 
@@ -105,7 +105,7 @@ func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixF
 	return m
 }
 
-func (m *mockMatrixFactorizationForRecommend) InternalPredict(userId, itemId int) float32 {
+func (m *mockMatrixFactorizationForRecommend) InternalPredict(_, itemId int) float32 {
 	return float32(itemId)
 }
 
@@ -155,6 +155,7 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
+	w.cfg.Recommend.EnableColRecommend = true
 	// insert feedbacks
 	now := time.Now()
 	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
@@ -170,18 +171,133 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
 
-	recommends, err := w.cacheClient.GetScores(cache.RecommendItems, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.ScoredItem{
-		{"3", 3},
-		{"2", 2},
-		{"1", 1},
+	assert.Equal(t, []cache.Scored{
+		{"3", 0},
+		{"2", 0},
+		{"1", 0},
 		{"0", 0},
 	}, recommends)
 
 	read, err := w.cacheClient.GetList(cache.IgnoreItems, "0")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"4", "6", "8"}, read)
+}
+
+func TestRecommend_ItemBased(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Recommend.EnableColRecommend = false
+	w.cfg.Recommend.EnableItemBasedRecommend = true
+	// insert feedback
+	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "21"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "22"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "23"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "24"}},
+	}, true, true)
+	assert.NoError(t, err)
+	// insert similar items
+	err = w.cacheClient.SetScores(cache.ItemNeighbors, "21", []cache.Scored{
+		{"22", 100000},
+		{"29", 1},
+	})
+	assert.NoError(t, err)
+	err = w.cacheClient.SetScores(cache.ItemNeighbors, "22", []cache.Scored{
+		{"23", 100000},
+		{"28", 1},
+		{"29", 1},
+	})
+	assert.NoError(t, err)
+	err = w.cacheClient.SetScores(cache.ItemNeighbors, "23", []cache.Scored{
+		{"24", 100000},
+		{"27", 1},
+		{"28", 1},
+		{"29", 1},
+	})
+	assert.NoError(t, err)
+	err = w.cacheClient.SetScores(cache.ItemNeighbors, "24", []cache.Scored{
+		{"21", 100000},
+		{"26", 1},
+		{"27", 1},
+		{"28", 1},
+		{"29", 1},
+	})
+	assert.NoError(t, err)
+	m := newMockMatrixFactorizationForRecommend(1, 10)
+	w.Recommend(m, []string{"0"})
+	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"29", 0}, {"28", 0}, {"27", 0}}, recommends)
+}
+
+func TestRecommend_UserBased(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Recommend.EnableColRecommend = false
+	w.cfg.Recommend.EnableUserBasedRecommend = true
+	// insert similar users
+	err := w.cacheClient.SetScores(cache.UserNeighbors, "0", []cache.Scored{
+		{"1", 2},
+		{"2", 1.5},
+		{"3", 1},
+	})
+	assert.NoError(t, err)
+	// insert feedback
+	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "11"}},
+	}, true, true)
+	assert.NoError(t, err)
+	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "12"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "48"}},
+	}, true, true)
+	assert.NoError(t, err)
+	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "13"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
+	}, true, true)
+	assert.NoError(t, err)
+	m := newMockMatrixFactorizationForRecommend(1, 10)
+	w.Recommend(m, []string{"0"})
+	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"48", 0}, {"11", 0}, {"12", 0}}, recommends)
+}
+
+func TestRecommend_Popular(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Recommend.EnableColRecommend = false
+	w.cfg.Recommend.EnablePopularRecommend = true
+	// insert popular items
+	err := w.cacheClient.SetScores(cache.PopularItems, "", []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}})
+	assert.NoError(t, err)
+	m := newMockMatrixFactorizationForRecommend(1, 10)
+	w.Recommend(m, []string{"0"})
+	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+}
+
+func TestRecommend_Latest(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Recommend.EnableColRecommend = false
+	w.cfg.Recommend.EnableLatestRecommend = true
+	// insert popular items
+	err := w.cacheClient.SetScores(cache.LatestItems, "", []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}})
+	assert.NoError(t, err)
+	m := newMockMatrixFactorizationForRecommend(1, 10)
+	w.Recommend(m, []string{"0"})
+	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
 }
 
 func marshal(t *testing.T, v interface{}) string {
@@ -273,7 +389,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	}
 }
 
-func (m *mockMaster) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*protocol.Meta, error) {
+func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol.Meta, error) {
 	return m.meta, nil
 }
 

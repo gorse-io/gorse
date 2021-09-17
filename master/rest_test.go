@@ -79,6 +79,32 @@ func marshal(t *testing.T, v interface{}) string {
 	return string(s)
 }
 
+func TestMaster_ExportUsers(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// insert users
+	users := []data.User{
+		{UserId: "1", Labels: []string{"a", "b"}},
+		{UserId: "2", Labels: []string{"b", "c"}},
+		{UserId: "3", Labels: []string{"c", "d"}},
+	}
+	for _, user := range users {
+		err := s.DataClient.InsertUser(user)
+		assert.NoError(t, err)
+	}
+	// send request
+	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	w := httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment;filename=users.csv", w.Header().Get("Content-Disposition"))
+	assert.Equal(t, "user_id,labels\r\n"+
+		"1,a|b\r\n"+
+		"2,b|c\r\n"+
+		"3,c|d\r\n", w.Body.String())
+}
+
 func TestMaster_ExportItems(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
@@ -125,6 +151,75 @@ func TestMaster_ExportFeedback(t *testing.T) {
 		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n"+
 		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n"+
 		"share,1,4,0001-01-01 00:00:00 +0000 UTC\r\n", w.Body.String())
+}
+
+func TestMaster_ImportUsers(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// send request
+	buf := bytes.NewBuffer(nil)
+	writer := multipart.NewWriter(buf)
+	err := writer.WriteField("has-header", "false")
+	assert.NoError(t, err)
+	err = writer.WriteField("sep", "\t")
+	assert.NoError(t, err)
+	err = writer.WriteField("label-sep", "::")
+	assert.NoError(t, err)
+	err = writer.WriteField("format", "lu")
+	assert.NoError(t, err)
+	file, err := writer.CreateFormFile("file", "users.csv")
+	assert.NoError(t, err)
+	_, err = file.Write([]byte("a::b\t1\n" +
+		"b::c\t2\n" +
+		"c::d\t3\n"))
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	// check
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
+	_, items, err := s.DataClient.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []data.User{
+		{UserId: "1", Labels: []string{"a", "b"}},
+		{UserId: "2", Labels: []string{"b", "c"}},
+		{UserId: "3", Labels: []string{"c", "d"}},
+	}, items)
+}
+
+func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// send request
+	buf := bytes.NewBuffer(nil)
+	writer := multipart.NewWriter(buf)
+	file, err := writer.CreateFormFile("file", "users.csv")
+	assert.NoError(t, err)
+	_, err = file.Write([]byte("user_id,labels\r\n" +
+		"1,a|用例\r\n" +
+		"2,b|乱码\r\n" +
+		"3,c|测试\r\n"))
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	// check
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
+	_, items, err := s.DataClient.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []data.User{
+		{UserId: "1", Labels: []string{"a", "用例"}},
+		{UserId: "2", Labels: []string{"b", "乱码"}},
+		{UserId: "3", Labels: []string{"c", "测试"}},
+	}, items)
 }
 
 func TestMaster_ImportItems(t *testing.T) {
@@ -288,11 +383,13 @@ func TestMaster_GetStats(t *testing.T) {
 	// set stats
 	s.rankingScore = ranking.Score{Precision: 0.1}
 	s.clickScore = click.Score{Precision: 0.2}
-	err := s.CacheClient.SetString(cache.GlobalMeta, cache.NumItems, "123")
+	err := s.DataClient.InsertMeasurement(data.Measurement{Name: NumUsers, Timestamp: time.Now(), Value: 123})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumUsers, "234")
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumItems, Timestamp: time.Now(), Value: 234})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.GlobalMeta, cache.NumPositiveFeedback, "345")
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumValidPosFeedbacks, Timestamp: time.Now(), Value: 345})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumValidNegFeedbacks, Timestamp: time.Now(), Value: 456})
 	assert.NoError(t, err)
 	// get stats
 	apitest.New().
@@ -301,11 +398,12 @@ func TestMaster_GetStats(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, Status{
-			NumUsers:       "234",
-			NumItems:       "123",
-			NumPosFeedback: "345",
-			RankingScore:   0.1,
-			ClickScore:     0.2,
+			NumUsers:            123,
+			NumItems:            234,
+			NumValidPosFeedback: 345,
+			NumValidNegFeedback: 456,
+			RankingScore:        ranking.Score{Precision: 0.1},
+			ClickScore:          click.Score{Precision: 0.2},
 		})).
 		End()
 }
@@ -348,7 +446,7 @@ func TestMaster_GetUsers(t *testing.T) {
 		End()
 }
 
-func TestServer_List(t *testing.T) {
+func TestServer_ItemList(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
@@ -359,24 +457,24 @@ func TestServer_List(t *testing.T) {
 	operators := []ListOperator{
 		{cache.LatestItems, "", "/api/dashboard/latest/"},
 		{cache.PopularItems, "", "/api/dashboard/popular/"},
-		{cache.SimilarItems, "0", "/api/dashboard/neighbors/0"},
+		{cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
 	}
 	for _, operator := range operators {
 		t.Logf("test RESTful API: %v", operator.Get)
-		// Put itemIds
-		itemIds := []cache.ScoredItem{
+		// Put scores
+		scores := []cache.Scored{
 			{"0", 100},
 			{"1", 99},
 			{"2", 98},
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, itemIds)
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
 		assert.NoError(t, err)
 		items := make([]data.Item, 0)
-		for _, item := range itemIds {
-			items = append(items, data.Item{ItemId: item.ItemId})
-			err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
+		for _, score := range scores {
+			items = append(items, data.Item{ItemId: score.Id})
+			err = s.DataClient.InsertItem(data.Item{ItemId: score.Id})
 			assert.NoError(t, err)
 		}
 		apitest.New().
@@ -385,6 +483,45 @@ func TestServer_List(t *testing.T) {
 			Expect(t).
 			Status(http.StatusOK).
 			Body(marshal(t, items)).
+			End()
+	}
+}
+
+func TestServer_UserList(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	type ListOperator struct {
+		Prefix string
+		Label  string
+		Get    string
+	}
+	operators := []ListOperator{
+		{cache.UserNeighbors, "0", "/api/dashboard/user/0/neighbors"},
+	}
+	for _, operator := range operators {
+		t.Logf("test RESTful API: %v", operator.Get)
+		// Put scores
+		scores := []cache.Scored{
+			{"0", 100},
+			{"1", 99},
+			{"2", 98},
+			{"3", 97},
+			{"4", 96},
+		}
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
+		assert.NoError(t, err)
+		users := make([]data.User, 0)
+		for _, score := range scores {
+			users = append(users, data.User{UserId: score.Id})
+			err = s.DataClient.InsertUser(data.User{UserId: score.Id})
+			assert.NoError(t, err)
+		}
+		apitest.New().
+			Handler(s.handler).
+			Get(operator.Get).
+			Expect(t).
+			Status(http.StatusOK).
+			Body(marshal(t, users)).
 			End()
 	}
 }
@@ -420,7 +557,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// inset recommendation
-	itemIds := []cache.ScoredItem{
+	itemIds := []cache.Scored{
 		{"1", 99},
 		{"2", 98},
 		{"3", 97},
@@ -430,7 +567,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.CacheClient.SetScores(cache.RecommendItems, "0", itemIds)
+	err := s.CacheClient.SetScores(cache.CTRRecommend, "0", itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -441,12 +578,12 @@ func TestServer_GetRecommends(t *testing.T) {
 	assert.NoError(t, err)
 	// insert items
 	for _, item := range itemIds {
-		err = s.DataClient.InsertItem(data.Item{ItemId: item.ItemId})
+		err = s.DataClient.InsertItem(data.Item{ItemId: item.Id})
 		assert.NoError(t, err)
 	}
 	apitest.New().
 		Handler(s.handler).
-		Get("/api/dashboard/recommend/0").
+		Get("/api/dashboard/recommend/0/ctr").
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []data.Item{

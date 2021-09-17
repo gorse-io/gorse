@@ -17,6 +17,7 @@ package click
 import (
 	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
+	"sort"
 )
 
 // EvaluateRegression evaluates factorization machines in regression task.
@@ -24,9 +25,15 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 	sum := float32(0)
 	// For all UserFeedback
 	for i := 0; i < testSet.Count(); i++ {
-		labels, target := testSet.Get(i)
-		prediction := estimator.InternalPredict(labels)
+		features, values, target := testSet.Get(i)
+		prediction := estimator.InternalPredict(features, values)
 		sum += (target - prediction) * (target - prediction)
+	}
+	if 0 == testSet.Count() {
+		return Score{
+			Task: FMRegression,
+			RMSE: 0,
+		}
 	}
 	return Score{
 		Task: FMRegression,
@@ -36,19 +43,100 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 
 // EvaluateClassification evaluates factorization machines in classification task.
 func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Score {
-	correct := float32(0)
 	// For all UserFeedback
+	var posPrediction, negPrediction []float32
 	for i := 0; i < testSet.Count(); i++ {
-		labels, target := testSet.Get(i)
-		prediction := estimator.InternalPredict(labels)
-		if target*prediction > 0 {
-			correct++
+		features, values, target := testSet.Get(i)
+		prediction := estimator.InternalPredict(features, values)
+		if target > 0 {
+			posPrediction = append(posPrediction, prediction)
+		} else {
+			negPrediction = append(negPrediction, prediction)
+		}
+	}
+	if 0 == testSet.Count() {
+		return Score{
+			Task:      FMClassification,
+			Precision: 0,
 		}
 	}
 	return Score{
 		Task:      FMClassification,
-		Precision: correct / float32(testSet.Count()),
+		Precision: Precision(posPrediction, negPrediction),
+		Recall:    Recall(posPrediction, negPrediction),
+		Accuracy:  Accuracy(posPrediction, negPrediction),
+		AUC:       AUC(posPrediction, negPrediction),
 	}
+}
+
+func Precision(posPrediction, negPrediction []float32) float32 {
+	var tp, fp float32
+	for _, p := range posPrediction {
+		if p > 0 { // true positive
+			tp++
+		}
+	}
+	for _, p := range negPrediction {
+		if p > 0 { // false positive
+			fp++
+		}
+	}
+	if tp+fp == 0 {
+		return 0
+	}
+	return tp / (tp + fp)
+}
+
+func Recall(posPrediction, _ []float32) float32 {
+	var tp, fn float32
+	for _, p := range posPrediction {
+		if p > 0 { // true positive
+			tp++
+		} else { // false negative
+			fn++
+		}
+	}
+	if tp+fn == 0 {
+		return 0
+	}
+	return tp / (tp + fn)
+}
+
+func Accuracy(posPrediction, negPrediction []float32) float32 {
+	var correct float32
+	for _, p := range posPrediction {
+		if p > 0 {
+			correct++
+		}
+	}
+	for _, p := range negPrediction {
+		if p < 0 {
+			correct++
+		}
+	}
+	if len(posPrediction)+len(negPrediction) == 0 {
+		return 0
+	}
+	return correct / float32(len(posPrediction)+len(negPrediction))
+}
+
+func AUC(posPrediction, negPrediction []float32) float32 {
+	sort.Slice(posPrediction, func(i, j int) bool { return posPrediction[i] < posPrediction[j] })
+	sort.Slice(negPrediction, func(i, j int) bool { return negPrediction[i] < negPrediction[j] })
+	var sum float32
+	var nPos int
+	for pPos := range posPrediction {
+		// find the negative sample with the greatest prediction less than current positive sample
+		for nPos < len(negPrediction) && negPrediction[nPos] < posPrediction[pPos] {
+			nPos++
+		}
+		// add the number of negative samples have less prediction than current positive sample
+		sum += float32(nPos)
+	}
+	if len(posPrediction)*len(negPrediction) == 0 {
+		return 0
+	}
+	return sum / float32(len(posPrediction)*len(negPrediction))
 }
 
 // SnapshotManger manages the best snapshot.
