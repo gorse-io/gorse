@@ -91,6 +91,7 @@ func (s *RestServer) CreateWebService() {
 		Doc("Insert a user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Returns(200, "OK", Success{}).
 		Reads(data.User{}))
 	// Get a user
 	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
@@ -98,12 +99,14 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(200, "OK", data.User{}).
 		Writes(data.User{}))
 	// Insert users
 	ws.Route(ws.POST("/users").To(s.insertUsers).
 		Doc("Insert users.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Returns(200, "OK", Success{}).
 		Reads([]data.User{}))
 	// Get users
 	ws.Route(ws.GET("/users").To(s.getUsers).
@@ -112,6 +115,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
+		Returns(200, "OK", UserIterator{}).
 		Writes(UserIterator{}))
 	// Delete a user
 	ws.Route(ws.DELETE("/user/{user-id}").To(s.deleteUser).
@@ -119,6 +123,7 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(200, "OK", Success{}).
 		Writes(Success{}))
 
 	// Insert an item
@@ -126,6 +131,7 @@ func (s *RestServer) CreateWebService() {
 		Doc("Insert an item.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Returns(200, "OK", Success{}).
 		Reads(data.Item{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
@@ -134,6 +140,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
+		Returns(200, "OK", ItemIterator{}).
 		Writes(ItemIterator{}))
 	// Get item
 	ws.Route(ws.GET("/item/{item-id}").To(s.getItem).
@@ -141,6 +148,7 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("int")).
+		Returns(200, "OK", data.Item{}).
 		Writes(data.Item{}))
 	// Insert items
 	ws.Route(ws.POST("/items").To(s.insertItems).
@@ -154,6 +162,7 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("item-id", "identified of the item").DataType("string")).
+		Returns(200, "OK", Success{}).
 		Writes(Success{}))
 
 	// Insert feedback
@@ -161,7 +170,8 @@ func (s *RestServer) CreateWebService() {
 		Doc("Insert multiple feedback.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Reads([]data.Feedback{}))
+		Reads([]data.Feedback{}).
+		Returns(200, "OK", Success{}))
 	// Get feedback
 	ws.Route(ws.GET("/feedback").To(s.getFeedback).
 		Doc("Get multiple feedback.").
@@ -169,6 +179,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned feedback").DataType("integer")).
+		Returns(200, "OK", FeedbackIterator{}).
 		Writes(FeedbackIterator{}))
 	ws.Route(ws.GET("/feedback/{user-id}/{item-id}").To(s.getUserItemFeedback).
 		Doc("Get feedback between a user and a item.").
@@ -176,6 +187,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Returns(200, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.DELETE("/feedback/{user-id}/{item-id}").To(s.deleteUserItemFeedback).
 		Doc("Delete feedback between a user and a item.").
@@ -183,6 +195,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Returns(200, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/feedback/{feedback-type}").To(s.getTypedFeedback).
 		Doc("Get multiple feedback with feedback type.").
@@ -191,6 +204,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned feedback").DataType("integer")).
+		Returns(200, "OK", FeedbackIterator{}).
 		Writes(FeedbackIterator{}))
 	ws.Route(ws.GET("/feedback/{feedback-type}/{user-id}/{item-id}").To(s.getTypedUserItemFeedback).
 		Doc("Get feedback between a user and a item with feedback type.").
@@ -199,6 +213,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Returns(200, "OK", data.Feedback{}).
 		Writes(data.Feedback{}))
 	ws.Route(ws.DELETE("/feedback/{feedback-type}/{user-id}/{item-id}").To(s.deleteTypedUserItemFeedback).
 		Doc("Delete feedback between a user and a item with feedback type.").
@@ -207,6 +222,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Returns(200, "OK", data.Feedback{}).
 		Writes(data.Feedback{}))
 	// Get feedback by user id
 	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByUser).
@@ -215,12 +231,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Returns(200, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/user/{user-id}/feedback/").To(s.getFeedbackByUser).
 		Doc("Get feedback by user id.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(200, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	// Get feedback by item-id
 	ws.Route(ws.GET("/item/{item-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByItem).
@@ -229,12 +247,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("strung")).
+		Returns(200, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.GET("/item/{item-id}/feedback/").To(s.getFeedbackByItem).
 		Doc("Get feedback by item id.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Returns(200, "OK", []string{}).
 		Writes([]string{}))
 
 	/* Interaction with intermediate result */
@@ -244,9 +264,10 @@ func (s *RestServer) CreateWebService() {
 		Doc("get the collaborative filtering recommendation for a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"intermediate"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(200, "OK", []string{}).
 		Writes([]string{}))
 
 	/* Rank recommendation */
@@ -258,6 +279,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(200, "OK", []string{}).
 		Writes([]string{}))
 	// Disable popular items under labels temporarily
 	//ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
@@ -274,7 +296,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]string{}))
+		Returns(200, "OK", []cache.Scored{}).
+		Writes([]cache.Scored{}))
 	// Disable the latest items under labels temporarily
 	//ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
 	//	Doc("get latest items").
@@ -291,6 +314,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(200, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.GET("/user/{user-id}/neighbors/").To(s.getUserNeighbors).
 		Doc("get neighbors of a user").
@@ -299,6 +323,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(200, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
 		Doc("Get recommendation for user.").
@@ -307,6 +332,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("write-back", "write recommendation back to feedback").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Returns(200, "OK", []string{}).
 		Writes([]string{}))
 
 	/* Interaction with measurements */
@@ -316,6 +342,7 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"measurements"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Returns(200, "OK", []data.Measurement{}).
 		Writes([]data.Measurement{}))
 }
 
