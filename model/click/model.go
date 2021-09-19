@@ -122,7 +122,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 type FactorizationMachine interface {
 	model.Model
 	Predict(userId, itemId string, userLabels, itemLabels []string) float32
-	InternalPredict(x []int, values []float32) float32
+	InternalPredict(x []int32, values []float32) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 }
 
@@ -189,7 +189,7 @@ func (fm *FM) SetParams(params model.Params) {
 }
 
 func (fm *FM) Predict(userId, itemId string, userLabels, itemLabels []string) float32 {
-	var features []int
+	var features []int32
 	var values []float32
 	// encode user
 	if userIndex := fm.Index.EncodeUser(userId); userIndex != base.NotId {
@@ -220,7 +220,7 @@ func (fm *FM) Predict(userId, itemId string, userLabels, itemLabels []string) fl
 	return fm.InternalPredict(features, values)
 }
 
-func (fm *FM) internalPredictImpl(features []int, values []float32) float32 {
+func (fm *FM) internalPredictImpl(features []int32, values []float32) float32 {
 	// w_0
 	pred := fm.B
 	// \sum^n_{i=1} w_i x_i
@@ -244,7 +244,7 @@ func (fm *FM) internalPredictImpl(features []int, values []float32) float32 {
 	return pred
 }
 
-func (fm *FM) InternalPredict(features []int, values []float32) float32 {
+func (fm *FM) InternalPredict(features []int32, values []float32) float32 {
 	pred := fm.internalPredictImpl(features, values)
 	if fm.Task == FMRegression {
 		if pred < fm.MinTarget {
@@ -390,7 +390,7 @@ func (fm *FM) Invalid() bool {
 }
 
 func (fm *FM) Init(trainSet *Dataset) {
-	newV := fm.GetRandomGenerator().NormalMatrix(trainSet.Index.Len(), fm.nFactors, fm.initMean, fm.initStdDev)
+	newV := fm.GetRandomGenerator().NormalMatrix(int(trainSet.Index.Len()), fm.nFactors, fm.initMean, fm.initStdDev)
 	newW := make([]float32, trainSet.Index.Len())
 	// Relocate parameters
 	if fm.Index != nil {

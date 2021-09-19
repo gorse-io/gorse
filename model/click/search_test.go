@@ -58,7 +58,7 @@ func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []string) 
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) InternalPredict(_ []int, _ []float32) float32 {
+func (m *mockFactorizationMachineForSearch) InternalPredict(_ []int32, _ []float32) float32 {
 	panic("don't call me")
 }
 

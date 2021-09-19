@@ -56,3 +56,14 @@ func TestRandomGenerator_Sample(t *testing.T) {
 		}
 	}
 }
+
+func TestRandomGenerator_SampleInt32(t *testing.T) {
+	excludeSet := set.NewInt32Set(0, 1, 2, 3, 4)
+	rng := NewRandomGenerator(0)
+	for i := 1; i <= 10; i++ {
+		sampled := rng.SampleInt32(0, 10, i, excludeSet)
+		for j := range sampled {
+			assert.False(t, excludeSet.Has(sampled[j]))
+		}
+	}
+}

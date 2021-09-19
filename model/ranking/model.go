@@ -91,7 +91,7 @@ type MatrixFactorization interface {
 	// Predict the rating given by a user (userId) to a item (itemId).
 	Predict(userId, itemId string) float32
 	// InternalPredict predicts rating given by a user index and a item index
-	InternalPredict(userIndex, itemIndex int) float32
+	InternalPredict(userIndex, itemIndex int32) float32
 	// GetUserIndex returns user index.
 	GetUserIndex() base.Index
 }
@@ -277,7 +277,7 @@ func (bpr *BPR) Predict(userId, itemId string) float32 {
 	return bpr.InternalPredict(userIndex, itemIndex)
 }
 
-func (bpr *BPR) InternalPredict(userIndex, itemIndex int) float32 {
+func (bpr *BPR) InternalPredict(userIndex, itemIndex int32) float32 {
 	ret := float32(0.0)
 	// + q_i^Tp_u
 	if itemIndex != base.NotId && userIndex != base.NotId {
@@ -314,7 +314,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	for u := range userFeedback {
 		userFeedback[u] = make(map[int]interface{})
 		for _, i := range trainSet.UserFeedback[u] {
-			userFeedback[u][i] = nil
+			userFeedback[u][int(i)] = nil
 		}
 	}
 	snapshots := SnapshotManger{}
@@ -334,9 +334,10 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		cost := float32(0.0)
 		_ = base.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
 			// Select a user
-			var userIndex, ratingCount int
+			var userIndex int32
+			var ratingCount int
 			for {
-				userIndex = rng[workerId].Intn(trainSet.UserCount())
+				userIndex = rng[workerId].Int31n(int32(trainSet.UserCount()))
 				ratingCount = len(trainSet.UserFeedback[userIndex])
 				if ratingCount > 0 {
 					break
@@ -344,10 +345,10 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			}
 			posIndex := trainSet.UserFeedback[userIndex][rng[workerId].Intn(ratingCount)]
 			// Select a negative sample
-			negIndex := -1
+			negIndex := int32(-1)
 			for {
-				temp := rng[workerId].Intn(trainSet.ItemCount())
-				if _, exist := userFeedback[userIndex][temp]; !exist {
+				temp := rng[workerId].Int31n(int32(trainSet.ItemCount()))
+				if _, exist := userFeedback[userIndex][int(temp)]; !exist {
 					negIndex = temp
 					break
 				}
@@ -518,11 +519,11 @@ func (als *ALS) Predict(userId, itemId string) float32 {
 	return als.InternalPredict(userIndex, itemIndex)
 }
 
-func (als *ALS) InternalPredict(userIndex, itemIndex int) float32 {
+func (als *ALS) InternalPredict(userIndex, itemIndex int32) float32 {
 	ret := float32(0.0)
 	if itemIndex != base.NotId && userIndex != base.NotId {
-		ret = float32(mat.Dot(als.UserFactor.RowView(userIndex),
-			als.ItemFactor.RowView(itemIndex)))
+		ret = float32(mat.Dot(als.UserFactor.RowView(int(userIndex)),
+			als.ItemFactor.RowView(int(itemIndex))))
 	} else {
 		base.Logger().Warn("unknown user or item")
 	}
@@ -582,10 +583,10 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			b := mat.NewVecDense(als.nFactors, nil)
 			for _, itemIndex := range trainSet.UserFeedback[userIndex] {
 				// Y^T (C^u-I) Y
-				temp1[workerId].Outer(1, als.ItemFactor.RowView(itemIndex), als.ItemFactor.RowView(itemIndex))
+				temp1[workerId].Outer(1, als.ItemFactor.RowView(int(itemIndex)), als.ItemFactor.RowView(int(itemIndex)))
 				a[workerId].Add(a[workerId], temp1[workerId])
 				// Y^T C^u p(u)
-				temp2[workerId].ScaleVec(1+als.weight, als.ItemFactor.RowView(itemIndex))
+				temp2[workerId].ScaleVec(1+als.weight, als.ItemFactor.RowView(int(itemIndex)))
 				b.AddVec(b, temp2[workerId])
 			}
 			a[workerId].Add(a[workerId], regI)
@@ -606,10 +607,10 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			b := mat.NewVecDense(als.nFactors, nil)
 			for _, index := range trainSet.ItemFeedback[itemIndex] {
 				// X^T (C^i-I) X
-				temp1[workerId].Outer(1, als.UserFactor.RowView(index), als.UserFactor.RowView(index))
+				temp1[workerId].Outer(1, als.UserFactor.RowView(int(index)), als.UserFactor.RowView(int(index)))
 				a[workerId].Add(a[workerId], temp1[workerId])
 				// X^T C^i p(i)
-				temp2[workerId].ScaleVec(1+als.weight, als.UserFactor.RowView(index))
+				temp2[workerId].ScaleVec(1+als.weight, als.UserFactor.RowView(int(index)))
 				b.AddVec(b, temp2[workerId])
 			}
 			a[workerId].Add(a[workerId], regI)
@@ -683,7 +684,7 @@ func (als *ALS) Init(trainSet *DataSet) {
 			oldIndex := als.UserIndex.ToNumber(userId)
 			newIndex := trainSet.UserIndex.ToNumber(userId)
 			if oldIndex != base.NotId {
-				newUserFactor.SetRow(newIndex, als.UserFactor.RawRowView(oldIndex))
+				newUserFactor.SetRow(int(newIndex), als.UserFactor.RawRowView(int(oldIndex)))
 			}
 		}
 	}
@@ -692,7 +693,7 @@ func (als *ALS) Init(trainSet *DataSet) {
 			oldIndex := als.ItemIndex.ToNumber(itemId)
 			newIndex := trainSet.ItemIndex.ToNumber(itemId)
 			if oldIndex != base.NotId {
-				newItemFactor.SetRow(newIndex, als.ItemFactor.RawRowView(oldIndex))
+				newItemFactor.SetRow(int(newIndex), als.ItemFactor.RawRowView(int(oldIndex)))
 			}
 		}
 	}
@@ -759,7 +760,7 @@ func (ccd *CCD) Predict(userId, itemId string) float32 {
 	return ccd.InternalPredict(userIndex, itemIndex)
 }
 
-func (ccd *CCD) InternalPredict(userIndex, itemIndex int) float32 {
+func (ccd *CCD) InternalPredict(userIndex, itemIndex int32) float32 {
 	ret := float32(0.0)
 	if itemIndex != base.NotId && userIndex != base.NotId {
 		ret = floats.Dot(ccd.UserFactor[userIndex], ccd.ItemFactor[itemIndex])
@@ -864,7 +865,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		_ = base.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
 			userFeedback := trainSet.UserFeedback[userIndex]
 			for _, i := range userFeedback {
-				userPredictions[workerId][i] = ccd.InternalPredict(userIndex, i)
+				userPredictions[workerId][i] = ccd.InternalPredict(int32(userIndex), i)
 			}
 			for f := 0; f < ccd.nFactors; f++ {
 				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}
@@ -905,7 +906,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		_ = base.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
 			itemFeedback := trainSet.ItemFeedback[itemIndex]
 			for _, u := range itemFeedback {
-				itemPredictions[workerId][u] = ccd.InternalPredict(u, itemIndex)
+				itemPredictions[workerId][u] = ccd.InternalPredict(u, int32(itemIndex))
 			}
 			for f := 0; f < ccd.nFactors; f++ {
 				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}

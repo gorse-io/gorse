@@ -18,7 +18,7 @@ import (
 	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
-	"github.com/scylladb/go-set/iset"
+	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 )
@@ -26,7 +26,7 @@ import (
 /* Evaluate Item Ranking */
 
 // Metric is used by evaluators in personalized ranking tasks.
-type Metric func(targetSet *iset.Set, rankList []int) float32
+type Metric func(targetSet *i32set.Set, rankList []int32) float32
 
 // Evaluate evaluates a model in top-n tasks.
 func Evaluate(estimator MatrixFactorization, testSet, trainSet *DataSet, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
@@ -40,16 +40,16 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet *DataSet, topK, n
 	negatives := testSet.NegativeSample(trainSet, numCandidates)
 	_ = base.Parallel(testSet.UserCount(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
-		targetSet := set.NewIntSet(testSet.UserFeedback[userIndex]...)
+		targetSet := set.NewInt32Set(testSet.UserFeedback[userIndex]...)
 		if targetSet.Size() > 0 {
 			// Sample negative samples
 			//userTrainSet := NewSet(trainSet.UserFeedback[userIndex])
 			negativeSample := negatives[userIndex]
-			candidates := make([]int, 0, targetSet.Size()+len(negativeSample))
+			candidates := make([]int32, 0, targetSet.Size()+len(negativeSample))
 			candidates = append(candidates, testSet.UserFeedback[userIndex]...)
 			candidates = append(candidates, negativeSample...)
 			// Find top-n ItemFeedback in predictions
-			rankList, _ := Rank(estimator, userIndex, candidates, topK)
+			rankList, _ := Rank(estimator, int32(userIndex), candidates, topK)
 			partCount[workerId]++
 			for i, metric := range scorers {
 				partSum[workerId][i] += metric(targetSet, rankList)
@@ -69,7 +69,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet *DataSet, topK, n
 }
 
 // NDCG means Normalized Discounted Cumulative Gain.
-func NDCG(targetSet *iset.Set, rankList []int) float32 {
+func NDCG(targetSet *i32set.Set, rankList []int32) float32 {
 	// IDCG = \sum^{|REL|}_{i=1} \frac {1} {\log_2(i+1)}
 	idcg := float32(0)
 	for i := 0; i < targetSet.Size() && i < len(rankList); i++ {
@@ -87,7 +87,7 @@ func NDCG(targetSet *iset.Set, rankList []int) float32 {
 
 // Precision is the fraction of relevant ItemFeedback among the recommended ItemFeedback.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{retrieved documents}|}
-func Precision(targetSet *iset.Set, rankList []int) float32 {
+func Precision(targetSet *i32set.Set, rankList []int32) float32 {
 	hit := float32(0)
 	for _, itemId := range rankList {
 		if targetSet.Has(itemId) {
@@ -100,7 +100,7 @@ func Precision(targetSet *iset.Set, rankList []int) float32 {
 // Recall is the fraction of relevant ItemFeedback that have been recommended over the total
 // amount of relevant ItemFeedback.
 //   \frac{|relevant documents| \cap |retrieved documents|} {|{relevant documents}|}
-func Recall(targetSet *iset.Set, rankList []int) float32 {
+func Recall(targetSet *i32set.Set, rankList []int32) float32 {
 	hit := 0
 	for _, itemId := range rankList {
 		if targetSet.Has(itemId) {
@@ -111,7 +111,7 @@ func Recall(targetSet *iset.Set, rankList []int) float32 {
 }
 
 // HR means Hit Ratio.
-func HR(targetSet *iset.Set, rankList []int) float32 {
+func HR(targetSet *i32set.Set, rankList []int32) float32 {
 	for _, itemId := range rankList {
 		if targetSet.Has(itemId) {
 			return 1
@@ -122,7 +122,7 @@ func HR(targetSet *iset.Set, rankList []int) float32 {
 
 // MAP means Mean Average Precision.
 // mAP: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
-func MAP(targetSet *iset.Set, rankList []int) float32 {
+func MAP(targetSet *i32set.Set, rankList []int32) float32 {
 	sumPrecision := float32(0)
 	hit := 0
 	for i, itemId := range rankList {
@@ -145,7 +145,7 @@ func MAP(targetSet *iset.Set, rankList []int) float32 {
 // a sample of queries Q:
 //
 //   MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
-func MRR(targetSet *iset.Set, rankList []int) float32 {
+func MRR(targetSet *i32set.Set, rankList []int32) float32 {
 	for i, itemId := range rankList {
 		if targetSet.Has(itemId) {
 			return 1 / float32(i+1)
@@ -154,14 +154,14 @@ func MRR(targetSet *iset.Set, rankList []int) float32 {
 	return 0
 }
 
-func Rank(model MatrixFactorization, userId int, candidates []int, topN int) ([]int, []float32) {
+func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int) ([]int32, []float32) {
 	// Get top-n list
 	itemsHeap := base.NewTopKFilter(topN)
 	for _, itemId := range candidates {
 		itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
 	}
 	elem, scores := itemsHeap.PopAll()
-	recommends := make([]int, len(elem))
+	recommends := make([]int32, len(elem))
 	for i := range recommends {
 		recommends[i] = elem[i]
 	}

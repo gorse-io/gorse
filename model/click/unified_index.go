@@ -27,22 +27,22 @@ func init() {
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.
 type UnifiedIndex interface {
-	Len() int
-	EncodeUser(userId string) int
-	EncodeItem(itemId string) int
-	EncodeUserLabel(userLabel string) int
-	EncodeItemLabel(itemLabel string) int
-	EncodeContextLabel(ctxLabel string) int
+	Len() int32
+	EncodeUser(userId string) int32
+	EncodeItem(itemId string) int32
+	EncodeUserLabel(userLabel string) int32
+	EncodeItemLabel(itemLabel string) int32
+	EncodeContextLabel(ctxLabel string) int32
 	GetUsers() []string
 	GetItems() []string
 	GetUserLabels() []string
 	GetItemLabels() []string
 	GetContextLabels() []string
-	CountUsers() int
-	CountItems() int
-	CountUserLabels() int
-	CountItemLabels() int
-	CountContextLabels() int
+	CountUsers() int32
+	CountItems() int32
+	CountUserLabels() int32
+	CountItemLabels() int32
+	CountContextLabels() int32
 }
 
 // UnifiedMapIndexBuilder is the builder for UnifiedMapIndex.
@@ -127,34 +127,34 @@ func (unified *UnifiedMapIndex) GetContextLabels() []string {
 }
 
 // CountUserLabels returns the number of user labels.
-func (unified *UnifiedMapIndex) CountUserLabels() int {
+func (unified *UnifiedMapIndex) CountUserLabels() int32 {
 	return unified.UserLabelIndex.Len()
 }
 
 // CountItemLabels returns the number of item labels.
-func (unified *UnifiedMapIndex) CountItemLabels() int {
+func (unified *UnifiedMapIndex) CountItemLabels() int32 {
 	return unified.ItemLabelIndex.Len()
 }
 
 // CountContextLabels returns the number of context labels.
-func (unified *UnifiedMapIndex) CountContextLabels() int {
+func (unified *UnifiedMapIndex) CountContextLabels() int32 {
 	return unified.CtxLabelIndex.Len()
 }
 
 // Len returns the size of unified index.
-func (unified *UnifiedMapIndex) Len() int {
+func (unified *UnifiedMapIndex) Len() int32 {
 	return unified.UserIndex.Len() + unified.ItemIndex.Len() +
 		unified.UserLabelIndex.Len() + unified.ItemLabelIndex.Len() +
 		unified.CtxLabelIndex.Len()
 }
 
 // EncodeUser converts a user id to a integer in the encoding space.
-func (unified *UnifiedMapIndex) EncodeUser(userId string) int {
+func (unified *UnifiedMapIndex) EncodeUser(userId string) int32 {
 	return unified.UserIndex.ToNumber(userId)
 }
 
 // EncodeItem converts a item id to a integer in the encoding space.
-func (unified *UnifiedMapIndex) EncodeItem(itemId string) int {
+func (unified *UnifiedMapIndex) EncodeItem(itemId string) int32 {
 	itemIndex := unified.ItemIndex.ToNumber(itemId)
 	if itemIndex != base.NotId {
 		itemIndex += unified.UserIndex.Len()
@@ -163,7 +163,7 @@ func (unified *UnifiedMapIndex) EncodeItem(itemId string) int {
 }
 
 // EncodeUserLabel converts a user label to a integer in the encoding space.
-func (unified *UnifiedMapIndex) EncodeUserLabel(userLabel string) int {
+func (unified *UnifiedMapIndex) EncodeUserLabel(userLabel string) int32 {
 	userLabelIndex := unified.UserLabelIndex.ToNumber(userLabel)
 	if userLabelIndex != base.NotId {
 		userLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len()
@@ -172,7 +172,7 @@ func (unified *UnifiedMapIndex) EncodeUserLabel(userLabel string) int {
 }
 
 // EncodeItemLabel converts a item label to a integer in the encoding space.
-func (unified *UnifiedMapIndex) EncodeItemLabel(itemLabel string) int {
+func (unified *UnifiedMapIndex) EncodeItemLabel(itemLabel string) int32 {
 	itemLabelIndex := unified.ItemLabelIndex.ToNumber(itemLabel)
 	if itemLabelIndex != base.NotId {
 		itemLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len() + unified.UserLabelIndex.Len()
@@ -181,7 +181,7 @@ func (unified *UnifiedMapIndex) EncodeItemLabel(itemLabel string) int {
 }
 
 // EncodeContextLabel converts a context label to a integer in the encoding space.
-func (unified *UnifiedMapIndex) EncodeContextLabel(label string) int {
+func (unified *UnifiedMapIndex) EncodeContextLabel(label string) int32 {
 	ctxLabelIndex := unified.CtxLabelIndex.ToNumber(label)
 	if ctxLabelIndex != base.NotId {
 		ctxLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len() +
@@ -201,35 +201,35 @@ func (unified *UnifiedMapIndex) GetItems() []string {
 }
 
 // CountUsers returns the number of users.
-func (unified *UnifiedMapIndex) CountUsers() int {
+func (unified *UnifiedMapIndex) CountUsers() int32 {
 	return unified.UserIndex.Len()
 }
 
 // CountItems returns the number of items.
-func (unified *UnifiedMapIndex) CountItems() int {
+func (unified *UnifiedMapIndex) CountItems() int32 {
 	return unified.ItemIndex.Len()
 }
 
 // UnifiedDirectIndex maps string to integer in literal.
 type UnifiedDirectIndex struct {
-	N int
+	N int32
 }
 
 // EncodeUserLabel should be used by unit testing only.
-func (unified *UnifiedDirectIndex) EncodeUserLabel(userLabel string) int {
+func (unified *UnifiedDirectIndex) EncodeUserLabel(userLabel string) int32 {
 	if val, err := strconv.Atoi(userLabel); err != nil {
 		panic(err)
 	} else {
-		return val
+		return int32(val)
 	}
 }
 
 // EncodeItemLabel should be used by unit testing only.
-func (unified *UnifiedDirectIndex) EncodeItemLabel(itemLabel string) int {
+func (unified *UnifiedDirectIndex) EncodeItemLabel(itemLabel string) int32 {
 	if val, err := strconv.Atoi(itemLabel); err != nil {
 		panic(err)
 	} else {
-		return val
+		return int32(val)
 	}
 }
 
@@ -238,7 +238,7 @@ func (unified *UnifiedDirectIndex) GetUserLabels() []string {
 	var names []string
 	begin, end := unified.N/5*3, unified.N/5*4
 	for i := begin; i < end; i++ {
-		names = append(names, strconv.Itoa(i))
+		names = append(names, strconv.Itoa(int(i)))
 	}
 	return names
 }
@@ -248,7 +248,7 @@ func (unified *UnifiedDirectIndex) GetItemLabels() []string {
 	var names []string
 	begin, end := unified.N/5*2, unified.N/5*3
 	for i := begin; i < end; i++ {
-		names = append(names, strconv.Itoa(i))
+		names = append(names, strconv.Itoa(int(i)))
 	}
 	return names
 }
@@ -258,60 +258,60 @@ func (unified *UnifiedDirectIndex) GetContextLabels() []string {
 	var names []string
 	begin, end := unified.N/5*4, unified.N
 	for i := begin; i < end; i++ {
-		names = append(names, strconv.Itoa(i))
+		names = append(names, strconv.Itoa(int(i)))
 	}
 	return names
 }
 
 // CountUserLabels should be used by unit testing only.
-func (unified *UnifiedDirectIndex) CountUserLabels() int {
+func (unified *UnifiedDirectIndex) CountUserLabels() int32 {
 	return unified.N / 5
 }
 
 // CountItemLabels should be used by unit testing only.
-func (unified *UnifiedDirectIndex) CountItemLabels() int {
+func (unified *UnifiedDirectIndex) CountItemLabels() int32 {
 	return unified.N / 5
 }
 
 // CountContextLabels should be used by unit testing only.
-func (unified *UnifiedDirectIndex) CountContextLabels() int {
+func (unified *UnifiedDirectIndex) CountContextLabels() int32 {
 	return unified.N - unified.N/5*4
 }
 
 // NewUnifiedDirectIndex creates a UnifiedDirectIndex.
-func NewUnifiedDirectIndex(n int) UnifiedIndex {
+func NewUnifiedDirectIndex(n int32) UnifiedIndex {
 	return &UnifiedDirectIndex{N: n}
 }
 
 // Len should be used by unit testing only.
-func (unified *UnifiedDirectIndex) Len() int {
+func (unified *UnifiedDirectIndex) Len() int32 {
 	return unified.N
 }
 
 // EncodeUser should be used by unit testing only.
-func (unified *UnifiedDirectIndex) EncodeUser(userId string) int {
+func (unified *UnifiedDirectIndex) EncodeUser(userId string) int32 {
 	if val, err := strconv.Atoi(userId); err != nil {
 		panic(err)
 	} else {
-		return val
+		return int32(val)
 	}
 }
 
 // EncodeItem should be used by unit testing only.
-func (unified *UnifiedDirectIndex) EncodeItem(itemId string) int {
+func (unified *UnifiedDirectIndex) EncodeItem(itemId string) int32 {
 	if val, err := strconv.Atoi(itemId); err != nil {
 		panic(err)
 	} else {
-		return val
+		return int32(val)
 	}
 }
 
 // EncodeContextLabel should be used by unit testing only.
-func (unified *UnifiedDirectIndex) EncodeContextLabel(label string) int {
+func (unified *UnifiedDirectIndex) EncodeContextLabel(label string) int32 {
 	if val, err := strconv.Atoi(label); err != nil {
 		panic(err)
 	} else {
-		return val
+		return int32(val)
 	}
 }
 
@@ -320,7 +320,7 @@ func (unified *UnifiedDirectIndex) GetUsers() []string {
 	var names []string
 	begin, end := unified.N/5, unified.N/5*2
 	for i := begin; i < end; i++ {
-		names = append(names, strconv.Itoa(i))
+		names = append(names, strconv.Itoa(int(i)))
 	}
 	return names
 }
@@ -329,19 +329,19 @@ func (unified *UnifiedDirectIndex) GetUsers() []string {
 func (unified *UnifiedDirectIndex) GetItems() []string {
 	base.Logger().Warn("")
 	var names []string
-	begin, end := 0, unified.N/5
+	begin, end := int32(0), unified.N/5
 	for i := begin; i < end; i++ {
-		names = append(names, strconv.Itoa(i))
+		names = append(names, strconv.Itoa(int(i)))
 	}
 	return names
 }
 
 // CountUsers should be used by unit testing only.
-func (unified *UnifiedDirectIndex) CountUsers() int {
+func (unified *UnifiedDirectIndex) CountUsers() int32 {
 	return unified.N / 5
 }
 
 // CountItems should be used by unit testing only.
-func (unified *UnifiedDirectIndex) CountItems() int {
+func (unified *UnifiedDirectIndex) CountItems() int32 {
 	return unified.N / 5
 }

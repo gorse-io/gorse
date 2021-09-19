@@ -25,7 +25,7 @@ func TestTopKFilter(t *testing.T) {
 	a.Push(20, 8)
 	a.Push(30, 1)
 	elem, scores := a.PopAll()
-	assert.Equal(t, []int{20, 10, 30}, elem)
+	assert.Equal(t, []int32{20, 10, 30}, elem)
 	assert.Equal(t, []float32{8, 2, 1}, scores)
 	// Test a full adjacent vec
 	a = NewTopKFilter(3)
@@ -38,7 +38,7 @@ func TestTopKFilter(t *testing.T) {
 	a.Push(67, 7)
 	a.Push(32, 9)
 	elem, scores = a.PopAll()
-	assert.Equal(t, []int{12, 32, 20}, elem)
+	assert.Equal(t, []int32{12, 32, 20}, elem)
 	assert.Equal(t, []float32{10, 9, 8}, scores)
 }
 
