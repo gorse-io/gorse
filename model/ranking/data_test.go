@@ -43,8 +43,8 @@ func TestLoadDataFromCSV(t *testing.T) {
 	assert.Equal(t, 5, dataset.Count())
 	for i := 0; i < dataset.Count(); i++ {
 		userIndex, itemIndex := dataset.GetIndex(i)
-		assert.Equal(t, i, userIndex)
-		assert.Equal(t, i, itemIndex)
+		assert.Equal(t, int32(i), userIndex)
+		assert.Equal(t, int32(i), itemIndex)
 	}
 }
 

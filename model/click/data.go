@@ -18,13 +18,13 @@ import (
 	"bufio"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
+	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/i32set"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/scylladb/go-set"
 	"go.uber.org/zap"
 
 	"github.com/zhenghaoz/gorse/base"
@@ -37,8 +37,8 @@ const batchSize = 10000
 // Dataset for click-through-rate models.
 type Dataset struct {
 	Index         UnifiedIndex
-	Labels        [][]int
-	Features      [][]int
+	Labels        [][]int32
+	Features      [][]int32
 	Values        [][]float32
 	Target        []float32
 	PositiveCount int
@@ -47,12 +47,12 @@ type Dataset struct {
 
 // UserCount returns the number of users.
 func (dataset *Dataset) UserCount() int {
-	return dataset.Index.CountUsers()
+	return int(dataset.Index.CountUsers())
 }
 
 // ItemCount returns the number of items.
 func (dataset *Dataset) ItemCount() int {
-	return dataset.Index.CountItems()
+	return int(dataset.Index.CountItems())
 }
 
 // Count returns the number of samples.
@@ -67,12 +67,12 @@ func (dataset *Dataset) Count() int {
 }
 
 // Get returns the i-th sample.
-func (dataset *Dataset) Get(i int) ([]int, []float32, float32) {
+func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 	return dataset.Features[i], dataset.Values[i], dataset.Target[i]
 }
 
 // LoadLibFMFile loads libFM format file.
-func LoadLibFMFile(path string) (features [][]int, values [][]float32, targets []float32, maxLabel int, err error) {
+func LoadLibFMFile(path string) (features [][]int32, values [][]float32, targets []float32, maxLabel int32, err error) {
 	// open file
 	file, err := os.Open(path)
 	if err != nil {
@@ -91,7 +91,7 @@ func LoadLibFMFile(path string) (features [][]int, values [][]float32, targets [
 		}
 		targets = append(targets, float32(target))
 		// fetch features
-		lineFeatures := make([]int, 0, len(fields[1:]))
+		lineFeatures := make([]int32, 0, len(fields[1:]))
 		lineValues := make([]float32, 0, len(fields[1:]))
 		for _, field := range fields[1:] {
 			if len(strings.TrimSpace(field)) > 0 {
@@ -102,7 +102,7 @@ func LoadLibFMFile(path string) (features [][]int, values [][]float32, targets [
 				if err != nil {
 					return nil, nil, nil, 0, errors.Trace(err)
 				}
-				lineFeatures = append(lineFeatures, feature)
+				lineFeatures = append(lineFeatures, int32(feature))
 				// append value
 				value, err := strconv.ParseFloat(v, 32)
 				if err != nil {
@@ -129,7 +129,7 @@ func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 		return nil, nil, err
 	}
 	train, test = &Dataset{}, &Dataset{}
-	trainMaxLabel, testMaxLabel := 0, 0
+	var trainMaxLabel, testMaxLabel int32
 	if train.Features, train.Values, train.Target, trainMaxLabel, err = LoadLibFMFile(trainFilePath); err != nil {
 		return nil, nil, err
 	}
@@ -168,7 +168,7 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 		}
 	}
 	base.Logger().Debug("pulled users from database",
-		zap.Int("n_users", unifiedIndex.UserIndex.Len()),
+		zap.Int32("n_users", unifiedIndex.UserIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
 	// pull items
 	cursor = ""
@@ -192,7 +192,7 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 		}
 	}
 	base.Logger().Debug("pulled items from database",
-		zap.Int("n_items", unifiedIndex.ItemIndex.Len()),
+		zap.Int32("n_items", unifiedIndex.ItemIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
 	// create dataset
 	dataSet := &Dataset{
@@ -200,10 +200,10 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 		Target: make([]float32, 0),
 	}
 	// insert users
-	dataSet.Labels = make([][]int, dataSet.Index.CountItems()+dataSet.Index.CountUsers())
+	dataSet.Labels = make([][]int32, dataSet.Index.CountItems()+dataSet.Index.CountUsers())
 	for _, user := range users {
 		userId := dataSet.Index.EncodeUser(user.UserId)
-		dataSet.Labels[userId] = make([]int, len(user.Labels))
+		dataSet.Labels[userId] = make([]int32, len(user.Labels))
 		for i := range user.Labels {
 			dataSet.Labels[userId][i] = dataSet.Index.EncodeUserLabel(user.Labels[i])
 		}
@@ -211,7 +211,7 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 	// insert items
 	for _, item := range items {
 		itemIndex := dataSet.Index.EncodeItem(item.ItemId)
-		dataSet.Labels[itemIndex] = make([]int, 0, len(item.Labels))
+		dataSet.Labels[itemIndex] = make([]int32, 0, len(item.Labels))
 		for _, label := range item.Labels {
 			labelIndex := dataSet.Index.EncodeItemLabel(label)
 			if labelIndex != base.NotId {
@@ -250,7 +250,7 @@ func LoadDataFromDatabase(database data.Database, clickTypes []string, readType 
 			}
 			if !positiveSet[userId].Has(int32(itemId)) {
 				// build features vector
-				features := []int{userId, itemId}
+				features := []int32{userId, itemId}
 				features = append(features, dataSet.Labels[userId]...)
 				features = append(features, dataSet.Labels[itemId]...)
 				dataSet.Features = append(dataSet.Features, features)

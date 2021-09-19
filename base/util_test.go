@@ -22,7 +22,7 @@ import (
 )
 
 func TestMax(t *testing.T) {
-	assert.Equal(t, 10, Max(2, 4, 6, 8, 10))
+	assert.Equal(t, int32(10), Max(2, 4, 6, 8, 10))
 }
 
 func TestMin(t *testing.T) {
