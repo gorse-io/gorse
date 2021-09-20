@@ -105,7 +105,7 @@ func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixF
 	return m
 }
 
-func (m *mockMatrixFactorizationForRecommend) InternalPredict(_, itemId int) float32 {
+func (m *mockMatrixFactorizationForRecommend) InternalPredict(_, itemId int32) float32 {
 	return float32(itemId)
 }
 

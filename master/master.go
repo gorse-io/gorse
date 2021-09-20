@@ -67,11 +67,8 @@ type Master struct {
 	userIndexMutex   sync.RWMutex
 
 	// ranking dataset
-	rankingItems     []data.Item
-	rankingFeedbacks []data.Feedback
 	rankingTrainSet  *ranking.DataSet
 	rankingTestSet   *ranking.DataSet
-	rankingFullSet   *ranking.DataSet
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
@@ -106,7 +103,7 @@ func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
 	taskMonitor := NewTaskMonitor()
-	for _, taskName := range []string{TaskFindLatest, TaskFindPopular, TaskFindItemNeighbors, TaskFindUserNeighbors,
+	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,
 		TaskFitRankingModel, TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel} {
 		taskMonitor.Pending(taskName)
 	}
@@ -202,8 +199,7 @@ func (m *Master) Serve() {
 	}
 
 	// pre-lock privileged tasks
-	tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
-		TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+	tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
 	for _, taskName := range tasksNames {
 		m.taskScheduler.PreLock(taskName)
 	}
@@ -255,23 +251,15 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		case <-m.insertedChan:
 		}
 		// pre-lock privileged tasks
-		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
-			TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+		tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
 		for _, taskName := range tasksNames {
 			m.taskScheduler.PreLock(taskName)
 		}
 
-		// download ranking dataset
-		err = m.runLoadRankingDatasetTask()
+		// download dataset
+		err = m.runLoadDatasetTask()
 		if err != nil {
 			base.Logger().Error("failed to load ranking dataset", zap.Error(err))
-			continue
-		}
-
-		// download click dataset
-		err = m.runLoadClickDatasetTask()
-		if err != nil {
-			base.Logger().Error("failed to load click dataset", zap.Error(err))
 			continue
 		}
 

@@ -18,19 +18,14 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/juju/errors"
-	"github.com/scylladb/go-set/i32set"
-	"os"
-	"strings"
-	"time"
-
 	"github.com/scylladb/go-set"
+	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"os"
+	"strings"
 )
-
-const batchSize = 10000
 
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
@@ -128,6 +123,9 @@ func (dataset *DataSet) SetNegatives(userId string, negatives []string) {
 }
 
 func (dataset *DataSet) Count() int {
+	if dataset.FeedbackUsers.Len() != dataset.FeedbackItems.Len() {
+		panic("dataset.FeedbackUsers.Len() != dataset.FeedbackItems.Len()")
+	}
 	return dataset.FeedbackUsers.Len()
 }
 
@@ -269,87 +267,6 @@ func LoadDataFromCSV(fileName, sep string, hasHeader bool) *DataSet {
 		dataset.AddFeedback(fields[0], fields[1], true)
 	}
 	return dataset
-}
-
-// LoadDataFromDatabase loads dataset from data store.
-func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTTL, positiveFeedbackTTL uint) (*DataSet, error) {
-	// setup time limit
-	var itemTimeLimit, feedbackTimeLimit *time.Time
-	if itemTTL > 0 {
-		temp := time.Now().AddDate(0, 0, -int(itemTTL))
-		itemTimeLimit = &temp
-	}
-	if positiveFeedbackTTL > 0 {
-		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
-		feedbackTimeLimit = &temp
-	}
-	dataset := NewMapIndexDataset()
-	var err error
-	// pull users
-	userLabelIndex := base.NewMapIndex()
-	start := time.Now()
-	userChan, errChan := database.GetUserStream(batchSize)
-	for users := range userChan {
-		for _, user := range users {
-			dataset.AddUser(user.UserId)
-			userIndex := dataset.UserIndex.ToNumber(user.UserId)
-			if len(dataset.UserLabels) == int(userIndex) {
-				dataset.UserLabels = append(dataset.UserLabels, nil)
-			}
-			dataset.UserLabels[userIndex] = make([]int32, len(user.Labels))
-			for i, label := range user.Labels {
-				userLabelIndex.Add(label)
-				dataset.UserLabels[userIndex][i] = userLabelIndex.ToNumber(label)
-			}
-		}
-	}
-	if err = <-errChan; err != nil {
-		return nil, errors.Trace(err)
-	}
-	dataset.NumUserLabels = userLabelIndex.Len()
-	base.Logger().Debug("pulled users from database",
-		zap.Int("n_users", dataset.UserCount()),
-		zap.Duration("used_time", time.Since(start)))
-	// pull items
-	itemLabelIndex := base.NewMapIndex()
-	start = time.Now()
-	itemChan, errChan := database.GetItemStream(batchSize, itemTimeLimit)
-	for items := range itemChan {
-		for _, item := range items {
-			dataset.AddItem(item.ItemId)
-			itemIndex := dataset.ItemIndex.ToNumber(item.ItemId)
-			if len(dataset.ItemLabels) == int(itemIndex) {
-				dataset.ItemLabels = append(dataset.ItemLabels, nil)
-			}
-			dataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
-			for i, label := range item.Labels {
-				itemLabelIndex.Add(label)
-				dataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
-			}
-		}
-	}
-	if err = <-errChan; err != nil {
-		return nil, errors.Trace(err)
-	}
-	dataset.NumItemLabels = itemLabelIndex.Len()
-	base.Logger().Debug("pulled items from database",
-		zap.Int("n_items", dataset.ItemCount()),
-		zap.Duration("used_time", time.Since(start)))
-	// pull database
-	start = time.Now()
-	feedbackChan, errChan := database.GetFeedbackStream(batchSize, feedbackTimeLimit, feedbackTypes...)
-	for feedback := range feedbackChan {
-		for _, v := range feedback {
-			dataset.AddFeedback(v.UserId, v.ItemId, false)
-		}
-	}
-	if err = <-errChan; err != nil {
-		return nil, errors.Trace(err)
-	}
-	base.Logger().Debug("pull feedback from database",
-		zap.Int("n_feedback", dataset.Count()),
-		zap.Duration("used_time", time.Since(start)))
-	return dataset, nil
 }
 
 func loadTest(dataset *DataSet, path string) error {

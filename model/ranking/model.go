@@ -173,7 +173,7 @@ func EncodeModel(m Model) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecodeModel(buf []byte) (Model, error) {
+func DecodeModel(buf []byte) (MatrixFactorization, error) {
 	reader := bytes.NewReader(buf)
 	decoder := gob.NewDecoder(reader)
 	var name string

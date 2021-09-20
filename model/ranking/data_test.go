@@ -15,9 +15,7 @@ package ranking
 
 import (
 	"fmt"
-	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"strconv"
 	"testing"
 )
@@ -48,59 +46,21 @@ func TestLoadDataFromCSV(t *testing.T) {
 	}
 }
 
-type mockDatastore struct {
-	data.Database
-	server *miniredis.Miniredis
-}
-
-func newMockDatastore(t *testing.T) *mockDatastore {
-	var err error
-	db := new(mockDatastore)
-	db.server, err = miniredis.Run()
-	assert.NoError(t, err)
-	db.Database, err = data.Open("redis://" + db.server.Addr())
-	assert.NoError(t, err)
-	return db
-}
-
-func (db *mockDatastore) Close(t *testing.T) {
-	err := db.Database.Close()
-	assert.NoError(t, err)
-	db.server.Close()
-}
-
-func TestLoadDataFromDatabase(t *testing.T) {
-	// create database
-	database := newMockDatastore(t)
-	defer database.Close(t)
+func TestDataSet_Split(t *testing.T) {
 	numUsers, numItems := 3, 5
+	// create dataset
+	dataset := NewMapIndexDataset()
 	for i := 0; i < numUsers; i++ {
-		err := database.BatchInsertUsers([]data.User{
-			{UserId: fmt.Sprintf("user%v", i)},
-		})
-		assert.NoError(t, err)
+		dataset.AddUser(fmt.Sprintf("user%v", i))
 	}
 	for i := 0; i < numItems; i++ {
-		err := database.BatchInsertItems([]data.Item{
-			{ItemId: fmt.Sprintf("item%v", i)},
-		})
-		assert.NoError(t, err)
+		dataset.AddItem(fmt.Sprintf("item%v", i))
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := i + 1; j < numItems; j++ {
-			err := database.BatchInsertFeedback([]data.Feedback{{
-				FeedbackKey: data.FeedbackKey{
-					UserId:       fmt.Sprintf("user%v", i),
-					ItemId:       fmt.Sprintf("item%v", j),
-					FeedbackType: "FeedbackType",
-				},
-			}}, false, false)
-			assert.NoError(t, err)
+			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j), false)
 		}
 	}
-	// load data
-	dataset, err := LoadDataFromDatabase(database.Database, []string{"FeedbackType"}, 0, 0)
-	assert.NoError(t, err)
 	assert.Equal(t, 9, dataset.Count())
 	// split
 	train, test := dataset.Split(0, 0)

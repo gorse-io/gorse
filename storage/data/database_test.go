@@ -51,9 +51,7 @@ func getUsersStream(t *testing.T, db Database, batchSize int) []User {
 	var users []User
 	userChan, errChan := db.GetUserStream(batchSize)
 	for batchUsers := range userChan {
-		for _, user := range batchUsers {
-			users = append(users, user)
-		}
+		users = append(users, batchUsers...)
 	}
 	assert.NoError(t, <-errChan)
 	return users
@@ -85,9 +83,7 @@ func getItemStream(t *testing.T, db Database, batchSize int) []Item {
 	var items []Item
 	itemChan, errChan := db.GetItemStream(batchSize, nil)
 	for batchUsers := range itemChan {
-		for _, item := range batchUsers {
-			items = append(items, item)
-		}
+		items = append(items, batchUsers...)
 	}
 	assert.NoError(t, <-errChan)
 	return items
@@ -119,9 +115,7 @@ func getFeedbackStream(t *testing.T, db Database, batchSize int, feedbackTypes .
 	var feedbacks []Feedback
 	feedbackChan, errChan := db.GetFeedbackStream(batchSize, nil, feedbackTypes...)
 	for batchFeedback := range feedbackChan {
-		for _, feedback := range batchFeedback {
-			feedbacks = append(feedbacks, feedback)
-		}
+		feedbacks = append(feedbacks, batchFeedback...)
 	}
 	assert.NoError(t, <-errChan)
 	return feedbacks
