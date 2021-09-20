@@ -299,7 +299,7 @@ func (r *Redis) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedb
 	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, _, thisItemId string) error {
 		if itemId == thisItemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -457,7 +457,7 @@ func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedb
 	// get itemId list by userId
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
 		if thisUserId == userId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -468,7 +468,7 @@ func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedb
 	return feedback, err
 }
 
-func (r *Redis) getFeedback(key string) (Feedback, error) {
+func (r *Redis) getFeedbackInternal(key string) (Feedback, error) {
 	var ctx = context.Background()
 	// get feedback by feedbackKey
 	val, err := r.client.Get(ctx, key).Result()
@@ -552,13 +552,13 @@ func (r *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem 
 }
 
 // GetFeedback returns feedback from Redis.
-func (r *Redis) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+func (r *Redis) GetFeedback(_ string, _ int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
 		if feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -584,7 +584,7 @@ func (r *Redis) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackT
 		feedback := make([]Feedback, 0, batchSize)
 		err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
 			if feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType) {
-				val, err := r.getFeedback(key)
+				val, err := r.getFeedbackInternal(key)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -614,7 +614,7 @@ func (r *Redis) GetUserItemFeedback(userId, itemId string, feedbackTypes ...stri
 	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
 		if thisUserId == userId && thisItemId == itemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -641,6 +641,6 @@ func (r *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...s
 }
 
 // GetClickThroughRate method of Redis returns ErrUnsupported.
-func (r *Redis) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
+func (r *Redis) GetClickThroughRate(_ time.Time, _ []string, _ string) (float64, error) {
 	return 0, ErrUnsupported
 }

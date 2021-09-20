@@ -292,9 +292,9 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
-		for _, target := range trainSet.Target {
-			fm.MinTarget = math32.Min(fm.MinTarget, target)
-			fm.MaxTarget = math32.Max(fm.MaxTarget, target)
+		for i := 0; i < trainSet.Target.Len(); i++ {
+			fm.MinTarget = math32.Min(fm.MinTarget, trainSet.Target.Get(i))
+			fm.MaxTarget = math32.Max(fm.MaxTarget, trainSet.Target.Get(i))
 		}
 		fitStart := time.Now()
 		cost := float32(0)

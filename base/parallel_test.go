@@ -96,7 +96,7 @@ func TestParallelFail(t *testing.T) {
 
 func TestBatchParallelFail(t *testing.T) {
 	// multiple threads
-	err := BatchParallel(10000, 4, 10, func(workerId, beginJobId, endJobId int) error {
+	err := BatchParallel(1000000, 4, 10, func(workerId, beginJobId, endJobId int) error {
 		if workerId%2 == 1 {
 			return fmt.Errorf("error from %d", workerId)
 		}
@@ -104,7 +104,7 @@ func TestBatchParallelFail(t *testing.T) {
 	})
 	assert.Error(t, err)
 	// single thread
-	err = BatchParallel(10000, 4, 10, func(workerId, beginJobId, endJobId int) error {
+	err = BatchParallel(1000000, 4, 10, func(workerId, beginJobId, endJobId int) error {
 		if workerId%2 == 1 {
 			return fmt.Errorf("error from %d", workerId)
 		}

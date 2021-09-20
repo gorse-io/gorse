@@ -144,7 +144,7 @@ func (m *Master) StartHttpServer() {
 	http.HandleFunc("/api/bulk/users", m.importExportUsers)
 	http.HandleFunc("/api/bulk/items", m.importExportItems)
 	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
-	http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
+	//http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
 	m.RestServer.StartHttpServer()
 }
 
@@ -839,27 +839,27 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
-func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
-	// load dataset
-	dataSet, err := click.LoadDataFromDatabase(m.DataClient,
-		m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ReadFeedbackType)
-	if err != nil {
-		server.InternalServerError(restful.NewResponse(response), err)
-	}
-	// write dataset
-	response.Header().Set("Content-Type", "text/plain")
-	response.Header().Set("Content-Disposition", "attachment;filename=libfm.txt")
-	for i := range dataSet.Features {
-		builder := strings.Builder{}
-		builder.WriteString(fmt.Sprintf("%f", dataSet.Target[i]))
-		for _, j := range dataSet.Features[i] {
-			builder.WriteString(fmt.Sprintf(" %d:1", j))
-		}
-		builder.WriteString("\r\n")
-		_, err = response.Write([]byte(builder.String()))
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-		}
-	}
-}
+//func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
+//// load dataset
+//dataSet, err := click.LoadDataFromDatabase(m.DataClient,
+//	m.GorseConfig.Database.PositiveFeedbackType,
+//	m.GorseConfig.Database.ReadFeedbackType)
+//if err != nil {
+//	server.InternalServerError(restful.NewResponse(response), err)
+//}
+//// write dataset
+//response.Header().Set("Content-Type", "text/plain")
+//response.Header().Set("Content-Disposition", "attachment;filename=libfm.txt")
+//for i := range dataSet.Features {
+//	builder := strings.Builder{}
+//	builder.WriteString(fmt.Sprintf("%f", dataSet.Target[i]))
+//	for _, j := range dataSet.Features[i] {
+//		builder.WriteString(fmt.Sprintf(" %d:1", j))
+//	}
+//	builder.WriteString("\r\n")
+//	_, err = response.Write([]byte(builder.String()))
+//	if err != nil {
+//		server.InternalServerError(restful.NewResponse(response), err)
+//	}
+//}
+//}

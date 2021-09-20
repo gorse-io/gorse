@@ -1043,7 +1043,6 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 			feedbackChan <- feedbacks
 		}
 		errChan <- nil
-		return
 	}()
 	return feedbackChan, errChan
 }
