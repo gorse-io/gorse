@@ -24,7 +24,7 @@ import (
 
 const (
 	benchDelta = 0.01
-	incrDelta  = 1e-3
+	incrDelta  = 0.05
 )
 
 type mockTracker struct {

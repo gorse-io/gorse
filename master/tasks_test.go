@@ -76,6 +76,8 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (common labels)
+	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "8", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeSimilar
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
@@ -85,6 +87,10 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (auto)
+	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "8", time.Now())
+	assert.NoError(t, err)
+	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "9", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeAuto
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
@@ -149,6 +155,8 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
+	err = m.CacheClient.SetTime(cache.LastModifyUserTime, "8", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeSimilar
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.UserNeighbors, "8", 0, 100)
@@ -158,6 +166,10 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
+	err = m.CacheClient.SetTime(cache.LastModifyUserTime, "8", time.Now())
+	assert.NoError(t, err)
+	err = m.CacheClient.SetTime(cache.LastModifyUserTime, "9", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeAuto
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.UserNeighbors, "8", 0, 100)

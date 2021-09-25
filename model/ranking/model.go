@@ -20,6 +20,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/juju/errors"
+	"github.com/scylladb/go-set/i32set"
 	"reflect"
 	"time"
 
@@ -310,11 +311,11 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		rng[i] = base.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
 	}
 	// Convert array to hashmap
-	userFeedback := make([]map[int]interface{}, trainSet.UserCount())
+	userFeedback := make([]*i32set.Set, trainSet.UserCount())
 	for u := range userFeedback {
-		userFeedback[u] = make(map[int]interface{})
+		userFeedback[u] = i32set.New()
 		for _, i := range trainSet.UserFeedback[u] {
-			userFeedback[u][int(i)] = nil
+			userFeedback[u].Add(i)
 		}
 	}
 	snapshots := SnapshotManger{}
@@ -348,7 +349,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			negIndex := int32(-1)
 			for {
 				temp := rng[workerId].Int31n(int32(trainSet.ItemCount()))
-				if _, exist := userFeedback[userIndex][int(temp)]; !exist {
+				if !userFeedback[userIndex].Has(temp) {
 					negIndex = temp
 					break
 				}
