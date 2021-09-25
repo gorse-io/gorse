@@ -17,6 +17,7 @@ package master
 import (
 	"bufio"
 	"fmt"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"io"
@@ -469,15 +470,8 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 			return
 		}
 		// write rows
-		var cursor string
-		const batchSize = 1024
-		for {
-			var users []data.User
-			cursor, users, err = m.DataClient.GetUsers(cursor, batchSize)
-			if err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			}
+		userChan, errChan := m.DataClient.GetUserStream(batchSize)
+		for users := range userChan {
 			for _, user := range users {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
 					base.Escape(user.UserId), base.Escape(strings.Join(user.Labels, "|"))))); err != nil {
@@ -485,9 +479,10 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 					return
 				}
 			}
-			if cursor == "" {
-				break
-			}
+		}
+		if err = <-errChan; err != nil {
+			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			return
 		}
 	case http.MethodPost:
 		hasHeader := formValue(request, "has-header", "true") == "true"
@@ -512,7 +507,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
 	lineCount := 0
 	timeStart := time.Now()
-	//users := make([]data.User, 0)
+	users := make([]data.User, 0)
 	err := base.ReadLines(bufio.NewScanner(file), sep, func(lineNumber int, splits []string) bool {
 		var err error
 		// skip header
@@ -543,10 +538,15 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 				}
 			}
 		}
-		err = m.DataClient.BatchInsertUsers([]data.User{user})
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return false
+		users = append(users, user)
+		// batch insert
+		if len(users) == batchSize {
+			err = m.DataClient.BatchInsertUsers(users)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return false
+			}
+			users = nil
 		}
 		lineCount++
 		return true
@@ -554,6 +554,13 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 	if err != nil {
 		server.BadRequest(restful.NewResponse(response), err)
 		return
+	}
+	if len(users) > 0 {
+		err = m.DataClient.BatchInsertUsers(users)
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
 	}
 	timeUsed := time.Since(timeStart)
 	base.Logger().Info("complete import users",
@@ -574,15 +581,8 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			return
 		}
 		// write rows
-		var cursor string
-		const batchSize = 1024
-		for {
-			var items []data.Item
-			cursor, items, err = m.DataClient.GetItems(cursor, batchSize, nil)
-			if err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			}
+		itemChan, errChan := m.DataClient.GetItemStream(batchSize, nil)
+		for items := range itemChan {
 			for _, item := range items {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%v,%s,%s\r\n",
 					base.Escape(item.ItemId), item.Timestamp, base.Escape(strings.Join(item.Labels, "|")), base.Escape(item.Comment)))); err != nil {
@@ -590,9 +590,10 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 					return
 				}
 			}
-			if cursor == "" {
-				break
-			}
+		}
+		if err = <-errChan; err != nil {
+			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			return
 		}
 	case http.MethodPost:
 		hasHeader := formValue(request, "has-header", "true") == "true"
@@ -660,11 +661,15 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		// 4. comment
 		item.Comment = splits[3]
 		items = append(items, item)
-		//err = m.DataClient.insertItem(item)
-		//if err != nil {
-		//	server.InternalServerError(restful.NewResponse(response), err)
-		//	return false
-		//}
+		// batch insert
+		if len(items) == batchSize {
+			err = m.DataClient.BatchInsertItems(items)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return false
+			}
+			items = nil
+		}
 		lineCount++
 		return true
 	})
@@ -672,10 +677,12 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
-	err = m.DataClient.BatchInsertItems(items)
-	if err != nil {
-		server.InternalServerError(restful.NewResponse(response), err)
-		return
+	if len(items) > 0 {
+		err = m.DataClient.BatchInsertItems(items)
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
 	}
 	timeUsed := time.Since(timeStart)
 	base.Logger().Info("complete import items",
@@ -725,15 +732,8 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			return
 		}
 		// write rows
-		var cursor string
-		const batchSize = 1024
-		for {
-			var feedback []data.Feedback
-			cursor, feedback, err = m.DataClient.GetFeedback(cursor, batchSize, nil)
-			if err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			}
+		feedbackChan, errChan := m.DataClient.GetFeedbackStream(batchSize, nil)
+		for feedback := range feedbackChan {
 			for _, v := range feedback {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s,%s,%v\r\n",
 					base.Escape(v.FeedbackType), base.Escape(v.UserId), base.Escape(v.ItemId), v.Timestamp))); err != nil {
@@ -741,9 +741,10 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 					return
 				}
 			}
-			if cursor == "" {
-				break
-			}
+		}
+		if err = <-errChan; err != nil {
+			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			return
 		}
 	case http.MethodPost:
 		hasHeader := formValue(request, "has-header", "true") == "true"
@@ -812,6 +813,15 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineCount))
 		}
 		feedbacks = append(feedbacks, feedback)
+		// batch insert
+		if len(feedbacks) == batchSize {
+			err = m.InsertFeedbackToCache(feedbacks)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			}
+			feedbacks = nil
+		}
 		lineCount++
 	}
 	if err = scanner.Err(); err != nil {
@@ -827,10 +837,12 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 		return
 	}
 	// insert to cache store
-	err = m.InsertFeedbackToCache(feedbacks)
-	if err != nil {
-		server.InternalServerError(restful.NewResponse(response), err)
-		return
+	if len(feedbacks) > 0 {
+		err = m.InsertFeedbackToCache(feedbacks)
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
 	}
 	timeUsed := time.Since(timeStart)
 	base.Logger().Info("complete import feedback",
