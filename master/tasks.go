@@ -185,6 +185,9 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	}
 
 	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId))) {
+			return nil
+		}
 		nearItems := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
@@ -319,6 +322,9 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	}
 
 	if err := base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		if !m.checkUserNeighborCacheTimeout(dataset.UserIndex.ToName(int32(userId))) {
+			return nil
+		}
 		nearUsers := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
@@ -420,6 +426,50 @@ func weightedSum(a []int32, weights []float32) float32 {
 		sum += weights[i]
 	}
 	return sum
+}
+
+// checkUserNeighborCacheTimeout checks if user neighbor cache stale.
+// 1. if cache is empty, stale.
+// 2. if modified time > update time, stale.
+func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
+	var modifiedTime, updateTime time.Time
+	var err error
+	// read modified time
+	modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyUserTime, userId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// read update time
+	updateTime, err = m.CacheClient.GetTime(cache.LastUpdateUserNeighborsTime, userId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// check time
+	return updateTime.Unix() <= modifiedTime.Unix()
+}
+
+// checkItemNeighborCacheTimeout checks if item neighbor cache stale.
+// 1. if cache is empty, stale.
+// 2. if modified time > update time, stale.
+func (m *Master) checkItemNeighborCacheTimeout(itemId string) bool {
+	var modifiedTime, updateTime time.Time
+	var err error
+	// read modified time
+	modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyItemTime, itemId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// read update time
+	updateTime, err = m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// check time
+	return updateTime.Unix() <= modifiedTime.Unix()
 }
 
 // fitRankingModel fits ranking model using passed dataset. After model fitted, following states are changed:
@@ -785,6 +835,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes [
 	m.taskMonitor.Update(TaskLoadDataset, 1)
 	base.Logger().Debug("pulled users from database",
 		zap.Int("n_users", rankingDataset.UserCount()),
+		zap.Int32("n_user_labels", userLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
 
 	// STEP 2: pull items
@@ -817,6 +868,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes [
 	m.taskMonitor.Update(TaskLoadDataset, 2)
 	base.Logger().Debug("pulled items from database",
 		zap.Int("n_items", rankingDataset.ItemCount()),
+		zap.Int32("n_item_labels", itemLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
 
 	// create positive set
@@ -907,7 +959,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes [
 		for _, itemIndex := range positiveSet[userIndex].List() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
-			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex])-2)))
+			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
 			clickDataset.Target.Append(1)
 			clickDataset.PositiveCount++
 		}
@@ -915,7 +967,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes [
 		for _, itemIndex := range negativeSet[userIndex].List() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
-			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex])-2)))
+			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
 			clickDataset.Target.Append(-1)
 			clickDataset.NegativeCount++
 		}
