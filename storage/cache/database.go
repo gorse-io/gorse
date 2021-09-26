@@ -39,9 +39,7 @@ const (
 
 	// GlobalMeta is global meta information
 	GlobalMeta              = "global_meta"
-	NumInserted             = "num_inserted"
-	LastUpdatePopularTime   = "last_update_popular_time"
-	LastUpdateLatestTime    = "last_update_latest_time"
+	DataImported            = "data_imported"
 	LastFitRankingModelTime = "last_fit_match_model_time"
 	LastRankingModelVersion = "latest_match_model_version"
 )

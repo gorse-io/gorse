@@ -562,6 +562,7 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 			return
 		}
 	}
+	m.notifyDataImported()
 	timeUsed := time.Since(timeStart)
 	base.Logger().Info("complete import users",
 		zap.Duration("time_used", timeUsed),
@@ -684,6 +685,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 			return
 		}
 	}
+	m.notifyDataImported()
 	timeUsed := time.Since(timeStart)
 	base.Logger().Info("complete import items",
 		zap.Duration("time_used", timeUsed),
@@ -844,6 +846,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 			return
 		}
 	}
+	m.notifyDataImported()
 	timeUsed := time.Since(timeStart)
 	base.Logger().Info("complete import feedback",
 		zap.Duration("time_used", timeUsed),
