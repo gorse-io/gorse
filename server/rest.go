@@ -1353,10 +1353,6 @@ func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = s.CacheClient.IncrInt(cache.GlobalMeta, cache.NumInserted)
-		if err != nil {
-			return errors.Trace(err)
-		}
 	}
 	return nil
 }

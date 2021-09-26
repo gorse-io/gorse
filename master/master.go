@@ -95,7 +95,7 @@ type Master struct {
 
 	// events
 	fitTicker    *time.Ticker
-	insertedChan chan bool // feedback inserted events
+	importedChan chan bool // feedback inserted events
 }
 
 // NewMaster creates a master node.
@@ -138,7 +138,7 @@ func NewMaster(cfg *config.Config) *Master {
 			WebService:  new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(time.Duration(cfg.Recommend.FitPeriod) * time.Minute),
-		insertedChan: make(chan bool),
+		importedChan: make(chan bool),
 	}
 }
 
@@ -237,10 +237,10 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		err                    error
 	)
 	go func() {
-		m.insertedChan <- true
+		m.importedChan <- true
 		for {
-			if m.hasFeedbackInserted() {
-				m.insertedChan <- true
+			if m.checkDataImported() {
+				m.importedChan <- true
 			}
 			time.Sleep(time.Second)
 		}
@@ -248,7 +248,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 	for {
 		select {
 		case <-m.fitTicker.C:
-		case <-m.insertedChan:
+		case <-m.importedChan:
 		}
 		// pre-lock privileged tasks
 		tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
@@ -328,17 +328,25 @@ func (m *Master) RunRagtagTasksLoop() {
 	}
 }
 
-func (m *Master) hasFeedbackInserted() bool {
-	numInserted, err := m.CacheClient.GetInt(cache.GlobalMeta, cache.NumInserted)
+func (m *Master) checkDataImported() bool {
+	isDataImported, err := m.CacheClient.GetInt(cache.GlobalMeta, cache.DataImported)
 	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
 		return false
 	}
-	if numInserted > 0 {
-		err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumInserted, 0)
+	if isDataImported > 0 {
+		err = m.CacheClient.SetInt(cache.GlobalMeta, cache.DataImported, 0)
 		if err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		return true
 	}
 	return false
+}
+
+func (m *Master) notifyDataImported() {
+	err := m.CacheClient.IncrInt(cache.GlobalMeta, cache.DataImported)
+	if err != nil {
+		base.Logger().Error("failed to write meta", zap.Error(err))
+	}
 }
