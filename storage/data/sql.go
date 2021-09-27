@@ -481,6 +481,7 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 		return nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.UserId, &feedback.ItemId, &feedback.FeedbackType); err != nil {
@@ -739,6 +740,7 @@ func (d *SQLDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([
 		return nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
@@ -959,6 +961,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 		return "", nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
@@ -1027,6 +1030,7 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 		}
 		// fetch result
 		feedbacks := make([]Feedback, 0, batchSize)
+		defer result.Close()
 		for result.Next() {
 			var feedback Feedback
 			if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
@@ -1081,6 +1085,7 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 		return nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
@@ -1199,6 +1204,7 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
+	defer rs.Close()
 	if rs.Next() {
 		var ctr float64
 		if err = rs.Scan(&ctr); err != nil {

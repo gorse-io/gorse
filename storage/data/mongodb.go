@@ -154,8 +154,9 @@ func (db *MongoDB) GetMeasurements(name string, n int) ([]Measurement, error) {
 	r, err := c.Find(ctx, bson.M{"name": bson.M{"$eq": name}}, opt)
 	measurements := make([]Measurement, 0)
 	if err != nil {
-		return measurements, err
+		return nil, err
 	}
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var measurement Measurement
 		if err = r.Decode(&measurement); err != nil {
@@ -225,6 +226,7 @@ func (db *MongoDB) GetItems(cursor string, n int, timeLimit *time.Time) (string,
 		return "", nil, err
 	}
 	items := make([]Item, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var item Item
 		if err = r.Decode(&item); err != nil {
@@ -262,6 +264,7 @@ func (db *MongoDB) GetItemStream(batchSize int, timeLimit *time.Time) (chan []It
 		}
 		// fetch result
 		items := make([]Item, 0, batchSize)
+		defer r.Close(ctx)
 		for r.Next(ctx) {
 			var item Item
 			if err = r.Decode(&item); err != nil {
@@ -300,6 +303,7 @@ func (db *MongoDB) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Fe
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
@@ -366,6 +370,7 @@ func (db *MongoDB) GetUsers(cursor string, n int) (string, []User, error) {
 		return "", nil, err
 	}
 	users := make([]User, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var user User
 		if err = r.Decode(&user); err != nil {
@@ -398,6 +403,7 @@ func (db *MongoDB) GetUserStream(batchSize int) (chan []User, chan error) {
 			return
 		}
 		users := make([]User, 0, batchSize)
+		defer r.Close(ctx)
 		for r.Next(ctx) {
 			var user User
 			if err = r.Decode(&user); err != nil {
@@ -436,6 +442,7 @@ func (db *MongoDB) GetUserFeedback(userId string, feedbackTypes ...string) ([]Fe
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
@@ -554,6 +561,7 @@ func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedb
 		return "", nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
@@ -598,6 +606,7 @@ func (db *MongoDB) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedba
 			return
 		}
 		feedbacks := make([]Feedback, 0, batchSize)
+		defer r.Close(ctx)
 		for r.Next(ctx) {
 			var feedback Feedback
 			if err = r.Decode(&feedback); err != nil {
@@ -635,6 +644,7 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackTypes ...s
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
