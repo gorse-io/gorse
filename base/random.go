@@ -15,6 +15,7 @@
 package base
 
 import (
+	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/iset"
 	"math/rand"
 )
@@ -99,6 +100,30 @@ func (rng RandomGenerator) Sample(low, high, n int, exclude ...*iset.Set) []int 
 	} else {
 		for len(sampled) < n {
 			v := rng.Intn(intervalLength) + low
+			if !excludeSet.Has(v) {
+				sampled = append(sampled, v)
+				excludeSet.Add(v)
+			}
+		}
+	}
+	return sampled
+}
+
+// SampleInt32 n 32bit values between low and high, but not in exclude.
+func (rng RandomGenerator) SampleInt32(low, high int32, n int, exclude ...*i32set.Set) []int32 {
+	intervalLength := high - low
+	excludeSet := i32set.Union(exclude...)
+	sampled := make([]int32, 0, n)
+	if n >= int(intervalLength)-excludeSet.Size() {
+		for i := low; i < high; i++ {
+			if !excludeSet.Has(i) {
+				sampled = append(sampled, i)
+				excludeSet.Add(i)
+			}
+		}
+	} else {
+		for len(sampled) < n {
+			v := rng.Int31n(intervalLength) + low
 			if !excludeSet.Has(v) {
 				sampled = append(sampled, v)
 				excludeSet.Add(v)

@@ -19,6 +19,7 @@ import (
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
+	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -27,6 +28,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"modernc.org/sortutil"
 	"sort"
 	"time"
 )
@@ -38,10 +40,7 @@ const (
 	ClickPrecision        = "Precision"
 	ClickThroughRate      = "ClickThroughRate"
 
-	TaskLoadRankingDataset = "Load collaborative filtering dataset"
-	TaskLoadClickDataset   = "Load click-through rate prediction dataset"
-	TaskFindLatest         = "Find latest items"
-	TaskFindPopular        = "Find popular items"
+	TaskLoadDataset        = "Load dataset"
 	TaskFindItemNeighbors  = "Find neighbors of items"
 	TaskFindUserNeighbors  = "Find neighbors of users"
 	TaskAnalyze            = "Analyze click-through rate"
@@ -50,19 +49,36 @@ const (
 	TaskSearchRankingModel = "Search collaborative filtering  model"
 	TaskSearchClickModel   = "Search click-through rate prediction model"
 
-	SimilarityShrink = 100
+	batchSize        = 10000
+	similarityShrink = 100
 )
 
-// runLoadRankingDatasetTask loads dataset for collaborative filtering task
-func (m *Master) runLoadRankingDatasetTask() error {
-	m.taskMonitor.Start(TaskLoadRankingDataset, 1)
-	base.Logger().Info("load ranking dataset",
+// runLoadDatasetTask loads dataset.
+func (m *Master) runLoadDatasetTask() error {
+
+	base.Logger().Info("load dataset",
+		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
+		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType),
+		zap.Uint("item_ttl", m.GorseConfig.Database.ItemTTL),
+		zap.Uint("feedback_ttl", m.GorseConfig.Database.PositiveFeedbackTTL),
 		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-	rankingDataset, rankingItems, rankingFeedbacks, err := ranking.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
+	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
+		m.GorseConfig.Database.ReadFeedbackType, m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	// save popular items to cache
+	if err = m.CacheClient.SetScores(cache.PopularItems, "", popularItems); err != nil {
+		base.Logger().Error("failed to cache popular items", zap.Error(err))
+	}
+
+	// save the latest items to cache
+	if err = m.CacheClient.SetScores(cache.LatestItems, "", latestItems); err != nil {
+		base.Logger().Error("failed to cache latest items", zap.Error(err))
+	}
+
+	// write statistics to database
 	loadDataTime := base.DateNow()
 	if err = m.DataClient.InsertMeasurement(data.Measurement{
 		Name: NumUsers, Timestamp: loadDataTime, Value: float32(rankingDataset.UserCount()),
@@ -79,29 +95,6 @@ func (m *Master) runLoadRankingDatasetTask() error {
 	}); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
-	m.rankingModelMutex.Lock()
-	m.rankingItems = rankingItems
-	m.rankingFeedbacks = rankingFeedbacks
-	m.rankingFullSet = rankingDataset
-	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
-	m.rankingModelMutex.Unlock()
-	m.taskMonitor.Finish(TaskLoadRankingDataset)
-	return nil
-}
-
-// runLoadClickDatasetTask loads dataset for click-through rate prediction task.
-func (m *Master) runLoadClickDatasetTask() error {
-	m.taskMonitor.Start(TaskLoadClickDataset, 1)
-	base.Logger().Info("load click dataset",
-		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
-		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType))
-	clickDataset, err := click.LoadDataFromDatabase(m.DataClient,
-		m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ReadFeedbackType)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	loadDataTime := base.DateNow()
 	if err = m.DataClient.InsertMeasurement(data.Measurement{
 		Name: NumUserLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountUserLabels()),
 	}); err != nil {
@@ -122,87 +115,19 @@ func (m *Master) runLoadClickDatasetTask() error {
 	}); err != nil {
 		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
+
+	// split ranking dataset
+	m.rankingModelMutex.Lock()
+	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
+	rankingDataset = nil
+	m.rankingModelMutex.Unlock()
+
+	// split click dataset
 	m.clickModelMutex.Lock()
 	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
+	clickDataset = nil
 	m.clickModelMutex.Unlock()
-	m.taskMonitor.Finish(TaskLoadClickDataset)
 	return nil
-}
-
-// runFindPopularItemsTask updates popular items for the database.
-func (m *Master) runFindPopularItemsTask(items []data.Item, feedback []data.Feedback) {
-	m.taskMonitor.Start(TaskFindPopular, 1)
-	base.Logger().Info("collect popular items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
-	// create item mapping
-	itemMap := make(map[string]data.Item)
-	for _, item := range items {
-		itemMap[item.ItemId] = item
-	}
-	// count feedback
-	timeWindowLimit := time.Now().AddDate(0, 0, -m.GorseConfig.Recommend.PopularWindow)
-	count := make(map[string]int)
-	for _, fb := range feedback {
-		if fb.Timestamp.After(timeWindowLimit) {
-			count[fb.ItemId]++
-		}
-	}
-	// collect pop items
-	popItems := make(map[string]*base.TopKStringFilter)
-	popItems[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-	for itemId, f := range count {
-		popItems[""].Push(itemId, float32(f))
-		// Disable popular items under labels temporarily
-		//item := itemMap[itemId]
-		//for _, label := range item.Labels {
-		//	if _, exists := popItems[label]; !exists {
-		//		popItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-		//	}
-		//	popItems[label].Push(itemId, float32(f))
-		//}
-	}
-	// write back
-	for label, topItems := range popItems {
-		result, scores := topItems.PopAll()
-		if err := m.CacheClient.SetScores(cache.PopularItems, label, cache.CreateScoredItems(result, scores)); err != nil {
-			base.Logger().Error("failed to cache popular items", zap.Error(err))
-		}
-	}
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdatePopularTime, base.Now()); err != nil {
-		base.Logger().Error("failed to cache popular items", zap.Error(err))
-	}
-	m.taskMonitor.Finish(TaskFindPopular)
-}
-
-// runFindLatestItemsTask updates the latest items.
-func (m *Master) runFindLatestItemsTask(items []data.Item) {
-	m.taskMonitor.Start(TaskFindLatest, 1)
-	base.Logger().Info("collect latest items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
-	var err error
-	latestItems := make(map[string]*base.TopKStringFilter)
-	latestItems[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-	// find the latest items
-	for _, item := range items {
-		if !item.Timestamp.IsZero() {
-			latestItems[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
-			// Disable the latest items under labels temporarily
-			//for _, label := range item.Labels {
-			//	if _, exist := latestItems[label]; !exist {
-			//		latestItems[label] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-			//	}
-			//	latestItems[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
-			//}
-		}
-	}
-	for label, topItems := range latestItems {
-		result, scores := topItems.PopAll()
-		if err = m.CacheClient.SetScores(cache.LatestItems, label, cache.CreateScoredItems(result, scores)); err != nil {
-			base.Logger().Error("failed to cache latest items", zap.Error(err))
-		}
-	}
-	if err = m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateLatestTime, base.Now()); err != nil {
-		base.Logger().Error("failed to cache latest items time", zap.Error(err))
-	}
-	m.taskMonitor.Finish(TaskFindLatest)
 }
 
 // runFindItemNeighborsTask updates neighbors of items.
@@ -236,21 +161,21 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
 		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		for _, feedbacks := range dataset.ItemFeedback {
-			sort.Ints(feedbacks)
+			sort.Sort(sortutil.Int32Slice(feedbacks))
 		}
 		// inverse document frequency of users
 		for i := range dataset.UserFeedback {
 			userIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(dataset.UserFeedback[i])))
 		}
 	}
-	labeledItems := make([][]int, dataset.NumItemLabels)
+	labeledItems := make([][]int32, dataset.NumItemLabels)
 	labelIDF := make([]float32, dataset.NumItemLabels)
 	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
 		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		for i, itemLabels := range dataset.ItemLabels {
-			sort.Ints(itemLabels)
+			sort.Sort(sortutil.Int32Slice(itemLabels))
 			for _, label := range itemLabels {
-				labeledItems[label] = append(labeledItems[label], i)
+				labeledItems[label] = append(labeledItems[label], int32(i))
 			}
 		}
 		// inverse document frequency of labels
@@ -260,13 +185,16 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	}
 
 	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId))) {
+			return nil
+		}
 		nearItems := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
 			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto) {
 			labels := dataset.ItemLabels[itemId]
 			itemSet := bitset.New(uint(dataset.ItemCount()))
-			var adjacencyItems []int
+			var adjacencyItems []int32
 			for _, label := range labels {
 				for _, adjacencyItemId := range labeledItems[label] {
 					if !itemSet.Test(uint(adjacencyItemId)) {
@@ -275,14 +203,14 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 					}
 				}
 			}
-			for j := range adjacencyItems {
-				if j != itemId {
+			for _, j := range adjacencyItems {
+				if j != int32(itemId) {
 					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
 					if commonLabels > 0 {
 						score := commonLabels * commonLabels /
 							math32.Sqrt(weightedSum(dataset.ItemLabels[itemId], labelIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
-							(commonLabels + SimilarityShrink)
+							(commonLabels + similarityShrink)
 						nearItems.Push(j, score)
 					}
 				}
@@ -293,7 +221,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && nearItems.Len() == 0) {
 			users := dataset.ItemFeedback[itemId]
 			itemSet := bitset.New(uint(dataset.ItemCount()))
-			var adjacencyItems []int
+			var adjacencyItems []int32
 			for _, u := range users {
 				for _, adjacencyItemId := range dataset.UserFeedback[u] {
 					if !itemSet.Test(uint(adjacencyItemId)) {
@@ -302,14 +230,14 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 					}
 				}
 			}
-			for j := range adjacencyItems {
-				if j != itemId {
+			for _, j := range adjacencyItems {
+				if j != int32(itemId) {
 					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
 					if commonUsers > 0 {
 						score := commonUsers * commonUsers /
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[itemId], userIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
-							(commonUsers + SimilarityShrink)
+							(commonUsers + similarityShrink)
 						nearItems.Push(j, score)
 					}
 				}
@@ -320,7 +248,10 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		for i := range recommends {
 			recommends[i] = dataset.ItemIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(itemId), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.SetScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), cache.CreateScoredItems(recommends, scores)); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId)), time.Now()); err != nil {
 			return errors.Trace(err)
 		}
 		completed <- nil
@@ -367,21 +298,21 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
 		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
 		for _, feedbacks := range dataset.UserFeedback {
-			sort.Ints(feedbacks)
+			sort.Sort(sortutil.Int32Slice(feedbacks))
 		}
 		// inverse document frequency of items
 		for i := range dataset.ItemFeedback {
 			itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
 		}
 	}
-	labeledUsers := make([][]int, dataset.NumUserLabels)
+	labeledUsers := make([][]int32, dataset.NumUserLabels)
 	labelIDF := make([]float32, dataset.NumUserLabels)
 	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
 		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
 		for i, userLabels := range dataset.UserLabels {
-			sort.Ints(userLabels)
+			sort.Sort(sortutil.Int32Slice(userLabels))
 			for _, label := range userLabels {
-				labeledUsers[label] = append(labeledUsers[label], i)
+				labeledUsers[label] = append(labeledUsers[label], int32(i))
 			}
 		}
 		// inverse document frequency of labels
@@ -391,13 +322,16 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	}
 
 	if err := base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		if !m.checkUserNeighborCacheTimeout(dataset.UserIndex.ToName(int32(userId))) {
+			return nil
+		}
 		nearUsers := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
 			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto) {
 			labels := dataset.UserLabels[userId]
 			userSet := bitset.New(uint(dataset.UserCount()))
-			var adjacencyUsers []int
+			var adjacencyUsers []int32
 			for _, label := range labels {
 				for _, adjacencyUserId := range labeledUsers[label] {
 					if !userSet.Test(uint(adjacencyUserId)) {
@@ -406,14 +340,14 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 					}
 				}
 			}
-			for j := range adjacencyUsers {
-				if j != userId {
+			for _, j := range adjacencyUsers {
+				if j != int32(userId) {
 					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
 					if commonLabels > 0 {
 						score := commonLabels * commonLabels /
 							math32.Sqrt(weightedSum(dataset.UserLabels[userId], labelIDF)) /
 							math32.Sqrt(weightedSum(dataset.UserLabels[j], labelIDF)) /
-							(commonLabels + SimilarityShrink)
+							(commonLabels + similarityShrink)
 						nearUsers.Push(j, score)
 					}
 				}
@@ -424,7 +358,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
 			items := dataset.UserFeedback[userId]
 			userSet := bitset.New(uint(dataset.UserCount()))
-			var adjacencyUsers []int
+			var adjacencyUsers []int32
 			for _, item := range items {
 				for _, adjacencyUserId := range dataset.ItemFeedback[item] {
 					if !userSet.Test(uint(adjacencyUserId)) {
@@ -433,14 +367,14 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 					}
 				}
 			}
-			for j := range adjacencyUsers {
-				if j != userId {
+			for _, j := range adjacencyUsers {
+				if j != int32(userId) {
 					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
 					if commonItems > 0 {
 						score := commonItems * commonItems /
 							math32.Sqrt(weightedSum(dataset.UserFeedback[userId], itemIDF)) /
 							math32.Sqrt(weightedSum(dataset.UserFeedback[j], itemIDF)) /
-							(commonItems + SimilarityShrink)
+							(commonItems + similarityShrink)
 						nearUsers.Push(j, score)
 					}
 				}
@@ -451,7 +385,10 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		for i := range recommends {
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetScores(cache.UserNeighbors, dataset.UserIndex.ToName(userId), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.SetScores(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId)), cache.CreateScoredItems(recommends, scores)); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
 			return errors.Trace(err)
 		}
 		completed <- nil
@@ -467,7 +404,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	m.taskMonitor.Finish(TaskFindUserNeighbors)
 }
 
-func commonElements(a, b []int, weights []float32) float32 {
+func commonElements(a, b []int32, weights []float32) float32 {
 	i, j, sum := 0, 0, float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
@@ -483,12 +420,56 @@ func commonElements(a, b []int, weights []float32) float32 {
 	return sum
 }
 
-func weightedSum(a []int, weights []float32) float32 {
+func weightedSum(a []int32, weights []float32) float32 {
 	var sum float32
 	for _, i := range a {
 		sum += weights[i]
 	}
 	return sum
+}
+
+// checkUserNeighborCacheTimeout checks if user neighbor cache stale.
+// 1. if cache is empty, stale.
+// 2. if modified time > update time, stale.
+func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
+	var modifiedTime, updateTime time.Time
+	var err error
+	// read modified time
+	modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyUserTime, userId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// read update time
+	updateTime, err = m.CacheClient.GetTime(cache.LastUpdateUserNeighborsTime, userId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// check time
+	return updateTime.Unix() <= modifiedTime.Unix()
+}
+
+// checkItemNeighborCacheTimeout checks if item neighbor cache stale.
+// 1. if cache is empty, stale.
+// 2. if modified time > update time, stale.
+func (m *Master) checkItemNeighborCacheTimeout(itemId string) bool {
+	var modifiedTime, updateTime time.Time
+	var err error
+	// read modified time
+	modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyItemTime, itemId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// read update time
+	updateTime, err = m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// check time
+	return updateTime.Unix() <= modifiedTime.Unix()
 }
 
 // fitRankingModel fits ranking model using passed dataset. After model fitted, following states are changed:
@@ -542,34 +523,18 @@ func (m *Master) runRankingRelatedTasks(
 		m.userIndexVersion++
 		m.userIndexMutex.Unlock()
 	}
-	// collect popular items
-	if numFeedback == 0 {
-		m.taskMonitor.Fail(TaskFindPopular, "No feedback found.")
-	} else if numFeedbackChanged {
-		m.runFindPopularItemsTask(m.rankingItems, m.rankingFeedbacks)
-	}
-	// collect latest items
-	if numItems == 0 {
-		m.taskMonitor.Fail(TaskFindLatest, "No item found.")
-	} else if numItemsChanged {
-		m.runFindLatestItemsTask(m.rankingItems)
-	}
 	// collect neighbors of items
 	if numItems == 0 {
 		m.taskMonitor.Fail(TaskFindItemNeighbors, "No item found.")
 	} else if numItemsChanged || numFeedbackChanged {
-		m.runFindItemNeighborsTask(m.rankingFullSet)
+		m.runFindItemNeighborsTask(m.rankingTrainSet)
 	}
 	// collect neighbors of users
 	if numUsers == 0 {
 		m.taskMonitor.Fail(TaskFindUserNeighbors, "No user found.")
 	} else if numUsersChanged || numFeedbackChanged {
-		m.runFindUserNeighborsTask(m.rankingFullSet)
+		m.runFindUserNeighborsTask(m.rankingTrainSet)
 	}
-	// release dataset
-	m.rankingFeedbacks = nil
-	m.rankingItems = nil
-	m.rankingFullSet = nil
 
 	// training model
 	if numFeedback == 0 {
@@ -822,4 +787,210 @@ func (m *Master) runSearchClickModelTask(
 	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet,
 		m.taskMonitor.NewTaskTracker(TaskSearchClickModel), m.taskScheduler.NewRunner(TaskSearchClickModel))
 	return
+}
+
+// LoadDataFromDatabase loads dataset from data store.
+func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes []string, readType string, itemTTL, positiveFeedbackTTL uint) (
+	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems []cache.Scored, popularItems []cache.Scored, err error) {
+	m.taskMonitor.Start(TaskLoadDataset, 5)
+
+	// setup time limit
+	var itemTimeLimit, feedbackTimeLimit *time.Time
+	if itemTTL > 0 {
+		temp := time.Now().AddDate(0, 0, -int(itemTTL))
+		itemTimeLimit = &temp
+	}
+	if positiveFeedbackTTL > 0 {
+		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
+		feedbackTimeLimit = &temp
+	}
+	timeWindowLimit := time.Time{}
+	if m.GorseConfig.Recommend.PopularWindow > 0 {
+		timeWindowLimit = time.Now().AddDate(0, 0, -m.GorseConfig.Recommend.PopularWindow)
+	}
+	rankingDataset = ranking.NewMapIndexDataset()
+
+	// STEP 1: pull users
+	userLabelIndex := base.NewMapIndex()
+	start := time.Now()
+	userChan, errChan := database.GetUserStream(batchSize)
+	for users := range userChan {
+		for _, user := range users {
+			rankingDataset.AddUser(user.UserId)
+			userIndex := rankingDataset.UserIndex.ToNumber(user.UserId)
+			if len(rankingDataset.UserLabels) == int(userIndex) {
+				rankingDataset.UserLabels = append(rankingDataset.UserLabels, nil)
+			}
+			rankingDataset.UserLabels[userIndex] = make([]int32, len(user.Labels))
+			for i, label := range user.Labels {
+				userLabelIndex.Add(label)
+				rankingDataset.UserLabels[userIndex][i] = userLabelIndex.ToNumber(label)
+			}
+		}
+	}
+	if err = <-errChan; err != nil {
+		return nil, nil, nil, nil, errors.Trace(err)
+	}
+	rankingDataset.NumUserLabels = userLabelIndex.Len()
+	m.taskMonitor.Update(TaskLoadDataset, 1)
+	base.Logger().Debug("pulled users from database",
+		zap.Int("n_users", rankingDataset.UserCount()),
+		zap.Int32("n_user_labels", userLabelIndex.Len()),
+		zap.Duration("used_time", time.Since(start)))
+
+	// STEP 2: pull items
+	latestItemsFilter := base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	itemLabelIndex := base.NewMapIndex()
+	start = time.Now()
+	itemChan, errChan := database.GetItemStream(batchSize, itemTimeLimit)
+	for items := range itemChan {
+		for _, item := range items {
+			rankingDataset.AddItem(item.ItemId)
+			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
+			if len(rankingDataset.ItemLabels) == int(itemIndex) {
+				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
+			}
+			rankingDataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
+			for i, label := range item.Labels {
+				itemLabelIndex.Add(label)
+				rankingDataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
+			}
+			// add items to the latest items filter
+			if !item.Timestamp.IsZero() {
+				latestItemsFilter.Push(item.ItemId, float32(item.Timestamp.Unix()))
+			}
+		}
+	}
+	if err = <-errChan; err != nil {
+		return nil, nil, nil, nil, errors.Trace(err)
+	}
+	rankingDataset.NumItemLabels = itemLabelIndex.Len()
+	m.taskMonitor.Update(TaskLoadDataset, 2)
+	base.Logger().Debug("pulled items from database",
+		zap.Int("n_items", rankingDataset.ItemCount()),
+		zap.Int32("n_item_labels", itemLabelIndex.Len()),
+		zap.Duration("used_time", time.Since(start)))
+
+	// create positive set
+	popularCount := make([]int32, rankingDataset.ItemCount())
+	positiveSet := make([]*i32set.Set, rankingDataset.UserCount())
+	for i := range positiveSet {
+		positiveSet[i] = i32set.New()
+	}
+
+	// STEP 3: pull positive feedback
+	start = time.Now()
+	feedbackChan, errChan := database.GetFeedbackStream(batchSize, feedbackTimeLimit, posFeedbackTypes...)
+	for feedback := range feedbackChan {
+		for _, f := range feedback {
+			rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
+			// insert feedback to positive set
+			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
+			if userIndex == base.NotId {
+				continue
+			}
+			itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
+			if itemIndex == base.NotId {
+				continue
+			}
+			positiveSet[userIndex].Add(itemIndex)
+			// insert feedback to popularity counter
+			if f.Timestamp.After(timeWindowLimit) {
+				popularCount[itemIndex]++
+			}
+		}
+	}
+	if err = <-errChan; err != nil {
+		return nil, nil, nil, nil, errors.Trace(err)
+	}
+	m.taskMonitor.Update(TaskLoadDataset, 3)
+	base.Logger().Debug("pulled positive feedback from database",
+		zap.Int("n_positive_feedback", rankingDataset.Count()),
+		zap.Duration("used_time", time.Since(start)))
+
+	// create negative set
+	negativeSet := make([]*i32set.Set, rankingDataset.UserCount())
+	for i := range negativeSet {
+		negativeSet[i] = i32set.New()
+	}
+
+	// STEP 4: pull negative feedback
+	start = time.Now()
+	feedbackChan, errChan = database.GetFeedbackStream(batchSize, feedbackTimeLimit, readType)
+	for feedback := range feedbackChan {
+		for _, f := range feedback {
+			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
+			if userIndex == base.NotId {
+				continue
+			}
+			itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
+			if itemIndex == base.NotId {
+				continue
+			}
+			if !positiveSet[userIndex].Has(itemIndex) {
+				negativeSet[userIndex].Add(itemIndex)
+			}
+		}
+	}
+	if err = <-errChan; err != nil {
+		return nil, nil, nil, nil, errors.Trace(err)
+	}
+	m.taskMonitor.Update(TaskLoadDataset, 4)
+
+	// STEP 5: create click dataset
+	unifiedIndex := click.NewUnifiedMapIndexBuilder()
+	unifiedIndex.ItemIndex = rankingDataset.ItemIndex
+	unifiedIndex.UserIndex = rankingDataset.UserIndex
+	unifiedIndex.ItemLabelIndex = itemLabelIndex
+	unifiedIndex.UserLabelIndex = userLabelIndex
+	clickDataset = &click.Dataset{
+		Index:        unifiedIndex.Build(),
+		UserFeatures: rankingDataset.UserLabels,
+		ItemFeatures: rankingDataset.ItemLabels,
+	}
+	for userIndex := range positiveSet {
+		if positiveSet[userIndex].IsEmpty() || negativeSet[userIndex].IsEmpty() {
+			// release positive set and negative set
+			positiveSet[userIndex] = nil
+			negativeSet[userIndex] = nil
+			continue
+		}
+		// insert positive feedback
+		for _, itemIndex := range positiveSet[userIndex].List() {
+			clickDataset.Users.Append(int32(userIndex))
+			clickDataset.Items.Append(itemIndex)
+			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
+			clickDataset.Target.Append(1)
+			clickDataset.PositiveCount++
+		}
+		// insert negative feedback
+		for _, itemIndex := range negativeSet[userIndex].List() {
+			clickDataset.Users.Append(int32(userIndex))
+			clickDataset.Items.Append(itemIndex)
+			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
+			clickDataset.Target.Append(-1)
+			clickDataset.NegativeCount++
+		}
+		// release positive set and negative set
+		positiveSet[userIndex] = nil
+		negativeSet[userIndex] = nil
+	}
+	base.Logger().Debug("pulled negative feedback from database",
+		zap.Int("n_valid_positive", clickDataset.PositiveCount),
+		zap.Int("n_valid_negative", clickDataset.NegativeCount),
+		zap.Duration("used_time", time.Since(start)))
+	m.taskMonitor.Update(TaskLoadDataset, 5)
+
+	// collect latest items and popular items
+	items, scores := latestItemsFilter.PopAll()
+	latestItems = cache.CreateScoredItems(items, scores)
+	popularItemsFilter := base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	for itemIndex, val := range popularCount {
+		popularItemsFilter.Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
+	}
+	items, scores = popularItemsFilter.PopAll()
+	popularItems = cache.CreateScoredItems(items, scores)
+
+	m.taskMonitor.Finish(TaskLoadDataset)
+	return rankingDataset, clickDataset, latestItems, popularItems, nil
 }

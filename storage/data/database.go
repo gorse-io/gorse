@@ -76,25 +76,26 @@ type Database interface {
 	Init() error
 	Close() error
 	Optimize() error
-	InsertItem(item Item) error
-	BatchInsertItem(items []Item) error
+	BatchInsertItems(items []Item) error
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
 	GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error)
 	GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error)
-	InsertUser(user User) error
+	BatchInsertUsers(users []User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
 	GetUsers(cursor string, n int) (string, []User, error)
 	GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error)
 	GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
 	DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error)
-	InsertFeedback(feedback Feedback, insertUser, insertItem bool) error
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
 	GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error)
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)
 	GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error)
+	GetUserStream(batchSize int) (chan []User, chan error)
+	GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error)
+	GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
 }
 
 const (

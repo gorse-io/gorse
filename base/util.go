@@ -42,7 +42,7 @@ func SetDevelopmentLogger() {
 }
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.
-func Max(a int, b ...int) int {
+func Max(a int32, b ...int32) int32 {
 	for _, value := range b {
 		if value > a {
 			a = value

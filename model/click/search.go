@@ -166,8 +166,8 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 	base.Logger().Info("click model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()),
-		zap.Int("n_user_labels", trainSet.Index.CountUserLabels()),
-		zap.Int("n_item_labels", trainSet.Index.CountItemLabels()))
+		zap.Int32("n_user_labels", trainSet.Index.CountUserLabels()),
+		zap.Int32("n_item_labels", trainSet.Index.CountItemLabels()))
 	startTime := time.Now()
 
 	// Random search

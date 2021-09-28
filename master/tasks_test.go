@@ -17,7 +17,6 @@ package master
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"strconv"
@@ -60,11 +59,11 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 		}
 	}
 	var err error
-	err = m.DataClient.BatchInsertItem(items)
+	err = m.DataClient.BatchInsertItems(items)
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, "", 0, 0)
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -77,6 +76,8 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (common labels)
+	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "8", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeSimilar
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
@@ -86,6 +87,10 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (auto)
+	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "8", time.Now())
+	assert.NoError(t, err)
+	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "9", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeAuto
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
@@ -133,13 +138,11 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 		}
 	}
 	var err error
-	for _, user := range users {
-		err = m.DataClient.InsertUser(user)
-		assert.NoError(t, err)
-	}
+	err = m.DataClient.BatchInsertUsers(users)
+	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, err := ranking.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, "", 0, 0)
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -152,6 +155,8 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
+	err = m.CacheClient.SetTime(cache.LastModifyUserTime, "8", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeSimilar
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.UserNeighbors, "8", 0, 100)
@@ -161,6 +166,10 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
+	err = m.CacheClient.SetTime(cache.LastModifyUserTime, "8", time.Now())
+	assert.NoError(t, err)
+	err = m.CacheClient.SetTime(cache.LastModifyUserTime, "9", time.Now())
+	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeAuto
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetScores(cache.UserNeighbors, "8", 0, 100)
@@ -171,4 +180,111 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+}
+
+func TestMaster_LoadDataFromDatabase(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+	// create config
+	m.GorseConfig = &config.Config{}
+	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Database.PositiveFeedbackType = []string{"positive"}
+	m.GorseConfig.Database.ReadFeedbackType = "negative"
+
+	// insert items
+	var items []data.Item
+	for i := 0; i < 10; i++ {
+		items = append(items, data.Item{
+			ItemId:    strconv.Itoa(i),
+			Timestamp: time.Date(2000+i, 1, 1, 1, 1, 0, 0, time.UTC),
+			Labels:    []string{strconv.Itoa(i % 3)},
+		})
+	}
+	err := m.DataClient.BatchInsertItems(items)
+	assert.NoError(t, err)
+
+	// insert users
+	var users []data.User
+	for i := 0; i <= 10; i++ {
+		users = append(users, data.User{
+			UserId: strconv.Itoa(i),
+			Labels: []string{strconv.Itoa(i % 5)},
+		})
+	}
+	err = m.DataClient.BatchInsertUsers(users)
+	assert.NoError(t, err)
+
+	// insert feedback
+	feedbacks := make([]data.Feedback, 0)
+	for i := 0; i < 10; i++ {
+		// positive feedback
+		// item 0: user 0
+		// ...
+		// item 9: user 0 ... user 9
+		for j := 0; j <= i; j++ {
+			feedbacks = append(feedbacks, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					ItemId:       strconv.Itoa(i),
+					UserId:       strconv.Itoa(j),
+					FeedbackType: "positive",
+				},
+				Timestamp: time.Now(),
+			})
+		}
+		// negative feedback
+		// item 0: user 1 .. user 10
+		// ...
+		// item 9: user 10
+		for j := i + 1; j < 11; j++ {
+			feedbacks = append(feedbacks, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					ItemId:       strconv.Itoa(i),
+					UserId:       strconv.Itoa(j),
+					FeedbackType: "negative",
+				},
+				Timestamp: time.Now(),
+			})
+		}
+	}
+	err = m.DataClient.BatchInsertFeedback(feedbacks, false, false)
+	assert.NoError(t, err)
+
+	// load dataset
+	err = m.runLoadDatasetTask()
+	assert.NoError(t, err)
+	assert.Equal(t, 11, m.rankingTrainSet.UserCount())
+	assert.Equal(t, 10, m.rankingTrainSet.ItemCount())
+	assert.Equal(t, 11, m.rankingTestSet.UserCount())
+	assert.Equal(t, 10, m.rankingTestSet.ItemCount())
+	assert.Equal(t, 55, m.rankingTrainSet.Count()+m.rankingTestSet.Count())
+	assert.Equal(t, 11, m.clickTrainSet.UserCount())
+	assert.Equal(t, 10, m.clickTrainSet.ItemCount())
+	assert.Equal(t, 11, m.clickTestSet.UserCount())
+	assert.Equal(t, 10, m.clickTestSet.ItemCount())
+	assert.Equal(t, int32(3), m.clickTrainSet.Index.CountItemLabels())
+	assert.Equal(t, int32(5), m.clickTrainSet.Index.CountUserLabels())
+	assert.Equal(t, int32(3), m.clickTestSet.Index.CountItemLabels())
+	assert.Equal(t, int32(5), m.clickTestSet.Index.CountUserLabels())
+	assert.Equal(t, 90, m.clickTrainSet.Count()+m.clickTestSet.Count())
+	assert.Equal(t, 45, m.clickTrainSet.PositiveCount+m.clickTestSet.PositiveCount)
+	assert.Equal(t, 45, m.clickTrainSet.NegativeCount+m.clickTestSet.NegativeCount)
+
+	// check latest items
+	latest, err := m.CacheClient.GetScores(cache.LatestItems, "", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{
+		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
+		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
+		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
+	}, latest)
+
+	// check popular items
+	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{
+		{Id: items[9].ItemId, Score: 10},
+		{Id: items[8].ItemId, Score: 9},
+		{Id: items[7].ItemId, Score: 8},
+	}, popular)
 }

@@ -18,33 +18,29 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/juju/errors"
-	"os"
-	"strings"
-	"time"
-
 	"github.com/scylladb/go-set"
+	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"os"
+	"strings"
 )
-
-const batchSize = 10000
 
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
 	UserIndex     base.Index
 	ItemIndex     base.Index
-	FeedbackUsers []int
-	FeedbackItems []int
-	UserFeedback  [][]int
-	ItemFeedback  [][]int
-	Negatives     [][]int
-	ItemLabels    [][]int
-	UserLabels    [][]int
+	FeedbackUsers base.Integers
+	FeedbackItems base.Integers
+	UserFeedback  [][]int32
+	ItemFeedback  [][]int32
+	Negatives     [][]int32
+	ItemLabels    [][]int32
+	UserLabels    [][]int32
 	// statistics
-	NumItemLabels int
-	NumUserLabels int
+	NumItemLabels int32
+	NumUserLabels int32
 }
 
 // NewMapIndexDataset creates a data set.
@@ -54,10 +50,8 @@ func NewMapIndexDataset() *DataSet {
 	s.UserIndex = base.NewMapIndex()
 	s.ItemIndex = base.NewMapIndex()
 	// Initialize slices
-	s.FeedbackUsers = make([]int, 0)
-	s.FeedbackItems = make([]int, 0)
-	s.UserFeedback = make([][]int, 0)
-	s.ItemFeedback = make([][]int, 0)
+	s.UserFeedback = make([][]int32, 0)
+	s.ItemFeedback = make([][]int32, 0)
 	return s
 }
 
@@ -67,27 +61,25 @@ func NewDirectIndexDataset() *DataSet {
 	dataset.UserIndex = base.NewDirectIndex()
 	dataset.ItemIndex = base.NewDirectIndex()
 	// Initialize slices
-	dataset.FeedbackUsers = make([]int, 0)
-	dataset.FeedbackItems = make([]int, 0)
-	dataset.UserFeedback = make([][]int, 0)
-	dataset.ItemFeedback = make([][]int, 0)
-	dataset.Negatives = make([][]int, 0)
+	dataset.UserFeedback = make([][]int32, 0)
+	dataset.ItemFeedback = make([][]int32, 0)
+	dataset.Negatives = make([][]int32, 0)
 	return dataset
 }
 
 func (dataset *DataSet) AddUser(userId string) {
 	dataset.UserIndex.Add(userId)
 	userIndex := dataset.UserIndex.ToNumber(userId)
-	for userIndex >= len(dataset.UserFeedback) {
-		dataset.UserFeedback = append(dataset.UserFeedback, make([]int, 0))
+	for int(userIndex) >= len(dataset.UserFeedback) {
+		dataset.UserFeedback = append(dataset.UserFeedback, make([]int32, 0))
 	}
 }
 
 func (dataset *DataSet) AddItem(itemId string) {
 	dataset.ItemIndex.Add(itemId)
 	itemIndex := dataset.ItemIndex.ToNumber(itemId)
-	for itemIndex >= len(dataset.ItemFeedback) {
-		dataset.ItemFeedback = append(dataset.ItemFeedback, make([]int, 0))
+	for int(itemIndex) >= len(dataset.ItemFeedback) {
+		dataset.ItemFeedback = append(dataset.ItemFeedback, make([]int32, 0))
 	}
 }
 
@@ -101,14 +93,14 @@ func (dataset *DataSet) AddFeedback(userId, itemId string, insertUserItem bool) 
 	userIndex := dataset.UserIndex.ToNumber(userId)
 	itemIndex := dataset.ItemIndex.ToNumber(itemId)
 	if userIndex != base.NotId && itemIndex != base.NotId {
-		dataset.FeedbackUsers = append(dataset.FeedbackUsers, userIndex)
-		dataset.FeedbackItems = append(dataset.FeedbackItems, itemIndex)
-		for itemIndex >= len(dataset.ItemFeedback) {
-			dataset.ItemFeedback = append(dataset.ItemFeedback, make([]int, 0))
+		dataset.FeedbackUsers.Append(userIndex)
+		dataset.FeedbackItems.Append(itemIndex)
+		for int(itemIndex) >= len(dataset.ItemFeedback) {
+			dataset.ItemFeedback = append(dataset.ItemFeedback, make([]int32, 0))
 		}
 		dataset.ItemFeedback[itemIndex] = append(dataset.ItemFeedback[itemIndex], userIndex)
-		for userIndex >= len(dataset.UserFeedback) {
-			dataset.UserFeedback = append(dataset.UserFeedback, make([]int, 0))
+		for int(userIndex) >= len(dataset.UserFeedback) {
+			dataset.UserFeedback = append(dataset.UserFeedback, make([]int32, 0))
 		}
 		dataset.UserFeedback[userIndex] = append(dataset.UserFeedback[userIndex], itemIndex)
 	}
@@ -117,10 +109,10 @@ func (dataset *DataSet) AddFeedback(userId, itemId string, insertUserItem bool) 
 func (dataset *DataSet) SetNegatives(userId string, negatives []string) {
 	userIndex := dataset.UserIndex.ToNumber(userId)
 	if userIndex != base.NotId {
-		for userIndex >= len(dataset.Negatives) {
-			dataset.Negatives = append(dataset.Negatives, make([]int, 0))
+		for int(userIndex) >= len(dataset.Negatives) {
+			dataset.Negatives = append(dataset.Negatives, make([]int32, 0))
 		}
-		dataset.Negatives[userIndex] = make([]int, 0, len(negatives))
+		dataset.Negatives[userIndex] = make([]int32, 0, len(negatives))
 		for _, itemId := range negatives {
 			itemIndex := dataset.ItemIndex.ToNumber(itemId)
 			if itemIndex != base.NotId {
@@ -131,35 +123,38 @@ func (dataset *DataSet) SetNegatives(userId string, negatives []string) {
 }
 
 func (dataset *DataSet) Count() int {
-	return len(dataset.FeedbackUsers)
+	if dataset.FeedbackUsers.Len() != dataset.FeedbackItems.Len() {
+		panic("dataset.FeedbackUsers.Len() != dataset.FeedbackItems.Len()")
+	}
+	return dataset.FeedbackUsers.Len()
 }
 
 // UserCount returns the number of UserFeedback.
 func (dataset *DataSet) UserCount() int {
-	return dataset.UserIndex.Len()
+	return int(dataset.UserIndex.Len())
 }
 
 // ItemCount returns the number of ItemFeedback.
 func (dataset *DataSet) ItemCount() int {
-	return dataset.ItemIndex.Len()
+	return int(dataset.ItemIndex.Len())
 }
 
-func createSliceOfSlice(n int) [][]int {
-	x := make([][]int, n)
+func createSliceOfSlice(n int) [][]int32 {
+	x := make([][]int32, n)
 	for i := range x {
-		x[i] = make([]int, 0)
+		x[i] = make([]int32, 0)
 	}
 	return x
 }
 
-func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [][]int {
+func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [][]int32 {
 	if len(dataset.Negatives) == 0 {
 		rng := base.NewRandomGenerator(0)
-		dataset.Negatives = make([][]int, dataset.UserCount())
+		dataset.Negatives = make([][]int32, dataset.UserCount())
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			s1 := set.NewIntSet(dataset.UserFeedback[userIndex]...)
-			s2 := set.NewIntSet(excludeSet.UserFeedback[userIndex]...)
-			dataset.Negatives[userIndex] = rng.Sample(0, dataset.ItemCount(), numCandidates, s1, s2)
+			s1 := set.NewInt32Set(dataset.UserFeedback[userIndex]...)
+			s2 := set.NewInt32Set(excludeSet.UserFeedback[userIndex]...)
+			dataset.Negatives[userIndex] = rng.SampleInt32(0, int32(dataset.ItemCount()), numCandidates, s1, s2)
 		}
 	}
 	return dataset.Negatives
@@ -180,17 +175,17 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet.ItemFeedback, testSet.ItemFeedback = createSliceOfSlice(dataset.ItemCount()), createSliceOfSlice(dataset.ItemCount())
 	rng := base.NewRandomGenerator(seed)
 	if numTestUsers >= dataset.UserCount() || numTestUsers <= 0 {
-		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
+		for userIndex := int32(0); userIndex < int32(dataset.UserCount()); userIndex++ {
 			if len(dataset.UserFeedback[userIndex]) > 0 {
 				k := rng.Intn(len(dataset.UserFeedback[userIndex]))
-				testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
-				testSet.FeedbackItems = append(testSet.FeedbackItems, dataset.UserFeedback[userIndex][k])
+				testSet.FeedbackUsers.Append(userIndex)
+				testSet.FeedbackItems.Append(dataset.UserFeedback[userIndex][k])
 				testSet.UserFeedback[userIndex] = append(testSet.UserFeedback[userIndex], dataset.UserFeedback[userIndex][k])
 				testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]] = append(testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]], userIndex)
 				for i, itemIndex := range dataset.UserFeedback[userIndex] {
 					if i != k {
-						trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
-						trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
+						trainSet.FeedbackUsers.Append(userIndex)
+						trainSet.FeedbackItems.Append(itemIndex)
 						trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
 						trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
 					}
@@ -198,30 +193,30 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 			}
 		}
 	} else {
-		testUsers := rng.Sample(0, dataset.UserCount(), numTestUsers)
+		testUsers := rng.SampleInt32(0, int32(dataset.UserCount()), numTestUsers)
 		for _, userIndex := range testUsers {
 			if len(dataset.UserFeedback[userIndex]) > 0 {
 				k := rng.Intn(len(dataset.UserFeedback[userIndex]))
-				testSet.FeedbackUsers = append(testSet.FeedbackUsers, userIndex)
-				testSet.FeedbackItems = append(testSet.FeedbackItems, dataset.UserFeedback[userIndex][k])
+				testSet.FeedbackUsers.Append(userIndex)
+				testSet.FeedbackItems.Append(dataset.UserFeedback[userIndex][k])
 				testSet.UserFeedback[userIndex] = append(testSet.UserFeedback[userIndex], dataset.UserFeedback[userIndex][k])
 				testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]] = append(testSet.ItemFeedback[dataset.UserFeedback[userIndex][k]], userIndex)
 				for i, itemIndex := range dataset.UserFeedback[userIndex] {
 					if i != k {
-						trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
-						trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
+						trainSet.FeedbackUsers.Append(userIndex)
+						trainSet.FeedbackItems.Append(itemIndex)
 						trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
 						trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
 					}
 				}
 			}
 		}
-		testUserSet := set.NewIntSet(testUsers...)
-		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
+		testUserSet := i32set.New(testUsers...)
+		for userIndex := int32(0); userIndex < int32(dataset.UserCount()); userIndex++ {
 			if !testUserSet.Has(userIndex) {
 				for _, itemIndex := range dataset.UserFeedback[userIndex] {
-					trainSet.FeedbackUsers = append(trainSet.FeedbackUsers, userIndex)
-					trainSet.FeedbackItems = append(trainSet.FeedbackItems, itemIndex)
+					trainSet.FeedbackUsers.Append(userIndex)
+					trainSet.FeedbackItems.Append(itemIndex)
 					trainSet.UserFeedback[userIndex] = append(trainSet.UserFeedback[userIndex], itemIndex)
 					trainSet.ItemFeedback[itemIndex] = append(trainSet.ItemFeedback[itemIndex], userIndex)
 				}
@@ -232,8 +227,8 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 }
 
 // GetIndex gets the i-th record by <user index, item index, rating>.
-func (dataset *DataSet) GetIndex(i int) (int, int) {
-	return dataset.FeedbackUsers[i], dataset.FeedbackItems[i]
+func (dataset *DataSet) GetIndex(i int) (int32, int32) {
+	return dataset.FeedbackUsers.Get(i), dataset.FeedbackItems.Get(i)
 }
 
 // LoadDataFromCSV loads Data from a CSV file. The CSV file should be:
@@ -272,104 +267,6 @@ func LoadDataFromCSV(fileName, sep string, hasHeader bool) *DataSet {
 		dataset.AddFeedback(fields[0], fields[1], true)
 	}
 	return dataset
-}
-
-// LoadDataFromDatabase loads dataset from data store.
-func LoadDataFromDatabase(database data.Database, feedbackTypes []string, itemTTL, positiveFeedbackTTL uint) (*DataSet, []data.Item, []data.Feedback, error) {
-	// setup time limit
-	var itemTimeLimit, feedbackTimeLimit *time.Time
-	if itemTTL > 0 {
-		temp := time.Now().AddDate(0, 0, -int(itemTTL))
-		itemTimeLimit = &temp
-	}
-	if positiveFeedbackTTL > 0 {
-		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
-		feedbackTimeLimit = &temp
-	}
-	dataset := NewMapIndexDataset()
-	cursor := ""
-	var err error
-	allItems := make([]data.Item, 0)
-	allFeedback := make([]data.Feedback, 0)
-	// pull users
-	userLabelIndex := base.NewMapIndex()
-	start := time.Now()
-	for {
-		var users []data.User
-		cursor, users, err = database.GetUsers(cursor, batchSize)
-		if err != nil {
-			return nil, nil, nil, errors.Trace(err)
-		}
-		for _, user := range users {
-			dataset.AddUser(user.UserId)
-			userIndex := dataset.UserIndex.ToNumber(user.UserId)
-			if len(dataset.UserLabels) == userIndex {
-				dataset.UserLabels = append(dataset.UserLabels, nil)
-			}
-			dataset.UserLabels[userIndex] = make([]int, len(user.Labels))
-			for i, label := range user.Labels {
-				userLabelIndex.Add(label)
-				dataset.UserLabels[userIndex][i] = userLabelIndex.ToNumber(label)
-			}
-		}
-		if cursor == "" {
-			break
-		}
-	}
-	dataset.NumUserLabels = userLabelIndex.Len()
-	base.Logger().Debug("pulled users from database",
-		zap.Int("n_users", dataset.UserCount()),
-		zap.Duration("used_time", time.Since(start)))
-	// pull items
-	itemLabelIndex := base.NewMapIndex()
-	start = time.Now()
-	for {
-		var items []data.Item
-		cursor, items, err = database.GetItems(cursor, batchSize, itemTimeLimit)
-		allItems = append(allItems, items...)
-		if err != nil {
-			return nil, nil, nil, errors.Trace(err)
-		}
-		for _, item := range items {
-			dataset.AddItem(item.ItemId)
-			itemIndex := dataset.ItemIndex.ToNumber(item.ItemId)
-			if len(dataset.ItemLabels) == itemIndex {
-				dataset.ItemLabels = append(dataset.ItemLabels, nil)
-			}
-			dataset.ItemLabels[itemIndex] = make([]int, len(item.Labels))
-			for i, label := range item.Labels {
-				itemLabelIndex.Add(label)
-				dataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
-			}
-		}
-		if cursor == "" {
-			break
-		}
-	}
-	dataset.NumItemLabels = itemLabelIndex.Len()
-	base.Logger().Debug("pulled items from database",
-		zap.Int("n_items", dataset.ItemCount()),
-		zap.Duration("used_time", time.Since(start)))
-	// pull database
-	start = time.Now()
-	for {
-		var feedback []data.Feedback
-		cursor, feedback, err = database.GetFeedback(cursor, batchSize, feedbackTimeLimit, feedbackTypes...)
-		if err != nil {
-			return nil, nil, nil, errors.Trace(err)
-		}
-		allFeedback = append(allFeedback, feedback...)
-		for _, v := range feedback {
-			dataset.AddFeedback(v.UserId, v.ItemId, false)
-		}
-		if cursor == "" {
-			break
-		}
-	}
-	base.Logger().Debug("pull feedback from database",
-		zap.Int("n_feedback", dataset.Count()),
-		zap.Duration("used_time", time.Since(start)))
-	return dataset, allItems, allFeedback, nil
 }
 
 func loadTest(dataset *DataSet, path string) error {

@@ -15,7 +15,7 @@
 package base
 
 type weightedItem struct {
-	item   int
+	item   int32
 	weight float32
 }
 
@@ -47,7 +47,7 @@ func (filter *TopKFilter) Less(i, j int) bool {
 
 // Push pushes the element x onto the heap.
 // The complexity is O(log n) where n = h.Count().
-func (filter *TopKFilter) Push(item int, weight float32) {
+func (filter *TopKFilter) Push(item int32, weight float32) {
 	filter.items = append(filter.items, weightedItem{item, weight})
 	filter.up(filter.Len() - 1)
 	if filter.Len() > filter.k {
@@ -58,7 +58,7 @@ func (filter *TopKFilter) Push(item int, weight float32) {
 // Pop removes and returns the minimum element (according to Less) from the heap.
 // The complexity is O(log n) where n = h.Count().
 // Pop is equivalent to Remove(h, 0).
-func (filter *TopKFilter) pop() (int, float32) {
+func (filter *TopKFilter) pop() (int32, float32) {
 	n := filter.Len() - 1
 	filter.Swap(0, n)
 	filter.down(0, n)
@@ -99,8 +99,8 @@ func (filter *TopKFilter) down(i0, n int) bool {
 }
 
 // PopAll pops all items in the filter with decreasing order.
-func (filter *TopKFilter) PopAll() ([]int, []float32) {
-	items := make([]int, filter.Len())
+func (filter *TopKFilter) PopAll() ([]int32, []float32) {
+	items := make([]int32, filter.Len())
 	weights := make([]float32, filter.Len())
 	for i := len(items) - 1; i >= 0; i-- {
 		items[i], weights[i] = filter.pop()

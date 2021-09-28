@@ -15,9 +15,7 @@ package click
 
 import (
 	"fmt"
-	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"testing"
 )
 
@@ -28,83 +26,67 @@ func TestLoadDataFromBuiltIn(t *testing.T) {
 	assert.Equal(t, 28860, test.Count())
 }
 
-type mockDatastore struct {
-	data.Database
-	server *miniredis.Miniredis
-}
-
-func newMockDatastore(t *testing.T) *mockDatastore {
-	var err error
-	db := new(mockDatastore)
-	db.server, err = miniredis.Run()
-	assert.NoError(t, err)
-	db.Database, err = data.Open("redis://" + db.server.Addr())
-	assert.NoError(t, err)
-	return db
-}
-
-func (db *mockDatastore) Close(t *testing.T) {
-	err := db.Database.Close()
-	assert.NoError(t, err)
-	db.server.Close()
-}
-
-func TestLoadDataFromDatabase(t *testing.T) {
-	// create database
-	database := newMockDatastore(t)
-	defer database.Close(t)
+func TestDataset_Split(t *testing.T) {
+	// create dataset
+	unifiedIndex := NewUnifiedMapIndexBuilder()
+	dataset := NewMapIndexDataset()
 	numUsers, numItems := 5, 6
 	for i := 0; i < numUsers; i++ {
-		err := database.InsertUser(data.User{
-			UserId: fmt.Sprintf("user%v", i),
-			Labels: []string{
-				fmt.Sprintf("user_label%v", i),
-				fmt.Sprintf("user_label%v", i*2),
-			},
-		})
-		assert.NoError(t, err)
+		unifiedIndex.AddUser(fmt.Sprintf("user%v", i))
+		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i))
+		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i+1))
+		dataset.UserFeatures = append(dataset.UserFeatures, []int32{int32(2 * i), int32(2*i + 1)})
 	}
 	for i := 0; i < numItems; i++ {
-		err := database.InsertItem(data.Item{
-			ItemId: fmt.Sprintf("item%v", i),
-			Labels: []string{
-				fmt.Sprintf("item_label%v", i),
-				fmt.Sprintf("item_label%v", i*2),
-			},
-		})
-		assert.NoError(t, err)
+		unifiedIndex.AddItem(fmt.Sprintf("item%v", i))
+		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i))
+		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+1))
+		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+2))
+		dataset.ItemFeatures = append(dataset.ItemFeatures, []int32{int32(3 * i), int32(3*i + 1), int32(3*i + 2)})
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := 0; j < numItems; j++ {
-			var err error
-			err = database.InsertFeedback(data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					UserId:       fmt.Sprintf("user%v", i),
-					ItemId:       fmt.Sprintf("item%v", j),
-					FeedbackType: "read",
-				},
-			}, false, false)
-			assert.NoError(t, err)
 			if i+j > 4 {
-				err = database.InsertFeedback(data.Feedback{
-					FeedbackKey: data.FeedbackKey{
-						UserId:       fmt.Sprintf("user%v", i),
-						ItemId:       fmt.Sprintf("item%v", j),
-						FeedbackType: "click",
-					},
-				}, false, false)
-				assert.NoError(t, err)
+				dataset.Users.Append(int32(i))
+				dataset.Items.Append(int32(j))
+				dataset.CtxFeatures = append(dataset.CtxFeatures, []int32{int32(i * j)})
+				dataset.CtxValues = append(dataset.CtxValues, []float32{float32(i + j)})
+				dataset.NormValues.Append(1.5)
+				dataset.Target.Append(1)
+				dataset.PositiveCount++
+			} else {
+				dataset.Users.Append(int32(i))
+				dataset.Items.Append(int32(j))
+				dataset.CtxFeatures = append(dataset.CtxFeatures, []int32{int32(i * j)})
+				dataset.CtxValues = append(dataset.CtxValues, []float32{float32(i + j)})
+				dataset.NormValues.Append(1.5)
+				dataset.Target.Append(-1)
+				dataset.NegativeCount++
 			}
 		}
 	}
-	// load data
-	dataset, err := LoadDataFromDatabase(database.Database, []string{"click"}, "read")
-	assert.NoError(t, err)
+	dataset.Index = unifiedIndex.Build()
+
 	assert.Equal(t, numUsers*numItems, dataset.Count())
 	assert.Equal(t, numUsers, dataset.UserCount())
 	assert.Equal(t, numItems, dataset.ItemCount())
 	assert.Equal(t, numUsers*numItems/2, dataset.PositiveCount)
 	assert.Equal(t, numUsers*numItems/2, dataset.NegativeCount)
+
+	features, values, target := dataset.Get(2)
+	assert.Equal(t, []int32{
+		0,
+		dataset.Index.CountUsers() + 2,
+		dataset.Index.CountUsers() + dataset.Index.CountItems() + 0,
+		dataset.Index.CountUsers() + dataset.Index.CountItems() + 1,
+		dataset.Index.CountUsers() + dataset.Index.CountItems() + dataset.Index.CountUserLabels() + 6,
+		dataset.Index.CountUsers() + dataset.Index.CountItems() + dataset.Index.CountUserLabels() + 7,
+		dataset.Index.CountUsers() + dataset.Index.CountItems() + dataset.Index.CountUserLabels() + 8,
+		0,
+	}, features)
+	assert.Equal(t, []float32{1, 1, 1.5, 1.5, 1.5, 1.5, 1.5, 2}, values)
+	assert.Equal(t, float32(-1), target)
+
 	// split
 	train, test := dataset.Split(0.2, 0)
 	assert.Equal(t, numUsers, train.UserCount())

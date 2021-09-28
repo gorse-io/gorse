@@ -3,8 +3,6 @@
 ############################
 FROM golang:1.17
 
-ENV GOPROXY=https://goproxy.io,direct
-
 COPY . gorse
 
 RUN cd gorse && \

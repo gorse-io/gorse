@@ -132,7 +132,7 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	assert.InDelta(t, 0.839194, score.RMSE, regressionDelta)
 
 	// test prediction
-	assert.Equal(t, m.InternalPredict([]int{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.5, 0.5, 0.5, 0.5}),
+	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.5, 0.5, 0.5, 0.5}),
 		m.Predict("1", "2", []string{"3", "4"}, []string{"5", "6"}))
 
 	// test increment test

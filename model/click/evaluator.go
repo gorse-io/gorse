@@ -17,6 +17,7 @@ package click
 import (
 	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
+	"modernc.org/sortutil"
 	"sort"
 )
 
@@ -121,8 +122,8 @@ func Accuracy(posPrediction, negPrediction []float32) float32 {
 }
 
 func AUC(posPrediction, negPrediction []float32) float32 {
-	sort.Slice(posPrediction, func(i, j int) bool { return posPrediction[i] < posPrediction[j] })
-	sort.Slice(negPrediction, func(i, j int) bool { return negPrediction[i] < negPrediction[j] })
+	sort.Sort(sortutil.Float32Slice(posPrediction))
+	sort.Sort(sortutil.Float32Slice(negPrediction))
 	var sum float32
 	var nPos int
 	for pPos := range posPrediction {

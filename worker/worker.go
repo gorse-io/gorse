@@ -22,26 +22,23 @@ import (
 	"fmt"
 	"github.com/juju/errors"
 	cmap "github.com/orcaman/concurrent-map"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/scylladb/go-set"
+	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/scylladb/go-set"
-	"github.com/zhenghaoz/gorse/model/ranking"
-	"go.uber.org/zap"
-
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"google.golang.org/grpc"
 )
 
 // Worker manages states of a worker node.
@@ -73,7 +70,7 @@ type Worker struct {
 	// ranking model
 	latestRankingModelVersion  int64
 	currentRankingModelVersion int64
-	rankingModel               ranking.Model
+	rankingModel               ranking.MatrixFactorization
 
 	// click model
 	latestClickModelVersion  int64
@@ -356,7 +353,7 @@ func (w *Worker) Serve() {
 // 6. Insert cold-start items into results.
 // 7. Rank items in results by click-through-rate.
 // 8. Refresh cache.
-func (w *Worker) Recommend(m ranking.Model, users []string) {
+func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 	var userIndexer base.Index
 	// load user index
 	if _, ok := m.(ranking.MatrixFactorization); ok {
@@ -409,7 +406,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 	_ = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		userId := users[jobId]
 		// convert to user index
-		var userIndex int
+		var userIndex int32
 		if _, ok := m.(ranking.MatrixFactorization); ok {
 			userIndex = userIndexer.ToNumber(userId)
 		}
@@ -445,13 +442,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			for itemIndex, itemId := range itemIds {
 				if !excludeSet.Has(itemId) {
-					switch m := m.(type) {
-					case ranking.MatrixFactorization:
-						recItems.Push(itemId, m.InternalPredict(userIndex, itemIndex))
-					default:
-						base.Logger().Error("unknown model type",
-							zap.String("type", reflect.TypeOf(m).String()))
-					}
+					recItems.Push(itemId, m.InternalPredict(userIndex, int32(itemIndex)))
 				}
 			}
 			// save result
@@ -563,7 +554,7 @@ func (w *Worker) Recommend(m ranking.Model, users []string) {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return errors.Trace(err)
 		}
-		if err = w.cacheClient.SetString(cache.LastUpdateRecommendTime, userId, base.Now()); err != nil {
+		if err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, userId, time.Now()); err != nil {
 			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
 		// refresh cache
@@ -635,13 +626,13 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 		return true
 	}
 	// read active time
-	activeTime, err = w.cacheClient.GetTime(cache.LastActiveTime, userId)
+	activeTime, err = w.cacheClient.GetTime(cache.LastModifyUserTime, userId)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
 	}
 	// read recommend time
-	recommendTime, err = w.cacheClient.GetTime(cache.LastUpdateRecommendTime, userId)
+	recommendTime, err = w.cacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
@@ -669,7 +660,7 @@ func loadUserHistoricalItems(database data.Database, userId string, feedbackType
 func (w *Worker) refreshCache(userId string) error {
 	var timeLimit *time.Time
 	// read recommend time
-	recommendTime, err := w.cacheClient.GetTime(cache.LastUpdateRecommendTime, userId)
+	recommendTime, err := w.cacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId)
 	if err == nil {
 		timeLimit = &recommendTime
 	} else {

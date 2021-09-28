@@ -23,29 +23,25 @@ import (
 )
 
 const (
-	IgnoreItems             = "ignore_items"
-	ItemNeighbors           = "item_neighbors"
-	UserNeighbors           = "user_neighbors"
-	CollaborativeRecommend  = "collaborative_recommend"
-	CTRRecommend            = "ctr_recommend"
-	SubscribeItems          = "subscribe_items"
-	PopularItems            = "popular_items"
-	LatestItems             = "latest_items"
-	LastActiveTime          = "last_active_time"
-	LastUpdateRecommendTime = "last_update_recommend_time"
+	IgnoreItems            = "ignore_items"
+	ItemNeighbors          = "item_neighbors"
+	UserNeighbors          = "user_neighbors"
+	CollaborativeRecommend = "collaborative_recommend"
+	CTRRecommend           = "ctr_recommend"
+	PopularItems           = "popular_items"
+	LatestItems            = "latest_items"
+
+	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
+	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
+	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
+	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time" // the latest timestamp that a user's neighbors item was updated
+	LastUpdateItemNeighborsTime = "last_update_item_neighbors_time" // the latest timestamp that an item's neighbors was updated
 
 	// GlobalMeta is global meta information
-	GlobalMeta                  = "global_meta"
-	NumInserted                 = "num_inserted"
-	NumUsers                    = "num_users"
-	NumItems                    = "num_items"
-	NumPositiveFeedback         = "num_pos_feedback"
-	LastUpdatePopularTime       = "last_update_popular_time"
-	LastUpdateLatestTime        = "last_update_latest_time"
-	LastUpdateItemNeighborsTime = "last_update_item_neighbors_time"
-	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time"
-	LastFitRankingModelTime     = "last_fit_match_model_time"
-	LastRankingModelVersion     = "latest_match_model_version"
+	GlobalMeta              = "global_meta"
+	DataImported            = "data_imported"
+	LastFitRankingModelTime = "last_fit_match_model_time"
+	LastRankingModelVersion = "latest_match_model_version"
 )
 
 var ErrObjectNotExist = fmt.Errorf("object not exists")

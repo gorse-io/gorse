@@ -88,10 +88,8 @@ func TestMaster_ExportUsers(t *testing.T) {
 		{UserId: "2", Labels: []string{"b", "c"}},
 		{UserId: "3", Labels: []string{"c", "d"}},
 	}
-	for _, user := range users {
-		err := s.DataClient.InsertUser(user)
-		assert.NoError(t, err)
-	}
+	err := s.DataClient.BatchInsertUsers(users)
+	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
 	w := httptest.NewRecorder()
@@ -114,7 +112,7 @@ func TestMaster_ExportItems(t *testing.T) {
 		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
 		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}
-	err := s.DataClient.BatchInsertItem(items)
+	err := s.DataClient.BatchInsertItems(items)
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
@@ -418,11 +416,11 @@ func TestMaster_GetUsers(t *testing.T) {
 		{data.User{UserId: "2"}, "2002-01-01", "2022-01-02"},
 	}
 	for _, user := range users {
-		err := s.DataClient.InsertUser(user.User)
+		err := s.DataClient.BatchInsertUsers([]data.User{user.User})
 		assert.NoError(t, err)
-		err = s.CacheClient.SetString(cache.LastActiveTime, user.UserId, user.LastActiveTime)
+		err = s.CacheClient.SetString(cache.LastModifyUserTime, user.UserId, user.LastActiveTime)
 		assert.NoError(t, err)
-		err = s.CacheClient.SetString(cache.LastUpdateRecommendTime, user.UserId, user.LastUpdateTime)
+		err = s.CacheClient.SetString(cache.LastUpdateUserRecommendTime, user.UserId, user.LastUpdateTime)
 		assert.NoError(t, err)
 	}
 	// get users
@@ -474,7 +472,7 @@ func TestServer_ItemList(t *testing.T) {
 		items := make([]data.Item, 0)
 		for _, score := range scores {
 			items = append(items, data.Item{ItemId: score.Id})
-			err = s.DataClient.InsertItem(data.Item{ItemId: score.Id})
+			err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: score.Id}})
 			assert.NoError(t, err)
 		}
 		apitest.New().
@@ -513,7 +511,7 @@ func TestServer_UserList(t *testing.T) {
 		users := make([]data.User, 0)
 		for _, score := range scores {
 			users = append(users, data.User{UserId: score.Id})
-			err = s.DataClient.InsertUser(data.User{UserId: score.Id})
+			err = s.DataClient.BatchInsertUsers([]data.User{{UserId: score.Id}})
 			assert.NoError(t, err)
 		}
 		apitest.New().
@@ -538,9 +536,9 @@ func TestServer_Feedback(t *testing.T) {
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "8"}},
 	}
 	for _, v := range feedback {
-		err := s.DataClient.InsertFeedback(data.Feedback{
+		err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
 			FeedbackKey: data.FeedbackKey{FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId},
-		}, true, true)
+		}}, true, true)
 		assert.NoError(t, err)
 	}
 	// get feedback
@@ -578,7 +576,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	assert.NoError(t, err)
 	// insert items
 	for _, item := range itemIds {
-		err = s.DataClient.InsertItem(data.Item{ItemId: item.Id})
+		err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: item.Id}})
 		assert.NoError(t, err)
 	}
 	apitest.New().

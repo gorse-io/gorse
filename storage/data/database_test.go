@@ -25,90 +25,125 @@ import (
 var positiveFeedbackType = "positiveFeedbackType"
 var negativeFeedbackType = "negativeFeedbackType"
 
-func getUsers(t *testing.T, db Database) []User {
+func getUsers(t *testing.T, db Database, batchSize int) []User {
 	users := make([]User, 0)
 	var err error
 	var data []User
 	cursor := ""
 	for {
-		cursor, data, err = db.GetUsers(cursor, 2)
+		cursor, data, err = db.GetUsers(cursor, batchSize)
 		assert.NoError(t, err)
 		users = append(users, data...)
 		if cursor == "" {
 			if _, ok := db.(*Redis); !ok {
-				assert.LessOrEqual(t, len(data), 2)
+				assert.LessOrEqual(t, len(data), batchSize)
 			}
 			return users
 		} else {
 			if _, ok := db.(*Redis); !ok {
-				assert.Equal(t, 2, len(data))
+				assert.Equal(t, batchSize, len(data))
 			}
 		}
 	}
 }
 
-func getItems(t *testing.T, db Database) []Item {
+func getUsersStream(t *testing.T, db Database, batchSize int) []User {
+	var users []User
+	userChan, errChan := db.GetUserStream(batchSize)
+	for batchUsers := range userChan {
+		users = append(users, batchUsers...)
+	}
+	assert.NoError(t, <-errChan)
+	return users
+}
+
+func getItems(t *testing.T, db Database, batchSize int) []Item {
 	items := make([]Item, 0)
 	var err error
 	var data []Item
 	cursor := ""
 	for {
-		cursor, data, err = db.GetItems(cursor, 2, nil)
+		cursor, data, err = db.GetItems(cursor, batchSize, nil)
 		assert.NoError(t, err)
 		items = append(items, data...)
 		if cursor == "" {
 			if _, ok := db.(*Redis); !ok {
-				assert.LessOrEqual(t, len(data), 2)
+				assert.LessOrEqual(t, len(data), batchSize)
 			}
 			return items
 		} else {
 			if _, ok := db.(*Redis); !ok {
-				assert.Equal(t, 2, len(data))
+				assert.Equal(t, batchSize, len(data))
 			}
 		}
 	}
 }
 
-func getFeedback(t *testing.T, db Database, feedbackTypes ...string) []Feedback {
+func getItemStream(t *testing.T, db Database, batchSize int) []Item {
+	var items []Item
+	itemChan, errChan := db.GetItemStream(batchSize, nil)
+	for batchUsers := range itemChan {
+		items = append(items, batchUsers...)
+	}
+	assert.NoError(t, <-errChan)
+	return items
+}
+
+func getFeedback(t *testing.T, db Database, batchSize int, feedbackTypes ...string) []Feedback {
 	feedback := make([]Feedback, 0)
 	var err error
 	var data []Feedback
 	cursor := ""
 	for {
-		cursor, data, err = db.GetFeedback(cursor, 2, nil, feedbackTypes...)
+		cursor, data, err = db.GetFeedback(cursor, batchSize, nil, feedbackTypes...)
 		assert.NoError(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
 			if _, ok := db.(*Redis); !ok {
-				assert.LessOrEqual(t, len(data), 2)
+				assert.LessOrEqual(t, len(data), batchSize)
 			}
 			return feedback
 		} else {
 			if _, ok := db.(*Redis); !ok {
-				assert.Equal(t, 2, len(data))
+				assert.Equal(t, batchSize, len(data))
 			}
 		}
 	}
 }
 
+func getFeedbackStream(t *testing.T, db Database, batchSize int, feedbackTypes ...string) []Feedback {
+	var feedbacks []Feedback
+	feedbackChan, errChan := db.GetFeedbackStream(batchSize, nil, feedbackTypes...)
+	for batchFeedback := range feedbackChan {
+		feedbacks = append(feedbacks, batchFeedback...)
+	}
+	assert.NoError(t, <-errChan)
+	return feedbacks
+}
+
 func testUsers(t *testing.T, db Database) {
 	// Insert users
+	var insertedUsers []User
 	for i := 9; i >= 0; i-- {
-		err := db.InsertUser(User{
+		insertedUsers = append(insertedUsers, User{
 			UserId:  strconv.Itoa(i),
 			Labels:  []string{strconv.Itoa(i + 100)},
 			Comment: fmt.Sprintf("comment %d", i),
 		})
-		assert.NoError(t, err)
 	}
+	err := db.BatchInsertUsers(insertedUsers)
+	assert.NoError(t, err)
 	// Get users
-	users := getUsers(t, db)
+	users := getUsers(t, db, 3)
 	assert.Equal(t, 10, len(users))
 	for i, user := range users {
 		assert.Equal(t, strconv.Itoa(i), user.UserId)
 		assert.Equal(t, []string{strconv.Itoa(i + 100)}, user.Labels)
 		assert.Equal(t, fmt.Sprintf("comment %d", i), user.Comment)
 	}
+	// Get user stream
+	usersFromStream := getUsersStream(t, db, 3)
+	assert.ElementsMatch(t, insertedUsers, usersFromStream)
 	// Get this user
 	user, err := db.GetUser("0")
 	assert.NoError(t, err)
@@ -119,7 +154,7 @@ func testUsers(t *testing.T, db Database) {
 	_, err = db.GetUser("0")
 	assert.ErrorIs(t, err, ErrUserNotExist)
 	// test override
-	err = db.InsertUser(User{UserId: "1", Comment: "override"})
+	err = db.BatchInsertUsers([]User{{UserId: "1", Comment: "override"}})
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
@@ -130,37 +165,40 @@ func testUsers(t *testing.T, db Database) {
 
 func testFeedback(t *testing.T, db Database) {
 	// users that already exists
-	err := db.InsertUser(User{"0", []string{"a"}, []string{"x"}, "comment"})
+	err := db.BatchInsertUsers([]User{{"0", []string{"a"}, []string{"x"}, "comment"}})
 	assert.NoError(t, err)
 	// items that already exists
-	err = db.InsertItem(Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)})
+	err = db.BatchInsertItems([]Item{{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
 	assert.NoError(t, err)
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "1", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "1", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 		{FeedbackKey{positiveFeedbackType, "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "3", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "4", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "3", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
-	err = db.BatchInsertFeedback(feedback[1:], true, true)
-	assert.NoError(t, err)
-	err = db.InsertFeedback(feedback[0], true, true)
+	err = db.BatchInsertFeedback(feedback, true, true)
 	assert.NoError(t, err)
 	// other type
-	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}, true, true)
+	err = db.BatchInsertFeedback([]Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true)
 	assert.NoError(t, err)
-	err = db.InsertFeedback(Feedback{FeedbackKey: FeedbackKey{negativeFeedbackType, "2", "4"}}, true, true)
+	err = db.BatchInsertFeedback([]Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "2", "4"}}}, true, true)
 	assert.NoError(t, err)
 	// Get feedback
-	ret := getFeedback(t, db, positiveFeedbackType)
+	ret := getFeedback(t, db, 3, positiveFeedbackType)
 	assert.Equal(t, feedback, ret)
-	ret = getFeedback(t, db)
+	ret = getFeedback(t, db, 2)
 	assert.Equal(t, len(feedback)+2, len(ret))
+	// Get feedback stream
+	feedbackFromStream := getFeedbackStream(t, db, 3, positiveFeedbackType)
+	assert.ElementsMatch(t, feedback, feedbackFromStream)
+	feedbackFromStream = getFeedbackStream(t, db, 3)
+	assert.Equal(t, len(feedback)+2, len(feedbackFromStream))
 	// Get items
 	err = db.Optimize()
 	assert.NoError(t, err)
-	items := getItems(t, db)
+	items := getItems(t, db, 3)
 	assert.Equal(t, 5, len(items))
 	for i, item := range items {
 		assert.Equal(t, strconv.Itoa(i*2), item.ItemId)
@@ -176,7 +214,7 @@ func testFeedback(t *testing.T, db Database) {
 		}
 	}
 	// Get users
-	users := getUsers(t, db)
+	users := getUsers(t, db, 2)
 	assert.Equal(t, 5, len(users))
 	for i, user := range users {
 		assert.Equal(t, strconv.Itoa(i), user.UserId)
@@ -215,10 +253,10 @@ func testFeedback(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(ret))
 	// test override
-	err = db.InsertFeedback(Feedback{
-		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "0"},
+	err = db.BatchInsertFeedback([]Feedback{{
+		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Comment:     "override",
-	}, true, true)
+	}}, true, true)
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
@@ -263,13 +301,14 @@ func testItems(t *testing.T, db Database) {
 		},
 	}
 	// Insert item
-	err := db.BatchInsertItem(items[1:])
-	assert.NoError(t, err)
-	err = db.InsertItem(items[0])
+	err := db.BatchInsertItems(items)
 	assert.NoError(t, err)
 	// Get items
-	totalItems := getItems(t, db)
+	totalItems := getItems(t, db, 3)
 	assert.Equal(t, items, totalItems)
+	// Get item stream
+	itemsFromStream := getItemStream(t, db, 3)
+	assert.ElementsMatch(t, items, itemsFromStream)
 	// Get item
 	for _, item := range items {
 		ret, err := db.GetItem(item.ItemId)
@@ -282,7 +321,7 @@ func testItems(t *testing.T, db Database) {
 	_, err = db.GetItem("0")
 	assert.ErrorIs(t, err, ErrItemNotExist)
 	// test override
-	err = db.InsertItem(Item{ItemId: "2", Comment: "override"})
+	err = db.BatchInsertItems([]Item{{ItemId: "2", Comment: "override"}})
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
@@ -439,7 +478,7 @@ func testTimeLimit(t *testing.T, db Database) {
 			Comment:   "comment 8",
 		},
 	}
-	err := db.BatchInsertItem(items[1:])
+	err := db.BatchInsertItems(items)
 	assert.NoError(t, err)
 	timeLimit := time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC)
 	_, ret, err := db.GetItems("", 100, &timeLimit)

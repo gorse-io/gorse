@@ -29,6 +29,8 @@ import (
 	"time"
 )
 
+const bufSize = 1
+
 type SQLDriver int
 
 const (
@@ -236,79 +238,46 @@ func (d *SQLDatabase) GetMeasurements(name string, n int) ([]Measurement, error)
 	return measurements, nil
 }
 
-// InsertItem inserts a item into MySQL.
-func (d *SQLDatabase) InsertItem(item Item) error {
-	startTime := time.Now()
-	labels, err := json.Marshal(item.Labels)
-	if err != nil {
-		return errors.Trace(err)
-	}
+// BatchInsertItems inserts a batch of items into MySQL.
+func (d *SQLDatabase) BatchInsertItems(items []Item) error {
+	builder := strings.Builder{}
 	switch d.driver {
 	case MySQL:
-		_, err = d.client.Exec("INSERT items(item_id, time_stamp, labels, `comment`) VALUES (?, ?, ?, ?) "+
-			"ON DUPLICATE KEY UPDATE time_stamp = ?, labels = ?, `comment` = ?",
-			item.ItemId, item.Timestamp, labels, item.Comment, item.Timestamp, labels, item.Comment)
+		builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, `comment`) VALUES ")
 	case Postgres:
-		_, err = d.client.Exec("INSERT INTO items(item_id, time_stamp, labels, comment) VALUES ($1, $2, $3, $4) "+
-			"ON CONFLICT (item_id) "+
-			"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment",
-			item.ItemId, item.Timestamp, labels, item.Comment)
+		builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment) VALUES ")
 	case ClickHouse:
-		_, err = d.client.Exec("INSERT INTO items(item_id, time_stamp, labels, `comment`, version) VALUES (?, ?, ?, ?, NOW())",
-			item.ItemId, item.Timestamp, string(labels), item.Comment)
+		builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment, version) VALUES ")
 	}
-	InsertItemLatency.Observe(time.Since(startTime).Seconds())
-	return errors.Trace(err)
-}
-
-// BatchInsertItem inserts a batch of items into MySQL.
-func (d *SQLDatabase) BatchInsertItem(items []Item) error {
-	const batchSize = 10000
-	for i := 0; i < len(items); i += batchSize {
-		batchItems := items[i:base.Min(i+batchSize, len(items))]
-		// build query
-		builder := strings.Builder{}
-		switch d.driver {
-		case MySQL:
-			builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, `comment`) VALUES ")
-		case Postgres:
-			builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment) VALUES ")
-		case ClickHouse:
-			builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment, version) VALUES ")
-		}
-		var args []interface{}
-		for i, item := range batchItems {
-			labels, err := json.Marshal(item.Labels)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			switch d.driver {
-			case MySQL:
-				builder.WriteString("(?,?,?,?)")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4))
-			case ClickHouse:
-				builder.WriteString("(?,?,?,?,NOW())")
-			}
-			if i+1 < len(batchItems) {
-				builder.WriteString(",")
-			}
-			args = append(args, item.ItemId, item.Timestamp, string(labels), item.Comment)
-		}
-		switch d.driver {
-		case MySQL:
-			builder.WriteString(" ON DUPLICATE KEY " +
-				"UPDATE time_stamp = VALUES(time_stamp), labels = VALUES(labels), `comment` = VALUES(`comment`)")
-		case Postgres:
-			builder.WriteString(" ON CONFLICT (item_id) " +
-				"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
-		}
-		_, err := d.client.Exec(builder.String(), args...)
+	var args []interface{}
+	for i, item := range items {
+		labels, err := json.Marshal(item.Labels)
 		if err != nil {
 			return errors.Trace(err)
 		}
+		switch d.driver {
+		case MySQL:
+			builder.WriteString("(?,?,?,?)")
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4))
+		case ClickHouse:
+			builder.WriteString("(?,?,?,?,NOW())")
+		}
+		if i+1 < len(items) {
+			builder.WriteString(",")
+		}
+		args = append(args, item.ItemId, item.Timestamp, string(labels), item.Comment)
 	}
-	return nil
+	switch d.driver {
+	case MySQL:
+		builder.WriteString(" ON DUPLICATE KEY " +
+			"UPDATE time_stamp = VALUES(time_stamp), labels = VALUES(labels), `comment` = VALUES(`comment`)")
+	case Postgres:
+		builder.WriteString(" ON CONFLICT (item_id) " +
+			"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
+	}
+	_, err := d.client.Exec(builder.String(), args...)
+	return errors.Trace(err)
 }
 
 // DeleteItem deletes a item from MySQL.
@@ -422,6 +391,62 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 	return "", items, nil
 }
 
+// GetItemStream reads items by stream.
+func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error) {
+	itemChan := make(chan []Item, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(itemChan)
+		defer close(errChan)
+		// send query
+		var result *sql.Rows
+		var err error
+		switch d.driver {
+		case MySQL, ClickHouse:
+			if timeLimit == nil {
+				result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items")
+			} else {
+				result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items WHERE time_stamp >= ?", *timeLimit)
+			}
+		case Postgres:
+			if timeLimit == nil {
+				result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items")
+			} else {
+				result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items WHERE time_stamp >= $2", *timeLimit)
+			}
+		}
+		if err != nil {
+			errChan <- errors.Trace(err)
+			return
+		}
+		// fetch result
+		items := make([]Item, 0, batchSize)
+		defer result.Close()
+		for result.Next() {
+			var item Item
+			var labels string
+			if err = result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			if err = json.Unmarshal([]byte(labels), &item.Labels); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			items = append(items, item)
+			if len(items) == batchSize {
+				itemChan <- items
+				items = make([]Item, 0, batchSize)
+			}
+		}
+		if len(items) > 0 {
+			itemChan <- items
+		}
+		errChan <- nil
+	}()
+	return itemChan, errChan
+}
+
 // GetItemFeedback returns feedback of a item from MySQL.
 func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
@@ -456,6 +481,7 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 		return nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.UserId, &feedback.ItemId, &feedback.FeedbackType); err != nil {
@@ -467,30 +493,49 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 	return feedbacks, nil
 }
 
-// InsertUser inserts a user into MySQL.
-func (d *SQLDatabase) InsertUser(user User) error {
-	labels, err := json.Marshal(user.Labels)
-	if err != nil {
-		return errors.Trace(err)
+// BatchInsertUsers inserts users into MySQL.
+func (d *SQLDatabase) BatchInsertUsers(users []User) error {
+	builder := strings.Builder{}
+	switch d.driver {
+	case MySQL:
+		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, `comment`) VALUES ")
+	case Postgres:
+		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, comment) VALUES ")
+	case ClickHouse:
+		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, comment, version) VALUES ")
 	}
-	subscribe, err := json.Marshal(user.Subscribe)
-	if err != nil {
-		return errors.Trace(err)
+	var args []interface{}
+	for i, user := range users {
+		labels, err := json.Marshal(user.Labels)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		subscribe, err := json.Marshal(user.Subscribe)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		switch d.driver {
+		case MySQL:
+			builder.WriteString("(?,?,?,?)")
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4))
+		case ClickHouse:
+			builder.WriteString("(?,?,?,?,NOW())")
+		}
+		if i+1 < len(users) {
+			builder.WriteString(",")
+		}
+		args = append(args, user.UserId, string(labels), string(subscribe), user.Comment)
 	}
 	switch d.driver {
 	case MySQL:
-		_, err = d.client.Exec("INSERT INTO users(user_id, labels, subscribe, `comment`) VALUES (?, ?, ?, ?) "+
-			"ON DUPLICATE KEY UPDATE labels = ?, subscribe = ?, `comment` = ?",
-			user.UserId, labels, subscribe, user.Comment, labels, subscribe, user.Comment)
+		builder.WriteString(" ON DUPLICATE KEY " +
+			"UPDATE labels = VALUES(labels), subscribe = VALUES(subscribe), `comment` = VALUES(`comment`)")
 	case Postgres:
-		_, err = d.client.Exec("INSERT INTO users(user_id, labels, subscribe, comment) VALUES ($1, $2, $3, $4) "+
-			"ON CONFLICT (user_id) "+
-			"DO UPDATE SET labels = EXCLUDED.labels, subscribe = EXCLUDED.subscribe, comment = EXCLUDED.comment",
-			user.UserId, labels, subscribe, user.Comment)
-	case ClickHouse:
-		_, err = d.client.Exec("INSERT INTO users(user_id, labels, subscribe, comment, version) VALUES (?, ?, ?, ?, NOW()) ",
-			user.UserId, string(labels), string(subscribe), user.Comment)
+		builder.WriteString(" ON CONFLICT (user_id) " +
+			"DO UPDATE SET labels = EXCLUDED.labels, subscribe = EXCLUDED.subscribe, comment = EXCLUDED.comment")
 	}
+	_, err := d.client.Exec(builder.String(), args...)
 	return errors.Trace(err)
 }
 
@@ -606,6 +651,61 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	return "", users, nil
 }
 
+// GetUserStream read users by stream.
+func (d *SQLDatabase) GetUserStream(batchSize int) (chan []User, chan error) {
+	userChan := make(chan []User, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(userChan)
+		defer close(errChan)
+		// send query
+		var result *sql.Rows
+		var err error
+		switch d.driver {
+		case MySQL:
+			result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users")
+		case Postgres:
+			result, err = d.client.Query("SELECT user_id, labels, subscribe, comment FROM users")
+		case ClickHouse:
+			result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users")
+		}
+		if err != nil {
+			errChan <- errors.Trace(err)
+			return
+		}
+		// fetch result
+		users := make([]User, 0, batchSize)
+		defer result.Close()
+		for result.Next() {
+			var user User
+			var labels string
+			var subscribe string
+			if err = result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			if err = json.Unmarshal([]byte(labels), &user.Labels); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			users = append(users, user)
+			if len(users) == batchSize {
+				userChan <- users
+				users = make([]User, 0, batchSize)
+			}
+		}
+		if len(users) > 0 {
+			userChan <- users
+		}
+		errChan <- nil
+	}()
+	return userChan, errChan
+}
+
 // GetUserFeedback returns feedback of a user from MySQL.
 func (d *SQLDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error) {
 	startTime := time.Now()
@@ -640,6 +740,7 @@ func (d *SQLDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([
 		return nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
@@ -651,79 +752,10 @@ func (d *SQLDatabase) GetUserFeedback(userId string, feedbackTypes ...string) ([
 	return feedbacks, nil
 }
 
-// InsertFeedback insert a feedback into MySQL.
-// If insertUser set, a new user will be insert to user table.
-// If insertItem set, a new item will be insert to item table.
-func (d *SQLDatabase) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
-	startTime := time.Now()
-	var err error
-	// insert users
-	if insertUser {
-		switch d.driver {
-		case MySQL:
-			_, err = d.client.Exec("INSERT IGNORE users(user_id) VALUES (?)", feedback.UserId)
-		case Postgres:
-			_, err = d.client.Exec("INSERT INTO users(user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", feedback.UserId)
-		case ClickHouse:
-			_, err = d.client.Exec("INSERT INTO users(user_id, version) VALUES (?,'0000-00-00 00:00:00')", feedback.UserId)
-		}
-		if err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		if _, err := d.GetUser(feedback.UserId); err != nil {
-			if err == ErrUserNotExist {
-				base.Logger().Warn("user doesn't exist", zap.String("user_id", feedback.UserId))
-				return nil
-			}
-			return errors.Trace(err)
-		}
-	}
-	// insert items
-	if insertItem {
-		switch d.driver {
-		case MySQL:
-			_, err = d.client.Exec("INSERT IGNORE items(item_id) VALUES (?)", feedback.ItemId)
-		case Postgres:
-			_, err = d.client.Exec("INSERT INTO items(item_id) VALUES ($1) ON CONFLICT (item_id) DO NOTHING", feedback.ItemId)
-		case ClickHouse:
-			_, err = d.client.Exec("INSERT INTO items(item_id, version) VALUES (?,'0000-00-00 00:00:00')", feedback.ItemId)
-		}
-		if err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		if _, err = d.GetItem(feedback.ItemId); err != nil {
-			if err == ErrItemNotExist {
-				base.Logger().Warn("item doesn't exist", zap.String("item_id", feedback.ItemId))
-				return nil
-			}
-			return errors.Trace(err)
-		}
-	}
-	// insert feedback
-	switch d.driver {
-	case MySQL:
-		_, err = d.client.Exec("INSERT feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES (?,?,?,?,?) "+
-			"ON DUPLICATE KEY UPDATE time_stamp = ?, `comment` = ?",
-			feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment, feedback.Timestamp, feedback.Comment)
-	case Postgres:
-		_, err = d.client.Exec("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, comment) VALUES ($1,$2,$3,$4,$5) "+
-			"ON CONFLICT (feedback_type, user_id, item_id) DO UPDATE SET time_stamp = EXCLUDED.time_stamp, comment = EXCLUDED.comment",
-			feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment)
-	case ClickHouse:
-		_, err = d.client.Exec("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES (?,?,?,?,?) ",
-			feedback.FeedbackType, feedback.UserId, feedback.ItemId, feedback.Timestamp, feedback.Comment)
-	}
-	InsertFeedbackLatency.Observe(time.Since(startTime).Seconds())
-	return errors.Trace(err)
-}
-
 // BatchInsertFeedback insert a batch feedback into MySQL.
 // If insertUser set, new users will be insert to user table.
 // If insertItem set, new items will be insert to item table.
 func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error {
-	const batchSize = 10000
 	// collect users and items
 	users := strset.New()
 	items := strset.New()
@@ -734,38 +766,35 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 	// insert users
 	if insertUser {
 		userList := users.List()
-		for i := 0; i < len(userList); i += batchSize {
-			batchUsers := userList[i:base.Min(i+batchSize, len(userList))]
-			builder := strings.Builder{}
+		builder := strings.Builder{}
+		switch d.driver {
+		case MySQL:
+			builder.WriteString("INSERT IGNORE users(user_id) VALUES ")
+		case Postgres:
+			builder.WriteString("INSERT INTO users(user_id) VALUES ")
+		case ClickHouse:
+			builder.WriteString("INSERT INTO users(user_id, version) VALUES ")
+		}
+		var args []interface{}
+		for i, user := range userList {
 			switch d.driver {
 			case MySQL:
-				builder.WriteString("INSERT IGNORE users(user_id) VALUES ")
+				builder.WriteString("(?)")
 			case Postgres:
-				builder.WriteString("INSERT INTO users(user_id) VALUES ")
+				builder.WriteString(fmt.Sprintf("($%d)", i+1))
 			case ClickHouse:
-				builder.WriteString("INSERT INTO users(user_id, version) VALUES ")
+				builder.WriteString("(?,'0000-00-00 00:00:00')")
 			}
-			var args []interface{}
-			for i, user := range batchUsers {
-				switch d.driver {
-				case MySQL:
-					builder.WriteString("(?)")
-				case Postgres:
-					builder.WriteString(fmt.Sprintf("($%d)", i+1))
-				case ClickHouse:
-					builder.WriteString("(?,'0000-00-00 00:00:00')")
-				}
-				if i+1 < len(batchUsers) {
-					builder.WriteString(",")
-				}
-				args = append(args, user)
+			if i+1 < len(userList) {
+				builder.WriteString(",")
 			}
-			if d.driver == Postgres {
-				builder.WriteString(" ON CONFLICT (user_id) DO NOTHING")
-			}
-			if _, err := d.client.Exec(builder.String(), args...); err != nil {
-				return errors.Trace(err)
-			}
+			args = append(args, user)
+		}
+		if d.driver == Postgres {
+			builder.WriteString(" ON CONFLICT (user_id) DO NOTHING")
+		}
+		if _, err := d.client.Exec(builder.String(), args...); err != nil {
+			return errors.Trace(err)
 		}
 	} else {
 		for _, user := range users.List() {
@@ -782,44 +811,43 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			} else if !rs.Next() {
 				users.Remove(user)
 			}
-			rs.Close()
+			if err = rs.Close(); err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 	// insert items
 	if insertItem {
 		itemList := items.List()
-		for i := 0; i < len(itemList); i += batchSize {
-			batchItems := itemList[i:base.Min(i+batchSize, len(itemList))]
-			builder := strings.Builder{}
+		builder := strings.Builder{}
+		switch d.driver {
+		case MySQL:
+			builder.WriteString("INSERT IGNORE items(item_id) VALUES ")
+		case Postgres:
+			builder.WriteString("INSERT INTO items(item_id) VALUES ")
+		case ClickHouse:
+			builder.WriteString("INSERT INTO items(item_id, version) VALUES ")
+		}
+		var args []interface{}
+		for i, item := range itemList {
 			switch d.driver {
 			case MySQL:
-				builder.WriteString("INSERT IGNORE items(item_id) VALUES ")
+				builder.WriteString("(?)")
 			case Postgres:
-				builder.WriteString("INSERT INTO items(item_id) VALUES ")
+				builder.WriteString(fmt.Sprintf("($%d)", i+1))
 			case ClickHouse:
-				builder.WriteString("INSERT INTO items(item_id, version) VALUES ")
+				builder.WriteString("(?,'0000-00-00 00:00:00')")
 			}
-			var args []interface{}
-			for i, item := range batchItems {
-				switch d.driver {
-				case MySQL:
-					builder.WriteString("(?)")
-				case Postgres:
-					builder.WriteString(fmt.Sprintf("($%d)", i+1))
-				case ClickHouse:
-					builder.WriteString("(?,'0000-00-00 00:00:00')")
-				}
-				if i+1 < len(batchItems) {
-					builder.WriteString(",")
-				}
-				args = append(args, item)
+			if i+1 < len(itemList) {
+				builder.WriteString(",")
 			}
-			if d.driver == Postgres {
-				builder.WriteString(" ON CONFLICT (item_id) DO NOTHING")
-			}
-			if _, err := d.client.Exec(builder.String(), args...); err != nil {
-				return errors.Trace(err)
-			}
+			args = append(args, item)
+		}
+		if d.driver == Postgres {
+			builder.WriteString(" ON CONFLICT (item_id) DO NOTHING")
+		}
+		if _, err := d.client.Exec(builder.String(), args...); err != nil {
+			return errors.Trace(err)
 		}
 	} else {
 		for _, item := range items.List() {
@@ -836,45 +864,44 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			} else if !rs.Next() {
 				users.Remove(item)
 			}
-			rs.Close()
+			if err = rs.Close(); err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 	// insert feedback
-	for i := 0; i < len(feedback); i += batchSize {
-		batchFeedback := feedback[i:base.Min(i+batchSize, len(feedback))]
-		builder := strings.Builder{}
-		switch d.driver {
-		case MySQL, ClickHouse:
-			builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
-		case Postgres:
-			builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, comment) VALUES ")
-		}
-		var args []interface{}
-		for i, f := range batchFeedback {
-			if users.Has(f.UserId) && items.Has(f.ItemId) {
-				switch d.driver {
-				case MySQL, ClickHouse:
-					builder.WriteString("(?,?,?,?,?)")
-				case Postgres:
-					builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)",
-						len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5))
-				}
-				if i+1 < len(batchFeedback) {
-					builder.WriteString(",")
-				}
-				args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
+	builder := strings.Builder{}
+	switch d.driver {
+	case MySQL, ClickHouse:
+		builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
+	case Postgres:
+		builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, comment) VALUES ")
+	}
+	var args []interface{}
+	for i, f := range feedback {
+		if users.Has(f.UserId) && items.Has(f.ItemId) {
+			switch d.driver {
+			case MySQL, ClickHouse:
+				builder.WriteString("(?,?,?,?,?)")
+			case Postgres:
+				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)",
+					len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5))
 			}
+			if i+1 < len(feedback) {
+				builder.WriteString(",")
+			}
+			args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
 		}
-		switch d.driver {
-		case MySQL:
-			builder.WriteString(" ON DUPLICATE KEY UPDATE time_stamp = VALUES(time_stamp), `comment` = VALUES(`comment`)")
-		case Postgres:
-			builder.WriteString(" ON CONFLICT (feedback_type, user_id, item_id) DO UPDATE SET time_stamp = EXCLUDED.time_stamp, comment = EXCLUDED.comment")
-		}
-		_, err := d.client.Exec(builder.String(), args...)
-		if err != nil {
-			return errors.Trace(err)
-		}
+	}
+	switch d.driver {
+	case MySQL:
+		builder.WriteString(" ON DUPLICATE KEY UPDATE time_stamp = VALUES(time_stamp), `comment` = VALUES(`comment`)")
+	case Postgres:
+		builder.WriteString(" ON CONFLICT (feedback_type, user_id, item_id) DO UPDATE SET time_stamp = EXCLUDED.time_stamp, comment = EXCLUDED.comment")
+	}
+	_, err := d.client.Exec(builder.String(), args...)
+	if err != nil {
+		return errors.Trace(err)
 	}
 	return nil
 }
@@ -892,9 +919,9 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 	var builder strings.Builder
 	switch d.driver {
 	case MySQL, ClickHouse:
-		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE feedback_type >= ? AND user_id >= ? AND item_id >= ?")
+		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE (feedback_type, user_id, item_id) >= (?,?,?)")
 	case Postgres:
-		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE feedback_type >= $1 AND user_id >= $2 AND item_id >= $3")
+		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE (feedback_type, user_id, item_id) >= ($1,$2,$3)")
 	}
 	args := []interface{}{cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId}
 	if len(feedbackTypes) > 0 {
@@ -934,6 +961,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 		return "", nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
@@ -950,6 +978,77 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 		return string(nextCursor), feedbacks[:len(feedbacks)-1], nil
 	}
 	return "", feedbacks, nil
+}
+
+// GetFeedbackStream reads feedback by stream.
+func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+	feedbackChan := make(chan []Feedback, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(feedbackChan)
+		defer close(errChan)
+		// send query
+		var result *sql.Rows
+		var err error
+		var builder strings.Builder
+		switch d.driver {
+		case MySQL, ClickHouse:
+			builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE 1")
+		case Postgres:
+			builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE TRUE")
+		}
+		var args []interface{}
+		if len(feedbackTypes) > 0 {
+			builder.WriteString(" AND feedback_type IN (")
+			for i, feedbackType := range feedbackTypes {
+				switch d.driver {
+				case MySQL, ClickHouse:
+					builder.WriteString("?")
+				case Postgres:
+					builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
+				}
+				if i+1 < len(feedbackTypes) {
+					builder.WriteString(",")
+				}
+				args = append(args, feedbackType)
+			}
+			builder.WriteString(")")
+		}
+		if timeLimit != nil {
+			switch d.driver {
+			case MySQL, ClickHouse:
+				builder.WriteString(" AND time_stamp >= ?")
+			case Postgres:
+				builder.WriteString(fmt.Sprintf(" AND time_stamp >= $%d", len(args)+1))
+			}
+			args = append(args, *timeLimit)
+		}
+		result, err = d.client.Query(builder.String(), args...)
+		if err != nil {
+			errChan <- errors.Trace(err)
+			return
+		}
+		// fetch result
+		feedbacks := make([]Feedback, 0, batchSize)
+		defer result.Close()
+		for result.Next() {
+			var feedback Feedback
+			if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			feedbacks = append(feedbacks, feedback)
+			if len(feedbacks) == batchSize {
+				feedbackChan <- feedbacks
+				feedbacks = make([]Feedback, 0, batchSize)
+			}
+		}
+		if len(feedbacks) > 0 {
+			feedbackChan <- feedbacks
+		}
+		errChan <- nil
+	}()
+	return feedbackChan, errChan
 }
 
 // GetUserItemFeedback gets a feedback by user id and item id from MySQL.
@@ -986,6 +1085,7 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 		return nil, errors.Trace(err)
 	}
 	feedbacks := make([]Feedback, 0)
+	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
@@ -1104,6 +1204,7 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
+	defer rs.Close()
 	if rs.Next() {
 		var ctr float64
 		if err = rs.Scan(&ctr); err != nil {

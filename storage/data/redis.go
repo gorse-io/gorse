@@ -120,8 +120,8 @@ func (s *sortMeasurements) Swap(i, j int) {
 	s.measurements[i], s.measurements[j] = s.measurements[j], s.measurements[i]
 }
 
-// InsertItem inserts a item into Redis.
-func (r *Redis) InsertItem(item Item) error {
+// insertItem inserts an item into Redis.
+func (r *Redis) insertItem(item Item) error {
 	var ctx = context.Background()
 	// write item
 	data, err := json.Marshal(item)
@@ -134,10 +134,10 @@ func (r *Redis) InsertItem(item Item) error {
 	return nil
 }
 
-// BatchInsertItem inserts a batch of items into Redis.
-func (r *Redis) BatchInsertItem(items []Item) error {
+// BatchInsertItems inserts a batch of items into Redis.
+func (r *Redis) BatchInsertItems(items []Item) error {
 	for _, item := range items {
-		if err := r.InsertItem(item); err != nil {
+		if err := r.insertItem(item); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -240,14 +240,66 @@ func (r *Redis) GetItems(cursor string, n int, timeLimit *time.Time) (string, []
 	return cursor, items, nil
 }
 
-// GetItemFeedback returns feedback of a item from Redis.
+// GetItemStream read items from Redis by stream.
+func (r *Redis) GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error) {
+	itemChan := make(chan []Item, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(itemChan)
+		defer close(errChan)
+		ctx := context.Background()
+		var cursor uint64
+		var keys []string
+		var err error
+		items := make([]Item, 0, batchSize)
+		for {
+			keys, cursor, err = r.client.Scan(ctx, cursor, prefixItem+"*", int64(batchSize)).Result()
+			if err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			for _, key := range keys {
+				data, err := r.client.Get(ctx, key).Result()
+				if err != nil {
+					errChan <- errors.Trace(err)
+					return
+				}
+				var item Item
+				err = json.Unmarshal([]byte(data), &item)
+				if err != nil {
+					errChan <- errors.Trace(err)
+					return
+				}
+				// compare timestamp
+				if timeLimit != nil && item.Timestamp.Unix() < timeLimit.Unix() {
+					continue
+				}
+				items = append(items, item)
+				if len(items) == batchSize {
+					itemChan <- items
+					items = make([]Item, 0, batchSize)
+				}
+			}
+			if cursor == 0 {
+				break
+			}
+		}
+		if len(items) > 0 {
+			itemChan <- items
+		}
+		errChan <- nil
+	}()
+	return itemChan, errChan
+}
+
+// GetItemFeedback returns feedback of an item from Redis.
 func (r *Redis) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, _, thisItemId string) error {
 		if itemId == thisItemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -258,14 +310,24 @@ func (r *Redis) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedb
 	return feedback, err
 }
 
-// InsertUser inserts a user into Redis.
-func (r *Redis) InsertUser(user User) error {
+// insertUser inserts a user into Redis.
+func (r *Redis) insertUser(user User) error {
 	var ctx = context.Background()
 	data, err := json.Marshal(user)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	return r.client.Set(ctx, prefixUser+user.UserId, data, 0).Err()
+}
+
+// BatchInsertUsers inserts a batch pf user into Redis.
+func (r *Redis) BatchInsertUsers(users []User) error {
+	for _, user := range users {
+		if err := r.insertUser(user); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteUser deletes a user from Redis.
@@ -339,6 +401,54 @@ func (r *Redis) GetUsers(cursor string, n int) (string, []User, error) {
 	return cursor, users, nil
 }
 
+// GetUserStream read users from Redis by stream.
+func (r *Redis) GetUserStream(batchSize int) (chan []User, chan error) {
+	userChan := make(chan []User, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(userChan)
+		defer close(errChan)
+		ctx := context.Background()
+		var cursor uint64
+		var keys []string
+		var err error
+		users := make([]User, 0, batchSize)
+		for {
+			keys, cursor, err = r.client.Scan(ctx, cursor, prefixUser+"*", int64(batchSize)).Result()
+			if err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			for _, key := range keys {
+				var user User
+				val, err := r.client.Get(ctx, key).Result()
+				if err != nil {
+					errChan <- errors.Trace(err)
+					return
+				}
+				err = json.Unmarshal([]byte(val), &user)
+				if err != nil {
+					errChan <- errors.Trace(err)
+					return
+				}
+				users = append(users, user)
+				if len(users) == batchSize {
+					userChan <- users
+					users = make([]User, 0, batchSize)
+				}
+			}
+			if cursor == 0 {
+				break
+			}
+		}
+		if len(users) > 0 {
+			userChan <- users
+		}
+		errChan <- nil
+	}()
+	return userChan, errChan
+}
+
 // GetUserFeedback returns feedback of a user from Redis.
 func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
@@ -347,7 +457,7 @@ func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedb
 	// get itemId list by userId
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
 		if thisUserId == userId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -358,7 +468,7 @@ func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedb
 	return feedback, err
 }
 
-func (r *Redis) getFeedback(key string) (Feedback, error) {
+func (r *Redis) getFeedbackInternal(key string) (Feedback, error) {
 	var ctx = context.Background()
 	// get feedback by feedbackKey
 	val, err := r.client.Get(ctx, key).Result()
@@ -382,10 +492,10 @@ func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
 	return fields[1], fields[2], fields[3]
 }
 
-// InsertFeedback insert a feedback into Redis.
+// insertFeedback insert a feedback into Redis.
 // If insertUser set, a new user will be insert to user table.
 // If insertItem set, a new item will be insert to item table.
-func (r *Redis) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
+func (r *Redis) insertFeedback(feedback Feedback, insertUser, insertItem bool) error {
 	var ctx = context.Background()
 	val, err := json.Marshal(feedback)
 	if err != nil {
@@ -434,7 +544,7 @@ func (r *Redis) InsertFeedback(feedback Feedback, insertUser, insertItem bool) e
 // If insertItem set, new items will be insert to item table.
 func (r *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error {
 	for _, temp := range feedback {
-		if err := r.InsertFeedback(temp, insertUser, insertItem); err != nil {
+		if err := r.insertFeedback(temp, insertUser, insertItem); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -442,13 +552,13 @@ func (r *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem 
 }
 
 // GetFeedback returns feedback from Redis.
-func (r *Redis) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+func (r *Redis) GetFeedback(_ string, _ int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
 		if feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -462,6 +572,41 @@ func (r *Redis) GetFeedback(cursor string, n int, timeLimit *time.Time, feedback
 	return "", feedback, err
 }
 
+// GetFeedbackStream reads feedback by stream.
+func (r *Redis) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+	feedbackChan := make(chan []Feedback, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(feedbackChan)
+		defer close(errChan)
+		feedbackTypeSet := strset.New(feedbackTypes...)
+		ctx := context.Background()
+		feedback := make([]Feedback, 0, batchSize)
+		err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
+			if feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType) {
+				val, err := r.getFeedbackInternal(key)
+				if err != nil {
+					return errors.Trace(err)
+				}
+				if timeLimit != nil && val.Timestamp.Unix() < timeLimit.Unix() {
+					return nil
+				}
+				feedback = append(feedback, val)
+				if len(feedback) == batchSize {
+					feedbackChan <- feedback
+					feedback = make([]Feedback, 0, batchSize)
+				}
+			}
+			return nil
+		})
+		if len(feedback) > 0 {
+			feedbackChan <- feedback
+		}
+		errChan <- errors.Trace(err)
+	}()
+	return feedbackChan, errChan
+}
+
 // GetUserItemFeedback gets a feedback by user id and item id from Redis.
 func (r *Redis) GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
@@ -469,7 +614,7 @@ func (r *Redis) GetUserItemFeedback(userId, itemId string, feedbackTypes ...stri
 	feedbackTypeSet := strset.New(feedbackTypes...)
 	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
 		if thisUserId == userId && thisItemId == itemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedback(key)
+			val, err := r.getFeedbackInternal(key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -496,11 +641,6 @@ func (r *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...s
 }
 
 // GetClickThroughRate method of Redis returns ErrUnsupported.
-func (r *Redis) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
-	return 0, ErrUnsupported
-}
-
-// CountActiveUsers method of Redis returns ErrUnsupported.
-func (r *Redis) CountActiveUsers(date time.Time) (int, error) {
+func (r *Redis) GetClickThroughRate(_ time.Time, _ []string, _ string) (float64, error) {
 	return 0, ErrUnsupported
 }

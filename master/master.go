@@ -67,11 +67,8 @@ type Master struct {
 	userIndexMutex   sync.RWMutex
 
 	// ranking dataset
-	rankingItems     []data.Item
-	rankingFeedbacks []data.Feedback
 	rankingTrainSet  *ranking.DataSet
 	rankingTestSet   *ranking.DataSet
-	rankingFullSet   *ranking.DataSet
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
@@ -98,7 +95,7 @@ type Master struct {
 
 	// events
 	fitTicker    *time.Ticker
-	insertedChan chan bool // feedback inserted events
+	importedChan chan bool // feedback inserted events
 }
 
 // NewMaster creates a master node.
@@ -106,7 +103,7 @@ func NewMaster(cfg *config.Config) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
 	taskMonitor := NewTaskMonitor()
-	for _, taskName := range []string{TaskFindLatest, TaskFindPopular, TaskFindItemNeighbors, TaskFindUserNeighbors,
+	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,
 		TaskFitRankingModel, TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel} {
 		taskMonitor.Pending(taskName)
 	}
@@ -141,7 +138,7 @@ func NewMaster(cfg *config.Config) *Master {
 			WebService:  new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(time.Duration(cfg.Recommend.FitPeriod) * time.Minute),
-		insertedChan: make(chan bool),
+		importedChan: make(chan bool),
 	}
 }
 
@@ -202,8 +199,7 @@ func (m *Master) Serve() {
 	}
 
 	// pre-lock privileged tasks
-	tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
-		TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+	tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
 	for _, taskName := range tasksNames {
 		m.taskScheduler.PreLock(taskName)
 	}
@@ -241,10 +237,10 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		err                    error
 	)
 	go func() {
-		m.insertedChan <- true
+		m.importedChan <- true
 		for {
-			if m.hasFeedbackInserted() {
-				m.insertedChan <- true
+			if m.checkDataImported() {
+				m.importedChan <- true
 			}
 			time.Sleep(time.Second)
 		}
@@ -252,26 +248,18 @@ func (m *Master) RunPrivilegedTasksLoop() {
 	for {
 		select {
 		case <-m.fitTicker.C:
-		case <-m.insertedChan:
+		case <-m.importedChan:
 		}
 		// pre-lock privileged tasks
-		tasksNames := []string{TaskFindLatest, TaskFindPopular, TaskLoadRankingDataset, TaskLoadClickDataset,
-			TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
+		tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
 		for _, taskName := range tasksNames {
 			m.taskScheduler.PreLock(taskName)
 		}
 
-		// download ranking dataset
-		err = m.runLoadRankingDatasetTask()
+		// download dataset
+		err = m.runLoadDatasetTask()
 		if err != nil {
 			base.Logger().Error("failed to load ranking dataset", zap.Error(err))
-			continue
-		}
-
-		// download click dataset
-		err = m.runLoadClickDatasetTask()
-		if err != nil {
-			base.Logger().Error("failed to load click dataset", zap.Error(err))
 			continue
 		}
 
@@ -340,17 +328,25 @@ func (m *Master) RunRagtagTasksLoop() {
 	}
 }
 
-func (m *Master) hasFeedbackInserted() bool {
-	numInserted, err := m.CacheClient.GetInt(cache.GlobalMeta, cache.NumInserted)
+func (m *Master) checkDataImported() bool {
+	isDataImported, err := m.CacheClient.GetInt(cache.GlobalMeta, cache.DataImported)
 	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
 		return false
 	}
-	if numInserted > 0 {
-		err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumInserted, 0)
+	if isDataImported > 0 {
+		err = m.CacheClient.SetInt(cache.GlobalMeta, cache.DataImported, 0)
 		if err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		return true
 	}
 	return false
+}
+
+func (m *Master) notifyDataImported() {
+	err := m.CacheClient.IncrInt(cache.GlobalMeta, cache.DataImported)
+	if err != nil {
+		base.Logger().Error("failed to write meta", zap.Error(err))
+	}
 }

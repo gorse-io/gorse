@@ -66,11 +66,11 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	err := w.cacheClient.SetScores(cache.CTRRecommend, "0", []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
-	err = w.cacheClient.SetTime(cache.LastActiveTime, "0", time.Now().Add(-time.Hour))
+	err = w.cacheClient.SetTime(cache.LastModifyUserTime, "0", time.Now().Add(-time.Hour))
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
-	err = w.cacheClient.SetTime(cache.LastUpdateRecommendTime, "0", time.Now().Add(-time.Hour*100))
+	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(-time.Hour*100))
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
-	err = w.cacheClient.SetTime(cache.LastUpdateRecommendTime, "0", time.Now().Add(time.Hour*100))
+	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(time.Hour*100))
 	assert.False(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.ClearList(cache.CTRRecommend, "0")
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
@@ -105,7 +105,7 @@ func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixF
 	return m
 }
 
-func (m *mockMatrixFactorizationForRecommend) InternalPredict(_, itemId int) float32 {
+func (m *mockMatrixFactorizationForRecommend) InternalPredict(_, itemId int32) float32 {
 	return float32(itemId)
 }
 

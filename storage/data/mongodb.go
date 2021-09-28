@@ -154,8 +154,9 @@ func (db *MongoDB) GetMeasurements(name string, n int) ([]Measurement, error) {
 	r, err := c.Find(ctx, bson.M{"name": bson.M{"$eq": name}}, opt)
 	measurements := make([]Measurement, 0)
 	if err != nil {
-		return measurements, err
+		return nil, err
 	}
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var measurement Measurement
 		if err = r.Decode(&measurement); err != nil {
@@ -166,18 +167,8 @@ func (db *MongoDB) GetMeasurements(name string, n int) ([]Measurement, error) {
 	return measurements, nil
 }
 
-// InsertItem inserts a item into MongoDB.
-func (db *MongoDB) InsertItem(item Item) error {
-	ctx := context.Background()
-	c := db.client.Database(db.dbName).Collection("items")
-	opt := options.Update()
-	opt.SetUpsert(true)
-	_, err := c.UpdateOne(ctx, bson.M{"itemid": bson.M{"$eq": item.ItemId}}, bson.M{"$set": item}, opt)
-	return errors.Trace(err)
-}
-
-// BatchInsertItem insert items into MongoDB.
-func (db *MongoDB) BatchInsertItem(items []Item) error {
+// BatchInsertItems insert items into MongoDB.
+func (db *MongoDB) BatchInsertItems(items []Item) error {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("items")
 	var models []mongo.WriteModel
@@ -235,6 +226,7 @@ func (db *MongoDB) GetItems(cursor string, n int, timeLimit *time.Time) (string,
 		return "", nil, err
 	}
 	items := make([]Item, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var item Item
 		if err = r.Decode(&item); err != nil {
@@ -248,6 +240,49 @@ func (db *MongoDB) GetItems(cursor string, n int, timeLimit *time.Time) (string,
 		cursor = ""
 	}
 	return cursor, items, nil
+}
+
+// GetItemStream read items from MongoDB by stream.
+func (db *MongoDB) GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error) {
+	itemChan := make(chan []Item, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(itemChan)
+		defer close(errChan)
+		// send query
+		ctx := context.Background()
+		c := db.client.Database(db.dbName).Collection("items")
+		opt := options.Find()
+		filter := bson.M{}
+		if timeLimit != nil {
+			filter["timestamp"] = bson.M{"$gt": *timeLimit}
+		}
+		r, err := c.Find(ctx, filter, opt)
+		if err != nil {
+			errChan <- errors.Trace(err)
+			return
+		}
+		// fetch result
+		items := make([]Item, 0, batchSize)
+		defer r.Close(ctx)
+		for r.Next(ctx) {
+			var item Item
+			if err = r.Decode(&item); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			items = append(items, item)
+			if len(items) == batchSize {
+				itemChan <- items
+				items = make([]Item, 0, batchSize)
+			}
+		}
+		if len(items) > 0 {
+			itemChan <- items
+		}
+		errChan <- nil
+	}()
+	return itemChan, errChan
 }
 
 // GetItemFeedback returns feedback of a item from MongoDB.
@@ -268,6 +303,7 @@ func (db *MongoDB) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Fe
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
@@ -279,13 +315,18 @@ func (db *MongoDB) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Fe
 	return feedbacks, nil
 }
 
-// InsertUser inserts a user into MongoDB.
-func (db *MongoDB) InsertUser(user User) error {
+// BatchInsertUsers inserts a user into MongoDB.
+func (db *MongoDB) BatchInsertUsers(users []User) error {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("users")
-	opt := options.Update()
-	opt.SetUpsert(true)
-	_, err := c.UpdateOne(ctx, bson.M{"userid": bson.M{"$eq": user.UserId}}, bson.M{"$set": user}, opt)
+	var models []mongo.WriteModel
+	for _, user := range users {
+		models = append(models, mongo.NewUpdateOneModel().
+			SetUpsert(true).
+			SetFilter(bson.M{"userid": bson.M{"$eq": user.UserId}}).
+			SetUpdate(bson.M{"$set": user}))
+	}
+	_, err := c.BulkWrite(ctx, models)
 	return errors.Trace(err)
 }
 
@@ -329,6 +370,7 @@ func (db *MongoDB) GetUsers(cursor string, n int) (string, []User, error) {
 		return "", nil, err
 	}
 	users := make([]User, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var user User
 		if err = r.Decode(&user); err != nil {
@@ -342,6 +384,44 @@ func (db *MongoDB) GetUsers(cursor string, n int) (string, []User, error) {
 		cursor = ""
 	}
 	return cursor, users, nil
+}
+
+// GetUserStream reads users from MongoDB by stream.
+func (db *MongoDB) GetUserStream(batchSize int) (chan []User, chan error) {
+	userChan := make(chan []User, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(userChan)
+		defer close(errChan)
+		// send query
+		ctx := context.Background()
+		c := db.client.Database(db.dbName).Collection("users")
+		opt := options.Find()
+		r, err := c.Find(ctx, bson.M{}, opt)
+		if err != nil {
+			errChan <- errors.Trace(err)
+			return
+		}
+		users := make([]User, 0, batchSize)
+		defer r.Close(ctx)
+		for r.Next(ctx) {
+			var user User
+			if err = r.Decode(&user); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			users = append(users, user)
+			if len(users) == batchSize {
+				userChan <- users
+				users = make([]User, 0, batchSize)
+			}
+		}
+		if len(users) > 0 {
+			userChan <- users
+		}
+		errChan <- nil
+	}()
+	return userChan, errChan
 }
 
 // GetUserFeedback returns feedback of a user from MongoDB.
@@ -362,6 +442,7 @@ func (db *MongoDB) GetUserFeedback(userId string, feedbackTypes ...string) ([]Fe
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
@@ -371,53 +452,6 @@ func (db *MongoDB) GetUserFeedback(userId string, feedbackTypes ...string) ([]Fe
 	}
 	GetUserFeedbackLatency.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
-}
-
-// InsertFeedback insert a feedback into MongoDB.
-func (db *MongoDB) InsertFeedback(feedback Feedback, insertUser, insertItem bool) error {
-	ctx := context.Background()
-	opt := options.Update()
-	opt.SetUpsert(true)
-	// insert user
-	if insertUser {
-		c := db.client.Database(db.dbName).Collection("users")
-		_, err := c.UpdateOne(ctx, bson.M{"userid": feedback.UserId}, bson.M{"$set": bson.M{"userid": feedback.UserId}}, opt)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		_, err := db.GetUser(feedback.UserId)
-		if err != nil {
-			if err == ErrUserNotExist {
-				return nil
-			}
-			return errors.Trace(err)
-		}
-	}
-	// insert item
-	if insertItem {
-		c := db.client.Database(db.dbName).Collection("items")
-		_, err := c.UpdateOne(ctx, bson.M{"itemid": feedback.ItemId}, bson.M{"$set": bson.M{"itemid": feedback.ItemId}}, opt)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		_, err := db.GetItem(feedback.ItemId)
-		if err != nil {
-			if err == ErrItemNotExist {
-				return nil
-			}
-			return errors.Trace(err)
-		}
-	}
-	// insert feedback
-	c := db.client.Database(db.dbName).Collection("feedback")
-	_, err := c.UpdateOne(ctx, bson.M{
-		"feedbackkey.feedbacktype": feedback.FeedbackType,
-		"feedbackkey.userid":       feedback.UserId,
-		"feedbackkey.itemid":       feedback.ItemId,
-	}, bson.M{"$set": feedback}, opt)
-	return errors.Trace(err)
 }
 
 // BatchInsertFeedback returns multiple feedback into MongoDB.
@@ -438,7 +472,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 			models = append(models, mongo.NewUpdateOneModel().
 				SetUpsert(true).
 				SetFilter(bson.M{"userid": bson.M{"$eq": userId}}).
-				SetUpdate(bson.M{"$set": User{UserId: userId}}))
+				SetUpdate(bson.M{"$setOnInsert": User{UserId: userId}}))
 		}
 		c := db.client.Database(db.dbName).Collection("users")
 		_, err := c.BulkWrite(ctx, models)
@@ -465,7 +499,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 			models = append(models, mongo.NewUpdateOneModel().
 				SetUpsert(true).
 				SetFilter(bson.M{"itemid": bson.M{"$eq": itemId}}).
-				SetUpdate(bson.M{"$set": Item{ItemId: itemId}}))
+				SetUpdate(bson.M{"$setOnInsert": Item{ItemId: itemId}}))
 		}
 		c := db.client.Database(db.dbName).Collection("items")
 		_, err := c.BulkWrite(ctx, models)
@@ -527,6 +561,7 @@ func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedb
 		return "", nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
@@ -543,6 +578,53 @@ func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedb
 		cursor = ""
 	}
 	return cursor, feedbacks, nil
+}
+
+// GetFeedbackStream reads feedback from MongoDB by stream.
+func (db *MongoDB) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+	feedbackChan := make(chan []Feedback, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(feedbackChan)
+		defer close(errChan)
+		// send query
+		ctx := context.Background()
+		c := db.client.Database(db.dbName).Collection("feedback")
+		opt := options.Find()
+		filter := make(bson.M)
+		// pass feedback type to filter
+		if len(feedbackTypes) > 0 {
+			filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+		}
+		// pass time limit to filter
+		if timeLimit != nil {
+			filter["timestamp"] = bson.M{"$gt": *timeLimit}
+		}
+		r, err := c.Find(ctx, filter, opt)
+		if err != nil {
+			errChan <- errors.Trace(err)
+			return
+		}
+		feedbacks := make([]Feedback, 0, batchSize)
+		defer r.Close(ctx)
+		for r.Next(ctx) {
+			var feedback Feedback
+			if err = r.Decode(&feedback); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			feedbacks = append(feedbacks, feedback)
+			if len(feedbacks) == batchSize {
+				feedbackChan <- feedbacks
+				feedbacks = make([]Feedback, 0, batchSize)
+			}
+		}
+		if len(feedbacks) > 0 {
+			feedbackChan <- feedbacks
+		}
+		errChan <- nil
+	}()
+	return feedbackChan, errChan
 }
 
 // GetUserItemFeedback returns a feedback return the user id and item id from MongoDB.
@@ -562,6 +644,7 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackTypes ...s
 		return nil, err
 	}
 	feedbacks := make([]Feedback, 0)
+	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var feedback Feedback
 		if err = r.Decode(&feedback); err != nil {
