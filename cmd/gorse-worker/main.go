@@ -14,8 +14,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
 	_ "net/http/pprof"
@@ -25,6 +27,12 @@ var workerCommand = &cobra.Command{
 	Use:   "gorse-worker",
 	Short: "The worker node of gorse recommender system.",
 	Run: func(cmd *cobra.Command, args []string) {
+		// show version
+		showVersion, _ := cmd.PersistentFlags().GetBool("version")
+		if showVersion {
+			fmt.Println(version.BuildInfo())
+			return
+		}
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
 		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
@@ -42,6 +50,7 @@ var workerCommand = &cobra.Command{
 }
 
 func init() {
+	workerCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	workerCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
 	workerCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
 	workerCommand.PersistentFlags().String("http-host", "127.0.0.1", "host of status report")

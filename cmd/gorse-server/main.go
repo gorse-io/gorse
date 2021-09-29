@@ -30,7 +30,7 @@ var serverCommand = &cobra.Command{
 		// show version
 		showVersion, _ := cmd.PersistentFlags().GetBool("version")
 		if showVersion {
-			fmt.Println(version.Name)
+			fmt.Println(version.BuildInfo())
 			return
 		}
 		// setup logger
