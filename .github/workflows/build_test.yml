@@ -113,7 +113,7 @@ jobs:
       uses: jtalk/url-health-check-action@v2
       with:
         # Check the following URLs one by one sequentially
-        url: http://127.0.0.1:8088|http://127.0.0.1:8087/metrics|http://127.0.0.1:8089/metrics
+        url: http://127.0.0.1:8088/metrics|http://127.0.0.1:8087/metrics|http://127.0.0.1:8089/metrics
         # Fail this action after this many failed attempts
         max-attempts: 5
         # Delay between retries
