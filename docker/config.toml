@@ -10,7 +10,7 @@ cache_store = "redis://redis:6379"
 #   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-data_store = "mysql://root@tcp(mysql:3306)/gorse?parseTime=true"
+data_store = "mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse?parseTime=true"
 
 # The cache size for recommended/popular/latest items. The default value is 100.
 cache_size = 200
