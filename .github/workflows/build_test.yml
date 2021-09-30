@@ -98,3 +98,11 @@ jobs:
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
+
+  integrate_test:
+    name: Ingrate Test
+    runs-on: ubuntu-latest
+    steps:
+     - name: Build the stack
+       working-directory: ./docker
+       run: docker-compose up -d
