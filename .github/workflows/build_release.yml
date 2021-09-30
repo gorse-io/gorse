@@ -20,7 +20,11 @@ jobs:
         run: go get -v github.com/mitchellh/gox
         
       - name: Build release
-        run: gox -osarch='darwin/arm64 darwin/amd64 windows/amd64 linux/arm64 linux/amd64' ./...
+        run: >
+          gox -osarch='darwin/arm64 darwin/amd64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
+            -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
+            -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
+            -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" ./...
 
       - name: Install zip
         uses: montudor/action-zip@v0.1.1
