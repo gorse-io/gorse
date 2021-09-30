@@ -15,6 +15,8 @@ RUN cd gorse/cmd/gorse-worker && \
        -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-worker /usr/bin
 
+RUN /usr/bin/gorse-worker --version
+
 ############################
 # STEP 2 build a small image
 ############################
@@ -23,7 +25,5 @@ FROM scratch
 COPY --from=0 /usr/bin/gorse-worker /usr/bin/gorse-worker
 
 ENV USER root
-
-RUN /usr/bin/gorse-worker --version
 
 ENTRYPOINT ["/usr/bin/gorse-worker"]
