@@ -15,6 +15,8 @@ RUN cd gorse/cmd/gorse-master && \
        -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-master /usr/bin
 
+RUN /usr/bin/gorse-master --version
+
 ############################
 # STEP 2 build a small image
 ############################
@@ -23,7 +25,5 @@ FROM scratch
 COPY --from=0 /usr/bin/gorse-master /usr/bin/gorse-master
 
 ENV USER root
-
-RUN /usr/bin/gorse-master --version
 
 ENTRYPOINT ["/usr/bin/gorse-master", "-c", "/etc/config.toml"]
