@@ -9,7 +9,10 @@ RUN cd gorse && \
     go get -v -t -d ./...
 
 RUN cd gorse/cmd/gorse-worker && \
-    CGO_ENABLED=0 go build . && \
+    CGO_ENABLED=0 go build -ldflags="
+       -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
+       -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
+       -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-worker /usr/bin
 
 ############################
@@ -20,5 +23,7 @@ FROM scratch
 COPY --from=0 /usr/bin/gorse-worker /usr/bin/gorse-worker
 
 ENV USER root
+
+RUN /usr/bin/gorse-worker --version
 
 ENTRYPOINT ["/usr/bin/gorse-worker"]

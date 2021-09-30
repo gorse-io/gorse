@@ -9,7 +9,10 @@ RUN cd gorse && \
     go get -v -t -d ./...
 
 RUN cd gorse/cmd/gorse-server && \
-    CGO_ENABLED=0 go build . && \
+    CGO_ENABLED=0 go build -ldflags=" \
+       -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+       -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+       -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-server /usr/bin
 
 ############################
@@ -20,5 +23,7 @@ FROM scratch
 ENV USER root
 
 COPY --from=0 /usr/bin/gorse-server /usr/bin/gorse-server
+
+RUN /usr/bin/gorse-server --version
 
 ENTRYPOINT ["/usr/bin/gorse-server"]
