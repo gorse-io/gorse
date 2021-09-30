@@ -103,7 +103,18 @@ jobs:
     name: Integrate Test
     runs-on: ubuntu-latest
     steps:
-     - uses: actions/checkout@v1
-     - name: Build the stack
-       working-directory: ./docker
-       run: docker-compose up -d
+    - uses: actions/checkout@v1
+
+    - name: Build the stack
+      working-directory: ./docker
+      run: docker-compose up -d
+
+    - name: Check the deployed service URL
+      uses: jtalk/url-health-check-action@v2
+      with:
+        # Check the following URLs one by one sequentially
+        url: http://127.0.0.1:8088|http://127.0.0.1:8087/metrics|http://127.0.0.1:8089/metrics
+        # Fail this action after this many failed attempts
+        max-attempts: 5
+        # Delay between retries
+        retry-delay: 5s
