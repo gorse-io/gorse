@@ -119,4 +119,4 @@ jobs:
         # Delay between retries
         retry-delay: 5s
         # Retry all errors, including 404. This option might trigger curl upgrade.
-        retry-all: yes
+        retry-all: true
