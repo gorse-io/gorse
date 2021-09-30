@@ -15,6 +15,8 @@ RUN cd gorse/cmd/gorse-server && \
        -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-server /usr/bin
 
+RUN /usr/bin/gorse-server --version
+
 ############################
 # STEP 2 build a small image
 ############################
@@ -23,7 +25,5 @@ FROM scratch
 ENV USER root
 
 COPY --from=0 /usr/bin/gorse-server /usr/bin/gorse-server
-
-RUN /usr/bin/gorse-server --version
 
 ENTRYPOINT ["/usr/bin/gorse-server"]
