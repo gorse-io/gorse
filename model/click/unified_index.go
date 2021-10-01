@@ -15,15 +15,13 @@
 package click
 
 import (
-	"encoding/gob"
+	"encoding/binary"
+	"fmt"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
+	"io"
 	"strconv"
 )
-
-func init() {
-	gob.Register(&UnifiedMapIndex{})
-	gob.Register(&UnifiedDirectIndex{})
-}
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.
 type UnifiedIndex interface {
@@ -43,6 +41,58 @@ type UnifiedIndex interface {
 	CountUserLabels() int32
 	CountItemLabels() int32
 	CountContextLabels() int32
+	Marshal(w io.Writer) error
+	Unmarshal(r io.Reader) error
+}
+
+const (
+	mapIndex uint8 = iota
+	directIndex
+)
+
+// MarshalIndex marshal index into byte stream.
+func MarshalIndex(w io.Writer, index UnifiedIndex) error {
+	// write index type
+	var indexType uint8
+	switch index.(type) {
+	case *UnifiedMapIndex:
+		indexType = mapIndex
+	case *UnifiedDirectIndex:
+		indexType = directIndex
+	default:
+		return errors.New("unknown index type")
+	}
+	err := binary.Write(w, binary.LittleEndian, indexType)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write index
+	return index.Marshal(w)
+}
+
+// UnmarshalIndex unmarshal index from byte stream.
+func UnmarshalIndex(r io.Reader) (UnifiedIndex, error) {
+	// read type index
+	var indexType uint8
+	err := binary.Read(r, binary.LittleEndian, &indexType)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	var index UnifiedIndex
+	switch indexType {
+	case mapIndex:
+		index = &UnifiedMapIndex{}
+	case directIndex:
+		index = &UnifiedDirectIndex{}
+	default:
+		return nil, fmt.Errorf("unknown index type (%v)", indexType)
+	}
+	// read index
+	err = index.Unmarshal(r)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return index, nil
 }
 
 // UnifiedMapIndexBuilder is the builder for UnifiedMapIndex.
@@ -210,6 +260,31 @@ func (unified *UnifiedMapIndex) CountItems() int32 {
 	return unified.ItemIndex.Len()
 }
 
+// Marshal map index into byte stream.
+func (unified *UnifiedMapIndex) Marshal(w io.Writer) error {
+	indices := []base.Index{unified.UserIndex, unified.ItemIndex, unified.UserLabelIndex, unified.ItemLabelIndex, unified.CtxLabelIndex}
+	for _, index := range indices {
+		err := base.MarshalIndex(w, index)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+// Unmarshal map index from byte stream.
+func (unified *UnifiedMapIndex) Unmarshal(r io.Reader) error {
+	indices := []*base.Index{&unified.UserIndex, &unified.ItemIndex, &unified.UserLabelIndex, &unified.ItemLabelIndex, &unified.CtxLabelIndex}
+	for i := range indices {
+		var err error
+		*indices[i], err = base.UnmarshalIndex(r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
 // UnifiedDirectIndex maps string to integer in literal.
 type UnifiedDirectIndex struct {
 	N int32
@@ -344,4 +419,14 @@ func (unified *UnifiedDirectIndex) CountUsers() int32 {
 // CountItems should be used by unit testing only.
 func (unified *UnifiedDirectIndex) CountItems() int32 {
 	return unified.N / 5
+}
+
+// Marshal direct index into byte stream.
+func (unified *UnifiedDirectIndex) Marshal(w io.Writer) error {
+	return binary.Write(w, binary.LittleEndian, unified.N)
+}
+
+// Unmarshal direct index from byte stream.
+func (unified *UnifiedDirectIndex) Unmarshal(r io.Reader) error {
+	return binary.Read(r, binary.LittleEndian, &unified.N)
 }

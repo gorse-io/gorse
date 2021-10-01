@@ -29,14 +29,14 @@ service Master {
   rpc GetMeta(NodeInfo) returns (Meta) {}
 
   /* data distribute */
-  rpc GetUserIndex(NodeInfo) returns(UserIndex) {}
-  rpc GetRankingModel(NodeInfo) returns (Model) {}
-  rpc GetClickModel(NodeInfo) returns (Model) {}
+  rpc GetUserIndex(VersionInfo) returns (stream Fragment) {}
+  rpc GetRankingModel(VersionInfo) returns (stream Fragment) {}
+  rpc GetClickModel(VersionInfo) returns (stream Fragment) {}
 
   /* task management */
-  rpc StartTask(StartTaskRequest) returns(StartTaskResponse) {}
-  rpc UpdateTask(UpdateTaskRequest) returns(UpdateTaskResponse) {}
-  rpc FinishTask(FinishTaskRequest) returns(FinishTaskResponse) {}
+  rpc StartTask(StartTaskRequest) returns (StartTaskResponse) {}
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {}
+  rpc FinishTask(FinishTaskRequest) returns (FinishTaskResponse) {}
 
 }
 
@@ -50,15 +50,12 @@ message Meta {
   repeated string workers = 7;
 }
 
-message UserIndex {
-  int64 version = 1;    // user index version
-  bytes user_index = 2; // user index data
+message Fragment {
+  bytes data = 1;
 }
 
-message Model {
-  int64 version = 1;  // model version
-  string name = 2;    // model name
-  bytes model = 3;    // model data
+message VersionInfo {
+  int64 version = 1;
 }
 
 message NodeInfo {

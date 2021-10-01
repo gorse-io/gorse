@@ -15,6 +15,7 @@
 package base
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -74,4 +75,37 @@ func TestDateNow(t *testing.T) {
 	assert.Zero(t, date.Second())
 	assert.Zero(t, date.Nanosecond())
 	assert.Equal(t, time.UTC, date.Location())
+}
+
+func TestWriteMatrix(t *testing.T) {
+	a := [][]float32{{1, 2}, {3, 4}}
+	buf := bytes.NewBuffer(nil)
+	err := WriteMatrix(buf, a)
+	assert.NoError(t, err)
+	b := [][]float32{{0, 0}, {0, 0}}
+	err = ReadMatrix(buf, b)
+	assert.NoError(t, err)
+	assert.Equal(t, a, b)
+}
+
+func TestWriteString(t *testing.T) {
+	a := "abc"
+	buf := bytes.NewBuffer(nil)
+	err := WriteString(buf, a)
+	assert.NoError(t, err)
+	var b string
+	b, err = ReadString(buf)
+	assert.NoError(t, err)
+	assert.Equal(t, a, b)
+}
+
+func TestWriteGob(t *testing.T) {
+	a := "abc"
+	buf := bytes.NewBuffer(nil)
+	err := WriteGob(buf, a)
+	assert.NoError(t, err)
+	var b string
+	err = ReadGob(buf, &b)
+	assert.NoError(t, err)
+	assert.Equal(t, a, b)
 }

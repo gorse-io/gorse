@@ -40,11 +40,6 @@ const (
 	UseFeature  ParamName = "UseFeature"
 )
 
-const (
-	SimilarityCosine = "Cosine"
-	SimilarityDot    = "Dot"
-)
-
 // Params stores hyper-parameters for an model. It is a map between strings
 // (names) and interface{}s (values). For example, hyper-parameters for SVD
 // is given by:

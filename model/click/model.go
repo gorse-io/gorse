@@ -15,11 +15,11 @@
 package click
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/gob"
+	"encoding/binary"
 	"fmt"
 	"github.com/barkimedes/go-deepcopy"
+	"github.com/juju/errors"
+	"io"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -66,9 +66,9 @@ func (score Score) GetValue() float32 {
 }
 
 func (score Score) BetterThan(s Score) bool {
-	if s.Task == "" && score.Task != "" {
+	if s.Task == 0 && score.Task != 0 {
 		return true
-	} else if s.Task != "" && score.Task == "" {
+	} else if s.Task != 0 && score.Task == 0 {
 		return false
 	}
 	if score.Task != s.Task {
@@ -124,6 +124,7 @@ type FactorizationMachine interface {
 	Predict(userId, itemId string, userLabels, itemLabels []string) float32
 	InternalPredict(x []int32, values []float32) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
+	Marshal(w io.Writer) error
 }
 
 type BaseFactorizationMachine struct {
@@ -135,11 +136,11 @@ func (b *BaseFactorizationMachine) Init(trainSet *Dataset) {
 	b.Index = trainSet.Index
 }
 
-type FMTask string
+type FMTask uint8
 
 const (
-	FMClassification FMTask = "c"
-	FMRegression     FMTask = "r"
+	FMClassification FMTask = 'c'
+	FMRegression     FMTask = 'r'
 )
 
 type FM struct {
@@ -447,27 +448,15 @@ func (fm *FM) Init(trainSet *Dataset) {
 	fm.BaseFactorizationMachine.Init(trainSet)
 }
 
-func EncodeModel(m FactorizationMachine) ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-	writer := bufio.NewWriter(buf)
-	encoder := gob.NewEncoder(writer)
-	if err := encoder.Encode(m); err != nil {
-		return nil, err
-	}
-	if err := writer.Flush(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+func MarshalModel(w io.Writer, m FactorizationMachine) error {
+	return m.Marshal(w)
 }
 
-func DecodeModel(buf []byte) (FactorizationMachine, error) {
-	reader := bytes.NewReader(buf)
-	decoder := gob.NewDecoder(reader)
+func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
 	var fm FM
-	if err := decoder.Decode(&fm); err != nil {
+	if err := fm.Unmarshal(r); err != nil {
 		return nil, err
 	}
-	fm.SetParams(fm.GetParams())
 	return &fm, nil
 }
 
@@ -480,4 +469,91 @@ func Clone(m FactorizationMachine) FactorizationMachine {
 		copied.SetParams(copied.GetParams())
 		return copied
 	}
+}
+
+// Marshal model into byte stream.
+func (fm *FM) Marshal(w io.Writer) error {
+	// write params
+	err := base.WriteGob(w, fm.Params)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write index
+	err = MarshalIndex(w, fm.Index)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write scalars
+	err = binary.Write(w, binary.LittleEndian, fm.MaxTarget)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	err = binary.Write(w, binary.LittleEndian, fm.MinTarget)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	err = binary.Write(w, binary.LittleEndian, fm.Task)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	err = binary.Write(w, binary.LittleEndian, fm.B)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write vector
+	err = binary.Write(w, binary.LittleEndian, fm.W)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write matrix
+	err = base.WriteMatrix(w, fm.V)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// Unmarshal model from byte stream.
+func (fm *FM) Unmarshal(r io.Reader) error {
+	// read params
+	err := base.ReadGob(r, &fm.Params)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	fm.SetParams(fm.Params)
+	// read index
+	fm.Index, err = UnmarshalIndex(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read scalars
+	err = binary.Read(r, binary.LittleEndian, &fm.MaxTarget)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	err = binary.Read(r, binary.LittleEndian, &fm.MinTarget)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	err = binary.Read(r, binary.LittleEndian, &fm.Task)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	err = binary.Read(r, binary.LittleEndian, &fm.B)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read vector
+	fm.W = make([]float32, fm.Index.Len())
+	err = binary.Read(r, binary.LittleEndian, fm.W)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read matrix
+	fm.V = base.NewMatrix32(int(fm.Index.Len()), fm.nFactors)
+	err = base.ReadMatrix(r, fm.V)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }

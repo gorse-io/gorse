@@ -15,6 +15,7 @@ package ranking
 
 import (
 	"github.com/scylladb/go-set/i32set"
+	"io"
 	"strconv"
 	"testing"
 
@@ -66,6 +67,14 @@ type mockMatrixFactorizationForEval struct {
 	model.BaseModel
 	positive []*i32set.Set
 	negative []*i32set.Set
+}
+
+func (m *mockMatrixFactorizationForEval) Marshal(_ io.Writer) error {
+	panic("implement me")
+}
+
+func (m *mockMatrixFactorizationForEval) Unmarshal(_ io.Reader) error {
+	panic("implement me")
 }
 
 func (m *mockMatrixFactorizationForEval) Invalid() bool {

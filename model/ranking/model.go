@@ -15,23 +15,19 @@
 package ranking
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/gob"
 	"fmt"
+	"github.com/barkimedes/go-deepcopy"
+	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/i32set"
-	"reflect"
-	"time"
-
-	"github.com/barkimedes/go-deepcopy"
-
-	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"gonum.org/v1/gonum/mat"
+	"io"
+	"reflect"
+	"time"
 )
 
 type Score struct {
@@ -85,6 +81,10 @@ type Model interface {
 	Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score
 	// GetItemIndex returns item index.
 	GetItemIndex() base.Index
+	// Marshal model into byte stream.
+	Marshal(w io.Writer) error
+	// Unmarshal model from byte stream.
+	Unmarshal(r io.Reader) error
 }
 
 type MatrixFactorization interface {
@@ -95,6 +95,10 @@ type MatrixFactorization interface {
 	InternalPredict(userIndex, itemIndex int32) float32
 	// GetUserIndex returns user index.
 	GetUserIndex() base.Index
+	// Marshal model into byte stream.
+	Marshal(w io.Writer) error
+	// Unmarshal model from byte stream.
+	Unmarshal(r io.Reader) error
 }
 
 type BaseMatrixFactorization struct {
@@ -103,29 +107,50 @@ type BaseMatrixFactorization struct {
 	ItemIndex base.Index
 }
 
-func (model *BaseMatrixFactorization) Init(trainSet *DataSet) {
-	model.UserIndex = trainSet.UserIndex
-	model.ItemIndex = trainSet.ItemIndex
+func (baseModel *BaseMatrixFactorization) Init(trainSet *DataSet) {
+	baseModel.UserIndex = trainSet.UserIndex
+	baseModel.ItemIndex = trainSet.ItemIndex
 }
 
-func (model *BaseMatrixFactorization) GetUserIndex() base.Index {
-	return model.UserIndex
+func (baseModel *BaseMatrixFactorization) GetUserIndex() base.Index {
+	return baseModel.UserIndex
 }
 
-func (model *BaseMatrixFactorization) GetItemIndex() base.Index {
-	return model.ItemIndex
+func (baseModel *BaseMatrixFactorization) GetItemIndex() base.Index {
+	return baseModel.ItemIndex
 }
 
-func NewModel(name string, params model.Params) (Model, error) {
-	switch name {
-	case "als":
-		return NewALS(params), nil
-	case "bpr":
-		return NewBPR(params), nil
-	case "ccd":
-		return NewCCD(params), nil
+// Marshal model into byte stream.
+func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
+	// write params
+	err := base.WriteGob(w, baseModel.Params)
+	if err != nil {
+		return errors.Trace(err)
 	}
-	return nil, fmt.Errorf("unknown model %v", name)
+	// write user index
+	err = base.MarshalIndex(w, baseModel.UserIndex)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write item index
+	return base.MarshalIndex(w, baseModel.ItemIndex)
+}
+
+// Unmarshal model from byte stream.
+func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
+	// read params
+	err := base.ReadGob(r, &baseModel.Params)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write user index
+	baseModel.UserIndex, err = base.UnmarshalIndex(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write item index
+	baseModel.ItemIndex, err = base.UnmarshalIndex(r)
+	return errors.Trace(err)
 }
 
 // Clone a model with deep copy.
@@ -158,50 +183,39 @@ func GetModelName(m Model) string {
 	}
 }
 
-func EncodeModel(m Model) ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-	writer := bufio.NewWriter(buf)
-	encoder := gob.NewEncoder(writer)
-	if err := encoder.Encode(GetModelName(m)); err != nil {
-		return nil, err
+func MarshalModel(w io.Writer, m Model) error {
+	if err := base.WriteString(w, GetModelName(m)); err != nil {
+		return errors.Trace(err)
 	}
-	if err := encoder.Encode(m); err != nil {
-		return nil, err
+	if err := m.Marshal(w); err != nil {
+		return errors.Trace(err)
 	}
-	if err := writer.Flush(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return nil
 }
 
-func DecodeModel(buf []byte) (MatrixFactorization, error) {
-	reader := bytes.NewReader(buf)
-	decoder := gob.NewDecoder(reader)
-	var name string
-	if err := decoder.Decode(&name); err != nil {
-		return nil, err
+func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
+	name, err := base.ReadString(r)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 	switch name {
 	case "als":
 		var als ALS
-		if err := decoder.Decode(&als); err != nil {
-			return nil, err
+		if err := als.Unmarshal(r); err != nil {
+			return nil, errors.Trace(err)
 		}
-		als.SetParams(als.GetParams())
 		return &als, nil
 	case "bpr":
 		var bpr BPR
-		if err := decoder.Decode(&bpr); err != nil {
-			return nil, err
+		if err := bpr.Unmarshal(r); err != nil {
+			return nil, errors.Trace(err)
 		}
-		bpr.SetParams(bpr.GetParams())
 		return &bpr, nil
 	case "ccd":
 		var ccd CCD
-		if err := decoder.Decode(&ccd); err != nil {
-			return nil, err
+		if err := ccd.Unmarshal(r); err != nil {
+			return nil, errors.Trace(err)
 		}
-		ccd.SetParams(ccd.GetParams())
 		return &ccd, nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
@@ -449,6 +463,50 @@ func (bpr *BPR) Init(trainSet *DataSet) {
 	bpr.UserFactor = newUserFactor
 	bpr.ItemFactor = newItemFactor
 	bpr.BaseMatrixFactorization.Init(trainSet)
+}
+
+// Marshal model into byte stream.
+func (bpr *BPR) Marshal(w io.Writer) error {
+	// write base
+	err := bpr.BaseMatrixFactorization.Marshal(w)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write user factors
+	err = base.WriteMatrix(w, bpr.UserFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write item factors
+	err = base.WriteMatrix(w, bpr.ItemFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// Unmarshal model from byte stream.
+func (bpr *BPR) Unmarshal(r io.Reader) error {
+	// read base
+	var err error
+	err = bpr.BaseMatrixFactorization.Unmarshal(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	bpr.SetParams(bpr.Params)
+	// read user factors
+	bpr.UserFactor = base.NewMatrix32(int(bpr.UserIndex.Len()), bpr.nFactors)
+	err = base.ReadMatrix(r, bpr.UserFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read item factors
+	bpr.ItemFactor = base.NewMatrix32(int(bpr.ItemIndex.Len()), bpr.nFactors)
+	err = base.ReadMatrix(r, bpr.ItemFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 // ALS [7] is the Weighted Regularized Matrix Factorization, which exploits
@@ -702,6 +760,48 @@ func (als *ALS) Init(trainSet *DataSet) {
 	als.UserFactor = newUserFactor
 	als.ItemFactor = newItemFactor
 	als.BaseMatrixFactorization.Init(trainSet)
+}
+
+// Marshal model into byte stream.
+func (als *ALS) Marshal(w io.Writer) error {
+	// write base
+	err := als.BaseMatrixFactorization.Marshal(w)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write user factors
+	err = base.WriteGob(w, als.UserFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write item factors
+	err = base.WriteGob(w, als.ItemFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// Unmarshal model from byte stream.
+func (als *ALS) Unmarshal(r io.Reader) error {
+	// read base
+	var err error
+	err = als.BaseMatrixFactorization.Unmarshal(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	als.SetParams(als.Params)
+	// read user factors
+	err = base.ReadGob(r, &als.UserFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read item factors
+	err = base.ReadGob(r, &als.ItemFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 type CCD struct {
@@ -962,4 +1062,48 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
 	return snapshots.BestScore
+}
+
+// Marshal model into byte stream.
+func (ccd *CCD) Marshal(w io.Writer) error {
+	// write params
+	err := ccd.BaseMatrixFactorization.Marshal(w)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write user factors
+	err = base.WriteMatrix(w, ccd.UserFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write item factors
+	err = base.WriteMatrix(w, ccd.ItemFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// Unmarshal model from byte stream.
+func (ccd *CCD) Unmarshal(r io.Reader) error {
+	// read params
+	var err error
+	err = ccd.BaseMatrixFactorization.Unmarshal(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	ccd.SetParams(ccd.Params)
+	// read user factors
+	ccd.UserFactor = base.NewMatrix32(int(ccd.UserIndex.Len()), ccd.nFactors)
+	err = base.ReadMatrix(r, ccd.UserFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read item factors
+	ccd.ItemFactor = base.NewMatrix32(int(ccd.ItemIndex.Len()), ccd.nFactors)
+	err = base.ReadMatrix(r, ccd.ItemFactor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }

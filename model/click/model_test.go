@@ -14,6 +14,7 @@
 package click
 
 import (
+	"bytes"
 	"github.com/stretchr/testify/mock"
 	"testing"
 
@@ -136,9 +137,10 @@ func TestFM_Regression_Criteo(t *testing.T) {
 		m.Predict("1", "2", []string{"3", "4"}, []string{"5", "6"}))
 
 	// test increment test
-	buf, err := EncodeModel(m)
+	buf := bytes.NewBuffer(nil)
+	err = MarshalModel(buf, m)
 	assert.NoError(t, err)
-	tmp, err := DecodeModel(buf)
+	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	m = tmp.(*FM)
 	m.nEpochs = 1
