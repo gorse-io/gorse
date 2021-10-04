@@ -72,7 +72,7 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(time.Hour*100))
 	assert.False(t, w.checkRecommendCacheTimeout("0"))
-	err = w.cacheClient.ClearList(cache.CTRRecommend, "0")
+	err = w.cacheClient.ClearScores(cache.CTRRecommend, "0")
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 }
 
@@ -160,12 +160,16 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	now := time.Now()
 	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "9"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "8"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "8"}, Timestamp: now.Add(-time.Hour)},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "7"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "6"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "6"}, Timestamp: now.Add(-time.Hour)},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "5"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "4"}, Timestamp: now.Add(time.Hour)},
-	}, true, true)
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "4"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "3"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "1"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Timestamp: now.Add(time.Hour)},
+	}, true, true, true)
 	assert.NoError(t, err)
 	// create mock model
 	m := newMockMatrixFactorizationForRecommend(1, 10)
@@ -180,9 +184,13 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 		{"0", 0},
 	}, recommends)
 
-	read, err := w.cacheClient.GetList(cache.IgnoreItems, "0")
+	readCache, err := w.cacheClient.GetScores(cache.IgnoreItems, "0", 0, -1)
+	read := cache.RemoveScores(readCache)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"4", "6", "8"}, read)
+	assert.Equal(t, []string{"0", "1", "2", "3"}, read)
+	for _, v := range readCache {
+		assert.Greater(t, v.Score, float32(time.Now().Unix()))
+	}
 }
 
 func TestRecommend_ItemBased(t *testing.T) {
@@ -197,7 +205,7 @@ func TestRecommend_ItemBased(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "22"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "23"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "24"}},
-	}, true, true)
+	}, true, true, true)
 	assert.NoError(t, err)
 	// insert similar items
 	err = w.cacheClient.SetScores(cache.ItemNeighbors, "21", []cache.Scored{
@@ -249,17 +257,17 @@ func TestRecommend_UserBased(t *testing.T) {
 	// insert feedback
 	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "11"}},
-	}, true, true)
+	}, true, true, true)
 	assert.NoError(t, err)
 	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "12"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "48"}},
-	}, true, true)
+	}, true, true, true)
 	assert.NoError(t, err)
 	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "13"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
-	}, true, true)
+	}, true, true, true)
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})

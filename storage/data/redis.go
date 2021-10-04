@@ -303,7 +303,9 @@ func (r *Redis) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedb
 			if err != nil {
 				return errors.Trace(err)
 			}
-			feedback = append(feedback, val)
+			if val.Timestamp.Before(time.Now()) {
+				feedback = append(feedback, val)
+			}
 		}
 		return nil
 	})
@@ -450,7 +452,7 @@ func (r *Redis) GetUserStream(batchSize int) (chan []User, chan error) {
 }
 
 // GetUserFeedback returns feedback of a user from Redis.
-func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error) {
+func (r *Redis) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	feedbackTypeSet := strset.New(feedbackTypes...)
@@ -461,7 +463,9 @@ func (r *Redis) GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedb
 			if err != nil {
 				return errors.Trace(err)
 			}
-			feedback = append(feedback, val)
+			if withFuture || val.Timestamp.Before(time.Now()) {
+				feedback = append(feedback, val)
+			}
 		}
 		return nil
 	})
@@ -495,14 +499,20 @@ func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
 // insertFeedback insert a feedback into Redis.
 // If insertUser set, a new user will be insert to user table.
 // If insertItem set, a new item will be insert to item table.
-func (r *Redis) insertFeedback(feedback Feedback, insertUser, insertItem bool) error {
+func (r *Redis) insertFeedback(feedback Feedback, insertUser, insertItem, overwrite bool) error {
 	var ctx = context.Background()
 	val, err := json.Marshal(feedback)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// insert feedback
-	err = r.client.Set(ctx, createFeedbackKey(feedback.FeedbackKey), val, 0).Err()
+	feedbackKey := createFeedbackKey(feedback.FeedbackKey)
+	if exists, err := r.client.Exists(ctx, feedbackKey).Result(); err != nil {
+		return errors.Trace(err)
+	} else if exists > 0 && !overwrite {
+		return nil
+	}
+	err = r.client.Set(ctx, feedbackKey, val, 0).Err()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -542,9 +552,9 @@ func (r *Redis) insertFeedback(feedback Feedback, insertUser, insertItem bool) e
 // BatchInsertFeedback insert a batch feedback into Redis.
 // If insertUser set, new users will be insert to user table.
 // If insertItem set, new items will be insert to item table.
-func (r *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error {
+func (r *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error {
 	for _, temp := range feedback {
-		if err := r.insertFeedback(temp, insertUser, insertItem); err != nil {
+		if err := r.insertFeedback(temp, insertUser, insertItem, overwrite); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -565,7 +575,9 @@ func (r *Redis) GetFeedback(_ string, _ int, timeLimit *time.Time, feedbackTypes
 			if timeLimit != nil && val.Timestamp.Unix() < timeLimit.Unix() {
 				return nil
 			}
-			feedback = append(feedback, val)
+			if val.Timestamp.Before(time.Now()) {
+				feedback = append(feedback, val)
+			}
 		}
 		return nil
 	})
@@ -591,10 +603,12 @@ func (r *Redis) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackT
 				if timeLimit != nil && val.Timestamp.Unix() < timeLimit.Unix() {
 					return nil
 				}
-				feedback = append(feedback, val)
-				if len(feedback) == batchSize {
-					feedbackChan <- feedback
-					feedback = make([]Feedback, 0, batchSize)
+				if val.Timestamp.Before(time.Now()) {
+					feedback = append(feedback, val)
+					if len(feedback) == batchSize {
+						feedbackChan <- feedback
+						feedback = make([]Feedback, 0, batchSize)
+					}
 				}
 			}
 			return nil

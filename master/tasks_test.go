@@ -61,7 +61,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	var err error
 	err = m.DataClient.BatchInsertItems(items)
 	assert.NoError(t, err)
-	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
+	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, "", 0, 0)
 	assert.NoError(t, err)
@@ -140,7 +140,7 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 	var err error
 	err = m.DataClient.BatchInsertUsers(users)
 	assert.NoError(t, err)
-	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true)
+	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, "", 0, 0)
 	assert.NoError(t, err)
@@ -247,7 +247,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 			})
 		}
 	}
-	err = m.DataClient.BatchInsertFeedback(feedbacks, false, false)
+	err = m.DataClient.BatchInsertFeedback(feedbacks, false, false, true)
 	assert.NoError(t, err)
 
 	// load dataset

@@ -96,27 +96,22 @@ func testScores(t *testing.T, db Database) {
 	totalItems, err = db.GetScores("list", "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, overwriteScores, totalItems)
-}
-
-func testList(t *testing.T, db Database) {
+	// test append
+	err = db.AppendScores("append", "0", scores...)
+	assert.NoError(t, err)
+	totalItems, err = db.GetScores("append", "0", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, scores, totalItems)
 	// append
-	items := []string{"0", "1", "2", "3", "4"}
-	err := db.AppendList("list", "0", items...)
+	err = db.AppendScores("append", "0", overwriteScores...)
 	assert.NoError(t, err)
-	totalItems, err := db.GetList("list", "0")
+	totalItems, err = db.GetScores("append", "0", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, items, totalItems)
-	// append
-	appendItems := []string{"10", "11", "12", "13", "14"}
-	err = db.AppendList("list", "0", appendItems...)
-	assert.NoError(t, err)
-	totalItems, err = db.GetList("list", "0")
-	assert.NoError(t, err)
-	assert.Equal(t, append(items, appendItems...), totalItems)
+	assert.Equal(t, append(scores, overwriteScores...), totalItems)
 	// clear
-	err = db.ClearList("list", "0")
+	err = db.ClearScores("append", "0")
 	assert.NoError(t, err)
-	totalItems, err = db.GetList("list", "0")
+	totalItems, err = db.GetScores("append", "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, totalItems)
 }

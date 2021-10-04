@@ -77,37 +77,28 @@ func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error)
 	return res, err
 }
 
-// ClearList clears a list of items in Redis.
-func (r *Redis) ClearList(prefix, name string) error {
+// ClearScores clears a list of scored items in Redis.
+func (r *Redis) ClearScores(prefix, name string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	return r.client.Del(ctx, key).Err()
 }
 
-// AppendList appends a list of scored items to Redis.
-func (r *Redis) AppendList(prefix, name string, items ...string) error {
+// AppendScores appends a list of scored items to Redis.
+func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	for _, item := range items {
-		err := r.client.RPush(ctx, key, item).Err()
+		data, err := json.Marshal(item)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = r.client.RPush(ctx, key, data).Err()
 		if err != nil {
 			return errors.Trace(err)
 		}
 	}
 	return nil
-}
-
-// GetList returns a list of scored items from Redis.
-func (r *Redis) GetList(prefix, name string) ([]string, error) {
-	var ctx = context.Background()
-	key := prefix + "/" + name
-	res := make([]string, 0)
-	data, err := r.client.LRange(ctx, key, 0, -1).Result()
-	if err != nil {
-		return nil, err
-	}
-	res = append(res, data...)
-	return res, err
 }
 
 // GetString returns a string from Redis.

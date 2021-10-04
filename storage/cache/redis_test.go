@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package cache
 
 import (
@@ -50,10 +51,4 @@ func TestRedis_Scores(t *testing.T) {
 	db := newMockRedis(t)
 	defer db.Close(t)
 	testScores(t, db.Database)
-}
-
-func TestRedis_List(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testList(t, db.Database)
 }
