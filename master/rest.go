@@ -373,7 +373,7 @@ type Feedback struct {
 func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataClient.GetUserFeedback(userId, feedbackType)
+	feedback, err := m.DataClient.GetUserFeedback(userId, false, feedbackType)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -833,7 +833,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	// insert to data store
 	err = m.DataClient.BatchInsertFeedback(feedbacks,
 		m.GorseConfig.Database.AutoInsertUser,
-		m.GorseConfig.Database.AutoInsertItem)
+		m.GorseConfig.Database.AutoInsertItem, true)
 	if err != nil {
 		server.InternalServerError(restful.NewResponse(response), err)
 		return

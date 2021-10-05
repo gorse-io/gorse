@@ -25,61 +25,56 @@ func (NoDatabase) Close() error {
 }
 
 // SetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetScores(prefix, name string, items []Scored) error {
+func (NoDatabase) SetScores(_, _ string, _ []Scored) error {
 	return ErrNoDatabase
 }
 
 // GetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetScores(prefix, name string, begin, end int) ([]Scored, error) {
+func (NoDatabase) GetScores(_, _ string, _, _ int) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
-// ClearList method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) ClearList(prefix, name string) error {
+// ClearScores method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) ClearScores(_, _ string) error {
 	return ErrNoDatabase
 }
 
-// AppendList method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AppendList(prefix, name string, items ...string) error {
+// AppendScores method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) AppendScores(_, _ string, _ ...Scored) error {
 	return ErrNoDatabase
-}
-
-// GetList method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetList(prefix, name string) ([]string, error) {
-	return nil, ErrNoDatabase
 }
 
 // GetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetString(prefix, name string) (string, error) {
+func (NoDatabase) GetString(_, _ string) (string, error) {
 	return "", ErrNoDatabase
 }
 
 // SetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetString(prefix, name, val string) error {
+func (NoDatabase) SetString(_, _, _ string) error {
 	return ErrNoDatabase
 }
 
 // GetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetInt(prefix, name string) (int, error) {
+func (NoDatabase) GetInt(_, _ string) (int, error) {
 	return 0, ErrNoDatabase
 }
 
 // SetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetInt(prefix, name string, val int) error {
+func (NoDatabase) SetInt(_, _ string, _ int) error {
 	return ErrNoDatabase
 }
 
 // GetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetTime(prefix, name string) (time.Time, error) {
+func (NoDatabase) GetTime(_, _ string) (time.Time, error) {
 	return time.Time{}, ErrNoDatabase
 }
 
 // SetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetTime(prefix, name string, val time.Time) error {
+func (NoDatabase) SetTime(_, _ string, _ time.Time) error {
 	return ErrNoDatabase
 }
 
 // IncrInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) IncrInt(prefix, name string) error {
+func (NoDatabase) IncrInt(_, _ string) error {
 	return ErrNoDatabase
 }

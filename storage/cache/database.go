@@ -80,9 +80,8 @@ type Database interface {
 	Close() error
 	SetScores(prefix, name string, items []Scored) error
 	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
-	ClearList(prefix, name string) error
-	AppendList(prefix, name string, items ...string) error
-	GetList(prefix, name string) ([]string, error)
+	ClearScores(prefix, name string) error
+	AppendScores(prefix, name string, items ...Scored) error
 	GetString(prefix, name string) (string, error)
 	SetString(prefix, name string, val string) error
 	GetTime(prefix, name string) (time.Time, error)

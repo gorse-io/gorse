@@ -491,7 +491,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			}
 			for _, user := range similarUsers {
 				// load historical feedback
-				feedbacks, err := w.dataClient.GetUserFeedback(user.Id, w.cfg.Database.PositiveFeedbackType...)
+				feedbacks, err := w.dataClient.GetUserFeedback(user.Id, false, w.cfg.Database.PositiveFeedbackType...)
 				if err != nil {
 					return err
 				}
@@ -647,7 +647,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 
 func loadUserHistoricalItems(database data.Database, userId string, feedbackTypes ...string) ([]string, error) {
 	items := make([]string, 0)
-	feedbacks, err := database.GetUserFeedback(userId, feedbackTypes...)
+	feedbacks, err := database.GetUserFeedback(userId, false, feedbackTypes...)
 	if err != nil {
 		return nil, err
 	}
@@ -667,22 +667,22 @@ func (w *Worker) refreshCache(userId string) error {
 		return errors.Trace(err)
 	}
 	// clear cache
-	err = w.cacheClient.ClearList(cache.IgnoreItems, userId)
+	err = w.cacheClient.ClearScores(cache.IgnoreItems, userId)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// load cache
-	feedback, err := w.dataClient.GetUserFeedback(userId)
+	feedback, err := w.dataClient.GetUserFeedback(userId, true)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	var items []string
+	var items []cache.Scored
 	for _, v := range feedback {
 		if v.Timestamp.Unix() > timeLimit.Unix() {
-			items = append(items, v.ItemId)
+			items = append(items, cache.Scored{Id: v.ItemId, Score: float32(v.Timestamp.Unix())})
 		}
 	}
-	err = w.cacheClient.AppendList(cache.IgnoreItems, userId, items...)
+	err = w.cacheClient.AppendScores(cache.IgnoreItems, userId, items...)
 	if err != nil {
 		return errors.Trace(err)
 	}

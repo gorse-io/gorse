@@ -42,10 +42,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetScores("", "", 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.AppendList("", "")
+	err = database.AppendScores("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.ClearList("", "")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.GetList("", "")
+	err = database.ClearScores("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

@@ -166,8 +166,14 @@ func (s *RestServer) CreateWebService() {
 		Writes(Success{}))
 
 	// Insert feedback
-	ws.Route(ws.POST("/feedback").To(s.insertFeedback).
-		Doc("Insert multiple feedback.").
+	ws.Route(ws.POST("/feedback").To(s.insertFeedback(false)).
+		Doc("Insert multiple feedback. Ignore insertion if feedback exists.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Reads([]data.Feedback{}).
+		Returns(200, "OK", Success{}))
+	ws.Route(ws.PUT("/feedback").To(s.insertFeedback(true)).
+		Doc("Insert multiple feedback. Existed feedback would be overwritten.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Reads([]data.Feedback{}).
@@ -330,7 +336,8 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Param(ws.QueryParameter("write-back", "write recommendation back to feedback").DataType("string")).
+		Param(ws.QueryParameter("write-back-type", "type of write back feedback").DataType("string")).
+		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback in minutes").DataType("int")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Returns(200, "OK", []string{}).
 		Writes([]string{}))
@@ -557,12 +564,14 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 		// read ignore items
 		loadCachedReadStart := time.Now()
-		ignoreItems, err := s.CacheClient.GetList(cache.IgnoreItems, userId)
+		ignoreItems, err := s.CacheClient.GetScores(cache.IgnoreItems, userId, 0, -1)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		for _, item := range ignoreItems {
-			excludeSet.Add(item)
+			if item.Score <= float32(time.Now().Unix()) {
+				excludeSet.Add(item.Id)
+			}
 		}
 		loadFinalRecTime = time.Since(loadCachedReadStart)
 		// remove ignore items
@@ -608,7 +617,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 	var userFeedback []data.Feedback
 	if len(results) < n && recommenderMask-CTRRecommender > 0 {
 		start := time.Now()
-		userFeedback, err = s.DataClient.GetUserFeedback(userId)
+		userFeedback, err = s.DataClient.GetUserFeedback(userId, false)
 		if err != nil {
 			return nil, err
 		}
@@ -665,7 +674,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, s.GorseConfig.Database.PositiveFeedbackType...)
+			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, false, s.GorseConfig.Database.PositiveFeedbackType...)
 			if err != nil {
 				return nil, err
 			}
@@ -764,7 +773,12 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		BadRequest(response, err)
 		return
 	}
-	writeBackFeedback := request.QueryParameter("write-back")
+	writeBackFeedback := request.QueryParameter("write-back-type")
+	writeBackDelay, err := ParseInt(request, "write-back-delay", 0)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
 	// online recommendation
 	recommenders := []Recommender{CTRRecommender}
 	for _, recommender := range s.GorseConfig.Recommend.FallbackRecommend {
@@ -799,9 +813,9 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 					ItemId:       itemId,
 					FeedbackType: writeBackFeedback,
 				},
-				Timestamp: time.Now(),
+				Timestamp: time.Now().Add(time.Minute * time.Duration(writeBackDelay)),
 			}
-			err = s.DataClient.BatchInsertFeedback([]data.Feedback{feedback}, false, false)
+			err = s.DataClient.BatchInsertFeedback([]data.Feedback{feedback}, false, false, false)
 			if err != nil {
 				InternalServerError(response, err)
 				return
@@ -940,7 +954,7 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(userId, feedbackType)
+	feedback, err := s.DataClient.GetUserFeedback(userId, false, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -955,7 +969,7 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 		return
 	}
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(userId)
+	feedback, err := s.DataClient.GetUserFeedback(userId, false)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1098,62 +1112,64 @@ type Feedback struct {
 	Comment   string
 }
 
-func (s *RestServer) insertFeedback(request *restful.Request, response *restful.Response) {
-	// authorize
-	if !s.auth(request, response) {
-		return
-	}
-	// add ratings
-	feedbackLiterTime := new([]Feedback)
-	if err := request.ReadEntity(feedbackLiterTime); err != nil {
-		BadRequest(response, err)
-		return
-	}
-	// parse datetime
-	var err error
-	feedback := make([]data.Feedback, len(*feedbackLiterTime))
-	users := set.NewStringSet()
-	items := set.NewStringSet()
-	for i := range feedback {
-		users.Add((*feedbackLiterTime)[i].UserId)
-		items.Add((*feedbackLiterTime)[i].ItemId)
-		feedback[i].FeedbackKey = (*feedbackLiterTime)[i].FeedbackKey
-		feedback[i].Comment = (*feedbackLiterTime)[i].Comment
-		feedback[i].Timestamp, err = dateparse.ParseAny((*feedbackLiterTime)[i].Timestamp)
-		if err != nil {
+func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Request, response *restful.Response) {
+	return func(request *restful.Request, response *restful.Response) {
+		// authorize
+		if !s.auth(request, response) {
+			return
+		}
+		// add ratings
+		feedbackLiterTime := new([]Feedback)
+		if err := request.ReadEntity(feedbackLiterTime); err != nil {
 			BadRequest(response, err)
 			return
 		}
-	}
-	// insert feedback to data store
-	err = s.DataClient.BatchInsertFeedback(feedback,
-		s.GorseConfig.Database.AutoInsertUser,
-		s.GorseConfig.Database.AutoInsertItem)
-	if err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// insert feedback to cache store
-	if err = s.InsertFeedbackToCache(feedback); err != nil {
-		InternalServerError(response, err)
-		return
-	}
+		// parse datetime
+		var err error
+		feedback := make([]data.Feedback, len(*feedbackLiterTime))
+		users := set.NewStringSet()
+		items := set.NewStringSet()
+		for i := range feedback {
+			users.Add((*feedbackLiterTime)[i].UserId)
+			items.Add((*feedbackLiterTime)[i].ItemId)
+			feedback[i].FeedbackKey = (*feedbackLiterTime)[i].FeedbackKey
+			feedback[i].Comment = (*feedbackLiterTime)[i].Comment
+			feedback[i].Timestamp, err = dateparse.ParseAny((*feedbackLiterTime)[i].Timestamp)
+			if err != nil {
+				BadRequest(response, err)
+				return
+			}
+		}
+		// insert feedback to data store
+		err = s.DataClient.BatchInsertFeedback(feedback,
+			s.GorseConfig.Database.AutoInsertUser,
+			s.GorseConfig.Database.AutoInsertItem, overwrite)
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		// insert feedback to cache store
+		if err = s.InsertFeedbackToCache(feedback); err != nil {
+			InternalServerError(response, err)
+			return
+		}
 
-	for _, userId := range users.List() {
-		err = s.CacheClient.SetTime(cache.LastModifyUserTime, userId, time.Now())
-		if err != nil {
-			InternalServerError(response, err)
-			return
+		for _, userId := range users.List() {
+			err = s.CacheClient.SetTime(cache.LastModifyUserTime, userId, time.Now())
+			if err != nil {
+				InternalServerError(response, err)
+				return
+			}
 		}
-	}
-	for _, itemId := range items.List() {
-		err = s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now())
-		if err != nil {
-			InternalServerError(response, err)
-			return
+		for _, itemId := range items.List() {
+			err = s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now())
+			if err != nil {
+				InternalServerError(response, err)
+				return
+			}
 		}
+		Ok(response, Success{RowAffected: len(feedback)})
 	}
-	Ok(response, Success{RowAffected: len(feedback)})
 }
 
 // FeedbackIterator is the iterator for feedback.
@@ -1349,7 +1365,7 @@ func (s *RestServer) auth(request *restful.Request, response *restful.Response) 
 // InsertFeedbackToCache inserts feedback to cache.
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 	for _, v := range feedback {
-		err := s.CacheClient.AppendList(cache.IgnoreItems, v.UserId, v.ItemId)
+		err := s.CacheClient.AppendScores(cache.IgnoreItems, v.UserId, cache.Scored{v.ItemId, float32(v.Timestamp.Unix())})
 		if err != nil {
 			return errors.Trace(err)
 		}

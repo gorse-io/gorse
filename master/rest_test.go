@@ -136,7 +136,7 @@ func TestMaster_ExportFeedback(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
 	}
-	err := s.DataClient.BatchInsertFeedback(feedbacks, true, true)
+	err := s.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
@@ -538,7 +538,7 @@ func TestServer_Feedback(t *testing.T) {
 	for _, v := range feedback {
 		err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
 			FeedbackKey: data.FeedbackKey{FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId},
-		}}, true, true)
+		}}, true, true, true)
 		assert.NoError(t, err)
 	}
 	// get feedback

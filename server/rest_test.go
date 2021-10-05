@@ -340,6 +340,40 @@ func TestServer_Feedback(t *testing.T) {
 		Status(http.StatusOK).
 		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z","Comment":""}]`).
 		End()
+	// test overwrite
+	apitest.New().
+		Handler(s.handler).
+		Put("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON([]data.Feedback{{
+			FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"},
+			Comment:     "override",
+		}}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
+	ret, err := s.DataClient.GetUserFeedback("0", false, "click")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(ret))
+	assert.Equal(t, "override", ret[0].Comment)
+	// test not overwrite
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON([]data.Feedback{{
+			FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"},
+			Comment:     "not_override",
+		}}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
+	ret, err = s.DataClient.GetUserFeedback("0", false, "click")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(ret))
+	assert.Equal(t, "override", ret[0].Comment)
 }
 
 func TestServer_List(t *testing.T) {
@@ -525,6 +559,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Now().Add(time.Hour)},
 	}
 	apitest.New().
 		Handler(s.handler).
@@ -533,7 +568,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`{"RowAffected": 2}`).
+		Body(`{"RowAffected": 3}`).
 		End()
 	apitest.New().
 		Handler(s.handler).
@@ -551,12 +586,25 @@ func TestServer_GetRecommends(t *testing.T) {
 		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
-			"n":          "3",
-			"write-back": "read",
+			"n":               "3",
+			"write-back-type": "read",
 		}).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"1", "3", "5"})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n":                "3",
+			"write-back-type":  "read",
+			"write-back-delay": "10",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(s.handler).
@@ -668,17 +716,17 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 	assert.NoError(t, err)
 	err = s.DataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "11"}},
-	}, true, true)
+	}, true, true, true)
 	assert.NoError(t, err)
 	err = s.DataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "12"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "48"}},
-	}, true, true)
+	}, true, true, true)
 	assert.NoError(t, err)
 	err = s.DataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "13"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
-	}, true, true)
+	}, true, true, true)
 	assert.NoError(t, err)
 	// test fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"user_based"}

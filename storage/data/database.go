@@ -85,10 +85,10 @@ type Database interface {
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
 	GetUsers(cursor string, n int) (string, []User, error)
-	GetUserFeedback(userId string, feedbackTypes ...string) ([]Feedback, error)
+	GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error)
 	GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
 	DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error)
-	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem bool) error
+	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error
 	GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error)
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)
