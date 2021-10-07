@@ -15,6 +15,7 @@ package ranking
 
 import (
 	"github.com/stretchr/testify/mock"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,14 @@ import (
 
 type mockMatrixFactorizationForSearch struct {
 	model.BaseModel
+}
+
+func (m *mockMatrixFactorizationForSearch) Marshal(_ io.Writer) error {
+	panic("implement me")
+}
+
+func (m *mockMatrixFactorizationForSearch) Unmarshal(_ io.Reader) error {
+	panic("implement me")
 }
 
 func (m *mockMatrixFactorizationForSearch) Invalid() bool {

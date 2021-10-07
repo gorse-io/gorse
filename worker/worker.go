@@ -15,9 +15,7 @@
 package worker
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
@@ -65,7 +63,7 @@ type Worker struct {
 	// user index
 	latestUserIndexVersion  int64
 	currentUserIndexVersion int64
-	userIndex               *base.MapIndex
+	userIndex               base.Index
 
 	// ranking model
 	latestRankingModelVersion  int64
@@ -197,20 +195,19 @@ func (w *Worker) Pull() {
 		// pull user index
 		if w.latestUserIndexVersion != w.currentUserIndexVersion {
 			base.Logger().Info("start pull user index")
-			if userIndexResponse, err := w.masterClient.GetUserIndex(context.Background(),
-				&protocol.NodeInfo{NodeType: protocol.NodeType_WorkerNode, NodeName: w.workerName},
+			if userIndexReceiver, err := w.masterClient.GetUserIndex(context.Background(),
+				&protocol.VersionInfo{Version: w.latestUserIndexVersion},
 				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				base.Logger().Error("failed to pull user index", zap.Error(err))
 			} else {
 				// encode user index
-				var userIndex base.MapIndex
-				reader := bytes.NewReader(userIndexResponse.UserIndex)
-				decoder := gob.NewDecoder(reader)
-				if err = decoder.Decode(&userIndex); err != nil {
-					base.Logger().Error("failed to decode user index", zap.Error(err))
+				var userIndex base.Index
+				userIndex, err = protocol.UnmarshalIndex(userIndexReceiver)
+				if err != nil {
+					base.Logger().Error("fail to unmarshal user index", zap.Error(err))
 				} else {
-					w.userIndex = &userIndex
-					w.currentUserIndexVersion = userIndexResponse.Version
+					w.userIndex = userIndex
+					w.currentUserIndexVersion = w.latestUserIndexVersion
 					base.Logger().Info("synced user index",
 						zap.String("version", base.Hex(w.currentUserIndexVersion)))
 					pulled = true
@@ -221,18 +218,18 @@ func (w *Worker) Pull() {
 		// pull ranking model
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
 			base.Logger().Info("start pull ranking model")
-			if rankingResponse, err := w.masterClient.GetRankingModel(context.Background(),
-				&protocol.NodeInfo{
-					NodeType: protocol.NodeType_WorkerNode,
-					NodeName: w.workerName,
-				}, grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
+			if rankingModelReceiver, err := w.masterClient.GetRankingModel(context.Background(),
+				&protocol.VersionInfo{Version: w.latestRankingModelVersion},
+				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				base.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
-				w.rankingModel, err = ranking.DecodeModel(rankingResponse.Model)
+				var rankingModel ranking.MatrixFactorization
+				rankingModel, err = protocol.UnmarshalRankingModel(rankingModelReceiver)
 				if err != nil {
-					base.Logger().Error("failed to decode ranking model", zap.Error(err))
+					base.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
-					w.currentRankingModelVersion = rankingResponse.Version
+					w.rankingModel = rankingModel
+					w.currentRankingModelVersion = w.latestRankingModelVersion
 					base.Logger().Info("synced ranking model",
 						zap.String("version", base.Hex(w.currentRankingModelVersion)))
 					pulled = true
@@ -243,18 +240,18 @@ func (w *Worker) Pull() {
 		// pull click model
 		if w.latestClickModelVersion != w.currentClickModelVersion {
 			base.Logger().Info("start pull click model")
-			if clickResponse, err := w.masterClient.GetClickModel(context.Background(),
-				&protocol.NodeInfo{
-					NodeType: protocol.NodeType_WorkerNode,
-					NodeName: w.workerName,
-				}, grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
+			if clickModelReceiver, err := w.masterClient.GetClickModel(context.Background(),
+				&protocol.VersionInfo{Version: w.latestClickModelVersion},
+				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				base.Logger().Error("failed to pull click model", zap.Error(err))
 			} else {
-				w.clickModel, err = click.DecodeModel(clickResponse.Model)
+				var clickModel click.FactorizationMachine
+				clickModel, err = protocol.UnmarshalClickModel(clickModelReceiver)
 				if err != nil {
-					base.Logger().Error("failed to decode click model", zap.Error(err))
+					base.Logger().Error("failed to unmarshal click model", zap.Error(err))
 				} else {
-					w.currentClickModelVersion = clickResponse.Version
+					w.clickModel = clickModel
+					w.currentClickModelVersion = w.latestClickModelVersion
 					base.Logger().Info("synced click model",
 						zap.String("version", base.Hex(w.currentClickModelVersion)))
 					pulled = true

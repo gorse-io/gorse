@@ -15,6 +15,7 @@ package click
 
 import (
 	"github.com/stretchr/testify/mock"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,10 @@ func NewMapIndexDataset() *Dataset {
 
 type mockFactorizationMachineForSearch struct {
 	model.BaseModel
+}
+
+func (m *mockFactorizationMachineForSearch) Marshal(_ io.Writer) error {
+	panic("implement me")
 }
 
 func (m *mockFactorizationMachineForSearch) Invalid() bool {

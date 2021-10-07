@@ -15,17 +15,16 @@
 package master
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/json"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/peer"
+	"io"
 	"strings"
 )
 
@@ -122,66 +121,144 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 }
 
 // GetRankingModel returns latest ranking model.
-func (m *Master) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
 	m.rankingModelMutex.RLock()
 	defer m.rankingModelMutex.RUnlock()
 	// skip empty model
 	if m.rankingModel == nil || m.rankingModel.Invalid() {
-		return &protocol.Model{Version: 0}, nil
+		return errors.New("no valid model found")
+	}
+	// check model version
+	if m.rankingModelVersion != version.Version {
+		return errors.New("model version mismatch")
 	}
 	// encode model
-	modelData, err := ranking.EncodeModel(m.rankingModel)
-	if err != nil {
-		return nil, err
+	reader, writer := io.Pipe()
+	var encoderError error
+	go func() {
+		defer func(writer *io.PipeWriter) {
+			err := writer.Close()
+			if err != nil {
+				base.Logger().Error("fail to close pipe", zap.Error(err))
+			}
+		}(writer)
+		err := ranking.MarshalModel(writer, m.rankingModel)
+		if err != nil {
+			base.Logger().Error("fail to marshal ranking model", zap.Error(err))
+			encoderError = err
+			return
+		}
+	}()
+	// send model
+	for {
+		buf := make([]byte, batchSize)
+		n, err := reader.Read(buf)
+		if err == io.EOF {
+			base.Logger().Debug("complete sending ranking model")
+			break
+		} else if err != nil {
+			return err
+		}
+		err = sender.Send(&protocol.Fragment{Data: buf[:n]})
+		if err != nil {
+			return err
+		}
 	}
-	return &protocol.Model{
-		Name:    m.rankingModelName,
-		Version: m.rankingModelVersion,
-		Model:   modelData,
-	}, nil
+	return encoderError
 }
 
 // GetClickModel returns latest click model.
-func (m *Master) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
 	m.clickModelMutex.RLock()
 	defer m.clickModelMutex.RUnlock()
 	// skip empty model
 	if m.clickModel == nil || m.clickModel.Invalid() {
-		return &protocol.Model{Version: 0}, nil
+		return errors.New("no valid model found")
+	}
+	// check empty model
+	if m.clickModelVersion != version.Version {
+		return errors.New("model version mismatch")
 	}
 	// encode model
-	modelData, err := click.EncodeModel(m.clickModel)
-	if err != nil {
-		return nil, err
+	reader, writer := io.Pipe()
+	var encoderError error
+	go func() {
+		defer func(writer *io.PipeWriter) {
+			err := writer.Close()
+			if err != nil {
+				base.Logger().Error("fail to close pipe", zap.Error(err))
+			}
+		}(writer)
+		err := click.MarshalModel(writer, m.clickModel)
+		if err != nil {
+			base.Logger().Error("fail to marshal click model", zap.Error(err))
+			encoderError = err
+			return
+		}
+	}()
+	// send model
+	for {
+		buf := make([]byte, batchSize)
+		n, err := reader.Read(buf)
+		if err == io.EOF {
+			base.Logger().Debug("complete sending click model")
+			break
+		} else if err != nil {
+			return err
+		}
+		err = sender.Send(&protocol.Fragment{Data: buf[:n]})
+		if err != nil {
+			return err
+		}
 	}
-	return &protocol.Model{
-		Version: m.clickModelVersion,
-		Model:   modelData,
-	}, nil
+	return encoderError
 }
 
 // GetUserIndex returns latest user index.
-func (m *Master) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.UserIndex, error) {
+func (m *Master) GetUserIndex(version *protocol.VersionInfo, sender protocol.Master_GetUserIndexServer) error {
 	m.userIndexMutex.RLock()
 	defer m.userIndexMutex.RUnlock()
 	// skip empty model
 	if m.userIndex == nil {
-		return &protocol.UserIndex{Version: 0}, nil
+		return errors.New("no valid index found")
 	}
-	// encode index
-	buf := bytes.NewBuffer(nil)
-	writer := bufio.NewWriter(buf)
-	encoder := gob.NewEncoder(writer)
-	if err := encoder.Encode(m.userIndex); err != nil {
-		return nil, err
+	// check empty model
+	if m.userIndexVersion != version.Version {
+		return errors.New("index version mismatch")
 	}
-	if err := writer.Flush(); err != nil {
-		return nil, err
+	// encode model
+	reader, writer := io.Pipe()
+	var encoderError error
+	go func() {
+		defer func(writer *io.PipeWriter) {
+			err := writer.Close()
+			if err != nil {
+				base.Logger().Error("fail to close pipe", zap.Error(err))
+			}
+		}(writer)
+		err := base.MarshalIndex(writer, m.userIndex)
+		if err != nil {
+			base.Logger().Error("fail to marshal index", zap.Error(err))
+			encoderError = err
+			return
+		}
+	}()
+	// send model
+	for {
+		buf := make([]byte, batchSize)
+		n, err := reader.Read(buf)
+		if err == io.EOF {
+			base.Logger().Debug("complete sending user index")
+			break
+		} else if err != nil {
+			return err
+		}
+		err = sender.Send(&protocol.Fragment{Data: buf[:n]})
+		if err != nil {
+			return err
+		}
 	}
-	return &protocol.UserIndex{
-		Version:   m.userIndexVersion,
-		UserIndex: buf.Bytes(),
-	}, nil
+	return encoderError
 }
 
 // nodeUp handles node information inserted events.
@@ -209,21 +286,21 @@ func (m *Master) nodeDown(key string, value interface{}) {
 }
 
 func (m *Master) StartTask(
-	ctx context.Context,
+	_ context.Context,
 	in *protocol.StartTaskRequest) (*protocol.StartTaskResponse, error) {
 	m.taskMonitor.Start(in.Name, int(in.Total))
 	return &protocol.StartTaskResponse{}, nil
 }
 
 func (m *Master) UpdateTask(
-	ctx context.Context,
+	_ context.Context,
 	in *protocol.UpdateTaskRequest) (*protocol.UpdateTaskResponse, error) {
 	m.taskMonitor.Update(in.Name, int(in.Done))
 	return &protocol.UpdateTaskResponse{}, nil
 }
 
 func (m *Master) FinishTask(
-	ctx context.Context,
+	_ context.Context,
 	in *protocol.FinishTaskRequest) (*protocol.FinishTaskResponse, error) {
 	m.taskMonitor.Finish(in.Name)
 	return &protocol.FinishTaskResponse{}, nil

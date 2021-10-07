@@ -14,10 +14,8 @@
 package worker
 
 import (
-	"bufio"
 	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
@@ -336,9 +334,9 @@ type mockMaster struct {
 	cacheStore   *miniredis.Miniredis
 	dataStore    *miniredis.Miniredis
 	meta         *protocol.Meta
-	rankingModel *protocol.Model
-	clickModel   *protocol.Model
-	userIndex    *protocol.UserIndex
+	rankingModel []byte
+	clickModel   []byte
+	userIndex    []byte
 }
 
 func newMockMaster(t *testing.T) *mockMaster {
@@ -354,32 +352,22 @@ func newMockMaster(t *testing.T) *mockMaster {
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
 	fm.Fit(train, test, nil)
-	clickModelPB := &protocol.Model{}
-	clickModelPB.Model, err = click.EncodeModel(fm)
+	clickModelBuffer := bytes.NewBuffer(nil)
+	err = click.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
-	clickModelPB.Version = 1
 
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
 	bpr.Fit(trainSet, testSet, nil)
-	rankingModelPB := &protocol.Model{}
-	rankingModelPB.Model, err = ranking.EncodeModel(bpr)
+	rankingModelBuffer := bytes.NewBuffer(nil)
+	err = ranking.MarshalModel(rankingModelBuffer, bpr)
 	assert.NoError(t, err)
-	rankingModelPB.Name = "bpr"
-	rankingModelPB.Version = 2
 
 	// create user index
-	buf := bytes.NewBuffer(nil)
-	writer := bufio.NewWriter(buf)
-	encoder := gob.NewEncoder(writer)
-	err = encoder.Encode(base.NewMapIndex())
+	userIndexBuffer := bytes.NewBuffer(nil)
+	err = base.MarshalIndex(userIndexBuffer, base.NewMapIndex())
 	assert.NoError(t, err)
-	err = writer.Flush()
-	assert.NoError(t, err)
-	userIndexPB := &protocol.UserIndex{}
-	userIndexPB.Version = 3
-	userIndexPB.UserIndex = buf.Bytes()
 
 	return &mockMaster{
 		addr: make(chan string),
@@ -391,9 +379,9 @@ func newMockMaster(t *testing.T) *mockMaster {
 		},
 		cacheStore:   cacheStore,
 		dataStore:    dataStore,
-		userIndex:    userIndexPB,
-		clickModel:   clickModelPB,
-		rankingModel: rankingModelPB,
+		userIndex:    userIndexBuffer.Bytes(),
+		clickModel:   clickModelBuffer.Bytes(),
+		rankingModel: rankingModelBuffer.Bytes(),
 	}
 }
 
@@ -401,16 +389,16 @@ func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol
 	return m.meta, nil
 }
 
-func (m *mockMaster) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
-	return m.rankingModel, nil
+func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
+	return sender.Send(&protocol.Fragment{Data: m.rankingModel})
 }
 
-func (m *mockMaster) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
-	return m.clickModel, nil
+func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
+	return sender.Send(&protocol.Fragment{Data: m.clickModel})
 }
 
-func (m *mockMaster) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.UserIndex, error) {
-	return m.userIndex, nil
+func (m *mockMaster) GetUserIndex(_ *protocol.VersionInfo, sender protocol.Master_GetUserIndexServer) error {
+	return sender.Send(&protocol.Fragment{Data: m.userIndex})
 }
 
 func (m *mockMaster) Start(t *testing.T) {

@@ -15,7 +15,7 @@
 package master
 
 import (
-	"encoding/gob"
+	"encoding/binary"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -54,61 +54,57 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	if err != nil {
 		return state, errors.Trace(err)
 	}
-	defer f.Close()
-	decoder := gob.NewDecoder(f)
+	defer func(f *os.File) {
+		err = f.Close()
+		if err != nil {
+			base.Logger().Error("fail to close file", zap.Error(err))
+		}
+	}(f)
 	// 1. ranking model name
-	err = decoder.Decode(&state.RankingModelName)
+	state.RankingModelName, err = base.ReadString(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 2. ranking model version
-	err = decoder.Decode(&state.RankingModelVersion)
+	err = binary.Read(f, binary.LittleEndian, &state.RankingModelVersion)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 3. ranking model
-	state.RankingModel, err = ranking.NewModel(state.RankingModelName, nil)
+	state.RankingModel, err = ranking.UnmarshalModel(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
-	err = decoder.Decode(state.RankingModel)
-	if err != nil {
-		return state, errors.Trace(err)
-	}
-	state.RankingModel.SetParams(state.RankingModel.GetParams())
 	// 4. ranking model score
-	err = decoder.Decode(&state.RankingModelScore)
+	err = base.ReadGob(f, &state.RankingModelScore)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 5. user index version
-	err = decoder.Decode(&state.UserIndexVersion)
+	err = binary.Read(f, binary.LittleEndian, &state.UserIndexVersion)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 6. user index
-	state.UserIndex = base.NewMapIndex()
-	err = decoder.Decode(state.UserIndex)
+	state.UserIndex, err = base.UnmarshalIndex(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 7. click model version
-	err = decoder.Decode(&state.ClickModelVersion)
+	err = binary.Read(f, binary.LittleEndian, &state.ClickModelVersion)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 8. click model score
-	err = decoder.Decode(&state.ClickModelScore)
+	err = base.ReadGob(f, &state.ClickModelScore)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 9. click model
-	state.ClickModel = click.NewFM(click.FMClassification, nil)
-	err = decoder.Decode(state.ClickModel)
+	state.ClickModel, err = click.UnmarshalModel(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
-	state.ClickModel.SetParams(state.ClickModel.GetParams())
 	return state, nil
 }
 
@@ -127,50 +123,54 @@ func (c *LocalCache) WriteLocalCache() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	defer f.Close()
-	encoder := gob.NewEncoder(f)
+	defer func(f *os.File) {
+		err = f.Close()
+		if err != nil {
+			base.Logger().Error("fail to close file", zap.Error(err))
+		}
+	}(f)
 	// 1. ranking model name
-	err = encoder.Encode(c.RankingModelName)
+	err = base.WriteString(f, c.RankingModelName)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 2. ranking model version
-	err = encoder.Encode(c.RankingModelVersion)
+	err = binary.Write(f, binary.LittleEndian, c.RankingModelVersion)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 3. ranking model
-	err = encoder.Encode(c.RankingModel)
+	err = ranking.MarshalModel(f, c.RankingModel)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 4. ranking model score
-	err = encoder.Encode(c.RankingModelScore)
+	err = base.WriteGob(f, c.RankingModelScore)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 5. user index version
-	err = encoder.Encode(c.UserIndexVersion)
+	err = binary.Write(f, binary.LittleEndian, c.UserIndexVersion)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 6. user index
-	err = encoder.Encode(c.UserIndex)
+	err = base.MarshalIndex(f, c.UserIndex)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 7. click model version
-	err = encoder.Encode(c.ClickModelVersion)
+	err = binary.Write(f, binary.LittleEndian, c.ClickModelVersion)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 8. click model score
-	err = encoder.Encode(c.ClickModelScore)
+	err = base.WriteGob(f, c.ClickModelScore)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 9. click model
-	err = encoder.Encode(c.ClickModel)
+	err = click.MarshalModel(f, c.ClickModel)
 	if err != nil {
 		return errors.Trace(err)
 	}

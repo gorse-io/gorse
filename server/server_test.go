@@ -50,19 +50,19 @@ func newMockMaster(t *testing.T) *mockMaster {
 	}
 }
 
-func (m *mockMaster) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*protocol.Meta, error) {
+func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol.Meta, error) {
 	return m.meta, nil
 }
 
-func (m *mockMaster) GetRankingModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, _ protocol.Master_GetRankingModelServer) error {
 	panic("not implement")
 }
 
-func (m *mockMaster) GetClickModel(context.Context, *protocol.NodeInfo) (*protocol.Model, error) {
+func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, _ protocol.Master_GetClickModelServer) error {
 	panic("not implement")
 }
 
-func (m *mockMaster) GetUserIndex(context.Context, *protocol.NodeInfo) (*protocol.UserIndex, error) {
+func (m *mockMaster) GetUserIndex(_ *protocol.VersionInfo, _ protocol.Master_GetUserIndexServer) error {
 	panic("not implement")
 }
 

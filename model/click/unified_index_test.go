@@ -14,6 +14,7 @@
 package click
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -77,6 +78,13 @@ func TestUnifiedMapIndex(t *testing.T) {
 		assert.Equal(t, numUsers+numItems+numUserLabels+numItemLabels+i, ctxLabelIndex)
 		assert.Equal(t, fmt.Sprintf("ctx_label%v", i), ctxLabels[i])
 	}
+	// Encode and decode
+	buf := bytes.NewBuffer(nil)
+	err := MarshalIndex(buf, index)
+	assert.NoError(t, err)
+	indexCopy, err := UnmarshalIndex(buf)
+	assert.NoError(t, err)
+	assert.Equal(t, index, indexCopy)
 }
 
 func TestUnifiedDirectIndex(t *testing.T) {
@@ -102,4 +110,11 @@ func TestUnifiedDirectIndex(t *testing.T) {
 	assert.Equal(t, int32(3), index.EncodeItemLabel("3"))
 	assert.Equal(t, int32(4), index.EncodeUserLabel("4"))
 	assert.Equal(t, int32(5), index.EncodeContextLabel("5"))
+	// Encode and decode
+	buf := bytes.NewBuffer(nil)
+	err := MarshalIndex(buf, index)
+	assert.NoError(t, err)
+	indexCopy, err := UnmarshalIndex(buf)
+	assert.NoError(t, err)
+	assert.Equal(t, index, indexCopy)
 }

@@ -11,6 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
+// Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
 // MasterClient is the client API for Master service.
@@ -20,9 +21,9 @@ type MasterClient interface {
 	// meta distribute
 	GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Meta, error)
 	// data distribute
-	GetUserIndex(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*UserIndex, error)
-	GetRankingModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
-	GetClickModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error)
+	GetUserIndex(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetUserIndexClient, error)
+	GetRankingModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetRankingModelClient, error)
+	GetClickModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetClickModelClient, error)
 	// task management
 	StartTask(ctx context.Context, in *StartTaskRequest, opts ...grpc.CallOption) (*StartTaskResponse, error)
 	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*UpdateTaskResponse, error)
@@ -46,31 +47,100 @@ func (c *masterClient) GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.C
 	return out, nil
 }
 
-func (c *masterClient) GetUserIndex(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*UserIndex, error) {
-	out := new(UserIndex)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetUserIndex", in, out, opts...)
+func (c *masterClient) GetUserIndex(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetUserIndexClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[0], "/protocol.Master/GetUserIndex", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &masterGetUserIndexClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
 
-func (c *masterClient) GetRankingModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
-	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetRankingModel", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+type Master_GetUserIndexClient interface {
+	Recv() (*Fragment, error)
+	grpc.ClientStream
 }
 
-func (c *masterClient) GetClickModel(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Model, error) {
-	out := new(Model)
-	err := c.cc.Invoke(ctx, "/protocol.Master/GetClickModel", in, out, opts...)
+type masterGetUserIndexClient struct {
+	grpc.ClientStream
+}
+
+func (x *masterGetUserIndexClient) Recv() (*Fragment, error) {
+	m := new(Fragment)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *masterClient) GetRankingModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetRankingModelClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[1], "/protocol.Master/GetRankingModel", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &masterGetRankingModelClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Master_GetRankingModelClient interface {
+	Recv() (*Fragment, error)
+	grpc.ClientStream
+}
+
+type masterGetRankingModelClient struct {
+	grpc.ClientStream
+}
+
+func (x *masterGetRankingModelClient) Recv() (*Fragment, error) {
+	m := new(Fragment)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *masterClient) GetClickModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetClickModelClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[2], "/protocol.Master/GetClickModel", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &masterGetClickModelClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Master_GetClickModelClient interface {
+	Recv() (*Fragment, error)
+	grpc.ClientStream
+}
+
+type masterGetClickModelClient struct {
+	grpc.ClientStream
+}
+
+func (x *masterGetClickModelClient) Recv() (*Fragment, error) {
+	m := new(Fragment)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *masterClient) StartTask(ctx context.Context, in *StartTaskRequest, opts ...grpc.CallOption) (*StartTaskResponse, error) {
@@ -107,9 +177,9 @@ type MasterServer interface {
 	// meta distribute
 	GetMeta(context.Context, *NodeInfo) (*Meta, error)
 	// data distribute
-	GetUserIndex(context.Context, *NodeInfo) (*UserIndex, error)
-	GetRankingModel(context.Context, *NodeInfo) (*Model, error)
-	GetClickModel(context.Context, *NodeInfo) (*Model, error)
+	GetUserIndex(*VersionInfo, Master_GetUserIndexServer) error
+	GetRankingModel(*VersionInfo, Master_GetRankingModelServer) error
+	GetClickModel(*VersionInfo, Master_GetClickModelServer) error
 	// task management
 	StartTask(context.Context, *StartTaskRequest) (*StartTaskResponse, error)
 	UpdateTask(context.Context, *UpdateTaskRequest) (*UpdateTaskResponse, error)
@@ -124,14 +194,14 @@ type UnimplementedMasterServer struct {
 func (UnimplementedMasterServer) GetMeta(context.Context, *NodeInfo) (*Meta, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMeta not implemented")
 }
-func (UnimplementedMasterServer) GetUserIndex(context.Context, *NodeInfo) (*UserIndex, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetUserIndex not implemented")
+func (UnimplementedMasterServer) GetUserIndex(*VersionInfo, Master_GetUserIndexServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetUserIndex not implemented")
 }
-func (UnimplementedMasterServer) GetRankingModel(context.Context, *NodeInfo) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRankingModel not implemented")
+func (UnimplementedMasterServer) GetRankingModel(*VersionInfo, Master_GetRankingModelServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetRankingModel not implemented")
 }
-func (UnimplementedMasterServer) GetClickModel(context.Context, *NodeInfo) (*Model, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetClickModel not implemented")
+func (UnimplementedMasterServer) GetClickModel(*VersionInfo, Master_GetClickModelServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetClickModel not implemented")
 }
 func (UnimplementedMasterServer) StartTask(context.Context, *StartTaskRequest) (*StartTaskResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartTask not implemented")
@@ -152,7 +222,7 @@ type UnsafeMasterServer interface {
 }
 
 func RegisterMasterServer(s grpc.ServiceRegistrar, srv MasterServer) {
-	s.RegisterService(&_Master_serviceDesc, srv)
+	s.RegisterService(&Master_ServiceDesc, srv)
 }
 
 func _Master_GetMeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -173,58 +243,67 @@ func _Master_GetMeta_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Master_GetUserIndex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
+func _Master_GetUserIndex_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VersionInfo)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetUserIndex(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetUserIndex",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetUserIndex(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(MasterServer).GetUserIndex(m, &masterGetUserIndexServer{stream})
 }
 
-func _Master_GetRankingModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetRankingModel(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetRankingModel",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetRankingModel(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
+type Master_GetUserIndexServer interface {
+	Send(*Fragment) error
+	grpc.ServerStream
 }
 
-func _Master_GetClickModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
+type masterGetUserIndexServer struct {
+	grpc.ServerStream
+}
+
+func (x *masterGetUserIndexServer) Send(m *Fragment) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Master_GetRankingModel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VersionInfo)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(MasterServer).GetClickModel(ctx, in)
+	return srv.(MasterServer).GetRankingModel(m, &masterGetRankingModelServer{stream})
+}
+
+type Master_GetRankingModelServer interface {
+	Send(*Fragment) error
+	grpc.ServerStream
+}
+
+type masterGetRankingModelServer struct {
+	grpc.ServerStream
+}
+
+func (x *masterGetRankingModelServer) Send(m *Fragment) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Master_GetClickModel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VersionInfo)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/GetClickModel",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).GetClickModel(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(MasterServer).GetClickModel(m, &masterGetClickModelServer{stream})
+}
+
+type Master_GetClickModelServer interface {
+	Send(*Fragment) error
+	grpc.ServerStream
+}
+
+type masterGetClickModelServer struct {
+	grpc.ServerStream
+}
+
+func (x *masterGetClickModelServer) Send(m *Fragment) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Master_StartTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -281,25 +360,16 @@ func _Master_FinishTask_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-var _Master_serviceDesc = grpc.ServiceDesc{
+// Master_ServiceDesc is the grpc.ServiceDesc for Master service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Master_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "protocol.Master",
 	HandlerType: (*MasterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "GetMeta",
 			Handler:    _Master_GetMeta_Handler,
-		},
-		{
-			MethodName: "GetUserIndex",
-			Handler:    _Master_GetUserIndex_Handler,
-		},
-		{
-			MethodName: "GetRankingModel",
-			Handler:    _Master_GetRankingModel_Handler,
-		},
-		{
-			MethodName: "GetClickModel",
-			Handler:    _Master_GetClickModel_Handler,
 		},
 		{
 			MethodName: "StartTask",
@@ -314,6 +384,22 @@ var _Master_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Master_FinishTask_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetUserIndex",
+			Handler:       _Master_GetUserIndex_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetRankingModel",
+			Handler:       _Master_GetRankingModel_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetClickModel",
+			Handler:       _Master_GetClickModel_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "protocol.proto",
 }

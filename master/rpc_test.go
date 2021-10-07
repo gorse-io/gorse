@@ -117,27 +117,26 @@ func TestRPC(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, rpcServer.taskMonitor.Tasks["a"].Status)
 
 	// test get click model
-	clickModelResp, err := client.GetClickModel(ctx, &protocol.NodeInfo{
-		NodeType: protocol.NodeType_ServerNode, NodeName: "tester", HttpPort: 1234})
+	clickModelReceiver, err := client.GetClickModel(ctx, &protocol.VersionInfo{Version: 456})
 	assert.NoError(t, err)
-	assert.Equal(t, int64(456), clickModelResp.Version)
-	_, err = click.DecodeModel(clickModelResp.Model)
+	clickModel, err := protocol.UnmarshalClickModel(clickModelReceiver)
 	assert.NoError(t, err)
+	assert.Equal(t, rpcServer.clickModel, clickModel)
 
 	// test get ranking model
-	rankingModelResp, err := client.GetRankingModel(ctx,
-		&protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "tester", HttpPort: 1234})
+	rankingModelReceiver, err := client.GetRankingModel(ctx, &protocol.VersionInfo{Version: 123})
 	assert.NoError(t, err)
-	assert.Equal(t, "bpr", rankingModelResp.Name)
-	assert.Equal(t, int64(123), rankingModelResp.Version)
-	_, err = ranking.DecodeModel(rankingModelResp.Model)
+	rankingModel, err := protocol.UnmarshalRankingModel(rankingModelReceiver)
 	assert.NoError(t, err)
+	rpcServer.rankingModel.SetParams(rpcServer.rankingModel.GetParams())
+	assert.Equal(t, rpcServer.rankingModel, rankingModel)
 
 	// test get user index
-	userIndexResp, err := client.GetUserIndex(ctx,
-		&protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "tester", HttpPort: 1234})
+	userIndexReceiver, err := client.GetUserIndex(ctx, &protocol.VersionInfo{Version: 789})
 	assert.NoError(t, err)
-	assert.Equal(t, int64(789), userIndexResp.Version)
+	userIndex, err := protocol.UnmarshalIndex(userIndexReceiver)
+	assert.NoError(t, err)
+	assert.Equal(t, rpcServer.userIndex, userIndex)
 
 	// test get meta
 	_, err = client.GetMeta(ctx,

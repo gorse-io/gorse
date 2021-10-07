@@ -14,6 +14,7 @@
 package ranking
 
 import (
+	"bytes"
 	"github.com/stretchr/testify/mock"
 	"runtime"
 	"testing"
@@ -97,9 +98,10 @@ func TestBPR_MovieLens(t *testing.T) {
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test encode/decode model and increment training
-	buf, err := EncodeModel(m)
+	buf := bytes.NewBuffer(nil)
+	err = MarshalModel(buf, m)
 	assert.NoError(t, err)
-	tmp, err := DecodeModel(buf)
+	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	m = tmp.(*BPR)
 	m.nEpochs = 1
@@ -145,9 +147,10 @@ func TestALS_MovieLens(t *testing.T) {
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test encode/decode model and increment training
-	buf, err := EncodeModel(m)
+	buf := bytes.NewBuffer(nil)
+	err = MarshalModel(buf, m)
 	assert.NoError(t, err)
-	tmp, err := DecodeModel(buf)
+	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	m = tmp.(*ALS)
 	m.nEpochs = 1
@@ -192,9 +195,10 @@ func TestCCD_MovieLens(t *testing.T) {
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
 
 	// test encode/decode model and increment training
-	buf, err := EncodeModel(m)
+	buf := bytes.NewBuffer(nil)
+	err = MarshalModel(buf, m)
 	assert.NoError(t, err)
-	tmp, err := DecodeModel(buf)
+	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	m = tmp.(*CCD)
 	m.nEpochs = 1

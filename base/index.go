@@ -15,7 +15,9 @@
 package base
 
 import (
-	"encoding/gob"
+	"encoding/binary"
+	"github.com/juju/errors"
+	"io"
 	"strconv"
 )
 
@@ -26,11 +28,58 @@ type Index interface {
 	ToNumber(name string) int32
 	ToName(index int32) string
 	GetNames() []string
+	Marshal(w io.Writer) error
+	Unmarshal(r io.Reader) error
 }
 
-func init() {
-	gob.Register(&MapIndex{})
-	gob.Register(&DirectIndex{})
+const (
+	mapIndex uint8 = iota
+	directIndex
+)
+
+// MarshalIndex marshal index into byte stream.
+func MarshalIndex(w io.Writer, index Index) error {
+	// write index type
+	var indexType uint8
+	switch index.(type) {
+	case *MapIndex:
+		indexType = mapIndex
+	case *DirectIndex:
+		indexType = directIndex
+	default:
+		return errors.New("unknown index type")
+	}
+	err := binary.Write(w, binary.LittleEndian, indexType)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write index
+	return index.Marshal(w)
+}
+
+// UnmarshalIndex unmarshal index from byte stream.
+func UnmarshalIndex(r io.Reader) (Index, error) {
+	// read type index
+	var indexType uint8
+	err := binary.Read(r, binary.LittleEndian, &indexType)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	var index Index
+	switch indexType {
+	case mapIndex:
+		index = &MapIndex{}
+	case directIndex:
+		index = &DirectIndex{}
+	default:
+		return nil, errors.New("unknown index type")
+	}
+	// read index
+	err = index.Unmarshal(r)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return index, nil
 }
 
 // MapIndex manages the map between sparse Names and dense indices. A sparse ID is
@@ -84,6 +133,44 @@ func (idx *MapIndex) ToName(index int32) string {
 // GetNames returns all names in current index.
 func (idx *MapIndex) GetNames() []string {
 	return idx.Names
+}
+
+// Marshal map index into byte stream.
+func (idx *MapIndex) Marshal(w io.Writer) error {
+	// write length
+	err := binary.Write(w, binary.LittleEndian, int32(len(idx.Names)))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write names
+	for _, s := range idx.Names {
+		err = WriteString(w, s)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+// Unmarshal map index from byte stream.
+func (idx *MapIndex) Unmarshal(r io.Reader) error {
+	// read length
+	var n int32
+	err := binary.Read(r, binary.LittleEndian, &n)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write names
+	idx.Names = make([]string, 0, n)
+	idx.Numbers = make(map[string]int32, n)
+	for i := 0; i < int(n); i++ {
+		name, err := ReadString(r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		idx.Add(name)
+	}
+	return nil
 }
 
 // DirectIndex means that the name and its index is the same. For example,
@@ -140,4 +227,14 @@ func (idx *DirectIndex) GetNames() []string {
 		names[i] = strconv.Itoa(i)
 	}
 	return names
+}
+
+// Marshal direct index into byte stream.
+func (idx *DirectIndex) Marshal(w io.Writer) error {
+	return binary.Write(w, binary.LittleEndian, idx.Limit)
+}
+
+// Unmarshal direct index from byte stream.
+func (idx *DirectIndex) Unmarshal(r io.Reader) error {
+	return binary.Read(r, binary.LittleEndian, &idx.Limit)
 }
