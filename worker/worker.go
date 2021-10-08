@@ -18,6 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/juju/errors"
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -31,12 +38,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"math"
-	"math/rand"
-	"net/http"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 // Worker manages states of a worker node.
@@ -351,11 +352,8 @@ func (w *Worker) Serve() {
 // 7. Rank items in results by click-through-rate.
 // 8. Refresh cache.
 func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
-	var userIndexer base.Index
 	// load user index
-	if _, ok := m.(ranking.MatrixFactorization); ok {
-		userIndexer = m.(ranking.MatrixFactorization).GetUserIndex()
-	}
+	userIndexer := m.GetUserIndex()
 	// load item index
 	itemIds := m.GetItemIndex().GetNames()
 	base.Logger().Info("ranking recommendation",
@@ -403,10 +401,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 	_ = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		userId := users[jobId]
 		// convert to user index
-		var userIndex int32
-		if _, ok := m.(ranking.MatrixFactorization); ok {
-			userIndex = userIndexer.ToNumber(userId)
-		}
+		userIndex := userIndexer.ToNumber(userId)
 		// skip inactive users before max recommend period
 		if !w.checkRecommendCacheTimeout(userId) {
 			return nil
