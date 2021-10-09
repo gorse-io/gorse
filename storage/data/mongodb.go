@@ -124,7 +124,18 @@ func (db *MongoDB) Init() error {
 			"feedbackkey.userid": 1,
 		},
 	})
-	return errors.Trace(err)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	_, err = d.Collection("feedback").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.M{
+			"feedbackkey.itemid": 1,
+		},
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 // Close connection to MongoDB.

@@ -88,7 +88,8 @@ func (d *SQLDatabase) Init() error {
 			"time_stamp timestamp NOT NULL," +
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY(feedback_type, user_id, item_id)," +
-			"INDEX (user_id)" +
+			"INDEX (user_id)," +
+			"INDEX (item_id)" +
 			")  ENGINE=InnoDB"); err != nil {
 			return errors.Trace(err)
 		}
@@ -137,6 +138,9 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		if _, err := d.client.Exec("CREATE INDEX IF NOT EXISTS user_id_index ON feedback(user_id)"); err != nil {
+			return errors.Trace(err)
+		}
+		if _, err := d.client.Exec("CREATE INDEX IF NOT EXISTS item_id_index ON feedback(item_id)"); err != nil {
 			return errors.Trace(err)
 		}
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
