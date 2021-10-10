@@ -201,6 +201,7 @@ func (d *SQLDatabase) Close() error {
 
 // InsertMeasurement insert a measurement into MySQL.
 func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
+	startTime := time.Now()
 	var err error
 	switch d.driver {
 	case MySQL:
@@ -214,6 +215,10 @@ func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
 	case ClickHouse:
 		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
 			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
+	}
+	if err == nil {
+		InsertMeasurementSeconds.Observe(time.Since(startTime).Seconds())
+		InsertMeasurementTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -245,6 +250,7 @@ func (d *SQLDatabase) GetMeasurements(name string, n int) ([]Measurement, error)
 
 // BatchInsertItems inserts a batch of items into MySQL.
 func (d *SQLDatabase) BatchInsertItems(items []Item) error {
+	startTime := time.Now()
 	builder := strings.Builder{}
 	switch d.driver {
 	case MySQL:
@@ -282,11 +288,16 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 			"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
 	}
 	_, err := d.client.Exec(builder.String(), args...)
+	if err == nil {
+		BatchInsertItemsSeconds.Observe(time.Since(startTime).Seconds())
+		BatchInsertItemsTimes.Inc()
+	}
 	return errors.Trace(err)
 }
 
 // DeleteItem deletes a item from MySQL.
 func (d *SQLDatabase) DeleteItem(itemId string) error {
+	startTime := time.Now()
 	txn, err := d.client.Begin()
 	if err != nil {
 		return errors.Trace(err)
@@ -319,6 +330,8 @@ func (d *SQLDatabase) DeleteItem(itemId string) error {
 		}
 		return errors.Trace(err)
 	}
+	DeleteItemSeconds.Observe(time.Since(startTime).Seconds())
+	DeleteItemTimes.Inc()
 	return txn.Commit()
 }
 
@@ -346,7 +359,8 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
 			return Item{}, err
 		}
-		GetItemLatency.Observe(time.Since(startTime).Seconds())
+		GetItemSeconds.Observe(time.Since(startTime).Seconds())
+		GetItemTimes.Inc()
 		return item, nil
 	}
 	return Item{}, ErrItemNotExist
@@ -494,12 +508,14 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
-	GetItemFeedbackLatency.Observe(time.Since(startTime).Seconds())
+	GetItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
+	GetItemFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
 // BatchInsertUsers inserts users into MySQL.
 func (d *SQLDatabase) BatchInsertUsers(users []User) error {
+	startTime := time.Now()
 	builder := strings.Builder{}
 	switch d.driver {
 	case MySQL:
@@ -541,11 +557,16 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 			"DO UPDATE SET labels = EXCLUDED.labels, subscribe = EXCLUDED.subscribe, comment = EXCLUDED.comment")
 	}
 	_, err := d.client.Exec(builder.String(), args...)
+	if err == nil {
+		BatchInsertUsersSeconds.Observe(time.Since(startTime).Seconds())
+		BatchInsertUsersTimes.Inc()
+	}
 	return errors.Trace(err)
 }
 
 // DeleteUser deletes a user from MySQL.
 func (d *SQLDatabase) DeleteUser(userId string) error {
+	startTime := time.Now()
 	txn, err := d.client.Begin()
 	if err != nil {
 		return errors.Trace(err)
@@ -578,11 +599,14 @@ func (d *SQLDatabase) DeleteUser(userId string) error {
 		}
 		return errors.Trace(err)
 	}
+	DeleteUserSeconds.Observe(time.Since(startTime).Seconds())
+	DeleteUserTimes.Inc()
 	return txn.Commit()
 }
 
 // GetUser returns a user from MySQL.
 func (d *SQLDatabase) GetUser(userId string) (User, error) {
+	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	switch d.driver {
@@ -610,6 +634,8 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 		if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
 			return User{}, errors.Trace(err)
 		}
+		GetUserSeconds.Observe(time.Since(startTime).Seconds())
+		GetUserTimes.Inc()
 		return user, nil
 	}
 	return User{}, ErrUserNotExist
@@ -756,7 +782,8 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
-	GetUserFeedbackLatency.Observe(time.Since(startTime).Seconds())
+	GetUserFeedbackSeconds.Observe(time.Since(startTime).Seconds())
+	GetUserFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
@@ -764,6 +791,7 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 // If insertUser set, new users will be insert to user table.
 // If insertItem set, new items will be insert to item table.
 func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error {
+	startTime := time.Now()
 	// collect users and items
 	users := strset.New()
 	items := strset.New()
@@ -927,6 +955,8 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 	if err != nil {
 		return errors.Trace(err)
 	}
+	BatchInsertFeedbackSeconds.Observe(time.Since(startTime).Seconds())
+	BatchInsertFeedbackTimes.Inc()
 	return nil
 }
 
@@ -1117,12 +1147,14 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
-	GetUserItemFeedbackLatency.Observe(time.Since(startTime).Seconds())
+	GetUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
+	GetUserItemFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
+	startTime := time.Now()
 	var rs sql.Result
 	var err error
 	var builder strings.Builder
@@ -1159,11 +1191,14 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 	if err != nil && d.driver != ClickHouse {
 		return 0, errors.Trace(err)
 	}
+	DeleteUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
+	DeleteUserItemFeedbackTimes.Inc()
 	return int(deleteCount), nil
 }
 
 // GetClickThroughRate computes the click-through-rate of a specified date.
 func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes, readTypes []string) (float64, error) {
+	startTime := time.Now()
 	builder := strings.Builder{}
 	// Get the average of click-through rates
 	switch d.driver {
@@ -1246,6 +1281,8 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes, readTyp
 		if err = rs.Scan(&ctr); err != nil {
 			return 0, errors.Trace(err)
 		}
+		GetClickThroughRateSeconds.Observe(time.Since(startTime).Seconds())
+		GetClickThroughRateTimes.Inc()
 		return ctr, nil
 	}
 	return 0, nil

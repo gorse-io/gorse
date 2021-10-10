@@ -38,6 +38,7 @@ func (r *Redis) Close() error {
 
 // SetScores save a list of scored items to Redis.
 func (r *Redis) SetScores(prefix, name string, items []Scored) error {
+	startTime := time.Now()
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	err := r.client.Del(ctx, key).Err()
@@ -54,11 +55,14 @@ func (r *Redis) SetScores(prefix, name string, items []Scored) error {
 			return errors.Trace(err)
 		}
 	}
+	SetScoresSeconds.Observe(time.Since(startTime).Seconds())
+	SetScoresTimes.Inc()
 	return nil
 }
 
 // GetScores returns a list of scored items from Redis.
 func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error) {
+	startTime := time.Now()
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	res := make([]Scored, 0)
@@ -74,18 +78,27 @@ func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error)
 		}
 		res = append(res, item)
 	}
+	GetScoresSeconds.Observe(time.Since(startTime).Seconds())
+	GetScoresTimes.Inc()
 	return res, err
 }
 
 // ClearScores clears a list of scored items in Redis.
 func (r *Redis) ClearScores(prefix, name string) error {
+	startTime := time.Now()
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	return r.client.Del(ctx, key).Err()
+	err := r.client.Del(ctx, key).Err()
+	if err == nil {
+		ClearScoresSeconds.Observe(time.Since(startTime).Seconds())
+		ClearScoresTimes.Inc()
+	}
+	return err
 }
 
 // AppendScores appends a list of scored items to Redis.
 func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
+	startTime := time.Now()
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	for _, item := range items {
@@ -98,6 +111,8 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 			return errors.Trace(err)
 		}
 	}
+	AppendScoresSeconds.Observe(time.Since(startTime).Seconds())
+	AppendScoresTimes.Inc()
 	return nil
 }
 
