@@ -185,6 +185,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	}
 
 	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+		startTime := time.Now()
 		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId))) {
 			return nil
 		}
@@ -254,6 +255,8 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		if err := m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId)), time.Now()); err != nil {
 			return errors.Trace(err)
 		}
+		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
+		FindItemNeighborsTimes.Inc()
 		completed <- nil
 		return nil
 	}); err != nil {
@@ -322,6 +325,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	}
 
 	if err := base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		startTime := time.Now()
 		if !m.checkUserNeighborCacheTimeout(dataset.UserIndex.ToName(int32(userId))) {
 			return nil
 		}
@@ -391,6 +395,8 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
 			return errors.Trace(err)
 		}
+		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
+		FindUserNeighborsTimes.Inc()
 		completed <- nil
 		return nil
 	}); err != nil {

@@ -572,7 +572,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 				excludeSet.Add(item.Id)
 			}
 		}
-		loadFinalRecTime = time.Since(loadCachedReadStart)
+
 		// remove ignore items
 		items := <-itemsChan
 		err = <-errChan
@@ -586,6 +586,10 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 				excludeSet.Add(itemId)
 			}
 		}
+
+		loadFinalRecTime = time.Since(loadCachedReadStart)
+		LoadCTRRecommendCacheSeconds.Observe(loadFinalRecTime.Seconds())
+		LoadCTRRecommendCacheTimes.Inc()
 	}
 	numFromFinal := len(results) - numPrevStage
 	numPrevStage = len(results)
@@ -606,6 +610,8 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 			}
 		}
 		loadColRecTime = time.Since(start)
+		LoadCollaborativeRecommendCacheSeconds.Observe(loadColRecTime.Seconds())
+		LoadCollaborativeRecommendCacheTimes.Inc()
 	}
 	numFromCollaborative := len(results) - numPrevStage
 	numPrevStage = len(results)
@@ -656,6 +662,8 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 		results = append(results, ids...)
 		excludeSet.Add(ids...)
 		itemBasedTime = time.Since(start)
+		ItemBasedRecommendSeconds.Observe(itemBasedTime.Seconds())
+		ItemBasedRecommendTimes.Inc()
 	}
 	numFromItemBased := len(results) - numPrevStage
 	numPrevStage = len(results)
@@ -694,6 +702,8 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 		results = append(results, ids...)
 		excludeSet.Add(ids...)
 		userBasedTime = time.Since(start)
+		UserBasedRecommendSeconds.Observe(userBasedTime.Seconds())
+		UserBasedRecommendTimes.Inc()
 	}
 	numFromUserBased := len(results) - numPrevStage
 	numPrevStage = len(results)
@@ -714,6 +724,8 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 			}
 		}
 		loadLatestTime = time.Since(start)
+		LoadLatestRecommendCacheSeconds.Observe(loadLatestTime.Seconds())
+		LoadLatestRecommendCacheTimes.Inc()
 	}
 	numFromLatest := len(results) - numPrevStage
 	numPrevStage = len(results)
@@ -733,7 +745,9 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 				excludeSet.Add(item.Id)
 			}
 		}
-		loadLatestTime = time.Since(start)
+		loadPopularTime = time.Since(start)
+		LoadPopularRecommendCacheSeconds.Observe(loadPopularTime.Seconds())
+		LoadPopularRecommendCacheTimes.Inc()
 	}
 	numFromPopular := len(results) - numPrevStage
 
@@ -761,6 +775,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 }
 
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
+	startTime := time.Now()
 	// authorize
 	if !s.auth(request, response) {
 		return
@@ -833,6 +848,8 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			}
 		}
 	}
+	GetRecommendSeconds.Observe(time.Since(startTime).Seconds())
+	GetRecommendTimes.Inc()
 	// Send result
 	Ok(response, results)
 }

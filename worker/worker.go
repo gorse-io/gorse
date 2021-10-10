@@ -399,6 +399,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 	// recommendation
 	startTime := time.Now()
 	_ = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
+		userStartTime := time.Now()
 		userId := users[jobId]
 		// convert to user index
 		userIndex := userIndexer.ToNumber(userId)
@@ -431,6 +432,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		var candidateItems []string
 		var candidateScores []float32
 		if w.cfg.Recommend.EnableColRecommend {
+			localStartTime := time.Now()
 			recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			for itemIndex, itemId := range itemIds {
 				if !excludeSet.Has(itemId) {
@@ -444,10 +446,13 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				base.Logger().Error("failed to cache recommendation", zap.Error(err))
 				return errors.Trace(err)
 			}
+			CollaborativeRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
+			CollaborativeRecommendTimes.Inc()
 		}
 
 		// insert item-based items
 		if w.cfg.Recommend.EnableItemBasedRecommend {
+			localStartTime := time.Now()
 			// collect candidates
 			candidates := make(map[string]float32)
 			for _, itemId := range positiveItems {
@@ -471,10 +476,13 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			ids, _ := filter.PopAll()
 			candidateItems = append(candidateItems, ids...)
 			excludeSet.Add(ids...)
+			ItemBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
+			ItemBasedRecommendTimes.Inc()
 		}
 
 		// insert user-based items
 		if w.cfg.Recommend.EnableUserBasedRecommend {
+			localStartTime := time.Now()
 			candidates := make(map[string]float32)
 			// load similar users
 			similarUsers, err := w.cacheClient.GetScores(cache.UserNeighbors, userId, 0, w.cfg.Database.CacheSize)
@@ -502,10 +510,13 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			ids, _ := filter.PopAll()
 			candidateItems = append(candidateItems, ids...)
 			excludeSet.Add(ids...)
+			UserBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
+			UserBasedRecommendTimes.Inc()
 		}
 
 		// insert latest items
 		if w.cfg.Recommend.EnableLatestRecommend {
+			localStartTime := time.Now()
 			latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Database.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
@@ -516,10 +527,13 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 					excludeSet.Add(latestItem.Id)
 				}
 			}
+			LoadLatestRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
+			LoadLatestRecommendCacheTimes.Inc()
 		}
 
 		// insert popular items
 		if w.cfg.Recommend.EnablePopularRecommend {
+			localStartTime := time.Now()
 			popularItems, err := w.cacheClient.GetScores(cache.PopularItems, "", 0, w.cfg.Database.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
@@ -530,6 +544,8 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 					excludeSet.Add(popularItem.Id)
 				}
 			}
+			LoadPopularRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
+			LoadPopularRecommendCacheTimes.Inc()
 		}
 
 		// rank items in result by click-through-rate
@@ -555,6 +571,8 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			return errors.Trace(err)
 		}
 		completed <- nil
+		GenerateRecommendSeconds.Observe(time.Since(userStartTime).Seconds())
+		GenerateRecommendTimes.Inc()
 		return nil
 	})
 	close(completed)
@@ -570,6 +588,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
 func (w *Worker) rankByClickTroughRate(userId string, itemIds []string, itemCache cmap.ConcurrentMap) ([]cache.Scored, error) {
+	startTime := time.Now()
 	var err error
 	// download user
 	var user data.User
@@ -600,6 +619,8 @@ func (w *Worker) rankByClickTroughRate(userId string, itemIds []string, itemCach
 		topItems.Push(item.ItemId, w.clickModel.Predict(userId, item.ItemId, user.Labels, item.Labels))
 	}
 	elems, scores := topItems.PopAll()
+	CTRRecommendSeconds.Observe(time.Since(startTime).Seconds())
+	CTRRecommendTimes.Inc()
 	return cache.CreateScoredItems(elems, scores), nil
 }
 

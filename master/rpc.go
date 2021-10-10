@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"io"
 	"strings"
+	"time"
 )
 
 // Node could be worker node for server node.
@@ -122,6 +123,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 
 // GetRankingModel returns latest ranking model.
 func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
+	startTime := time.Now()
 	m.rankingModelMutex.RLock()
 	defer m.rankingModelMutex.RUnlock()
 	// skip empty model
@@ -164,11 +166,14 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 			return err
 		}
 	}
+	GetRankingModelSeconds.Observe(time.Since(startTime).Seconds())
+	GetRankingModelTimes.Inc()
 	return encoderError
 }
 
 // GetClickModel returns latest click model.
 func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
+	startTime := time.Now()
 	m.clickModelMutex.RLock()
 	defer m.clickModelMutex.RUnlock()
 	// skip empty model
@@ -211,11 +216,14 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 			return err
 		}
 	}
+	GetClickModelSeconds.Observe(time.Since(startTime).Seconds())
+	GetClickModelTimes.Inc()
 	return encoderError
 }
 
 // GetUserIndex returns latest user index.
 func (m *Master) GetUserIndex(version *protocol.VersionInfo, sender protocol.Master_GetUserIndexServer) error {
+	startTime := time.Now()
 	m.userIndexMutex.RLock()
 	defer m.userIndexMutex.RUnlock()
 	// skip empty model
@@ -258,6 +266,8 @@ func (m *Master) GetUserIndex(version *protocol.VersionInfo, sender protocol.Mas
 			return err
 		}
 	}
+	GetUserIndexSeconds.Observe(time.Since(startTime).Seconds())
+	GetUserIndexTimes.Inc()
 	return encoderError
 }
 
