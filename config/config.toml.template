@@ -24,8 +24,8 @@ auto_insert_item = false
 # The feedback types for positive events.
 positive_feedback_types = ["star","like"]
 
-# The feedback type for read event.
-read_feedback_type = "read"
+# The feedback types for read events.
+read_feedback_types = ["read"]
 
 # The time-to-live (days) of positive feedback, 0 means disabled. The default value is 0.
 positive_feedback_ttl = 0

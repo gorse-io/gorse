@@ -1163,7 +1163,7 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 }
 
 // GetClickThroughRate computes the click-through-rate of a specified date.
-func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
+func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes, readTypes []string) (float64, error) {
 	builder := strings.Builder{}
 	// Get the average of click-through rates
 	switch d.driver {
@@ -1208,12 +1208,24 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes []string
 	// Get read feedback
 	switch d.driver {
 	case MySQL, ClickHouse:
-		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type = ?) AS read_feedback ")
+		builder.WriteString("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE(?) AND feedback_type IN (")
 	case Postgres:
-		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE($%d) AND feedback_type = $%d) AS read_feedback ", len(args)+1, len(args)+2))
+		builder.WriteString(fmt.Sprintf("SELECT DISTINCT user_id, item_id FROM feedback WHERE DATE(time_stamp) = DATE($%d) AND feedback_type IN (", len(args)+1))
 	}
-	args = append(args, date, readType)
-	builder.WriteString("ON positive_feedback.user_id = read_feedback.user_id AND positive_feedback.item_id = read_feedback.item_id GROUP BY read_feedback.user_id ")
+	args = append(args, date)
+	for i, readType := range readTypes {
+		if i > 0 {
+			builder.WriteString(",")
+		}
+		switch d.driver {
+		case MySQL, ClickHouse:
+			builder.WriteString("?")
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
+		}
+		args = append(args, readType)
+	}
+	builder.WriteString(")) AS read_feedback ON positive_feedback.user_id = read_feedback.user_id AND positive_feedback.item_id = read_feedback.item_id GROUP BY read_feedback.user_id ")
 	// users must have at least one positive feedback
 	switch d.driver {
 	case MySQL:

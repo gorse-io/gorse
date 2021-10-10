@@ -714,7 +714,7 @@ func (db *MongoDB) CountActiveUsers(date time.Time) (int, error) {
 }
 
 // GetClickThroughRate computes the click-through-rate of a specified date.
-func (db *MongoDB) GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error) {
+func (db *MongoDB) GetClickThroughRate(date time.Time, positiveTypes, readTypes []string) (float64, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
 	readCountAgg, err := c.Aggregate(ctx, mongo.Pipeline{
@@ -725,7 +725,7 @@ func (db *MongoDB) GetClickThroughRate(date time.Time, positiveTypes []string, r
 				"$lt":  time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC),
 			},
 			"feedbackkey.feedbacktype": bson.M{
-				"$eq": readType,
+				"$in": readTypes,
 			},
 		}}},
 		{{"$project", bson.M{

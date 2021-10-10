@@ -63,7 +63,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, "", 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -142,7 +142,7 @@ func TestMaster_RunFindUserNeighborsTask(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, "", 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -190,7 +190,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	m.GorseConfig = &config.Config{}
 	m.GorseConfig.Database.CacheSize = 3
 	m.GorseConfig.Database.PositiveFeedbackType = []string{"positive"}
-	m.GorseConfig.Database.ReadFeedbackType = "negative"
+	m.GorseConfig.Database.ReadFeedbackTypes = []string{"negative"}
 
 	// insert items
 	var items []data.Item

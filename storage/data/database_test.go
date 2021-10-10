@@ -531,7 +531,7 @@ func testTimeLimit(t *testing.T, db Database) {
 
 func testGetClickThroughRate(t *testing.T, db Database) {
 	// get empty click-through-rate
-	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
+	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, []string{"read"})
 	assert.NoError(t, err)
 	assert.Zero(t, rate)
 	// insert feedback
@@ -556,7 +556,7 @@ func testGetClickThroughRate(t *testing.T, db Database) {
 	}, true, true, true)
 	assert.NoError(t, err)
 	// get click-through-rate
-	rate, err = db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, "read")
+	rate, err = db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, []string{"read"})
 	assert.NoError(t, err)
 	assert.Equal(t, 0.375, rate)
 }

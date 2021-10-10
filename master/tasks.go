@@ -58,12 +58,12 @@ func (m *Master) runLoadDatasetTask() error {
 
 	base.Logger().Info("load dataset",
 		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
-		zap.String("read_feedback_type", m.GorseConfig.Database.ReadFeedbackType),
+		zap.Strings("read_feedback_types", m.GorseConfig.Database.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.GorseConfig.Database.ItemTTL),
 		zap.Uint("feedback_ttl", m.GorseConfig.Database.PositiveFeedbackTTL),
 		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
 	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ReadFeedbackType, m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
+		m.GorseConfig.Database.ReadFeedbackTypes, m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -622,7 +622,7 @@ func (m *Master) runAnalyzeTask() error {
 		if !existed.Has(date.String()) {
 			// click through clickThroughRate
 			startTime := time.Now()
-			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.PositiveFeedbackType, m.GorseConfig.Database.ReadFeedbackType)
+			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.PositiveFeedbackType, m.GorseConfig.Database.ReadFeedbackTypes)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -790,7 +790,7 @@ func (m *Master) runSearchClickModelTask(
 }
 
 // LoadDataFromDatabase loads dataset from data store.
-func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes []string, readType string, itemTTL, positiveFeedbackTTL uint) (
+func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint) (
 	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems []cache.Scored, popularItems []cache.Scored, err error) {
 	m.taskMonitor.Start(TaskLoadDataset, 5)
 
@@ -916,7 +916,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes [
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	feedbackChan, errChan = database.GetFeedbackStream(batchSize, feedbackTimeLimit, readType)
+	feedbackChan, errChan = database.GetFeedbackStream(batchSize, feedbackTimeLimit, readTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
 			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)

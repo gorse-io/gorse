@@ -92,7 +92,7 @@ type Database interface {
 	GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error)
 	InsertMeasurement(measurement Measurement) error
 	GetMeasurements(name string, n int) ([]Measurement, error)
-	GetClickThroughRate(date time.Time, positiveTypes []string, readType string) (float64, error)
+	GetClickThroughRate(date time.Time, positiveTypes, readTypes []string) (float64, error)
 	GetUserStream(batchSize int) (chan []User, chan error)
 	GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error)
 	GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
