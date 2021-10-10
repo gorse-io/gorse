@@ -53,7 +53,7 @@ type DatabaseConfig struct {
 	AutoInsertItem       bool     `toml:"auto_insert_item"`        // insert new items while inserting feedback
 	CacheSize            int      `toml:"cache_size"`              // cache size for recommended/popular/latest items
 	PositiveFeedbackType []string `toml:"positive_feedback_types"` // positive feedback type
-	ReadFeedbackType     string   `toml:"read_feedback_type"`      // feedback type for read event
+	ReadFeedbackTypes    []string `toml:"read_feedback_types"`     // feedback type for read event
 	PositiveFeedbackTTL  uint     `toml:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
 	ItemTTL              uint     `toml:"item_ttl"`                // item-to-live of items
 }
