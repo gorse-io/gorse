@@ -586,6 +586,18 @@ func TestServer_GetRecommends(t *testing.T) {
 		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
+			"n":      "3",
+			"offset": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"6", "7", "8"})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
 			"n":               "3",
 			"write-back-type": "read",
 		}).

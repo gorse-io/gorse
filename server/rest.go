@@ -772,6 +772,11 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		BadRequest(response, err)
 		return
 	}
+	offset, err := ParseInt(request, "offset", 0)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
 	writeBackFeedback := request.QueryParameter("write-back-type")
 	writeBackDelay, err := ParseInt(request, "write-back-delay", 0)
 	if err != nil {
@@ -797,11 +802,12 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			return
 		}
 	}
-	results, err := s.Recommend(userId, n, recommenders...)
+	results, err := s.Recommend(userId, offset+n, recommenders...)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
+	results = results[offset:]
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range results {
