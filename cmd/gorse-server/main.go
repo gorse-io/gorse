@@ -34,9 +34,16 @@ var serverCommand = &cobra.Command{
 			return
 		}
 		// setup logger
+		var outputPaths []string
+		if cmd.PersistentFlags().Changed("log-path") {
+			outputPath, _ := cmd.PersistentFlags().GetString("log-path")
+			outputPaths = append(outputPaths, outputPath)
+		}
 		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
 		if debugMode {
-			base.SetDevelopmentLogger()
+			base.SetDevelopmentLogger(outputPaths...)
+		} else {
+			base.SetProductionLogger(outputPaths...)
 		}
 		// start server
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
@@ -55,6 +62,7 @@ func init() {
 	serverCommand.PersistentFlags().Int("http-port", 8087, "port of RESTful API")
 	serverCommand.PersistentFlags().String("http-host", "127.0.0.1", "host of RESTful API")
 	serverCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
+	serverCommand.PersistentFlags().String("log-path", "", "path of log file")
 }
 
 func main() {

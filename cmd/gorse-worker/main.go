@@ -37,11 +37,18 @@ var workerCommand = &cobra.Command{
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
 		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
 		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
-		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
 		workingJobs, _ := cmd.PersistentFlags().GetInt("jobs")
 		// setup logger
+		var outputPaths []string
+		if cmd.PersistentFlags().Changed("log-path") {
+			outputPath, _ := cmd.PersistentFlags().GetString("log-path")
+			outputPaths = append(outputPaths, outputPath)
+		}
+		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
 		if debugMode {
-			base.SetDevelopmentLogger()
+			base.SetDevelopmentLogger(outputPaths...)
+		} else {
+			base.SetProductionLogger(outputPaths...)
 		}
 		// create worker
 		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs)
@@ -57,6 +64,7 @@ func init() {
 	workerCommand.PersistentFlags().Int("http-port", 8089, "port of status report")
 	workerCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
+	workerCommand.PersistentFlags().String("log-path", "", "path of log file")
 }
 
 func main() {
