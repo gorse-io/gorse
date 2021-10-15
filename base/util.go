@@ -37,13 +37,17 @@ func Logger() *zap.Logger {
 }
 
 // SetProductionLogger set current logger in production mode.
-func SetProductionLogger() {
-	logger, _ = zap.NewProduction()
+func SetProductionLogger(outputPaths ...string) {
+	cfg := zap.NewProductionConfig()
+	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
+	logger, _ = cfg.Build()
 }
 
 // SetDevelopmentLogger set current logger in development mode.
-func SetDevelopmentLogger() {
-	logger, _ = zap.NewDevelopment()
+func SetDevelopmentLogger(outputPaths ...string) {
+	cfg := zap.NewDevelopmentConfig()
+	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
+	logger, _ = cfg.Build()
 }
 
 // Max finds the maximum in a vector of integers. Panic if the slice is empty.

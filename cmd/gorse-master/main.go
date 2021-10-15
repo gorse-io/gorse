@@ -34,9 +34,16 @@ var masterCommand = &cobra.Command{
 			return
 		}
 		// setup logger
+		var outputPaths []string
+		if cmd.PersistentFlags().Changed("log-path") {
+			outputPath, _ := cmd.PersistentFlags().GetString("log-path")
+			outputPaths = append(outputPaths, outputPath)
+		}
 		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
 		if debugMode {
-			base.SetDevelopmentLogger()
+			base.SetDevelopmentLogger(outputPaths...)
+		} else {
+			base.SetProductionLogger(outputPaths...)
 		}
 		// Start master
 		configPath, _ := cmd.PersistentFlags().GetString("config")
@@ -54,6 +61,7 @@ func init() {
 	masterCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	masterCommand.PersistentFlags().StringP("config", "c", "/etc/gorse.toml", "configuration file path")
 	masterCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
+	masterCommand.PersistentFlags().String("log-path", "", "path of log file")
 }
 
 func main() {
