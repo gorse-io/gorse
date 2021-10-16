@@ -22,24 +22,31 @@ services:
     restart: unless-stopped
     ports:
       - 8089:8089
-    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8089 --log-path /var/log/gorse/worker.log
+    command: >
+      --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8089
+      --log-path /var/log/gorse/worker.log --cache-path /var/lib/gorse/worker_cache.data
     volumes:
       - ./var/log/gorse:/var/log/gorse
+      - ./var/lib/gorse:/var/lib/gorse
   server:
     image: zhenghaoz/gorse-server
     restart: unless-stopped
     ports:
       - 8087:8087
-    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8087 --log-path /var/log/gorse/server.log
+    command: >
+      --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8087
+      --log-path /var/log/gorse/server.log --cache-path /var/lib/gorse/server_cache.data
     volumes:
       - ./var/log/gorse:/var/log/gorse
+      - ./var/lib/gorse:/var/lib/gorse
   master:
     image: zhenghaoz/gorse-master
     restart: unless-stopped
     ports:
       - 8086:8086
       - 8088:8088
-    command: -c /etc/gorse/config.toml --log-path /var/log/gorse/master.log
+    command: -c /etc/gorse/config.toml --log-path /var/log/gorse/master.log --cache-path /var/lib/gorse/master_cache.data
     volumes:
       - ./config.toml:/etc/gorse/config.toml
       - ./var/log/gorse:/var/log/gorse
+      - ./var/lib/gorse:/var/lib/gorse
