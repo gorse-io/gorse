@@ -50,7 +50,8 @@ var serverCommand = &cobra.Command{
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
 		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
 		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
-		s := server.NewServer(masterHost, masterPort, httpHost, httpPort)
+		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
+		s := server.NewServer(masterHost, masterPort, httpHost, httpPort, cachePath)
 		s.Serve()
 	},
 }
@@ -63,6 +64,7 @@ func init() {
 	serverCommand.PersistentFlags().String("http-host", "127.0.0.1", "host of RESTful API")
 	serverCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	serverCommand.PersistentFlags().String("log-path", "", "path of log file")
+	serverCommand.PersistentFlags().String("cache-path", "server_cache.data", "path of cache file")
 }
 
 func main() {

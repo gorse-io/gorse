@@ -16,26 +16,30 @@ services:
       MYSQL_USER: gorse
       MYSQL_PASSWORD: gorse_pass
     volumes:
-      - data:/var/lib/mysql
+      - ./var/lib/mysql:/var/lib/mysql
   worker:
     image: zhenghaoz/gorse-worker
     restart: unless-stopped
     ports:
       - 8089:8089
-    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8089
+    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8089 --log-path /var/log/gorse/worker.log
+    volumes:
+      - ./var/log/gorse:/var/log/gorse
   server:
     image: zhenghaoz/gorse-server
     restart: unless-stopped
     ports:
       - 8087:8087
-    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8087
+    command: --master-host master --master-port 8086 --http-host 0.0.0.0 --http-port 8087 --log-path /var/log/gorse/server.log
+    volumes:
+      - ./var/log/gorse:/var/log/gorse
   master:
     image: zhenghaoz/gorse-master
     restart: unless-stopped
     ports:
       - 8086:8086
       - 8088:8088
+    command: -c /etc/gorse/config.toml --log-path /var/log/gorse/master.log
     volumes:
-      - ./config.toml:/etc/config.toml
-volumes:
-  data:
+      - ./config.toml:/etc/gorse/config.toml
+      - ./var/log/gorse:/var/log/gorse

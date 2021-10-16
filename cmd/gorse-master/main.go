@@ -52,16 +52,18 @@ var masterCommand = &cobra.Command{
 		if err != nil {
 			base.Logger().Fatal("failed to load config", zap.Error(err))
 		}
-		l := master.NewMaster(conf)
+		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
+		l := master.NewMaster(conf, cachePath)
 		l.Serve()
 	},
 }
 
 func init() {
 	masterCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
-	masterCommand.PersistentFlags().StringP("config", "c", "/etc/gorse.toml", "configuration file path")
+	masterCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	masterCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	masterCommand.PersistentFlags().String("log-path", "", "path of log file")
+	masterCommand.PersistentFlags().String("cache-path", "master_cache.data", "path of cache file")
 }
 
 func main() {
