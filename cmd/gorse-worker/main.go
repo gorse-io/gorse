@@ -51,7 +51,8 @@ var workerCommand = &cobra.Command{
 			base.SetProductionLogger(outputPaths...)
 		}
 		// create worker
-		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs)
+		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
+		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath)
 		w.Serve()
 	},
 }
@@ -65,6 +66,7 @@ func init() {
 	workerCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
 	workerCommand.PersistentFlags().String("log-path", "", "path of log file")
+	workerCommand.PersistentFlags().String("cache-path", "worker_cache.data", "path of cache file")
 }
 
 func main() {

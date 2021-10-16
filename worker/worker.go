@@ -21,8 +21,6 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/juju/errors"
@@ -51,6 +49,7 @@ type Worker struct {
 	masterHost string
 	masterPort int
 	testMode   bool
+	cacheFile  string
 
 	// database connection
 	cachePath   string
@@ -87,12 +86,13 @@ type Worker struct {
 }
 
 // NewWorker creates a new worker node.
-func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int) *Worker {
+func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string) *Worker {
 	return &Worker{
 		// database
 		dataClient:  data.NoDatabase{},
 		cacheClient: cache.NoDatabase{},
 		// config
+		cacheFile:  cacheFile,
 		masterHost: masterHost,
 		masterPort: masterPort,
 		httpHost:   httpHost,
@@ -282,10 +282,10 @@ func (w *Worker) ServeMetrics() {
 func (w *Worker) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
-	state, err := LoadLocalCache(filepath.Join(os.TempDir(), "gorse-worker"))
+	state, err := LoadLocalCache(w.cacheFile)
 	if err != nil {
 		base.Logger().Error("failed to load persist state", zap.Error(err),
-			zap.String("path", filepath.Join(os.TempDir(), "gorse-server")))
+			zap.String("path", state.path))
 	}
 	if state.WorkerName == "" {
 		state.WorkerName = base.GetRandomName(0)

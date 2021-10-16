@@ -24,8 +24,6 @@ import (
 	"math"
 	"math/rand"
 	"net"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -55,6 +53,7 @@ type Master struct {
 
 	taskMonitor   *TaskMonitor
 	taskScheduler *TaskScheduler
+	cacheFile     string
 
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache
@@ -99,7 +98,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config) *Master {
+func NewMaster(cfg *config.Config, cacheFile string) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
 	taskMonitor := NewTaskMonitor()
@@ -110,6 +109,7 @@ func NewMaster(cfg *config.Config) *Master {
 	return &Master{
 		nodesInfo: make(map[string]*Node),
 		// create task monitor
+		cacheFile:     cacheFile,
 		taskMonitor:   taskMonitor,
 		taskScheduler: NewTaskScheduler(),
 		// init versions
@@ -147,7 +147,7 @@ func (m *Master) Serve() {
 
 	// load local cached model
 	var err error
-	m.localCache, err = LoadLocalCache(filepath.Join(os.TempDir(), "gorse-master"))
+	m.localCache, err = LoadLocalCache(m.cacheFile)
 	if err != nil {
 		base.Logger().Warn("failed to load local cache", zap.Error(err))
 	}

@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/zhenghaoz/gorse/base"
@@ -43,13 +41,15 @@ type Server struct {
 	masterHost   string
 	masterPort   int
 	testMode     bool
+	cacheFile    string
 }
 
 // NewServer creates a server node.
-func NewServer(masterHost string, masterPort int, serverHost string, serverPort int) *Server {
+func NewServer(masterHost string, masterPort int, serverHost string, serverPort int, cacheFile string) *Server {
 	return &Server{
 		masterHost: masterHost,
 		masterPort: masterPort,
+		cacheFile:  cacheFile,
 		RestServer: RestServer{
 			DataClient:  &data.NoDatabase{},
 			CacheClient: &cache.NoDatabase{},
@@ -66,10 +66,10 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 func (s *Server) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
-	state, err := LoadLocalCache(filepath.Join(os.TempDir(), "gorse-server"))
+	state, err := LoadLocalCache(s.cacheFile)
 	if err != nil {
 		base.Logger().Error("failed to connect local store", zap.Error(err),
-			zap.String("path", filepath.Join(os.TempDir(), "gorse-server")))
+			zap.String("path", state.path))
 	}
 	if state.ServerName == "" {
 		state.ServerName = base.GetRandomName(0)
