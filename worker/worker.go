@@ -447,7 +447,6 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				return errors.Trace(err)
 			}
 			CollaborativeRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
-			CollaborativeRecommendTimes.Inc()
 		}
 
 		// insert item-based items
@@ -477,7 +476,6 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			candidateItems = append(candidateItems, ids...)
 			excludeSet.Add(ids...)
 			ItemBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
-			ItemBasedRecommendTimes.Inc()
 		}
 
 		// insert user-based items
@@ -511,7 +509,6 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			candidateItems = append(candidateItems, ids...)
 			excludeSet.Add(ids...)
 			UserBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
-			UserBasedRecommendTimes.Inc()
 		}
 
 		// insert latest items
@@ -528,7 +525,6 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				}
 			}
 			LoadLatestRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
-			LoadLatestRecommendCacheTimes.Inc()
 		}
 
 		// insert popular items
@@ -545,7 +541,6 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				}
 			}
 			LoadPopularRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
-			LoadPopularRecommendCacheTimes.Inc()
 		}
 
 		// rank items in result by click-through-rate
@@ -572,7 +567,6 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		}
 		completed <- nil
 		GenerateRecommendSeconds.Observe(time.Since(userStartTime).Seconds())
-		GenerateRecommendTimes.Inc()
 		return nil
 	})
 	close(completed)
@@ -620,7 +614,6 @@ func (w *Worker) rankByClickTroughRate(userId string, itemIds []string, itemCach
 	}
 	elems, scores := topItems.PopAll()
 	CTRRecommendSeconds.Observe(time.Since(startTime).Seconds())
-	CTRRecommendTimes.Inc()
 	return cache.CreateScoredItems(elems, scores), nil
 }
 

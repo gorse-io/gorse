@@ -23,72 +23,36 @@ var (
 	GenerateRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "worker_get_recommend_seconds",
+		Name:      "get_recommend_seconds",
 	})
 	CTRRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "worker_ctr_recommend_seconds",
+		Name:      "ctr_recommend_seconds",
 	})
 	CollaborativeRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "worker_collaborative_recommend_seconds",
+		Name:      "collaborative_recommend_seconds",
 	})
 	ItemBasedRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "worker_item_based_recommend_seconds",
+		Name:      "item_based_recommend_seconds",
 	})
 	UserBasedRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "worker_user_based_recommend_seconds",
+		Name:      "user_based_recommend_seconds",
 	})
 	LoadLatestRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "worker_load_latest_recommend_cache_seconds",
+		Name:      "load_latest_recommend_cache_seconds",
 	})
 	LoadPopularRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "worker_load_popular_recommend_cache_seconds",
-	})
-
-	GenerateRecommendTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "worker_get_recommend_times",
-	})
-	CTRRecommendTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "worker_ctr_recommend_times",
-	})
-	CollaborativeRecommendTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "worker_collaborative_recommend_times",
-	})
-	ItemBasedRecommendTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "worker_item_based_recommend_times",
-	})
-	UserBasedRecommendTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "worker_user_based_recommend_times",
-	})
-	LoadLatestRecommendCacheTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "worker_load_latest_recommend_cache_times",
-	})
-	LoadPopularRecommendCacheTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "worker_load_popular_recommend_cache_times",
+		Name:      "load_popular_recommend_cache_seconds",
 	})
 )

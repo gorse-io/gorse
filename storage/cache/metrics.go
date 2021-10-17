@@ -23,42 +23,21 @@ var (
 	SetScoresSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "cache",
-		Name:      "cache_set_scores_seconds",
+		Name:      "set_scores_seconds",
 	})
 	GetScoresSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "cache",
-		Name:      "cache_get_scores_seconds",
+		Name:      "get_scores_seconds",
 	})
 	ClearScoresSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "cache",
-		Name:      "cache_clear_scores_seconds",
+		Name:      "clear_scores_seconds",
 	})
 	AppendScoresSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "cache",
-		Name:      "cache_append_scores_seconds",
-	})
-
-	SetScoresTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "cache",
-		Name:      "cache_set_scores_times",
-	})
-	GetScoresTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "cache",
-		Name:      "cache_get_scores_times",
-	})
-	ClearScoresTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "cache",
-		Name:      "cache_clear_scores_times",
-	})
-	AppendScoresTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "cache",
-		Name:      "cache_append_scores_times",
+		Name:      "append_scores_seconds",
 	})
 )

@@ -23,52 +23,26 @@ var (
 	GetRankingModelSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "master_get_ranking_model_seconds",
+		Name:      "get_ranking_model_seconds",
 	})
 	GetClickModelSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "master_get_click_model_seconds",
+		Name:      "get_click_model_seconds",
 	})
 	GetUserIndexSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "master_get_user_index_seconds",
+		Name:      "get_user_index_seconds",
 	})
 	FindUserNeighborsSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "master_find_user_neighbors_seconds",
+		Name:      "find_user_neighbors_seconds",
 	})
 	FindItemNeighborsSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "master_find_item_neighbors_seconds",
-	})
-
-	GetRankingModelTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "master_get_ranking_model_times",
-	})
-	GetClickModelTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "master_get_click_model_times",
-	})
-	GetUserIndexTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "master_get_user_index_times",
-	})
-	FindUserNeighborsTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "master_find_user_neighbors_times",
-	})
-	FindItemNeighborsTimes = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "master_find_item_neighbors_times",
+		Name:      "find_item_neighbors_seconds",
 	})
 )

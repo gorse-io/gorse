@@ -167,7 +167,6 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 		}
 	}
 	GetRankingModelSeconds.Observe(time.Since(startTime).Seconds())
-	GetRankingModelTimes.Inc()
 	return encoderError
 }
 
@@ -217,7 +216,6 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 		}
 	}
 	GetClickModelSeconds.Observe(time.Since(startTime).Seconds())
-	GetClickModelTimes.Inc()
 	return encoderError
 }
 
@@ -267,7 +265,6 @@ func (m *Master) GetUserIndex(version *protocol.VersionInfo, sender protocol.Mas
 		}
 	}
 	GetUserIndexSeconds.Observe(time.Since(startTime).Seconds())
-	GetUserIndexTimes.Inc()
 	return encoderError
 }
 
