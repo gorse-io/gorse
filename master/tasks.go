@@ -256,7 +256,6 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 			return errors.Trace(err)
 		}
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		FindItemNeighborsTimes.Inc()
 		completed <- nil
 		return nil
 	}); err != nil {
@@ -396,7 +395,6 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 			return errors.Trace(err)
 		}
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		FindUserNeighborsTimes.Inc()
 		completed <- nil
 		return nil
 	}); err != nil {

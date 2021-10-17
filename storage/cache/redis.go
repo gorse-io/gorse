@@ -56,7 +56,6 @@ func (r *Redis) SetScores(prefix, name string, items []Scored) error {
 		}
 	}
 	SetScoresSeconds.Observe(time.Since(startTime).Seconds())
-	SetScoresTimes.Inc()
 	return nil
 }
 
@@ -79,7 +78,6 @@ func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error)
 		res = append(res, item)
 	}
 	GetScoresSeconds.Observe(time.Since(startTime).Seconds())
-	GetScoresTimes.Inc()
 	return res, err
 }
 
@@ -91,7 +89,6 @@ func (r *Redis) ClearScores(prefix, name string) error {
 	err := r.client.Del(ctx, key).Err()
 	if err == nil {
 		ClearScoresSeconds.Observe(time.Since(startTime).Seconds())
-		ClearScoresTimes.Inc()
 	}
 	return err
 }
@@ -112,7 +109,6 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 		}
 	}
 	AppendScoresSeconds.Observe(time.Since(startTime).Seconds())
-	AppendScoresTimes.Inc()
 	return nil
 }
 

@@ -155,7 +155,6 @@ func (db *MongoDB) InsertMeasurement(measurement Measurement) error {
 		bson.M{"$set": measurement}, opt)
 	if err == nil {
 		InsertMeasurementSeconds.Observe(time.Since(startTime).Seconds())
-		InsertMeasurementTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -198,7 +197,6 @@ func (db *MongoDB) BatchInsertItems(items []Item) error {
 	_, err := c.BulkWrite(ctx, models)
 	if err == nil {
 		BatchInsertItemsSeconds.Observe(time.Since(startTime).Seconds())
-		BatchInsertItemsTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -218,7 +216,6 @@ func (db *MongoDB) DeleteItem(itemId string) error {
 	})
 	if err == nil {
 		DeleteItemSeconds.Observe(time.Since(startTime).Seconds())
-		DeleteItemTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -236,7 +233,6 @@ func (db *MongoDB) GetItem(itemId string) (item Item, err error) {
 	err = r.Decode(&item)
 	if err == nil {
 		GetItemSeconds.Observe(time.Since(startTime).Seconds())
-		GetItemTimes.Inc()
 	}
 	return
 }
@@ -344,7 +340,6 @@ func (db *MongoDB) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Fe
 		feedbacks = append(feedbacks, feedback)
 	}
 	GetItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	GetItemFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
@@ -363,7 +358,6 @@ func (db *MongoDB) BatchInsertUsers(users []User) error {
 	_, err := c.BulkWrite(ctx, models)
 	if err == nil {
 		BatchInsertUsersSeconds.Observe(time.Since(startTime).Seconds())
-		BatchInsertUsersTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -383,7 +377,6 @@ func (db *MongoDB) DeleteUser(userId string) error {
 	})
 	if err == nil {
 		DeleteUserSeconds.Observe(time.Since(startTime).Seconds())
-		DeleteUserTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -401,7 +394,6 @@ func (db *MongoDB) GetUser(userId string) (user User, err error) {
 	err = r.Decode(&user)
 	if err == nil {
 		GetUserSeconds.Observe(time.Since(startTime).Seconds())
-		GetUserTimes.Inc()
 	}
 	return
 }
@@ -502,7 +494,6 @@ func (db *MongoDB) GetUserFeedback(userId string, withFuture bool, feedbackTypes
 		feedbacks = append(feedbacks, feedback)
 	}
 	GetUserFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	GetUserFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
@@ -590,7 +581,6 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 	_, err := c.BulkWrite(ctx, models)
 	if err == nil {
 		BatchInsertFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-		BatchInsertFeedbackTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -718,7 +708,6 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackTypes ...s
 		feedbacks = append(feedbacks, feedback)
 	}
 	GetUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	GetUserItemFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
@@ -739,7 +728,6 @@ func (db *MongoDB) DeleteUserItemFeedback(userId, itemId string, feedbackTypes .
 		return 0, err
 	}
 	DeleteUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	DeleteUserItemFeedbackTimes.Inc()
 	return int(r.DeletedCount), nil
 }
 
@@ -849,6 +837,5 @@ func (db *MongoDB) GetClickThroughRate(date time.Time, positiveTypes, readTypes 
 		result = ret.Map()["avg_ctr"].(float64)
 	}
 	GetClickThroughRateSeconds.Observe(time.Since(startTime).Seconds())
-	GetClickThroughRateTimes.Inc()
 	return result, err
 }

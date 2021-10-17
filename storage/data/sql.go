@@ -218,7 +218,6 @@ func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
 	}
 	if err == nil {
 		InsertMeasurementSeconds.Observe(time.Since(startTime).Seconds())
-		InsertMeasurementTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -290,7 +289,6 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 	_, err := d.client.Exec(builder.String(), args...)
 	if err == nil {
 		BatchInsertItemsSeconds.Observe(time.Since(startTime).Seconds())
-		BatchInsertItemsTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -331,7 +329,6 @@ func (d *SQLDatabase) DeleteItem(itemId string) error {
 		return errors.Trace(err)
 	}
 	DeleteItemSeconds.Observe(time.Since(startTime).Seconds())
-	DeleteItemTimes.Inc()
 	return txn.Commit()
 }
 
@@ -360,7 +357,6 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 			return Item{}, err
 		}
 		GetItemSeconds.Observe(time.Since(startTime).Seconds())
-		GetItemTimes.Inc()
 		return item, nil
 	}
 	return Item{}, ErrItemNotExist
@@ -509,7 +505,6 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 		feedbacks = append(feedbacks, feedback)
 	}
 	GetItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	GetItemFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
@@ -559,7 +554,6 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 	_, err := d.client.Exec(builder.String(), args...)
 	if err == nil {
 		BatchInsertUsersSeconds.Observe(time.Since(startTime).Seconds())
-		BatchInsertUsersTimes.Inc()
 	}
 	return errors.Trace(err)
 }
@@ -600,7 +594,6 @@ func (d *SQLDatabase) DeleteUser(userId string) error {
 		return errors.Trace(err)
 	}
 	DeleteUserSeconds.Observe(time.Since(startTime).Seconds())
-	DeleteUserTimes.Inc()
 	return txn.Commit()
 }
 
@@ -635,7 +628,6 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 			return User{}, errors.Trace(err)
 		}
 		GetUserSeconds.Observe(time.Since(startTime).Seconds())
-		GetUserTimes.Inc()
 		return user, nil
 	}
 	return User{}, ErrUserNotExist
@@ -783,7 +775,6 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 		feedbacks = append(feedbacks, feedback)
 	}
 	GetUserFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	GetUserFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
@@ -956,7 +947,6 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		return errors.Trace(err)
 	}
 	BatchInsertFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	BatchInsertFeedbackTimes.Inc()
 	return nil
 }
 
@@ -1148,7 +1138,6 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 		feedbacks = append(feedbacks, feedback)
 	}
 	GetUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	GetUserItemFeedbackTimes.Inc()
 	return feedbacks, nil
 }
 
@@ -1192,7 +1181,6 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 		return 0, errors.Trace(err)
 	}
 	DeleteUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
-	DeleteUserItemFeedbackTimes.Inc()
 	return int(deleteCount), nil
 }
 
@@ -1282,7 +1270,6 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes, readTyp
 			return 0, errors.Trace(err)
 		}
 		GetClickThroughRateSeconds.Observe(time.Since(startTime).Seconds())
-		GetClickThroughRateTimes.Inc()
 		return ctr, nil
 	}
 	return 0, nil
