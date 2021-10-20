@@ -65,7 +65,7 @@ func (d *SQLDatabase) Init() error {
 		// create tables
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS items (" +
 			"item_id varchar(256) NOT NULL," +
-			"time_stamp timestamp NOT NULL," +
+			"time_stamp datetime NOT NULL," +
 			"labels json NOT NULL," +
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY(item_id)" +
@@ -85,7 +85,7 @@ func (d *SQLDatabase) Init() error {
 			"feedback_type varchar(256) NOT NULL," +
 			"user_id varchar(256) NOT NULL," +
 			"item_id varchar(256) NOT NULL," +
-			"time_stamp timestamp NOT NULL," +
+			"time_stamp datetime NOT NULL," +
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY(feedback_type, user_id, item_id)," +
 			"INDEX (user_id)," +
@@ -95,7 +95,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
 			"name varchar(256) NOT NULL," +
-			"time_stamp timestamp NOT NULL," +
+			"time_stamp datetime NOT NULL," +
 			"value double NOT NULL," +
 			"comment TEXT NOT NULL," +
 			"PRIMARY KEY(name, time_stamp)" +
@@ -796,7 +796,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		builder := strings.Builder{}
 		switch d.driver {
 		case MySQL:
-			builder.WriteString("INSERT IGNORE users(user_id) VALUES ")
+			builder.WriteString("INSERT IGNORE users(user_id, labels, subscribe) VALUES ")
 		case Postgres:
 			builder.WriteString("INSERT INTO users(user_id) VALUES ")
 		case ClickHouse:
@@ -806,7 +806,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		for i, user := range userList {
 			switch d.driver {
 			case MySQL:
-				builder.WriteString("(?)")
+				builder.WriteString("(?, '[]', '[]')")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("($%d)", i+1))
 			case ClickHouse:
@@ -849,7 +849,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		builder := strings.Builder{}
 		switch d.driver {
 		case MySQL:
-			builder.WriteString("INSERT IGNORE items(item_id) VALUES ")
+			builder.WriteString("INSERT IGNORE items(item_id, labels) VALUES ")
 		case Postgres:
 			builder.WriteString("INSERT INTO items(item_id) VALUES ")
 		case ClickHouse:
@@ -859,7 +859,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		for i, item := range itemList {
 			switch d.driver {
 			case MySQL:
-				builder.WriteString("(?)")
+				builder.WriteString("(?, '[]')")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("($%d)", i+1))
 			case ClickHouse:
