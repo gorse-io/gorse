@@ -97,8 +97,8 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Returns(200, "OK", Success{}).
-		Writes(data.UserPatch{}))
+		Reads(data.UserPatch{}).
+		Returns(200, "OK", Success{}))
 	// Get a user
 	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
 		Doc("Get a user.").
@@ -145,8 +145,8 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
-		Returns(200, "OK", Success{}).
-		Writes(data.ItemPatch{}))
+		Reads(data.ItemPatch{}).
+		Returns(200, "OK", Success{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
 		Doc("Get items.").
