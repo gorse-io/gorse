@@ -201,6 +201,26 @@ func (db *MongoDB) BatchInsertItems(items []Item) error {
 	return errors.Trace(err)
 }
 
+// ModifyItem modify an item in MongoDB.
+func (db *MongoDB) ModifyItem(itemId string, patch ItemPatch) error {
+	// create update
+	update := bson.M{}
+	if patch.Comment != nil {
+		update["comment"] = patch.Comment
+	}
+	if patch.Labels != nil {
+		update["labels"] = patch.Labels
+	}
+	if patch.Timestamp != nil {
+		update["timestamp"] = patch.Timestamp
+	}
+	// execute
+	ctx := context.Background()
+	c := db.client.Database(db.dbName).Collection("items")
+	_, err := c.UpdateOne(ctx, bson.M{"itemid": bson.M{"$eq": itemId}}, bson.M{"$set": update})
+	return errors.Trace(err)
+}
+
 // DeleteItem deletes a item from MongoDB.
 func (db *MongoDB) DeleteItem(itemId string) error {
 	startTime := time.Now()
@@ -359,6 +379,23 @@ func (db *MongoDB) BatchInsertUsers(users []User) error {
 	if err == nil {
 		BatchInsertUsersSeconds.Observe(time.Since(startTime).Seconds())
 	}
+	return errors.Trace(err)
+}
+
+// ModifyUser modify a user in MongoDB.
+func (db *MongoDB) ModifyUser(userId string, patch UserPatch) error {
+	// create patch
+	update := bson.M{}
+	if patch.Labels != nil {
+		update["labels"] = patch.Labels
+	}
+	if patch.Comment != nil {
+		update["comment"] = patch.Comment
+	}
+	// execute
+	ctx := context.Background()
+	c := db.client.Database(db.dbName).Collection("users")
+	_, err := c.UpdateOne(ctx, bson.M{"userid": bson.M{"$eq": userId}}, bson.M{"$set": update})
 	return errors.Trace(err)
 }
 
@@ -687,7 +724,7 @@ func (db *MongoDB) GetUserItemFeedback(userId, itemId string, feedbackTypes ...s
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
-	var filter bson.M = bson.M{
+	var filter = bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},
 		"feedbackkey.itemid": bson.M{"$eq": itemId},
 	}
@@ -716,7 +753,7 @@ func (db *MongoDB) DeleteUserItemFeedback(userId, itemId string, feedbackTypes .
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("feedback")
-	var filter bson.M = bson.M{
+	var filter = bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},
 		"feedbackkey.itemid": bson.M{"$eq": itemId},
 	}

@@ -658,3 +658,42 @@ func (r *Redis) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...s
 func (r *Redis) GetClickThroughRate(_ time.Time, _, _ []string) (float64, error) {
 	return 0, ErrUnsupported
 }
+
+// ModifyItem modify an item in Redis.
+func (r *Redis) ModifyItem(itemId string, patch ItemPatch) error {
+	// read item
+	item, err := r.GetItem(itemId)
+	if err != nil {
+		return err
+	}
+	// apply patch
+	if patch.Comment != nil {
+		item.Comment = *patch.Comment
+	}
+	if patch.Labels != nil {
+		item.Labels = patch.Labels
+	}
+	if patch.Timestamp != nil {
+		item.Timestamp = *patch.Timestamp
+	}
+	// write back
+	return r.insertItem(item)
+}
+
+// ModifyUser modify a user in Redis.
+func (r *Redis) ModifyUser(userId string, patch UserPatch) error {
+	// read user
+	user, err := r.GetUser(userId)
+	if err != nil {
+		return err
+	}
+	// apply patch
+	if patch.Comment != nil {
+		user.Comment = *patch.Comment
+	}
+	if patch.Labels != nil {
+		user.Labels = patch.Labels
+	}
+	// write back
+	return r.insertUser(user)
+}

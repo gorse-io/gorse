@@ -17,6 +17,7 @@ package data
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 	"strconv"
 	"testing"
 	"time"
@@ -164,6 +165,15 @@ func testUsers(t *testing.T, db Database) {
 	user, err = db.GetUser("1")
 	assert.NoError(t, err)
 	assert.Equal(t, "override", user.Comment)
+	// test modify
+	err = db.ModifyUser("1", UserPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}})
+	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
+	user, err = db.GetUser("1")
+	assert.NoError(t, err)
+	assert.Equal(t, "modify", user.Comment)
+	assert.Equal(t, []string{"a", "b", "c"}, user.Labels)
 }
 
 func testFeedback(t *testing.T, db Database) {
@@ -353,6 +363,17 @@ func testItems(t *testing.T, db Database) {
 	item, err := db.GetItem("2")
 	assert.NoError(t, err)
 	assert.Equal(t, "override", item.Comment)
+	// test modify
+	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
+	err = db.ModifyItem("2", ItemPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}, Timestamp: &timestamp})
+	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
+	item, err = db.GetItem("2")
+	assert.NoError(t, err)
+	assert.Equal(t, "modify", item.Comment)
+	assert.Equal(t, []string{"a", "b", "c"}, item.Labels)
+	assert.Equal(t, timestamp, item.Timestamp)
 }
 
 func testDeleteUser(t *testing.T, db Database) {

@@ -91,6 +91,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Returns(200, "OK", Success{}).
 		Reads(data.User{}))
+	// Modify a user
+	ws.Route(ws.PATCH("/user/{user-id}").To(s.modifyUser).
+		Doc("Modify a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(200, "OK", Success{}).
+		Writes(data.UserPatch{}))
 	// Get a user
 	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
 		Doc("Get a user.").
@@ -131,6 +139,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Returns(200, "OK", Success{}).
 		Reads(data.Item{}))
+	// Modify an item
+	ws.Route(ws.PATCH("/item/{item-id}").To(s.modifyItem).
+		Doc("Modify an item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Returns(200, "OK", Success{}).
+		Writes(data.ItemPatch{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
 		Doc("Get items.").
@@ -874,6 +890,30 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 	Ok(response, Success{RowAffected: 1})
 }
 
+func (s *RestServer) modifyUser(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// get user id
+	userId := request.PathParameter("user-id")
+	// modify user
+	var patch data.UserPatch
+	if err := request.ReadEntity(&patch); err != nil {
+		BadRequest(response, err)
+		return
+	}
+	if err := s.DataClient.ModifyUser(userId, patch); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	// insert modify timestamp
+	if err := s.CacheClient.SetTime(cache.LastModifyUserTime, userId, time.Now()); err != nil {
+		return
+	}
+	Ok(response, Success{RowAffected: 1})
+}
+
 func (s *RestServer) getUser(request *restful.Request, response *restful.Response) {
 	// Authorize
 	if !s.auth(request, response) {
@@ -1006,27 +1046,31 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 		return
 	}
 	// Add ratings
-	items := make([]Item, 0)
-	if err := request.ReadEntity(&items); err != nil {
+	temp := make([]Item, 0)
+	if err := request.ReadEntity(&temp); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	// Insert items
+	// Insert temp
 	var count int
-	for _, item := range items {
+	var items []data.Item
+	for _, item := range temp {
 		// parse datetime
 		timestamp, err := dateparse.ParseAny(item.Timestamp)
 		if err != nil {
 			BadRequest(response, err)
 			return
 		}
-		err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}})
+		items = append(items, data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment})
 		count++
-		if err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		// insert modify timestamp
+	}
+	err := s.DataClient.BatchInsertItems(items)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	// insert modify timestamp
+	for _, item := range items {
 		if err = s.CacheClient.SetTime(cache.LastModifyItemTime, item.ItemId, time.Now()); err != nil {
 			return
 		}
@@ -1057,6 +1101,30 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 	}
 	// insert modify timestamp
 	if err = s.CacheClient.SetTime(cache.LastModifyItemTime, item.ItemId, time.Now()); err != nil {
+		return
+	}
+	Ok(response, Success{RowAffected: 1})
+}
+
+func (s *RestServer) modifyItem(request *restful.Request, response *restful.Response) {
+	// authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Get item id
+	itemId := request.PathParameter("item-id")
+	// modify item
+	var patch data.ItemPatch
+	if err := request.ReadEntity(&patch); err != nil {
+		BadRequest(response, err)
+		return
+	}
+	if err := s.DataClient.ModifyItem(itemId, patch); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	// insert modify timestamp
+	if err := s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now()); err != nil {
 		return
 	}
 	Ok(response, Success{RowAffected: 1})

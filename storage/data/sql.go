@@ -362,6 +362,91 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	return Item{}, ErrItemNotExist
 }
 
+// ModifyItem modify an item in MySQL.
+func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
+	// ignore empty patch
+	if patch.Labels == nil && patch.Comment == nil && patch.Timestamp != nil {
+		base.Logger().Debug("empty item patch")
+		return nil
+	}
+	var builder strings.Builder
+	var args []interface{}
+	delimiter := " "
+	switch d.driver {
+	case MySQL:
+		builder.WriteString("UPDATE items SET")
+		if patch.Comment != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("`comment` = ?")
+			args = append(args, patch.Comment)
+			delimiter = ", "
+		}
+		if patch.Labels != nil {
+			builder.WriteString(delimiter)
+			text, _ := json.Marshal(patch.Labels)
+			builder.WriteString("`labels` = ?")
+			args = append(args, text)
+			delimiter = ", "
+		}
+		if patch.Timestamp != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("time_stamp = ?")
+			args = append(args, patch.Timestamp)
+			delimiter = ", "
+		}
+		builder.WriteString(" WHERE item_id = ?")
+		args = append(args, itemId)
+	case Postgres:
+		builder.WriteString("UPDATE items SET")
+		if patch.Comment != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString(fmt.Sprintf("comment = $%d", len(args)+1))
+			args = append(args, patch.Comment)
+			delimiter = ", "
+		}
+		if patch.Labels != nil {
+			builder.WriteString(delimiter)
+			text, _ := json.Marshal(patch.Labels)
+			builder.WriteString(fmt.Sprintf("labels = $%d", len(args)+1))
+			args = append(args, text)
+			delimiter = ", "
+		}
+		if patch.Timestamp != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString(fmt.Sprintf("time_stamp = $%d", len(args)+1))
+			args = append(args, patch.Timestamp)
+			delimiter = ", "
+		}
+		builder.WriteString(fmt.Sprintf(" WHERE item_id = $%d", len(args)+1))
+		args = append(args, itemId)
+	case ClickHouse:
+		builder.WriteString("ALTER TABLE items UPDATE")
+		if patch.Comment != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("`comment` = ?")
+			args = append(args, patch.Comment)
+			delimiter = ", "
+		}
+		if patch.Labels != nil {
+			builder.WriteString(delimiter)
+			text, _ := json.Marshal(patch.Labels)
+			builder.WriteString("`labels` = ?")
+			args = append(args, string(text))
+			delimiter = ", "
+		}
+		if patch.Timestamp != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("time_stamp = ?")
+			args = append(args, patch.Timestamp)
+			delimiter = ", "
+		}
+		builder.WriteString(" WHERE item_id = ?")
+		args = append(args, itemId)
+	}
+	_, err := d.client.Exec(builder.String(), args...)
+	return errors.Trace(err)
+}
+
 // GetItems returns items from MySQL.
 func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
 	var result *sql.Rows
@@ -631,6 +716,73 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 		return user, nil
 	}
 	return User{}, ErrUserNotExist
+}
+
+// ModifyUser modify a user in MySQL.
+func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
+	// ignore empty patch
+	if patch.Labels == nil && patch.Comment == nil {
+		base.Logger().Debug("empty user patch")
+		return nil
+	}
+	var builder strings.Builder
+	var args []interface{}
+	delimiter := " "
+	switch d.driver {
+	case MySQL:
+		builder.WriteString("UPDATE users SET")
+		if patch.Comment != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("`comment` = ?")
+			args = append(args, patch.Comment)
+			delimiter = ", "
+		}
+		if patch.Labels != nil {
+			builder.WriteString(delimiter)
+			text, _ := json.Marshal(patch.Labels)
+			builder.WriteString("`labels` = ?")
+			args = append(args, text)
+			delimiter = ", "
+		}
+		builder.WriteString(" WHERE user_id = ?")
+		args = append(args, userId)
+	case Postgres:
+		builder.WriteString("UPDATE users SET")
+		if patch.Comment != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString(fmt.Sprintf("comment = $%d", len(args)+1))
+			args = append(args, patch.Comment)
+			delimiter = ", "
+		}
+		if patch.Labels != nil {
+			builder.WriteString(delimiter)
+			text, _ := json.Marshal(patch.Labels)
+			builder.WriteString(fmt.Sprintf("labels = $%d", len(args)+1))
+			args = append(args, text)
+			delimiter = ", "
+		}
+		builder.WriteString(fmt.Sprintf(" WHERE user_id = $%d", len(args)+1))
+		args = append(args, userId)
+	case ClickHouse:
+		builder.WriteString("ALTER TABLE users UPDATE")
+		if patch.Comment != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("`comment` = ?")
+			args = append(args, patch.Comment)
+			delimiter = ", "
+		}
+		if patch.Labels != nil {
+			builder.WriteString(delimiter)
+			text, _ := json.Marshal(patch.Labels)
+			builder.WriteString("`labels` = ?")
+			args = append(args, string(text))
+			delimiter = ", "
+		}
+		builder.WriteString(" WHERE user_id = ?")
+		args = append(args, userId)
+	}
+	_, err := d.client.Exec(builder.String(), args...)
+	return errors.Trace(err)
 }
 
 // GetUsers returns users from MySQL.
