@@ -42,12 +42,26 @@ type Item struct {
 	Comment   string
 }
 
+// ItemPatch is the modification on an item.
+type ItemPatch struct {
+	Timestamp *time.Time
+	Labels    []string
+	Comment   *string
+}
+
 // User stores meta data about user.
 type User struct {
 	UserId    string
 	Labels    []string
 	Subscribe []string
 	Comment   string
+}
+
+// UserPatch is the modification on a user.
+type UserPatch struct {
+	Labels    []string
+	Subscribe []string
+	Comment   *string
 }
 
 // FeedbackKey identifies feedback.
@@ -79,11 +93,13 @@ type Database interface {
 	BatchInsertItems(items []Item) error
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
+	ModifyItem(itemId string, patch ItemPatch) error
 	GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error)
 	GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error)
 	BatchInsertUsers(users []User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
+	ModifyUser(userId string, patch UserPatch) error
 	GetUsers(cursor string, n int) (string, []User, error)
 	GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error)
 	GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error)

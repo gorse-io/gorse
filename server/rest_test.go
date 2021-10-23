@@ -15,6 +15,7 @@ package server
 
 import (
 	"encoding/json"
+	"google.golang.org/protobuf/proto"
 	"net/http"
 	"testing"
 	"time"
@@ -142,6 +143,28 @@ func TestServer_Users(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
+	// test modify
+	apitest.New().
+		Handler(s.handler).
+		Patch("/api/user/1").
+		Header("X-API-Key", apiKey).
+		JSON(data.UserPatch{Labels: []string{"a", "b", "c"}, Comment: proto.String("modified")}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/user/1").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, data.User{
+			UserId:  "1",
+			Comment: "modified",
+			Labels:  []string{"a", "b", "c"},
+		})).
+		End()
 }
 
 func TestServer_Items(t *testing.T) {
@@ -232,6 +255,30 @@ func TestServer_Items(t *testing.T) {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusNotFound).
+		End()
+	// test modify
+	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
+	apitest.New().
+		Handler(s.handler).
+		Patch("/api/item/2").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Labels: []string{"a", "b", "c"}, Comment: proto.String("modified"), Timestamp: &timestamp}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/item/2").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, data.Item{
+			ItemId:    "2",
+			Comment:   "modified",
+			Labels:    []string{"a", "b", "c"},
+			Timestamp: timestamp,
+		})).
 		End()
 }
 

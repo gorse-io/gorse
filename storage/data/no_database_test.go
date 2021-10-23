@@ -31,6 +31,8 @@ func TestNoDatabase(t *testing.T) {
 
 	err = database.BatchInsertItems(nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.ModifyItem("", ItemPatch{})
+	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetItem("")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, _, err = database.GetItems("", 0, nil)
@@ -43,6 +45,8 @@ func TestNoDatabase(t *testing.T) {
 	err = database.BatchInsertUsers(nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetUser("")
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.ModifyUser("", UserPatch{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, _, err = database.GetUsers("", 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)

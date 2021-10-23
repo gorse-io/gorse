@@ -159,3 +159,11 @@ func (NoDatabase) GetMeasurements(_ string, _ int) ([]Measurement, error) {
 func (NoDatabase) GetClickThroughRate(_ time.Time, _, _ []string) (float64, error) {
 	return 0, ErrNoDatabase
 }
+
+func (d NoDatabase) ModifyItem(_ string, _ ItemPatch) error {
+	return ErrNoDatabase
+}
+
+func (d NoDatabase) ModifyUser(_ string, _ UserPatch) error {
+	return ErrNoDatabase
+}
