@@ -411,16 +411,16 @@ func TestMaster_GetUsers(t *testing.T) {
 	defer s.Close(t)
 	// add users
 	users := []User{
-		{data.User{UserId: "0"}, "2000-01-01", "2020-01-02"},
-		{data.User{UserId: "1"}, "2001-01-01", "2021-01-02"},
-		{data.User{UserId: "2"}, "2002-01-01", "2022-01-02"},
+		{data.User{UserId: "0"}, time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC), time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{data.User{UserId: "1"}, time.Date(2001, 1, 1, 1, 1, 1, 1, time.UTC), time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{data.User{UserId: "2"}, time.Date(2002, 1, 1, 1, 1, 1, 1, time.UTC), time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
 	}
 	for _, user := range users {
 		err := s.DataClient.BatchInsertUsers([]data.User{user.User})
 		assert.NoError(t, err)
-		err = s.CacheClient.SetString(cache.LastModifyUserTime, user.UserId, user.LastActiveTime)
+		err = s.CacheClient.SetTime(cache.LastModifyUserTime, user.UserId, user.LastActiveTime)
 		assert.NoError(t, err)
-		err = s.CacheClient.SetString(cache.LastUpdateUserRecommendTime, user.UserId, user.LastUpdateTime)
+		err = s.CacheClient.SetTime(cache.LastUpdateUserRecommendTime, user.UserId, user.LastUpdateTime)
 		assert.NoError(t, err)
 	}
 	// get users
