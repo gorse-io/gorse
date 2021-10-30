@@ -48,13 +48,14 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "", config.Server.APIKey)
 
 	// recommend configuration
-	assert.Equal(t, 365, config.Recommend.PopularWindow)
+	assert.Equal(t, 30, config.Recommend.PopularWindow)
 	assert.Equal(t, 360, config.Recommend.FitPeriod)
 	assert.Equal(t, 60, config.Recommend.SearchPeriod)
 	assert.Equal(t, 100, config.Recommend.SearchEpoch)
 	assert.Equal(t, 10, config.Recommend.SearchTrials)
 	assert.Equal(t, 1, config.Recommend.RefreshRecommendPeriod)
 	assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.FallbackRecommend)
+	assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.ExploreRecommend)
 	assert.Equal(t, "similar", config.Recommend.ItemNeighborType)
 	assert.Equal(t, "similar", config.Recommend.UserNeighborType)
 	assert.True(t, config.Recommend.EnableColRecommend)
@@ -62,6 +63,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.True(t, config.Recommend.EnableUserBasedRecommend)
 	assert.False(t, config.Recommend.EnablePopularRecommend)
 	assert.True(t, config.Recommend.EnableLatestRecommend)
+	assert.True(t, config.Recommend.EnableClickThroughPrediction)
 }
 
 func TestConfig_FillDefault(t *testing.T) {

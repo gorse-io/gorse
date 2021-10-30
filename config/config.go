@@ -97,40 +97,43 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	PopularWindow            int      `toml:"popular_window"`
-	FitPeriod                int      `toml:"fit_period"`
-	SearchPeriod             int      `toml:"search_period"`
-	SearchEpoch              int      `toml:"search_epoch"`
-	SearchTrials             int      `toml:"search_trials"`
-	RefreshRecommendPeriod   int      `toml:"refresh_recommend_period"`
-	FallbackRecommend        []string `toml:"fallback_recommend"`
-	ItemNeighborType         string   `toml:"item_neighbor_type"`
-	UserNeighborType         string   `toml:"user_neighbor_type"`
-	EnableLatestRecommend    bool     `toml:"enable_latest_recommend"`
-	EnablePopularRecommend   bool     `toml:"enable_popular_recommend"`
-	EnableUserBasedRecommend bool     `toml:"enable_user_based_recommend"`
-	EnableItemBasedRecommend bool     `toml:"enable_item_based_recommend"`
-	EnableColRecommend       bool     `toml:"enable_collaborative_recommend"`
+	PopularWindow                int                `toml:"popular_window"`
+	FitPeriod                    int                `toml:"fit_period"`
+	SearchPeriod                 int                `toml:"search_period"`
+	SearchEpoch                  int                `toml:"search_epoch"`
+	SearchTrials                 int                `toml:"search_trials"`
+	RefreshRecommendPeriod       int                `toml:"refresh_recommend_period"`
+	FallbackRecommend            []string           `toml:"fallback_recommend"`
+	ExploreRecommend             map[string]float64 `toml:"explore_recommend"`
+	ItemNeighborType             string             `toml:"item_neighbor_type"`
+	UserNeighborType             string             `toml:"user_neighbor_type"`
+	EnableLatestRecommend        bool               `toml:"enable_latest_recommend"`
+	EnablePopularRecommend       bool               `toml:"enable_popular_recommend"`
+	EnableUserBasedRecommend     bool               `toml:"enable_user_based_recommend"`
+	EnableItemBasedRecommend     bool               `toml:"enable_item_based_recommend"`
+	EnableColRecommend           bool               `toml:"enable_collaborative_recommend"`
+	EnableClickThroughPrediction bool               `toml:"enable_click_through_prediction"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
 func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 	if config == nil {
 		return &RecommendConfig{
-			PopularWindow:            180,
-			FitPeriod:                60,
-			SearchPeriod:             180,
-			SearchEpoch:              100,
-			SearchTrials:             10,
-			RefreshRecommendPeriod:   5,
-			FallbackRecommend:        []string{"popular"},
-			ItemNeighborType:         "auto",
-			UserNeighborType:         "auto",
-			EnableLatestRecommend:    false,
-			EnablePopularRecommend:   false,
-			EnableUserBasedRecommend: false,
-			EnableItemBasedRecommend: false,
-			EnableColRecommend:       true,
+			PopularWindow:                180,
+			FitPeriod:                    60,
+			SearchPeriod:                 180,
+			SearchEpoch:                  100,
+			SearchTrials:                 10,
+			RefreshRecommendPeriod:       5,
+			FallbackRecommend:            []string{"popular"},
+			ItemNeighborType:             "auto",
+			UserNeighborType:             "auto",
+			EnableLatestRecommend:        false,
+			EnablePopularRecommend:       false,
+			EnableUserBasedRecommend:     false,
+			EnableItemBasedRecommend:     false,
+			EnableColRecommend:           true,
+			EnableClickThroughPrediction: false,
 		}
 	}
 	return config
@@ -236,6 +239,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "enable_collaborative_recommend") {
 		config.Recommend.EnableColRecommend = defaultRecommendConfig.EnableColRecommend
+	}
+	if !meta.IsDefined("recommend", "enable_click_through_prediction") {
+		config.Recommend.EnableClickThroughPrediction = defaultRecommendConfig.EnableClickThroughPrediction
 	}
 }
 

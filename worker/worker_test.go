@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
+	cmap "github.com/orcaman/concurrent-map"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -28,6 +29,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
+	"io"
 	"net"
 	"strconv"
 	"testing"
@@ -61,7 +63,7 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	w := newMockWorker(t)
 	defer w.Close(t)
 	// insert cache
-	err := w.cacheClient.SetScores(cache.CTRRecommend, "0", []cache.Scored{{"0", 0}})
+	err := w.cacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.SetTime(cache.LastModifyUserTime, "0", time.Now().Add(-time.Hour))
@@ -70,7 +72,7 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(time.Hour*100))
 	assert.False(t, w.checkRecommendCacheTimeout("0"))
-	err = w.cacheClient.ClearScores(cache.CTRRecommend, "0")
+	err = w.cacheClient.ClearScores(cache.OfflineRecommend, "0")
 	assert.True(t, w.checkRecommendCacheTimeout("0"))
 }
 
@@ -173,7 +175,7 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
 
-	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{"3", 0},
@@ -234,7 +236,7 @@ func TestRecommend_ItemBased(t *testing.T) {
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
-	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, 2)
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"29", 0}, {"28", 0}, {"27", 0}}, recommends)
 }
@@ -269,7 +271,7 @@ func TestRecommend_UserBased(t *testing.T) {
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
-	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, 2)
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"48", 0}, {"11", 0}, {"12", 0}}, recommends)
 }
@@ -285,7 +287,7 @@ func TestRecommend_Popular(t *testing.T) {
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
-	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
 }
@@ -301,9 +303,36 @@ func TestRecommend_Latest(t *testing.T) {
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
-	recommends, err := w.cacheClient.GetScores(cache.CTRRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+}
+
+func TestMergeAndShuffle(t *testing.T) {
+	scores := mergeAndShuffle([][]string{{"1", "2", "3"}, {"1", "3", "5"}})
+	assert.ElementsMatch(t, []string{"1", "2", "3", "5"}, cache.RemoveScores(scores))
+}
+
+func TestExploreRecommend(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Recommend.ExploreRecommend = map[string]float64{"popular": 0.3, "latest": 0.3}
+	// insert popular items
+	err := w.cacheClient.SetScores(cache.PopularItems, "", []cache.Scored{{"popular", 0}})
+	assert.NoError(t, err)
+	// insert latest items
+	err = w.cacheClient.SetScores(cache.LatestItems, "", []cache.Scored{{"latest", 0}})
+	assert.NoError(t, err)
+
+	recommend, err := w.exploreRecommend(cache.CreateScoredItems(
+		[]string{"1", "2", "3", "4", "5", "6", "7", "8"},
+		[]float32{0, 0, 0, 0, 0, 0, 0, 0}))
+	assert.NoError(t, err)
+	items := cache.RemoveScores(recommend)
+	assert.Contains(t, items, "latest")
+	assert.Contains(t, items, "popular")
+	assert.Equal(t, 8, len(recommend))
 }
 
 func marshal(t *testing.T, v interface{}) string {
@@ -444,4 +473,59 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Equal(t, int64(2), serv.currentRankingModelVersion)
 	assert.Equal(t, int64(3), serv.currentUserIndexVersion)
 	master.Stop()
+}
+
+type mockFactorizationMachine struct {
+	click.BaseFactorizationMachine
+}
+
+func (m mockFactorizationMachine) GetParamsGrid() model.ParamsGrid {
+	panic("implement me")
+}
+
+func (m mockFactorizationMachine) Clear() {
+	panic("implement me")
+}
+
+func (m mockFactorizationMachine) Invalid() bool {
+	panic("implement me")
+}
+
+func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []string) float32 {
+	score, err := strconv.Atoi(itemId)
+	if err != nil {
+		panic(err)
+	}
+	return float32(score)
+}
+
+func (m mockFactorizationMachine) InternalPredict(_ []int32, _ []float32) float32 {
+	panic("implement me")
+}
+
+func (m mockFactorizationMachine) Fit(_, _ *click.Dataset, _ *click.FitConfig) click.Score {
+	panic("implement me")
+}
+
+func (m mockFactorizationMachine) Marshal(_ io.Writer) error {
+	panic("implement me")
+}
+
+func TestRankByClickTroughRate(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	// insert a user
+	err := w.dataClient.BatchInsertUsers([]data.User{{UserId: "1"}})
+	assert.NoError(t, err)
+	// insert items
+	itemCache := cmap.New()
+	for i := 1; i <= 5; i++ {
+		itemCache.Set(strconv.Itoa(i), data.Item{ItemId: strconv.Itoa(i)})
+	}
+	// rank items
+	w.clickModel = new(mockFactorizationMachine)
+	result, err := w.rankByClickTroughRate("1", [][]string{{"1", "2", "3", "4", "5"}}, itemCache)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"5", "4", "3", "2", "1"}, cache.RemoveScores(result))
 }

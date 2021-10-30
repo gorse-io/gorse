@@ -51,7 +51,7 @@ api_key = ""                    # secret key for RESTful APIs (SSL required)
 [recommend]
 
 # The time window of popular items (days). The default values is 180.
-popular_window = 365
+popular_window = 30
 
 # The time period for model fitting (minutes). The default values is 60.
 fit_period = 10
@@ -68,15 +68,12 @@ search_trials = 10
 # The time period to refresh recommendation for inactive users (days). The default values is 5.
 refresh_recommend_period = 1
 
-# The fallback recommendation method for cold-start users:
+# The fallback recommendation method is used when cached recommendation drained out:
 #   item_based: Recommend similar items to cold-start users.
 #   popular: Recommend popular items to cold-start users.
 #   latest: Recommend latest items to cold-start users.
-# The default values is ["latest"].
+# Recommenders are used in order. The default values is ["latest"].
 fallback_recommend = ["item_based", "latest"]
-
-# The number of latest (cold-start) items insert to recommended items cache. The default values is 10.
-explore_latest_num = 20
 
 # The type of neighbors for items. There are three types:
 #   similar: Neighbors are found by number of common labels.
@@ -108,3 +105,13 @@ enable_item_based_recommend = false
 
 # Enable collaborative filtering recommendation during offline recommendation. The default values is true.
 enable_collaborative_recommend = true
+
+# Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
+# would be merged randomly. The default values is true.
+enable_click_through_prediction = true
+
+# The explore recommendation method is used to inject popular items or latest items into recommended result:
+#   popular: Recommend popular items to cold-start users.
+#   latest: Recommend latest items to cold-start users.
+# Recommenders are used in order. The default values is { popular = 0.0, latest = 0.0 }.
+explore_recommend = { popular = 0.1, latest = 0.2 }
