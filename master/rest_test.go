@@ -565,7 +565,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.CacheClient.SetScores(cache.CTRRecommend, "0", itemIds)
+	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -581,7 +581,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	}
 	apitest.New().
 		Handler(s.handler).
-		Get("/api/dashboard/recommend/0/ctr").
+		Get("/api/dashboard/recommend/0/offline").
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []data.Item{

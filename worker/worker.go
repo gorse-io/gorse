@@ -18,15 +18,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
-	"math/rand"
-	"net/http"
-	"time"
-
 	"github.com/juju/errors"
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -36,6 +32,10 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"math"
+	"math/rand"
+	"net/http"
+	"time"
 )
 
 // Worker manages states of a worker node.
@@ -428,9 +428,8 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			}
 		}
 
-		// generate recommendation
-		var candidateItems []string
-		var candidateScores []float32
+		// Recommender #1: collaborative filtering.
+		var candidates [][]string
 		if w.cfg.Recommend.EnableColRecommend {
 			localStartTime := time.Now()
 			recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
@@ -440,20 +439,20 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				}
 			}
 			// save result
-			candidateItems, candidateScores = recItems.PopAll()
-			excludeSet.Add(candidateItems...)
-			if err = w.cacheClient.SetScores(cache.CollaborativeRecommend, userId, cache.CreateScoredItems(candidateItems, candidateScores)); err != nil {
-				base.Logger().Error("failed to cache recommendation", zap.Error(err))
+			recommendItems, recommendScores := recItems.PopAll()
+			candidates = append(candidates, recommendItems)
+			if err = w.cacheClient.SetScores(cache.CollaborativeRecommend, userId, cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
+				base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.Error(err))
 				return errors.Trace(err)
 			}
 			CollaborativeRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
 		}
 
-		// insert item-based items
+		// Recommender #2: item-based.
 		if w.cfg.Recommend.EnableItemBasedRecommend {
 			localStartTime := time.Now()
 			// collect candidates
-			candidates := make(map[string]float32)
+			scores := make(map[string]float32)
 			for _, itemId := range positiveItems {
 				// load similar items
 				similarItems, err := w.cacheClient.GetScores(cache.ItemNeighbors, itemId, 0, w.cfg.Database.CacheSize)
@@ -463,25 +462,24 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				// add unseen items
 				for _, item := range similarItems {
 					if !excludeSet.Has(item.Id) {
-						candidates[item.Id] += item.Score
+						scores[item.Id] += item.Score
 					}
 				}
 			}
 			// collect top k
 			filter := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
-			for id, score := range candidates {
+			for id, score := range scores {
 				filter.Push(id, score)
 			}
 			ids, _ := filter.PopAll()
-			candidateItems = append(candidateItems, ids...)
-			excludeSet.Add(ids...)
+			candidates = append(candidates, ids)
 			ItemBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
 		}
 
 		// insert user-based items
 		if w.cfg.Recommend.EnableUserBasedRecommend {
 			localStartTime := time.Now()
-			candidates := make(map[string]float32)
+			scores := make(map[string]float32)
 			// load similar users
 			similarUsers, err := w.cacheClient.GetScores(cache.UserNeighbors, userId, 0, w.cfg.Database.CacheSize)
 			if err != nil {
@@ -496,64 +494,72 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				// add unseen items
 				for _, feedback := range feedbacks {
 					if !excludeSet.Has(feedback.ItemId) {
-						candidates[feedback.ItemId] += user.Score
+						scores[feedback.ItemId] += user.Score
 					}
 				}
 			}
 			// collect top k
 			filter := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
-			for id, score := range candidates {
+			for id, score := range scores {
 				filter.Push(id, score)
 			}
 			ids, _ := filter.PopAll()
-			candidateItems = append(candidateItems, ids...)
-			excludeSet.Add(ids...)
+			candidates = append(candidates, ids)
 			UserBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
 		}
 
-		// insert latest items
+		// Recommender #4: latest items.
 		if w.cfg.Recommend.EnableLatestRecommend {
 			localStartTime := time.Now()
 			latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Database.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
+			var recommend []string
 			for _, latestItem := range latestItems {
 				if !excludeSet.Has(latestItem.Id) {
-					candidateItems = append(candidateItems, latestItem.Id)
-					excludeSet.Add(latestItem.Id)
+					recommend = append(recommend, latestItem.Id)
 				}
 			}
+			candidates = append(candidates, recommend)
 			LoadLatestRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
 		}
 
-		// insert popular items
+		// Recommender #5: popular items.
 		if w.cfg.Recommend.EnablePopularRecommend {
 			localStartTime := time.Now()
 			popularItems, err := w.cacheClient.GetScores(cache.PopularItems, "", 0, w.cfg.Database.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
+			var recommend []string
 			for _, popularItem := range popularItems {
 				if !excludeSet.Has(popularItem.Id) {
-					candidateItems = append(candidateItems, popularItem.Id)
-					excludeSet.Add(popularItem.Id)
+					recommend = append(recommend, popularItem.Id)
 				}
 			}
+			candidates = append(candidates, recommend)
 			LoadPopularRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
 		}
 
-		// rank items in result by click-through-rate
+		// rank items
 		var result []cache.Scored
-		if w.clickModel != nil {
-			result, err = w.rankByClickTroughRate(userId, candidateItems, itemCache)
+		if w.cfg.Recommend.EnableClickThroughPrediction && w.clickModel != nil {
+			result, err = w.rankByClickTroughRate(userId, candidates, itemCache)
 			if err != nil {
 				return errors.Trace(err)
 			}
 		} else {
-			result = cache.CreateScoredItems(candidateItems, base.RepeatFloat32s(len(candidateItems), 0))
+			result = mergeAndShuffle(candidates)
 		}
-		if err = w.cacheClient.SetScores(cache.CTRRecommend, userId, result); err != nil {
+
+		// explore latest and popular
+		result, err = w.exploreRecommend(result)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		if err = w.cacheClient.SetScores(cache.OfflineRecommend, userId, result); err != nil {
 			base.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return errors.Trace(err)
 		}
@@ -581,9 +587,20 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(userId string, itemIds []string, itemCache cmap.ConcurrentMap) ([]cache.Scored, error) {
+func (w *Worker) rankByClickTroughRate(userId string, candidates [][]string, itemCache cmap.ConcurrentMap) ([]cache.Scored, error) {
 	startTime := time.Now()
 	var err error
+	// concat candidates
+	memo := strset.New()
+	var itemIds []string
+	for _, v := range candidates {
+		for _, itemId := range v {
+			if !memo.Has(itemId) {
+				memo.Add(itemId)
+				itemIds = append(itemIds, itemId)
+			}
+		}
+	}
 	// download user
 	var user data.User
 	user, err = w.dataClient.GetUser(userId)
@@ -617,6 +634,79 @@ func (w *Worker) rankByClickTroughRate(userId string, itemIds []string, itemCach
 	return cache.CreateScoredItems(elems, scores), nil
 }
 
+func mergeAndShuffle(candidates [][]string) []cache.Scored {
+	memo := strset.New()
+	pos := make([]int, len(candidates))
+	var recommend []cache.Scored
+	for {
+		// filter out ended slice
+		var src []int
+		for i := range candidates {
+			if pos[i] < len(candidates[i]) {
+				src = append(src, i)
+			}
+		}
+		if len(src) == 0 {
+			break
+		}
+		// select a slice randomly
+		j := src[rand.Intn(len(src))]
+		candidateId := candidates[j][pos[j]]
+		pos[j]++
+		if !memo.Has(candidateId) {
+			memo.Add(candidateId)
+			recommend = append(recommend, cache.Scored{Score: 0, Id: candidateId})
+		}
+	}
+	return recommend
+}
+
+func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored) ([]cache.Scored, error) {
+	// create thresholds
+	explorePopularThreshold := 0.0
+	if threshold, exist := w.cfg.Recommend.ExploreRecommend["popular"]; exist {
+		explorePopularThreshold = threshold
+	}
+	exploreLatestThreshold := explorePopularThreshold
+	if threshold, exist := w.cfg.Recommend.ExploreRecommend["latest"]; exist {
+		exploreLatestThreshold += threshold
+	}
+	// load popular items
+	popularItems, err := w.cacheClient.GetScores(cache.PopularItems, "", 0, w.cfg.Database.CacheSize)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	// load the latest items
+	latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Database.CacheSize)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	// explore recommendation
+	var exploreRecommend []cache.Scored
+	memo := strset.New()
+	for range exploitRecommend {
+		dice := rand.Float64()
+		var recommendItem cache.Scored
+		if dice < explorePopularThreshold && len(popularItems) > 0 {
+			recommendItem = popularItems[0]
+			popularItems = popularItems[1:]
+		} else if dice < exploreLatestThreshold && len(latestItems) > 0 {
+			recommendItem = latestItems[0]
+			latestItems = latestItems[1:]
+		} else if len(exploitRecommend) > 0 {
+			recommendItem = exploitRecommend[0]
+			exploitRecommend = exploitRecommend[1:]
+		} else {
+			break
+		}
+		if !memo.Has(recommendItem.Id) {
+			memo.Add(recommendItem.Id)
+			exploreRecommend = append(exploreRecommend, recommendItem)
+		}
+	}
+	return exploreRecommend, nil
+}
+
 // checkRecommendCacheTimeout checks if recommend cache stale.
 // 1. if cache is empty, stale.
 // 2. if active time > recommend time, stale.
@@ -624,7 +714,7 @@ func (w *Worker) rankByClickTroughRate(userId string, itemIds []string, itemCach
 func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
 	var activeTime, recommendTime time.Time
 	// check cache
-	items, err := w.cacheClient.GetScores(cache.CTRRecommend, userId, 0, -1)
+	items, err := w.cacheClient.GetScores(cache.OfflineRecommend, userId, 0, -1)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
 		return true

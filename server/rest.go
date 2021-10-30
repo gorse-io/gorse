@@ -22,6 +22,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -513,275 +514,285 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	}
 	// Get user id
 	userId := request.PathParameter("user-id")
-	s.getList(cache.CTRRecommend, userId, request, response)
+	s.getList(cache.OfflineRecommend, userId, request, response)
 }
-
-type Recommender byte
-
-const (
-	CTRRecommender           Recommender = 0x1
-	CollaborativeRecommender Recommender = 0x2
-	UserBasedRecommender     Recommender = 0x4
-	ItemBasedRecommender     Recommender = 0x8
-	LatestRecommender        Recommender = 0x10
-	PopularRecommender       Recommender = 0x20
-)
 
 // Recommend items to users.
 // 1. If there are recommendations in cache, return cached recommendations.
 // 2. If there are historical interactions of the users, return similar items.
 // 3. Otherwise, return fallback recommendation (popular/latest).
 func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender) ([]string, error) {
-	var (
-		err              error
-		loadFinalRecTime time.Duration
-		loadColRecTime   time.Duration
-		loadLoadHistTime time.Duration
-		itemBasedTime    time.Duration
-		userBasedTime    time.Duration
-		loadLatestTime   time.Duration
-		loadPopularTime  time.Duration
-		numPrevStage     int
-		results          []string
-		excludeSet       = set.NewStringSet()
-	)
-
-	// create recommender mask
-	var recommenderMask Recommender
-	if len(recommenders) == 0 {
-		recommenderMask |= CTRRecommender | ItemBasedRecommender | PopularRecommender
-	} else {
-		for _, recommender := range recommenders {
-			recommenderMask |= recommender
-		}
-	}
-
 	initStart := time.Now()
 
-	if recommenderMask&CTRRecommender > 0 {
-		// read recommendations in cache.
-		itemsChan := make(chan []string, 1)
-		errChan := make(chan error, 1)
-		go func() {
-			var collaborativeFilteringItems []cache.Scored
-			collaborativeFilteringItems, err = s.CacheClient.GetScores(cache.CTRRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
-			if err != nil {
-				itemsChan <- nil
-				errChan <- err
-			} else {
-				itemsChan <- cache.RemoveScores(collaborativeFilteringItems)
-				errChan <- nil
-				if len(collaborativeFilteringItems) == 0 {
-					base.Logger().Warn("empty collaborative filtering", zap.String("user_id", userId))
-				}
-			}
-		}()
+	// create context
+	ctx, err := s.createRecommendContext(userId, n)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
-		// read ignore items
-		loadCachedReadStart := time.Now()
-		ignoreItems, err := s.CacheClient.GetScores(cache.IgnoreItems, userId, 0, -1)
+	// execute recommenders
+	for _, recommender := range recommenders {
+		err = recommender(ctx)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		for _, item := range ignoreItems {
-			if item.Score <= float32(time.Now().Unix()) {
-				excludeSet.Add(item.Id)
-			}
-		}
-
-		// remove ignore items
-		items := <-itemsChan
-		err = <-errChan
-		if err != nil {
-			return nil, err
-		}
-		results = make([]string, 0, len(items))
-		for _, itemId := range items {
-			if !excludeSet.Has(itemId) {
-				results = append(results, itemId)
-				excludeSet.Add(itemId)
-			}
-		}
-
-		loadFinalRecTime = time.Since(loadCachedReadStart)
-		LoadCTRRecommendCacheSeconds.Observe(loadFinalRecTime.Seconds())
 	}
-	numFromFinal := len(results) - numPrevStage
-	numPrevStage = len(results)
 
-	// Load collaborative recommendation.  The running condition is:
-	// 1. The number of current results is less than n.
-	// 2. There are recommenders other than CollaborativeRecommender.
-	if len(results) < n && recommenderMask&CollaborativeRecommender > 0 {
+	// return recommendations
+	if len(ctx.results) > n {
+		ctx.results = ctx.results[:n]
+	}
+	totalTime := time.Since(initStart)
+	base.Logger().Info("complete recommendation",
+		zap.Int("num_from_final", ctx.numFromOffline),
+		zap.Int("num_from_collaborative", ctx.numFromCollaborative),
+		zap.Int("num_from_item_based", ctx.numFromItemBased),
+		zap.Int("num_from_user_based", ctx.numFromUserBased),
+		zap.Int("num_from_latest", ctx.numFromLatest),
+		zap.Int("num_from_poplar", ctx.numFromPopular),
+		zap.Duration("total_time", totalTime),
+		zap.Duration("load_final_recommend_time", ctx.loadOfflineRecTime),
+		zap.Duration("load_col_recommend_time", ctx.loadColRecTime),
+		zap.Duration("load_hist_time", ctx.loadLoadHistTime),
+		zap.Duration("item_based_recommend_time", ctx.itemBasedTime),
+		zap.Duration("user_based_recommend_time", ctx.userBasedTime),
+		zap.Duration("load_latest_time", ctx.loadLatestTime),
+		zap.Duration("load_popular_time", ctx.loadPopularTime))
+	return ctx.results, nil
+}
+
+type recommendContext struct {
+	userId       string
+	userFeedback []data.Feedback
+	n            int
+	results      []string
+	excludeSet   *strset.Set
+
+	numPrevStage         int
+	numFromLatest        int
+	numFromPopular       int
+	numFromUserBased     int
+	numFromItemBased     int
+	numFromCollaborative int
+	numFromOffline       int
+
+	loadOfflineRecTime time.Duration
+	loadColRecTime     time.Duration
+	loadLoadHistTime   time.Duration
+	itemBasedTime      time.Duration
+	userBasedTime      time.Duration
+	loadLatestTime     time.Duration
+	loadPopularTime    time.Duration
+}
+
+func (s *RestServer) createRecommendContext(userId string, n int) (*recommendContext, error) {
+	ignoreItems, err := s.CacheClient.GetScores(cache.IgnoreItems, userId, 0, -1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	excludeSet := strset.New()
+	for _, item := range ignoreItems {
+		if item.Score <= float32(time.Now().Unix()) {
+			excludeSet.Add(item.Id)
+		}
+	}
+	return &recommendContext{
+		userId:     userId,
+		n:          n,
+		excludeSet: excludeSet,
+	}, nil
+}
+
+func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
+	if ctx.userFeedback == nil {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.GetScores(cache.CollaborativeRecommend, userId, 0, s.GorseConfig.Database.CacheSize)
+		var err error
+		ctx.userFeedback, err = s.DataClient.GetUserFeedback(ctx.userId, false)
 		if err != nil {
-			return nil, err
+			return errors.Trace(err)
+		}
+		for _, feedback := range ctx.userFeedback {
+			ctx.excludeSet.Add(feedback.ItemId)
+		}
+		ctx.loadLoadHistTime = time.Since(start)
+	}
+	return nil
+}
+
+type Recommender func(ctx *recommendContext) error
+
+func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
+	if len(ctx.results) < ctx.n {
+		start := time.Now()
+		recommendation, err := s.CacheClient.GetScores(cache.OfflineRecommend, ctx.userId, 0, s.GorseConfig.Database.CacheSize)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		for _, item := range recommendation {
+			if !ctx.excludeSet.Has(item.Id) {
+				ctx.results = append(ctx.results, item.Id)
+				ctx.excludeSet.Add(item.Id)
+			}
+		}
+		ctx.loadOfflineRecTime = time.Since(start)
+		LoadCTRRecommendCacheSeconds.Observe(ctx.loadOfflineRecTime.Seconds())
+		ctx.numFromOffline = len(ctx.results) - ctx.numPrevStage
+		ctx.numPrevStage = len(ctx.results)
+	}
+	return nil
+}
+
+func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
+	if len(ctx.results) < ctx.n {
+		start := time.Now()
+		collaborativeRecommendation, err := s.CacheClient.GetScores(cache.CollaborativeRecommend, ctx.userId, 0, s.GorseConfig.Database.CacheSize)
+		if err != nil {
+			return errors.Trace(err)
 		}
 		for _, item := range collaborativeRecommendation {
-			if !excludeSet.Has(item.Id) {
-				results = append(results, item.Id)
-				excludeSet.Add(item.Id)
+			if !ctx.excludeSet.Has(item.Id) {
+				ctx.results = append(ctx.results, item.Id)
+				ctx.excludeSet.Add(item.Id)
 			}
 		}
-		loadColRecTime = time.Since(start)
-		LoadCollaborativeRecommendCacheSeconds.Observe(loadColRecTime.Seconds())
+		ctx.loadColRecTime = time.Since(start)
+		LoadCollaborativeRecommendCacheSeconds.Observe(ctx.loadColRecTime.Seconds())
+		ctx.numFromCollaborative = len(ctx.results) - ctx.numPrevStage
+		ctx.numPrevStage = len(ctx.results)
 	}
-	numFromCollaborative := len(results) - numPrevStage
-	numPrevStage = len(results)
+	return nil
+}
 
-	// Load historical feedback. The running condition is:
-	// 1. The number of current results is less than n.
-	// 2. There are recommenders other than CTRRecommender.
-	var userFeedback []data.Feedback
-	if len(results) < n && recommenderMask-CTRRecommender > 0 {
-		start := time.Now()
-		userFeedback, err = s.DataClient.GetUserFeedback(userId, false)
+func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
+	if len(ctx.results) < ctx.n {
+		err := s.requireUserFeedback(ctx)
 		if err != nil {
-			return nil, err
+			return errors.Trace(err)
 		}
-		for _, feedback := range userFeedback {
-			excludeSet.Add(feedback.ItemId)
-		}
-		loadLoadHistTime = time.Since(start)
-	}
-
-	// Item-based recommendation. The running condition is:
-	// 1. The number of current results is less than n.
-	// 2. Recommenders include CTRRecommender.
-	if len(results) < n && recommenderMask&ItemBasedRecommender > 0 {
-		start := time.Now()
-		// collect candidates
-		candidates := make(map[string]float32)
-		for _, feedback := range userFeedback {
-			// load similar items
-			similarItems, err := s.CacheClient.GetScores(cache.ItemNeighbors, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
-			if err != nil {
-				return nil, err
-			}
-			// add unseen items
-			for _, item := range similarItems {
-				if !excludeSet.Has(item.Id) {
-					candidates[item.Id] += item.Score
-				}
-			}
-		}
-		// collect top k
-		k := n - len(results)
-		filter := base.NewTopKStringFilter(k)
-		for id, score := range candidates {
-			filter.Push(id, score)
-		}
-		ids, _ := filter.PopAll()
-		results = append(results, ids...)
-		excludeSet.Add(ids...)
-		itemBasedTime = time.Since(start)
-		ItemBasedRecommendSeconds.Observe(itemBasedTime.Seconds())
-	}
-	numFromItemBased := len(results) - numPrevStage
-	numPrevStage = len(results)
-
-	// User-based recommendation. The running condition is:
-	// 1. The number of current results is less than n.
-	// 2. Recommenders include UserBasedRecommender.
-	if len(results) < n && recommenderMask&UserBasedRecommender > 0 {
 		start := time.Now()
 		candidates := make(map[string]float32)
 		// load similar users
-		similarUsers, err := s.CacheClient.GetScores(cache.UserNeighbors, userId, 0, s.GorseConfig.Database.CacheSize)
+		similarUsers, err := s.CacheClient.GetScores(cache.UserNeighbors, ctx.userId, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
-			return nil, err
+			return errors.Trace(err)
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
 			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, false, s.GorseConfig.Database.PositiveFeedbackType...)
 			if err != nil {
-				return nil, err
+				return errors.Trace(err)
 			}
 			// add unseen items
 			for _, feedback := range feedbacks {
-				if !excludeSet.Has(feedback.ItemId) {
+				if !ctx.excludeSet.Has(feedback.ItemId) {
 					candidates[feedback.ItemId] += user.Score
 				}
 			}
 		}
 		// collect top k
-		k := n - len(results)
+		k := ctx.n - len(ctx.results)
 		filter := base.NewTopKStringFilter(k)
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
 		ids, _ := filter.PopAll()
-		results = append(results, ids...)
-		excludeSet.Add(ids...)
-		userBasedTime = time.Since(start)
-		UserBasedRecommendSeconds.Observe(userBasedTime.Seconds())
+		ctx.results = append(ctx.results, ids...)
+		ctx.excludeSet.Add(ids...)
+		ctx.userBasedTime = time.Since(start)
+		UserBasedRecommendSeconds.Observe(ctx.userBasedTime.Seconds())
+		ctx.numFromUserBased = len(ctx.results) - ctx.numPrevStage
+		ctx.numPrevStage = len(ctx.results)
 	}
-	numFromUserBased := len(results) - numPrevStage
-	numPrevStage = len(results)
+	return nil
+}
 
-	// Latest recommendation. The running condition is:
-	// 1. The number of current results is less than n.
-	// 2. Recommenders include LatestRecommender.
-	if len(results) < n && recommenderMask&LatestRecommender > 0 {
-		start := time.Now()
-		items, err := s.CacheClient.GetScores(cache.LatestItems, "", 0, n-len(results))
+func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
+	if len(ctx.results) < ctx.n {
+		err := s.requireUserFeedback(ctx)
 		if err != nil {
-			return nil, err
+			return errors.Trace(err)
 		}
-		for _, item := range items {
-			if !excludeSet.Has(item.Id) {
-				results = append(results, item.Id)
-				excludeSet.Add(item.Id)
+		start := time.Now()
+		// collect candidates
+		candidates := make(map[string]float32)
+		for _, feedback := range ctx.userFeedback {
+			// load similar items
+			similarItems, err := s.CacheClient.GetScores(cache.ItemNeighbors, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			// add unseen items
+			for _, item := range similarItems {
+				if !ctx.excludeSet.Has(item.Id) {
+					candidates[item.Id] += item.Score
+				}
 			}
 		}
-		loadLatestTime = time.Since(start)
-		LoadLatestRecommendCacheSeconds.Observe(loadLatestTime.Seconds())
+		// collect top k
+		k := ctx.n - len(ctx.results)
+		filter := base.NewTopKStringFilter(k)
+		for id, score := range candidates {
+			filter.Push(id, score)
+		}
+		ids, _ := filter.PopAll()
+		ctx.results = append(ctx.results, ids...)
+		ctx.excludeSet.Add(ids...)
+		ctx.itemBasedTime = time.Since(start)
+		ItemBasedRecommendSeconds.Observe(ctx.itemBasedTime.Seconds())
+		ctx.numFromItemBased = len(ctx.results) - ctx.numPrevStage
+		ctx.numPrevStage = len(ctx.results)
 	}
-	numFromLatest := len(results) - numPrevStage
-	numPrevStage = len(results)
+	return nil
+}
 
-	// Popular recommendation. The running condition is:
-	// 1. The number of current results is less than n.
-	// 2. Recommenders include PopularRecommender.
-	if len(results) < n && recommenderMask&PopularRecommender > 0 {
-		start := time.Now()
-		items, err := s.CacheClient.GetScores(cache.PopularItems, "", 0, n-len(results))
+func (s *RestServer) recommendLatest(ctx *recommendContext) error {
+	if len(ctx.results) < ctx.n {
+		err := s.requireUserFeedback(ctx)
 		if err != nil {
-			return nil, err
+			return errors.Trace(err)
+		}
+		start := time.Now()
+		items, err := s.CacheClient.GetScores(cache.LatestItems, "", 0, ctx.n-len(ctx.results))
+		if err != nil {
+			return errors.Trace(err)
 		}
 		for _, item := range items {
-			if !excludeSet.Has(item.Id) {
-				results = append(results, item.Id)
-				excludeSet.Add(item.Id)
+			if !ctx.excludeSet.Has(item.Id) {
+				ctx.results = append(ctx.results, item.Id)
+				ctx.excludeSet.Add(item.Id)
 			}
 		}
-		loadPopularTime = time.Since(start)
-		LoadPopularRecommendCacheSeconds.Observe(loadPopularTime.Seconds())
+		ctx.loadLatestTime = time.Since(start)
+		LoadLatestRecommendCacheSeconds.Observe(ctx.loadLatestTime.Seconds())
+		ctx.numFromLatest = len(ctx.results) - ctx.numPrevStage
+		ctx.numPrevStage = len(ctx.results)
 	}
-	numFromPopular := len(results) - numPrevStage
+	return nil
+}
 
-	// return recommendations
-	if len(results) > n {
-		results = results[:n]
+func (s *RestServer) recommendPopular(ctx *recommendContext) error {
+	if len(ctx.results) < ctx.n {
+		err := s.requireUserFeedback(ctx)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		start := time.Now()
+		items, err := s.CacheClient.GetScores(cache.PopularItems, "", 0, ctx.n-len(ctx.results))
+		if err != nil {
+			return errors.Trace(err)
+		}
+		for _, item := range items {
+			if !ctx.excludeSet.Has(item.Id) {
+				ctx.results = append(ctx.results, item.Id)
+				ctx.excludeSet.Add(item.Id)
+			}
+		}
+		ctx.loadPopularTime = time.Since(start)
+		LoadPopularRecommendCacheSeconds.Observe(ctx.loadPopularTime.Seconds())
+		ctx.numFromPopular = len(ctx.results) - ctx.numPrevStage
+		ctx.numPrevStage = len(ctx.results)
 	}
-	totalTime := time.Since(initStart)
-	base.Logger().Info("complete recommendation",
-		zap.Int("num_from_final", numFromFinal),
-		zap.Int("num_from_collaborative", numFromCollaborative),
-		zap.Int("num_from_item_based", numFromItemBased),
-		zap.Int("num_from_user_based", numFromUserBased),
-		zap.Int("num_from_latest", numFromLatest),
-		zap.Int("num_from_poplar", numFromPopular),
-		zap.Duration("total_time", totalTime),
-		zap.Duration("load_final_recommend_time", loadFinalRecTime),
-		zap.Duration("load_col_recommend_time", loadColRecTime),
-		zap.Duration("load_hist_time", loadLoadHistTime),
-		zap.Duration("item_based_recommend_time", itemBasedTime),
-		zap.Duration("user_based_recommend_time", userBasedTime),
-		zap.Duration("load_latest_time", loadLatestTime),
-		zap.Duration("load_popular_time", loadPopularTime))
-	return results, nil
+	return nil
 }
 
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
@@ -809,19 +820,19 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	// online recommendation
-	recommenders := []Recommender{CTRRecommender}
+	recommenders := []Recommender{s.RecommendOffline}
 	for _, recommender := range s.GorseConfig.Recommend.FallbackRecommend {
 		switch recommender {
 		case "collaborative":
-			recommenders = append(recommenders, CollaborativeRecommender)
-		case "user_based":
-			recommenders = append(recommenders, UserBasedRecommender)
+			recommenders = append(recommenders, s.RecommendCollaborative)
 		case "item_based":
-			recommenders = append(recommenders, ItemBasedRecommender)
+			recommenders = append(recommenders, s.RecommendItemBased)
+		case "user_based":
+			recommenders = append(recommenders, s.RecommendUserBased)
 		case "latest":
-			recommenders = append(recommenders, LatestRecommender)
+			recommenders = append(recommenders, s.recommendLatest)
 		case "popular":
-			recommenders = append(recommenders, PopularRecommender)
+			recommenders = append(recommenders, s.recommendPopular)
 		default:
 			InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
 			return

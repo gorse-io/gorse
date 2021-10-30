@@ -336,14 +336,14 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	var results []string
 	switch recommender {
-	case "ctr":
-		results, err = m.Recommend(userId, n, server.CTRRecommender)
+	case "offline":
+		results, err = m.Recommend(userId, n, m.RecommendOffline)
 	case "collaborative":
-		results, err = m.Recommend(userId, n, server.CollaborativeRecommender)
+		results, err = m.Recommend(userId, n, m.RecommendCollaborative)
 	case "user_based":
-		results, err = m.Recommend(userId, n, server.UserBasedRecommender)
+		results, err = m.Recommend(userId, n, m.RecommendUserBased)
 	case "item_based":
-		results, err = m.Recommend(userId, n, server.ItemBasedRecommender)
+		results, err = m.Recommend(userId, n, m.RecommendItemBased)
 	}
 	if err != nil {
 		server.InternalServerError(response, err)
