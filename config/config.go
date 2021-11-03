@@ -45,6 +45,14 @@ func (config *Config) LoadDefaultIfNil() *Config {
 	return config
 }
 
+// validate Config.
+func (config *Config) validate() {
+	config.Database.validate()
+	config.Master.validate()
+	config.Server.validate()
+	config.Recommend.validate()
+}
+
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
 	DataStore            string   `toml:"data_store"`              // database for data store
@@ -70,6 +78,13 @@ func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
 	return config
 }
 
+// validate MasterConfig.
+func (config *DatabaseConfig) validate() {
+	validatePositive("cache_size", config.CacheSize)
+	validateNotEmpty("positive_feedback_types", config.PositiveFeedbackType)
+	validateNotEmpty("read_feedback_types", config.ReadFeedbackTypes)
+}
+
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
 	Port        int    `toml:"port"`         // master port
@@ -93,6 +108,12 @@ func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
 		}
 	}
 	return config
+}
+
+// validate MasterConfig.
+func (config *MasterConfig) validate() {
+	validatePositive("n_jobs", config.NumJobs)
+	validatePositive("meta_timeout", config.MetaTimeout)
 }
 
 // RecommendConfig is the configuration of recommendation setup.
@@ -125,7 +146,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			SearchEpoch:                  100,
 			SearchTrials:                 10,
 			RefreshRecommendPeriod:       5,
-			FallbackRecommend:            []string{"popular"},
+			FallbackRecommend:            []string{"latest"},
 			ItemNeighborType:             "auto",
 			UserNeighborType:             "auto",
 			EnableLatestRecommend:        false,
@@ -137,6 +158,19 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 		}
 	}
 	return config
+}
+
+// validate RecommendConfig.
+func (config *RecommendConfig) validate() {
+	validateNotNegative("popular_window", config.PopularWindow)
+	validatePositive("fit_period", config.FitPeriod)
+	validatePositive("search_period", config.SearchPeriod)
+	validatePositive("search_epoch", config.SearchEpoch)
+	validatePositive("search_trials", config.SearchTrials)
+	validatePositive("refresh_recommend_period", config.RefreshRecommendPeriod)
+	validateSubset("fallback_recommend", config.FallbackRecommend, []string{"item_based", "popular", "latest"})
+	validateIn("item_neighbor_type", config.ItemNeighborType, []string{"similar", "related", "auto"})
+	validateIn("user_neighbor_type", config.UserNeighborType, []string{"similar", "related", "auto"})
 }
 
 // ServerConfig is the configuration for the server.
@@ -153,6 +187,11 @@ func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
 		}
 	}
 	return config
+}
+
+// validate ServerConfig.
+func (config *ServerConfig) validate() {
+	validatePositive("default_n", config.DefaultN)
 }
 
 // FillDefault fill default values for missing values.
@@ -253,5 +292,6 @@ func LoadConfig(path string) (*Config, *toml.MetaData, error) {
 		return nil, nil, err
 	}
 	conf.FillDefault(metaData)
+	conf.validate()
 	return &conf, &metaData, nil
 }
