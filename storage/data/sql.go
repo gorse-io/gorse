@@ -935,6 +935,10 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 // If insertItem set, new items will be insert to item table.
 func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error {
 	startTime := time.Now()
+	// skip empty list
+	if len(feedback) == 0 {
+		return nil
+	}
 	// collect users and items
 	users := strset.New()
 	items := strset.New()

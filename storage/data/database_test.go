@@ -193,6 +193,9 @@ func testFeedback(t *testing.T, db Database) {
 	}
 	err = db.BatchInsertFeedback(feedback, true, true, true)
 	assert.NoError(t, err)
+	// insert no feedback
+	err = db.BatchInsertFeedback(nil, true, true, true)
+	assert.NoError(t, err)
 	// other type
 	err = db.BatchInsertFeedback([]Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true, true)
 	assert.NoError(t, err)
