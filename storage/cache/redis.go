@@ -119,7 +119,7 @@ func (r *Redis) GetString(prefix, name string) (string, error) {
 	val, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return "", ErrObjectNotExist
+			return "", errors.Annotate(ErrObjectNotExist, key)
 		}
 		return "", err
 	}

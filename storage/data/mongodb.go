@@ -247,7 +247,7 @@ func (db *MongoDB) GetItem(itemId string) (item Item, err error) {
 	c := db.client.Database(db.dbName).Collection("items")
 	r := c.FindOne(ctx, bson.M{"itemid": itemId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = ErrItemNotExist
+		err = errors.Annotate(ErrItemNotExist, itemId)
 		return
 	}
 	err = r.Decode(&item)
@@ -425,7 +425,7 @@ func (db *MongoDB) GetUser(userId string) (user User, err error) {
 	c := db.client.Database(db.dbName).Collection("users")
 	r := c.FindOne(ctx, bson.M{"userid": userId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = ErrUserNotExist
+		err = errors.Annotate(ErrUserNotExist, userId)
 		return
 	}
 	err = r.Decode(&user)
@@ -568,7 +568,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 		for _, userId := range userList {
 			_, err := db.GetUser(userId)
 			if err != nil {
-				if err == ErrUserNotExist {
+				if errors.IsNotFound(err) {
 					users.Remove(userId)
 					continue
 				}
@@ -595,7 +595,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 		for _, itemId := range itemList {
 			_, err := db.GetItem(itemId)
 			if err != nil {
-				if err == ErrItemNotExist {
+				if errors.IsNotFound(err) {
 					items.Remove(itemId)
 					continue
 				}
@@ -607,17 +607,22 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 	c := db.client.Database(db.dbName).Collection("feedback")
 	var models []mongo.WriteModel
 	for _, f := range feedback {
-		model := mongo.NewUpdateOneModel().
-			SetUpsert(true).
-			SetFilter(bson.M{
-				"feedbackkey": f.FeedbackKey,
-			})
-		if overwrite {
-			model.SetUpdate(bson.M{"$set": f})
-		} else {
-			model.SetUpdate(bson.M{"$setOnInsert": f})
+		if users.Has(f.UserId) && items.Has(f.ItemId) {
+			model := mongo.NewUpdateOneModel().
+				SetUpsert(true).
+				SetFilter(bson.M{
+					"feedbackkey": f.FeedbackKey,
+				})
+			if overwrite {
+				model.SetUpdate(bson.M{"$set": f})
+			} else {
+				model.SetUpdate(bson.M{"$setOnInsert": f})
+			}
+			models = append(models, model)
 		}
-		models = append(models, model)
+	}
+	if len(models) == 0 {
+		return nil
 	}
 	_, err := c.BulkWrite(ctx, models)
 	if err == nil {

@@ -15,7 +15,6 @@
 package cache
 
 import (
-	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"strings"
@@ -44,8 +43,10 @@ const (
 	LastRankingModelVersion = "latest_match_model_version"
 )
 
-var ErrObjectNotExist = fmt.Errorf("object not exists")
-var ErrNoDatabase = fmt.Errorf("no database specified")
+var (
+	ErrObjectNotExist = errors.NotFoundf("object")
+	ErrNoDatabase     = errors.NotAssignedf("database")
+)
 
 // Scored associate a id with a score.
 type Scored struct {
