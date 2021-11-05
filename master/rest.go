@@ -277,7 +277,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 	// get user
 	user, err := m.DataClient.GetUser(userId)
 	if err != nil {
-		if err == data.ErrUserNotExist {
+		if errors.IsNotFound(err) {
 			server.PageNotFound(response, err)
 		} else {
 			server.InternalServerError(response, err)
@@ -285,11 +285,11 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 		return
 	}
 	detail := User{User: user}
-	if detail.LastActiveTime, err = m.CacheClient.GetTime(cache.LastModifyUserTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+	if detail.LastActiveTime, err = m.CacheClient.GetTime(cache.LastModifyUserTime, user.UserId); err != nil && !errors.IsNotFound(err) {
 		server.InternalServerError(response, err)
 		return
 	}
-	if detail.LastUpdateTime, err = m.CacheClient.GetTime(cache.LastUpdateUserRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+	if detail.LastUpdateTime, err = m.CacheClient.GetTime(cache.LastUpdateUserRecommendTime, user.UserId); err != nil && !errors.IsNotFound(err) {
 		server.InternalServerError(response, err)
 		return
 	}
@@ -313,11 +313,11 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 	details := make([]User, len(users))
 	for i, user := range users {
 		details[i].User = user
-		if details[i].LastActiveTime, err = m.CacheClient.GetTime(cache.LastModifyUserTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		if details[i].LastActiveTime, err = m.CacheClient.GetTime(cache.LastModifyUserTime, user.UserId); err != nil && !errors.IsNotFound(err) {
 			server.InternalServerError(response, err)
 			return
 		}
-		if details[i].LastUpdateTime, err = m.CacheClient.GetTime(cache.LastUpdateUserRecommendTime, user.UserId); err != nil && err != cache.ErrObjectNotExist {
+		if details[i].LastUpdateTime, err = m.CacheClient.GetTime(cache.LastUpdateUserRecommendTime, user.UserId); err != nil && !errors.IsNotFound(err) {
 			server.InternalServerError(response, err)
 			return
 		}

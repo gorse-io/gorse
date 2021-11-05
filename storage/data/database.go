@@ -17,7 +17,6 @@ package data
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
@@ -29,9 +28,10 @@ import (
 )
 
 var (
-	ErrUserNotExist = errors.New("user not exist")
-	ErrItemNotExist = errors.New("item not exist")
-	ErrUnsupported  = fmt.Errorf("unsupported interface")
+	ErrUserNotExist = errors.NotFoundf("user")
+	ErrItemNotExist = errors.NotFoundf("item")
+	ErrUnsupported  = errors.NotSupportedf("interface")
+	ErrNoDatabase   = errors.NotAssignedf("database")
 )
 
 // Item stores meta data about item.

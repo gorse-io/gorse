@@ -359,7 +359,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 		GetItemSeconds.Observe(time.Since(startTime).Seconds())
 		return item, nil
 	}
-	return Item{}, ErrItemNotExist
+	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
 }
 
 // ModifyItem modify an item in MySQL.
@@ -715,7 +715,7 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 		GetUserSeconds.Observe(time.Since(startTime).Seconds())
 		return user, nil
 	}
-	return User{}, ErrUserNotExist
+	return User{}, errors.Annotate(ErrUserNotExist, userId)
 }
 
 // ModifyUser modify a user in MySQL.
@@ -984,7 +984,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			var rs *sql.Rows
 			var err error
 			switch d.driver {
-			case MySQL:
+			case MySQL, ClickHouse:
 				rs, err = d.client.Query("SELECT user_id FROM users WHERE user_id = ?", user)
 			case Postgres:
 				rs, err = d.client.Query("SELECT user_id FROM users WHERE user_id = $1", user)
@@ -1037,7 +1037,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			var rs *sql.Rows
 			var err error
 			switch d.driver {
-			case MySQL:
+			case MySQL, ClickHouse:
 				rs, err = d.client.Query("SELECT item_id FROM items WHERE item_id = ?", item)
 			case Postgres:
 				rs, err = d.client.Query("SELECT item_id FROM items WHERE item_id = $1", item)
@@ -1045,7 +1045,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			if err != nil {
 				return errors.Trace(err)
 			} else if !rs.Next() {
-				users.Remove(item)
+				items.Remove(item)
 			}
 			if err = rs.Close(); err != nil {
 				return errors.Trace(err)
@@ -1087,6 +1087,9 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			}
 			args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
 		}
+	}
+	if len(args) == 0 {
+		return nil
 	}
 	if overwrite {
 		switch d.driver {

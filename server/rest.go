@@ -935,7 +935,7 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 	// get user
 	user, err := s.DataClient.GetUser(userId)
 	if err != nil {
-		if err == data.ErrUserNotExist {
+		if errors.IsNotFound(err) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)
@@ -1176,7 +1176,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	// Get item
 	item, err := s.DataClient.GetItem(itemId)
 	if err != nil {
-		if err == data.ErrItemNotExist {
+		if errors.IsNotFound(err) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)

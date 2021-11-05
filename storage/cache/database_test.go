@@ -14,6 +14,7 @@
 package cache
 
 import (
+	"github.com/juju/errors"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func testMeta(t *testing.T, db Database) {
 	assert.Equal(t, "2", value)
 	// Get meta not existed
 	value, err = db.GetString("meta", "NULL")
-	assert.ErrorIs(t, err, ErrObjectNotExist)
+	assert.True(t, errors.IsNotFound(err))
 	assert.Equal(t, "", value)
 	// Set meta int
 	err = db.SetInt("meta", "1", 2)

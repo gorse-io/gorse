@@ -189,7 +189,7 @@ func (r *Redis) GetItem(itemId string) (Item, error) {
 	data, err := r.client.Get(ctx, prefixItem+itemId).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return Item{}, ErrItemNotExist
+			return Item{}, errors.Annotate(ErrItemNotExist, itemId)
 		}
 		return Item{}, err
 	}
@@ -354,7 +354,7 @@ func (r *Redis) GetUser(userId string) (User, error) {
 	val, err := r.client.Get(ctx, prefixUser+userId).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return User{}, ErrUserNotExist
+			return User{}, errors.Annotate(ErrUserNotExist, userId)
 		}
 		return User{}, err
 	}
@@ -500,6 +500,24 @@ func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
 // If insertUser set, a new user will be insert to user table.
 // If insertItem set, a new item will be insert to item table.
 func (r *Redis) insertFeedback(feedback Feedback, insertUser, insertItem, overwrite bool) error {
+	// locate user
+	_, err := r.GetUser(feedback.UserId)
+	if errors.IsNotFound(err) {
+		if !insertUser {
+			return nil
+		}
+	} else if err != nil {
+		return err
+	}
+	// locate item
+	_, err = r.GetItem(feedback.ItemId)
+	if errors.IsNotFound(err) {
+		if !insertItem {
+			return nil
+		}
+	} else if err != nil {
+		return err
+	}
 	var ctx = context.Background()
 	val, err := json.Marshal(feedback)
 	if err != nil {

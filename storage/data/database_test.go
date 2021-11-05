@@ -16,6 +16,7 @@ package data
 
 import (
 	"fmt"
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"strconv"
@@ -156,7 +157,7 @@ func testUsers(t *testing.T, db Database) {
 	err = db.DeleteUser("0")
 	assert.NoError(t, err)
 	_, err = db.GetUser("0")
-	assert.ErrorIs(t, err, ErrUserNotExist)
+	assert.True(t, errors.IsNotFound(err))
 	// test override
 	err = db.BatchInsertUsers([]User{{UserId: "1", Comment: "override"}})
 	assert.NoError(t, err)
@@ -192,9 +193,6 @@ func testFeedback(t *testing.T, db Database) {
 		{FeedbackKey{positiveFeedbackType, "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err = db.BatchInsertFeedback(feedback, true, true, true)
-	assert.NoError(t, err)
-	// insert no feedback
-	err = db.BatchInsertFeedback(nil, true, true, true)
 	assert.NoError(t, err)
 	// other type
 	err = db.BatchInsertFeedback([]Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true, true)
@@ -302,6 +300,27 @@ func testFeedback(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
+
+	// insert no feedback
+	err = db.BatchInsertFeedback(nil, true, true, true)
+	assert.NoError(t, err)
+
+	// not insert users or items
+	err = db.BatchInsertFeedback([]Feedback{
+		{FeedbackKey: FeedbackKey{"a", "100", "200"}},
+		{FeedbackKey: FeedbackKey{"a", "0", "200"}},
+		{FeedbackKey: FeedbackKey{"a", "100", "8"}},
+	}, false, false, false)
+	assert.NoError(t, err)
+	result, err := db.GetUserItemFeedback("100", "200")
+	assert.NoError(t, err)
+	assert.Empty(t, result)
+	result, err = db.GetUserItemFeedback("0", "200")
+	assert.NoError(t, err)
+	assert.Empty(t, result)
+	result, err = db.GetUserItemFeedback("100", "8")
+	assert.NoError(t, err)
+	assert.Empty(t, result)
 }
 
 func testItems(t *testing.T, db Database) {
@@ -357,7 +376,7 @@ func testItems(t *testing.T, db Database) {
 	err = db.DeleteItem("0")
 	assert.NoError(t, err)
 	_, err = db.GetItem("0")
-	assert.ErrorIs(t, err, ErrItemNotExist)
+	assert.True(t, errors.IsNotFound(err))
 	// test override
 	err = db.BatchInsertItems([]Item{{ItemId: "2", Comment: "override"}})
 	assert.NoError(t, err)

@@ -15,11 +15,8 @@
 package data
 
 import (
-	"fmt"
 	"time"
 )
-
-var ErrNoDatabase = fmt.Errorf("no database specified for datastore")
 
 // NoDatabase means that no database used.
 type NoDatabase struct{}
