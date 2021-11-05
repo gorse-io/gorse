@@ -385,7 +385,9 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		details[i].Timestamp = feedback[i].Timestamp
 		details[i].Comment = feedback[i].Comment
 		details[i].Item, err = m.DataClient.GetItem(feedback[i].ItemId)
-		if err != nil {
+		if errors.IsNotFound(err) {
+			details[i].Item = data.Item{ItemId: feedback[i].ItemId, Comment: "** This item doesn't exist in Gorse **"}
+		} else if err != nil {
 			server.InternalServerError(response, err)
 			return
 		}
