@@ -538,6 +538,10 @@ func (db *MongoDB) GetUserFeedback(userId string, withFuture bool, feedbackTypes
 func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error {
 	startTime := time.Now()
 	ctx := context.Background()
+	// skip empty list
+	if len(feedback) == 0 {
+		return nil
+	}
 	// collect users and items
 	users := strset.New()
 	items := strset.New()
