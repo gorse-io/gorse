@@ -1067,8 +1067,11 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, comment) VALUES ")
 	}
 	var args []interface{}
-	for i, f := range feedback {
+	for _, f := range feedback {
 		if users.Has(f.UserId) && items.Has(f.ItemId) {
+			if len(args) > 0 {
+				builder.WriteString(",")
+			}
 			switch d.driver {
 			case MySQL:
 				builder.WriteString("(?,?,?,?,?)")
@@ -1081,9 +1084,6 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)",
 					len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5))
-			}
-			if i+1 < len(feedback) {
-				builder.WriteString(",")
 			}
 			args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
 		}

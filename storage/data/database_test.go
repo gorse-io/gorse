@@ -321,6 +321,13 @@ func testFeedback(t *testing.T, db Database) {
 	result, err = db.GetUserItemFeedback("100", "8")
 	assert.NoError(t, err)
 	assert.Empty(t, result)
+
+	// insert valid feedback and invalid feedback at the same time
+	err = db.BatchInsertFeedback([]Feedback{
+		{FeedbackKey: FeedbackKey{"a", "0", "8"}},
+		{FeedbackKey: FeedbackKey{"a", "100", "200"}},
+	}, false, false, false)
+	assert.NoError(t, err)
 }
 
 func testItems(t *testing.T, db Database) {
