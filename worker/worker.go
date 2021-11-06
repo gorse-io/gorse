@@ -560,7 +560,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		}
 
 		// explore latest and popular
-		result, err = w.exploreRecommend(result)
+		result, err = w.exploreRecommend(result, excludeSet)
 		if err != nil {
 			base.Logger().Error("failed to explore latest and popular items", zap.Error(err))
 			return errors.Trace(err)
@@ -673,7 +673,7 @@ func mergeAndShuffle(candidates [][]string) []cache.Scored {
 	return recommend
 }
 
-func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored) ([]cache.Scored, error) {
+func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *strset.Set) ([]cache.Scored, error) {
 	// create thresholds
 	explorePopularThreshold := 0.0
 	if threshold, exist := w.cfg.Recommend.ExploreRecommend["popular"]; exist {
@@ -695,7 +695,6 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored) ([]cache.Scor
 	}
 	// explore recommendation
 	var exploreRecommend []cache.Scored
-	memo := strset.New()
 	for range exploitRecommend {
 		dice := rand.Float64()
 		var recommendItem cache.Scored
@@ -711,8 +710,8 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored) ([]cache.Scor
 		} else {
 			break
 		}
-		if !memo.Has(recommendItem.Id) {
-			memo.Add(recommendItem.Id)
+		if !excludeSet.Has(recommendItem.Id) {
+			excludeSet.Add(recommendItem.Id)
 			exploreRecommend = append(exploreRecommend, recommendItem)
 		}
 	}
