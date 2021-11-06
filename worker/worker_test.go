@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
 	cmap "github.com/orcaman/concurrent-map"
+	"github.com/scylladb/go-set/strset"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
@@ -327,7 +328,7 @@ func TestExploreRecommend(t *testing.T) {
 
 	recommend, err := w.exploreRecommend(cache.CreateScoredItems(
 		[]string{"1", "2", "3", "4", "5", "6", "7", "8"},
-		[]float32{0, 0, 0, 0, 0, 0, 0, 0}))
+		[]float32{0, 0, 0, 0, 0, 0, 0, 0}), strset.New())
 	assert.NoError(t, err)
 	items := cache.RemoveScores(recommend)
 	assert.Contains(t, items, "latest")
