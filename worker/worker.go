@@ -398,7 +398,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 	}()
 	// recommendation
 	startTime := time.Now()
-	_ = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
+	err := base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		userStartTime := time.Now()
 		userId := users[jobId]
 		// convert to user index
@@ -457,7 +457,8 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				// load similar items
 				similarItems, err := w.cacheClient.GetScores(cache.ItemNeighbors, itemId, 0, w.cfg.Database.CacheSize)
 				if err != nil {
-					return err
+					base.Logger().Error("failed to load similar items", zap.Error(err))
+					return errors.Trace(err)
 				}
 				// add unseen items
 				for _, item := range similarItems {
@@ -483,13 +484,15 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			// load similar users
 			similarUsers, err := w.cacheClient.GetScores(cache.UserNeighbors, userId, 0, w.cfg.Database.CacheSize)
 			if err != nil {
-				return err
+				base.Logger().Error("failed to load similar users", zap.Error(err))
+				return errors.Trace(err)
 			}
 			for _, user := range similarUsers {
 				// load historical feedback
 				feedbacks, err := w.dataClient.GetUserFeedback(user.Id, false, w.cfg.Database.PositiveFeedbackType...)
 				if err != nil {
-					return err
+					base.Logger().Error("failed to get user feedback", zap.Error(err))
+					return errors.Trace(err)
 				}
 				// add unseen items
 				for _, feedback := range feedbacks {
@@ -513,6 +516,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			localStartTime := time.Now()
 			latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Database.CacheSize)
 			if err != nil {
+				base.Logger().Error("failed to load latest items", zap.Error(err))
 				return errors.Trace(err)
 			}
 			var recommend []string
@@ -530,6 +534,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			localStartTime := time.Now()
 			popularItems, err := w.cacheClient.GetScores(cache.PopularItems, "", 0, w.cfg.Database.CacheSize)
 			if err != nil {
+				base.Logger().Error("failed to load popular items", zap.Error(err))
 				return errors.Trace(err)
 			}
 			var recommend []string
@@ -547,6 +552,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		if w.cfg.Recommend.EnableClickThroughPrediction && w.clickModel != nil {
 			result, err = w.rankByClickTroughRate(userId, candidates, itemCache)
 			if err != nil {
+				base.Logger().Error("failed to rank items", zap.Error(err))
 				return errors.Trace(err)
 			}
 		} else {
@@ -556,6 +562,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// explore latest and popular
 		result, err = w.exploreRecommend(result)
 		if err != nil {
+			base.Logger().Error("failed to explore latest and popular items", zap.Error(err))
 			return errors.Trace(err)
 		}
 
@@ -569,6 +576,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// refresh cache
 		err = w.refreshCache(userId)
 		if err != nil {
+			base.Logger().Error("failed to refresh cache", zap.Error(err))
 			return errors.Trace(err)
 		}
 		completed <- nil
@@ -576,6 +584,10 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		return nil
 	})
 	close(completed)
+	if err != nil {
+		base.Logger().Error("failed to continue offline recommendation", zap.Error(err))
+		return
+	}
 	if w.masterClient != nil {
 		if _, err := w.masterClient.FinishTask(context.Background(),
 			&protocol.FinishTaskRequest{Name: taskName}); err != nil {
