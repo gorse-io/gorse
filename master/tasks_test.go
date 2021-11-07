@@ -34,16 +34,16 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	m.GorseConfig.Master.NumJobs = 4
 	// collect similar
 	items := []data.Item{
-		{"0", time.Now(), []string{"a", "b", "c", "d"}, ""},
-		{"1", time.Now(), []string{"b", "c", "d"}, ""},
-		{"2", time.Now(), []string{"b", "c"}, ""},
-		{"3", time.Now(), []string{"c"}, ""},
-		{"4", time.Now(), []string{}, ""},
-		{"5", time.Now(), []string{}, ""},
-		{"6", time.Now(), []string{}, ""},
-		{"7", time.Now(), []string{}, ""},
-		{"8", time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
-		{"9", time.Now(), []string{}, ""},
+		{"0", false, time.Now(), []string{"a", "b", "c", "d"}, ""},
+		{"1", false, time.Now(), []string{"b", "c", "d"}, ""},
+		{"2", false, time.Now(), []string{"b", "c"}, ""},
+		{"3", false, time.Now(), []string{"c"}, ""},
+		{"4", false, time.Now(), []string{}, ""},
+		{"5", false, time.Now(), []string{}, ""},
+		{"6", false, time.Now(), []string{}, ""},
+		{"7", false, time.Now(), []string{}, ""},
+		{"8", false, time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
+		{"9", false, time.Now(), []string{}, ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {

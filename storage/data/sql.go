@@ -68,6 +68,7 @@ func (d *SQLDatabase) Init() error {
 			"time_stamp datetime NOT NULL," +
 			"labels json NOT NULL," +
 			"comment TEXT NOT NULL," +
+			"is_hidden BOOL NOT NULL DEFAULT FALSE," +
 			"PRIMARY KEY(item_id)" +
 			")  ENGINE=InnoDB"); err != nil {
 			return errors.Trace(err)
@@ -114,6 +115,7 @@ func (d *SQLDatabase) Init() error {
 			"time_stamp timestamptz NOT NULL DEFAULT '0001-01-01'," +
 			"labels json NOT NULL DEFAULT '[]'," +
 			"comment TEXT NOT NULL DEFAULT ''," +
+			"is_hidden BOOL NOT NULL DEFAULT FALSE," +
 			"PRIMARY KEY(item_id)" +
 			")"); err != nil {
 			return errors.Trace(err)
@@ -159,6 +161,7 @@ func (d *SQLDatabase) Init() error {
 			"time_stamp Datetime," +
 			"labels String DEFAULT '[]'," +
 			"comment String," +
+			"is_hidden Boolean DEFAULT 0," +
 			"version DateTime" +
 			") ENGINE = ReplacingMergeTree(version) ORDER BY item_id"); err != nil {
 			return errors.Trace(err)
@@ -253,11 +256,11 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 	builder := strings.Builder{}
 	switch d.driver {
 	case MySQL:
-		builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, `comment`) VALUES ")
+		builder.WriteString("INSERT INTO items(item_id, is_hidden, time_stamp, labels, `comment`) VALUES ")
 	case Postgres:
-		builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment) VALUES ")
+		builder.WriteString("INSERT INTO items(item_id, is_hidden, time_stamp, labels, comment) VALUES ")
 	case ClickHouse:
-		builder.WriteString("INSERT INTO items(item_id, time_stamp, labels, comment, version) VALUES ")
+		builder.WriteString("INSERT INTO items(item_id, is_hidden, time_stamp, labels, comment, version) VALUES ")
 	}
 	var args []interface{}
 	for i, item := range items {
@@ -267,24 +270,24 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 		}
 		switch d.driver {
 		case MySQL:
-			builder.WriteString("(?,?,?,?)")
+			builder.WriteString("(?,?,?,?,?)")
 		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4))
+			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5))
 		case ClickHouse:
-			builder.WriteString("(?,?,?,?,NOW())")
+			builder.WriteString("(?,?,?,?,?,NOW())")
 		}
 		if i+1 < len(items) {
 			builder.WriteString(",")
 		}
-		args = append(args, item.ItemId, item.Timestamp, string(labels), item.Comment)
+		args = append(args, item.ItemId, item.IsHidden, item.Timestamp, string(labels), item.Comment)
 	}
 	switch d.driver {
 	case MySQL:
 		builder.WriteString(" ON DUPLICATE KEY " +
-			"UPDATE time_stamp = VALUES(time_stamp), labels = VALUES(labels), `comment` = VALUES(`comment`)")
+			"UPDATE is_hidden = VALUES(is_hidden), time_stamp = VALUES(time_stamp), labels = VALUES(labels), `comment` = VALUES(`comment`)")
 	case Postgres:
 		builder.WriteString(" ON CONFLICT (item_id) " +
-			"DO UPDATE SET time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
+			"DO UPDATE SET is_hidden = EXCLUDED.is_hidden, time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
 	}
 	_, err := d.client.Exec(builder.String(), args...)
 	if err == nil {
@@ -339,9 +342,9 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	var err error
 	switch d.driver {
 	case MySQL, ClickHouse:
-		result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items WHERE item_id = ?", itemId)
+		result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, `comment` FROM items WHERE item_id = ?", itemId)
 	case Postgres:
-		result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items WHERE item_id = $1", itemId)
+		result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, comment FROM items WHERE item_id = $1", itemId)
 	}
 	if err != nil {
 		return Item{}, errors.Trace(err)
@@ -350,8 +353,8 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	if result.Next() {
 		var item Item
 		var labels string
-		if err := result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
-			return Item{}, err
+		if err := result.Scan(&item.ItemId, &item.IsHidden, &item.Timestamp, &labels, &item.Comment); err != nil {
+			return Item{}, errors.Trace(err)
 		}
 		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
 			return Item{}, err
@@ -375,6 +378,12 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 	switch d.driver {
 	case MySQL:
 		builder.WriteString("UPDATE items SET")
+		if patch.IsHidden != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("is_hidden = ?")
+			args = append(args, patch.IsHidden)
+			delimiter = ", "
+		}
 		if patch.Comment != nil {
 			builder.WriteString(delimiter)
 			builder.WriteString("`comment` = ?")
@@ -398,6 +407,12 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 		args = append(args, itemId)
 	case Postgres:
 		builder.WriteString("UPDATE items SET")
+		if patch.IsHidden != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString(fmt.Sprintf("is_hidden = $%d", len(args)+1))
+			args = append(args, patch.IsHidden)
+			delimiter = ", "
+		}
 		if patch.Comment != nil {
 			builder.WriteString(delimiter)
 			builder.WriteString(fmt.Sprintf("comment = $%d", len(args)+1))
@@ -421,6 +436,12 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 		args = append(args, itemId)
 	case ClickHouse:
 		builder.WriteString("ALTER TABLE items UPDATE")
+		if patch.IsHidden != nil {
+			builder.WriteString(delimiter)
+			builder.WriteString("is_hidden = ?")
+			args = append(args, patch.IsHidden)
+			delimiter = ", "
+		}
 		if patch.Comment != nil {
 			builder.WriteString(delimiter)
 			builder.WriteString("`comment` = ?")
@@ -454,18 +475,18 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 	switch d.driver {
 	case MySQL, ClickHouse:
 		if timeLimit == nil {
-			result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
+			result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, `comment` FROM items "+
 				"WHERE item_id >= ? ORDER BY item_id LIMIT ?", cursor, n+1)
 		} else {
-			result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items "+
+			result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, `comment` FROM items "+
 				"WHERE item_id >= ? AND time_stamp >= ? ORDER BY item_id LIMIT ?", cursor, *timeLimit, n+1)
 		}
 	case Postgres:
 		if timeLimit == nil {
-			result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items "+
+			result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, comment FROM items "+
 				"WHERE item_id >= $1 ORDER BY item_id LIMIT $2", cursor, n+1)
 		} else {
-			result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items "+
+			result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, comment FROM items "+
 				"WHERE item_id >= $1 AND time_stamp >= $2 ORDER BY item_id LIMIT $3", cursor, *timeLimit, n+1)
 		}
 	}
@@ -477,7 +498,7 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 	for result.Next() {
 		var item Item
 		var labels string
-		if err = result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
+		if err = result.Scan(&item.ItemId, &item.IsHidden, &item.Timestamp, &labels, &item.Comment); err != nil {
 			return "", nil, errors.Trace(err)
 		}
 		if err = json.Unmarshal([]byte(labels), &item.Labels); err != nil {
@@ -504,15 +525,15 @@ func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan [
 		switch d.driver {
 		case MySQL, ClickHouse:
 			if timeLimit == nil {
-				result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items")
+				result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, `comment` FROM items")
 			} else {
-				result, err = d.client.Query("SELECT item_id, time_stamp, labels, `comment` FROM items WHERE time_stamp >= ?", *timeLimit)
+				result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, `comment` FROM items WHERE time_stamp >= ?", *timeLimit)
 			}
 		case Postgres:
 			if timeLimit == nil {
-				result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items")
+				result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, comment FROM items")
 			} else {
-				result, err = d.client.Query("SELECT item_id, time_stamp, labels, comment FROM items WHERE time_stamp >= $2", *timeLimit)
+				result, err = d.client.Query("SELECT item_id, is_hidden, time_stamp, labels, comment FROM items WHERE time_stamp >= $2", *timeLimit)
 			}
 		}
 		if err != nil {
@@ -525,7 +546,7 @@ func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan [
 		for result.Next() {
 			var item Item
 			var labels string
-			if err = result.Scan(&item.ItemId, &item.Timestamp, &labels, &item.Comment); err != nil {
+			if err = result.Scan(&item.ItemId, &item.IsHidden, &item.Timestamp, &labels, &item.Comment); err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}

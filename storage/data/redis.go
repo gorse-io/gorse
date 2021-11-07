@@ -685,6 +685,9 @@ func (r *Redis) ModifyItem(itemId string, patch ItemPatch) error {
 		return err
 	}
 	// apply patch
+	if patch.IsHidden != nil {
+		item.IsHidden = *patch.IsHidden
+	}
 	if patch.Comment != nil {
 		item.Comment = *patch.Comment
 	}
