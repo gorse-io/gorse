@@ -264,7 +264,7 @@ func (w *Worker) Pull() {
 			return
 		}
 		if pulled {
-			w.syncedChan <- true
+			w.pulledChan <- true
 		}
 	}
 }
@@ -336,7 +336,7 @@ func (w *Worker) Serve() {
 		select {
 		case <-w.ticker.C:
 			loop()
-		case <-w.syncedChan:
+		case <-w.pulledChan:
 			loop()
 		}
 	}
