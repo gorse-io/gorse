@@ -121,6 +121,15 @@ jobs:
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
 
+    - name: Download dataset
+      run: wget https://cdn.gorse.io/example/github.sql
+
+    - name: Install MySQL client
+      run: sudo apt-get install -y mysql-client
+
+    - name: Import dataset
+      run: mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
+
   compat_test:
     name: Compatibility Test
     runs-on: ubuntu-latest
