@@ -223,7 +223,7 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 4}`).
 		End()
-	//get items
+	// get items
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/items").
@@ -262,7 +262,12 @@ func TestServer_Items(t *testing.T) {
 		Handler(s.handler).
 		Patch("/api/item/2").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{Labels: []string{"a", "b", "c"}, Comment: proto.String("modified"), Timestamp: &timestamp}).
+		JSON(data.ItemPatch{
+			IsHidden:  proto.Bool(true),
+			Labels:    []string{"a", "b", "c"},
+			Comment:   proto.String("modified"),
+			Timestamp: &timestamp,
+		}).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
@@ -275,11 +280,15 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, data.Item{
 			ItemId:    "2",
+			IsHidden:  true,
 			Comment:   "modified",
 			Labels:    []string{"a", "b", "c"},
 			Timestamp: timestamp,
 		})).
 		End()
+	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"2"}, cache.RemoveScores(hiddenItems))
 }
 
 func TestServer_Feedback(t *testing.T) {

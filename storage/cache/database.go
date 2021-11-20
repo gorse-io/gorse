@@ -23,6 +23,7 @@ import (
 
 const (
 	IgnoreItems            = "ignore_items"
+	HiddenItems            = "hidden_items"
 	ItemNeighbors          = "item_neighbors"
 	UserNeighbors          = "user_neighbors"
 	CollaborativeRecommend = "collaborative_recommend"

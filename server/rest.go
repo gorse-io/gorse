@@ -1134,6 +1134,13 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		InternalServerError(response, err)
 		return
 	}
+	// insert hidden items to cache
+	if patch.IsHidden != nil && *patch.IsHidden {
+		if err := s.CacheClient.AppendScores(cache.HiddenItems, "", cache.Scored{Id: itemId, Score: float32(time.Now().Unix())}); err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
 	// insert modify timestamp
 	if err := s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now()); err != nil {
 		return
