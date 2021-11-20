@@ -63,6 +63,22 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
+
+	// insert hidden item
+	err = m.DataClient.BatchInsertItems([]data.Item{{
+		ItemId:   "10",
+		Labels:   []string{"a", "b", "c", "d", "e"},
+		IsHidden: true,
+	}})
+	assert.NoError(t, err)
+	for i := 0; i <= 10; i++ {
+		err = m.DataClient.BatchInsertFeedback([]data.Feedback{{
+			FeedbackKey: data.FeedbackKey{UserId: strconv.Itoa(i), ItemId: "10", FeedbackType: "FeedbackType"},
+		}}, true, true, true)
+		assert.NoError(t, err)
+	}
+
+	// load mock dataset
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
 	assert.NoError(t, err)
 
@@ -72,7 +88,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	similar, err := m.CacheClient.GetScores(cache.ItemNeighbors, "9", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (common labels)
@@ -83,7 +99,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (auto)
@@ -99,7 +115,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "9", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
 

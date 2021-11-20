@@ -205,7 +205,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				}
 			}
 			for _, j := range adjacencyItems {
-				if j != int32(itemId) {
+				if j != int32(itemId) && !dataset.HiddenItems[j] {
 					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
 					if commonLabels > 0 {
 						score := commonLabels * commonLabels /
@@ -232,7 +232,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				}
 			}
 			for _, j := range adjacencyItems {
-				if j != int32(itemId) {
+				if j != int32(itemId) && !dataset.HiddenItems[j] {
 					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
 					if commonUsers > 0 {
 						score := commonUsers * commonUsers /
