@@ -38,6 +38,7 @@ type DataSet struct {
 	Negatives     [][]int32
 	ItemLabels    [][]int32
 	UserLabels    [][]int32
+	HiddenItems   []bool
 	// statistics
 	NumItemLabels int32
 	NumUserLabels int32
@@ -167,6 +168,7 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet, testSet := new(DataSet), new(DataSet)
 	trainSet.NumItemLabels, testSet.NumItemLabels = dataset.NumItemLabels, dataset.NumItemLabels
 	trainSet.NumUserLabels, testSet.NumUserLabels = dataset.NumUserLabels, dataset.NumUserLabels
+	trainSet.HiddenItems, testSet.HiddenItems = dataset.HiddenItems, dataset.HiddenItems
 	trainSet.ItemLabels, testSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
 	trainSet.UserLabels, testSet.UserLabels = dataset.UserLabels, dataset.UserLabels
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex
@@ -249,7 +251,12 @@ func LoadDataFromCSV(fileName, sep string, hasHeader bool) *DataSet {
 		base.Logger().Fatal("failed to open csv file", zap.Error(err),
 			zap.String("csv_file", fileName))
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err = file.Close()
+		if err != nil {
+			base.Logger().Error("failed to close file", zap.Error(err))
+		}
+	}(file)
 	// Read CSV file
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -275,7 +282,12 @@ func loadTest(dataset *DataSet, path string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err = file.Close()
+		if err != nil {
+			base.Logger().Error("failed to close file", zap.Error(err))
+		}
+	}(file)
 	// Read lines
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -300,7 +312,12 @@ func loadTrain(path string) (*DataSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err = file.Close()
+		if err != nil {
+			base.Logger().Error("failed to close file", zap.Error(err))
+		}
+	}(file)
 	// Read lines
 	scanner := bufio.NewScanner(file)
 	dataset := NewDirectIndexDataset()

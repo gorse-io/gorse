@@ -853,14 +853,16 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
 			if len(rankingDataset.ItemLabels) == int(itemIndex) {
 				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
+				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
 			}
 			rankingDataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
 			for i, label := range item.Labels {
 				itemLabelIndex.Add(label)
 				rankingDataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
 			}
-			// add items to the latest items filter
-			if !item.Timestamp.IsZero() {
+			if item.IsHidden { // set hidden flag
+				rankingDataset.HiddenItems[itemIndex] = true
+			} else if !item.Timestamp.IsZero() { // add items to the latest items filter
 				latestItemsFilter.Push(item.ItemId, float32(item.Timestamp.Unix()))
 			}
 		}
@@ -899,7 +901,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			}
 			positiveSet[userIndex].Add(itemIndex)
 			// insert feedback to popularity counter
-			if f.Timestamp.After(timeWindowLimit) {
+			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 				popularCount[itemIndex]++
 			}
 		}

@@ -194,7 +194,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 
 	// insert items
 	var items []data.Item
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 9; i++ {
 		items = append(items, data.Item{
 			ItemId:    strconv.Itoa(i),
 			Timestamp: time.Date(2000+i, 1, 1, 1, 1, 0, 0, time.UTC),
@@ -202,6 +202,12 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		})
 	}
 	err := m.DataClient.BatchInsertItems(items)
+	assert.NoError(t, err)
+	err = m.DataClient.BatchInsertItems([]data.Item{{
+		ItemId:    "9",
+		Timestamp: time.Date(2020, 1, 1, 1, 1, 0, 0, time.UTC),
+		IsHidden:  true,
+	}})
 	assert.NoError(t, err)
 
 	// insert users
@@ -274,17 +280,17 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	latest, err := m.CacheClient.GetScores(cache.LatestItems, "", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
+		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 	}, latest)
 
 	// check popular items
 	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{Id: items[9].ItemId, Score: 10},
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
+		{Id: items[6].ItemId, Score: 7},
 	}, popular)
 }
