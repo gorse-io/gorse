@@ -586,6 +586,7 @@ type recommendContext struct {
 }
 
 func (s *RestServer) createRecommendContext(userId string, n int) (*recommendContext, error) {
+	// pull ignored items
 	ignoreItems, err := s.CacheClient.GetScores(cache.IgnoreItems, userId, 0, -1)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -595,6 +596,14 @@ func (s *RestServer) createRecommendContext(userId string, n int) (*recommendCon
 		if item.Score <= float32(time.Now().Unix()) {
 			excludeSet.Add(item.Id)
 		}
+	}
+	// pull hidden items
+	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	for _, item := range hiddenItems {
+		excludeSet.Add(item.Id)
 	}
 	return &recommendContext{
 		userId:     userId,
