@@ -22,19 +22,22 @@ import (
 )
 
 const (
-	IgnoreItems            = "ignore_items"
-	ItemNeighbors          = "item_neighbors"
-	UserNeighbors          = "user_neighbors"
-	CollaborativeRecommend = "collaborative_recommend"
-	OfflineRecommend       = "offline_recommend"
-	PopularItems           = "popular_items"
-	LatestItems            = "latest_items"
+	IgnoreItems            = "ignore_items"            // ignored items for each user
+	HiddenItems            = "hidden_items"            // hidden items
+	ItemNeighbors          = "item_neighbors"          // neighbors of each item
+	UserNeighbors          = "user_neighbors"          // neighbors of each user
+	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
+	OfflineRecommend       = "offline_recommend"       // offline recommendation for each user
+	PopularItems           = "popular_items"           // popular items
+	LatestItems            = "latest_items"            // latest items
 
 	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
 	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
 	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
 	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time" // the latest timestamp that a user's neighbors item was updated
 	LastUpdateItemNeighborsTime = "last_update_item_neighbors_time" // the latest timestamp that an item's neighbors was updated
+	LastUpdateLatestItemsTime   = "last_update_latest_items_time"   // the latest timestamp that latest items were updated
+	LastUpdatePopularItemsTime  = "last_update_popular_items_time"  // the latest timestamp that popular items were updated
 
 	// GlobalMeta is global meta information
 	GlobalMeta              = "global_meta"

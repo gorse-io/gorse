@@ -586,6 +586,7 @@ type recommendContext struct {
 }
 
 func (s *RestServer) createRecommendContext(userId string, n int) (*recommendContext, error) {
+	// pull ignored items
 	ignoreItems, err := s.CacheClient.GetScores(cache.IgnoreItems, userId, 0, -1)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -595,6 +596,14 @@ func (s *RestServer) createRecommendContext(userId string, n int) (*recommendCon
 		if item.Score <= float32(time.Now().Unix()) {
 			excludeSet.Add(item.Id)
 		}
+	}
+	// pull hidden items
+	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	for _, item := range hiddenItems {
+		excludeSet.Add(item.Id)
 	}
 	return &recommendContext{
 		userId:     userId,
@@ -1134,6 +1143,13 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		InternalServerError(response, err)
 		return
 	}
+	// insert hidden items to cache
+	if patch.IsHidden != nil && *patch.IsHidden {
+		if err := s.CacheClient.AppendScores(cache.HiddenItems, "", cache.Scored{Id: itemId, Score: float32(time.Now().Unix())}); err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
 	// insert modify timestamp
 	if err := s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now()); err != nil {
 		return
@@ -1193,6 +1209,11 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 	}
 	itemId := request.PathParameter("item-id")
 	if err := s.DataClient.DeleteItem(itemId); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	// insert deleted item to cache
+	if err := s.CacheClient.AppendScores(cache.HiddenItems, "", cache.Scored{Id: itemId, Score: float32(time.Now().Unix())}); err != nil {
 		InternalServerError(response, err)
 		return
 	}

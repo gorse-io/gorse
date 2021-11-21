@@ -108,9 +108,9 @@ func TestMaster_ExportItems(t *testing.T) {
 	defer s.Close(t)
 	// insert items
 	items := []data.Item{
-		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
-		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
-		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
+		{"1", false, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
+		{"2", false, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
+		{"3", false, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}
 	err := s.DataClient.BatchInsertItems(items)
 	assert.NoError(t, err)
@@ -252,9 +252,9 @@ func TestMaster_ImportItems(t *testing.T) {
 	_, items, err := s.DataClient.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
-		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
-		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
+		{"1", false, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
+		{"2", false, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
+		{"3", false, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}, items)
 }
 
@@ -283,9 +283,9 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	_, items, err := s.DataClient.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
-		{"2", time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
-		{"3", time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "three"},
+		{"1", false, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
+		{"2", false, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
+		{"3", false, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "three"},
 	}, items)
 }
 

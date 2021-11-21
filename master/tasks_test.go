@@ -34,16 +34,16 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	m.GorseConfig.Master.NumJobs = 4
 	// collect similar
 	items := []data.Item{
-		{"0", time.Now(), []string{"a", "b", "c", "d"}, ""},
-		{"1", time.Now(), []string{"b", "c", "d"}, ""},
-		{"2", time.Now(), []string{"b", "c"}, ""},
-		{"3", time.Now(), []string{"c"}, ""},
-		{"4", time.Now(), []string{}, ""},
-		{"5", time.Now(), []string{}, ""},
-		{"6", time.Now(), []string{}, ""},
-		{"7", time.Now(), []string{}, ""},
-		{"8", time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
-		{"9", time.Now(), []string{}, ""},
+		{"0", false, time.Now(), []string{"a", "b", "c", "d"}, ""},
+		{"1", false, time.Now(), []string{"b", "c", "d"}, ""},
+		{"2", false, time.Now(), []string{"b", "c"}, ""},
+		{"3", false, time.Now(), []string{"c"}, ""},
+		{"4", false, time.Now(), []string{}, ""},
+		{"5", false, time.Now(), []string{}, ""},
+		{"6", false, time.Now(), []string{}, ""},
+		{"7", false, time.Now(), []string{}, ""},
+		{"8", false, time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
+		{"9", false, time.Now(), []string{}, ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
@@ -63,6 +63,22 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
+
+	// insert hidden item
+	err = m.DataClient.BatchInsertItems([]data.Item{{
+		ItemId:   "10",
+		Labels:   []string{"a", "b", "c", "d", "e"},
+		IsHidden: true,
+	}})
+	assert.NoError(t, err)
+	for i := 0; i <= 10; i++ {
+		err = m.DataClient.BatchInsertFeedback([]data.Feedback{{
+			FeedbackKey: data.FeedbackKey{UserId: strconv.Itoa(i), ItemId: "10", FeedbackType: "FeedbackType"},
+		}}, true, true, true)
+		assert.NoError(t, err)
+	}
+
+	// load mock dataset
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
 	assert.NoError(t, err)
 
@@ -72,7 +88,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	similar, err := m.CacheClient.GetScores(cache.ItemNeighbors, "9", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (common labels)
@@ -83,7 +99,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "8", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 
 	// similar items (auto)
@@ -99,7 +115,7 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	similar, err = m.CacheClient.GetScores(cache.ItemNeighbors, "9", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
-	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
+	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
 
@@ -194,7 +210,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 
 	// insert items
 	var items []data.Item
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 9; i++ {
 		items = append(items, data.Item{
 			ItemId:    strconv.Itoa(i),
 			Timestamp: time.Date(2000+i, 1, 1, 1, 1, 0, 0, time.UTC),
@@ -202,6 +218,12 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		})
 	}
 	err := m.DataClient.BatchInsertItems(items)
+	assert.NoError(t, err)
+	err = m.DataClient.BatchInsertItems([]data.Item{{
+		ItemId:    "9",
+		Timestamp: time.Date(2020, 1, 1, 1, 1, 0, 0, time.UTC),
+		IsHidden:  true,
+	}})
 	assert.NoError(t, err)
 
 	// insert users
@@ -274,17 +296,17 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	latest, err := m.CacheClient.GetScores(cache.LatestItems, "", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{items[9].ItemId, float32(items[9].Timestamp.Unix())},
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
+		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 	}, latest)
 
 	// check popular items
 	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{Id: items[9].ItemId, Score: 10},
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
+		{Id: items[6].ItemId, Score: 7},
 	}, popular)
 }

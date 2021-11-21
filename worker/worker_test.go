@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
-	cmap "github.com/orcaman/concurrent-map"
 	"github.com/scylladb/go-set/strset"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
@@ -172,8 +171,16 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Timestamp: now.Add(time.Hour)},
 	}, true, true, true)
 	assert.NoError(t, err)
+
+	// insert hidden items
+	err = w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "10", IsHidden: true},
+		{ItemId: "11", IsHidden: true},
+	})
+	assert.NoError(t, err)
+
 	// create mock model
-	m := newMockMatrixFactorizationForRecommend(1, 10)
+	m := newMockMatrixFactorizationForRecommend(1, 12)
 	w.Recommend(m, []string{"0"})
 
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
@@ -211,17 +218,20 @@ func TestRecommend_ItemBased(t *testing.T) {
 	// insert similar items
 	err = w.cacheClient.SetScores(cache.ItemNeighbors, "21", []cache.Scored{
 		{"22", 100000},
+		{"25", 1000000},
 		{"29", 1},
 	})
 	assert.NoError(t, err)
 	err = w.cacheClient.SetScores(cache.ItemNeighbors, "22", []cache.Scored{
 		{"23", 100000},
+		{"25", 1000000},
 		{"28", 1},
 		{"29", 1},
 	})
 	assert.NoError(t, err)
 	err = w.cacheClient.SetScores(cache.ItemNeighbors, "23", []cache.Scored{
 		{"24", 100000},
+		{"25", 1000000},
 		{"27", 1},
 		{"28", 1},
 		{"29", 1},
@@ -229,11 +239,18 @@ func TestRecommend_ItemBased(t *testing.T) {
 	assert.NoError(t, err)
 	err = w.cacheClient.SetScores(cache.ItemNeighbors, "24", []cache.Scored{
 		{"21", 100000},
+		{"25", 1000000},
 		{"26", 1},
 		{"27", 1},
 		{"28", 1},
 		{"29", 1},
 	})
+	assert.NoError(t, err)
+	// insert items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "21"}, {ItemId: "22"}, {ItemId: "23"}, {ItemId: "24"},
+		{ItemId: "25"}, {ItemId: "26"}, {ItemId: "27"}, {ItemId: "28"}, {ItemId: "29"}})
+	// insert hidden items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "25", IsHidden: true}})
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
@@ -257,18 +274,24 @@ func TestRecommend_UserBased(t *testing.T) {
 	assert.NoError(t, err)
 	// insert feedback
 	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "10"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "11"}},
 	}, true, true, true)
 	assert.NoError(t, err)
 	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "10"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "12"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "48"}},
 	}, true, true, true)
 	assert.NoError(t, err)
 	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "10"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "13"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
 	}, true, true, true)
+	assert.NoError(t, err)
+	// insert hidden items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "10", IsHidden: true}})
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
@@ -284,7 +307,13 @@ func TestRecommend_Popular(t *testing.T) {
 	w.cfg.Recommend.EnableColRecommend = false
 	w.cfg.Recommend.EnablePopularRecommend = true
 	// insert popular items
-	err := w.cacheClient.SetScores(cache.PopularItems, "", []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}})
+	err := w.cacheClient.SetScores(cache.PopularItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
+	assert.NoError(t, err)
+	// insert items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"}})
+	assert.NoError(t, err)
+	// insert hidden items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
@@ -299,8 +328,14 @@ func TestRecommend_Latest(t *testing.T) {
 	defer w.Close(t)
 	w.cfg.Recommend.EnableColRecommend = false
 	w.cfg.Recommend.EnableLatestRecommend = true
-	// insert popular items
-	err := w.cacheClient.SetScores(cache.LatestItems, "", []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}})
+	// insert latest items
+	err := w.cacheClient.SetScores(cache.LatestItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
+	assert.NoError(t, err)
+	// insert items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"}})
+	assert.NoError(t, err)
+	// insert hidden items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
@@ -520,9 +555,9 @@ func TestRankByClickTroughRate(t *testing.T) {
 	err := w.dataClient.BatchInsertUsers([]data.User{{UserId: "1"}})
 	assert.NoError(t, err)
 	// insert items
-	itemCache := cmap.New()
+	itemCache := make(map[string]data.Item)
 	for i := 1; i <= 5; i++ {
-		itemCache.Set(strconv.Itoa(i), data.Item{ItemId: strconv.Itoa(i)})
+		itemCache[strconv.Itoa(i)] = data.Item{ItemId: strconv.Itoa(i)}
 	}
 	// rank items
 	w.clickModel = new(mockFactorizationMachine)

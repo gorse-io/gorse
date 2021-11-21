@@ -223,7 +223,7 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 4}`).
 		End()
-	//get items
+	// get items
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/items").
@@ -256,13 +256,23 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
+	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"0"}, cache.RemoveScores(hiddenItems))
+	err = s.CacheClient.ClearScores(cache.HiddenItems, "")
+	assert.NoError(t, err)
 	// test modify
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
 	apitest.New().
 		Handler(s.handler).
 		Patch("/api/item/2").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{Labels: []string{"a", "b", "c"}, Comment: proto.String("modified"), Timestamp: &timestamp}).
+		JSON(data.ItemPatch{
+			IsHidden:  proto.Bool(true),
+			Labels:    []string{"a", "b", "c"},
+			Comment:   proto.String("modified"),
+			Timestamp: &timestamp,
+		}).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
@@ -275,11 +285,15 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, data.Item{
 			ItemId:    "2",
+			IsHidden:  true,
 			Comment:   "modified",
 			Labels:    []string{"a", "b", "c"},
 			Timestamp: timestamp,
 		})).
 		End()
+	hiddenItems, err = s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"2"}, cache.RemoveScores(hiddenItems))
 }
 
 func TestServer_Feedback(t *testing.T) {
@@ -589,18 +603,22 @@ func TestServer_Measurement(t *testing.T) {
 func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
+	// insert hidden items
+	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 100}})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetScores(cache.HiddenItems, "", []cache.Scored{{"0", 0}})
+	assert.NoError(t, err)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
-		[]cache.Scored{
-			{"1", 99},
-			{"2", 98},
-			{"3", 97},
-			{"4", 96},
-			{"5", 95},
-			{"6", 94},
-			{"7", 93},
-			{"8", 92},
-		})
+	err = s.CacheClient.AppendScores(cache.OfflineRecommend, "0",
+		cache.Scored{Id: "1", Score: 99},
+		cache.Scored{Id: "2", Score: 98},
+		cache.Scored{Id: "3", Score: 97},
+		cache.Scored{Id: "4", Score: 96},
+		cache.Scored{Id: "5", Score: 95},
+		cache.Scored{Id: "6", Score: 94},
+		cache.Scored{Id: "7", Score: 93},
+		cache.Scored{Id: "8", Score: 92},
+	)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{

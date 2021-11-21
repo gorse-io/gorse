@@ -72,10 +72,16 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.SetScores(cache.PopularItems, "", popularItems); err != nil {
 		base.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
+	if err = m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Now()); err != nil {
+		base.Logger().Error("failed to write latest update popular items time", zap.Error(err))
+	}
 
 	// save the latest items to cache
 	if err = m.CacheClient.SetScores(cache.LatestItems, "", latestItems); err != nil {
 		base.Logger().Error("failed to cache latest items", zap.Error(err))
+	}
+	if err = m.CacheClient.SetTime(cache.LastUpdateLatestItemsTime, "", time.Now()); err != nil {
+		base.Logger().Error("failed to write latest update latest items time", zap.Error(err))
 	}
 
 	// write statistics to database
@@ -205,7 +211,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				}
 			}
 			for _, j := range adjacencyItems {
-				if j != int32(itemId) {
+				if j != int32(itemId) && !dataset.HiddenItems[j] {
 					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
 					if commonLabels > 0 {
 						score := commonLabels * commonLabels /
@@ -232,7 +238,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				}
 			}
 			for _, j := range adjacencyItems {
-				if j != int32(itemId) {
+				if j != int32(itemId) && !dataset.HiddenItems[j] {
 					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
 					if commonUsers > 0 {
 						score := commonUsers * commonUsers /
@@ -853,14 +859,16 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
 			if len(rankingDataset.ItemLabels) == int(itemIndex) {
 				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
+				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
 			}
 			rankingDataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
 			for i, label := range item.Labels {
 				itemLabelIndex.Add(label)
 				rankingDataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
 			}
-			// add items to the latest items filter
-			if !item.Timestamp.IsZero() {
+			if item.IsHidden { // set hidden flag
+				rankingDataset.HiddenItems[itemIndex] = true
+			} else if !item.Timestamp.IsZero() { // add items to the latest items filter
 				latestItemsFilter.Push(item.ItemId, float32(item.Timestamp.Unix()))
 			}
 		}
@@ -899,7 +907,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			}
 			positiveSet[userIndex].Add(itemIndex)
 			// insert feedback to popularity counter
-			if f.Timestamp.After(timeWindowLimit) {
+			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 				popularCount[itemIndex]++
 			}
 		}

@@ -205,6 +205,9 @@ func (db *MongoDB) BatchInsertItems(items []Item) error {
 func (db *MongoDB) ModifyItem(itemId string, patch ItemPatch) error {
 	// create update
 	update := bson.M{}
+	if patch.IsHidden != nil {
+		update["ishidden"] = patch.IsHidden
+	}
 	if patch.Comment != nil {
 		update["comment"] = patch.Comment
 	}
