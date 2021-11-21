@@ -256,6 +256,11 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
+	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"0"}, cache.RemoveScores(hiddenItems))
+	err = s.CacheClient.ClearScores(cache.HiddenItems, "")
+	assert.NoError(t, err)
 	// test modify
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
 	apitest.New().
@@ -286,7 +291,7 @@ func TestServer_Items(t *testing.T) {
 			Timestamp: timestamp,
 		})).
 		End()
-	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	hiddenItems, err = s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"2"}, cache.RemoveScores(hiddenItems))
 }

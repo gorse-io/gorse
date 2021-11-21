@@ -72,10 +72,16 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.SetScores(cache.PopularItems, "", popularItems); err != nil {
 		base.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
+	if err = m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Now()); err != nil {
+		base.Logger().Error("failed to write latest update popular items time", zap.Error(err))
+	}
 
 	// save the latest items to cache
 	if err = m.CacheClient.SetScores(cache.LatestItems, "", latestItems); err != nil {
 		base.Logger().Error("failed to cache latest items", zap.Error(err))
+	}
+	if err = m.CacheClient.SetTime(cache.LastUpdateLatestItemsTime, "", time.Now()); err != nil {
+		base.Logger().Error("failed to write latest update latest items time", zap.Error(err))
 	}
 
 	// write statistics to database

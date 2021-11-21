@@ -1212,6 +1212,11 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		InternalServerError(response, err)
 		return
 	}
+	// insert deleted item to cache
+	if err := s.CacheClient.AppendScores(cache.HiddenItems, "", cache.Scored{Id: itemId, Score: float32(time.Now().Unix())}); err != nil {
+		InternalServerError(response, err)
+		return
+	}
 	Ok(response, Success{RowAffected: 1})
 }
 
