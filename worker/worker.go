@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
-	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
@@ -37,6 +36,8 @@ import (
 	"net/http"
 	"time"
 )
+
+const batchSize = 10000
 
 // Worker manages states of a worker node.
 type Worker struct {
@@ -370,8 +371,12 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			base.Logger().Error("failed to report start task", zap.Error(err))
 		}
 	}
-	// create item cache
-	itemCache := cmap.New()
+	// pull items from database
+	itemCache, err := w.pullItems()
+	if err != nil {
+		base.Logger().Error("failed to pull items", zap.Error(err))
+		return
+	}
 	go func() {
 		defer base.CheckPanic()
 		completedCount := 0
@@ -398,7 +403,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 	}()
 	// recommendation
 	startTime := time.Now()
-	err := base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
+	err = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		userStartTime := time.Now()
 		userId := users[jobId]
 		// convert to user index
@@ -434,7 +439,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			localStartTime := time.Now()
 			recItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			for itemIndex, itemId := range itemIds {
-				if !excludeSet.Has(itemId) {
+				if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
 					recItems.Push(itemId, m.InternalPredict(userIndex, int32(itemIndex)))
 				}
 			}
@@ -462,7 +467,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				}
 				// add unseen items
 				for _, item := range similarItems {
-					if !excludeSet.Has(item.Id) {
+					if !excludeSet.Has(item.Id) && itemCache.IsAvailable(item.Id) {
 						scores[item.Id] += item.Score
 					}
 				}
@@ -496,7 +501,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				}
 				// add unseen items
 				for _, feedback := range feedbacks {
-					if !excludeSet.Has(feedback.ItemId) {
+					if !excludeSet.Has(feedback.ItemId) && itemCache.IsAvailable(feedback.ItemId) {
 						scores[feedback.ItemId] += user.Score
 					}
 				}
@@ -521,7 +526,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			}
 			var recommend []string
 			for _, latestItem := range latestItems {
-				if !excludeSet.Has(latestItem.Id) {
+				if !excludeSet.Has(latestItem.Id) && itemCache.IsAvailable(latestItem.Id) {
 					recommend = append(recommend, latestItem.Id)
 				}
 			}
@@ -539,7 +544,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			}
 			var recommend []string
 			for _, popularItem := range popularItems {
-				if !excludeSet.Has(popularItem.Id) {
+				if !excludeSet.Has(popularItem.Id) && itemCache.IsAvailable(popularItem.Id) {
 					recommend = append(recommend, popularItem.Id)
 				}
 			}
@@ -599,7 +604,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(userId string, candidates [][]string, itemCache cmap.ConcurrentMap) ([]cache.Scored, error) {
+func (w *Worker) rankByClickTroughRate(userId string, candidates [][]string, itemCache map[string]data.Item) ([]cache.Scored, error) {
 	startTime := time.Now()
 	var err error
 	// concat candidates
@@ -620,21 +625,13 @@ func (w *Worker) rankByClickTroughRate(userId string, candidates [][]string, ite
 		return nil, errors.Trace(err)
 	}
 	// download items
-	items := make([]data.Item, len(itemIds))
-	for i, itemId := range itemIds {
-		var tmp interface{}
-		if itemCache.Has(itemId) {
-			// get item from cache
-			tmp, _ = itemCache.Get(itemId)
+	items := make([]data.Item, 0, len(itemIds))
+	for _, itemId := range itemIds {
+		if item, exist := itemCache[itemId]; exist {
+			items = append(items, item)
 		} else {
-			// get item from database
-			tmp, err = w.dataClient.GetItem(itemId)
-			if err != nil {
-				return nil, err
-			}
-			itemCache.Set(itemId, tmp)
+			base.Logger().Warn("item doesn't exists in database", zap.String("item_id", itemId))
 		}
-		items[i] = tmp.(data.Item)
 	}
 	// rank by CTR
 	topItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
@@ -818,4 +815,31 @@ func split(userIndex base.Index, nodes []string, me string) ([]string, error) {
 		zap.Int("n_working_users", len(workingUsers)),
 		zap.Int("n_users", len(users)))
 	return workingUsers, nil
+}
+
+func (w *Worker) pullItems() (ItemCache, error) {
+	// pull items from database
+	itemCache := make(ItemCache)
+	itemChan, errChan := w.dataClient.GetItemStream(batchSize, nil)
+	for batchItems := range itemChan {
+		for _, item := range batchItems {
+			itemCache[item.ItemId] = item
+		}
+	}
+	if err := <-errChan; err != nil {
+		return nil, errors.Trace(err)
+	}
+	return itemCache, nil
+}
+
+// ItemCache is alias of map[string]data.Item.
+type ItemCache map[string]data.Item
+
+// IsAvailable means the item exists in database and is not hidden.
+func (c ItemCache) IsAvailable(itemId string) bool {
+	if item, exist := c[itemId]; exist {
+		return !item.IsHidden
+	} else {
+		return false
+	}
 }
