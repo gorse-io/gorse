@@ -34,6 +34,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, []string{"read"}, config.Database.ReadFeedbackTypes)
 	assert.Equal(t, uint(0), config.Database.PositiveFeedbackTTL)
 	assert.Equal(t, uint(0), config.Database.ItemTTL)
+	assert.Equal(t, []string{"spoken_language_code:zh"}, config.Database.ItemCategories)
 
 	// master configuration
 	assert.Equal(t, 8086, config.Master.Port)

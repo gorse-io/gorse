@@ -64,6 +64,7 @@ type DatabaseConfig struct {
 	ReadFeedbackTypes    []string `toml:"read_feedback_types"`     // feedback type for read event
 	PositiveFeedbackTTL  uint     `toml:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
 	ItemTTL              uint     `toml:"item_ttl"`                // item-to-live of items
+	ItemCategories       []string `toml:"item_categories"`         // labels of item categories
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
