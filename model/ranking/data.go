@@ -39,6 +39,7 @@ type DataSet struct {
 	ItemLabels    [][]int32
 	UserLabels    [][]int32
 	HiddenItems   []bool
+	ItemCats      [][]string
 	// statistics
 	NumItemLabels int32
 	NumUserLabels int32
@@ -169,6 +170,7 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet.NumItemLabels, testSet.NumItemLabels = dataset.NumItemLabels, dataset.NumItemLabels
 	trainSet.NumUserLabels, testSet.NumUserLabels = dataset.NumUserLabels, dataset.NumUserLabels
 	trainSet.HiddenItems, testSet.HiddenItems = dataset.HiddenItems, dataset.HiddenItems
+	trainSet.ItemCats, trainSet.ItemCats = dataset.ItemCats, dataset.ItemCats
 	trainSet.ItemLabels, testSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
 	trainSet.UserLabels, testSet.UserLabels = dataset.UserLabels, dataset.UserLabels
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex

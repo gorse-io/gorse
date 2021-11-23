@@ -207,6 +207,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	m.GorseConfig.Database.CacheSize = 3
 	m.GorseConfig.Database.PositiveFeedbackType = []string{"positive"}
 	m.GorseConfig.Database.ReadFeedbackTypes = []string{"negative"}
+	m.GorseConfig.Database.ItemCategories = []string{"2"}
 
 	// insert items
 	var items []data.Item
@@ -300,6 +301,13 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 	}, latest)
+	latest, err = m.CacheClient.GetScores(cache.LatestItems, "2", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{
+		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
+		{items[5].ItemId, float32(items[5].Timestamp.Unix())},
+		{items[2].ItemId, float32(items[2].Timestamp.Unix())},
+	}, latest)
 
 	// check popular items
 	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
@@ -308,5 +316,12 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
 		{Id: items[6].ItemId, Score: 7},
+	}, popular)
+	popular, err = m.CacheClient.GetScores(cache.PopularItems, "2", 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{
+		{Id: items[8].ItemId, Score: 9},
+		{Id: items[5].ItemId, Score: 6},
+		{Id: items[2].ItemId, Score: 3},
 	}, popular)
 }

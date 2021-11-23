@@ -69,16 +69,20 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save popular items to cache
-	if err = m.CacheClient.SetScores(cache.PopularItems, "", popularItems); err != nil {
-		base.Logger().Error("failed to cache popular items", zap.Error(err))
+	for category, items := range popularItems {
+		if err = m.CacheClient.SetScores(cache.PopularItems, category, items); err != nil {
+			base.Logger().Error("failed to cache popular items", zap.Error(err))
+		}
 	}
 	if err = m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Now()); err != nil {
 		base.Logger().Error("failed to write latest update popular items time", zap.Error(err))
 	}
 
 	// save the latest items to cache
-	if err = m.CacheClient.SetScores(cache.LatestItems, "", latestItems); err != nil {
-		base.Logger().Error("failed to cache latest items", zap.Error(err))
+	for category, items := range latestItems {
+		if err = m.CacheClient.SetScores(cache.LatestItems, category, items); err != nil {
+			base.Logger().Error("failed to cache latest items", zap.Error(err))
+		}
 	}
 	if err = m.CacheClient.SetTime(cache.LastUpdateLatestItemsTime, "", time.Now()); err != nil {
 		base.Logger().Error("failed to write latest update latest items time", zap.Error(err))
@@ -801,7 +805,7 @@ func (m *Master) runSearchClickModelTask(
 
 // LoadDataFromDatabase loads dataset from data store.
 func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint) (
-	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems []cache.Scored, popularItems []cache.Scored, err error) {
+	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems map[string][]cache.Scored, popularItems map[string][]cache.Scored, err error) {
 	m.taskMonitor.Start(TaskLoadDataset, 5)
 
 	// setup time limit
@@ -819,6 +823,16 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		timeWindowLimit = time.Now().AddDate(0, 0, -m.GorseConfig.Recommend.PopularWindow)
 	}
 	rankingDataset = ranking.NewMapIndexDataset()
+
+	// create filers for latest/popular items
+	latestItemsFilters := make(map[string]*base.TopKStringFilter)
+	popularItemsFilters := make(map[string]*base.TopKStringFilter)
+	latestItemsFilters[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	popularItemsFilters[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	for _, category := range m.GorseConfig.Database.ItemCategories {
+		latestItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+		popularItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	}
 
 	// STEP 1: pull users
 	userLabelIndex := base.NewMapIndex()
@@ -849,7 +863,6 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		zap.Duration("used_time", time.Since(start)))
 
 	// STEP 2: pull items
-	latestItemsFilter := base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 	itemLabelIndex := base.NewMapIndex()
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(batchSize, itemTimeLimit)
@@ -860,16 +873,25 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if len(rankingDataset.ItemLabels) == int(itemIndex) {
 				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
 				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
+				rankingDataset.ItemCats = append(rankingDataset.ItemCats, nil)
 			}
 			rankingDataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
 			for i, label := range item.Labels {
 				itemLabelIndex.Add(label)
 				rankingDataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
+				if m.GorseConfig.Database.HasItemCategory(label) {
+					rankingDataset.ItemCats[itemIndex] = append(rankingDataset.ItemCats[itemIndex], label)
+				}
 			}
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
 			} else if !item.Timestamp.IsZero() { // add items to the latest items filter
-				latestItemsFilter.Push(item.ItemId, float32(item.Timestamp.Unix()))
+				latestItemsFilters[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
+				for _, label := range item.Labels {
+					if m.GorseConfig.Database.HasItemCategory(label) {
+						latestItemsFilters[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
+					}
+				}
 			}
 		}
 	}
@@ -993,15 +1015,25 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		zap.Duration("used_time", time.Since(start)))
 	m.taskMonitor.Update(TaskLoadDataset, 5)
 
-	// collect latest items and popular items
-	items, scores := latestItemsFilter.PopAll()
-	latestItems = cache.CreateScoredItems(items, scores)
-	popularItemsFilter := base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-	for itemIndex, val := range popularCount {
-		popularItemsFilter.Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
+	// collect latest items
+	latestItems = make(map[string][]cache.Scored)
+	for category, latestItemsFilter := range latestItemsFilters {
+		items, scores := latestItemsFilter.PopAll()
+		latestItems[category] = cache.CreateScoredItems(items, scores)
 	}
-	items, scores = popularItemsFilter.PopAll()
-	popularItems = cache.CreateScoredItems(items, scores)
+
+	// collect popular items
+	for itemIndex, val := range popularCount {
+		popularItemsFilters[""].Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
+		for _, category := range rankingDataset.ItemCats[itemIndex] {
+			popularItemsFilters[category].Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
+		}
+	}
+	popularItems = make(map[string][]cache.Scored)
+	for category, popularItemsFilter := range popularItemsFilters {
+		items, scores := popularItemsFilter.PopAll()
+		popularItems[category] = cache.CreateScoredItems(items, scores)
+	}
 
 	m.taskMonitor.Finish(TaskLoadDataset)
 	return rankingDataset, clickDataset, latestItems, popularItems, nil

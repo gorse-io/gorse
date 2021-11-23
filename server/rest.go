@@ -302,14 +302,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
 		Returns(200, "OK", []string{}).
 		Writes([]string{}))
-	// Disable popular items under labels temporarily
-	//ws.Route(ws.GET("/popular/{label}").To(s.getLabelPopular).
-	//	Doc("get popular items").
-	//	Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-	//	Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
-	//	Writes([]string{}))
+	ws.Route(ws.GET("/popular/{category}").To(s.getCategoryPopular).
+		Doc("get popular items in category").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
+		Returns(http.StatusOK, "OK", []string{}).
+		Writes([]string{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("get latest items").
@@ -319,14 +319,14 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
 		Returns(200, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
-	// Disable the latest items under labels temporarily
-	//ws.Route(ws.GET("/latest/{label}").To(s.getLabelLatest).
-	//	Doc("get latest items").
-	//	Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-	//	Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-	//	Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-	//	Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
-	//	Writes([]string{}))
+	ws.Route(ws.GET("/latest/{category}").To(s.getCategoryLatest).
+		Doc("get latest items in category").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
+		Returns(http.StatusOK, "OK", []string{}).
+		Writes([]string{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
 		Doc("get neighbors of a item").
@@ -422,25 +422,33 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 	s.getList(cache.LatestItems, "", request, response)
 }
 
-//func (s *RestServer) getLabelPopular(request *restful.Request, response *restful.Response) {
-//	// Authorize
-//	if !s.auth(request, response) {
-//		return
-//	}
-//	label := request.PathParameter("label")
-//	base.Logger().Debug("get label popular items", zap.String("label", label))
-//	s.getList(cache.PopularItems, label, request, response)
-//}
-//
-//func (s *RestServer) getLabelLatest(request *restful.Request, response *restful.Response) {
-//	// Authorize
-//	if !s.auth(request, response) {
-//		return
-//	}
-//	label := request.PathParameter("label")
-//	base.Logger().Debug("get label latest items", zap.String("label", label))
-//	s.getList(cache.LatestItems, label, request, response)
-//}
+func (s *RestServer) getCategoryPopular(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	category := request.PathParameter("category")
+	if !s.GorseConfig.Database.HasItemCategory(category) {
+		BadRequest(response, errors.Errorf("invalid item category: %v", category))
+		return
+	}
+	base.Logger().Debug("get category popular items in category", zap.String("category", category))
+	s.getList(cache.PopularItems, category, request, response)
+}
+
+func (s *RestServer) getCategoryLatest(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	category := request.PathParameter("category")
+	if !s.GorseConfig.Database.HasItemCategory(category) {
+		BadRequest(response, errors.Errorf("invalid item category: %v", category))
+		return
+	}
+	base.Logger().Debug("get category latest items in category", zap.String("category", category))
+	s.getList(cache.LatestItems, category, request, response)
+}
 
 // get feedback by item-id with feedback type
 func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *restful.Response) {
