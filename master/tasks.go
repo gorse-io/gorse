@@ -199,7 +199,11 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId))) {
 			return nil
 		}
-		nearItems := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+		nearItemsFilters := make(map[string]*base.TopKFilter)
+		nearItemsFilters[""] = base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+		for _, category := range m.GorseConfig.Database.ItemCategories {
+			nearItemsFilters[category] = base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+		}
 
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
 			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto) {
@@ -222,14 +226,17 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 							math32.Sqrt(weightedSum(dataset.ItemLabels[itemId], labelIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
 							(commonLabels + similarityShrink)
-						nearItems.Push(j, score)
+						nearItemsFilters[""].Push(j, score)
+						for _, category := range dataset.ItemCats[j] {
+							nearItemsFilters[category].Push(j, score)
+						}
 					}
 				}
 			}
 		}
 
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
-			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && nearItems.Len() == 0) {
+			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && nearItemsFilters[""].Len() == 0) {
 			users := dataset.ItemFeedback[itemId]
 			itemSet := bitset.New(uint(dataset.ItemCount()))
 			var adjacencyItems []int32
@@ -249,18 +256,23 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[itemId], userIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
 							(commonUsers + similarityShrink)
-						nearItems.Push(j, score)
+						nearItemsFilters[""].Push(j, score)
+						for _, category := range dataset.ItemCats[j] {
+							nearItemsFilters[category].Push(j, score)
+						}
 					}
 				}
 			}
 		}
-		elem, scores := nearItems.PopAll()
-		recommends := make([]string, len(elem))
-		for i := range recommends {
-			recommends[i] = dataset.ItemIndex.ToName(elem[i])
-		}
-		if err := m.CacheClient.SetScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), cache.CreateScoredItems(recommends, scores)); err != nil {
-			return errors.Trace(err)
+		for category, nearItemsFilter := range nearItemsFilters {
+			elem, scores := nearItemsFilter.PopAll()
+			recommends := make([]string, len(elem))
+			for i := range recommends {
+				recommends[i] = dataset.ItemIndex.ToName(elem[i])
+			}
+			if err := m.CacheClient.SetCategoryScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category, cache.CreateScoredItems(recommends, scores)); err != nil {
+				return errors.Trace(err)
+			}
 		}
 		if err := m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId)), time.Now()); err != nil {
 			return errors.Trace(err)

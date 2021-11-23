@@ -115,6 +115,21 @@ func testScores(t *testing.T, db Database) {
 	totalItems, err = db.GetScores("append", "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, totalItems)
+
+	// Put scores in category
+	scores = []Scored{
+		{"0", 0},
+		{"1", 1.1},
+		{"2", 1.2},
+		{"3", 1.3},
+		{"4", 1.4},
+	}
+	err = db.SetCategoryScores("list", "0", "cat", scores)
+	assert.NoError(t, err)
+	// Get scores in category
+	totalItems, err = db.GetCategoryScores("list", "0", "cat", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, scores, totalItems)
 }
 
 func TestScored(t *testing.T) {
