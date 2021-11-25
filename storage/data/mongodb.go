@@ -208,6 +208,9 @@ func (db *MongoDB) ModifyItem(itemId string, patch ItemPatch) error {
 	if patch.IsHidden != nil {
 		update["ishidden"] = patch.IsHidden
 	}
+	if patch.Categories != nil {
+		update["categories"] = patch.Categories
+	}
 	if patch.Comment != nil {
 		update["comment"] = patch.Comment
 	}

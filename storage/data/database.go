@@ -36,19 +36,21 @@ var (
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId    string
-	IsHidden  bool
-	Timestamp time.Time
-	Labels    []string
-	Comment   string
+	ItemId     string
+	IsHidden   bool
+	Categories []string
+	Timestamp  time.Time
+	Labels     []string
+	Comment    string
 }
 
 // ItemPatch is the modification on an item.
 type ItemPatch struct {
-	IsHidden  *bool
-	Timestamp *time.Time
-	Labels    []string
-	Comment   *string
+	IsHidden   *bool
+	Categories []string
+	Timestamp  *time.Time
+	Labels     []string
+	Comment    *string
 }
 
 // User stores meta data about user.
