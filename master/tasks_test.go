@@ -32,19 +32,18 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	m.GorseConfig = &config.Config{}
 	m.GorseConfig.Database.CacheSize = 3
 	m.GorseConfig.Master.NumJobs = 4
-	m.GorseConfig.Database.ItemCategories = []string{"*"}
 	// collect similar
 	items := []data.Item{
-		{"0", false, time.Now(), []string{"*", "a", "b", "c", "d"}, ""},
-		{"1", false, time.Now(), []string{"b", "c", "d"}, ""},
-		{"2", false, time.Now(), []string{"*", "b", "c"}, ""},
-		{"3", false, time.Now(), []string{"*", "c"}, ""},
-		{"4", false, time.Now(), []string{"*"}, ""},
-		{"5", false, time.Now(), []string{}, ""},
-		{"6", false, time.Now(), []string{"*"}, ""},
-		{"7", false, time.Now(), []string{}, ""},
-		{"8", false, time.Now(), []string{"*", "a", "b", "c", "d", "e"}, ""},
-		{"9", false, time.Now(), []string{}, ""},
+		{"0", false, nil, time.Now(), []string{"a", "b", "c", "d"}, ""},
+		{"1", false, nil, time.Now(), []string{"b", "c", "d"}, ""},
+		{"2", false, nil, time.Now(), []string{"b", "c"}, ""},
+		{"3", false, nil, time.Now(), []string{"c"}, ""},
+		{"4", false, nil, time.Now(), []string{}, ""},
+		{"5", false, nil, time.Now(), []string{}, ""},
+		{"6", false, nil, time.Now(), []string{}, ""},
+		{"7", false, nil, time.Now(), []string{}, ""},
+		{"8", false, nil, time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
+		{"9", false, nil, time.Now(), []string{}, ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
@@ -91,10 +90,6 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
-	// similar items in category (common users)
-	similar, err = m.CacheClient.GetCategoryScores(cache.ItemNeighbors, "9", "*", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "6", "4"}, cache.RemoveScores(similar))
 
 	// similar items (common labels)
 	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "8", time.Now())
@@ -106,10 +101,6 @@ func TestMaster_RunFindItemNeighborsTask(t *testing.T) {
 	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
-	// similar items in category (common labels)
-	similar, err = m.CacheClient.GetCategoryScores(cache.ItemNeighbors, "8", "*", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "3"}, cache.RemoveScores(similar))
 
 	// similar items (auto)
 	err = m.CacheClient.SetTime(cache.LastModifyItemTime, "8", time.Now())
@@ -216,7 +207,6 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	m.GorseConfig.Database.CacheSize = 3
 	m.GorseConfig.Database.PositiveFeedbackType = []string{"positive"}
 	m.GorseConfig.Database.ReadFeedbackTypes = []string{"negative"}
-	m.GorseConfig.Database.ItemCategories = []string{"2"}
 
 	// insert items
 	var items []data.Item
@@ -310,13 +300,6 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 	}, latest)
-	latest, err = m.CacheClient.GetScores(cache.LatestItems, "2", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{
-		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
-		{items[5].ItemId, float32(items[5].Timestamp.Unix())},
-		{items[2].ItemId, float32(items[2].Timestamp.Unix())},
-	}, latest)
 
 	// check popular items
 	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
@@ -325,12 +308,5 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
 		{Id: items[6].ItemId, Score: 7},
-	}, popular)
-	popular, err = m.CacheClient.GetScores(cache.PopularItems, "2", 0, 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{
-		{Id: items[8].ItemId, Score: 9},
-		{Id: items[5].ItemId, Score: 6},
-		{Id: items[2].ItemId, Score: 3},
 	}, popular)
 }

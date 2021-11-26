@@ -334,37 +334,42 @@ func testItems(t *testing.T, db Database) {
 	// Items
 	items := []Item{
 		{
-			ItemId:    "0",
-			IsHidden:  true,
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a"},
-			Comment:   "comment 0",
+			ItemId:     "0",
+			IsHidden:   true,
+			Categories: []string{"a"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []string{"a"},
+			Comment:    "comment 0",
 		},
 		{
-			ItemId:    "2",
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a"},
-			Comment:   "comment 2",
+			ItemId:     "2",
+			Categories: []string{"b"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []string{"a"},
+			Comment:    "comment 2",
 		},
 		{
-			ItemId:    "4",
-			IsHidden:  true,
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a", "b"},
-			Comment:   "comment 4",
+			ItemId:     "4",
+			IsHidden:   true,
+			Categories: []string{"a"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []string{"a", "b"},
+			Comment:    "comment 4",
 		},
 		{
-			ItemId:    "6",
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"b"},
-			Comment:   "comment 6",
+			ItemId:     "6",
+			Categories: []string{"b"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []string{"b"},
+			Comment:    "comment 6",
 		},
 		{
-			ItemId:    "8",
-			IsHidden:  true,
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"b"},
-			Comment:   "comment 8",
+			ItemId:     "8",
+			IsHidden:   true,
+			Categories: []string{"a"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []string{"b"},
+			Comment:    "comment 8",
 		},
 	}
 	// Insert item
@@ -389,25 +394,27 @@ func testItems(t *testing.T, db Database) {
 	assert.True(t, errors.IsNotFound(err))
 
 	// test override
-	err = db.BatchInsertItems([]Item{{ItemId: "4", IsHidden: false, Labels: []string{"o"}, Comment: "override"}})
+	err = db.BatchInsertItems([]Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
 	item, err := db.GetItem("4")
 	assert.NoError(t, err)
 	assert.False(t, item.IsHidden)
+	assert.Equal(t, []string{"b"}, item.Categories)
 	assert.Equal(t, []string{"o"}, item.Labels)
 	assert.Equal(t, "override", item.Comment)
 
 	// test modify
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
-	err = db.ModifyItem("2", ItemPatch{IsHidden: proto.Bool(true), Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}, Timestamp: &timestamp})
+	err = db.ModifyItem("2", ItemPatch{IsHidden: proto.Bool(true), Categories: []string{"a"}, Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}, Timestamp: &timestamp})
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
 	item, err = db.GetItem("2")
 	assert.NoError(t, err)
 	assert.True(t, item.IsHidden)
+	assert.Equal(t, []string{"a"}, item.Categories)
 	assert.Equal(t, "modify", item.Comment)
 	assert.Equal(t, []string{"a", "b", "c"}, item.Labels)
 	assert.Equal(t, timestamp, item.Timestamp)
