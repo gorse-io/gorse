@@ -372,7 +372,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		}
 	}
 	// pull items from database
-	itemCache, err := w.pullItems()
+	itemCache, itemCategories, err := w.pullItems()
 	if err != nil {
 		base.Logger().Error("failed to pull items", zap.Error(err))
 		return
@@ -436,7 +436,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// create candidates container
 		candidates := make(map[string][][]string)
 		candidates[""] = make([][]string, 0)
-		for _, category := range w.cfg.Database.ItemCategories {
+		for _, category := range itemCategories {
 			candidates[category] = make([][]string, 0)
 		}
 
@@ -445,17 +445,15 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			localStartTime := time.Now()
 			recItemsFilters := make(map[string]*base.TopKStringFilter)
 			recItemsFilters[""] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
-			for _, category := range w.cfg.Database.ItemCategories {
+			for _, category := range itemCategories {
 				recItemsFilters[category] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			}
 			for itemIndex, itemId := range itemIds {
 				if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
 					prediction := m.InternalPredict(userIndex, int32(itemIndex))
 					recItemsFilters[""].Push(itemId, prediction)
-					for _, category := range itemCache[itemId].Labels {
-						if w.cfg.Database.HasItemCategory(category) {
-							recItemsFilters[category].Push(itemId, prediction)
-						}
+					for _, category := range itemCache[itemId].Categories {
+						recItemsFilters[category].Push(itemId, prediction)
 					}
 				}
 			}
@@ -474,7 +472,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// Recommender #2: item-based.
 		if w.cfg.Recommend.EnableItemBasedRecommend {
 			localStartTime := time.Now()
-			for _, category := range append([]string{""}, w.cfg.Database.ItemCategories...) {
+			for _, category := range append([]string{""}, itemCategories...) {
 				// collect candidates
 				scores := make(map[string]float32)
 				for _, itemId := range positiveItems {
@@ -505,7 +503,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// insert user-based items
 		if w.cfg.Recommend.EnableUserBasedRecommend {
 			localStartTime := time.Now()
-			for _, category := range append([]string{""}, w.cfg.Database.ItemCategories...) {
+			for _, category := range append([]string{""}, itemCategories...) {
 				scores := make(map[string]float32)
 				// load similar users
 				similarUsers, err := w.cacheClient.GetCategoryScores(cache.UserNeighbors, userId, category, 0, w.cfg.Database.CacheSize)
@@ -541,7 +539,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// Recommender #4: latest items.
 		if w.cfg.Recommend.EnableLatestRecommend {
 			localStartTime := time.Now()
-			for _, category := range append([]string{""}, w.cfg.Database.ItemCategories...) {
+			for _, category := range append([]string{""}, itemCategories...) {
 				latestItems, err := w.cacheClient.GetScores(cache.LatestItems, category, 0, w.cfg.Database.CacheSize)
 				if err != nil {
 					base.Logger().Error("failed to load latest items", zap.Error(err))
@@ -561,7 +559,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// Recommender #5: popular items.
 		if w.cfg.Recommend.EnablePopularRecommend {
 			localStartTime := time.Now()
-			for _, category := range append([]string{""}, w.cfg.Database.ItemCategories...) {
+			for _, category := range append([]string{""}, itemCategories...) {
 				popularItems, err := w.cacheClient.GetScores(cache.PopularItems, category, 0, w.cfg.Database.CacheSize)
 				if err != nil {
 					base.Logger().Error("failed to load popular items", zap.Error(err))
@@ -848,19 +846,21 @@ func split(userIndex base.Index, nodes []string, me string) ([]string, error) {
 	return workingUsers, nil
 }
 
-func (w *Worker) pullItems() (ItemCache, error) {
+func (w *Worker) pullItems() (ItemCache, []string, error) {
 	// pull items from database
 	itemCache := make(ItemCache)
+	itemCategories := strset.New()
 	itemChan, errChan := w.dataClient.GetItemStream(batchSize, nil)
 	for batchItems := range itemChan {
 		for _, item := range batchItems {
 			itemCache[item.ItemId] = item
+			itemCategories.Add(item.Categories...)
 		}
 	}
 	if err := <-errChan; err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
-	return itemCache, nil
+	return itemCache, itemCategories.List(), nil
 }
 
 // ItemCache is alias of map[string]data.Item.

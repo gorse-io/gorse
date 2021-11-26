@@ -16,8 +16,6 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
-	"github.com/scylladb/go-set/strset"
-	"sync"
 )
 
 const (
@@ -66,9 +64,6 @@ type DatabaseConfig struct {
 	ReadFeedbackTypes    []string `toml:"read_feedback_types"`     // feedback type for read event
 	PositiveFeedbackTTL  uint     `toml:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
 	ItemTTL              uint     `toml:"item_ttl"`                // item-to-live of items
-	ItemCategories       []string `toml:"item_categories"`         // labels of item categories
-	itemCategorySet      *strset.Set
-	itemCategoryOnce     sync.Once
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -88,14 +83,6 @@ func (config *DatabaseConfig) validate() {
 	validatePositive("cache_size", config.CacheSize)
 	validateNotEmpty("positive_feedback_types", config.PositiveFeedbackType)
 	validateNotEmpty("read_feedback_types", config.ReadFeedbackTypes)
-}
-
-// HasItemCategory check whether a category is in config.
-func (config *DatabaseConfig) HasItemCategory(category string) bool {
-	config.itemCategoryOnce.Do(func() {
-		config.itemCategorySet = strset.New(config.ItemCategories...)
-	})
-	return config.itemCategorySet.Has(category)
 }
 
 // MasterConfig is the configuration for the master.

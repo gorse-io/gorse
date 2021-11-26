@@ -428,10 +428,6 @@ func (s *RestServer) getCategoryPopular(request *restful.Request, response *rest
 		return
 	}
 	category := request.PathParameter("category")
-	if !s.GorseConfig.Database.HasItemCategory(category) {
-		BadRequest(response, errors.Errorf("invalid item category: %v", category))
-		return
-	}
 	base.Logger().Debug("get category popular items in category", zap.String("category", category))
 	s.getList(cache.PopularItems, category, request, response)
 }
@@ -442,10 +438,6 @@ func (s *RestServer) getCategoryLatest(request *restful.Request, response *restf
 		return
 	}
 	category := request.PathParameter("category")
-	if !s.GorseConfig.Database.HasItemCategory(category) {
-		BadRequest(response, errors.Errorf("invalid item category: %v", category))
-		return
-	}
 	base.Logger().Debug("get category latest items in category", zap.String("category", category))
 	s.getList(cache.LatestItems, category, request, response)
 }
