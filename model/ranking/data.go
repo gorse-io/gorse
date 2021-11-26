@@ -20,6 +20,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/i32set"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -29,17 +30,18 @@ import (
 
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
-	UserIndex     base.Index
-	ItemIndex     base.Index
-	FeedbackUsers base.Integers
-	FeedbackItems base.Integers
-	UserFeedback  [][]int32
-	ItemFeedback  [][]int32
-	Negatives     [][]int32
-	ItemLabels    [][]int32
-	UserLabels    [][]int32
-	HiddenItems   []bool
-	ItemCats      [][]string
+	UserIndex      base.Index
+	ItemIndex      base.Index
+	FeedbackUsers  base.Integers
+	FeedbackItems  base.Integers
+	UserFeedback   [][]int32
+	ItemFeedback   [][]int32
+	Negatives      [][]int32
+	ItemLabels     [][]int32
+	UserLabels     [][]int32
+	HiddenItems    []bool
+	ItemCategories [][]string
+	CategorySet    *strset.Set
 	// statistics
 	NumItemLabels int32
 	NumUserLabels int32
@@ -48,6 +50,7 @@ type DataSet struct {
 // NewMapIndexDataset creates a data set.
 func NewMapIndexDataset() *DataSet {
 	s := new(DataSet)
+	s.CategorySet = strset.New()
 	// Create index
 	s.UserIndex = base.NewMapIndex()
 	s.ItemIndex = base.NewMapIndex()
@@ -170,7 +173,8 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet.NumItemLabels, testSet.NumItemLabels = dataset.NumItemLabels, dataset.NumItemLabels
 	trainSet.NumUserLabels, testSet.NumUserLabels = dataset.NumUserLabels, dataset.NumUserLabels
 	trainSet.HiddenItems, testSet.HiddenItems = dataset.HiddenItems, dataset.HiddenItems
-	trainSet.ItemCats, trainSet.ItemCats = dataset.ItemCats, dataset.ItemCats
+	trainSet.ItemCategories, testSet.ItemCategories = dataset.ItemCategories, dataset.ItemCategories
+	trainSet.CategorySet, testSet.CategorySet = dataset.CategorySet, dataset.CategorySet
 	trainSet.ItemLabels, testSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
 	trainSet.UserLabels, testSet.UserLabels = dataset.UserLabels, dataset.UserLabels
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex

@@ -201,7 +201,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		}
 		nearItemsFilters := make(map[string]*base.TopKFilter)
 		nearItemsFilters[""] = base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
-		for _, category := range m.GorseConfig.Database.ItemCategories {
+		for _, category := range dataset.CategorySet.List() {
 			nearItemsFilters[category] = base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 		}
 
@@ -227,7 +227,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
 							(commonLabels + similarityShrink)
 						nearItemsFilters[""].Push(j, score)
-						for _, category := range dataset.ItemCats[j] {
+						for _, category := range dataset.ItemCategories[j] {
 							nearItemsFilters[category].Push(j, score)
 						}
 					}
@@ -257,7 +257,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
 							(commonUsers + similarityShrink)
 						nearItemsFilters[""].Push(j, score)
-						for _, category := range dataset.ItemCats[j] {
+						for _, category := range dataset.ItemCategories[j] {
 							nearItemsFilters[category].Push(j, score)
 						}
 					}
@@ -841,10 +841,6 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	popularItemsFilters := make(map[string]*base.TopKStringFilter)
 	latestItemsFilters[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 	popularItemsFilters[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-	for _, category := range m.GorseConfig.Database.ItemCategories {
-		latestItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-		popularItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-	}
 
 	// STEP 1: pull users
 	userLabelIndex := base.NewMapIndex()
@@ -885,24 +881,23 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if len(rankingDataset.ItemLabels) == int(itemIndex) {
 				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
 				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
-				rankingDataset.ItemCats = append(rankingDataset.ItemCats, nil)
+				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
+				rankingDataset.CategorySet.Add(item.Categories...)
 			}
 			rankingDataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
 			for i, label := range item.Labels {
 				itemLabelIndex.Add(label)
 				rankingDataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
-				if m.GorseConfig.Database.HasItemCategory(label) {
-					rankingDataset.ItemCats[itemIndex] = append(rankingDataset.ItemCats[itemIndex], label)
-				}
 			}
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
 			} else if !item.Timestamp.IsZero() { // add items to the latest items filter
 				latestItemsFilters[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
-				for _, label := range item.Labels {
-					if m.GorseConfig.Database.HasItemCategory(label) {
-						latestItemsFilters[label].Push(item.ItemId, float32(item.Timestamp.Unix()))
+				for _, category := range item.Categories {
+					if _, exist := latestItemsFilters[category]; !exist {
+						latestItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 					}
+					latestItemsFilters[category].Push(item.ItemId, float32(item.Timestamp.Unix()))
 				}
 			}
 		}
@@ -1037,7 +1032,10 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	// collect popular items
 	for itemIndex, val := range popularCount {
 		popularItemsFilters[""].Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
-		for _, category := range rankingDataset.ItemCats[itemIndex] {
+		for _, category := range rankingDataset.ItemCategories[itemIndex] {
+			if _, exist := popularItemsFilters[category]; !exist {
+				popularItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+			}
 			popularItemsFilters[category].Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
 		}
 	}
