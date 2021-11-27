@@ -1122,10 +1122,12 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 
 // Item is the data structure for the item but stores the timestamp using string.
 type Item struct {
-	ItemId    string
-	Timestamp string
-	Labels    []string
-	Comment   string
+	ItemId     string
+	IsHidden   bool
+	Categories []string
+	Timestamp  string
+	Labels     []string
+	Comment    string
 }
 
 func (s *RestServer) insertItems(request *restful.Request, response *restful.Response) {
@@ -1149,7 +1151,14 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 			BadRequest(response, err)
 			return
 		}
-		items = append(items, data.Item{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment})
+		items = append(items, data.Item{
+			ItemId:     item.ItemId,
+			IsHidden:   item.IsHidden,
+			Categories: item.Categories,
+			Timestamp:  timestamp,
+			Labels:     item.Labels,
+			Comment:    item.Comment,
+		})
 		count++
 	}
 	err := s.DataClient.BatchInsertItems(items)
@@ -1183,7 +1192,14 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
-	if err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: item.ItemId, Timestamp: timestamp, Labels: item.Labels, Comment: item.Comment}}); err != nil {
+	if err = s.DataClient.BatchInsertItems([]data.Item{{
+		ItemId:     item.ItemId,
+		IsHidden:   item.IsHidden,
+		Categories: item.Categories,
+		Timestamp:  timestamp,
+		Labels:     item.Labels,
+		Comment:    item.Comment,
+	}}); err != nil {
 		InternalServerError(response, err)
 		return
 	}

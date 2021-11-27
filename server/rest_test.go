@@ -174,30 +174,35 @@ func TestServer_Items(t *testing.T) {
 	items := []data.Item{
 		{
 			ItemId:    "0",
+			IsHidden:  true,
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a"},
 			Comment:   "comment_0",
 		},
 		{
-			ItemId:    "2",
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a"},
-			Comment:   "comment_2",
+			ItemId:     "2",
+			Categories: []string{"*"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []string{"a"},
+			Comment:    "comment_2",
 		},
 		{
 			ItemId:    "4",
+			IsHidden:  true,
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"a", "b"},
 			Comment:   "comment_4",
 		},
 		{
-			ItemId:    "6",
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"b"},
-			Comment:   "comment_6",
+			ItemId:     "6",
+			Categories: []string{"*"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []string{"b"},
+			Comment:    "comment_6",
 		},
 		{
 			ItemId:    "8",
+			IsHidden:  true,
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:    []string{"b"},
 			Comment:   "comment_8",
@@ -284,11 +289,12 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, data.Item{
-			ItemId:    "2",
-			IsHidden:  true,
-			Comment:   "modified",
-			Labels:    []string{"a", "b", "c"},
-			Timestamp: timestamp,
+			ItemId:     "2",
+			IsHidden:   true,
+			Categories: []string{"*"},
+			Comment:    "modified",
+			Labels:     []string{"a", "b", "c"},
+			Timestamp:  timestamp,
 		})).
 		End()
 	hiddenItems, err = s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
