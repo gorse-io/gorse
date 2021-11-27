@@ -15,6 +15,7 @@
 package master
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
@@ -124,6 +125,12 @@ func (m *Master) runLoadDatasetTask() error {
 		Name: NumValidNegFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
 	}); err != nil {
 		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
+	}
+
+	// write categories to cache
+	categories, err := json.Marshal(rankingDataset.CategorySet.List())
+	if err = m.CacheClient.SetString(cache.ItemCategories, "", string(categories)); err != nil {
+		base.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 
 	// split ranking dataset
