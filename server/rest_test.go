@@ -442,17 +442,18 @@ func TestServer_List(t *testing.T) {
 	defer s.Close(t)
 	type ListOperator struct {
 		Prefix string
-		Label  string
+		Ident  string
 		Get    string
 	}
 	operators := []ListOperator{
 		{cache.OfflineRecommend, "0", "/api/intermediate/recommend/0"},
-		//{cache.SubscribeItems, "0", "/subscribe/0"},
+		{cache.OfflineRecommend, "0/0", "/api/intermediate/recommend/0/0"},
 		{cache.LatestItems, "", "/api/latest/"},
-		//{cache.LatestItems, "0", "/api/latest/0"},
+		{cache.LatestItems, "0", "/api/latest/0"},
 		{cache.PopularItems, "", "/api/popular/"},
-		//{cache.PopularItems, "0", "/api/popular/0"},
+		{cache.PopularItems, "0", "/api/popular/0"},
 		{cache.ItemNeighbors, "0", "/api/item/0/neighbors"},
+		{cache.ItemNeighbors, "0/0", "/api/item/0/neighbors/0"},
 		{cache.UserNeighbors, "0", "/api/user/0/neighbors"},
 	}
 
@@ -466,7 +467,7 @@ func TestServer_List(t *testing.T) {
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
+		err := s.CacheClient.SetScores(operator.Prefix, operator.Ident, scores)
 		assert.NoError(t, err)
 		apitest.New().
 			Handler(s.handler).
@@ -719,6 +720,7 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 4}`).
 		End()
+
 	// insert similar items
 	err = s.CacheClient.SetScores(cache.ItemNeighbors, "1", []cache.Scored{
 		{"2", 100000},
@@ -746,6 +748,29 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		{"9", 1},
 	})
 	assert.NoError(t, err)
+
+	// insert similar items of category *
+	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "1", "*", []cache.Scored{
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "2", "*", []cache.Scored{
+		{"3", 100000},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "3", "*", []cache.Scored{
+		{"7", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "4", "*", []cache.Scored{
+		{"1", 100000},
+		{"7", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+
 	// test fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"item_based"}
 	apitest.New().
@@ -758,6 +783,18 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"9", "8", "7"})).
+		End()
+	s.GorseConfig.Recommend.FallbackRecommend = []string{"item_based"}
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"9", "7"})).
 		End()
 }
 
@@ -784,7 +821,7 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 4}`).
 		End()
-	// insert similar items
+	// insert similar users
 	err = s.CacheClient.SetScores(cache.UserNeighbors, "0", []cache.Scored{
 		{"1", 2},
 		{"2", 1.5},
@@ -805,6 +842,12 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
 	}, true, true, true)
 	assert.NoError(t, err)
+	// insert categorized items
+	err = s.DataClient.BatchInsertItems([]data.Item{
+		{ItemId: "12", Categories: []string{"*"}},
+		{ItemId: "48", Categories: []string{"*"}},
+	})
+	assert.NoError(t, err)
 	// test fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"user_based"}
 	apitest.New().
@@ -818,26 +861,49 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"48", "11", "12"})).
 		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"48", "12"})).
+		End()
 }
 
 func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
-	// insert recommendation
+	// insert offline recommendation
 	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetCategoryScores(cache.OfflineRecommend, "0", "*",
+		[]cache.Scored{{"101", 99}, {"102", 98}, {"103", 97}, {"104", 96}})
 	assert.NoError(t, err)
 	// insert latest
 	err = s.CacheClient.SetScores(cache.LatestItems, "",
 		[]cache.Scored{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
 	assert.NoError(t, err)
+	err = s.CacheClient.SetScores(cache.LatestItems, "*",
+		[]cache.Scored{{"105", 95}, {"106", 94}, {"107", 93}, {"108", 92}})
+	assert.NoError(t, err)
 	// insert popular
 	err = s.CacheClient.SetScores(cache.PopularItems, "",
 		[]cache.Scored{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
 	assert.NoError(t, err)
+	err = s.CacheClient.SetScores(cache.PopularItems, "*",
+		[]cache.Scored{{"109", 91}, {"110", 90}, {"111", 89}, {"112", 88}})
+	assert.NoError(t, err)
 	// insert collaborative filtering
 	err = s.CacheClient.SetScores(cache.CollaborativeRecommend, "0",
 		[]cache.Scored{{"13", 79}, {"14", 78}, {"15", 77}, {"16", 76}})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetCategoryScores(cache.CollaborativeRecommend, "0", "*",
+		[]cache.Scored{{"113", 79}, {"114", 78}, {"115", 77}, {"116", 76}})
 	assert.NoError(t, err)
 	// test popular fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"popular"}
@@ -852,6 +918,17 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"1", "2", "3", "4", "9", "10", "11", "12"})).
 		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"101", "102", "103", "104", "109", "110", "111", "112"})).
+		End()
 	// test latest fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"latest"}
 	apitest.New().
@@ -865,6 +942,17 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"})).
 		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"101", "102", "103", "104", "105", "106", "107", "108"})).
+		End()
 	// test collaborative filtering
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"collaborative"}
 	apitest.New().
@@ -877,6 +965,17 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"1", "2", "3", "4", "13", "14", "15", "16"})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"101", "102", "103", "104", "113", "114", "115", "116"})).
 		End()
 	// test wrong fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{""}

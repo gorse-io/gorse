@@ -86,6 +86,8 @@ type Database interface {
 	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
 	ClearScores(prefix, name string) error
 	AppendScores(prefix, name string, items ...Scored) error
+	SetCategoryScores(prefix, name, category string, items []Scored) error
+	GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error)
 	GetString(prefix, name string) (string, error)
 	SetString(prefix, name string, val string) error
 	GetTime(prefix, name string) (time.Time, error)

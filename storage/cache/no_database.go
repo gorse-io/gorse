@@ -34,6 +34,16 @@ func (NoDatabase) GetScores(_, _ string, _, _ int) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
+// SetCategoryScores method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) SetCategoryScores(_, _, _ string, _ []Scored) error {
+	return ErrNoDatabase
+}
+
+// GetCategoryScores method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetCategoryScores(_, _, _ string, _, _ int) ([]Scored, error) {
+	return nil, ErrNoDatabase
+}
+
 // ClearScores method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) ClearScores(_, _ string) error {
 	return ErrNoDatabase

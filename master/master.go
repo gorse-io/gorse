@@ -134,7 +134,7 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 			GorseConfig: cfg,
 			HttpHost:    cfg.Master.HttpHost,
 			HttpPort:    cfg.Master.HttpPort,
-			EnableAuth:  false,
+			IsDashboard: true,
 			WebService:  new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(time.Duration(cfg.Recommend.FitPeriod) * time.Minute),

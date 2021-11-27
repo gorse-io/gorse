@@ -81,6 +81,22 @@ func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error)
 	return res, err
 }
 
+// SetCategoryScores method of NoDatabase returns ErrNoDatabase.
+func (r *Redis) SetCategoryScores(prefix, name, category string, items []Scored) error {
+	if category != "" {
+		name += "/" + category
+	}
+	return r.SetScores(prefix, name, items)
+}
+
+// GetCategoryScores method of NoDatabase returns ErrNoDatabase.
+func (r *Redis) GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error) {
+	if category != "" {
+		name += "/" + category
+	}
+	return r.GetScores(prefix, name, begin, end)
+}
+
 // ClearScores clears a list of scored items in Redis.
 func (r *Redis) ClearScores(prefix, name string) error {
 	startTime := time.Now()

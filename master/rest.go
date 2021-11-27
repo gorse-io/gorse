@@ -105,6 +105,14 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}/{category}").To(m.getRecommend).
+		Doc("Get recommendation for user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
@@ -329,6 +337,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// parse arguments
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
+	category := request.PathParameter("category")
 	n, err := server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
@@ -337,13 +346,13 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	var results []string
 	switch recommender {
 	case "offline":
-		results, err = m.Recommend(userId, n, m.RecommendOffline)
+		results, err = m.Recommend(userId, category, n, m.RecommendOffline)
 	case "collaborative":
-		results, err = m.Recommend(userId, n, m.RecommendCollaborative)
+		results, err = m.Recommend(userId, category, n, m.RecommendCollaborative)
 	case "user_based":
-		results, err = m.Recommend(userId, n, m.RecommendUserBased)
+		results, err = m.Recommend(userId, category, n, m.RecommendUserBased)
 	case "item_based":
-		results, err = m.Recommend(userId, n, m.RecommendItemBased)
+		results, err = m.Recommend(userId, category, n, m.RecommendItemBased)
 	}
 	if err != nil {
 		server.InternalServerError(response, err)
