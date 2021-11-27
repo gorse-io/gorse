@@ -90,7 +90,7 @@ func (r *Redis) SetCategoryScores(prefix, name, category string, items []Scored)
 }
 
 // GetCategoryScores method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) GetCategoryScores(prefix, name, category string, begin int, end int) ([]Scored, error) {
+func (r *Redis) GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error) {
 	if category != "" {
 		name += "/" + category
 	}

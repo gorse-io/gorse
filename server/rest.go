@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
+	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -40,7 +41,7 @@ type RestServer struct {
 	GorseConfig *config.Config
 	HttpHost    string
 	HttpPort    int
-	EnableAuth  bool
+	IsDashboard bool
 	WebService  *restful.WebService
 }
 
@@ -290,6 +291,16 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
 		Returns(200, "OK", []string{}).
 		Writes([]string{}))
+	ws.Route(ws.GET("/intermediate/recommend/{user-id}/{category}").To(s.getCategorizedCollaborative).
+		Doc("get the collaborative filtering recommendation for a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"intermediate"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
+		Returns(200, "OK", []string{}).
+		Writes([]string{}))
 
 	/* Rank recommendation */
 
@@ -306,6 +317,7 @@ func (s *RestServer) CreateWebService() {
 		Doc("get popular items in category").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
 		Returns(http.StatusOK, "OK", []string{}).
@@ -323,6 +335,7 @@ func (s *RestServer) CreateWebService() {
 		Doc("get latest items in category").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
 		Returns(http.StatusOK, "OK", []string{}).
@@ -333,6 +346,16 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
+		Returns(200, "OK", []string{}).
+		Writes([]string{}))
+	ws.Route(ws.GET("/item/{item-id}/neighbors/{category}").To(s.getItemCategorizedNeighbors).
+		Doc("get neighbors of a item").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
 		Returns(200, "OK", []string{}).
@@ -351,6 +374,18 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("write-back-type", "type of write back feedback").DataType("string")).
+		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback in minutes").DataType("integer")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "offset in the recommendation result").DataType("integer")).
+		Returns(200, "OK", []string{}).
+		Writes([]string{}))
+	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
+		Doc("Get recommendation for user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("write-back-type", "type of write back feedback").DataType("string")).
 		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback in minutes").DataType("integer")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
@@ -484,6 +519,18 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 	s.getList(cache.ItemNeighbors, itemId, request, response)
 }
 
+// getItemCategorizedNeighbors gets categorized neighbors of an item from database.
+func (s *RestServer) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Get item id
+	itemId := request.PathParameter("item-id")
+	category := request.PathParameter("category")
+	s.getList(cache.ItemNeighbors, itemId+"/"+category, request, response)
+}
+
 // getUserNeighbors gets neighbors of a user from database.
 func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	// Authorize
@@ -506,6 +553,18 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 //	s.getList(cache.SubscribeItems, userId, request, response)
 //}
 
+// getCategorizedCollaborative gets cached categorized recommended items from database.
+func (s *RestServer) getCategorizedCollaborative(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Get user id
+	userId := request.PathParameter("user-id")
+	category := request.PathParameter("category")
+	s.getList(cache.OfflineRecommend, userId+"/"+category, request, response)
+}
+
 // getCollaborative gets cached recommended items from database.
 func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
 	// Authorize
@@ -521,11 +580,11 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 // 1. If there are recommendations in cache, return cached recommendations.
 // 2. If there are historical interactions of the users, return similar items.
 // 3. Otherwise, return fallback recommendation (popular/latest).
-func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender) ([]string, error) {
+func (s *RestServer) Recommend(userId, category string, n int, recommenders ...Recommender) ([]string, error) {
 	initStart := time.Now()
 
 	// create context
-	ctx, err := s.createRecommendContext(userId, n)
+	ctx, err := s.createRecommendContext(userId, category, n)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -563,6 +622,7 @@ func (s *RestServer) Recommend(userId string, n int, recommenders ...Recommender
 
 type recommendContext struct {
 	userId       string
+	category     string
 	userFeedback []data.Feedback
 	n            int
 	results      []string
@@ -585,7 +645,7 @@ type recommendContext struct {
 	loadPopularTime    time.Duration
 }
 
-func (s *RestServer) createRecommendContext(userId string, n int) (*recommendContext, error) {
+func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
 	ignoreItems, err := s.CacheClient.GetScores(cache.IgnoreItems, userId, 0, -1)
 	if err != nil {
@@ -607,6 +667,7 @@ func (s *RestServer) createRecommendContext(userId string, n int) (*recommendCon
 	}
 	return &recommendContext{
 		userId:     userId,
+		category:   category,
 		n:          n,
 		excludeSet: excludeSet,
 	}, nil
@@ -633,7 +694,7 @@ type Recommender func(ctx *recommendContext) error
 func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		recommendation, err := s.CacheClient.GetScores(cache.OfflineRecommend, ctx.userId, 0, s.GorseConfig.Database.CacheSize)
+		recommendation, err := s.CacheClient.GetCategoryScores(cache.OfflineRecommend, ctx.userId, ctx.category, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -654,7 +715,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.GetScores(cache.CollaborativeRecommend, ctx.userId, 0, s.GorseConfig.Database.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.GetCategoryScores(cache.CollaborativeRecommend, ctx.userId, ctx.category, 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -694,7 +755,13 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !ctx.excludeSet.Has(feedback.ItemId) {
-					candidates[feedback.ItemId] += user.Score
+					item, err := s.DataClient.GetItem(feedback.ItemId)
+					if err != nil {
+						return errors.Trace(err)
+					}
+					if ctx.category == "" || funk.ContainsString(item.Categories, ctx.category) {
+						candidates[feedback.ItemId] += user.Score
+					}
 				}
 			}
 		}
@@ -726,7 +793,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		candidates := make(map[string]float32)
 		for _, feedback := range ctx.userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.GetScores(cache.ItemNeighbors, feedback.ItemId, 0, s.GorseConfig.Database.CacheSize)
+			similarItems, err := s.CacheClient.GetCategoryScores(cache.ItemNeighbors, feedback.ItemId, ctx.category, 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -761,7 +828,7 @@ func (s *RestServer) recommendLatest(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetScores(cache.LatestItems, "", 0, ctx.n-len(ctx.results))
+		items, err := s.CacheClient.GetScores(cache.LatestItems, ctx.category, 0, ctx.n-len(ctx.results))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -786,7 +853,7 @@ func (s *RestServer) recommendPopular(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetScores(cache.PopularItems, "", 0, ctx.n-len(ctx.results))
+		items, err := s.CacheClient.GetScores(cache.PopularItems, ctx.category, 0, ctx.n-len(ctx.results))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -817,6 +884,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		BadRequest(response, err)
 		return
 	}
+	category := request.PathParameter("category")
 	offset, err := ParseInt(request, "offset", 0)
 	if err != nil {
 		BadRequest(response, err)
@@ -847,7 +915,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			return
 		}
 	}
-	results, err := s.Recommend(userId, offset+n, recommenders...)
+	results, err := s.Recommend(userId, category, offset+n, recommenders...)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1461,7 +1529,7 @@ func Text(response *restful.Response, content string) {
 }
 
 func (s *RestServer) auth(request *restful.Request, response *restful.Response) bool {
-	if !s.EnableAuth || s.GorseConfig.Server.APIKey == "" {
+	if s.IsDashboard || s.GorseConfig.Server.APIKey == "" {
 		return true
 	}
 	apikey := request.HeaderParameter("X-API-Key")

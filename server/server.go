@@ -56,7 +56,6 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 			GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
 			HttpHost:    serverHost,
 			HttpPort:    serverPort,
-			EnableAuth:  true,
 			WebService:  new(restful.WebService),
 		},
 	}

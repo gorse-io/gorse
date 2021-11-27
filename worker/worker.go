@@ -500,36 +500,43 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			ItemBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
 		}
 
-		// insert user-based items
+		// Recommender #3: insert user-based items
 		if w.cfg.Recommend.EnableUserBasedRecommend {
 			localStartTime := time.Now()
-			for _, category := range append([]string{""}, itemCategories...) {
-				scores := make(map[string]float32)
-				// load similar users
-				similarUsers, err := w.cacheClient.GetCategoryScores(cache.UserNeighbors, userId, category, 0, w.cfg.Database.CacheSize)
+			scores := make(map[string]float32)
+			// load similar users
+			similarUsers, err := w.cacheClient.GetScores(cache.UserNeighbors, userId, 0, w.cfg.Database.CacheSize)
+			if err != nil {
+				base.Logger().Error("failed to load similar users", zap.Error(err))
+				return errors.Trace(err)
+			}
+			for _, user := range similarUsers {
+				// load historical feedback
+				feedbacks, err := w.dataClient.GetUserFeedback(user.Id, false, w.cfg.Database.PositiveFeedbackType...)
 				if err != nil {
-					base.Logger().Error("failed to load similar users", zap.Error(err))
+					base.Logger().Error("failed to get user feedback", zap.Error(err))
 					return errors.Trace(err)
 				}
-				for _, user := range similarUsers {
-					// load historical feedback
-					feedbacks, err := w.dataClient.GetUserFeedback(user.Id, false, w.cfg.Database.PositiveFeedbackType...)
-					if err != nil {
-						base.Logger().Error("failed to get user feedback", zap.Error(err))
-						return errors.Trace(err)
-					}
-					// add unseen items
-					for _, feedback := range feedbacks {
-						if !excludeSet.Has(feedback.ItemId) && itemCache.IsAvailable(feedback.ItemId) {
-							scores[feedback.ItemId] += user.Score
-						}
+				// add unseen items
+				for _, feedback := range feedbacks {
+					if !excludeSet.Has(feedback.ItemId) && itemCache.IsAvailable(feedback.ItemId) {
+						scores[feedback.ItemId] += user.Score
 					}
 				}
-				// collect top k
-				filter := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
-				for id, score := range scores {
-					filter.Push(id, score)
+			}
+			// collect top k
+			filters := make(map[string]*base.TopKStringFilter)
+			filters[""] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+			for _, category := range itemCategories {
+				filters[category] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+			}
+			for id, score := range scores {
+				filters[""].Push(id, score)
+				for _, category := range itemCache[id].Categories {
+					filters[category].Push(id, score)
 				}
+			}
+			for category, filter := range filters {
 				ids, _ := filter.PopAll()
 				candidates[category] = append(candidates[category], ids)
 			}
@@ -700,6 +707,7 @@ func mergeAndShuffle(candidates [][]string) []cache.Scored {
 }
 
 func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *strset.Set) ([]cache.Scored, error) {
+	localExcludeSet := excludeSet.Copy()
 	// create thresholds
 	explorePopularThreshold := 0.0
 	if threshold, exist := w.cfg.Recommend.ExploreRecommend["popular"]; exist {
@@ -736,8 +744,8 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 		} else {
 			break
 		}
-		if !excludeSet.Has(recommendItem.Id) {
-			excludeSet.Add(recommendItem.Id)
+		if !localExcludeSet.Has(recommendItem.Id) {
+			localExcludeSet.Add(recommendItem.Id)
 			exploreRecommend = append(exploreRecommend, recommendItem)
 		}
 	}

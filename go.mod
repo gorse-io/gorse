@@ -23,13 +23,13 @@ require (
 	github.com/juju/testing v0.0.0-20210324180055-18c50b0c2098 // indirect
 	github.com/lib/pq v1.10.2
 	github.com/mailru/go-clickhouse v1.6.0
-	github.com/orcaman/concurrent-map v0.0.0-20210501183033-44dafcb38ecc
 	github.com/prometheus/client_golang v1.10.0
 	github.com/rakyll/statik v0.1.7
 	github.com/scylladb/go-set v1.0.2
 	github.com/spf13/cobra v0.0.7
 	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.0
+	github.com/thoas/go-funk v0.9.1
 	go.mongodb.org/mongo-driver v1.5.1
 	go.uber.org/zap v1.17.0
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2

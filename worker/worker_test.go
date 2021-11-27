@@ -172,10 +172,12 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	}, true, true, true)
 	assert.NoError(t, err)
 
-	// insert hidden items
+	// insert hidden items and categorized items
 	err = w.dataClient.BatchInsertItems([]data.Item{
 		{ItemId: "10", IsHidden: true},
 		{ItemId: "11", IsHidden: true},
+		{ItemId: "3", Categories: []string{"*"}},
+		{ItemId: "1", Categories: []string{"*"}},
 	})
 	assert.NoError(t, err)
 
@@ -190,6 +192,12 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 		{"2", 0},
 		{"1", 0},
 		{"0", 0},
+	}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{
+		{"3", 0},
+		{"1", 0},
 	}, recommends)
 
 	readCache, err := w.cacheClient.GetScores(cache.IgnoreItems, "0", 0, -1)
@@ -215,6 +223,7 @@ func TestRecommend_ItemBased(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "24"}},
 	}, true, true, true)
 	assert.NoError(t, err)
+
 	// insert similar items
 	err = w.cacheClient.SetScores(cache.ItemNeighbors, "21", []cache.Scored{
 		{"22", 100000},
@@ -246,17 +255,44 @@ func TestRecommend_ItemBased(t *testing.T) {
 		{"29", 1},
 	})
 	assert.NoError(t, err)
+
+	// insert similar items in category
+	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "21", "*", []cache.Scored{
+		{"22", 100000},
+	})
+	assert.NoError(t, err)
+	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "22", "*", []cache.Scored{
+		{"28", 1},
+	})
+	assert.NoError(t, err)
+	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "23", "*", []cache.Scored{
+		{"24", 100000},
+		{"28", 1},
+	})
+	assert.NoError(t, err)
+	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "24", "*", []cache.Scored{
+		{"26", 1},
+		{"28", 1},
+	})
+	assert.NoError(t, err)
+
 	// insert items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "21"}, {ItemId: "22"}, {ItemId: "23"}, {ItemId: "24"},
 		{ItemId: "25"}, {ItemId: "26"}, {ItemId: "27"}, {ItemId: "28"}, {ItemId: "29"}})
 	// insert hidden items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "25", IsHidden: true}})
 	assert.NoError(t, err)
+	// insert categorized items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "26", Categories: []string{"*"}}, {ItemId: "28", Categories: []string{"*"}}})
+	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"29", 0}, {"28", 0}, {"27", 0}}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"28", 0}, {"26", 0}}, recommends)
 }
 
 func TestRecommend_UserBased(t *testing.T) {
@@ -293,11 +329,20 @@ func TestRecommend_UserBased(t *testing.T) {
 	// insert hidden items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "10", IsHidden: true}})
 	assert.NoError(t, err)
+	// insert categorized items
+	err = w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "12", Categories: []string{"*"}},
+		{ItemId: "48", Categories: []string{"*"}},
+	})
+	assert.NoError(t, err)
 	m := newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend(m, []string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"48", 0}, {"11", 0}, {"12", 0}}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"48", 0}, {"12", 0}}, recommends)
 }
 
 func TestRecommend_Popular(t *testing.T) {
@@ -309,8 +354,16 @@ func TestRecommend_Popular(t *testing.T) {
 	// insert popular items
 	err := w.cacheClient.SetScores(cache.PopularItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
+	// insert popular items with category *
+	err = w.cacheClient.SetScores(cache.PopularItems, "*", []cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}})
+	assert.NoError(t, err)
 	// insert items
-	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"}})
+	err = w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"},
+		{ItemId: "20", Categories: []string{"*"}},
+		{ItemId: "19", Categories: []string{"*"}},
+		{ItemId: "18", Categories: []string{"*"}},
+	})
 	assert.NoError(t, err)
 	// insert hidden items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
@@ -320,6 +373,9 @@ func TestRecommend_Popular(t *testing.T) {
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
 }
 
 func TestRecommend_Latest(t *testing.T) {
@@ -331,8 +387,16 @@ func TestRecommend_Latest(t *testing.T) {
 	// insert latest items
 	err := w.cacheClient.SetScores(cache.LatestItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
+	// insert the latest items with category *
+	err = w.cacheClient.SetScores(cache.LatestItems, "*", []cache.Scored{{"20", 10}, {"19", 9}, {"18", 8}})
+	assert.NoError(t, err)
 	// insert items
-	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"}})
+	err = w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"},
+		{ItemId: "20", Categories: []string{"*"}},
+		{ItemId: "19", Categories: []string{"*"}},
+		{ItemId: "18", Categories: []string{"*"}},
+	})
 	assert.NoError(t, err)
 	// insert hidden items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
@@ -342,6 +406,9 @@ func TestRecommend_Latest(t *testing.T) {
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
 }
 
 func TestMergeAndShuffle(t *testing.T) {
