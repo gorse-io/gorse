@@ -430,7 +430,7 @@ func TestExploreRecommend(t *testing.T) {
 
 	recommend, err := w.exploreRecommend(cache.CreateScoredItems(
 		[]string{"1", "2", "3", "4", "5", "6", "7", "8"},
-		[]float32{0, 0, 0, 0, 0, 0, 0, 0}), strset.New())
+		[]float32{0, 0, 0, 0, 0, 0, 0, 0}), strset.New(), "")
 	assert.NoError(t, err)
 	items := cache.RemoveScores(recommend)
 	assert.Contains(t, items, "latest")
