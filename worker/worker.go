@@ -599,7 +599,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 
 		// explore latest and popular
 		for category, result := range results {
-			results[category], err = w.exploreRecommend(result, excludeSet)
+			results[category], err = w.exploreRecommend(result, excludeSet, category)
 			if err != nil {
 				base.Logger().Error("failed to explore latest and popular items", zap.Error(err))
 				return errors.Trace(err)
@@ -706,7 +706,7 @@ func mergeAndShuffle(candidates [][]string) []cache.Scored {
 	return recommend
 }
 
-func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *strset.Set) ([]cache.Scored, error) {
+func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *strset.Set, category string) ([]cache.Scored, error) {
 	localExcludeSet := excludeSet.Copy()
 	// create thresholds
 	explorePopularThreshold := 0.0
@@ -718,12 +718,12 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 		exploreLatestThreshold += threshold
 	}
 	// load popular items
-	popularItems, err := w.cacheClient.GetScores(cache.PopularItems, "", 0, w.cfg.Database.CacheSize)
+	popularItems, err := w.cacheClient.GetScores(cache.PopularItems, category, 0, w.cfg.Database.CacheSize)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	// load the latest items
-	latestItems, err := w.cacheClient.GetScores(cache.LatestItems, "", 0, w.cfg.Database.CacheSize)
+	latestItems, err := w.cacheClient.GetScores(cache.LatestItems, category, 0, w.cfg.Database.CacheSize)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
