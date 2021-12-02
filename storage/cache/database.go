@@ -86,6 +86,7 @@ type Database interface {
 	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
 	ClearScores(prefix, name string) error
 	AppendScores(prefix, name string, items ...Scored) error
+	PopScores(prefix, name string, n int) error
 	SetCategoryScores(prefix, name, category string, items []Scored) error
 	GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error)
 	GetString(prefix, name string) (string, error)

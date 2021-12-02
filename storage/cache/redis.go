@@ -128,6 +128,13 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 	return nil
 }
 
+// PopScores pops n scored items in the front of list in Redis.
+func (r *Redis) PopScores(prefix, name string, n int) error {
+	var ctx = context.Background()
+	key := prefix + "/" + name
+	return r.client.LPopCount(ctx, key, n).Err()
+}
+
 // GetString returns a string from Redis.
 func (r *Redis) GetString(prefix, name string) (string, error) {
 	var ctx = context.Background()

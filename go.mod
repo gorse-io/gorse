@@ -5,7 +5,7 @@ go 1.14
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/ReneKroon/ttlcache/v2 v2.7.0
-	github.com/alicebob/miniredis/v2 v2.14.3
+	github.com/alicebob/miniredis/v2 v2.16.1
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/barkimedes/go-deepcopy v0.0.0-20200817023428-a044a1957ca4
 	github.com/bits-and-blooms/bitset v1.2.1
@@ -30,6 +30,7 @@ require (
 	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.0
 	github.com/thoas/go-funk v0.9.1
+	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
 	go.mongodb.org/mongo-driver v1.5.1
 	go.uber.org/zap v1.17.0
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2

@@ -44,6 +44,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.AppendScores("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.PopScores("", "", 0)
+	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.ClearScores("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.SetCategoryScores("", "", "", nil)

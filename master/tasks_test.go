@@ -333,3 +333,35 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		{Id: items[2].ItemId, Score: 3},
 	}, popular)
 }
+
+func TestRunRefreshHiddenItemsCache(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+
+	// insert timestamps
+	err := m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC))
+	assert.NoError(t, err)
+	err = m.CacheClient.SetTime(cache.LastUpdateLatestItemsTime, "", time.Date(1999, 1, 1, 1, 1, 1, 1, time.UTC))
+	assert.NoError(t, err)
+	err = m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, "item", time.Date(1998, 1, 1, 1, 1, 1, 1, time.UTC))
+	assert.NoError(t, err)
+	err = m.CacheClient.SetTime(cache.LastUpdateUserRecommendTime, "user", time.Date(1997, 1, 1, 1, 1, 1, 1, time.UTC))
+	assert.NoError(t, err)
+
+	// insert hidden items
+	err = m.CacheClient.SetScores(cache.HiddenItems, "", []cache.Scored{
+		{Id: "1", Score: float32(time.Date(1996, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
+		{Id: "2", Score: float32(time.Date(1997, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
+		{Id: "3", Score: float32(time.Date(1998, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
+	})
+	assert.NoError(t, err)
+
+	// remove outdated hidden items from cache
+	m.runRefreshHiddenItemsCache([]string{"user"}, []string{"item"})
+	hiddenItems, err := m.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	assert.Equal(t, []cache.Scored{
+		{Id: "2", Score: float32(time.Date(1997, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
+		{Id: "3", Score: float32(time.Date(1998, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
+	}, hiddenItems)
+}
