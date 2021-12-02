@@ -140,6 +140,52 @@ func (m *Master) runLoadDatasetTask() error {
 	return nil
 }
 
+// runRefreshHiddenItemsCache remove outdated hidden items from cache.
+func (m *Master) runRefreshHiddenItemsCache(users, items []string) {
+	// find the oldest timestamp
+	oldestTimestamp := time.Now()
+	if ts, err := m.CacheClient.GetTime(cache.LastUpdatePopularItemsTime, ""); err == nil {
+		if ts.Before(oldestTimestamp) {
+			oldestTimestamp = ts
+		}
+	}
+	if ts, err := m.CacheClient.GetTime(cache.LastUpdateLatestItemsTime, ""); err == nil {
+		if ts.Before(oldestTimestamp) {
+			oldestTimestamp = ts
+		}
+	}
+	for _, itemId := range items {
+		if ts, err := m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId); err == nil {
+			if ts.Before(oldestTimestamp) {
+				oldestTimestamp = ts
+			}
+		}
+	}
+	for _, userId := range users {
+		if ts, err := m.CacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId); err == nil {
+			if ts.Before(oldestTimestamp) {
+				oldestTimestamp = ts
+			}
+		}
+	}
+
+	// locate outdated hidden items
+	hiddenItems, err := m.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	if err != nil {
+		base.Logger().Error("failed to read hidden items", zap.Error(err))
+		return
+	}
+	i := 0
+	for i < len(hiddenItems) && hiddenItems[i].Score < float32(oldestTimestamp.Unix()) {
+		i++
+	}
+
+	// remove outdated hidden items
+	if err = m.CacheClient.PopScores(cache.HiddenItems, "", i); err != nil {
+		base.Logger().Error("failed to remove outdated hidden items", zap.Error(err))
+	}
+}
+
 // runFindItemNeighborsTask updates neighbors of items.
 func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	m.taskMonitor.Start(TaskFindItemNeighbors, dataset.ItemCount())
@@ -561,6 +607,7 @@ func (m *Master) runRankingRelatedTasks(
 	} else if numUsersChanged || numFeedbackChanged {
 		m.runFindUserNeighborsTask(m.rankingTrainSet)
 	}
+	m.runRefreshHiddenItemsCache(m.rankingTrainSet.UserIndex.GetNames(), m.rankingTrainSet.ItemIndex.GetNames())
 
 	// training model
 	if numFeedback == 0 {

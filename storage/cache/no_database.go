@@ -54,6 +54,11 @@ func (NoDatabase) AppendScores(_, _ string, _ ...Scored) error {
 	return ErrNoDatabase
 }
 
+// PopScores method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) PopScores(_, _ string, _ int) error {
+	return ErrNoDatabase
+}
+
 // GetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetString(_, _ string) (string, error) {
 	return "", ErrNoDatabase

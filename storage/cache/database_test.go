@@ -109,6 +109,12 @@ func testScores(t *testing.T, db Database) {
 	totalItems, err = db.GetScores("append", "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, append(scores, overwriteScores...), totalItems)
+	// pop
+	err = db.PopScores("append", "0", len(scores))
+	assert.NoError(t, err)
+	totalItems, err = db.GetScores("append", "0", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, overwriteScores, totalItems)
 	// clear
 	err = db.ClearScores("append", "0")
 	assert.NoError(t, err)
