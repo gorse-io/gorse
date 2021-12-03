@@ -80,7 +80,6 @@ func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.Filt
 func (s *RestServer) CreateWebService() {
 	// Create a server
 	ws := s.WebService
-	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
 	ws.Filter(LogFilter)
 
@@ -178,6 +177,24 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
 		Param(ws.PathParameter("item-id", "identified of the item").DataType("string")).
+		Returns(200, "OK", Success{}).
+		Writes(Success{}))
+	// Insert category
+	ws.Route(ws.PUT("/item/{item-id}/category/{category}").To(s.insertItemCategory).
+		Doc("Insert a category for a item").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("item-id", "identified of the item").DataType("string")).
+		Param(ws.PathParameter("category", "category of the item").DataType("string")).
+		Returns(200, "OK", Success{}).
+		Writes(Success{}))
+	// Delete category
+	ws.Route(ws.DELETE("/item/{item-id}/category/{category}").To(s.deleteItemCategory).
+		Doc("Delete a category from a item").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API").DataType("string")).
+		Param(ws.PathParameter("item-id", "identified of the item").DataType("string")).
+		Param(ws.PathParameter("category", "category of the item").DataType("string")).
 		Returns(200, "OK", Success{}).
 		Writes(Success{}))
 
@@ -1298,6 +1315,60 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 	}
 	// insert deleted item to cache
 	if err := s.CacheClient.AppendScores(cache.HiddenItems, "", cache.Scored{Id: itemId, Score: float32(time.Now().Unix())}); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	Ok(response, Success{RowAffected: 1})
+}
+
+func (s *RestServer) insertItemCategory(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Get item id and category
+	itemId := request.PathParameter("item-id")
+	category := request.PathParameter("category")
+	// Insert category
+	item, err := s.DataClient.GetItem(itemId)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	if !funk.ContainsString(item.Categories, category) {
+		item.Categories = append(item.Categories, category)
+	}
+	err = s.DataClient.BatchInsertItems([]data.Item{item})
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	Ok(response, Success{RowAffected: 1})
+}
+
+func (s *RestServer) deleteItemCategory(request *restful.Request, response *restful.Response) {
+	// Authorize
+	if !s.auth(request, response) {
+		return
+	}
+	// Get item id and category
+	itemId := request.PathParameter("item-id")
+	category := request.PathParameter("category")
+	// Delete category
+	item, err := s.DataClient.GetItem(itemId)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	categories := make([]string, 0, len(item.Categories))
+	for _, cat := range item.Categories {
+		if cat != category {
+			categories = append(categories, cat)
+		}
+	}
+	item.Categories = categories
+	err = s.DataClient.BatchInsertItems([]data.Item{item})
+	if err != nil {
 		InternalServerError(response, err)
 		return
 	}

@@ -300,6 +300,55 @@ func TestServer_Items(t *testing.T) {
 	hiddenItems, err = s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"2"}, cache.RemoveScores(hiddenItems))
+
+	// insert category
+	apitest.New().
+		Handler(s.handler).
+		Put("/api/item/2/category/@").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, Success{RowAffected: 1})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/item/2").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, data.Item{
+			ItemId:     "2",
+			IsHidden:   true,
+			Categories: []string{"*", "@"},
+			Comment:    "modified",
+			Labels:     []string{"a", "b", "c"},
+			Timestamp:  timestamp,
+		})).
+		End()
+	// delete category
+	apitest.New().
+		Handler(s.handler).
+		Delete("/api/item/2/category/@").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, Success{RowAffected: 1})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/item/2").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, data.Item{
+			ItemId:     "2",
+			IsHidden:   true,
+			Categories: []string{"*"},
+			Comment:    "modified",
+			Labels:     []string{"a", "b", "c"},
+			Timestamp:  timestamp,
+		})).
+		End()
 }
 
 func TestServer_Feedback(t *testing.T) {
