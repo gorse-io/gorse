@@ -65,15 +65,15 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	// insert cache
 	err := w.cacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
-	assert.True(t, w.checkRecommendCacheTimeout("0"))
+	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.SetTime(cache.LastModifyUserTime, "0", time.Now().Add(-time.Hour))
-	assert.True(t, w.checkRecommendCacheTimeout("0"))
+	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(-time.Hour*100))
-	assert.True(t, w.checkRecommendCacheTimeout("0"))
+	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(time.Hour*100))
-	assert.False(t, w.checkRecommendCacheTimeout("0"))
+	assert.False(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.ClearScores(cache.OfflineRecommend, "0")
-	assert.True(t, w.checkRecommendCacheTimeout("0"))
+	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 }
 
 type mockMatrixFactorizationForRecommend struct {
