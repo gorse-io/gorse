@@ -409,7 +409,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// convert to user index
 		userIndex := userIndexer.ToNumber(userId)
 		// skip inactive users before max recommend period
-		if !w.checkRecommendCacheTimeout(userId) {
+		if !w.checkRecommendCacheTimeout(userId, itemCategories) {
 			return nil
 		}
 
@@ -756,17 +756,20 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 // 1. if cache is empty, stale.
 // 2. if active time > recommend time, stale.
 // 3. if recommend time + timeout < now, stale.
-func (w *Worker) checkRecommendCacheTimeout(userId string) bool {
+func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) bool {
 	var activeTime, recommendTime time.Time
 	// check cache
-	items, err := w.cacheClient.GetScores(cache.OfflineRecommend, userId, 0, -1)
-	if err != nil {
-		base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
-		return true
-	} else if len(items) == 0 {
-		return true
+	for _, category := range append([]string{""}, categories...) {
+		items, err := w.cacheClient.GetCategoryScores(cache.OfflineRecommend, userId, category, 0, -1)
+		if err != nil {
+			base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
+			return true
+		} else if len(items) == 0 {
+			return true
+		}
 	}
 	// read active time
+	var err error
 	activeTime, err = w.cacheClient.GetTime(cache.LastModifyUserTime, userId)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
