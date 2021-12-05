@@ -30,6 +30,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -406,6 +407,24 @@ func TestMaster_GetStats(t *testing.T) {
 		End()
 }
 
+func TestMaster_GetCategories(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	// insert categories
+	text, err := json.Marshal([]string{"a", "b", "c"})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetString(cache.ItemCategories, "", string(text))
+	assert.NoError(t, err)
+	// get categories
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/dashboard/categories").
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"a", "b", "c"})).
+		End()
+}
+
 func TestMaster_GetUsers(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
@@ -448,40 +467,45 @@ func TestServer_ItemList(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
+		Name   string
 		Prefix string
 		Label  string
 		Get    string
 	}
 	operators := []ListOperator{
-		{cache.LatestItems, "", "/api/dashboard/latest/"},
-		{cache.PopularItems, "", "/api/dashboard/popular/"},
-		{cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
+		{"Latest Items", cache.LatestItems, "", "/api/dashboard/latest/"},
+		{"Popular Items", cache.PopularItems, "", "/api/dashboard/popular/"},
+		{"Latest Items in Category", cache.LatestItems, "*", "/api/dashboard/latest/*"},
+		{"Popular Items in Category", cache.PopularItems, "*", "/api/dashboard/popular/*"},
+		{"Item Neighbors", cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
+		{"Item Neighbors in Category", cache.ItemNeighbors, "0/*", "/api/dashboard/item/0/neighbors/*"},
 	}
-	for _, operator := range operators {
-		t.Logf("test RESTful API: %v", operator.Get)
-		// Put scores
-		scores := []cache.Scored{
-			{"0", 100},
-			{"1", 99},
-			{"2", 98},
-			{"3", 97},
-			{"4", 96},
-		}
-		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
-		assert.NoError(t, err)
-		items := make([]data.Item, 0)
-		for _, score := range scores {
-			items = append(items, data.Item{ItemId: score.Id})
-			err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: score.Id}})
+	for i, operator := range operators {
+		t.Run(operator.Name, func(t *testing.T) {
+			// Put scores
+			scores := []cache.Scored{
+				{strconv.Itoa(i) + "0", 100},
+				{strconv.Itoa(i) + "1", 99},
+				{strconv.Itoa(i) + "2", 98},
+				{strconv.Itoa(i) + "3", 97},
+				{strconv.Itoa(i) + "4", 96},
+			}
+			err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
 			assert.NoError(t, err)
-		}
-		apitest.New().
-			Handler(s.handler).
-			Get(operator.Get).
-			Expect(t).
-			Status(http.StatusOK).
-			Body(marshal(t, items)).
-			End()
+			items := make([]data.Item, 0)
+			for _, score := range scores {
+				items = append(items, data.Item{ItemId: score.Id})
+				err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: score.Id}})
+				assert.NoError(t, err)
+			}
+			apitest.New().
+				Handler(s.handler).
+				Get(operator.Get).
+				Expect(t).
+				Status(http.StatusOK).
+				Body(marshal(t, items)).
+				End()
+		})
 	}
 }
 

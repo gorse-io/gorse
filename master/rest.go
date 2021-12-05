@@ -184,7 +184,7 @@ func (m *Master) StartHttpServer() {
 	m.RestServer.StartHttpServer()
 }
 
-func (m *Master) getCategories(request *restful.Request, response *restful.Response) {
+func (m *Master) getCategories(_ *restful.Request, response *restful.Response) {
 	s, err := m.CacheClient.GetString(cache.ItemCategories, "")
 	if err != nil {
 		server.InternalServerError(response, err)
