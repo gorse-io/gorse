@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"google.golang.org/protobuf/proto"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -496,75 +497,77 @@ func TestServer_List(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
+		Name   string
 		Prefix string
 		Ident  string
 		Get    string
 	}
 	operators := []ListOperator{
-		{cache.OfflineRecommend, "0", "/api/intermediate/recommend/0"},
-		{cache.OfflineRecommend, "0/0", "/api/intermediate/recommend/0/0"},
-		{cache.LatestItems, "", "/api/latest/"},
-		{cache.LatestItems, "0", "/api/latest/0"},
-		{cache.PopularItems, "", "/api/popular/"},
-		{cache.PopularItems, "0", "/api/popular/0"},
-		{cache.ItemNeighbors, "0", "/api/item/0/neighbors"},
-		{cache.ItemNeighbors, "0/0", "/api/item/0/neighbors/0"},
-		{cache.UserNeighbors, "0", "/api/user/0/neighbors"},
+		{"Offline Recommend", cache.OfflineRecommend, "0", "/api/intermediate/recommend/0"},
+		{"Offline Recommend in Category", cache.OfflineRecommend, "0/0", "/api/intermediate/recommend/0/0"},
+		{"Latest Items", cache.LatestItems, "", "/api/latest/"},
+		{"Latest Items in Category", cache.LatestItems, "0", "/api/latest/0"},
+		{"Popular Items", cache.PopularItems, "", "/api/popular/"},
+		{"Popular Items in Category", cache.PopularItems, "0", "/api/popular/0"},
+		{"Item Neighbors", cache.ItemNeighbors, "0", "/api/item/0/neighbors"},
+		{"Item Neighbors in Category", cache.ItemNeighbors, "0/0", "/api/item/0/neighbors/0"},
+		{"User Neighbors", cache.UserNeighbors, "0", "/api/user/0/neighbors"},
 	}
 
-	for _, operator := range operators {
-		t.Logf("test RESTful API: %v", operator.Get)
-		// Put scores
-		scores := []cache.Scored{
-			{"0", 100},
-			{"1", 99},
-			{"2", 98},
-			{"3", 97},
-			{"4", 96},
-		}
-		err := s.CacheClient.SetScores(operator.Prefix, operator.Ident, scores)
-		assert.NoError(t, err)
-		apitest.New().
-			Handler(s.handler).
-			Get(operator.Get).
-			Header("X-API-Key", apiKey).
-			Expect(t).
-			Status(http.StatusOK).
-			Body(marshal(t, scores)).
-			End()
-		apitest.New().
-			Handler(s.handler).
-			Get(operator.Get).
-			Header("X-API-Key", apiKey).
-			QueryParams(map[string]string{
-				"offset": "0",
-				"n":      "3"}).
-			Expect(t).
-			Status(http.StatusOK).
-			Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2]})).
-			End()
-		apitest.New().
-			Handler(s.handler).
-			Get(operator.Get).
-			Header("X-API-Key", apiKey).
-			QueryParams(map[string]string{
-				"offset": "1",
-				"n":      "3"}).
-			Expect(t).
-			Status(http.StatusOK).
-			Body(marshal(t, []cache.Scored{scores[1], scores[2], scores[3]})).
-			End()
-		apitest.New().
-			Handler(s.handler).
-			Get(operator.Get).
-			Header("X-API-Key", apiKey).
-			QueryParams(map[string]string{
-				"offset": "0",
-				"n":      "0"}).
-			Expect(t).
-			Status(http.StatusOK).
-			Body(marshal(t, scores)).
-			End()
+	for i, operator := range operators {
+		t.Run(operator.Name, func(t *testing.T) {
+			// Put scores
+			scores := []cache.Scored{
+				{strconv.Itoa(i) + "0", 100},
+				{strconv.Itoa(i) + "1", 99},
+				{strconv.Itoa(i) + "2", 98},
+				{strconv.Itoa(i) + "3", 97},
+				{strconv.Itoa(i) + "4", 96},
+			}
+			err := s.CacheClient.SetScores(operator.Prefix, operator.Ident, scores)
+			assert.NoError(t, err)
+			apitest.New().
+				Handler(s.handler).
+				Get(operator.Get).
+				Header("X-API-Key", apiKey).
+				Expect(t).
+				Status(http.StatusOK).
+				Body(marshal(t, scores)).
+				End()
+			apitest.New().
+				Handler(s.handler).
+				Get(operator.Get).
+				Header("X-API-Key", apiKey).
+				QueryParams(map[string]string{
+					"offset": "0",
+					"n":      "3"}).
+				Expect(t).
+				Status(http.StatusOK).
+				Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2]})).
+				End()
+			apitest.New().
+				Handler(s.handler).
+				Get(operator.Get).
+				Header("X-API-Key", apiKey).
+				QueryParams(map[string]string{
+					"offset": "1",
+					"n":      "3"}).
+				Expect(t).
+				Status(http.StatusOK).
+				Body(marshal(t, []cache.Scored{scores[1], scores[2], scores[3]})).
+				End()
+			apitest.New().
+				Handler(s.handler).
+				Get(operator.Get).
+				Header("X-API-Key", apiKey).
+				QueryParams(map[string]string{
+					"offset": "0",
+					"n":      "0"}).
+				Expect(t).
+				Status(http.StatusOK).
+				Body(marshal(t, scores)).
+				End()
+		})
 	}
 }
 

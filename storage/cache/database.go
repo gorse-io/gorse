@@ -44,6 +44,7 @@ const (
 	DataImported            = "data_imported"
 	LastFitRankingModelTime = "last_fit_match_model_time"
 	LastRankingModelVersion = "latest_match_model_version"
+	ItemCategories          = "item_categories"
 )
 
 var (

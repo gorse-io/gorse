@@ -16,7 +16,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/gorse-io/dashboard v0.0.0-20211105140245-5e43c07ee07e
+	github.com/gorse-io/dashboard v0.0.0-20211205061710-e8f0fb3b84f9
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.10
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f

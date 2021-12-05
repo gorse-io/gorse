@@ -16,6 +16,7 @@ package master
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -49,6 +50,10 @@ func (m *Master) CreateWebService() {
 		Doc("Get nodes in the cluster.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Writes([]Node{}))
+	ws.Route(ws.GET("/dashboard/categories").To(m.getCategories).
+		Doc("Get categories of items.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Writes([]string{}))
 	ws.Route(ws.GET("/dashboard/config").To(m.getConfig).
 		Doc("Get config.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -85,16 +90,30 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
 		Writes(UserIterator{}))
 	// Get popular items
-	ws.Route(ws.GET("/dashboard/popular").To(m.getPopular).
+	ws.Route(ws.GET("/dashboard/popular/").To(m.getPopular).
 		Doc("get popular items").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/popular/{category}").To(m.getPopular).
+		Doc("get popular items").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]data.Item{}))
 	// Get latest items
-	ws.Route(ws.GET("/dashboard/latest").To(m.getLatest).
+	ws.Route(ws.GET("/dashboard/latest/").To(m.getLatest).
 		Doc("get latest items").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/latest/{category}").To(m.getLatest).
+		Doc("get latest items").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
@@ -116,14 +135,22 @@ func (m *Master) CreateWebService() {
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.QueryParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors/{category}").To(m.getItemCategorizedNeighbors).
+		Doc("get neighbors of a item").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/user/{user-id}/neighbors").To(m.getUserNeighbors).
 		Doc("get neighbors of a user").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.User{}))
@@ -155,6 +182,21 @@ func (m *Master) StartHttpServer() {
 	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
 	//http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
 	m.RestServer.StartHttpServer()
+}
+
+func (m *Master) getCategories(_ *restful.Request, response *restful.Response) {
+	s, err := m.CacheClient.GetString(cache.ItemCategories, "")
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	var categories []string
+	err = json.Unmarshal([]byte(s), &categories)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Ok(response, categories)
 }
 
 func (m *Master) getCluster(_ *restful.Request, response *restful.Response) {
@@ -452,16 +494,24 @@ func (m *Master) getList(prefix, name string, request *restful.Request, response
 
 // getPopular gets popular items from database.
 func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
-	m.getList(cache.PopularItems, "", request, response, data.Item{})
+	category := request.PathParameter("category")
+	m.getList(cache.PopularItems, category, request, response, data.Item{})
 }
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
-	m.getList(cache.LatestItems, "", request, response, data.Item{})
+	category := request.PathParameter("category")
+	m.getList(cache.LatestItems, category, request, response, data.Item{})
 }
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	m.getList(cache.ItemNeighbors, itemId, request, response, data.Item{})
+}
+
+func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
+	itemId := request.PathParameter("item-id")
+	category := request.PathParameter("category")
+	m.getList(cache.ItemNeighbors, itemId+"/"+category, request, response, data.Item{})
 }
 
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
