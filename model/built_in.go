@@ -45,31 +45,31 @@ type _BuiltInDataSet struct {
 
 var builtInDataSets = map[string]_BuiltInDataSet{
 	"pinterest-20": {
-		downloadURL: "https://cdn.sine-x.com/datasets/pinterest-20.zip",
+		downloadURL: "https://cdn.gorse.io/datasets/pinterest-20.zip",
 		trainFile:   "pinterest-20/train.txt",
 		testFile:    "pinterest-20/test.txt",
 		format:      FormatNCF,
 	},
 	"ml-1m": {
-		downloadURL: "https://cdn.sine-x.com/datasets/ml-1m.zip",
+		downloadURL: "https://cdn.gorse.io/datasets/ml-1m.zip",
 		trainFile:   "ml-1m/train.txt",
 		testFile:    "ml-1m/test.txt",
 		format:      FormatNCF,
 	},
 	"ml-tag": {
-		downloadURL: "https://cdn.sine-x.com/datasets/ml-tag.zip",
+		downloadURL: "https://cdn.gorse.io/datasets/ml-tag.zip",
 		trainFile:   "ml-tag/train.libfm",
 		testFile:    "ml-tag/test.libfm",
 		format:      FormatLibFM,
 	},
 	"frappe": {
-		downloadURL: "https://cdn.sine-x.com/datasets/frappe.zip",
+		downloadURL: "https://cdn.gorse.io/datasets/frappe.zip",
 		trainFile:   "frappe/train.libfm",
 		testFile:    "frappe/test.libfm",
 		format:      FormatLibFM,
 	},
 	"criteo": {
-		downloadURL: "https://cdn.sine-x.com/datasets/criteo.zip",
+		downloadURL: "https://cdn.gorse.io/datasets/criteo.zip",
 		trainFile:   "criteo/train.libfm",
 		testFile:    "criteo/test.libfm",
 		format:      FormatLibFM,

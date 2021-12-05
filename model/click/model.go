@@ -17,8 +17,8 @@ package click
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/barkimedes/go-deepcopy"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base/copier"
 	"io"
 	"time"
 
@@ -462,10 +462,10 @@ func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
 
 // Clone a model with deep copy.
 func Clone(m FactorizationMachine) FactorizationMachine {
-	if temp, err := deepcopy.Anything(m); err != nil {
+	var copied FactorizationMachine
+	if err := copier.Copy(&copied, m); err != nil {
 		panic(err)
 	} else {
-		copied := temp.(FactorizationMachine)
 		copied.SetParams(copied.GetParams())
 		return copied
 	}

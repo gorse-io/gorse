@@ -16,11 +16,11 @@ package ranking
 
 import (
 	"fmt"
-	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -155,10 +155,10 @@ func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 
 // Clone a model with deep copy.
 func Clone(m Model) Model {
-	if temp, err := deepcopy.Anything(m); err != nil {
+	var copied Model
+	if err := copier.Copy(&copied, m); err != nil {
 		panic(err)
 	} else {
-		copied := temp.(Model)
 		copied.SetParams(copied.GetParams())
 		return copied
 	}
