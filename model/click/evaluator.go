@@ -15,8 +15,8 @@
 package click
 
 import (
-	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
+	"github.com/zhenghaoz/gorse/base/copier"
 	"modernc.org/sortutil"
 	"sort"
 )
@@ -150,10 +150,8 @@ type SnapshotManger struct {
 func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
 	if sm.BestWeights == nil || score.BetterThan(sm.BestScore) {
 		sm.BestScore = score
-		if temp, err := deepcopy.Anything(weights); err != nil {
+		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
 			panic(err)
-		} else {
-			sm.BestWeights = temp.([]interface{})
 		}
 	}
 }

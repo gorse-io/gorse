@@ -15,11 +15,11 @@
 package ranking
 
 import (
-	"github.com/barkimedes/go-deepcopy"
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/floats"
 )
 
@@ -178,10 +178,8 @@ type SnapshotManger struct {
 func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
 	if sm.BestWeights == nil || score.NDCG > sm.BestScore.NDCG {
 		sm.BestScore = score
-		if temp, err := deepcopy.Anything(weights); err != nil {
+		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
 			panic(err)
-		} else {
-			sm.BestWeights = temp.([]interface{})
 		}
 	}
 }
@@ -190,9 +188,8 @@ func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
 func (sm *SnapshotManger) AddSnapshotNoCopy(score Score, weights ...interface{}) {
 	if sm.BestWeights == nil || score.NDCG > sm.BestScore.NDCG {
 		sm.BestScore = score
-		sm.BestWeights = make([]interface{}, len(weights))
-		for i := range weights {
-			sm.BestWeights[i] = weights[i]
+		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
+			panic(err)
 		}
 	}
 }
