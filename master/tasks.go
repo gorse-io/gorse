@@ -249,7 +249,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 
 	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		startTime := time.Now()
-		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId))) {
+		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId)), dataset.CategorySet.List()) {
 			return nil
 		}
 		nearItemsFilters := make(map[string]*base.TopKFilter)
@@ -532,10 +532,20 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 // checkItemNeighborCacheTimeout checks if item neighbor cache stale.
 // 1. if cache is empty, stale.
 // 2. if modified time > update time, stale.
-func (m *Master) checkItemNeighborCacheTimeout(itemId string) bool {
+func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []string) bool {
 	var modifiedTime, updateTime time.Time
-	var err error
+	// check cache
+	for _, category := range append([]string{""}, categories...) {
+		items, err := m.CacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, -1)
+		if err != nil {
+			base.Logger().Error("failed to read item neighbors cache", zap.String("item_id", itemId), zap.Error(err))
+			return true
+		} else if len(items) == 0 {
+			return true
+		}
+	}
 	// read modified time
+	var err error
 	modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyItemTime, itemId)
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
