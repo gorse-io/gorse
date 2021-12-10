@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
+	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
@@ -403,6 +404,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 	}()
 	// recommendation
 	startTime := time.Now()
+	userFeedbackCache := NewFeedbackCache(w.dataClient, w.cfg.Database.PositiveFeedbackType...)
 	err = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		userStartTime := time.Now()
 		userId := users[jobId]
@@ -425,7 +427,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		// load positive items
 		var positiveItems []string
 		if w.cfg.Recommend.EnableItemBasedRecommend {
-			positiveItems, err = loadUserHistoricalItems(w.dataClient, userId, w.cfg.Database.PositiveFeedbackType...)
+			positiveItems, err = userFeedbackCache.GetUserFeedback(userId)
 			if err != nil {
 				base.Logger().Error("failed to pull user feedback",
 					zap.String("user_id", userId), zap.Error(err))
@@ -512,15 +514,16 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 			}
 			for _, user := range similarUsers {
 				// load historical feedback
-				feedbacks, err := w.dataClient.GetUserFeedback(user.Id, false, w.cfg.Database.PositiveFeedbackType...)
+				similarUserPositiveItems, err := userFeedbackCache.GetUserFeedback(user.Id)
 				if err != nil {
-					base.Logger().Error("failed to get user feedback", zap.Error(err))
+					base.Logger().Error("failed to pull user feedback",
+						zap.String("user_id", userId), zap.Error(err))
 					return errors.Trace(err)
 				}
 				// add unseen items
-				for _, feedback := range feedbacks {
-					if !excludeSet.Has(feedback.ItemId) && itemCache.IsAvailable(feedback.ItemId) {
-						scores[feedback.ItemId] += user.Score
+				for _, itemId := range similarUserPositiveItems {
+					if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
+						scores[itemId] += user.Score
 					}
 				}
 			}
@@ -789,9 +792,9 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	return true
 }
 
-func loadUserHistoricalItems(database data.Database, userId string, feedbackTypes ...string) ([]string, error) {
+func loadUserHistoricalItems(database data.Database, userId string) ([]string, error) {
 	items := make([]string, 0)
-	feedbacks, err := database.GetUserFeedback(userId, false, feedbackTypes...)
+	feedbacks, err := database.GetUserFeedback(userId, false)
 	if err != nil {
 		return nil, err
 	}
@@ -883,5 +886,39 @@ func (c ItemCache) IsAvailable(itemId string) bool {
 		return !item.IsHidden
 	} else {
 		return false
+	}
+}
+
+// FeedbackCache is the cache for user feedbacks.
+type FeedbackCache struct {
+	Types  []string
+	Cache  cmap.ConcurrentMap
+	Client data.Database
+}
+
+// NewFeedbackCache creates a new FeedbackCache.
+func NewFeedbackCache(client data.Database, feedbackTypes ...string) *FeedbackCache {
+	return &FeedbackCache{
+		Types:  feedbackTypes,
+		Client: client,
+		Cache:  cmap.New(),
+	}
+}
+
+// GetUserFeedback gets user feedback from cache or database.
+func (c *FeedbackCache) GetUserFeedback(userId string) ([]string, error) {
+	if tmp, ok := c.Cache.Get(userId); ok {
+		return tmp.([]string), nil
+	} else {
+		items := make([]string, 0)
+		feedbacks, err := c.Client.GetUserFeedback(userId, false, c.Types...)
+		if err != nil {
+			return nil, err
+		}
+		for _, feedback := range feedbacks {
+			items = append(items, feedback.ItemId)
+		}
+		c.Cache.Set(userId, items)
+		return items, nil
 	}
 }
