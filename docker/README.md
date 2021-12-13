@@ -8,6 +8,23 @@ The best practice to manage Gorse nodes is using orchestration tools such as Doc
 | gorse-server | [![](https://img.shields.io/docker/image-size/zhenghaoz/gorse-server)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-server) |
 | gorse-worker | [![](https://img.shields.io/docker/image-size/zhenghaoz/gorse-worker)](https://hub.docker.com/repository/docker/zhenghaoz/gorse-worker) |
 
+## Prerequisite
+
+Gorse depends on following software:
+
+- *Redis* is used to store caches.
+- One of *MySQL/PostgresSQL/ClickHouse/MongoDB* is used to store data.
+
+The minimal versions of dependent software are as follows:
+
+| Software    | Minimal Version |
+|-------------|-----------------|
+| Redis       | 5.0             |
+| MySQL       | 5.7             |
+| PostgresSQL | 10.0            |
+| ClickHouse  | 21.10           |
+| MongoDB     | 4.0             |
+
 ## Quick Start
 
 There is an example [docker-compose.yml](https://github.com/zhenghaoz/gorse/blob/master/docker/docker-compose.yml) consists of a master node, a server node and a worker node, a Redis instance, and a MySQL instance.

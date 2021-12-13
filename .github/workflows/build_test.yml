@@ -15,7 +15,7 @@ jobs:
 
     services:
       mysql:
-        image: mysql
+        image: mysql:8.0
         ports:
           - 3306
         env:
@@ -23,7 +23,7 @@ jobs:
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
       postgres:
-        image: postgres
+        image: postgres:10.0
         ports:
           - 5432
         env:
@@ -36,17 +36,27 @@ jobs:
           --health-retries 5
 
       mongo:
-        image: healthcheck/mongo
+        image: mongo:4.0
         ports:
           - 27017
         env:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password
+        options: >-
+          --health-cmd mongo
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
       clickhouse:
-        image: yandex/clickhouse-server
+        image: yandex/clickhouse-server:21.10
         ports:
           - 8123
+
+      redis:
+        image: redis:5.0
+        ports:
+          - 6379
 
     steps:
     - name: Set up dataset
@@ -95,6 +105,8 @@ jobs:
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
         # ClickHouse
         CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
+        # Redis
+        REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
@@ -133,11 +145,16 @@ jobs:
 
     services:
       mariadb:
-        image: mariadb
+        image: mariadb:10.2
         ports:
           - 3306
         env:
           MYSQL_ROOT_PASSWORD: password
+
+      pika:
+        image: zhenghaoz/pika
+        ports:
+          - 9221
 
     steps:
       - name: Set up Go 1.17.x
@@ -153,3 +170,8 @@ jobs:
         run: go test ./storage/data -run ^TestMySQL_
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
+
+      - name: Test Pika
+        run: go test ./storage/cache -run ^TestRedis_
+        env:
+          REDIS_URI: redis://localhost:${{ job.services.pika.ports[9221] }}/

@@ -15,22 +15,33 @@
 package cache
 
 import (
-	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
+var redisDSN string
+
+func init() {
+	// get environment variables
+	env := func(key, defaultValue string) string {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+		return defaultValue
+	}
+	redisDSN = env("REDIS_URI", "redis://127.0.0.1:6379/")
+}
+
 type mockRedis struct {
 	Database
-	server *miniredis.Miniredis
 }
 
 func newMockRedis(t *testing.T) *mockRedis {
 	var err error
 	db := new(mockRedis)
-	db.server, err = miniredis.Run()
 	assert.NoError(t, err)
-	db.Database, err = Open(redisPrefix + db.server.Addr())
+	db.Database, err = Open(redisDSN)
 	assert.NoError(t, err)
 	return db
 }
@@ -38,7 +49,6 @@ func newMockRedis(t *testing.T) *mockRedis {
 func (db *mockRedis) Close(t *testing.T) {
 	err := db.Database.Close()
 	assert.NoError(t, err)
-	db.server.Close()
 }
 
 func TestRedis_Meta(t *testing.T) {

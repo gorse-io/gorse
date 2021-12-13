@@ -7,7 +7,17 @@ Binary distributions have been provided for 64-bit Windows/Linux/Mac OS on the [
 Gorse depends on following software:
 
 - *Redis* is used to store caches.
-- *MySQL/MongoDB* is used to store data.
+- One of *MySQL/PostgresSQL/ClickHouse/MongoDB* is used to store data.
+
+The minimal versions of dependent software are as follows:
+
+| Software    | Minimal Version |
+|-------------|-----------------|
+| Redis       | 5.0             |
+| MySQL       | 5.7             |
+| PostgresSQL | 10.0            |
+| ClickHouse  | 21.10           |
+| MongoDB     | 4.0             |
 
 ## Run Gorse
 
