@@ -80,9 +80,9 @@ func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.Filt
 func (s *RestServer) CreateWebService() {
 	// Create a server
 	ws := s.WebService
-	ws.Path("/api/")
-	ws.Consumes(restful.MIME_JSON, restful.MIME_OCTET)
-	ws.Filter(LogFilter)
+	ws.Path("/api/").
+		Produces(restful.MIME_JSON).
+		Filter(LogFilter)
 
 	/* Interactions with data store */
 
