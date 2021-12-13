@@ -124,9 +124,6 @@ jobs:
     - name: Download dataset
       run: wget https://cdn.gorse.io/example/github.sql
 
-    - name: Install MySQL client
-      run: sudo apt-get install -y mysql-client
-
     - name: Import dataset
       run: mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
 
