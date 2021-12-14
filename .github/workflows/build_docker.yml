@@ -32,4 +32,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           file: docker/${{ matrix.image }}/Dockerfile
           push: true
-          tags: zhenghaoz/${{ matrix.image }}:latest
+          tags: zhenghaoz/${{ matrix.image }}:nightly
