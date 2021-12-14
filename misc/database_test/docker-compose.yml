@@ -1,19 +1,19 @@
 version: "3"
 services:
   redis:
-    image: redis
+    image: redis:5.0
     ports:
       - 6379:6379
 
   mysql:
-    image: mysql
+    image: mysql:8.0
     ports:
       - 3306:3306
     environment:
       MYSQL_ROOT_PASSWORD: password
 
   postgres:
-    image: postgres
+    image: postgres:10.0
     ports:
       - 5432:5432
     environment:
@@ -21,7 +21,7 @@ services:
       POSTGRES_PASSWORD: gorse_pass
 
   mongo:
-    image: healthcheck/mongo
+    image: mongo:4.0
     ports:
       - 27017:27017
     environment:
@@ -29,6 +29,6 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: password
 
   clickhouse:
-    image: yandex/clickhouse-server
+    image: yandex/clickhouse-server:21.10
     ports:
       - 8123:8123

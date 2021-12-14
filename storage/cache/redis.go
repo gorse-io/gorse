@@ -132,7 +132,12 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 func (r *Redis) PopScores(prefix, name string, n int) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	return r.client.LPopCount(ctx, key, n).Err()
+	for i := 0; i < n; i++ {
+		if err := r.client.LPop(ctx, key).Err(); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }
 
 // GetString returns a string from Redis.
