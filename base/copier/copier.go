@@ -52,10 +52,10 @@ func copyValue(dst, src reflect.Value) error {
 		reflect.Complex64, reflect.Complex128, reflect.String:
 		dst.Set(src)
 	case reflect.Slice:
-		if dst.IsNil() || dst.Cap() < src.Len() {
+		if dst.IsNil() || (!dst.CanAddr() && dst.Len() != src.Len()) || dst.Cap() < src.Len() {
 			newSlice := reflect.MakeSlice(src.Type(), src.Len(), src.Len())
 			dst.Set(newSlice)
-		} else {
+		} else if dst.Len() != src.Len() {
 			dst.SetLen(src.Len())
 		}
 		for i := 0; i < src.Len(); i++ {
