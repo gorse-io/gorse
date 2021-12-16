@@ -52,9 +52,11 @@ func copyValue(dst, src reflect.Value) error {
 		reflect.Complex64, reflect.Complex128, reflect.String:
 		dst.Set(src)
 	case reflect.Slice:
-		if dst.Len() != src.Len() || dst.IsNil() {
+		if dst.IsNil() || dst.Cap() < src.Len() {
 			newSlice := reflect.MakeSlice(src.Type(), src.Len(), src.Len())
 			dst.Set(newSlice)
+		} else {
+			dst.SetLen(src.Len())
 		}
 		for i := 0; i < src.Len(); i++ {
 			err := copyValue(dst.Index(i), src.Index(i))
@@ -63,16 +65,18 @@ func copyValue(dst, src reflect.Value) error {
 			}
 		}
 	case reflect.Map:
-		dst.Set(reflect.MakeMap(dst.Type()))
-		keys := src.MapKeys()
-		for _, k := range keys {
-			value := src.MapIndex(k)
-			newValuePointer := reflect.New((value).Type())
-			err := copyValue(newValuePointer.Elem(), src.MapIndex(k))
-			if err != nil {
-				return err
+		if !reflect.DeepEqual(dst.Interface(), src.Interface()) {
+			dst.Set(reflect.MakeMap(dst.Type()))
+			keys := src.MapKeys()
+			for _, k := range keys {
+				value := src.MapIndex(k)
+				newValuePointer := reflect.New((value).Type())
+				err := copyValue(newValuePointer.Elem(), src.MapIndex(k))
+				if err != nil {
+					return err
+				}
+				dst.SetMapIndex(k, newValuePointer.Elem())
 			}
-			dst.SetMapIndex(k, newValuePointer.Elem())
 		}
 	case reflect.Struct:
 		if dst.Type().Name() != src.Type().Name() {
