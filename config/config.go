@@ -167,7 +167,6 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnableItemBasedRecommend:     false,
 			EnableColRecommend:           true,
 			EnableClickThroughPrediction: false,
-			exploreRecommendLock:         sync.Mutex{},
 		}
 	}
 	return config
@@ -295,7 +294,6 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("recommend", "enable_click_through_prediction") {
 		config.Recommend.EnableClickThroughPrediction = defaultRecommendConfig.EnableClickThroughPrediction
 	}
-	config.Recommend.exploreRecommendLock = sync.Mutex{}
 }
 
 // LoadConfig loads configuration from toml file.
