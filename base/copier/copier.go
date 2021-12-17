@@ -55,7 +55,7 @@ func copyValue(dst, src reflect.Value) error {
 		if dst.IsNil() || (!dst.CanAddr() && dst.Len() != src.Len()) || dst.Cap() < src.Len() {
 			newSlice := reflect.MakeSlice(src.Type(), src.Len(), src.Len())
 			dst.Set(newSlice)
-		} else if dst.Len() != src.Len() {
+		} else if dst.CanAddr() {
 			dst.SetLen(src.Len())
 		}
 		for i := 0; i < src.Len(); i++ {
