@@ -16,6 +16,7 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
+	"sync"
 )
 
 const (
@@ -126,14 +127,25 @@ type RecommendConfig struct {
 	RefreshRecommendPeriod       int                `toml:"refresh_recommend_period"`
 	FallbackRecommend            []string           `toml:"fallback_recommend"`
 	ExploreRecommend             map[string]float64 `toml:"explore_recommend"`
-	ItemNeighborType             string             `toml:"item_neighbor_type"`
-	UserNeighborType             string             `toml:"user_neighbor_type"`
-	EnableLatestRecommend        bool               `toml:"enable_latest_recommend"`
-	EnablePopularRecommend       bool               `toml:"enable_popular_recommend"`
-	EnableUserBasedRecommend     bool               `toml:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool               `toml:"enable_item_based_recommend"`
-	EnableColRecommend           bool               `toml:"enable_collaborative_recommend"`
-	EnableClickThroughPrediction bool               `toml:"enable_click_through_prediction"`
+	ExploreRecommendLock         sync.Mutex
+	ItemNeighborType             string `toml:"item_neighbor_type"`
+	UserNeighborType             string `toml:"user_neighbor_type"`
+	EnableLatestRecommend        bool   `toml:"enable_latest_recommend"`
+	EnablePopularRecommend       bool   `toml:"enable_popular_recommend"`
+	EnableUserBasedRecommend     bool   `toml:"enable_user_based_recommend"`
+	EnableItemBasedRecommend     bool   `toml:"enable_item_based_recommend"`
+	EnableColRecommend           bool   `toml:"enable_collaborative_recommend"`
+	EnableClickThroughPrediction bool   `toml:"enable_click_through_prediction"`
+}
+
+func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
+	if config == nil {
+		return 0.0, false
+	}
+	config.ExploreRecommendLock.Lock()
+	defer config.ExploreRecommendLock.Unlock()
+	value, exist = config.ExploreRecommend[key]
+	return
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
