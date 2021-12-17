@@ -75,9 +75,9 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestConfig_FillDefault(t *testing.T) {
-	var config Config
+	var config *Config
 	meta, err := toml.Decode("", &config)
 	assert.NoError(t, err)
 	config.FillDefault(meta)
-	assert.Equal(t, *(*Config)(nil).LoadDefaultIfNil(), config)
+	assert.Equal(t, (*Config)(nil).LoadDefaultIfNil(), config)
 }
