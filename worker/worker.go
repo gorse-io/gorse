@@ -713,11 +713,11 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 	localExcludeSet := excludeSet.Copy()
 	// create thresholds
 	explorePopularThreshold := 0.0
-	if threshold, exist := w.cfg.Recommend.ExploreRecommend["popular"]; exist {
+	if threshold, exist := w.cfg.Recommend.GetExploreRecommend("popular"); exist {
 		explorePopularThreshold = threshold
 	}
 	exploreLatestThreshold := explorePopularThreshold
-	if threshold, exist := w.cfg.Recommend.ExploreRecommend["latest"]; exist {
+	if threshold, exist := w.cfg.Recommend.GetExploreRecommend("latest"); exist {
 		exploreLatestThreshold += threshold
 	}
 	// load popular items

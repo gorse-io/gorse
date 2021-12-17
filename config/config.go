@@ -16,6 +16,7 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
+	"sync"
 )
 
 const (
@@ -134,6 +135,17 @@ type RecommendConfig struct {
 	EnableItemBasedRecommend     bool               `toml:"enable_item_based_recommend"`
 	EnableColRecommend           bool               `toml:"enable_collaborative_recommend"`
 	EnableClickThroughPrediction bool               `toml:"enable_click_through_prediction"`
+	exploreRecommendLock         sync.Mutex
+}
+
+func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
+	if config == nil {
+		return 0.0, false
+	}
+	config.exploreRecommendLock.Lock()
+	defer config.exploreRecommendLock.Unlock()
+	value, exist = config.ExploreRecommend[key]
+	return
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -155,6 +167,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnableItemBasedRecommend:     false,
 			EnableColRecommend:           true,
 			EnableClickThroughPrediction: false,
+			exploreRecommendLock:         sync.Mutex{},
 		}
 	}
 	return config
@@ -282,6 +295,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("recommend", "enable_click_through_prediction") {
 		config.Recommend.EnableClickThroughPrediction = defaultRecommendConfig.EnableClickThroughPrediction
 	}
+	config.Recommend.exploreRecommendLock = sync.Mutex{}
 }
 
 // LoadConfig loads configuration from toml file.
