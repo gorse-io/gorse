@@ -127,23 +127,23 @@ type RecommendConfig struct {
 	RefreshRecommendPeriod       int                `toml:"refresh_recommend_period"`
 	FallbackRecommend            []string           `toml:"fallback_recommend"`
 	ExploreRecommend             map[string]float64 `toml:"explore_recommend"`
-	ExploreRecommendLock         sync.Mutex
-	ItemNeighborType             string `toml:"item_neighbor_type"`
-	UserNeighborType             string `toml:"user_neighbor_type"`
-	EnableLatestRecommend        bool   `toml:"enable_latest_recommend"`
-	EnablePopularRecommend       bool   `toml:"enable_popular_recommend"`
-	EnableUserBasedRecommend     bool   `toml:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool   `toml:"enable_item_based_recommend"`
-	EnableColRecommend           bool   `toml:"enable_collaborative_recommend"`
-	EnableClickThroughPrediction bool   `toml:"enable_click_through_prediction"`
+	ItemNeighborType             string             `toml:"item_neighbor_type"`
+	UserNeighborType             string             `toml:"user_neighbor_type"`
+	EnableLatestRecommend        bool               `toml:"enable_latest_recommend"`
+	EnablePopularRecommend       bool               `toml:"enable_popular_recommend"`
+	EnableUserBasedRecommend     bool               `toml:"enable_user_based_recommend"`
+	EnableItemBasedRecommend     bool               `toml:"enable_item_based_recommend"`
+	EnableColRecommend           bool               `toml:"enable_collaborative_recommend"`
+	EnableClickThroughPrediction bool               `toml:"enable_click_through_prediction"`
+	exploreRecommendLock         *sync.Mutex
 }
 
 func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
 	if config == nil {
 		return 0.0, false
 	}
-	config.ExploreRecommendLock.Lock()
-	defer config.ExploreRecommendLock.Unlock()
+	config.exploreRecommendLock.Lock()
+	defer config.exploreRecommendLock.Unlock()
 	value, exist = config.ExploreRecommend[key]
 	return
 }
@@ -167,6 +167,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnableItemBasedRecommend:     false,
 			EnableColRecommend:           true,
 			EnableClickThroughPrediction: false,
+			exploreRecommendLock:         &sync.Mutex{},
 		}
 	}
 	return config
@@ -294,6 +295,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	if !meta.IsDefined("recommend", "enable_click_through_prediction") {
 		config.Recommend.EnableClickThroughPrediction = defaultRecommendConfig.EnableClickThroughPrediction
 	}
+	config.Recommend.exploreRecommendLock = &sync.Mutex{}
 }
 
 // LoadConfig loads configuration from toml file.

@@ -62,7 +62,7 @@ func TestLoadConfig(t *testing.T) {
 	value, exist = config.Recommend.GetExploreRecommend("latest")
 	assert.Equal(t, true, exist)
 	assert.Equal(t, 0.2, value)
-	value, exist = config.Recommend.GetExploreRecommend("unknown")
+	_, exist = config.Recommend.GetExploreRecommend("unknown")
 	assert.Equal(t, false, exist)
 	assert.Equal(t, "similar", config.Recommend.ItemNeighborType)
 	assert.Equal(t, "similar", config.Recommend.UserNeighborType)
