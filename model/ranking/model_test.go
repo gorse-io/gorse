@@ -16,6 +16,7 @@ package ranking
 import (
 	"bytes"
 	"github.com/stretchr/testify/mock"
+	"math"
 	"runtime"
 	"testing"
 
@@ -96,6 +97,10 @@ func TestBPR_MovieLens(t *testing.T) {
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
+	assert.True(t, m.IsUserPredictable(1))
+	assert.True(t, m.IsItemPredictable(1))
+	assert.False(t, m.IsUserPredictable(math.MaxInt32))
+	assert.False(t, m.IsItemPredictable(math.MaxInt32))
 
 	// test encode/decode model and increment training
 	buf := bytes.NewBuffer(nil)
@@ -103,6 +108,10 @@ func TestBPR_MovieLens(t *testing.T) {
 	assert.NoError(t, err)
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
+	assert.True(t, tmp.IsUserPredictable(1))
+	assert.True(t, tmp.IsItemPredictable(1))
+	assert.False(t, tmp.IsUserPredictable(math.MaxInt32))
+	assert.False(t, tmp.IsItemPredictable(math.MaxInt32))
 	m = tmp.(*BPR)
 	m.nEpochs = 1
 	fitConfig, _ = newFitConfigWithTestTracker(1)

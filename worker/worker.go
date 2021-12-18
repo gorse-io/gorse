@@ -443,7 +443,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 		}
 
 		// Recommender #1: collaborative filtering.
-		if w.cfg.Recommend.EnableColRecommend {
+		if w.cfg.Recommend.EnableColRecommend && m.IsUserPredictable(userIndex) {
 			localStartTime := time.Now()
 			recItemsFilters := make(map[string]*base.TopKStringFilter)
 			recItemsFilters[""] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
@@ -451,7 +451,7 @@ func (w *Worker) Recommend(m ranking.MatrixFactorization, users []string) {
 				recItemsFilters[category] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			}
 			for itemIndex, itemId := range itemIds {
-				if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
+				if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && m.IsItemPredictable(int32(itemIndex)) {
 					prediction := m.InternalPredict(userIndex, int32(itemIndex))
 					recItemsFilters[""].Push(itemId, prediction)
 					for _, category := range itemCache[itemId].Categories {
