@@ -612,4 +612,15 @@ func TestServer_GetRecommends(t *testing.T) {
 			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
 		})).
 		End()
+
+	s.GorseConfig.Recommend.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/dashboard/recommend/0/").
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []data.Item{
+			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
+		})).
+		End()
 }

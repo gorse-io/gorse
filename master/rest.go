@@ -117,6 +117,12 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Writes([]data.Item{}))
+	ws.Route(ws.GET("/dashboard/recommend/{user-id}").To(m.getRecommend).
+		Doc("Get recommendation for user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -395,6 +401,26 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		results, err = m.Recommend(userId, category, n, m.RecommendUserBased)
 	case "item_based":
 		results, err = m.Recommend(userId, category, n, m.RecommendItemBased)
+	case "":
+		recommenders := []server.Recommender{m.RecommendOffline}
+		for _, recommender := range m.GorseConfig.Recommend.FallbackRecommend {
+			switch recommender {
+			case "collaborative":
+				recommenders = append(recommenders, m.RecommendCollaborative)
+			case "item_based":
+				recommenders = append(recommenders, m.RecommendItemBased)
+			case "user_based":
+				recommenders = append(recommenders, m.RecommendUserBased)
+			case "latest":
+				recommenders = append(recommenders, m.RecommendLatest)
+			case "popular":
+				recommenders = append(recommenders, m.RecommendPopular)
+			default:
+				server.InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
+				return
+			}
+		}
+		results, err = m.Recommend(userId, category, n, recommenders...)
 	}
 	if err != nil {
 		server.InternalServerError(response, err)
