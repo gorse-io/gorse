@@ -20,6 +20,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
+	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/floats"
 )
 
@@ -156,7 +157,7 @@ func MRR(targetSet *i32set.Set, rankList []int32) float32 {
 
 func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int) ([]int32, []float32) {
 	// Get top-n list
-	itemsHeap := base.NewTopKFilter(topN)
+	itemsHeap := heap.NewTopKFilter(topN)
 	for _, itemId := range candidates {
 		itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
 	}

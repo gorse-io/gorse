@@ -25,6 +25,7 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -818,7 +819,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		}
 		// collect top k
 		k := ctx.n - len(ctx.results)
-		filter := base.NewTopKStringFilter(k)
+		filter := heap.NewTopKStringFilter(k)
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
@@ -864,7 +865,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		}
 		// collect top k
 		k := ctx.n - len(ctx.results)
-		filter := base.NewTopKStringFilter(k)
+		filter := heap.NewTopKStringFilter(k)
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
