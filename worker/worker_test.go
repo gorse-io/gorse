@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/bits-and-blooms/bitset"
 	"github.com/scylladb/go-set/strset"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
@@ -102,6 +103,8 @@ func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixF
 	for i := 0; i < numItems; i++ {
 		m.ItemIndex.Add(strconv.Itoa(i))
 	}
+	m.UserPredictable = bitset.New(uint(numUsers)).Complement()
+	m.ItemPredictable = bitset.New(uint(numItems)).Complement()
 	return m
 }
 
@@ -182,8 +185,9 @@ func TestRecommendMatrixFactorization(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create mock model
-	m := newMockMatrixFactorizationForRecommend(1, 12)
-	w.Recommend(m, []string{"0"})
+	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
+	w.userIndex = w.rankingModel.GetUserIndex()
+	w.Recommend([]string{"0"})
 
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
@@ -285,8 +289,9 @@ func TestRecommend_ItemBased(t *testing.T) {
 	// insert categorized items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "26", Categories: []string{"*"}}, {ItemId: "28", Categories: []string{"*"}}})
 	assert.NoError(t, err)
-	m := newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend(m, []string{"0"})
+	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.userIndex = w.rankingModel.GetUserIndex()
+	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"29", 0}, {"28", 0}, {"27", 0}}, recommends)
@@ -335,8 +340,9 @@ func TestRecommend_UserBased(t *testing.T) {
 		{ItemId: "48", Categories: []string{"*"}},
 	})
 	assert.NoError(t, err)
-	m := newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend(m, []string{"0"})
+	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.userIndex = w.rankingModel.GetUserIndex()
+	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"48", 0}, {"11", 0}, {"12", 0}}, recommends)
@@ -368,8 +374,9 @@ func TestRecommend_Popular(t *testing.T) {
 	// insert hidden items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
-	m := newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend(m, []string{"0"})
+	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.userIndex = w.rankingModel.GetUserIndex()
+	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
@@ -401,12 +408,59 @@ func TestRecommend_Latest(t *testing.T) {
 	// insert hidden items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
-	m := newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend(m, []string{"0"})
+	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.userIndex = w.rankingModel.GetUserIndex()
+	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
 	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
+}
+
+func TestRecommend_ColdStart(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Recommend.EnableColRecommend = true
+	w.cfg.Recommend.EnableLatestRecommend = true
+	// insert latest items
+	err := w.cacheClient.SetScores(cache.LatestItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
+	assert.NoError(t, err)
+	// insert the latest items with category *
+	err = w.cacheClient.SetScores(cache.LatestItems, "*", []cache.Scored{{"20", 10}, {"19", 9}, {"18", 8}})
+	assert.NoError(t, err)
+	// insert items
+	err = w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"},
+		{ItemId: "20", Categories: []string{"*"}},
+		{ItemId: "19", Categories: []string{"*"}},
+		{ItemId: "18", Categories: []string{"*"}},
+	})
+	assert.NoError(t, err)
+	// insert hidden items
+	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
+	assert.NoError(t, err)
+
+	// ranking model not exist
+	m := newMockMatrixFactorizationForRecommend(10, 100)
+	w.userIndex = m.GetUserIndex()
+	w.Recommend([]string{"0"})
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
+
+	// user not predictable
+	w.rankingModel = m
+	w.Recommend([]string{"100"})
+	recommends, err = w.cacheClient.GetScores(cache.OfflineRecommend, "100", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "100", "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
 }
