@@ -839,7 +839,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 	return nil
 }
 
-func (s *RestServer) recommendLatest(ctx *recommendContext) error {
+func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		err := s.requireUserFeedback(ctx)
 		if err != nil {
@@ -864,7 +864,7 @@ func (s *RestServer) recommendLatest(ctx *recommendContext) error {
 	return nil
 }
 
-func (s *RestServer) recommendPopular(ctx *recommendContext) error {
+func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		err := s.requireUserFeedback(ctx)
 		if err != nil {
@@ -925,9 +925,9 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		case "user_based":
 			recommenders = append(recommenders, s.RecommendUserBased)
 		case "latest":
-			recommenders = append(recommenders, s.recommendLatest)
+			recommenders = append(recommenders, s.RecommendLatest)
 		case "popular":
-			recommenders = append(recommenders, s.recommendPopular)
+			recommenders = append(recommenders, s.RecommendPopular)
 		default:
 			InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
 			return
