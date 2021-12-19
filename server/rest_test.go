@@ -262,11 +262,9 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
-	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	isHidden, err := s.CacheClient.GetInt(cache.HiddenItems, "0")
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0"}, cache.RemoveScores(hiddenItems))
-	err = s.CacheClient.ClearScores(cache.HiddenItems, "")
-	assert.NoError(t, err)
+	assert.Equal(t, 1, isHidden)
 	// test modify
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
 	apitest.New().
@@ -298,9 +296,9 @@ func TestServer_Items(t *testing.T) {
 			Timestamp:  timestamp,
 		})).
 		End()
-	hiddenItems, err = s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
+	isHidden, err = s.CacheClient.GetInt(cache.HiddenItems, "2")
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"2"}, cache.RemoveScores(hiddenItems))
+	assert.Equal(t, 1, isHidden)
 
 	// insert category
 	apitest.New().
@@ -665,7 +663,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	// insert hidden items
 	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.HiddenItems, "", []cache.Scored{{"0", 0}})
+	err = s.CacheClient.SetInt(cache.HiddenItems, "0", 1)
 	assert.NoError(t, err)
 	// insert recommendation
 	err = s.CacheClient.AppendScores(cache.OfflineRecommend, "0",

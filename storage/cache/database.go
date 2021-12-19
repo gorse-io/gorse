@@ -87,7 +87,6 @@ type Database interface {
 	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
 	ClearScores(prefix, name string) error
 	AppendScores(prefix, name string, items ...Scored) error
-	PopScores(prefix, name string, n int) error
 	SetCategoryScores(prefix, name, category string, items []Scored) error
 	GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error)
 	GetString(prefix, name string) (string, error)
@@ -97,6 +96,8 @@ type Database interface {
 	GetInt(prefix, name string) (int, error)
 	SetInt(prefix, name string, val int) error
 	IncrInt(prefix, name string) error
+	Delete(prefix, name string) error
+	Exists(prefix string, names ...string) ([]int, error)
 }
 
 const redisPrefix = "redis://"

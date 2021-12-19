@@ -54,11 +54,6 @@ func (NoDatabase) AppendScores(_, _ string, _ ...Scored) error {
 	return ErrNoDatabase
 }
 
-// PopScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) PopScores(_, _ string, _ int) error {
-	return ErrNoDatabase
-}
-
 // GetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetString(_, _ string) (string, error) {
 	return "", ErrNoDatabase
@@ -92,4 +87,14 @@ func (NoDatabase) SetTime(_, _ string, _ time.Time) error {
 // IncrInt method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) IncrInt(_, _ string) error {
 	return ErrNoDatabase
+}
+
+// Delete method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) Delete(_, _ string) error {
+	return ErrNoDatabase
+}
+
+// Exists method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) Exists(_ string, _ ...string) ([]int, error) {
+	return nil, ErrNoDatabase
 }
