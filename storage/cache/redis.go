@@ -128,18 +128,6 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 	return nil
 }
 
-// PopScores pops n scored items in the front of list in Redis.
-func (r *Redis) PopScores(prefix, name string, n int) error {
-	var ctx = context.Background()
-	key := prefix + "/" + name
-	for i := 0; i < n; i++ {
-		if err := r.client.LPop(ctx, key).Err(); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
-}
-
 // GetString returns a string from Redis.
 func (r *Redis) GetString(prefix, name string) (string, error) {
 	var ctx = context.Background()
@@ -177,6 +165,26 @@ func (r *Redis) GetInt(prefix, name string) (int, error) {
 	return buf, err
 }
 
+// Exists check keys in Redis.
+func (r *Redis) Exists(prefix string, names ...string) ([]int, error) {
+	ctx := context.Background()
+	pipeline := r.client.Pipeline()
+	commands := make([]*redis.IntCmd, len(names))
+	for i, name := range names {
+		key := prefix + "/" + name
+		commands[i] = pipeline.Exists(ctx, key)
+	}
+	_, err := pipeline.Exec(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	existences := make([]int, len(names))
+	for i := range existences {
+		existences[i] = int(commands[i].Val())
+	}
+	return existences, nil
+}
+
 // SetInt saves a integer from Redis.
 func (r *Redis) SetInt(prefix, name string, val int) error {
 	return r.SetString(prefix, name, strconv.Itoa(val))
@@ -208,4 +216,11 @@ func (r *Redis) GetTime(prefix, name string) (time.Time, error) {
 // SetTime saves a time from Redis.
 func (r *Redis) SetTime(prefix, name string, val time.Time) error {
 	return r.SetString(prefix, name, val.String())
+}
+
+// Delete object from Redis.
+func (r *Redis) Delete(prefix, name string) error {
+	ctx := context.Background()
+	key := prefix + "/" + name
+	return r.client.Del(ctx, key).Err()
 }

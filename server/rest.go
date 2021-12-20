@@ -675,14 +675,6 @@ func (s *RestServer) createRecommendContext(userId, category string, n int) (*re
 			excludeSet.Add(item.Id)
 		}
 	}
-	// pull hidden items
-	hiddenItems, err := s.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	for _, item := range hiddenItems {
-		excludeSet.Add(item.Id)
-	}
 	return &recommendContext{
 		userId:     userId,
 		category:   category,
@@ -707,6 +699,40 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 	return nil
 }
 
+func (s *RestServer) filterOutHiddenScores(items []cache.Scored) []cache.Scored {
+	isHidden, err := s.CacheClient.Exists(cache.HiddenItems, cache.RemoveScores(items)...)
+	if err != nil {
+		base.Logger().Error("failed to check hidden items", zap.Error(err))
+		return items
+	}
+	var results []cache.Scored
+	for i := range isHidden {
+		if isHidden[i] == 0 {
+			results = append(results, items[i])
+		}
+	}
+	return results
+}
+
+func (s *RestServer) filterOutHiddenFeedback(feedbacks []data.Feedback) []data.Feedback {
+	names := make([]string, len(feedbacks))
+	for i, item := range feedbacks {
+		names[i] = item.ItemId
+	}
+	isHidden, err := s.CacheClient.Exists(cache.HiddenItems, names...)
+	if err != nil {
+		base.Logger().Error("failed to check hidden items", zap.Error(err))
+		return feedbacks
+	}
+	var results []data.Feedback
+	for i := range isHidden {
+		if isHidden[i] == 0 {
+			results = append(results, feedbacks[i])
+		}
+	}
+	return results
+}
+
 type Recommender func(ctx *recommendContext) error
 
 func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
@@ -716,6 +742,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		recommendation = s.filterOutHiddenScores(recommendation)
 		for _, item := range recommendation {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -737,6 +764,7 @@ func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		collaborativeRecommendation = s.filterOutHiddenScores(collaborativeRecommendation)
 		for _, item := range collaborativeRecommendation {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -770,6 +798,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			if err != nil {
 				return errors.Trace(err)
 			}
+			feedbacks = s.filterOutHiddenFeedback(feedbacks)
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !ctx.excludeSet.Has(feedback.ItemId) {
@@ -816,6 +845,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 				return errors.Trace(err)
 			}
 			// add unseen items
+			similarItems = s.filterOutHiddenScores(similarItems)
 			for _, item := range similarItems {
 				if !ctx.excludeSet.Has(item.Id) {
 					candidates[item.Id] += item.Score
@@ -850,6 +880,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		items = s.filterOutHiddenScores(items)
 		for _, item := range items {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -875,6 +906,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		items = s.filterOutHiddenScores(items)
 		for _, item := range items {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -1246,8 +1278,14 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert hidden items to cache
-	if patch.IsHidden != nil && *patch.IsHidden {
-		if err := s.CacheClient.AppendScores(cache.HiddenItems, "", cache.Scored{Id: itemId, Score: float32(time.Now().Unix())}); err != nil {
+	if patch.IsHidden != nil {
+		var err error
+		if *patch.IsHidden {
+			err = s.CacheClient.SetInt(cache.HiddenItems, itemId, 1)
+		} else {
+			err = s.CacheClient.Delete(cache.HiddenItems, itemId)
+		}
+		if err != nil && !errors.IsNotFound(err) {
 			InternalServerError(response, err)
 			return
 		}
@@ -1315,7 +1353,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert deleted item to cache
-	if err := s.CacheClient.AppendScores(cache.HiddenItems, "", cache.Scored{Id: itemId, Score: float32(time.Now().Unix())}); err != nil {
+	if err := s.CacheClient.SetInt(cache.HiddenItems, itemId, 1); err != nil {
 		InternalServerError(response, err)
 		return
 	}

@@ -29,8 +29,11 @@ func testMeta(t *testing.T, db Database) {
 	value, err := db.GetString("meta", "1")
 	assert.NoError(t, err)
 	assert.Equal(t, "2", value)
+	// Delete string
+	err = db.Delete("meta", "1")
+	assert.NoError(t, err)
 	// Get meta not existed
-	value, err = db.GetString("meta", "NULL")
+	value, err = db.GetString("meta", "1")
 	assert.True(t, errors.IsNotFound(err))
 	assert.Equal(t, "", value)
 	// Set meta int
@@ -55,6 +58,10 @@ func testMeta(t *testing.T, db Database) {
 	assert.Equal(t, 1996, valTime.Year())
 	assert.Equal(t, time.Month(4), valTime.Month())
 	assert.Equal(t, 8, valTime.Day())
+	// test exists
+	exists, err := db.Exists("meta", "1", "10000")
+	assert.NoError(t, err)
+	assert.Equal(t, []int{1, 0}, exists)
 }
 
 func testScores(t *testing.T, db Database) {
@@ -109,12 +116,6 @@ func testScores(t *testing.T, db Database) {
 	totalItems, err = db.GetScores("append", "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, append(scores, overwriteScores...), totalItems)
-	// pop
-	err = db.PopScores("append", "0", len(scores))
-	assert.NoError(t, err)
-	totalItems, err = db.GetScores("append", "0", 0, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, overwriteScores, totalItems)
 	// clear
 	err = db.ClearScores("append", "0")
 	assert.NoError(t, err)
