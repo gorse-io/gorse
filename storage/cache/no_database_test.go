@@ -54,4 +54,11 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetCategoryScores("", "", "", 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
+
+	_, err = database.GetSort("", "", 0, 0)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.SetSort("", "", nil)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.IncSort("", "", "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
 }

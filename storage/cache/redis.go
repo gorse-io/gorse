@@ -224,3 +224,33 @@ func (r *Redis) Delete(prefix, name string) error {
 	key := prefix + "/" + name
 	return r.client.Del(ctx, key).Err()
 }
+
+// GetSort get scores from sorted set.
+func (r *Redis) GetSort(prefix, name string, begin, end int) ([]Scored, error) {
+	ctx := context.Background()
+	members, err := r.client.ZRevRangeWithScores(ctx, prefix+"/"+name, int64(begin), int64(end)).Result()
+	if err != nil {
+		return nil, err
+	}
+	results := make([]Scored, 0, len(members))
+	for _, member := range members {
+		results = append(results, Scored{Id: member.Member.(string), Score: float32(member.Score)})
+	}
+	return results, nil
+}
+
+// SetSort add scores to sorted set.
+func (r *Redis) SetSort(prefix, name string, scores []Scored) error {
+	ctx := context.Background()
+	members := make([]*redis.Z, 0, len(scores))
+	for _, score := range scores {
+		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
+	}
+	return r.client.ZAdd(ctx, prefix+"/"+name, members...).Err()
+}
+
+// IncSort increase score in sorted set.
+func (r *Redis) IncSort(prefix, name, member string) error {
+	ctx := context.Background()
+	return r.client.ZIncrBy(ctx, prefix+"/"+name, 1, member).Err()
+}

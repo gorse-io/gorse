@@ -98,6 +98,9 @@ type Database interface {
 	IncrInt(prefix, name string) error
 	Delete(prefix, name string) error
 	Exists(prefix string, names ...string) ([]int, error)
+	GetSort(prefix, name string, begin, end int) ([]Scored, error)
+	SetSort(prefix, name string, scores []Scored) error
+	IncSort(prefix, name, member string) error
 }
 
 const redisPrefix = "redis://"

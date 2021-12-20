@@ -139,6 +139,43 @@ func testScores(t *testing.T, db Database) {
 	assert.Equal(t, scores, totalItems)
 }
 
+func testSort(t *testing.T, db Database) {
+	// Put scores
+	scores := []Scored{
+		{"0", 0},
+		{"1", 1.1},
+		{"2", 1.2},
+		{"3", 1.3},
+		{"4", 1.4},
+	}
+	err := db.SetSort("sort", "1", scores)
+	assert.NoError(t, err)
+	// Get scores
+	totalItems, err := db.GetSort("sort", "1", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+		{"0", 0},
+	}, totalItems)
+	// Increase score
+	err = db.IncSort("sort", "1", "0")
+	assert.NoError(t, err)
+	err = db.IncSort("sort", "1", "0")
+	assert.NoError(t, err)
+	totalItems, err = db.GetSort("sort", "1", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"0", 2},
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+	}, totalItems)
+}
+
 func TestScored(t *testing.T) {
 	itemIds := []string{"2", "4", "6"}
 	scores := []float32{2, 4, 6}

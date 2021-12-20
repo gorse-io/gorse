@@ -98,3 +98,18 @@ func (NoDatabase) Delete(_, _ string) error {
 func (NoDatabase) Exists(_ string, _ ...string) ([]int, error) {
 	return nil, ErrNoDatabase
 }
+
+// GetSort method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetSort(_, _ string, _, _ int) ([]Scored, error) {
+	return nil, ErrNoDatabase
+}
+
+// SetSort method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) SetSort(_, _ string, _ []Scored) error {
+	return ErrNoDatabase
+}
+
+// IncSort method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) IncSort(_, _, _ string) error {
+	return ErrNoDatabase
+}
