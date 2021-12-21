@@ -80,6 +80,24 @@ func RemoveScores(items []Scored) []string {
 	return ids
 }
 
+// Scores is slice of Scored.
+type Scores []Scored
+
+// Len is the number of elements in the collection.
+func (s Scores) Len() int {
+	return len(s)
+}
+
+// Less reports whether the element with index i
+func (s Scores) Less(i, j int) bool {
+	return s[i].Score > s[j].Score
+}
+
+// Swap swaps the elements with indexes i and j.
+func (s Scores) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
