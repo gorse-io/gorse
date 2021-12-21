@@ -15,7 +15,6 @@
 package master
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
@@ -71,7 +70,7 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save popular items to cache
 	for category, items := range popularItems {
-		if err = m.CacheClient.SetSort(cache.PopularItems, category, items); err != nil {
+		if err = m.CacheClient.SetSort(cache.Key(cache.PopularItems, category), items); err != nil {
 			base.Logger().Error("failed to cache popular items", zap.Error(err))
 		}
 	}
@@ -81,7 +80,7 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save the latest items to cache
 	for category, items := range latestItems {
-		if err = m.CacheClient.SetSort(cache.LatestItems, category, items); err != nil {
+		if err = m.CacheClient.SetSort(cache.Key(cache.LatestItems, category), items); err != nil {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 	}
@@ -128,8 +127,7 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// write categories to cache
-	categories, err := json.Marshal(rankingDataset.CategorySet.List())
-	if err = m.CacheClient.SetString(cache.ItemCategories, "", string(categories)); err != nil {
+	if err = m.CacheClient.SetSet(cache.ItemCategories, rankingDataset.CategorySet.List()...); err != nil {
 		base.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 

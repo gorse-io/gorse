@@ -225,10 +225,50 @@ func (r *Redis) Delete(prefix, name string) error {
 	return r.client.Del(ctx, key).Err()
 }
 
-// GetSort get scores from sorted set.
-func (r *Redis) GetSort(prefix, name string, begin, end int) ([]Scored, error) {
+// GetSet returns members of a set from Redis.
+func (r *Redis) GetSet(key string) ([]string, error) {
 	ctx := context.Background()
-	members, err := r.client.ZRevRangeWithScores(ctx, prefix+"/"+name, int64(begin), int64(end)).Result()
+	return r.client.SMembers(ctx, key).Result()
+}
+
+// SetSet overrides a set with members in Redis.
+func (r *Redis) SetSet(key string, members ...string) error {
+	if len(members) == 0 {
+		return nil
+	}
+	// convert strings to interfaces
+	values := make([]interface{}, 0, len(members))
+	for _, member := range members {
+		values = append(values, member)
+	}
+	// push set
+	ctx := context.Background()
+	pipeline := r.client.Pipeline()
+	pipeline.Del(ctx, key)
+	pipeline.SAdd(ctx, key, values...)
+	_, err := pipeline.Exec(ctx)
+	return err
+}
+
+// AddSet adds members to a set in Redis.
+func (r *Redis) AddSet(key string, members ...string) error {
+	if len(members) == 0 {
+		return nil
+	}
+	// convert strings to interfaces
+	values := make([]interface{}, 0, len(members))
+	for _, member := range members {
+		values = append(values, member)
+	}
+	// push set
+	ctx := context.Background()
+	return r.client.SAdd(ctx, key, values...).Err()
+}
+
+// GetSort get scores from sorted set.
+func (r *Redis) GetSort(key string, begin, end int) ([]Scored, error) {
+	ctx := context.Background()
+	members, err := r.client.ZRevRangeWithScores(ctx, key, int64(begin), int64(end)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -240,17 +280,26 @@ func (r *Redis) GetSort(prefix, name string, begin, end int) ([]Scored, error) {
 }
 
 // SetSort add scores to sorted set.
-func (r *Redis) SetSort(prefix, name string, scores []Scored) error {
+func (r *Redis) SetSort(key string, scores []Scored) error {
+	if len(scores) == 0 {
+		return nil
+	}
 	ctx := context.Background()
 	members := make([]*redis.Z, 0, len(scores))
 	for _, score := range scores {
 		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
 	}
-	return r.client.ZAdd(ctx, prefix+"/"+name, members...).Err()
+	return r.client.ZAdd(ctx, key, members...).Err()
 }
 
-// IncSort increase score in sorted set.
-func (r *Redis) IncSort(prefix, name, member string) error {
+// IncrSort increase score in sorted set.
+func (r *Redis) IncrSort(key, member string) error {
 	ctx := context.Background()
-	return r.client.ZIncrBy(ctx, prefix+"/"+name, 1, member).Err()
+	return r.client.ZIncrBy(ctx, key, 1, member).Err()
+}
+
+// RemSort method of NoDatabase returns ErrNoDatabase.
+func (r *Redis) RemSort(key, member string) error {
+	ctx := context.Background()
+	return r.client.ZRem(ctx, key, member).Err()
 }

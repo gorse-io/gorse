@@ -28,8 +28,14 @@ const (
 	UserNeighbors          = "user_neighbors"          // neighbors of each user
 	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
 	OfflineRecommend       = "offline_recommend"       // offline recommendation for each user
-	PopularItems           = "popular_items"           // popular items
-	LatestItems            = "latest_items"            // latest items
+	// PopularItems is sorted set of popular items. The format of key:
+	//   Global popular items      - latest_items
+	//   Categorized popular items - latest_items/{category}
+	PopularItems = "popular_items"
+	// LatestItems is sorted set of the latest items. The format of key:
+	//   Global latest items      - latest_items
+	//   Categorized latest items - latest_items/{category}
+	LatestItems = "latest_items"
 
 	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
 	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
@@ -44,7 +50,8 @@ const (
 	DataImported            = "data_imported"
 	LastFitRankingModelTime = "last_fit_match_model_time"
 	LastRankingModelVersion = "latest_match_model_version"
-	ItemCategories          = "item_categories"
+	// ItemCategories is the set of item categories.
+	ItemCategories = "item_categories"
 )
 
 var (
@@ -98,6 +105,21 @@ func (s Scores) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+func Key(keys ...string) string {
+	if len(keys) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString(keys[0])
+	for _, key := range keys[1:] {
+		if key != "" {
+			builder.WriteRune('/')
+			builder.WriteString(key)
+		}
+	}
+	return builder.String()
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
@@ -116,9 +138,15 @@ type Database interface {
 	IncrInt(prefix, name string) error
 	Delete(prefix, name string) error
 	Exists(prefix string, names ...string) ([]int, error)
-	GetSort(prefix, name string, begin, end int) ([]Scored, error)
-	SetSort(prefix, name string, scores []Scored) error
-	IncSort(prefix, name, member string) error
+
+	GetSet(key string) ([]string, error)
+	SetSet(key string, members ...string) error
+	AddSet(key string, members ...string) error
+
+	GetSort(key string, begin, end int) ([]Scored, error)
+	SetSort(key string, scores []Scored) error
+	IncrSort(key, member string) error
+	RemSort(key, member string) error
 }
 
 const redisPrefix = "redis://"

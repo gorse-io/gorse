@@ -358,10 +358,10 @@ func TestRecommend_Popular(t *testing.T) {
 	w.cfg.Recommend.EnableColRecommend = false
 	w.cfg.Recommend.EnablePopularRecommend = true
 	// insert popular items
-	err := w.cacheClient.SetSort(cache.PopularItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
+	err := w.cacheClient.SetSort(cache.PopularItems, []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
 	// insert popular items with category *
-	err = w.cacheClient.SetSort(cache.PopularItems, "*", []cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}})
+	err = w.cacheClient.SetSort(cache.Key(cache.PopularItems, "*"), []cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}})
 	assert.NoError(t, err)
 	// insert items
 	err = w.dataClient.BatchInsertItems([]data.Item{
@@ -392,10 +392,10 @@ func TestRecommend_Latest(t *testing.T) {
 	w.cfg.Recommend.EnableColRecommend = false
 	w.cfg.Recommend.EnableLatestRecommend = true
 	// insert latest items
-	err := w.cacheClient.SetSort(cache.LatestItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
+	err := w.cacheClient.SetSort(cache.LatestItems, []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
 	// insert the latest items with category *
-	err = w.cacheClient.SetSort(cache.LatestItems, "*", []cache.Scored{{"20", 10}, {"19", 9}, {"18", 8}})
+	err = w.cacheClient.SetSort(cache.Key(cache.LatestItems, "*"), []cache.Scored{{"20", 10}, {"19", 9}, {"18", 8}})
 	assert.NoError(t, err)
 	// insert items
 	err = w.dataClient.BatchInsertItems([]data.Item{
@@ -426,10 +426,10 @@ func TestRecommend_ColdStart(t *testing.T) {
 	w.cfg.Recommend.EnableColRecommend = true
 	w.cfg.Recommend.EnableLatestRecommend = true
 	// insert latest items
-	err := w.cacheClient.SetSort(cache.LatestItems, "", []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
+	err := w.cacheClient.SetSort(cache.LatestItems, []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
 	// insert the latest items with category *
-	err = w.cacheClient.SetSort(cache.LatestItems, "*", []cache.Scored{{"20", 10}, {"19", 9}, {"18", 8}})
+	err = w.cacheClient.SetSort(cache.Key(cache.LatestItems, "*"), []cache.Scored{{"20", 10}, {"19", 9}, {"18", 8}})
 	assert.NoError(t, err)
 	// insert items
 	err = w.dataClient.BatchInsertItems([]data.Item{
@@ -476,10 +476,10 @@ func TestExploreRecommend(t *testing.T) {
 	defer w.Close(t)
 	w.cfg.Recommend.ExploreRecommend = map[string]float64{"popular": 0.3, "latest": 0.3}
 	// insert popular items
-	err := w.cacheClient.SetSort(cache.PopularItems, "", []cache.Scored{{"popular", 0}})
+	err := w.cacheClient.SetSort(cache.PopularItems, []cache.Scored{{"popular", 0}})
 	assert.NoError(t, err)
 	// insert latest items
-	err = w.cacheClient.SetSort(cache.LatestItems, "", []cache.Scored{{"latest", 0}})
+	err = w.cacheClient.SetSort(cache.LatestItems, []cache.Scored{{"latest", 0}})
 	assert.NoError(t, err)
 
 	recommend, err := w.exploreRecommend(cache.CreateScoredItems(

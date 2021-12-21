@@ -99,17 +99,37 @@ func (NoDatabase) Exists(_ string, _ ...string) ([]int, error) {
 	return nil, ErrNoDatabase
 }
 
+// GetSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetSet(_ string) ([]string, error) {
+	return nil, ErrNoDatabase
+}
+
+// SetSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) SetSet(_ string, _ ...string) error {
+	return ErrNoDatabase
+}
+
+// AddSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) AddSet(_ string, _ ...string) error {
+	return ErrNoDatabase
+}
+
 // GetSort method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSort(_, _ string, _, _ int) ([]Scored, error) {
+func (NoDatabase) GetSort(_ string, _, _ int) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
 // SetSort method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetSort(_, _ string, _ []Scored) error {
+func (NoDatabase) SetSort(_ string, _ []Scored) error {
 	return ErrNoDatabase
 }
 
-// IncSort method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) IncSort(_, _, _ string) error {
+// IncrSort method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) IncrSort(_, _ string) error {
+	return ErrNoDatabase
+}
+
+// RemSort method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) RemSort(_, _ string) error {
 	return ErrNoDatabase
 }

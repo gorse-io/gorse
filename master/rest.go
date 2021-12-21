@@ -16,7 +16,6 @@ package master
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -191,13 +190,7 @@ func (m *Master) StartHttpServer() {
 }
 
 func (m *Master) getCategories(_ *restful.Request, response *restful.Response) {
-	s, err := m.CacheClient.GetString(cache.ItemCategories, "")
-	if err != nil {
-		server.InternalServerError(response, err)
-		return
-	}
-	var categories []string
-	err = json.Unmarshal([]byte(s), &categories)
+	categories, err := m.CacheClient.GetSet(cache.ItemCategories)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -518,7 +511,7 @@ func (m *Master) getList(prefix, name string, request *restful.Request, response
 	}
 }
 
-func (m *Master) getSort(prefix, name string, request *restful.Request, response *restful.Response, retType interface{}) {
+func (m *Master) getSort(key string, request *restful.Request, response *restful.Response, retType interface{}) {
 	var n, begin, end int
 	var err error
 	// read arguments
@@ -532,7 +525,7 @@ func (m *Master) getSort(prefix, name string, request *restful.Request, response
 	}
 	end = begin + n - 1
 	// Get the popular list
-	scores, err := m.CacheClient.GetSort(prefix, name, begin, end)
+	scores, err := m.CacheClient.GetSort(key, begin, end)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -567,12 +560,12 @@ func (m *Master) getSort(prefix, name string, request *restful.Request, response
 // getPopular gets popular items from database.
 func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.getSort(cache.PopularItems, category, request, response, data.Item{})
+	m.getSort(cache.Key(cache.PopularItems, category), request, response, data.Item{})
 }
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.getSort(cache.LatestItems, category, request, response, data.Item{})
+	m.getSort(cache.Key(cache.LatestItems, category), request, response, data.Item{})
 }
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {

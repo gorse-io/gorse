@@ -411,9 +411,7 @@ func TestMaster_GetCategories(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert categories
-	text, err := json.Marshal([]string{"a", "b", "c"})
-	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.ItemCategories, "", string(text))
+	err := s.CacheClient.SetSet(cache.ItemCategories, "a", "b", "c")
 	assert.NoError(t, err)
 	// get categories
 	apitest.New().
@@ -530,7 +528,7 @@ func TestServer_Sort(t *testing.T) {
 				{strconv.Itoa(i) + "3", 97},
 				{strconv.Itoa(i) + "4", 96},
 			}
-			err := s.CacheClient.SetSort(operator.Prefix, operator.Label, scores)
+			err := s.CacheClient.SetSort(cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
 			items := make([]data.Item, 0)
 			for _, score := range scores {
