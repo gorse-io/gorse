@@ -17,6 +17,8 @@ package cache
 import (
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base"
+	"go.uber.org/zap"
 	"strings"
 	"time"
 )
@@ -100,6 +102,7 @@ type Database interface {
 }
 
 const redisPrefix = "redis://"
+const redisClusterPrefix = "redis_cluster://"
 
 // Open a connection to a database.
 func Open(path string) (Database, error) {
@@ -110,6 +113,22 @@ func Open(path string) (Database, error) {
 		}
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
+		database.useCluster = false
+		return database, nil
+	} else if strings.HasPrefix(path, redisClusterPrefix) {
+		opt := &redis.ClusterOptions{
+			Addrs:        strings.Split(path[strings.Index(path, "@")+1:], ","),
+			DialTimeout:  500 * time.Microsecond,
+			ReadTimeout:  500 * time.Microsecond,
+			WriteTimeout: 500 * time.Microsecond,
+			Password:     path[strings.LastIndex(path, "/")+1 : strings.Index(path, "@")],
+		}
+		base.Logger().Info("redis cluster config",
+			zap.String("Address", strings.Join(opt.Addrs, ",")),
+			zap.String("Password", opt.Password))
+		database := new(Redis)
+		database.clusterClient = redis.NewClusterClient(opt)
+		database.useCluster = true
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)

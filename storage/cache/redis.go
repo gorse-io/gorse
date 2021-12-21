@@ -28,12 +28,18 @@ import (
 
 // Redis cache storage.
 type Redis struct {
-	client *redis.Client
+	useCluster    bool
+	client        *redis.Client
+	clusterClient *redis.ClusterClient
 }
 
 // Close redis connection.
 func (r *Redis) Close() error {
-	return r.client.Close()
+	if r.useCluster {
+		return r.clusterClient.Close()
+	} else {
+		return r.client.Close()
+	}
 }
 
 // SetScores save a list of scored items to Redis.
@@ -41,7 +47,12 @@ func (r *Redis) SetScores(prefix, name string, items []Scored) error {
 	startTime := time.Now()
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	err := r.client.Del(ctx, key).Err()
+	var err error
+	if r.useCluster {
+		err = r.clusterClient.Del(ctx, key).Err()
+	} else {
+		err = r.client.Del(ctx, key).Err()
+	}
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -50,7 +61,11 @@ func (r *Redis) SetScores(prefix, name string, items []Scored) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = r.client.RPush(ctx, key, data).Err()
+		if r.useCluster {
+			err = r.clusterClient.RPush(ctx, key, data).Err()
+		} else {
+			err = r.client.RPush(ctx, key, data).Err()
+		}
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -65,7 +80,15 @@ func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error)
 	var ctx = context.Background()
 	key := prefix + "/" + name
 	res := make([]Scored, 0)
-	data, err := r.client.LRange(ctx, key, int64(begin), int64(end)).Result()
+	var (
+		err  error
+		data []string
+	)
+	if r.useCluster {
+		data, err = r.clusterClient.LRange(ctx, key, int64(begin), int64(end)).Result()
+	} else {
+		data, err = r.client.LRange(ctx, key, int64(begin), int64(end)).Result()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +125,12 @@ func (r *Redis) ClearScores(prefix, name string) error {
 	startTime := time.Now()
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	err := r.client.Del(ctx, key).Err()
+	var err error
+	if r.useCluster {
+		err = r.clusterClient.Del(ctx, key).Err()
+	} else {
+		err = r.client.Del(ctx, key).Err()
+	}
 	if err == nil {
 		ClearScoresSeconds.Observe(time.Since(startTime).Seconds())
 	}
@@ -119,7 +147,11 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = r.client.RPush(ctx, key, data).Err()
+		if r.useCluster {
+			err = r.clusterClient.RPush(ctx, key, data).Err()
+		} else {
+			err = r.client.RPush(ctx, key, data).Err()
+		}
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -132,8 +164,14 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 func (r *Redis) PopScores(prefix, name string, n int) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
+	var err error
 	for i := 0; i < n; i++ {
-		if err := r.client.LPop(ctx, key).Err(); err != nil {
+		if r.useCluster {
+			err = r.clusterClient.LPop(ctx, key).Err()
+		} else {
+			err = r.client.LPop(ctx, key).Err()
+		}
+		if err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -144,7 +182,15 @@ func (r *Redis) PopScores(prefix, name string, n int) error {
 func (r *Redis) GetString(prefix, name string) (string, error) {
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	val, err := r.client.Get(ctx, key).Result()
+	var (
+		val string
+		err error
+	)
+	if r.useCluster {
+		val, err = r.clusterClient.Get(ctx, key).Result()
+	} else {
+		val, err = r.client.Get(ctx, key).Result()
+	}
 	if err != nil {
 		if err == redis.Nil {
 			return "", errors.Annotate(ErrObjectNotExist, key)
@@ -158,7 +204,13 @@ func (r *Redis) GetString(prefix, name string) (string, error) {
 func (r *Redis) SetString(prefix, name, val string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	if err := r.client.Set(ctx, key, val, 0).Err(); err != nil {
+	var err error
+	if r.useCluster {
+		err = r.clusterClient.Set(ctx, key, val, 0).Err()
+	} else {
+		err = r.client.Set(ctx, key, val, 0).Err()
+	}
+	if err != nil {
 		return errors.Trace(err)
 	}
 	return nil
@@ -186,7 +238,13 @@ func (r *Redis) SetInt(prefix, name string, val int) error {
 func (r *Redis) IncrInt(prefix, name string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	if err := r.client.Incr(ctx, key).Err(); err != nil {
+	var err error
+	if r.useCluster {
+		err = r.clusterClient.Incr(ctx, key).Err()
+	} else {
+		err = r.client.Incr(ctx, key).Err()
+	}
+	if err != nil {
 		return errors.Trace(err)
 	}
 	return nil
