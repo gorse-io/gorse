@@ -525,7 +525,7 @@ func (m *Master) getSort(key string, request *restful.Request, response *restful
 	}
 	end = begin + n - 1
 	// Get the popular list
-	scores, err := m.CacheClient.GetSort(key, begin, end)
+	scores, err := m.CacheClient.GetSorted(key, begin, end)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return

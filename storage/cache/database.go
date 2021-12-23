@@ -105,6 +105,7 @@ func (s Scores) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+// Key creates key for cache. Empty field will be ignored.
 func Key(keys ...string) string {
 	if len(keys) == 0 {
 		return ""
@@ -143,10 +144,11 @@ type Database interface {
 	SetSet(key string, members ...string) error
 	AddSet(key string, members ...string) error
 
-	GetSort(key string, begin, end int) ([]Scored, error)
-	SetSort(key string, scores []Scored) error
-	IncrSort(key, member string) error
-	RemSort(key, member string) error
+	GetSortedScore(key, member string) (float32, error)
+	GetSorted(key string, begin, end int) ([]Scored, error)
+	SetSorted(key string, scores []Scored) error
+	IncrSorted(key, member string) error
+	RemSorted(key, member string) error
 }
 
 const redisPrefix = "redis://"

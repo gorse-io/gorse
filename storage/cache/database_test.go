@@ -140,28 +140,32 @@ func testScores(t *testing.T, db Database) {
 }
 
 func testSet(t *testing.T, db Database) {
-	err := db.SetSet("a", "1")
+	err := db.SetSet("set", "1")
 	assert.NoError(t, err)
 	// test add
-	err = db.AddSet("a", "2")
+	err = db.AddSet("set", "2")
 	assert.NoError(t, err)
 	var members []string
-	members, err = db.GetSet("a")
+	members, err = db.GetSet("set")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"1", "2"}, members)
 	// test set
-	err = db.SetSet("a", "3")
+	err = db.SetSet("set", "3")
 	assert.NoError(t, err)
-	members, err = db.GetSet("a")
+	members, err = db.GetSet("set")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"3"}, members)
 
 	// test add empty
-	err = db.AddSet("a")
+	err = db.AddSet("set")
 	assert.NoError(t, err)
 	// test set empty
-	err = db.SetSet("a")
+	err = db.SetSet("set")
 	assert.NoError(t, err)
+	// test get empty
+	members, err = db.GetSet("unknown_set")
+	assert.NoError(t, err)
+	assert.Empty(t, members)
 }
 
 func testSort(t *testing.T, db Database) {
@@ -173,10 +177,10 @@ func testSort(t *testing.T, db Database) {
 		{"3", 1.3},
 		{"4", 1.4},
 	}
-	err := db.SetSort("sort", scores)
+	err := db.SetSorted("sort", scores)
 	assert.NoError(t, err)
 	// Get scores
-	totalItems, err := db.GetSort("sort", 0, -1)
+	totalItems, err := db.GetSorted("sort", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []Scored{
 		{"4", 1.4},
@@ -186,11 +190,11 @@ func testSort(t *testing.T, db Database) {
 		{"0", 0},
 	}, totalItems)
 	// Increase score
-	err = db.IncrSort("sort", "0")
+	err = db.IncrSorted("sort", "0")
 	assert.NoError(t, err)
-	err = db.IncrSort("sort", "0")
+	err = db.IncrSorted("sort", "0")
 	assert.NoError(t, err)
-	totalItems, err = db.GetSort("sort", 0, -1)
+	totalItems, err = db.GetSorted("sort", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []Scored{
 		{"0", 2},
@@ -200,9 +204,9 @@ func testSort(t *testing.T, db Database) {
 		{"1", 1.1},
 	}, totalItems)
 	// Remove score
-	err = db.RemSort("sort", "0")
+	err = db.RemSorted("sort", "0")
 	assert.NoError(t, err)
-	totalItems, err = db.GetSort("sort", 0, -1)
+	totalItems, err = db.GetSorted("sort", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []Scored{
 		{"4", 1.4},
@@ -210,10 +214,21 @@ func testSort(t *testing.T, db Database) {
 		{"2", 1.2},
 		{"1", 1.1},
 	}, totalItems)
+	// Get score
+	score, err := db.GetSortedScore("sort", "2")
+	assert.NoError(t, err)
+	assert.Equal(t, float32(1.2), score)
 
 	// test set empty
-	err = db.SetSort("sort", []Scored{})
+	err = db.SetSorted("sort", []Scored{})
 	assert.NoError(t, err)
+	// test get empty
+	scores, err = db.GetSorted("unknown_sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, scores)
+	// test get non-existed score
+	_, err = db.GetSortedScore("sort", "10086")
+	assert.True(t, errors.IsNotFound(err))
 }
 
 func TestScored(t *testing.T) {
@@ -222,4 +237,11 @@ func TestScored(t *testing.T) {
 	scored := []Scored{{Id: "2", Score: 2}, {Id: "4", Score: 4}, {Id: "6", Score: 6}}
 	assert.Equal(t, scored, CreateScoredItems(itemIds, scores))
 	assert.Equal(t, itemIds, RemoveScores(scored))
+}
+
+func TestKey(t *testing.T) {
+	assert.Empty(t, Key())
+	assert.Equal(t, "a", Key("a"))
+	assert.Equal(t, "a", Key("a", ""))
+	assert.Equal(t, "a/b", Key("a", "b"))
 }

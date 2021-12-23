@@ -470,7 +470,7 @@ func (s *RestServer) getSort(key string, request *restful.Request, response *res
 	}
 	end = begin + n - 1
 	// Get the popular list
-	items, err := s.CacheClient.GetSort(key, begin, end)
+	items, err := s.CacheClient.GetSorted(key, begin, end)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -880,7 +880,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSort(cache.Key(cache.LatestItems, ctx.category), 0, ctx.n-len(ctx.results))
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, ctx.n-len(ctx.results))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -906,7 +906,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSort(cache.Key(cache.PopularItems, ctx.category), 0, ctx.n-len(ctx.results))
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, ctx.n-len(ctx.results))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1187,7 +1187,8 @@ type Item struct {
 func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	var count int
 	items := make([]data.Item, 0, len(temp))
-	scores := make(map[string][]cache.Scored)
+	timeScores := make(map[string][]cache.Scored)
+	popularScores := make(map[string][]cache.Scored)
 	for _, item := range temp {
 		// parse datetime
 		timestamp, err := dateparse.ParseAny(item.Timestamp)
@@ -1203,11 +1204,18 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 			Labels:     item.Labels,
 			Comment:    item.Comment,
 		})
+		popularScore, _ := s.CacheClient.GetSortedScore(cache.PopularItems, item.ItemId)
 		for _, category := range append([]string{""}, item.Categories...) {
-			scores[category] = append(scores[category], cache.Scored{
+			timeScores[category] = append(timeScores[category], cache.Scored{
 				Id:    item.ItemId,
 				Score: float32(timestamp.Unix()),
 			})
+			if popularScore > 0 {
+				popularScores[category] = append(popularScores[category], cache.Scored{
+					Id:    item.ItemId,
+					Score: popularScore,
+				})
+			}
 		}
 		count++
 	}
@@ -1227,9 +1235,16 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 			return
 		}
 	}
-	// insert timestamp scores
-	for category, score := range scores {
-		if err = s.CacheClient.SetSort(cache.Key(cache.LatestItems, category), score); err != nil {
+	// insert timestamp score
+	for category, score := range timeScores {
+		if err = s.CacheClient.SetSorted(cache.Key(cache.LatestItems, category), score); err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
+	// insert popular score
+	for category, score := range popularScores {
+		if err = s.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), score); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1302,10 +1317,17 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 			InternalServerError(response, err)
 			return
 		}
+		popularScore, _ := s.CacheClient.GetSortedScore(cache.PopularItems, itemId)
 		for _, category := range append([]string{""}, item.Categories...) {
-			if err = s.CacheClient.SetSort(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float32(item.Timestamp.Unix())}}); err != nil {
+			if err = s.CacheClient.SetSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float32(item.Timestamp.Unix())}}); err != nil {
 				InternalServerError(response, err)
 				return
+			}
+			if popularScore > 0 {
+				if err = s.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}}); err != nil {
+					InternalServerError(response, err)
+					return
+				}
 			}
 		}
 	}
@@ -1388,7 +1410,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		}
 	}
 	for _, deleteKey := range deleteKeys {
-		if err := s.CacheClient.RemSort(deleteKey, itemId); err != nil {
+		if err := s.CacheClient.RemSorted(deleteKey, itemId); err != nil {
 			InternalServerError(response, err)
 		}
 	}
@@ -1417,8 +1439,16 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		InternalServerError(response, err)
 		return
 	}
-	// inert item to latest
-	if err = s.CacheClient.SetSort(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float32(item.Timestamp.Unix())}}); err != nil {
+	// insert to popular
+	popularScore, _ := s.CacheClient.GetSortedScore(cache.PopularItems, itemId)
+	if popularScore > 0 {
+		if err = s.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}}); err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
+	// insert item to latest
+	if err = s.CacheClient.SetSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float32(item.Timestamp.Unix())}}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1451,8 +1481,13 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 		InternalServerError(response, err)
 		return
 	}
+	// remove item from popular
+	if err = s.CacheClient.RemSorted(cache.Key(cache.PopularItems, category), itemId); err != nil {
+		InternalServerError(response, err)
+		return
+	}
 	// remove item from latest
-	if err = s.CacheClient.RemSort(cache.Key(cache.LatestItems, category), itemId); err != nil {
+	if err = s.CacheClient.RemSorted(cache.Key(cache.LatestItems, category), itemId); err != nil {
 		InternalServerError(response, err)
 		return
 	}

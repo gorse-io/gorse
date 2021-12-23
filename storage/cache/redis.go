@@ -265,8 +265,21 @@ func (r *Redis) AddSet(key string, members ...string) error {
 	return r.client.SAdd(ctx, key, values...).Err()
 }
 
-// GetSort get scores from sorted set.
-func (r *Redis) GetSort(key string, begin, end int) ([]Scored, error) {
+// GetSortedScore get the score of a member from sorted set.
+func (r *Redis) GetSortedScore(key, member string) (float32, error) {
+	ctx := context.Background()
+	score, err := r.client.ZScore(ctx, key, member).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return 0, errors.Annotate(ErrObjectNotExist, key)
+		}
+		return 0, err
+	}
+	return float32(score), nil
+}
+
+// GetSorted get scores from sorted set.
+func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	ctx := context.Background()
 	members, err := r.client.ZRevRangeWithScores(ctx, key, int64(begin), int64(end)).Result()
 	if err != nil {
@@ -279,8 +292,8 @@ func (r *Redis) GetSort(key string, begin, end int) ([]Scored, error) {
 	return results, nil
 }
 
-// SetSort add scores to sorted set.
-func (r *Redis) SetSort(key string, scores []Scored) error {
+// SetSorted add scores to sorted set.
+func (r *Redis) SetSorted(key string, scores []Scored) error {
 	if len(scores) == 0 {
 		return nil
 	}
@@ -292,14 +305,14 @@ func (r *Redis) SetSort(key string, scores []Scored) error {
 	return r.client.ZAdd(ctx, key, members...).Err()
 }
 
-// IncrSort increase score in sorted set.
-func (r *Redis) IncrSort(key, member string) error {
+// IncrSorted increase score in sorted set.
+func (r *Redis) IncrSorted(key, member string) error {
 	ctx := context.Background()
 	return r.client.ZIncrBy(ctx, key, 1, member).Err()
 }
 
-// RemSort method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) RemSort(key, member string) error {
+// RemSorted method of NoDatabase returns ErrNoDatabase.
+func (r *Redis) RemSorted(key, member string) error {
 	ctx := context.Background()
 	return r.client.ZRem(ctx, key, member).Err()
 }
