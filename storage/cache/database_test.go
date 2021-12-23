@@ -139,6 +139,83 @@ func testScores(t *testing.T, db Database) {
 	assert.Equal(t, scores, totalItems)
 }
 
+func testSet(t *testing.T, db Database) {
+	err := db.SetSet("a", "1")
+	assert.NoError(t, err)
+	// test add
+	err = db.AddSet("a", "2")
+	assert.NoError(t, err)
+	var members []string
+	members, err = db.GetSet("a")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1", "2"}, members)
+	// test set
+	err = db.SetSet("a", "3")
+	assert.NoError(t, err)
+	members, err = db.GetSet("a")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"3"}, members)
+
+	// test add empty
+	err = db.AddSet("a")
+	assert.NoError(t, err)
+	// test set empty
+	err = db.SetSet("a")
+	assert.NoError(t, err)
+}
+
+func testSort(t *testing.T, db Database) {
+	// Put scores
+	scores := []Scored{
+		{"0", 0},
+		{"1", 1.1},
+		{"2", 1.2},
+		{"3", 1.3},
+		{"4", 1.4},
+	}
+	err := db.SetSort("sort", scores)
+	assert.NoError(t, err)
+	// Get scores
+	totalItems, err := db.GetSort("sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+		{"0", 0},
+	}, totalItems)
+	// Increase score
+	err = db.IncrSort("sort", "0")
+	assert.NoError(t, err)
+	err = db.IncrSort("sort", "0")
+	assert.NoError(t, err)
+	totalItems, err = db.GetSort("sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"0", 2},
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+	}, totalItems)
+	// Remove score
+	err = db.RemSort("sort", "0")
+	assert.NoError(t, err)
+	totalItems, err = db.GetSort("sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+	}, totalItems)
+
+	// test set empty
+	err = db.SetSort("sort", []Scored{})
+	assert.NoError(t, err)
+}
+
 func TestScored(t *testing.T) {
 	itemIds := []string{"2", "4", "6"}
 	scores := []float32{2, 4, 6}

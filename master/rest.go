@@ -16,7 +16,6 @@ package master
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -191,13 +190,7 @@ func (m *Master) StartHttpServer() {
 }
 
 func (m *Master) getCategories(_ *restful.Request, response *restful.Response) {
-	s, err := m.CacheClient.GetString(cache.ItemCategories, "")
-	if err != nil {
-		server.InternalServerError(response, err)
-		return
-	}
-	var categories []string
-	err = json.Unmarshal([]byte(s), &categories)
+	categories, err := m.CacheClient.GetSet(cache.ItemCategories)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -518,15 +511,61 @@ func (m *Master) getList(prefix, name string, request *restful.Request, response
 	}
 }
 
+func (m *Master) getSort(key string, request *restful.Request, response *restful.Response, retType interface{}) {
+	var n, begin, end int
+	var err error
+	// read arguments
+	if begin, err = server.ParseInt(request, "offset", 0); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	if n, err = server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	end = begin + n - 1
+	// Get the popular list
+	scores, err := m.CacheClient.GetSort(key, begin, end)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	// Send result
+	switch retType.(type) {
+	case data.Item:
+		details := make([]data.Item, len(scores))
+		for i := range scores {
+			details[i], err = m.DataClient.GetItem(scores[i].Id)
+			if err != nil {
+				server.InternalServerError(response, err)
+				return
+			}
+		}
+		server.Ok(response, details)
+	case data.User:
+		details := make([]data.User, len(scores))
+		for i := range scores {
+			details[i], err = m.DataClient.GetUser(scores[i].Id)
+			if err != nil {
+				server.InternalServerError(response, err)
+				return
+			}
+		}
+		server.Ok(response, details)
+	default:
+		base.Logger().Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
+	}
+}
+
 // getPopular gets popular items from database.
 func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.getList(cache.PopularItems, category, request, response, data.Item{})
+	m.getSort(cache.Key(cache.PopularItems, category), request, response, data.Item{})
 }
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.getList(cache.LatestItems, category, request, response, data.Item{})
+	m.getSort(cache.Key(cache.LatestItems, category), request, response, data.Item{})
 }
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
