@@ -149,6 +149,12 @@ func testSet(t *testing.T, db Database) {
 	members, err = db.GetSet("set")
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"1", "2"}, members)
+	// test rem
+	err = db.RemSet("set", "1")
+	assert.NoError(t, err)
+	members, err = db.GetSet("set")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"2"}, members)
 	// test set
 	err = db.SetSet("set", "3")
 	assert.NoError(t, err)

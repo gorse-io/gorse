@@ -265,6 +265,12 @@ func (r *Redis) AddSet(key string, members ...string) error {
 	return r.client.SAdd(ctx, key, values...).Err()
 }
 
+// RemSet removes members from a set in Redis.
+func (r *Redis) RemSet(key string, members ...string) error {
+	ctx := context.Background()
+	return r.client.SRem(ctx, key, members).Err()
+}
+
 // GetSortedScore get the score of a member from sorted set.
 func (r *Redis) GetSortedScore(key, member string) (float32, error) {
 	ctx := context.Background()

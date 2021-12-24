@@ -114,6 +114,11 @@ func (NoDatabase) AddSet(_ string, _ ...string) error {
 	return ErrNoDatabase
 }
 
+// RemSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) RemSet(_ string, _ ...string) error {
+	return ErrNoDatabase
+}
+
 // GetSortedScore method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetSortedScore(_, _ string) (float32, error) {
 	return 0, ErrNoDatabase
