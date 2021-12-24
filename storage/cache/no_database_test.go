@@ -62,12 +62,14 @@ func TestNoDatabase(t *testing.T) {
 	err = database.AddSet("")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	_, err = database.GetSort("", 0, 0)
+	_, err = database.GetSortedScore("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetSort("", nil)
+	_, err = database.GetSorted("", 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.IncrSort("", "")
+	err = database.SetSorted("", nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSort("", "")
+	err = database.IncrSorted("", "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.RemSorted("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

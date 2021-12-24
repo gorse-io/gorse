@@ -209,6 +209,15 @@ func TestServer_Items(t *testing.T) {
 			Comment:   "comment_8",
 		},
 	}
+	// insert popular scores
+	err := s.CacheClient.SetSorted(cache.PopularItems, []cache.Scored{
+		{Id: "0", Score: 10},
+		{Id: "2", Score: 12},
+		{Id: "4", Score: 14},
+		{Id: "6", Score: 16},
+		{Id: "8", Score: 18},
+	})
+	assert.NoError(t, err)
 	// insert items
 	apitest.New().
 		Handler(s.handler).
@@ -275,6 +284,36 @@ func TestServer_Items(t *testing.T) {
 			{Id: items[1].ItemId, Score: float32(items[1].Timestamp.Unix())},
 		})).
 		End()
+	// get popular items
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{
+			{Id: items[4].ItemId, Score: 18},
+			{Id: items[3].ItemId, Score: 16},
+			{Id: items[2].ItemId, Score: 14},
+		})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{
+			{Id: items[3].ItemId, Score: 16},
+			{Id: items[1].ItemId, Score: 12},
+		})).
+		End()
 
 	// delete item
 	apitest.New().
@@ -325,6 +364,35 @@ func TestServer_Items(t *testing.T) {
 			{Id: items[1].ItemId, Score: float32(items[1].Timestamp.Unix())},
 		})).
 		End()
+	// get popular items
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{
+			{Id: items[4].ItemId, Score: 18},
+			{Id: items[2].ItemId, Score: 14},
+			{Id: items[1].ItemId, Score: 12},
+		})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{
+			{Id: items[1].ItemId, Score: 12},
+		})).
+		End()
 
 	// test modify
 	timestamp := time.Date(2010, 1, 1, 1, 1, 1, 0, time.UTC)
@@ -333,10 +401,11 @@ func TestServer_Items(t *testing.T) {
 		Patch("/api/item/2").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{
-			IsHidden:  proto.Bool(true),
-			Labels:    []string{"a", "b", "c"},
-			Comment:   proto.String("modified"),
-			Timestamp: &timestamp,
+			IsHidden:   proto.Bool(true),
+			Categories: []string{"*", "-"},
+			Labels:     []string{"a", "b", "c"},
+			Comment:    proto.String("modified"),
+			Timestamp:  &timestamp,
 		}).
 		Expect(t).
 		Status(http.StatusOK).
@@ -351,7 +420,7 @@ func TestServer_Items(t *testing.T) {
 		Body(marshal(t, data.Item{
 			ItemId:     "2",
 			IsHidden:   true,
-			Categories: []string{"*"},
+			Categories: []string{"*", "-"},
 			Comment:    "modified",
 			Labels:     []string{"a", "b", "c"},
 			Timestamp:  timestamp,
@@ -363,7 +432,7 @@ func TestServer_Items(t *testing.T) {
 	// get latest items
 	apitest.New().
 		Handler(s.handler).
-		Get("/api/latest/*").
+		Get("/api/latest/-").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n": "1",
@@ -372,6 +441,20 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
 			{Id: "2", Score: float32(timestamp.Unix())},
+		})).
+		End()
+	// get popular items
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular/-").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "1",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{
+			{Id: "2", Score: 12},
 		})).
 		End()
 
@@ -393,7 +476,7 @@ func TestServer_Items(t *testing.T) {
 		Body(marshal(t, data.Item{
 			ItemId:     "2",
 			IsHidden:   true,
-			Categories: []string{"*", "@"},
+			Categories: []string{"*", "-", "@"},
 			Comment:    "modified",
 			Labels:     []string{"a", "b", "c"},
 			Timestamp:  timestamp,
@@ -411,6 +494,20 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
 			{Id: "2", Score: float32(timestamp.Unix())},
+		})).
+		End()
+	// get popular items
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular/@").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "1",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{
+			{Id: "2", Score: 12},
 		})).
 		End()
 
@@ -432,7 +529,7 @@ func TestServer_Items(t *testing.T) {
 		Body(marshal(t, data.Item{
 			ItemId:     "2",
 			IsHidden:   true,
-			Categories: []string{"*"},
+			Categories: []string{"*", "-"},
 			Comment:    "modified",
 			Labels:     []string{"a", "b", "c"},
 			Timestamp:  timestamp,
@@ -442,6 +539,18 @@ func TestServer_Items(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/latest/@").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "1",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{})).
+		End()
+	// get popular items
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular/@").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n": "1",
@@ -692,7 +801,7 @@ func TestServer_Sort(t *testing.T) {
 				{strconv.Itoa(i) + "3", 97},
 				{strconv.Itoa(i) + "4", 96},
 			}
-			err := s.CacheClient.SetSort(operator.Key, scores)
+			err := s.CacheClient.SetSorted(operator.Key, scores)
 			assert.NoError(t, err)
 			apitest.New().
 				Handler(s.handler).
@@ -1111,17 +1220,17 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		[]cache.Scored{{"101", 99}, {"102", 98}, {"103", 97}, {"104", 96}})
 	assert.NoError(t, err)
 	// insert latest
-	err = s.CacheClient.SetSort(cache.LatestItems,
+	err = s.CacheClient.SetSorted(cache.LatestItems,
 		[]cache.Scored{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetSort(cache.Key(cache.LatestItems, "*"),
+	err = s.CacheClient.SetSorted(cache.Key(cache.LatestItems, "*"),
 		[]cache.Scored{{"105", 95}, {"106", 94}, {"107", 93}, {"108", 92}})
 	assert.NoError(t, err)
 	// insert popular
-	err = s.CacheClient.SetSort(cache.PopularItems,
+	err = s.CacheClient.SetSorted(cache.PopularItems,
 		[]cache.Scored{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetSort(cache.Key(cache.PopularItems, "*"),
+	err = s.CacheClient.SetSorted(cache.Key(cache.PopularItems, "*"),
 		[]cache.Scored{{"109", 91}, {"110", 90}, {"111", 89}, {"112", 88}})
 	assert.NoError(t, err)
 	// insert collaborative filtering

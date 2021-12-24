@@ -528,7 +528,7 @@ func TestServer_Sort(t *testing.T) {
 				{strconv.Itoa(i) + "3", 97},
 				{strconv.Itoa(i) + "4", 96},
 			}
-			err := s.CacheClient.SetSort(cache.Key(operator.Prefix, operator.Label), scores)
+			err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
 			items := make([]data.Item, 0)
 			for _, score := range scores {
