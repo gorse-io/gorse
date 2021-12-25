@@ -130,6 +130,12 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.SetSet(cache.ItemCategories, rankingDataset.CategorySet.List()...); err != nil {
 		base.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
+	for i, categories := range rankingDataset.ItemCategories {
+		itemId := rankingDataset.ItemIndex.ToName(int32(i))
+		if err = m.CacheClient.SetSet(cache.Key(cache.ItemCategories, itemId), categories...); err != nil {
+			base.Logger().Error("failed to write categories to cache", zap.Error(err))
+		}
+	}
 
 	// split ranking dataset
 	m.rankingModelMutex.Lock()

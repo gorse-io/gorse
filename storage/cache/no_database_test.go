@@ -61,6 +61,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.AddSet("")
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.RemSet("", "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
 
 	_, err = database.GetSortedScore("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
