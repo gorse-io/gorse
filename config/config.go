@@ -135,15 +135,23 @@ type RecommendConfig struct {
 	EnableItemBasedRecommend     bool               `toml:"enable_item_based_recommend"`
 	EnableColRecommend           bool               `toml:"enable_collaborative_recommend"`
 	EnableClickThroughPrediction bool               `toml:"enable_click_through_prediction"`
-	exploreRecommendLock         sync.Mutex
+	exploreRecommendLock         sync.RWMutex
+}
+
+func (config *RecommendConfig) Lock() {
+	config.exploreRecommendLock.Lock()
+}
+
+func (config *RecommendConfig) UnLock() {
+	config.exploreRecommendLock.Unlock()
 }
 
 func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
 	if config == nil {
 		return 0.0, false
 	}
-	config.exploreRecommendLock.Lock()
-	defer config.exploreRecommendLock.Unlock()
+	config.exploreRecommendLock.RLock()
+	defer config.exploreRecommendLock.RUnlock()
 	value, exist = config.ExploreRecommend[key]
 	return
 }
