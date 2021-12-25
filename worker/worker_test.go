@@ -616,6 +616,21 @@ func TestWorker_Sync(t *testing.T) {
 		cfg:          (*config.Config)(nil).LoadDefaultIfNil(),
 		syncedChan:   make(chan bool, 1024),
 	}
+
+	// This clause is used to test race condition.
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				p, _ := serv.cfg.Recommend.GetExploreRecommend("popular")
+				assert.Zero(t, p)
+			}
+		}
+	}()
+
 	serv.Sync()
 	assert.Equal(t, "redis://"+master.dataStore.Addr(), serv.dataPath)
 	assert.Equal(t, "redis://"+master.cacheStore.Addr(), serv.cachePath)
@@ -630,6 +645,7 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Equal(t, int64(2), serv.currentRankingModelVersion)
 	assert.Equal(t, int64(3), serv.currentUserIndexVersion)
 	master.Stop()
+	done <- struct{}{}
 }
 
 type mockFactorizationMachine struct {

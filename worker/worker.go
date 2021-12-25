@@ -126,11 +126,14 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
+		w.cfg.Recommend.Lock()
 		err = json.Unmarshal([]byte(meta.Config), &w.cfg)
 		if err != nil {
+			w.cfg.Recommend.UnLock()
 			base.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
 		}
+		w.cfg.Recommend.UnLock()
 
 		// connect to data store
 		if w.dataPath != w.cfg.Database.DataStore {
