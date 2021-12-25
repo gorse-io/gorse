@@ -1221,6 +1221,10 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 		{ItemId: "48", Categories: []string{"*"}},
 	})
 	assert.NoError(t, err)
+	err = s.CacheClient.AddSet(cache.Key(cache.ItemCategories, "12"), "*")
+	assert.NoError(t, err)
+	err = s.CacheClient.AddSet(cache.Key(cache.ItemCategories, "48"), "*")
+	assert.NoError(t, err)
 	// test fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"user_based"}
 	apitest.New().
