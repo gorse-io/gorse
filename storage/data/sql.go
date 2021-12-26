@@ -184,7 +184,9 @@ func (d *SQLDatabase) Init() error {
 			"item_id String," +
 			"time_stamp Datetime," +
 			"comment String," +
-			"version DateTime" +
+			"version DateTime," +
+			"INDEX user_index user_id TYPE bloom_filter(0.01) GRANULARITY 1," +
+			"INDEX item_index item_id TYPE bloom_filter(0.01) GRANULARITY 1" +
 			") ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)"); err != nil {
 			return errors.Trace(err)
 		}
