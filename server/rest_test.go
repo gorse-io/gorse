@@ -1072,6 +1072,7 @@ func TestServer_GetRecommends(t *testing.T) {
 
 func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	s := newMockServer(t)
+	s.GorseConfig.Recommend.NumFeedbackFallbackItemBased = 4
 	defer s.Close(t)
 	// insert recommendation
 	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
@@ -1079,10 +1080,11 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}, Timestamp: time.Date(2009, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}, Timestamp: time.Date(2008, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}, Timestamp: time.Date(2007, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "5"}, Timestamp: time.Date(2006, 1, 1, 1, 1, 1, 1, time.UTC)},
 	}
 	apitest.New().
 		Handler(s.handler).
@@ -1091,7 +1093,7 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`{"RowAffected": 4}`).
+		Body(`{"RowAffected": 5}`).
 		End()
 
 	// insert similar items
@@ -1118,6 +1120,14 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		{"6", 1},
 		{"7", 1},
 		{"8", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetScores(cache.ItemNeighbors, "5", []cache.Scored{
+		{"1", 1},
+		{"6", 1},
+		{"7", 100000},
+		{"8", 100},
 		{"9", 1},
 	})
 	assert.NoError(t, err)

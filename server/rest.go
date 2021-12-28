@@ -840,9 +840,15 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
+		// truncate user feedback
+		data.SortFeedbacks(ctx.userFeedback)
+		userFeedback := ctx.userFeedback
+		if s.GorseConfig.Recommend.NumFeedbackFallbackItemBased < len(userFeedback) {
+			userFeedback = userFeedback[:s.GorseConfig.Recommend.NumFeedbackFallbackItemBased]
+		}
 		// collect candidates
 		candidates := make(map[string]float32)
-		for _, feedback := range ctx.userFeedback {
+		for _, feedback := range userFeedback {
 			// load similar items
 			similarItems, err := s.CacheClient.GetCategoryScores(cache.ItemNeighbors, feedback.ItemId, ctx.category, 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {

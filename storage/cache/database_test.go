@@ -243,6 +243,8 @@ func TestScored(t *testing.T) {
 	scored := []Scored{{Id: "2", Score: 2}, {Id: "4", Score: 4}, {Id: "6", Score: 6}}
 	assert.Equal(t, scored, CreateScoredItems(itemIds, scores))
 	assert.Equal(t, itemIds, RemoveScores(scored))
+	SortScores(scored)
+	assert.Equal(t, []Scored{{Id: "6", Score: 6}, {Id: "4", Score: 4}, {Id: "2", Score: 2}}, scored)
 }
 
 func TestKey(t *testing.T) {
