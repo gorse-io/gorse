@@ -1060,7 +1060,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		}
 	}
 	for _, items := range popularItems {
-		sort.Sort(cache.Scores(items))
+		cache.SortScores(items)
 	}
 
 	m.taskMonitor.Finish(TaskLoadDataset)

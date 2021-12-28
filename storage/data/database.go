@@ -23,6 +23,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+	"sort"
 	"strings"
 	"time"
 )
@@ -80,6 +81,25 @@ type Feedback struct {
 	FeedbackKey
 	Timestamp time.Time
 	Comment   string
+}
+
+// SortFeedbacks sorts feedback from latest to oldest.
+func SortFeedbacks(feedback []Feedback) {
+	sort.Sort(feedbackSorter(feedback))
+}
+
+type feedbackSorter []Feedback
+
+func (sorter feedbackSorter) Len() int {
+	return len(sorter)
+}
+
+func (sorter feedbackSorter) Less(i, j int) bool {
+	return sorter[i].Timestamp.After(sorter[j].Timestamp)
+}
+
+func (sorter feedbackSorter) Swap(i, j int) {
+	sorter[i], sorter[j] = sorter[j], sorter[i]
 }
 
 // Measurement stores a statistical value.

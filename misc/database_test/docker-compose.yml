@@ -5,6 +5,12 @@ services:
     ports:
       - 6379:6379
 
+  pika:
+    image: zhenghaoz/pika
+    restart: unless-stopped
+    ports:
+      - 9221:9221
+
   mysql:
     image: mysql:8.0
     ports:

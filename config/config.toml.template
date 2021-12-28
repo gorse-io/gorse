@@ -75,6 +75,9 @@ refresh_recommend_period = 1
 # Recommenders are used in order. The default values is ["latest"].
 fallback_recommend = ["item_based", "latest"]
 
+# The number of feedback used in fallback item-based similar recommendation. The default values is 10.
+num_feedback_fallback_item_based = 20
+
 # The type of neighbors for items. There are three types:
 #   similar: Neighbors are found by number of common labels.
 #   related: Neighbors are found by number of common users.
