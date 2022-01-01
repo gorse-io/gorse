@@ -70,8 +70,11 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save popular items to cache
 	for category, items := range popularItems {
-		if err = m.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), items); err != nil {
-			base.Logger().Error("failed to cache popular items", zap.Error(err))
+		for batchBegin := 0; batchBegin < len(items); batchBegin += batchSize {
+			batchEnd := base.Min(len(items), batchBegin+batchSize)
+			if err = m.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), items[batchBegin:batchEnd]); err != nil {
+				base.Logger().Error("failed to cache popular items", zap.Error(err))
+			}
 		}
 	}
 	if err = m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Now()); err != nil {
