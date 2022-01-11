@@ -55,7 +55,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 10, config.Recommend.SearchTrials)
 	assert.Equal(t, 1, config.Recommend.RefreshRecommendPeriod)
 	assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.FallbackRecommend)
-	assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.ExploreRecommend)
+	assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.ExploreRecommend.Recommend)
 	value, exist := config.Recommend.GetExploreRecommend("popular")
 	assert.Equal(t, true, exist)
 	assert.Equal(t, 0.1, value)

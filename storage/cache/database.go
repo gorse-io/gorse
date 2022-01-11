@@ -118,9 +118,12 @@ func Open(path string) (Database, error) {
 	} else if strings.HasPrefix(path, redisClusterPrefix) {
 		opt := &redis.ClusterOptions{
 			Addrs:        strings.Split(path[strings.Index(path, "@")+1:], ","),
-			DialTimeout:  500 * time.Microsecond,
-			ReadTimeout:  500 * time.Microsecond,
-			WriteTimeout: 500 * time.Microsecond,
+			PoolSize:     600,
+			MinIdleConns: 30,
+			MaxConnAge:   time.Hour,
+			DialTimeout:  15000 * time.Microsecond,
+			ReadTimeout:  15000 * time.Microsecond,
+			WriteTimeout: 15000 * time.Microsecond,
 			Password:     path[strings.LastIndex(path, "/")+1 : strings.Index(path, "@")],
 		}
 		base.Logger().Info("redis cluster config",

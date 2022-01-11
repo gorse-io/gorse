@@ -110,8 +110,10 @@ enable_collaborative_recommend = true
 # would be merged randomly. The default values is true.
 enable_click_through_prediction = true
 
+
+[recommend.explore]
 # The explore recommendation method is used to inject popular items or latest items into recommended result:
 #   popular: Recommend popular items to cold-start users.
 #   latest: Recommend latest items to cold-start users.
 # Recommenders are used in order. The default values is { popular = 0.0, latest = 0.0 }.
-explore_recommend = { popular = 0.1, latest = 0.2 }
+recommend = { popular = 0.1, latest = 0.2 }

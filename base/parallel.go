@@ -21,7 +21,7 @@ import (
 
 /* Parallel Schedulers */
 
-// Parallel schedules and runs tasks in parallel. nTask is the number of tasks. nJob is
+// Parallel schedules and runs tasks in parallel. nJobs is the number of tasks. nWorkers is
 // the number of executors. worker is the executed function which passed a range of task
 // Names (begin, end).
 func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error {
@@ -38,10 +38,11 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		// producer
 		go func() {
 			defer CheckPanic()
-
+			taskNumber := 0
 			// send jobs
 			for i := 0; i < nJobs; i++ {
 				c <- i
+				taskNumber++
 			}
 			// send EOF
 			for i := 0; i < nWorkers; i++ {
@@ -57,6 +58,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 			go func(workerId int) {
 				defer CheckPanic()
 				defer wg.Done()
+				workCount := 0
 				for {
 					// read job
 					jobId := <-c
@@ -66,17 +68,23 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 					// run job
 					if err := worker(workerId, jobId); err != nil {
 						errs[jobId] = err
-						return
 					}
+					workCount++
 				}
 			}(j)
 		}
 		wg.Wait()
+		errCount := 0
+		var firstError error
 		// check errors
 		for _, err := range errs {
 			if err != nil {
-				return errors.Trace(err)
+				errCount++
+				firstError = errors.Trace(err)
 			}
+		}
+		if firstError != nil {
+			return firstError
 		}
 	}
 	return nil
@@ -125,7 +133,6 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 				// run job
 				if err := worker(workerId, job.beginId, job.endId); err != nil {
 					errs[job.beginId] = err
-					return
 				}
 			}
 		}(j)
