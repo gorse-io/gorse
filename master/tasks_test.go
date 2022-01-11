@@ -302,14 +302,14 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	assert.Equal(t, 45, m.clickTrainSet.NegativeCount+m.clickTestSet.NegativeCount)
 
 	// check latest items
-	latest, err := m.CacheClient.GetScores(cache.LatestItems, "", 0, 100)
+	latest, err := m.CacheClient.GetSorted(cache.Key(cache.LatestItems, ""), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
 		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
 		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
 	}, latest)
-	latest, err = m.CacheClient.GetScores(cache.LatestItems, "2", 0, 100)
+	latest, err = m.CacheClient.GetSorted(cache.Key(cache.LatestItems, "2"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
@@ -318,50 +318,27 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	}, latest)
 
 	// check popular items
-	popular, err := m.CacheClient.GetScores(cache.PopularItems, "", 0, 100)
+	popular, err := m.CacheClient.GetSorted(cache.Key(cache.PopularItems, ""), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
 		{Id: items[6].ItemId, Score: 7},
 	}, popular)
-	popular, err = m.CacheClient.GetScores(cache.PopularItems, "2", 0, 100)
+	popular, err = m.CacheClient.GetSorted(cache.Key(cache.PopularItems, "2"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[5].ItemId, Score: 6},
 		{Id: items[2].ItemId, Score: 3},
 	}, popular)
-}
 
-func TestRunRefreshHiddenItemsCache(t *testing.T) {
-	// create mock master
-	m := newMockMaster(t)
-	defer m.Close()
+	// check categories
+	categories, err := m.CacheClient.GetSet(cache.ItemCategories)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"0", "1", "2"}, categories)
+	categories, err = m.CacheClient.GetSet(cache.Key(cache.ItemCategories, "2"))
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"2"}, categories)
 
-	// insert timestamps
-	err := m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC))
-	assert.NoError(t, err)
-	err = m.CacheClient.SetTime(cache.LastUpdateLatestItemsTime, "", time.Date(1999, 1, 1, 1, 1, 1, 1, time.UTC))
-	assert.NoError(t, err)
-	err = m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, "item", time.Date(1998, 1, 1, 1, 1, 1, 1, time.UTC))
-	assert.NoError(t, err)
-	err = m.CacheClient.SetTime(cache.LastUpdateUserRecommendTime, "user", time.Date(1997, 1, 1, 1, 1, 1, 1, time.UTC))
-	assert.NoError(t, err)
-
-	// insert hidden items
-	err = m.CacheClient.SetScores(cache.HiddenItems, "", []cache.Scored{
-		{Id: "1", Score: float32(time.Date(1996, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
-		{Id: "2", Score: float32(time.Date(1997, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
-		{Id: "3", Score: float32(time.Date(1998, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
-	})
-	assert.NoError(t, err)
-
-	// remove outdated hidden items from cache
-	m.runRefreshHiddenItemsCache([]string{"user"}, []string{"item"})
-	hiddenItems, err := m.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
-	assert.Equal(t, []cache.Scored{
-		{Id: "2", Score: float32(time.Date(1997, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
-		{Id: "3", Score: float32(time.Date(1998, 1, 1, 1, 1, 1, 1, time.UTC).Unix())},
-	}, hiddenItems)
 }

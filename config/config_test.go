@@ -55,7 +55,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 10, config.Recommend.SearchTrials)
 	assert.Equal(t, 1, config.Recommend.RefreshRecommendPeriod)
 	assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.FallbackRecommend)
-	assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.ExploreRecommend.Recommend)
+	assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.Explore.Recommend)
+	assert.Equal(t, 20, config.Recommend.NumFeedbackFallbackItemBased)
 	value, exist := config.Recommend.GetExploreRecommend("popular")
 	assert.Equal(t, true, exist)
 	assert.Equal(t, 0.1, value)
@@ -75,7 +76,7 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestConfig_FillDefault(t *testing.T) {
-	config := &Config{}
+	var config *Config
 	meta, err := toml.Decode("", &config)
 	assert.NoError(t, err)
 	config.FillDefault(meta)

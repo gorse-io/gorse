@@ -29,8 +29,11 @@ func testMeta(t *testing.T, db Database) {
 	value, err := db.GetString("meta", "1")
 	assert.NoError(t, err)
 	assert.Equal(t, "2", value)
+	// Delete string
+	err = db.Delete("meta", "1")
+	assert.NoError(t, err)
 	// Get meta not existed
-	value, err = db.GetString("meta", "NULL")
+	value, err = db.GetString("meta", "1")
 	assert.True(t, errors.IsNotFound(err))
 	assert.Equal(t, "", value)
 	// Set meta int
@@ -55,6 +58,10 @@ func testMeta(t *testing.T, db Database) {
 	assert.Equal(t, 1996, valTime.Year())
 	assert.Equal(t, time.Month(4), valTime.Month())
 	assert.Equal(t, 8, valTime.Day())
+	// test exists
+	exists, err := db.Exists("meta", "1", "10000")
+	assert.NoError(t, err)
+	assert.Equal(t, []int{1, 0}, exists)
 }
 
 func testScores(t *testing.T, db Database) {
@@ -109,12 +116,6 @@ func testScores(t *testing.T, db Database) {
 	totalItems, err = db.GetScores("append", "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, append(scores, overwriteScores...), totalItems)
-	// pop
-	err = db.PopScores("append", "0", len(scores))
-	assert.NoError(t, err)
-	totalItems, err = db.GetScores("append", "0", 0, -1)
-	assert.NoError(t, err)
-	assert.Equal(t, overwriteScores, totalItems)
 	// clear
 	err = db.ClearScores("append", "0")
 	assert.NoError(t, err)
@@ -138,10 +139,117 @@ func testScores(t *testing.T, db Database) {
 	assert.Equal(t, scores, totalItems)
 }
 
+func testSet(t *testing.T, db Database) {
+	err := db.SetSet("set", "1")
+	assert.NoError(t, err)
+	// test add
+	err = db.AddSet("set", "2")
+	assert.NoError(t, err)
+	var members []string
+	members, err = db.GetSet("set")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1", "2"}, members)
+	// test rem
+	err = db.RemSet("set", "1")
+	assert.NoError(t, err)
+	members, err = db.GetSet("set")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"2"}, members)
+	// test set
+	err = db.SetSet("set", "3")
+	assert.NoError(t, err)
+	members, err = db.GetSet("set")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"3"}, members)
+
+	// test add empty
+	err = db.AddSet("set")
+	assert.NoError(t, err)
+	// test set empty
+	err = db.SetSet("set")
+	assert.NoError(t, err)
+	// test get empty
+	members, err = db.GetSet("unknown_set")
+	assert.NoError(t, err)
+	assert.Empty(t, members)
+}
+
+func testSort(t *testing.T, db Database) {
+	// Put scores
+	scores := []Scored{
+		{"0", 0},
+		{"1", 1.1},
+		{"2", 1.2},
+		{"3", 1.3},
+		{"4", 1.4},
+	}
+	err := db.SetSorted("sort", scores)
+	assert.NoError(t, err)
+	// Get scores
+	totalItems, err := db.GetSorted("sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+		{"0", 0},
+	}, totalItems)
+	// Increase score
+	err = db.IncrSorted("sort", "0")
+	assert.NoError(t, err)
+	err = db.IncrSorted("sort", "0")
+	assert.NoError(t, err)
+	totalItems, err = db.GetSorted("sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"0", 2},
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+	}, totalItems)
+	// Remove score
+	err = db.RemSorted("sort", "0")
+	assert.NoError(t, err)
+	totalItems, err = db.GetSorted("sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+		{"1", 1.1},
+	}, totalItems)
+	// Get score
+	score, err := db.GetSortedScore("sort", "2")
+	assert.NoError(t, err)
+	assert.Equal(t, float32(1.2), score)
+
+	// test set empty
+	err = db.SetSorted("sort", []Scored{})
+	assert.NoError(t, err)
+	// test get empty
+	scores, err = db.GetSorted("unknown_sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, scores)
+	// test get non-existed score
+	_, err = db.GetSortedScore("sort", "10086")
+	assert.True(t, errors.IsNotFound(err))
+}
+
 func TestScored(t *testing.T) {
 	itemIds := []string{"2", "4", "6"}
 	scores := []float32{2, 4, 6}
 	scored := []Scored{{Id: "2", Score: 2}, {Id: "4", Score: 4}, {Id: "6", Score: 6}}
 	assert.Equal(t, scored, CreateScoredItems(itemIds, scores))
 	assert.Equal(t, itemIds, RemoveScores(scored))
+	SortScores(scored)
+	assert.Equal(t, []Scored{{Id: "6", Score: 6}, {Id: "4", Score: 4}, {Id: "2", Score: 2}}, scored)
+}
+
+func TestKey(t *testing.T) {
+	assert.Empty(t, Key())
+	assert.Equal(t, "a", Key("a"))
+	assert.Equal(t, "a", Key("a", ""))
+	assert.Equal(t, "a/b", Key("a", "b"))
 }

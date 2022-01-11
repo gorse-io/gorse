@@ -62,3 +62,15 @@ func TestRedis_Scores(t *testing.T) {
 	defer db.Close(t)
 	testScores(t, db.Database)
 }
+
+func TestRedis_Sort(t *testing.T) {
+	db := newMockRedis(t)
+	defer db.Close(t)
+	testSort(t, db.Database)
+}
+
+func TestRedis_Set(t *testing.T) {
+	db := newMockRedis(t)
+	defer db.Close(t)
+	testSet(t, db.Database)
+}

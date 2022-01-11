@@ -15,7 +15,6 @@
 package master
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
@@ -71,8 +70,11 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save popular items to cache
 	for category, items := range popularItems {
-		if err = m.CacheClient.SetScores(cache.PopularItems, category, items); err != nil {
-			base.Logger().Error("failed to cache popular items", zap.Error(err))
+		for batchBegin := 0; batchBegin < len(items); batchBegin += batchSize {
+			batchEnd := base.Min(len(items), batchBegin+batchSize)
+			if err = m.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), items[batchBegin:batchEnd]); err != nil {
+				base.Logger().Error("failed to cache popular items", zap.Error(err))
+			}
 		}
 	}
 	if err = m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Now()); err != nil {
@@ -81,7 +83,7 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save the latest items to cache
 	for category, items := range latestItems {
-		if err = m.CacheClient.SetScores(cache.LatestItems, category, items); err != nil {
+		if err = m.CacheClient.SetSorted(cache.Key(cache.LatestItems, category), items); err != nil {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 	}
@@ -128,9 +130,14 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// write categories to cache
-	categories, err := json.Marshal(rankingDataset.CategorySet.List())
-	if err = m.CacheClient.SetString(cache.ItemCategories, "", string(categories)); err != nil {
+	if err = m.CacheClient.SetSet(cache.ItemCategories, rankingDataset.CategorySet.List()...); err != nil {
 		base.Logger().Error("failed to write categories to cache", zap.Error(err))
+	}
+	for i, categories := range rankingDataset.ItemCategories {
+		itemId := rankingDataset.ItemIndex.ToName(int32(i))
+		if err = m.CacheClient.SetSet(cache.Key(cache.ItemCategories, itemId), categories...); err != nil {
+			base.Logger().Error("failed to write categories to cache", zap.Error(err))
+		}
 	}
 
 	// split ranking dataset
@@ -145,52 +152,6 @@ func (m *Master) runLoadDatasetTask() error {
 	clickDataset = nil
 	m.clickModelMutex.Unlock()
 	return nil
-}
-
-// runRefreshHiddenItemsCache remove outdated hidden items from cache.
-func (m *Master) runRefreshHiddenItemsCache(users, items []string) {
-	// find the oldest timestamp
-	oldestTimestamp := time.Now()
-	if ts, err := m.CacheClient.GetTime(cache.LastUpdatePopularItemsTime, ""); err == nil {
-		if ts.Before(oldestTimestamp) {
-			oldestTimestamp = ts
-		}
-	}
-	if ts, err := m.CacheClient.GetTime(cache.LastUpdateLatestItemsTime, ""); err == nil {
-		if ts.Before(oldestTimestamp) {
-			oldestTimestamp = ts
-		}
-	}
-	for _, itemId := range items {
-		if ts, err := m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId); err == nil {
-			if ts.Before(oldestTimestamp) {
-				oldestTimestamp = ts
-			}
-		}
-	}
-	for _, userId := range users {
-		if ts, err := m.CacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId); err == nil {
-			if ts.Before(oldestTimestamp) {
-				oldestTimestamp = ts
-			}
-		}
-	}
-
-	// locate outdated hidden items
-	hiddenItems, err := m.CacheClient.GetScores(cache.HiddenItems, "", 0, -1)
-	if err != nil {
-		base.Logger().Error("failed to read hidden items", zap.Error(err))
-		return
-	}
-	i := 0
-	for i < len(hiddenItems) && hiddenItems[i].Score < float32(oldestTimestamp.Unix()) {
-		i++
-	}
-
-	// remove outdated hidden items
-	if err = m.CacheClient.PopScores(cache.HiddenItems, "", i); err != nil {
-		base.Logger().Error("failed to remove outdated hidden items", zap.Error(err))
-	}
 }
 
 // runFindItemNeighborsTask updates neighbors of items.
@@ -624,7 +585,6 @@ func (m *Master) runRankingRelatedTasks(
 	} else if numUsersChanged || numFeedbackChanged {
 		m.runFindUserNeighborsTask(m.rankingTrainSet)
 	}
-	m.runRefreshHiddenItemsCache(m.rankingTrainSet.UserIndex.GetNames(), m.rankingTrainSet.ItemIndex.GetNames())
 
 	// training model
 	if numFeedback == 0 {
@@ -900,11 +860,9 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	}
 	rankingDataset = ranking.NewMapIndexDataset()
 
-	// create filers for latest/popular items
+	// create filers for latest items
 	latestItemsFilters := make(map[string]*base.TopKStringFilter)
-	popularItemsFilters := make(map[string]*base.TopKStringFilter)
 	latestItemsFilters[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
-	popularItemsFilters[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 
 	// STEP 1: pull users
 	userLabelIndex := base.NewMapIndex()
@@ -1094,19 +1052,18 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	}
 
 	// collect popular items
+	popularItems = make(map[string][]cache.Scored)
 	for itemIndex, val := range popularCount {
-		popularItemsFilters[""].Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
+		popularItems[""] = append(popularItems[""], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float32(val)})
 		for _, category := range rankingDataset.ItemCategories[itemIndex] {
-			if _, exist := popularItemsFilters[category]; !exist {
-				popularItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+			if _, exist := popularItems[category]; !exist {
+				popularItems[category] = make([]cache.Scored, 0)
 			}
-			popularItemsFilters[category].Push(rankingDataset.ItemIndex.ToName(int32(itemIndex)), float32(val))
+			popularItems[category] = append(popularItems[category], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float32(val)})
 		}
 	}
-	popularItems = make(map[string][]cache.Scored)
-	for category, popularItemsFilter := range popularItemsFilters {
-		items, scores := popularItemsFilter.PopAll()
-		popularItems[category] = cache.CreateScoredItems(items, scores)
+	for _, items := range popularItems {
+		cache.SortScores(items)
 	}
 
 	m.taskMonitor.Finish(TaskLoadDataset)

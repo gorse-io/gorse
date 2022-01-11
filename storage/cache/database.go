@@ -17,8 +17,7 @@ package cache
 import (
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base"
-	"go.uber.org/zap"
+	"sort"
 	"strings"
 	"time"
 )
@@ -30,8 +29,18 @@ const (
 	UserNeighbors          = "user_neighbors"          // neighbors of each user
 	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
 	OfflineRecommend       = "offline_recommend"       // offline recommendation for each user
-	PopularItems           = "popular_items"           // popular items
-	LatestItems            = "latest_items"            // latest items
+	// PopularItems is sorted set of popular items. The format of key:
+	//  Global popular items      - latest_items
+	//  Categorized popular items - latest_items/{category}
+	PopularItems = "popular_items"
+	// LatestItems is sorted set of the latest items. The format of key:
+	//  Global latest items      - latest_items
+	//  Categorized latest items - latest_items/{category}
+	LatestItems = "latest_items"
+	// ItemCategories is the set of item categories. The format of key:
+	//	Global item categories - item_categories
+	//	Categories of an item  - item_categories/{item_id}
+	ItemCategories = "item_categories"
 
 	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
 	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
@@ -46,7 +55,6 @@ const (
 	DataImported            = "data_imported"
 	LastFitRankingModelTime = "last_fit_match_model_time"
 	LastRankingModelVersion = "latest_match_model_version"
-	ItemCategories          = "item_categories"
 )
 
 var (
@@ -82,6 +90,44 @@ func RemoveScores(items []Scored) []string {
 	return ids
 }
 
+// SortScores sorts scores from high score to low score.
+func SortScores(scores []Scored) {
+	sort.Sort(scoresSorter(scores))
+}
+
+type scoresSorter []Scored
+
+// Len is the number of elements in the collection.
+func (s scoresSorter) Len() int {
+	return len(s)
+}
+
+// Less reports whether the element with index i
+func (s scoresSorter) Less(i, j int) bool {
+	return s[i].Score > s[j].Score
+}
+
+// Swap swaps the elements with indexes i and j.
+func (s scoresSorter) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+// Key creates key for cache. Empty field will be ignored.
+func Key(keys ...string) string {
+	if len(keys) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString(keys[0])
+	for _, key := range keys[1:] {
+		if key != "" {
+			builder.WriteRune('/')
+			builder.WriteString(key)
+		}
+	}
+	return builder.String()
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
@@ -89,7 +135,6 @@ type Database interface {
 	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
 	ClearScores(prefix, name string) error
 	AppendScores(prefix, name string, items ...Scored) error
-	PopScores(prefix, name string, n int) error
 	SetCategoryScores(prefix, name, category string, items []Scored) error
 	GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error)
 	GetString(prefix, name string) (string, error)
@@ -99,10 +144,22 @@ type Database interface {
 	GetInt(prefix, name string) (int, error)
 	SetInt(prefix, name string, val int) error
 	IncrInt(prefix, name string) error
+	Delete(prefix, name string) error
+	Exists(prefix string, names ...string) ([]int, error)
+
+	GetSet(key string) ([]string, error)
+	SetSet(key string, members ...string) error
+	AddSet(key string, members ...string) error
+	RemSet(key string, members ...string) error
+
+	GetSortedScore(key, member string) (float32, error)
+	GetSorted(key string, begin, end int) ([]Scored, error)
+	SetSorted(key string, scores []Scored) error
+	IncrSorted(key, member string) error
+	RemSorted(key, member string) error
 }
 
 const redisPrefix = "redis://"
-const redisClusterPrefix = "redis_cluster://"
 
 // Open a connection to a database.
 func Open(path string) (Database, error) {
@@ -114,24 +171,6 @@ func Open(path string) (Database, error) {
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
 		database.useCluster = false
-		return database, nil
-	} else if strings.HasPrefix(path, redisClusterPrefix) {
-		opt := &redis.ClusterOptions{
-			Addrs:        strings.Split(path[strings.Index(path, "@")+1:], ","),
-			PoolSize:     600,
-			MinIdleConns: 30,
-			MaxConnAge:   time.Hour,
-			DialTimeout:  15000 * time.Microsecond,
-			ReadTimeout:  15000 * time.Microsecond,
-			WriteTimeout: 15000 * time.Microsecond,
-			Password:     path[strings.LastIndex(path, "/")+1 : strings.Index(path, "@")],
-		}
-		base.Logger().Info("redis cluster config",
-			zap.String("Address", strings.Join(opt.Addrs, ",")),
-			zap.String("Password", opt.Password))
-		database := new(Redis)
-		database.clusterClient = redis.NewClusterClient(opt)
-		database.useCluster = true
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)

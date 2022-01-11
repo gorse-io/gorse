@@ -69,6 +69,14 @@ type mockMatrixFactorizationForEval struct {
 	negative []*i32set.Set
 }
 
+func (m *mockMatrixFactorizationForEval) IsUserPredictable(_ int32) bool {
+	panic("implement me")
+}
+
+func (m *mockMatrixFactorizationForEval) IsItemPredictable(_ int32) bool {
+	panic("implement me")
+}
+
 func (m *mockMatrixFactorizationForEval) Marshal(_ io.Writer) error {
 	panic("implement me")
 }

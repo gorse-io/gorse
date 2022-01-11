@@ -27,6 +27,14 @@ type mockMatrixFactorizationForSearch struct {
 	model.BaseModel
 }
 
+func (m *mockMatrixFactorizationForSearch) IsUserPredictable(_ int32) bool {
+	panic("implement me")
+}
+
+func (m *mockMatrixFactorizationForSearch) IsItemPredictable(_ int32) bool {
+	panic("implement me")
+}
+
 func (m *mockMatrixFactorizationForSearch) Marshal(_ io.Writer) error {
 	panic("implement me")
 }

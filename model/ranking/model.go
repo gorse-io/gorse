@@ -16,6 +16,7 @@ package ranking
 
 import (
 	"fmt"
+	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/i32set"
@@ -95,6 +96,12 @@ type MatrixFactorization interface {
 	InternalPredict(userIndex, itemIndex int32) float32
 	// GetUserIndex returns user index.
 	GetUserIndex() base.Index
+	// GetItemIndex returns item index.
+	GetItemIndex() base.Index
+	// IsUserPredictable returns false if user has no feedback and its embedding vector never be trained.
+	IsUserPredictable(userIndex int32) bool
+	// IsItemPredictable returns false if item has no feedback and its embedding vector never be trained.
+	IsItemPredictable(itemIndex int32) bool
 	// Marshal model into byte stream.
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
@@ -103,13 +110,29 @@ type MatrixFactorization interface {
 
 type BaseMatrixFactorization struct {
 	model.BaseModel
-	UserIndex base.Index
-	ItemIndex base.Index
+	UserIndex       base.Index
+	ItemIndex       base.Index
+	UserPredictable *bitset.BitSet
+	ItemPredictable *bitset.BitSet
 }
 
 func (baseModel *BaseMatrixFactorization) Init(trainSet *DataSet) {
 	baseModel.UserIndex = trainSet.UserIndex
 	baseModel.ItemIndex = trainSet.ItemIndex
+	// set user trained flags
+	baseModel.UserPredictable = bitset.New(uint(trainSet.UserIndex.Len()))
+	for userIndex := range baseModel.UserIndex.GetNames() {
+		if len(trainSet.UserFeedback[userIndex]) > 0 {
+			baseModel.UserPredictable.Set(uint(userIndex))
+		}
+	}
+	// set item trained flags
+	baseModel.ItemPredictable = bitset.New(uint(trainSet.ItemIndex.Len()))
+	for itemIndex := range baseModel.ItemIndex.GetNames() {
+		if len(trainSet.ItemFeedback[itemIndex]) > 0 {
+			baseModel.ItemPredictable.Set(uint(itemIndex))
+		}
+	}
 }
 
 func (baseModel *BaseMatrixFactorization) GetUserIndex() base.Index {
@@ -118,6 +141,22 @@ func (baseModel *BaseMatrixFactorization) GetUserIndex() base.Index {
 
 func (baseModel *BaseMatrixFactorization) GetItemIndex() base.Index {
 	return baseModel.ItemIndex
+}
+
+// IsUserPredictable returns false if user has no feedback and its embedding vector never be trained.
+func (baseModel *BaseMatrixFactorization) IsUserPredictable(userIndex int32) bool {
+	if userIndex >= baseModel.UserIndex.Len() {
+		return false
+	}
+	return baseModel.UserPredictable.Test(uint(userIndex))
+}
+
+// IsItemPredictable returns false if item has no feedback and its embedding vector never be trained.
+func (baseModel *BaseMatrixFactorization) IsItemPredictable(itemIndex int32) bool {
+	if itemIndex >= baseModel.ItemIndex.Len() {
+		return false
+	}
+	return baseModel.ItemPredictable.Test(uint(itemIndex))
 }
 
 // Marshal model into byte stream.
@@ -133,7 +172,18 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write item index
-	return base.MarshalIndex(w, baseModel.ItemIndex)
+	err = base.MarshalIndex(w, baseModel.ItemIndex)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write user predictable
+	_, err = baseModel.UserPredictable.WriteTo(w)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// write item predictable
+	_, err = baseModel.ItemPredictable.WriteTo(w)
+	return errors.Trace(err)
 }
 
 // Unmarshal model from byte stream.
@@ -143,13 +193,25 @@ func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	// write user index
+	// read user index
 	baseModel.UserIndex, err = base.UnmarshalIndex(r)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	// write item index
+	// read item index
 	baseModel.ItemIndex, err = base.UnmarshalIndex(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read user predictable
+	baseModel.UserPredictable = &bitset.BitSet{}
+	_, err = baseModel.UserPredictable.ReadFrom(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read item predictable
+	baseModel.ItemPredictable = &bitset.BitSet{}
+	_, err = baseModel.ItemPredictable.ReadFrom(r)
 	return errors.Trace(err)
 }
 
