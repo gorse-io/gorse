@@ -3,10 +3,6 @@
 
 ### Go ###
 # Binaries for programs and plugins
-cmd/gorse-master/gorse-master
-cmd/gorse-server/gorse-server
-cmd/gorse-worker/gorse-worker
-.idea
 *.exe
 *.exe~
 *.dll
