@@ -474,7 +474,7 @@ func TestExploreRecommend(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.ExploreRecommend = map[string]float64{"popular": 0.3, "latest": 0.3}
+	w.cfg.Recommend.Explore.Recommend = map[string]float64{"popular": 0.3, "latest": 0.3}
 	// insert popular items
 	err := w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"popular", 0}})
 	assert.NoError(t, err)
