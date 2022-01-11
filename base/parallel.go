@@ -38,6 +38,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		// producer
 		go func() {
 			defer CheckPanic()
+
 			// send jobs
 			for i := 0; i < nJobs; i++ {
 				c <- i
