@@ -126,7 +126,7 @@ type RecommendConfig struct {
 	SearchTrials                 int                     `toml:"search_trials"`
 	RefreshRecommendPeriod       int                     `toml:"refresh_recommend_period"`
 	FallbackRecommend            []string                `toml:"fallback_recommend"`
-	ExploreRecommend             ExploreRecommendWrapper `toml:"explore"`
+	Explore                      ExploreRecommendWrapper `toml:"explore"`
 	ItemNeighborType             string                  `toml:"item_neighbor_type"`
 	UserNeighborType             string                  `toml:"user_neighbor_type"`
 	EnableLatestRecommend        bool                    `toml:"enable_latest_recommend"`
@@ -143,12 +143,12 @@ type ExploreRecommendWrapper struct {
 }
 
 func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
-	if config == nil || len(config.ExploreRecommend.Recommend) == 0 {
+	if config == nil || len(config.Explore.Recommend) == 0 {
 		return 0.0, false
 	}
-	config.ExploreRecommend.Lock.Lock()
-	defer config.ExploreRecommend.Lock.Unlock()
-	value, exist = config.ExploreRecommend.Recommend[key]
+	config.Explore.Lock.Lock()
+	defer config.Explore.Lock.Unlock()
+	value, exist = config.Explore.Recommend[key]
 	return
 }
 
@@ -171,7 +171,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnableItemBasedRecommend:     false,
 			EnableColRecommend:           true,
 			EnableClickThroughPrediction: false,
-			ExploreRecommend: ExploreRecommendWrapper{
+			Explore: ExploreRecommendWrapper{
 				Recommend: make(map[string]float64, 0),
 				Lock:      sync.Mutex{},
 			},
@@ -303,7 +303,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 		config.Recommend.EnableClickThroughPrediction = defaultRecommendConfig.EnableClickThroughPrediction
 	}
 	if !meta.IsDefined("recommend", "explore") {
-		config.Recommend.ExploreRecommend = ExploreRecommendWrapper{
+		config.Recommend.Explore = ExploreRecommendWrapper{
 			Recommend: make(map[string]float64, 0),
 			Lock:      sync.Mutex{},
 		}
