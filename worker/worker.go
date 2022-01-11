@@ -712,7 +712,7 @@ func mergeAndShuffle(candidates [][]string) []cache.Scored {
 
 func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *strset.Set, category string) ([]cache.Scored, error) {
 	localExcludeSet := excludeSet.Copy()
-	//create thresholds
+	// create thresholds
 	explorePopularThreshold := 0.0
 	if threshold, exist := w.cfg.Recommend.GetExploreRecommend("popular"); exist {
 		explorePopularThreshold = threshold

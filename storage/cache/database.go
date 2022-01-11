@@ -170,7 +170,6 @@ func Open(path string) (Database, error) {
 		}
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
-		database.useCluster = false
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
