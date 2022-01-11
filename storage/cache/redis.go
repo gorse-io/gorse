@@ -28,8 +28,7 @@ import (
 
 // Redis cache storage.
 type Redis struct {
-	client        *redis.Client
-	clusterClient *redis.ClusterClient
+	client *redis.Client
 }
 
 // Close redis connection.
@@ -129,19 +128,6 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 	return nil
 }
 
-// PopScores pops n scored items in the front of list in Redis.
-func (r *Redis) PopScores(prefix, name string, n int) error {
-	var ctx = context.Background()
-	key := prefix + "/" + name
-	for i := 0; i < n; i++ {
-		err := r.client.LPop(ctx, key).Err()
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
-}
-
 // GetString returns a string from Redis.
 func (r *Redis) GetString(prefix, name string) (string, error) {
 	var ctx = context.Background()
@@ -160,8 +146,7 @@ func (r *Redis) GetString(prefix, name string) (string, error) {
 func (r *Redis) SetString(prefix, name, val string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	err := r.client.Set(ctx, key, val, 0).Err()
-	if err != nil {
+	if err := r.client.Set(ctx, key, val, 0).Err(); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
@@ -209,8 +194,7 @@ func (r *Redis) SetInt(prefix, name string, val int) error {
 func (r *Redis) IncrInt(prefix, name string) error {
 	var ctx = context.Background()
 	key := prefix + "/" + name
-	err := r.client.Incr(ctx, key).Err()
-	if err != nil {
+	if err := r.client.Incr(ctx, key).Err(); err != nil {
 		return errors.Trace(err)
 	}
 	return nil

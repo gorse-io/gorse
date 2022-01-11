@@ -721,7 +721,6 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 	if threshold, exist := w.cfg.Recommend.GetExploreRecommend("latest"); exist {
 		exploreLatestThreshold += threshold
 	}
-
 	// load popular items
 	popularItems, err := w.cacheClient.GetSorted(cache.Key(cache.PopularItems, category), 0, w.cfg.Database.CacheSize)
 	if err != nil {
