@@ -182,7 +182,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnableColRecommend:           true,
 			EnableClickThroughPrediction: false,
 			Explore: ExploreWrapper{
-				Recommend: make(map[string]float64, 0),
+				Recommend: make(map[string]float64),
 				Lock:      sync.Mutex{},
 			},
 		}
@@ -317,7 +317,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "explore") {
 		config.Recommend.Explore = ExploreWrapper{
-			Recommend: make(map[string]float64, 0),
+			Recommend: make(map[string]float64),
 			Lock:      sync.Mutex{},
 		}
 	}
