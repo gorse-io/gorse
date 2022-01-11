@@ -143,6 +143,14 @@ type ExploreRecommendWrapper struct {
 	Lock      sync.Mutex
 }
 
+func (config *RecommendConfig) Lock() {
+	config.Explore.Lock.Lock()
+}
+
+func (config *RecommendConfig) UnLock() {
+	config.Explore.Lock.Unlock()
+}
+
 func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
 	if config == nil || len(config.Explore.Recommend) == 0 {
 		return 0.0, false
