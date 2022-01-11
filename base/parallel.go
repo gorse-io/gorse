@@ -38,11 +38,9 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		// producer
 		go func() {
 			defer CheckPanic()
-			taskNumber := 0
 			// send jobs
 			for i := 0; i < nJobs; i++ {
 				c <- i
-				taskNumber++
 			}
 			// send EOF
 			for i := 0; i < nWorkers; i++ {
@@ -58,7 +56,6 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 			go func(workerId int) {
 				defer CheckPanic()
 				defer wg.Done()
-				workCount := 0
 				for {
 					// read job
 					jobId := <-c
@@ -69,22 +66,15 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 					if err := worker(workerId, jobId); err != nil {
 						errs[jobId] = err
 					}
-					workCount++
 				}
 			}(j)
 		}
 		wg.Wait()
-		errCount := 0
-		var firstError error
 		// check errors
 		for _, err := range errs {
 			if err != nil {
-				errCount++
-				firstError = errors.Trace(err)
+				return errors.Trace(err)
 			}
-		}
-		if firstError != nil {
-			return firstError
 		}
 	}
 	return nil
