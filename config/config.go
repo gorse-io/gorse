@@ -119,26 +119,26 @@ func (config *MasterConfig) validate() {
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	PopularWindow                int                     `toml:"popular_window"`
-	FitPeriod                    int                     `toml:"fit_period"`
-	SearchPeriod                 int                     `toml:"search_period"`
-	SearchEpoch                  int                     `toml:"search_epoch"`
-	SearchTrials                 int                     `toml:"search_trials"`
-	RefreshRecommendPeriod       int                     `toml:"refresh_recommend_period"`
-	FallbackRecommend            []string                `toml:"fallback_recommend"`
-	NumFeedbackFallbackItemBased int                     `toml:"num_feedback_fallback_item_based"`
-	Explore                      ExploreRecommendWrapper `toml:"explore"`
-	ItemNeighborType             string                  `toml:"item_neighbor_type"`
-	UserNeighborType             string                  `toml:"user_neighbor_type"`
-	EnableLatestRecommend        bool                    `toml:"enable_latest_recommend"`
-	EnablePopularRecommend       bool                    `toml:"enable_popular_recommend"`
-	EnableUserBasedRecommend     bool                    `toml:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool                    `toml:"enable_item_based_recommend"`
-	EnableColRecommend           bool                    `toml:"enable_collaborative_recommend"`
-	EnableClickThroughPrediction bool                    `toml:"enable_click_through_prediction"`
+	PopularWindow                int            `toml:"popular_window"`
+	FitPeriod                    int            `toml:"fit_period"`
+	SearchPeriod                 int            `toml:"search_period"`
+	SearchEpoch                  int            `toml:"search_epoch"`
+	SearchTrials                 int            `toml:"search_trials"`
+	RefreshRecommendPeriod       int            `toml:"refresh_recommend_period"`
+	FallbackRecommend            []string       `toml:"fallback_recommend"`
+	NumFeedbackFallbackItemBased int            `toml:"num_feedback_fallback_item_based"`
+	Explore                      ExploreWrapper `toml:"explore"`
+	ItemNeighborType             string         `toml:"item_neighbor_type"`
+	UserNeighborType             string         `toml:"user_neighbor_type"`
+	EnableLatestRecommend        bool           `toml:"enable_latest_recommend"`
+	EnablePopularRecommend       bool           `toml:"enable_popular_recommend"`
+	EnableUserBasedRecommend     bool           `toml:"enable_user_based_recommend"`
+	EnableItemBasedRecommend     bool           `toml:"enable_item_based_recommend"`
+	EnableColRecommend           bool           `toml:"enable_collaborative_recommend"`
+	EnableClickThroughPrediction bool           `toml:"enable_click_through_prediction"`
 }
 
-type ExploreRecommendWrapper struct {
+type ExploreWrapper struct {
 	Recommend map[string]float64 `toml:"recommend"`
 	Lock      sync.Mutex
 }
@@ -152,11 +152,11 @@ func (config *RecommendConfig) UnLock() {
 }
 
 func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
-	if config == nil || len(config.Explore.Recommend) == 0 {
+	if config == nil {
 		return 0.0, false
 	}
-	config.Explore.Lock.Lock()
-	defer config.Explore.Lock.Unlock()
+	config.Lock()
+	defer config.UnLock()
 	value, exist = config.Explore.Recommend[key]
 	return
 }
@@ -181,7 +181,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnableItemBasedRecommend:     false,
 			EnableColRecommend:           true,
 			EnableClickThroughPrediction: false,
-			Explore: ExploreRecommendWrapper{
+			Explore: ExploreWrapper{
 				Recommend: make(map[string]float64, 0),
 				Lock:      sync.Mutex{},
 			},
@@ -316,7 +316,7 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 		config.Recommend.EnableClickThroughPrediction = defaultRecommendConfig.EnableClickThroughPrediction
 	}
 	if !meta.IsDefined("recommend", "explore") {
-		config.Recommend.Explore = ExploreRecommendWrapper{
+		config.Recommend.Explore = ExploreWrapper{
 			Recommend: make(map[string]float64, 0),
 			Lock:      sync.Mutex{},
 		}
