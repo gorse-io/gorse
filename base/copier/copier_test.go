@@ -67,6 +67,12 @@ func TestSlice(t *testing.T) {
 	err = Copy(&e, make([]int, 0))
 	assert.NoError(t, err)
 	assert.NotNil(t, e)
+	// copy to larger slice
+	var f = [][]int{{10}, {20}, {30}, {40}, {50}}
+	err = Copy(&f, a)
+	assert.NoError(t, err)
+	assert.Equal(t, a, f)
+	assert.Equal(t, 5, cap(f))
 }
 
 func TestMap(t *testing.T) {
@@ -83,6 +89,14 @@ func TestMap(t *testing.T) {
 	err = Copy(&d, a)
 	assert.NoError(t, err)
 	assert.Equal(t, a, d)
+	// test no copy
+	var integers = []int64{100}
+	c := map[int64][]int64{1: integers, 2: {1}, 3: {1}}
+	err = Copy(&c, a)
+	assert.NoError(t, err)
+	assert.Equal(t, a, c)
+	integers[0] = 10
+	assert.Equal(t, int64(10), c[1][0])
 }
 
 type Foo struct {

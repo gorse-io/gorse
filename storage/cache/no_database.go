@@ -54,11 +54,6 @@ func (NoDatabase) AppendScores(_, _ string, _ ...Scored) error {
 	return ErrNoDatabase
 }
 
-// PopScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) PopScores(_, _ string, _ int) error {
-	return ErrNoDatabase
-}
-
 // GetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetString(_, _ string) (string, error) {
 	return "", ErrNoDatabase
@@ -91,5 +86,60 @@ func (NoDatabase) SetTime(_, _ string, _ time.Time) error {
 
 // IncrInt method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) IncrInt(_, _ string) error {
+	return ErrNoDatabase
+}
+
+// Delete method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) Delete(_, _ string) error {
+	return ErrNoDatabase
+}
+
+// Exists method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) Exists(_ string, _ ...string) ([]int, error) {
+	return nil, ErrNoDatabase
+}
+
+// GetSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetSet(_ string) ([]string, error) {
+	return nil, ErrNoDatabase
+}
+
+// SetSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) SetSet(_ string, _ ...string) error {
+	return ErrNoDatabase
+}
+
+// AddSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) AddSet(_ string, _ ...string) error {
+	return ErrNoDatabase
+}
+
+// RemSet method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) RemSet(_ string, _ ...string) error {
+	return ErrNoDatabase
+}
+
+// GetSortedScore method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetSortedScore(_, _ string) (float32, error) {
+	return 0, ErrNoDatabase
+}
+
+// GetSorted method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetSorted(_ string, _, _ int) ([]Scored, error) {
+	return nil, ErrNoDatabase
+}
+
+// SetSorted method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) SetSorted(_ string, _ []Scored) error {
+	return ErrNoDatabase
+}
+
+// IncrSorted method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) IncrSorted(_, _ string) error {
+	return ErrNoDatabase
+}
+
+// RemSorted method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) RemSorted(_, _ string) error {
 	return ErrNoDatabase
 }

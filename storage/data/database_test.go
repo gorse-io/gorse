@@ -633,3 +633,17 @@ func isClickHouse(db Database) bool {
 		return sqlDB.driver == ClickHouse
 	}
 }
+
+func TestSortFeedbacks(t *testing.T) {
+	feedback := []Feedback{
+		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Date(2002, 10, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	SortFeedbacks(feedback)
+	assert.Equal(t, []Feedback{
+		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Date(2002, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+	}, feedback)
+}

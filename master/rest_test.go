@@ -411,9 +411,7 @@ func TestMaster_GetCategories(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert categories
-	text, err := json.Marshal([]string{"a", "b", "c"})
-	assert.NoError(t, err)
-	err = s.CacheClient.SetString(cache.ItemCategories, "", string(text))
+	err := s.CacheClient.SetSet(cache.ItemCategories, "a", "b", "c")
 	assert.NoError(t, err)
 	// get categories
 	apitest.New().
@@ -473,10 +471,6 @@ func TestServer_ItemList(t *testing.T) {
 		Get    string
 	}
 	operators := []ListOperator{
-		{"Latest Items", cache.LatestItems, "", "/api/dashboard/latest/"},
-		{"Popular Items", cache.PopularItems, "", "/api/dashboard/popular/"},
-		{"Latest Items in Category", cache.LatestItems, "*", "/api/dashboard/latest/*"},
-		{"Popular Items in Category", cache.PopularItems, "*", "/api/dashboard/popular/*"},
 		{"Item Neighbors", cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.ItemNeighbors, "0/*", "/api/dashboard/item/0/neighbors/*"},
 	}
@@ -491,6 +485,50 @@ func TestServer_ItemList(t *testing.T) {
 				{strconv.Itoa(i) + "4", 96},
 			}
 			err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
+			assert.NoError(t, err)
+			items := make([]data.Item, 0)
+			for _, score := range scores {
+				items = append(items, data.Item{ItemId: score.Id})
+				err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: score.Id}})
+				assert.NoError(t, err)
+			}
+			apitest.New().
+				Handler(s.handler).
+				Get(operator.Get).
+				Expect(t).
+				Status(http.StatusOK).
+				Body(marshal(t, items)).
+				End()
+		})
+	}
+}
+
+func TestServer_Sort(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+	type ListOperator struct {
+		Name   string
+		Prefix string
+		Label  string
+		Get    string
+	}
+	operators := []ListOperator{
+		{"Latest Items", cache.LatestItems, "", "/api/dashboard/latest/"},
+		{"Popular Items", cache.PopularItems, "", "/api/dashboard/popular/"},
+		{"Latest Items in Category", cache.LatestItems, "*", "/api/dashboard/latest/*"},
+		{"Popular Items in Category", cache.PopularItems, "*", "/api/dashboard/popular/*"},
+	}
+	for i, operator := range operators {
+		t.Run(operator.Name, func(t *testing.T) {
+			// Put scores
+			scores := []cache.Scored{
+				{strconv.Itoa(i) + "0", 100},
+				{strconv.Itoa(i) + "1", 99},
+				{strconv.Itoa(i) + "2", 98},
+				{strconv.Itoa(i) + "3", 97},
+				{strconv.Itoa(i) + "4", 96},
+			}
+			err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
 			items := make([]data.Item, 0)
 			for _, score := range scores {
@@ -606,6 +644,17 @@ func TestServer_GetRecommends(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/recommend/0/offline").
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []data.Item{
+			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
+		})).
+		End()
+
+	s.GorseConfig.Recommend.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/dashboard/recommend/0/").
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []data.Item{

@@ -126,6 +126,7 @@ type RecommendConfig struct {
 	SearchTrials                 int                     `toml:"search_trials"`
 	RefreshRecommendPeriod       int                     `toml:"refresh_recommend_period"`
 	FallbackRecommend            []string                `toml:"fallback_recommend"`
+	NumFeedbackFallbackItemBased int                     `toml:"num_feedback_fallback_item_based"`
 	Explore                      ExploreRecommendWrapper `toml:"explore"`
 	ItemNeighborType             string                  `toml:"item_neighbor_type"`
 	UserNeighborType             string                  `toml:"user_neighbor_type"`
@@ -163,6 +164,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			SearchTrials:                 10,
 			RefreshRecommendPeriod:       5,
 			FallbackRecommend:            []string{"latest"},
+			NumFeedbackFallbackItemBased: 10,
 			ItemNeighborType:             "auto",
 			UserNeighborType:             "auto",
 			EnableLatestRecommend:        false,
@@ -277,6 +279,9 @@ func (config *Config) FillDefault(meta toml.MetaData) {
 	}
 	if !meta.IsDefined("recommend", "fallback_recommend") {
 		config.Recommend.FallbackRecommend = defaultRecommendConfig.FallbackRecommend
+	}
+	if !meta.IsDefined("recommend", "num_feedback_fallback_item_based") {
+		config.Recommend.NumFeedbackFallbackItemBased = defaultRecommendConfig.NumFeedbackFallbackItemBased
 	}
 	if !meta.IsDefined("recommend", "item_neighbor_type") {
 		config.Recommend.ItemNeighborType = defaultRecommendConfig.ItemNeighborType

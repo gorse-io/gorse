@@ -229,6 +229,26 @@ func (r *Redis) GetInt(prefix, name string) (int, error) {
 	return buf, err
 }
 
+// Exists check keys in Redis.
+func (r *Redis) Exists(prefix string, names ...string) ([]int, error) {
+	ctx := context.Background()
+	pipeline := r.client.Pipeline()
+	commands := make([]*redis.IntCmd, len(names))
+	for i, name := range names {
+		key := prefix + "/" + name
+		commands[i] = pipeline.Exists(ctx, key)
+	}
+	_, err := pipeline.Exec(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	existences := make([]int, len(names))
+	for i := range existences {
+		existences[i] = int(commands[i].Val())
+	}
+	return existences, nil
+}
+
 // SetInt saves a integer from Redis.
 func (r *Redis) SetInt(prefix, name string, val int) error {
 	return r.SetString(prefix, name, strconv.Itoa(val))
@@ -266,4 +286,109 @@ func (r *Redis) GetTime(prefix, name string) (time.Time, error) {
 // SetTime saves a time from Redis.
 func (r *Redis) SetTime(prefix, name string, val time.Time) error {
 	return r.SetString(prefix, name, val.String())
+}
+
+// Delete object from Redis.
+func (r *Redis) Delete(prefix, name string) error {
+	ctx := context.Background()
+	key := prefix + "/" + name
+	return r.client.Del(ctx, key).Err()
+}
+
+// GetSet returns members of a set from Redis.
+func (r *Redis) GetSet(key string) ([]string, error) {
+	ctx := context.Background()
+	return r.client.SMembers(ctx, key).Result()
+}
+
+// SetSet overrides a set with members in Redis.
+func (r *Redis) SetSet(key string, members ...string) error {
+	if len(members) == 0 {
+		return nil
+	}
+	// convert strings to interfaces
+	values := make([]interface{}, 0, len(members))
+	for _, member := range members {
+		values = append(values, member)
+	}
+	// push set
+	ctx := context.Background()
+	pipeline := r.client.Pipeline()
+	pipeline.Del(ctx, key)
+	pipeline.SAdd(ctx, key, values...)
+	_, err := pipeline.Exec(ctx)
+	return err
+}
+
+// AddSet adds members to a set in Redis.
+func (r *Redis) AddSet(key string, members ...string) error {
+	if len(members) == 0 {
+		return nil
+	}
+	// convert strings to interfaces
+	values := make([]interface{}, 0, len(members))
+	for _, member := range members {
+		values = append(values, member)
+	}
+	// push set
+	ctx := context.Background()
+	return r.client.SAdd(ctx, key, values...).Err()
+}
+
+// RemSet removes members from a set in Redis.
+func (r *Redis) RemSet(key string, members ...string) error {
+	ctx := context.Background()
+	return r.client.SRem(ctx, key, members).Err()
+}
+
+// GetSortedScore get the score of a member from sorted set.
+func (r *Redis) GetSortedScore(key, member string) (float32, error) {
+	ctx := context.Background()
+	score, err := r.client.ZScore(ctx, key, member).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return 0, errors.Annotate(ErrObjectNotExist, key)
+		}
+		return 0, err
+	}
+	return float32(score), nil
+}
+
+// GetSorted get scores from sorted set.
+func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
+	ctx := context.Background()
+	members, err := r.client.ZRevRangeWithScores(ctx, key, int64(begin), int64(end)).Result()
+	if err != nil {
+		return nil, err
+	}
+	results := make([]Scored, 0, len(members))
+	for _, member := range members {
+		results = append(results, Scored{Id: member.Member.(string), Score: float32(member.Score)})
+	}
+	return results, nil
+}
+
+// SetSorted add scores to sorted set.
+func (r *Redis) SetSorted(key string, scores []Scored) error {
+	if len(scores) == 0 {
+		return nil
+	}
+	ctx := context.Background()
+	members := make([]*redis.Z, 0, len(scores))
+	for _, score := range scores {
+		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
+	}
+	return r.client.ZAdd(ctx, key, members...).Err()
+}
+
+// IncrSorted increase score in sorted set.
+func (r *Redis) IncrSorted(key, member string) error {
+	ctx := context.Background()
+	return r.client.ZIncrBy(ctx, key, 1, member).Err()
+}
+
+// RemSorted method of NoDatabase returns ErrNoDatabase.
+func (r *Redis) RemSorted(key, member string) error {
+	ctx := context.Background()
+	return r.client.ZRem(ctx, key, member).Err()
 }
