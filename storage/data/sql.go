@@ -16,7 +16,6 @@ package data
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -24,6 +23,7 @@ import (
 	_ "github.com/mailru/go-clickhouse"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/json"
 	"go.uber.org/zap"
 	"strings"
 	"time"
