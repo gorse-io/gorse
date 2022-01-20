@@ -16,9 +16,10 @@ package hnsw
 
 type Vector interface {
 	Distance(vector Vector) float32
+	Match(condition string) bool
 }
 
 type VectorIndex interface {
-	AddVector(vector Vector)
 	Search(q Vector, n int) ([]int32, []float32)
+	SearchConditional(q Vector, condition string, n int) ([]int32, []float32)
 }

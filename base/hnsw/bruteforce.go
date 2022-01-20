@@ -30,11 +30,6 @@ func NewBruteforce(vectors []Vector) VectorIndex {
 	return &Bruteforce{vectors: vectors}
 }
 
-// AddVector add a vector to this index.
-func (b *Bruteforce) AddVector(vector Vector) {
-	b.vectors = append(b.vectors, vector)
-}
-
 // Search top-k similar vectors.
 func (b *Bruteforce) Search(q Vector, n int) (values []int32, scores []float32) {
 	pq := heap.NewPriorityQueue(true)
@@ -42,6 +37,26 @@ func (b *Bruteforce) Search(q Vector, n int) (values []int32, scores []float32) 
 		pq.Push(int32(i), q.Distance(vec))
 		if pq.Len() > n {
 			pq.Pop()
+		}
+	}
+	pq = pq.Reverse()
+	for pq.Len() > 0 {
+		value, score := pq.Pop()
+		values = append(values, value)
+		scores = append(scores, score)
+	}
+	return
+}
+
+// SearchConditional searches top-k similar vectors with condition.
+func (b *Bruteforce) SearchConditional(q Vector, condition string, n int) (values []int32, scores []float32) {
+	pq := heap.NewPriorityQueue(true)
+	for i, vec := range b.vectors {
+		if vec.Match(condition) {
+			pq.Push(int32(i), q.Distance(vec))
+			if pq.Len() > n {
+				pq.Pop()
+			}
 		}
 	}
 	pq = pq.Reverse()
