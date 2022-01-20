@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package hnsw
+package search
 
 import (
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"go.uber.org/zap"
 	"math/rand"
+	"time"
 )
 
-var _ VectorIndex = &HierarchicalNSW{}
+var _ VectorIndex = &HNSW{}
 
-type HierarchicalNSW struct {
+// HNSW is a vector index based on Hierarchical Navigable Small Worlds.
+type HNSW struct {
 	vectors         []Vector
 	bottomNeighbors []*heap.PriorityQueue
 	upperNeighbors  []map[int32]*heap.PriorityQueue
@@ -36,24 +39,28 @@ type HierarchicalNSW struct {
 	efConstruction int
 }
 
-type Config func(*HierarchicalNSW)
+// Config is the configuration function for HNSW.
+type Config func(*HNSW)
 
+// SetMaxConnection sets the number of connections in HNSW.
 func SetMaxConnection(maxConnection int) Config {
-	return func(h *HierarchicalNSW) {
+	return func(h *HNSW) {
 		h.levelFactor = 1.0 / math32.Log(float32(maxConnection))
 		h.maxConnection = maxConnection
 		h.maxConnection0 = maxConnection * 2
 	}
 }
 
+// SetEFConstruction sets efConstruction in HNSW.
 func SetEFConstruction(efConstruction int) Config {
-	return func(h *HierarchicalNSW) {
+	return func(h *HNSW) {
 		h.efConstruction = efConstruction
 	}
 }
 
-func NewHierarchicalNSW(vectors []Vector, configs ...Config) VectorIndex {
-	h := &HierarchicalNSW{
+// NewHNSW builds a vector index based on Hierarchical Navigable Small Worlds.
+func NewHNSW(vectors []Vector, configs ...Config) *HNSW {
+	h := &HNSW{
 		vectors:        vectors,
 		levelFactor:    1.0 / math32.Log(48),
 		maxConnection:  48,
@@ -63,28 +70,23 @@ func NewHierarchicalNSW(vectors []Vector, configs ...Config) VectorIndex {
 	for _, config := range configs {
 		config(h)
 	}
-	for i := range vectors {
-		h.insert(int32(i))
-	}
 	return h
 }
 
-func (h *HierarchicalNSW) AddVector(vector Vector) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (h *HierarchicalNSW) Search(q Vector, n int) (values []int32, scores []float32) {
+// Search a vector in Hierarchical Navigable Small Worlds.
+func (h *HNSW) Search(q Vector, n int, prune0 bool) (values []int32, scores []float32) {
 	w := h.knnSearch(q, n, h.efConstruction)
 	for w.Len() > 0 {
 		value, score := w.Pop()
-		values = append(values, value)
-		scores = append(scores, score)
+		if !prune0 || score < 0 {
+			values = append(values, value)
+			scores = append(scores, score)
+		}
 	}
 	return
 }
 
-func (h *HierarchicalNSW) knnSearch(q Vector, k, ef int) *heap.PriorityQueue {
+func (h *HNSW) knnSearch(q Vector, k, ef int) *heap.PriorityQueue {
 	var (
 		w           *heap.PriorityQueue                    // set for the current the nearest element
 		enterPoints = h.distance(q, []int32{h.enterPoint}) // get enter point for hnsw
@@ -99,7 +101,15 @@ func (h *HierarchicalNSW) knnSearch(q Vector, k, ef int) *heap.PriorityQueue {
 	return h.selectNeighbors(q, w, k)
 }
 
-func (h *HierarchicalNSW) insert(q int32) {
+// Build a vector index on data.
+func (h *HNSW) Build() {
+	for i := range h.vectors {
+		h.insert(int32(i))
+	}
+}
+
+// insert i-th vector into the vector index.
+func (h *HNSW) insert(q int32) {
 	if h.bottomNeighbors == nil {
 		h.bottomNeighbors = make([]*heap.PriorityQueue, 1)
 		h.bottomNeighbors[q] = heap.NewPriorityQueue(false)
@@ -149,7 +159,7 @@ func (h *HierarchicalNSW) insert(q int32) {
 	}
 }
 
-func (h *HierarchicalNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue, ef, currentLayer int) *heap.PriorityQueue {
+func (h *HNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue, ef, currentLayer int) *heap.PriorityQueue {
 	var (
 		v          = i32set.New(enterPoints.Values()...) // set of visited elements
 		candidates = enterPoints.Clone()                 // set of candidates
@@ -185,7 +195,7 @@ func (h *HierarchicalNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue,
 	return w.Reverse()
 }
 
-func (h *HierarchicalNSW) setNeighbourhood(e int32, currentLayer int, connections *heap.PriorityQueue) {
+func (h *HNSW) setNeighbourhood(e int32, currentLayer int, connections *heap.PriorityQueue) {
 	if currentLayer == 0 {
 		for len(h.bottomNeighbors) <= int(e) {
 			h.bottomNeighbors = append(h.bottomNeighbors, nil)
@@ -199,7 +209,7 @@ func (h *HierarchicalNSW) setNeighbourhood(e int32, currentLayer int, connection
 	}
 }
 
-func (h *HierarchicalNSW) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueue {
+func (h *HNSW) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueue {
 	if currentLayer == 0 {
 		return h.bottomNeighbors[e]
 	} else {
@@ -207,7 +217,7 @@ func (h *HierarchicalNSW) getNeighbourhood(e int32, currentLayer int) *heap.Prio
 	}
 }
 
-func (h *HierarchicalNSW) selectNeighbors(q Vector, candidates *heap.PriorityQueue, m int) *heap.PriorityQueue {
+func (h *HNSW) selectNeighbors(_ Vector, candidates *heap.PriorityQueue, m int) *heap.PriorityQueue {
 	pq := candidates.Reverse()
 	for pq.Len() > m {
 		pq.Pop()
@@ -215,10 +225,80 @@ func (h *HierarchicalNSW) selectNeighbors(q Vector, candidates *heap.PriorityQue
 	return pq.Reverse()
 }
 
-func (h *HierarchicalNSW) distance(q Vector, points []int32) *heap.PriorityQueue {
+func (h *HNSW) distance(q Vector, points []int32) *heap.PriorityQueue {
 	pq := heap.NewPriorityQueue(false)
 	for _, point := range points {
 		pq.Push(point, h.vectors[point].Distance(q))
 	}
 	return pq
+}
+
+type HNSWBuilder struct {
+	bruteForce *Bruteforce
+	data       []Vector
+	testSize   int
+	k          int
+	rng        base.RandomGenerator
+}
+
+func NewHNSWBuilder(data []Vector, k, testSize int) *HNSWBuilder {
+	b := &HNSWBuilder{
+		bruteForce: NewBruteforce(data),
+		data:       data,
+		testSize:   testSize,
+		k:          k,
+		rng:        base.NewRandomGenerator(0),
+	}
+	b.bruteForce.Build()
+	return b
+}
+
+func recall(expected, actual []int32) float32 {
+	var result float32
+	truth := i32set.New(expected...)
+	for _, v := range actual {
+		if truth.Has(v) {
+			result++
+		}
+	}
+	if result == 0 {
+		return 0
+	}
+	return result / float32(len(actual))
+}
+
+func (b *HNSWBuilder) evaluate(idx VectorIndex, prune0 bool) float32 {
+	testSize := base.Min(b.testSize, len(b.data))
+	samples := b.rng.Sample(0, len(b.data), testSize)
+	var result, count float32
+	for _, i := range samples {
+		expected, _ := b.bruteForce.Search(b.data[i], b.k, prune0)
+		if len(expected) > 0 {
+			actual, _ := idx.Search(b.data[i], b.k, prune0)
+			result += recall(expected, actual)
+			count++
+		}
+	}
+	return result / count
+}
+
+func (b *HNSWBuilder) Build(recall float32, prune0 bool) (*HNSW, float32) {
+	ef := 1 << int(math32.Ceil(math32.Log2(float32(b.k))))
+	for {
+		start := time.Now()
+		idx := NewHNSW(b.data, SetEFConstruction(ef))
+		idx.Build()
+		buildTime := time.Since(start)
+		score := b.evaluate(idx, prune0)
+		base.Logger().Info("try to build vector index",
+			zap.String("index_type", "HNSW"),
+			zap.Int("ef_construction", ef),
+			zap.Float32("recall", score),
+			zap.String("build_time", buildTime.String()))
+		if score > recall {
+			return idx, score
+		} else {
+			ef <<= 1
+		}
+	}
 }

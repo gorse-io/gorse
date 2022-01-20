@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package hnsw
+package search
 
 import (
 	"github.com/zhenghaoz/gorse/base/heap"
@@ -25,13 +25,18 @@ type Bruteforce struct {
 	vectors []Vector
 }
 
+// Build a vector index on data.
+func (b *Bruteforce) Build() {}
+
 // NewBruteforce creates a Bruteforce vector index.
-func NewBruteforce(vectors []Vector) VectorIndex {
-	return &Bruteforce{vectors: vectors}
+func NewBruteforce(vectors []Vector) *Bruteforce {
+	return &Bruteforce{
+		vectors: vectors,
+	}
 }
 
 // Search top-k similar vectors.
-func (b *Bruteforce) Search(q Vector, n int) (values []int32, scores []float32) {
+func (b *Bruteforce) Search(q Vector, n int, prune0 bool) (values []int32, scores []float32) {
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
 		pq.Push(int32(i), q.Distance(vec))
@@ -42,28 +47,10 @@ func (b *Bruteforce) Search(q Vector, n int) (values []int32, scores []float32) 
 	pq = pq.Reverse()
 	for pq.Len() > 0 {
 		value, score := pq.Pop()
-		values = append(values, value)
-		scores = append(scores, score)
-	}
-	return
-}
-
-// SearchConditional searches top-k similar vectors with condition.
-func (b *Bruteforce) SearchConditional(q Vector, condition string, n int) (values []int32, scores []float32) {
-	pq := heap.NewPriorityQueue(true)
-	for i, vec := range b.vectors {
-		if vec.Match(condition) {
-			pq.Push(int32(i), q.Distance(vec))
-			if pq.Len() > n {
-				pq.Pop()
-			}
+		if !prune0 || score < 0 {
+			values = append(values, value)
+			scores = append(scores, score)
 		}
-	}
-	pq = pq.Reverse()
-	for pq.Len() > 0 {
-		value, score := pq.Pop()
-		values = append(values, value)
-		scores = append(scores, score)
 	}
 	return
 }
