@@ -14,14 +14,15 @@
 package config
 
 import (
-	"testing"
-
-	"github.com/BurntSushi/toml"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"strings"
+	"testing"
 )
 
 func TestLoadConfig(t *testing.T) {
-	config, _, err := LoadConfig("config.toml.template")
+	config, err := LoadConfig("config.toml.template")
 	assert.NoError(t, err)
 
 	// database configuration
@@ -75,10 +76,44 @@ func TestLoadConfig(t *testing.T) {
 	assert.True(t, config.Recommend.EnableClickThroughPrediction)
 }
 
-func TestConfig_FillDefault(t *testing.T) {
-	var config *Config
-	meta, err := toml.Decode("", &config)
+func TestSetDefault(t *testing.T) {
+	err := viper.ReadConfig(strings.NewReader(""))
 	assert.NoError(t, err)
-	config.FillDefault(meta)
-	assert.Equal(t, (*Config)(nil).LoadDefaultIfNil(), config)
+	var config Config
+	err = viper.Unmarshal(&config)
+	assert.NoError(t, err)
+	assert.Equal(t, (*Config)(nil).LoadDefaultIfNil(), &config)
+}
+
+type environmentVariable struct {
+	key   string
+	value string
+}
+
+func TestBindEnv(t *testing.T) {
+	variables := []environmentVariable{
+		{"GORSE_CACHE_STORE", "<cache_store>"},
+		{"GORSE_DATA_STORE", "<data_store>"},
+		{"GORSE_MASTER_PORT", "123"},
+		{"GORSE_MASTER_HOST", "<master_host>"},
+		{"GORSE_MASTER_HTTP_PORT", "456"},
+		{"GORSE_MASTER_HTTP_HOST", "<master_http_host>"},
+		{"GORSE_MASTER_JOBS", "789"},
+		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
+	}
+	for _, variable := range variables {
+		err := os.Setenv(variable.key, variable.value)
+		assert.NoError(t, err)
+	}
+
+	config, err := LoadConfig("config.toml.template")
+	assert.NoError(t, err)
+	assert.Equal(t, "<cache_store>", config.Database.CacheStore)
+	assert.Equal(t, "<data_store>", config.Database.DataStore)
+	assert.Equal(t, 123, config.Master.Port)
+	assert.Equal(t, "<master_host>", config.Master.Host)
+	assert.Equal(t, 456, config.Master.HttpPort)
+	assert.Equal(t, "<master_http_host>", config.Master.HttpHost)
+	assert.Equal(t, 789, config.Master.NumJobs)
+	assert.Equal(t, "<server_api_key>", config.Server.APIKey)
 }
