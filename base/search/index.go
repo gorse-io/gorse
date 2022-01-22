@@ -26,6 +26,7 @@ import (
 
 type Vector interface {
 	Distance(vector Vector) float32
+	Terms() []string
 }
 
 type DenseVector struct {
@@ -48,13 +49,18 @@ func (v *DenseVector) Distance(vector Vector) float32 {
 	return -floats.Dot(v.data, feedbackVector.data)
 }
 
+func (v *DenseVector) Terms() []string {
+	return nil
+}
+
 type DictionaryVector struct {
+	terms   []string
 	indices []int32
 	values  []float32
 	norm    float32
 }
 
-func NewDictionaryVector(indices []int32, values []float32) *DictionaryVector {
+func NewDictionaryVector(indices []int32, values []float32, terms []string) *DictionaryVector {
 	sort.Sort(sortutil.Int32Slice(indices))
 	var norm float32
 	for _, i := range indices {
@@ -62,6 +68,7 @@ func NewDictionaryVector(indices []int32, values []float32) *DictionaryVector {
 	}
 	norm = math32.Sqrt(norm)
 	return &DictionaryVector{
+		terms:   terms,
 		indices: indices,
 		values:  values,
 		norm:    norm,
@@ -99,7 +106,12 @@ func (v *DictionaryVector) Distance(vector Vector) float32 {
 	return score
 }
 
+func (v *DictionaryVector) Terms() []string {
+	return v.terms
+}
+
 type VectorIndex interface {
-	Search(q Vector, n int, prune0 bool) ([]int32, []float32)
 	Build()
+	Search(q Vector, n int, prune0 bool) ([]int32, []float32)
+	MultiSearch(q Vector, terms []string, n int, prune0 bool) (map[string][]int32, map[string][]float32)
 }

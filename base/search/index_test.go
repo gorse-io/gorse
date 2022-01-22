@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"math/big"
 	"runtime"
 	"testing"
 )
@@ -32,12 +33,12 @@ func TestHNSW_Cosine(t *testing.T) {
 	}
 	var vectors []Vector
 	for _, feedback := range trainSet.ItemFeedback {
-		vectors = append(vectors, NewDictionaryVector(feedback, values))
+		vectors = append(vectors, NewDictionaryVector(feedback, values, nil))
 	}
 
 	// build vector index
 	builder := NewHNSWBuilder(vectors, 10, 1000)
-	_, recall := builder.Build(0.95, true)
+	_, recall := builder.Build(0.95, 5, true)
 	assert.Greater(t, recall, float32(0.95))
 }
 
@@ -62,7 +63,7 @@ func TestHNSW_InnerProduct(t *testing.T) {
 
 	// build vector index
 	builder := NewHNSWBuilder(vectors, 10, 1000)
-	_, recall := builder.Build(0.95, false)
+	_, recall := builder.Build(0.95, 5, false)
 	assert.Greater(t, recall, float32(0.95))
 }
 
@@ -75,12 +76,18 @@ func TestIVF_Cosine(t *testing.T) {
 		values[i] = 1
 	}
 	var vectors []Vector
-	for _, feedback := range trainSet.ItemFeedback {
-		vectors = append(vectors, NewDictionaryVector(feedback, values))
+	for i, feedback := range trainSet.ItemFeedback {
+		var terms []string
+		if big.NewInt(int64(i)).ProbablyPrime(0) {
+			terms = append(terms, "prime")
+		}
+		vectors = append(vectors, NewDictionaryVector(feedback, values, terms))
 	}
 
 	// build vector index
 	builder := NewIVFBuilder(vectors, 10, 1000)
-	_, recall := builder.Build(true)
+	idx, recall := builder.Build(0.9, 5, true)
 	assert.Greater(t, recall, float32(0.9))
+	recall = builder.evaluateTermSearch(idx, true, "prime")
+	assert.Greater(t, recall, float32(0.8))
 }

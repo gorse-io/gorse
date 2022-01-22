@@ -20,6 +20,8 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"go.uber.org/zap"
 	"math/rand"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -31,6 +33,7 @@ type IVF struct {
 	k         int
 	errorRate float32
 	numProbe  int
+	numJobs   int
 }
 
 type IVFConfig func(ivf *IVF)
@@ -47,17 +50,25 @@ func SetClusterErrorRate(errorRate float32) IVFConfig {
 	}
 }
 
+func SetNumJobs(numJobs int) IVFConfig {
+	return func(ivf *IVF) {
+		ivf.numJobs = numJobs
+	}
+}
+
 type ivfCluster struct {
 	centroid     *dictionaryCentroidVector
 	observations []int32
+	mu           sync.Mutex
 }
 
-func NewInvertedFile(vectors []Vector, configs ...IVFConfig) *IVF {
+func NewIVF(vectors []Vector, configs ...IVFConfig) *IVF {
 	idx := &IVF{
 		data:      vectors,
 		k:         int(math32.Sqrt(float32(len(vectors)))),
 		errorRate: 0.05,
-		numProbe:  8,
+		numProbe:  1,
+		numJobs:   runtime.NumCPU(),
 	}
 	for _, config := range configs {
 		config(idx)
@@ -93,6 +104,56 @@ func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []f
 	return
 }
 
+func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (values map[string][]int32, scores map[string][]float32) {
+	cq := heap.NewTopKFilter(idx.numProbe)
+	for c := range idx.clusters {
+		d := idx.clusters[c].centroid.Distance(q)
+		cq.Push(int32(c), -d)
+	}
+
+	// create priority queues
+	queues := make(map[string]*heap.PriorityQueue)
+	queues[""] = heap.NewPriorityQueue(true)
+	for _, term := range terms {
+		queues[term] = heap.NewPriorityQueue(true)
+	}
+
+	// search with terms
+	clusters, _ := cq.PopAll()
+	for _, c := range clusters {
+		for _, i := range idx.clusters[c].observations {
+			vec := idx.data[i]
+			queues[""].Push(int32(i), q.Distance(vec))
+			if queues[""].Len() > n {
+				queues[""].Pop()
+			}
+			for _, term := range vec.Terms() {
+				if _, match := queues[term]; match {
+					queues[term].Push(int32(i), q.Distance(vec))
+					if queues[term].Len() > n {
+						queues[term].Pop()
+					}
+				}
+			}
+		}
+	}
+
+	// retrieve results
+	values = make(map[string][]int32)
+	scores = make(map[string][]float32)
+	for term, pq := range queues {
+		pq = pq.Reverse()
+		for pq.Len() > 0 {
+			value, score := pq.Pop()
+			if !prune0 || score < 0 {
+				values[term] = append(values[term], value)
+				scores[term] = append(scores[term], score)
+			}
+		}
+	}
+	return
+}
+
 func (idx *IVF) Build() {
 	if idx.k > len(idx.data) {
 		base.Logger().Fatal("the size of the observations set must at least equal k")
@@ -115,7 +176,7 @@ func (idx *IVF) Build() {
 
 		// reassign clusters
 		nextClusters := make([]ivfCluster, idx.k)
-		for i := range idx.data {
+		_ = base.Parallel(len(idx.data), idx.numJobs, func(_, i int) error {
 			nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
 			for c := range clusters {
 				d := clusters[c].centroid.Distance(idx.data[i])
@@ -127,10 +188,15 @@ func (idx *IVF) Build() {
 			if nextCluster != assignments[i] {
 				errorCount++
 			}
+			nextClusters[nextCluster].mu.Lock()
+			defer nextClusters[nextCluster].mu.Unlock()
 			nextClusters[nextCluster].observations = append(nextClusters[nextCluster].observations, int32(i))
 			assignments[i] = nextCluster
-		}
+			return nil
+		})
 
+		base.Logger().Debug("spatial k means clustering",
+			zap.Int("changes", errorCount))
 		if float32(errorCount)/float32(len(idx.data)) < idx.errorRate {
 			idx.clusters = clusters
 			break
@@ -192,44 +258,79 @@ type IVFBuilder struct {
 	testSize   int
 	k          int
 	rng        base.RandomGenerator
+	configs    []IVFConfig
 }
 
-func NewIVFBuilder(data []Vector, k, testSize int) *IVFBuilder {
+func NewIVFBuilder(data []Vector, k, testSize int, configs ...IVFConfig) *IVFBuilder {
 	b := &IVFBuilder{
 		bruteForce: NewBruteforce(data),
 		data:       data,
 		testSize:   testSize,
 		k:          k,
 		rng:        base.NewRandomGenerator(0),
+		configs:    configs,
 	}
 	b.bruteForce.Build()
 	return b
 }
 
-func (b *IVFBuilder) evaluate(idx VectorIndex, prune0 bool) float32 {
+func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 	testSize := base.Min(b.testSize, len(b.data))
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
-	for _, i := range samples {
-		expected, _ := b.bruteForce.Search(b.data[i], b.k, prune0)
+	var mu sync.Mutex
+	_ = base.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+		sample := samples[i]
+		expected, _ := b.bruteForce.Search(b.data[sample], b.k, prune0)
 		if len(expected) > 0 {
-			actual, _ := idx.Search(b.data[i], b.k, prune0)
+			actual, _ := idx.Search(b.data[sample], b.k, prune0)
+			mu.Lock()
+			defer mu.Unlock()
 			result += recall(expected, actual)
 			count++
 		}
-	}
+		return nil
+	})
 	return result / count
 }
 
-func (b *IVFBuilder) Build(prune0 bool) (*IVF, float32) {
-	idx := NewInvertedFile(b.data)
+func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF, score float32) {
+	idx = NewIVF(b.data, b.configs...)
 	start := time.Now()
 	idx.Build()
 	buildTime := time.Since(start)
-	score := b.evaluate(idx, prune0)
-	base.Logger().Info("try to build vector index",
-		zap.String("index_type", "IVF"),
-		zap.Float32("recall", score),
-		zap.String("build_time", buildTime.String()))
-	return idx, score
+	idx.numProbe = int(math32.Ceil(float32(b.k) / math32.Sqrt(float32(len(b.data)))))
+	for i := 0; i < numEpoch; i++ {
+		score = b.evaluate(idx, prune0)
+		base.Logger().Info("try to build vector index",
+			zap.String("index_type", "IVF"),
+			zap.Float32("recall", score),
+			zap.String("build_time", buildTime.String()))
+		if score > recall {
+			return
+		} else {
+			idx.numProbe <<= 1
+		}
+	}
+	return
+}
+
+func (b *IVFBuilder) evaluateTermSearch(idx *IVF, prune0 bool, term string) float32 {
+	testSize := base.Min(b.testSize, len(b.data))
+	samples := b.rng.Sample(0, len(b.data), testSize)
+	var result, count float32
+	var mu sync.Mutex
+	_ = base.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+		sample := samples[i]
+		expected, _ := b.bruteForce.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
+		if len(expected) > 0 {
+			actual, _ := idx.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
+			mu.Lock()
+			defer mu.Unlock()
+			result += recall(expected[term], actual[term])
+			count++
+		}
+		return nil
+	})
+	return result / count
 }

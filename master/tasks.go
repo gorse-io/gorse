@@ -23,6 +23,7 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -73,7 +74,7 @@ func (m *Master) runLoadDatasetTask() error {
 	for category, items := range popularItems {
 		for batchBegin := 0; batchBegin < len(items); batchBegin += batchSize {
 			batchEnd := base.Min(len(items), batchBegin+batchSize)
-			if err = m.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), items[batchBegin:batchEnd]); err != nil {
+			if err = m.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), items[batchBegin:batchEnd]); err != nil {
 				base.Logger().Error("failed to cache popular items", zap.Error(err))
 			}
 		}
@@ -84,7 +85,7 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save the latest items to cache
 	for category, items := range latestItems {
-		if err = m.CacheClient.SetSorted(cache.Key(cache.LatestItems, category), items); err != nil {
+		if err = m.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), items); err != nil {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 	}
@@ -158,13 +159,12 @@ func (m *Master) runLoadDatasetTask() error {
 // runFindItemNeighborsTask updates neighbors of items.
 func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	m.taskMonitor.Start(TaskFindItemNeighbors, dataset.ItemCount())
-	base.Logger().Info("start collecting neighbors of items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+	base.Logger().Info("start searching neighbors of items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create progress tracker
-	completed := make(chan []interface{}, 1000)
+	completed := make(chan struct{}, 1000)
 	go func() {
-		completedCount := 0
+		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(time.Second)
-		start := time.Now()
 		for {
 			select {
 			case _, ok := <-completed:
@@ -173,11 +173,15 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				}
 				completedCount++
 			case <-ticker.C:
-				m.taskMonitor.Update(TaskFindItemNeighbors, completedCount)
-				base.Logger().Debug("collecting neighbors of items",
-					zap.Int("n_complete_items", completedCount),
-					zap.Int("n_items", dataset.ItemCount()),
-					zap.Float64("throughput", float64(completedCount)/time.Since(start).Seconds()))
+				throughput := completedCount - previousCount
+				previousCount = completedCount
+				if throughput > 0 {
+					m.taskMonitor.Update(TaskFindItemNeighbors, completedCount)
+					base.Logger().Debug("searching neighbors of items",
+						zap.Int("n_complete_items", completedCount),
+						zap.Int("n_items", dataset.ItemCount()),
+						zap.Int("throughput", throughput))
+				}
 			}
 		}
 	}()
@@ -209,7 +213,32 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		}
 	}
 
-	if err := base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+	start := time.Now()
+	var err error
+	if m.GorseConfig.Recommend.EnableItemNeighborIndex {
+		err = m.findItemNeighborsIVF(dataset, labelIDF, userIDF, completed)
+	} else {
+		err = m.findItemNeighborsBruteForce(dataset, labeledItems, labelIDF, userIDF, completed)
+	}
+	searchTime := time.Since(start)
+
+	close(completed)
+	if err != nil {
+		base.Logger().Error("failed to searching neighbors of items", zap.Error(err))
+		m.taskMonitor.Fail(TaskFindItemNeighbors, err.Error())
+	} else {
+		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime, base.Now()); err != nil {
+			base.Logger().Error("failed to set neighbors of items update time", zap.Error(err))
+		}
+		base.Logger().Info("complete searching neighbors of items",
+			zap.String("search_time", searchTime.String()))
+		m.taskMonitor.Finish(TaskFindItemNeighbors)
+	}
+}
+
+func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledItems [][]int32,
+	labelIDF, userIDF []float32, completed chan struct{}) error {
+	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		startTime := time.Now()
 		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId)), dataset.CategorySet.List()) {
 			return nil
@@ -285,7 +314,8 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 			for i := range recommends {
 				recommends[i] = dataset.ItemIndex.ToName(elem[i])
 			}
-			if err := m.CacheClient.SetCategoryScores(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category, cache.CreateScoredItems(recommends, scores)); err != nil {
+			if err := m.CacheClient.AddSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category),
+				cache.CreateScoredItems(recommends, scores)); err != nil {
 				return errors.Trace(err)
 			}
 		}
@@ -293,29 +323,71 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 			return errors.Trace(err)
 		}
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		completed <- nil
+		completed <- struct{}{}
 		return nil
-	}); err != nil {
-		base.Logger().Error("failed to cache neighbors of items", zap.Error(err))
+	})
+}
+
+func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userIDF []float32, completed chan struct{}) error {
+	var similarItemNeighbors, relatedItemNeighbors search.VectorIndex
+	var itemLabelVectors, itemFeedbackVectors []search.Vector
+	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+		itemLabelVectors = make([]search.Vector, dataset.ItemCount())
+		for i := range itemLabelVectors {
+			itemLabelVectors[i] = search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i])
+		}
+		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
+		similarItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
+			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
-	close(completed)
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime, base.Now()); err != nil {
-		base.Logger().Error("failed to cache neighbors of items", zap.Error(err))
+	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+		itemFeedbackVectors = make([]search.Vector, dataset.ItemCount())
+		for i := range itemFeedbackVectors {
+			itemFeedbackVectors[i] = search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i])
+		}
+		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
+		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
+			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
-	base.Logger().Info("finish collecting neighbors of items")
-	m.taskMonitor.Finish(TaskFindItemNeighbors)
+	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+		var neighbors map[string][]int32
+		var scores map[string][]float32
+		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
+			m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+			neighbors, scores = similarItemNeighbors.MultiSearch(itemLabelVectors[itemId], dataset.CategorySet.List(), m.GorseConfig.Database.CacheSize, true)
+		}
+		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
+			m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && len(neighbors[""]) == 0 {
+			neighbors, scores = relatedItemNeighbors.MultiSearch(itemFeedbackVectors[itemId], dataset.CategorySet.List(), m.GorseConfig.Database.CacheSize, true)
+		}
+		for category := range neighbors {
+			if categoryNeighbors, exist := neighbors[category]; exist && len(categoryNeighbors) > 0 {
+				itemScores := make([]cache.Scored, len(neighbors[category]))
+				for i := range scores[category] {
+					itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[category][i])
+					itemScores[i].Score = scores[category][i]
+				}
+				if err := m.CacheClient.AddSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId))), itemScores); err != nil {
+					return errors.Trace(err)
+				}
+			}
+		}
+		completed <- struct{}{}
+		return nil
+	})
 }
 
 // runFindUserNeighborsTask updates neighbors of users.
 func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	m.taskMonitor.Start(TaskFindUserNeighbors, dataset.UserCount())
-	base.Logger().Info("start collecting neighbors of users", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+	base.Logger().Info("start searching neighbors of users", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
 	// create progress tracker
-	completed := make(chan []interface{}, 1000)
+	completed := make(chan struct{}, 1000)
 	go func() {
-		completedCount := 0
+		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(time.Second)
-		start := time.Now()
 		for {
 			select {
 			case _, ok := <-completed:
@@ -324,11 +396,13 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 				}
 				completedCount++
 			case <-ticker.C:
+				throughput := completedCount - previousCount
+				previousCount = completedCount
 				m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
-				base.Logger().Debug("collecting neighbors of users",
+				base.Logger().Debug("searching neighbors of users",
 					zap.Int("n_complete_users", completedCount),
 					zap.Int("n_users", dataset.UserCount()),
-					zap.Float64("throughput", float64(completedCount)/time.Since(start).Seconds()))
+					zap.Int("throughput", throughput))
 			}
 		}
 	}()
@@ -360,7 +434,31 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		}
 	}
 
-	if err := base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+	start := time.Now()
+	var err error
+	if m.GorseConfig.Recommend.EnableUserNeighborIndex {
+		err = m.findUserNeighborsIVF(dataset, labelIDF, itemIDF, completed)
+	} else {
+		err = m.findUserNeighborsBruteForce(dataset, labeledUsers, labelIDF, itemIDF, completed)
+	}
+	searchTime := time.Since(start)
+
+	close(completed)
+	if err != nil {
+		base.Logger().Error("failed to searching neighbors of users", zap.Error(err))
+		m.taskMonitor.Fail(TaskFindUserNeighbors, err.Error())
+	} else {
+		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime, base.Now()); err != nil {
+			base.Logger().Error("failed to set neighbors of users update time", zap.Error(err))
+		}
+		base.Logger().Info("complete searching neighbors of users",
+			zap.String("search_time", searchTime.String()))
+	}
+	m.taskMonitor.Finish(TaskFindUserNeighbors)
+}
+
+func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}) error {
+	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
 		startTime := time.Now()
 		if !m.checkUserNeighborCacheTimeout(dataset.UserIndex.ToName(int32(userId))) {
 			return nil
@@ -425,24 +523,63 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		for i := range recommends {
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetScores(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId)), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.AddSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))), cache.CreateScoredItems(recommends, scores)); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
 			return errors.Trace(err)
 		}
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		completed <- nil
+		completed <- struct{}{}
 		return nil
-	}); err != nil {
-		base.Logger().Error("failed to cache neighbors of users", zap.Error(err))
+	})
+}
+
+func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}) error {
+	var similarUserNeighbors, relatedUserNeighbors search.VectorIndex
+	var userLabelVectors, userFeedbackVectors []search.Vector
+	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+		userLabelVectors = make([]search.Vector, dataset.UserCount())
+		for i := range userLabelVectors {
+			userLabelVectors[i] = search.NewDictionaryVector(dataset.UserLabels[i], labelIDF, nil)
+		}
+		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
+		similarUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
+			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
-	close(completed)
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime, base.Now()); err != nil {
-		base.Logger().Error("failed to cache neighbors of users", zap.Error(err))
+	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+		userFeedbackVectors = make([]search.Vector, dataset.UserCount())
+		for i := range userFeedbackVectors {
+			userFeedbackVectors[i] = search.NewDictionaryVector(dataset.UserFeedback[i], itemIDF, nil)
+		}
+		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
+		relatedUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
+			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
-	base.Logger().Info("finish collecting neighbors of users")
-	m.taskMonitor.Finish(TaskFindUserNeighbors)
+	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		var neighbors []int32
+		var scores []float32
+		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
+			m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+			neighbors, scores = similarUserNeighbors.Search(userLabelVectors[userId], m.GorseConfig.Database.CacheSize, true)
+		}
+		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
+			m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && len(neighbors) == 0 {
+			neighbors, scores = relatedUserNeighbors.Search(userFeedbackVectors[userId], m.GorseConfig.Database.CacheSize, true)
+		}
+		itemScores := make([]cache.Scored, len(neighbors))
+		for i := range scores {
+			itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[i])
+			itemScores[i].Score = scores[i]
+		}
+		if err := m.CacheClient.AddSorted(cache.Key(cache.UserNeighbors, dataset.ItemIndex.ToName(int32(userId))), itemScores); err != nil {
+			return errors.Trace(err)
+		}
+		completed <- struct{}{}
+		return nil
+	})
 }
 
 func commonElements(a, b []int32, weights []float32) float32 {
@@ -495,32 +632,33 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 // 1. if cache is empty, stale.
 // 2. if modified time > update time, stale.
 func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []string) bool {
-	var modifiedTime, updateTime time.Time
-	// check cache
-	for _, category := range append([]string{""}, categories...) {
-		items, err := m.CacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, -1)
-		if err != nil {
-			base.Logger().Error("failed to read item neighbors cache", zap.String("item_id", itemId), zap.Error(err))
-			return true
-		} else if len(items) == 0 {
-			return true
-		}
-	}
-	// read modified time
-	var err error
-	modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyItemTime, itemId)
-	if err != nil {
-		base.Logger().Error("failed to read meta", zap.Error(err))
-		return true
-	}
-	// read update time
-	updateTime, err = m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId)
-	if err != nil {
-		base.Logger().Error("failed to read meta", zap.Error(err))
-		return true
-	}
-	// check time
-	return updateTime.Unix() <= modifiedTime.Unix()
+	return true
+	//var modifiedTime, updateTime time.Time
+	//// check cache
+	//for _, category := range append([]string{""}, categories...) {
+	//	items, err := m.CacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, -1)
+	//	if err != nil {
+	//		base.Logger().Error("failed to read item neighbors cache", zap.String("item_id", itemId), zap.Error(err))
+	//		return true
+	//	} else if len(items) == 0 {
+	//		return true
+	//	}
+	//}
+	//// read modified time
+	//var err error
+	//modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyItemTime, itemId)
+	//if err != nil {
+	//	base.Logger().Error("failed to read meta", zap.Error(err))
+	//	return true
+	//}
+	//// read update time
+	//updateTime, err = m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId)
+	//if err != nil {
+	//	base.Logger().Error("failed to read meta", zap.Error(err))
+	//	return true
+	//}
+	//// check time
+	//return updateTime.Unix() <= modifiedTime.Unix()
 }
 
 // fitRankingModel fits ranking model using passed dataset. After model fitted, following states are changed:

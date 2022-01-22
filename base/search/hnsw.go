@@ -282,23 +282,29 @@ func (b *HNSWBuilder) evaluate(idx VectorIndex, prune0 bool) float32 {
 	return result / count
 }
 
-func (b *HNSWBuilder) Build(recall float32, prune0 bool) (*HNSW, float32) {
+func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool) (idx *HNSW, score float32) {
 	ef := 1 << int(math32.Ceil(math32.Log2(float32(b.k))))
-	for {
+	for i := 0; i < trials; i++ {
 		start := time.Now()
-		idx := NewHNSW(b.data, SetEFConstruction(ef))
+		idx = NewHNSW(b.data, SetEFConstruction(ef))
 		idx.Build()
 		buildTime := time.Since(start)
-		score := b.evaluate(idx, prune0)
+		score = b.evaluate(idx, prune0)
 		base.Logger().Info("try to build vector index",
 			zap.String("index_type", "HNSW"),
 			zap.Int("ef_construction", ef),
 			zap.Float32("recall", score),
 			zap.String("build_time", buildTime.String()))
 		if score > recall {
-			return idx, score
+			return
 		} else {
 			ef <<= 1
 		}
 	}
+	return
+}
+
+func (h *HNSW) MultiSearch(q Vector, terms []string, n int, prune0 bool) (map[string][]int32, map[string][]float32) {
+	//TODO implement me
+	panic("implement me")
 }

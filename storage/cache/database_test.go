@@ -183,7 +183,7 @@ func testSort(t *testing.T, db Database) {
 		{"3", 1.3},
 		{"4", 1.4},
 	}
-	err := db.SetSorted("sort", scores)
+	err := db.AddSorted("sort", scores)
 	assert.NoError(t, err)
 	// Get scores
 	totalItems, err := db.GetSorted("sort", 0, -1)
@@ -226,7 +226,7 @@ func testSort(t *testing.T, db Database) {
 	assert.Equal(t, float32(1.2), score)
 
 	// test set empty
-	err = db.SetSorted("sort", []Scored{})
+	err = db.AddSorted("sort", []Scored{})
 	assert.NoError(t, err)
 	// test get empty
 	scores, err = db.GetSorted("unknown_sort", 0, -1)

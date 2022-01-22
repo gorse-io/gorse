@@ -23,10 +23,16 @@ import (
 )
 
 const (
-	IgnoreItems            = "ignore_items"            // ignored items for each user
-	HiddenItems            = "hidden_items"            // hidden items
-	ItemNeighbors          = "item_neighbors"          // neighbors of each item
-	UserNeighbors          = "user_neighbors"          // neighbors of each user
+	IgnoreItems = "ignore_items" // ignored items for each user
+	HiddenItems = "hidden_items" // hidden items
+	// ItemNeighbors is sorted set of neighbors for each item.
+	//  Global item neighbors      - item_neighbors/{item_id}
+	//  Categorized item neighbors - item_neighbors/{item_id}/{category}
+	ItemNeighbors = "item_neighbors"
+	// UserNeighbors is sorted set of neighbors for each user.
+	//  Global user neighbors      - user_neighbors/{user_id}
+	//  Categorized user neighbors - user_neighbors/{user_id}/{category}
+	UserNeighbors          = "user_neighbors"
 	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
 	OfflineRecommend       = "offline_recommend"       // offline recommendation for each user
 	// PopularItems is sorted set of popular items. The format of key:
@@ -154,6 +160,7 @@ type Database interface {
 
 	GetSortedScore(key, member string) (float32, error)
 	GetSorted(key string, begin, end int) ([]Scored, error)
+	AddSorted(key string, scores []Scored) error
 	SetSorted(key string, scores []Scored) error
 	IncrSorted(key, member string) error
 	RemSorted(key, member string) error

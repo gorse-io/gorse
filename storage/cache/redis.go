@@ -298,7 +298,24 @@ func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	return results, nil
 }
 
-// SetSorted add scores to sorted set.
+// AddSorted add scores to sorted set.
+func (r *Redis) AddSorted(key string, scores []Scored) error {
+	if len(scores) == 0 {
+		return nil
+	}
+	members := make([]*redis.Z, 0, len(scores))
+	for _, score := range scores {
+		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
+	}
+	ctx := context.Background()
+	pipeline := r.client.Pipeline()
+	pipeline.Del(ctx, key)
+	pipeline.ZAdd(ctx, key, members...)
+	_, err := pipeline.Exec(ctx)
+	return err
+}
+
+// SetSorted set scores in sorted set.
 func (r *Redis) SetSorted(key string, scores []Scored) error {
 	if len(scores) == 0 {
 		return nil
