@@ -134,12 +134,11 @@ func (idx *IVF) Build() {
 		if float32(errorCount)/float32(len(idx.data)) < idx.errorRate {
 			idx.clusters = clusters
 			break
-		} else {
-			for c := range clusters {
-				nextClusters[c].centroid = newDictionaryCentroidVector(idx.data, nextClusters[c].observations)
-			}
-			clusters = nextClusters
 		}
+		for c := range clusters {
+			nextClusters[c].centroid = newDictionaryCentroidVector(idx.data, nextClusters[c].observations)
+		}
+		clusters = nextClusters
 	}
 }
 
