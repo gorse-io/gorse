@@ -22,6 +22,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -213,10 +214,10 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId)), dataset.CategorySet.List()) {
 			return nil
 		}
-		nearItemsFilters := make(map[string]*base.TopKFilter)
-		nearItemsFilters[""] = base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+		nearItemsFilters := make(map[string]*heap.TopKFilter)
+		nearItemsFilters[""] = heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 		for _, category := range dataset.CategorySet.List() {
-			nearItemsFilters[category] = base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+			nearItemsFilters[category] = heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 		}
 
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
@@ -364,7 +365,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		if !m.checkUserNeighborCacheTimeout(dataset.UserIndex.ToName(int32(userId))) {
 			return nil
 		}
-		nearUsers := base.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+		nearUsers := heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
 			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto) {
@@ -861,8 +862,8 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	rankingDataset = ranking.NewMapIndexDataset()
 
 	// create filers for latest items
-	latestItemsFilters := make(map[string]*base.TopKStringFilter)
-	latestItemsFilters[""] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	latestItemsFilters := make(map[string]*heap.TopKStringFilter)
+	latestItemsFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 
 	// STEP 1: pull users
 	userLabelIndex := base.NewMapIndex()
@@ -917,7 +918,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				latestItemsFilters[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
 				for _, category := range item.Categories {
 					if _, exist := latestItemsFilters[category]; !exist {
-						latestItemsFilters[category] = base.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+						latestItemsFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 					}
 					latestItemsFilters[category].Push(item.ItemId, float32(item.Timestamp.Unix()))
 				}

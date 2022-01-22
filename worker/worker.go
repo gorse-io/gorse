@@ -24,6 +24,7 @@ import (
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -442,10 +443,10 @@ func (w *Worker) Recommend(users []string) {
 		if w.cfg.Recommend.EnableColRecommend && w.rankingModel != nil && w.rankingModel.IsUserPredictable(userIndex) {
 			itemIds := w.rankingModel.GetItemIndex().GetNames()
 			localStartTime := time.Now()
-			recItemsFilters := make(map[string]*base.TopKStringFilter)
-			recItemsFilters[""] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+			recItemsFilters := make(map[string]*heap.TopKStringFilter)
+			recItemsFilters[""] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			for _, category := range itemCategories {
-				recItemsFilters[category] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+				recItemsFilters[category] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			}
 			for itemIndex, itemId := range itemIds {
 				if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.rankingModel.IsItemPredictable(int32(itemIndex)) {
@@ -493,7 +494,7 @@ func (w *Worker) Recommend(users []string) {
 					}
 				}
 				// collect top k
-				filter := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+				filter := heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
 				for id, score := range scores {
 					filter.Push(id, score)
 				}
@@ -529,10 +530,10 @@ func (w *Worker) Recommend(users []string) {
 				}
 			}
 			// collect top k
-			filters := make(map[string]*base.TopKStringFilter)
-			filters[""] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+			filters := make(map[string]*heap.TopKStringFilter)
+			filters[""] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			for _, category := range itemCategories {
-				filters[category] = base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+				filters[category] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
 			}
 			for id, score := range scores {
 				filters[""].Push(id, score)
@@ -674,7 +675,7 @@ func (w *Worker) rankByClickTroughRate(userId string, candidates [][]string, ite
 		}
 	}
 	// rank by CTR
-	topItems := base.NewTopKStringFilter(w.cfg.Database.CacheSize)
+	topItems := heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
 	for _, item := range items {
 		topItems.Push(item.ItemId, w.clickModel.Predict(userId, item.ItemId, user.Labels, item.Labels))
 	}
