@@ -17,7 +17,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/floats"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"gonum.org/v1/gonum/stat"
 	"math"
 	"testing"

@@ -17,16 +17,15 @@ package click
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/copier"
-	"io"
-	"time"
-
 	"github.com/chewxy/math32"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/floats"
+	"github.com/zhenghaoz/gorse/base/copier"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
+	"io"
+	"time"
 )
 
 type Score struct {
