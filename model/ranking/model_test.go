@@ -34,7 +34,7 @@ type mockTracker struct {
 	notTracking bool
 }
 
-func (t *mockTracker) Fail(err string) {}
+func (t *mockTracker) Fail(_ string) {}
 
 func (t *mockTracker) Start(total int) {
 	if !t.notTracking {

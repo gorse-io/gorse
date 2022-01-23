@@ -304,7 +304,7 @@ func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool) (idx *HNSW,
 	return
 }
 
-func (h *HNSW) MultiSearch(q Vector, terms []string, n int, prune0 bool) (map[string][]int32, map[string][]float32) {
+func (h *HNSW) MultiSearch(_ Vector, _ []string, _ int, _ bool) (map[string][]int32, map[string][]float32) {
 	//TODO implement me
 	panic("implement me")
 }
