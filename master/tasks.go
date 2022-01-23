@@ -314,7 +314,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			for i := range recommends {
 				recommends[i] = dataset.ItemIndex.ToName(elem[i])
 			}
-			if err := m.CacheClient.AddSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category),
+			if err := m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category),
 				cache.CreateScoredItems(recommends, scores)); err != nil {
 				return errors.Trace(err)
 			}
@@ -398,11 +398,13 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 			case <-ticker.C:
 				throughput := completedCount - previousCount
 				previousCount = completedCount
-				m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
-				base.Logger().Debug("searching neighbors of users",
-					zap.Int("n_complete_users", completedCount),
-					zap.Int("n_users", dataset.UserCount()),
-					zap.Int("throughput", throughput))
+				if throughput > 0 {
+					m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
+					base.Logger().Debug("searching neighbors of users",
+						zap.Int("n_complete_users", completedCount),
+						zap.Int("n_users", dataset.UserCount()),
+						zap.Int("throughput", throughput))
+				}
 			}
 		}
 	}()
@@ -523,7 +525,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		for i := range recommends {
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.AddSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))), cache.CreateScoredItems(recommends, scores)); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
@@ -632,33 +634,32 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 // 1. if cache is empty, stale.
 // 2. if modified time > update time, stale.
 func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []string) bool {
-	return true
-	//var modifiedTime, updateTime time.Time
-	//// check cache
-	//for _, category := range append([]string{""}, categories...) {
-	//	items, err := m.CacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, -1)
-	//	if err != nil {
-	//		base.Logger().Error("failed to read item neighbors cache", zap.String("item_id", itemId), zap.Error(err))
-	//		return true
-	//	} else if len(items) == 0 {
-	//		return true
-	//	}
-	//}
-	//// read modified time
-	//var err error
-	//modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyItemTime, itemId)
-	//if err != nil {
-	//	base.Logger().Error("failed to read meta", zap.Error(err))
-	//	return true
-	//}
-	//// read update time
-	//updateTime, err = m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId)
-	//if err != nil {
-	//	base.Logger().Error("failed to read meta", zap.Error(err))
-	//	return true
-	//}
-	//// check time
-	//return updateTime.Unix() <= modifiedTime.Unix()
+	var modifiedTime, updateTime time.Time
+	// check cache
+	for _, category := range append([]string{""}, categories...) {
+		items, err := m.CacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, -1)
+		if err != nil {
+			base.Logger().Error("failed to read item neighbors cache", zap.String("item_id", itemId), zap.Error(err))
+			return true
+		} else if len(items) == 0 {
+			return true
+		}
+	}
+	// read modified time
+	var err error
+	modifiedTime, err = m.CacheClient.GetTime(cache.LastModifyItemTime, itemId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// read update time
+	updateTime, err = m.CacheClient.GetTime(cache.LastUpdateItemNeighborsTime, itemId)
+	if err != nil {
+		base.Logger().Error("failed to read meta", zap.Error(err))
+		return true
+	}
+	// check time
+	return updateTime.Unix() <= modifiedTime.Unix()
 }
 
 // fitRankingModel fits ranking model using passed dataset. After model fitted, following states are changed:

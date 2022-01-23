@@ -303,6 +303,16 @@ func (r *Redis) AddSorted(key string, scores []Scored) error {
 	if len(scores) == 0 {
 		return nil
 	}
+	ctx := context.Background()
+	members := make([]*redis.Z, 0, len(scores))
+	for _, score := range scores {
+		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
+	}
+	return r.client.ZAdd(ctx, key, members...).Err()
+}
+
+// SetSorted set scores in sorted set and clear previous scores.
+func (r *Redis) SetSorted(key string, scores []Scored) error {
 	members := make([]*redis.Z, 0, len(scores))
 	for _, score := range scores {
 		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
@@ -310,22 +320,11 @@ func (r *Redis) AddSorted(key string, scores []Scored) error {
 	ctx := context.Background()
 	pipeline := r.client.Pipeline()
 	pipeline.Del(ctx, key)
-	pipeline.ZAdd(ctx, key, members...)
+	if len(scores) > 0 {
+		pipeline.ZAdd(ctx, key, members...)
+	}
 	_, err := pipeline.Exec(ctx)
 	return err
-}
-
-// SetSorted set scores in sorted set.
-func (r *Redis) SetSorted(key string, scores []Scored) error {
-	if len(scores) == 0 {
-		return nil
-	}
-	ctx := context.Background()
-	members := make([]*redis.Z, 0, len(scores))
-	for _, score := range scores {
-		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
-	}
-	return r.client.ZAdd(ctx, key, members...).Err()
 }
 
 // IncrSorted increase score in sorted set.
