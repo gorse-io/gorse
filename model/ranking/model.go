@@ -22,7 +22,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
-	"github.com/zhenghaoz/gorse/floats"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"gonum.org/v1/gonum/mat"

@@ -17,7 +17,7 @@ package search
 import (
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/floats"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"go.uber.org/zap"
 	"modernc.org/sortutil"
 	"reflect"
