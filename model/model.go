@@ -58,6 +58,7 @@ type Tracker interface {
 	Finish()
 	Suspend(flag bool)
 	SubTracker() Tracker
+	Fail(err string)
 }
 
 type Runner interface {

@@ -185,6 +185,10 @@ type TaskTracker struct {
 	monitor *TaskMonitor
 }
 
+func (tt *TaskTracker) Fail(err string) {
+	tt.monitor.Fail(tt.name, err)
+}
+
 // NewTaskTracker creates a TaskTracker from TaskMonitor.
 func (tm *TaskMonitor) NewTaskTracker(name string) *TaskTracker {
 	return &TaskTracker{
@@ -224,6 +228,11 @@ type SubTaskTracker struct {
 	*TaskTracker
 	Offset int
 	Total  int
+}
+
+// Fail reports the error message.
+func (tt *SubTaskTracker) Fail(err string) {
+	tt.monitor.Fail(tt.name, err)
 }
 
 // Start a task.

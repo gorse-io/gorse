@@ -298,8 +298,8 @@ func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	return results, nil
 }
 
-// SetSorted add scores to sorted set.
-func (r *Redis) SetSorted(key string, scores []Scored) error {
+// AddSorted add scores to sorted set.
+func (r *Redis) AddSorted(key string, scores []Scored) error {
 	if len(scores) == 0 {
 		return nil
 	}
@@ -309,6 +309,22 @@ func (r *Redis) SetSorted(key string, scores []Scored) error {
 		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
 	}
 	return r.client.ZAdd(ctx, key, members...).Err()
+}
+
+// SetSorted set scores in sorted set and clear previous scores.
+func (r *Redis) SetSorted(key string, scores []Scored) error {
+	members := make([]*redis.Z, 0, len(scores))
+	for _, score := range scores {
+		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
+	}
+	ctx := context.Background()
+	pipeline := r.client.Pipeline()
+	pipeline.Del(ctx, key)
+	if len(scores) > 0 {
+		pipeline.ZAdd(ctx, key, members...)
+	}
+	_, err := pipeline.Exec(ctx)
+	return err
 }
 
 // IncrSorted increase score in sorted set.

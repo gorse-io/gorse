@@ -30,10 +30,10 @@ const (
 
 // Config is the configuration for the engine.
 type Config struct {
-	Database  DatabaseConfig  `toml:"database" mapstructure:"database"`
-	Master    MasterConfig    `toml:"master" mapstructure:"master"`
-	Server    ServerConfig    `toml:"server" mapstructure:"server"`
-	Recommend RecommendConfig `toml:"recommend" mapstructure:"recommend"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Master    MasterConfig    `mapstructure:"master"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Recommend RecommendConfig `mapstructure:"recommend"`
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -59,15 +59,15 @@ func (config *Config) validate() {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore            string   `toml:"data_store" mapstructure:"data_store"`                           // database for data store
-	CacheStore           string   `toml:"cache_store" mapstructure:"cache_store"`                         // database for cache store
-	AutoInsertUser       bool     `toml:"auto_insert_user" mapstructure:"auto_insert_user"`               // insert new users while inserting feedback
-	AutoInsertItem       bool     `toml:"auto_insert_item" mapstructure:"auto_insert_item"`               // insert new items while inserting feedback
-	CacheSize            int      `toml:"cache_size" mapstructure:"cache_size"`                           // cache size for recommended/popular/latest items
-	PositiveFeedbackType []string `toml:"positive_feedback_types" mapstructure:"positive_feedback_types"` // positive feedback type
-	ReadFeedbackTypes    []string `toml:"read_feedback_types" mapstructure:"read_feedback_types"`         // feedback type for read event
-	PositiveFeedbackTTL  uint     `toml:"positive_feedback_ttl" mapstructure:"positive_feedback_ttl"`     // time-to-live of positive feedbacks
-	ItemTTL              uint     `toml:"item_ttl" mapstructure:"item_ttl"`                               // item-to-live of items
+	DataStore            string   `mapstructure:"data_store"`              // database for data store
+	CacheStore           string   `mapstructure:"cache_store"`             // database for cache store
+	AutoInsertUser       bool     `mapstructure:"auto_insert_user"`        // insert new users while inserting feedback
+	AutoInsertItem       bool     `mapstructure:"auto_insert_item"`        // insert new items while inserting feedback
+	CacheSize            int      `mapstructure:"cache_size"`              // cache size for recommended/popular/latest items
+	PositiveFeedbackType []string `mapstructure:"positive_feedback_types"` // positive feedback type
+	ReadFeedbackTypes    []string `mapstructure:"read_feedback_types"`     // feedback type for read event
+	PositiveFeedbackTTL  uint     `mapstructure:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
+	ItemTTL              uint     `mapstructure:"item_ttl"`                // item-to-live of items
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -91,12 +91,12 @@ func (config *DatabaseConfig) validate() {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port        int    `toml:"port" mapstructure:"port"`                 // master port
-	Host        string `toml:"host" mapstructure:"host"`                 // master host
-	HttpPort    int    `toml:"http_port" mapstructure:"http_port"`       // HTTP port
-	HttpHost    string `toml:"http_host" mapstructure:"http_host"`       // HTTP host
-	NumJobs     int    `toml:"n_jobs" mapstructure:"n_jobs"`             // number of working jobs
-	MetaTimeout int    `toml:"meta_timeout" mapstructure:"meta_timeout"` // cluster meta timeout (second)
+	Port        int    `mapstructure:"port"`         // master port
+	Host        string `mapstructure:"host"`         // master host
+	HttpPort    int    `mapstructure:"http_port"`    // HTTP port
+	HttpHost    string `mapstructure:"http_host"`    // HTTP host
+	NumJobs     int    `mapstructure:"n_jobs"`       // number of working jobs
+	MetaTimeout int    `mapstructure:"meta_timeout"` // cluster meta timeout (second)
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -122,23 +122,29 @@ func (config *MasterConfig) validate() {
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	PopularWindow                int                `toml:"popular_window" mapstructure:"popular_window"`
-	FitPeriod                    int                `toml:"fit_period" mapstructure:"fit_period"`
-	SearchPeriod                 int                `toml:"search_period" mapstructure:"search_period"`
-	SearchEpoch                  int                `toml:"search_epoch" mapstructure:"search_epoch"`
-	SearchTrials                 int                `toml:"search_trials" mapstructure:"search_trials"`
-	RefreshRecommendPeriod       int                `toml:"refresh_recommend_period" mapstructure:"refresh_recommend_period"`
-	FallbackRecommend            []string           `toml:"fallback_recommend" mapstructure:"fallback_recommend"`
-	NumFeedbackFallbackItemBased int                `toml:"num_feedback_fallback_item_based" mapstructure:"num_feedback_fallback_item_based"`
-	ExploreRecommend             map[string]float64 `toml:"explore_recommend" mapstructure:"explore_recommend"`
-	ItemNeighborType             string             `toml:"item_neighbor_type" mapstructure:"item_neighbor_type"`
-	UserNeighborType             string             `toml:"user_neighbor_type" mapstructure:"user_neighbor_type"`
-	EnableLatestRecommend        bool               `toml:"enable_latest_recommend" mapstructure:"enable_latest_recommend"`
-	EnablePopularRecommend       bool               `toml:"enable_popular_recommend" mapstructure:"enable_popular_recommend"`
-	EnableUserBasedRecommend     bool               `toml:"enable_user_based_recommend" mapstructure:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool               `toml:"enable_item_based_recommend" mapstructure:"enable_item_based_recommend"`
-	EnableColRecommend           bool               `toml:"enable_collaborative_recommend" mapstructure:"enable_collaborative_recommend"`
-	EnableClickThroughPrediction bool               `toml:"enable_click_through_prediction" mapstructure:"enable_click_through_prediction"`
+	PopularWindow                int                `mapstructure:"popular_window"`
+	FitPeriod                    int                `mapstructure:"fit_period"`
+	SearchPeriod                 int                `mapstructure:"search_period"`
+	SearchEpoch                  int                `mapstructure:"search_epoch"`
+	SearchTrials                 int                `mapstructure:"search_trials"`
+	RefreshRecommendPeriod       int                `mapstructure:"refresh_recommend_period"`
+	FallbackRecommend            []string           `mapstructure:"fallback_recommend"`
+	NumFeedbackFallbackItemBased int                `mapstructure:"num_feedback_fallback_item_based"`
+	ExploreRecommend             map[string]float64 `mapstructure:"explore_recommend"`
+	EnableItemNeighborIndex      bool               `mapstructure:"enable_item_neighbor_index"`
+	ItemNeighborType             string             `mapstructure:"item_neighbor_type"`
+	ItemNeighborIndexRecall      float32            `mapstructure:"item_neighbor_index_recall"`
+	ItemNeighborIndexFitEpoch    int                `mapstructure:"item_neighbor_index_fit_epoch"`
+	EnableUserNeighborIndex      bool               `mapstructure:"enable_user_neighbor_index"`
+	UserNeighborType             string             `mapstructure:"user_neighbor_type"`
+	UserNeighborIndexRecall      float32            `mapstructure:"user_neighbor_index_recall"`
+	UserNeighborIndexFitEpoch    int                `mapstructure:"user_neighbor_index_fit_epoch"`
+	EnableLatestRecommend        bool               `mapstructure:"enable_latest_recommend"`
+	EnablePopularRecommend       bool               `mapstructure:"enable_popular_recommend"`
+	EnableUserBasedRecommend     bool               `mapstructure:"enable_user_based_recommend"`
+	EnableItemBasedRecommend     bool               `mapstructure:"enable_item_based_recommend"`
+	EnableColRecommend           bool               `mapstructure:"enable_collaborative_recommend"`
+	EnableClickThroughPrediction bool               `mapstructure:"enable_click_through_prediction"`
 	exploreRecommendLock         sync.RWMutex
 }
 
@@ -200,8 +206,8 @@ func (config *RecommendConfig) validate() {
 
 // ServerConfig is the configuration for the server.
 type ServerConfig struct {
-	APIKey   string `toml:"api_key" mapstructure:"api_key"`     // default number of returned items
-	DefaultN int    `toml:"default_n" mapstructure:"default_n"` // secret key for RESTful APIs (SSL required)
+	APIKey   string `mapstructure:"api_key"`   // default number of returned items
+	DefaultN int    `mapstructure:"default_n"` // secret key for RESTful APIs (SSL required)
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
