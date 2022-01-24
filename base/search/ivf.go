@@ -87,9 +87,11 @@ func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []f
 	clusters, _ := cq.PopAll()
 	for _, c := range clusters {
 		for _, i := range idx.clusters[c].observations {
-			pq.Push(int32(i), q.Distance(idx.data[i]))
-			if pq.Len() > n {
-				pq.Pop()
+			if idx.data[i] != q {
+				pq.Push(int32(i), q.Distance(idx.data[i]))
+				if pq.Len() > n {
+					pq.Pop()
+				}
 			}
 		}
 	}
@@ -122,16 +124,18 @@ func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (value
 	clusters, _ := cq.PopAll()
 	for _, c := range clusters {
 		for _, i := range idx.clusters[c].observations {
-			vec := idx.data[i]
-			queues[""].Push(int32(i), q.Distance(vec))
-			if queues[""].Len() > n {
-				queues[""].Pop()
-			}
-			for _, term := range vec.Terms() {
-				if _, match := queues[term]; match {
-					queues[term].Push(int32(i), q.Distance(vec))
-					if queues[term].Len() > n {
-						queues[term].Pop()
+			if idx.data[i] != q {
+				vec := idx.data[i]
+				queues[""].Push(i, q.Distance(vec))
+				if queues[""].Len() > n {
+					queues[""].Pop()
+				}
+				for _, term := range vec.Terms() {
+					if _, match := queues[term]; match {
+						queues[term].Push(i, q.Distance(vec))
+						if queues[term].Len() > n {
+							queues[term].Pop()
+						}
 					}
 				}
 			}
@@ -308,7 +312,7 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF,
 			zap.Int("num_probe", idx.numProbe),
 			zap.Float32("recall", score),
 			zap.String("build_time", buildTime.String()))
-		if score > recall {
+		if score >= recall {
 			return
 		} else {
 			idx.numProbe <<= 1
