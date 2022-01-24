@@ -304,6 +304,7 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF,
 		score = b.evaluate(idx, prune0)
 		base.Logger().Info("try to build vector index",
 			zap.String("index_type", "IVF"),
+			zap.Int("num_probe", idx.numProbe),
 			zap.Float32("recall", score),
 			zap.String("build_time", buildTime.String()))
 		if score > recall {
