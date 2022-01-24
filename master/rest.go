@@ -570,18 +570,18 @@ func (m *Master) getLatest(request *restful.Request, response *restful.Response)
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	m.getList(cache.ItemNeighbors, itemId, request, response, data.Item{})
+	m.getSort(cache.Key(cache.ItemNeighbors, itemId), request, response, data.Item{})
 }
 
 func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
-	m.getList(cache.ItemNeighbors, itemId+"/"+category, request, response, data.Item{})
+	m.getSort(cache.Key(cache.ItemNeighbors, itemId, category), request, response, data.Item{})
 }
 
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
-	m.getList(cache.UserNeighbors, userId, request, response, data.User{})
+	m.getSort(cache.Key(cache.UserNeighbors, userId), request, response, data.User{})
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
