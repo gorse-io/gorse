@@ -75,11 +75,12 @@ func NewDictionaryVector(indices []int32, values []float32, terms []string) *Dic
 	}
 }
 
-func (v *DictionaryVector) Dot(vector *DictionaryVector) float32 {
-	i, j, sum := 0, 0, float32(0)
+func (v *DictionaryVector) Dot(vector *DictionaryVector) (float32, float32) {
+	i, j, sum, common := 0, 0, float32(0), float32(0)
 	for i < len(v.indices) && j < len(vector.indices) {
 		if v.indices[i] == vector.indices[j] {
 			sum += v.values[v.indices[i]]
+			common++
 			i++
 			j++
 		} else if v.indices[i] < vector.indices[j] {
@@ -88,8 +89,10 @@ func (v *DictionaryVector) Dot(vector *DictionaryVector) float32 {
 			j++
 		}
 	}
-	return sum
+	return sum, common
 }
+
+const similarityShrink = 100
 
 func (v *DictionaryVector) Distance(vector Vector) float32 {
 	var score float32
@@ -98,9 +101,9 @@ func (v *DictionaryVector) Distance(vector Vector) float32 {
 			zap.String("expect", reflect.TypeOf(v).String()),
 			zap.String("actual", reflect.TypeOf(vector).String()))
 	} else {
-		dot := v.Dot(dictVec)
+		dot, common := v.Dot(dictVec)
 		if dot > 0 {
-			score = -dot / v.norm / dictVec.norm
+			score = -dot / v.norm / dictVec.norm * common / (common + similarityShrink)
 		}
 	}
 	return score

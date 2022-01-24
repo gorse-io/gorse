@@ -239,17 +239,18 @@ func newDictionaryCentroidVector(vectors []Vector, indices []int32) *dictionaryC
 }
 
 func (v *dictionaryCentroidVector) Distance(vector Vector) float32 {
-	var sum float32
+	var sum, common float32
 	if dictVector, isDictVec := vector.(*DictionaryVector); !isDictVec {
 		base.Logger().Fatal("vector type mismatch")
 	} else {
 		for _, i := range dictVector.indices {
 			if val, exist := v.data[i]; exist {
 				sum += val * math32.Sqrt(v.data[i])
+				common++
 			}
 		}
 	}
-	return -sum
+	return -sum * common / (common + similarityShrink)
 }
 
 type IVFBuilder struct {

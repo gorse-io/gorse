@@ -264,12 +264,12 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 			for _, j := range adjacencyItems {
 				if j != int32(itemId) && !dataset.HiddenItems[j] {
-					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
-					if commonLabels > 0 {
-						score := commonLabels * commonLabels /
+					commonSum, commonCount := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.ItemLabels[itemId], labelIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
-							(commonLabels + similarityShrink)
+							(commonCount + similarityShrink)
 						nearItemsFilters[""].Push(j, score)
 						for _, category := range dataset.ItemCategories[j] {
 							nearItemsFilters[category].Push(j, score)
@@ -294,12 +294,12 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 			for _, j := range adjacencyItems {
 				if j != int32(itemId) && !dataset.HiddenItems[j] {
-					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
-					if commonUsers > 0 {
-						score := commonUsers * commonUsers /
+					commonSum, commonCount := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[itemId], userIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
-							(commonUsers + similarityShrink)
+							(commonCount + similarityShrink)
 						nearItemsFilters[""].Push(j, score)
 						for _, category := range dataset.ItemCategories[j] {
 							nearItemsFilters[category].Push(j, score)
@@ -487,12 +487,12 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			}
 			for _, j := range adjacencyUsers {
 				if j != int32(userId) {
-					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
-					if commonLabels > 0 {
-						score := commonLabels * commonLabels /
+					commonSum, commonCount := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.UserLabels[userId], labelIDF)) /
 							math32.Sqrt(weightedSum(dataset.UserLabels[j], labelIDF)) /
-							(commonLabels + similarityShrink)
+							(commonCount + similarityShrink)
 						nearUsers.Push(j, score)
 					}
 				}
@@ -514,12 +514,12 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			}
 			for _, j := range adjacencyUsers {
 				if j != int32(userId) {
-					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
-					if commonItems > 0 {
-						score := commonItems * commonItems /
+					commonSum, commonCount := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.UserFeedback[userId], itemIDF)) /
 							math32.Sqrt(weightedSum(dataset.UserFeedback[j], itemIDF)) /
-							(commonItems + similarityShrink)
+							(commonCount + similarityShrink)
 						nearUsers.Push(j, score)
 					}
 				}
@@ -594,11 +594,12 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	})
 }
 
-func commonElements(a, b []int32, weights []float32) float32 {
-	i, j, sum := 0, 0, float32(0)
+func commonElements(a, b []int32, weights []float32) (float32, float32) {
+	i, j, sum, count := 0, 0, float32(0), float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
 			sum += weights[a[i]]
+			count++
 			i++
 			j++
 		} else if a[i] < b[j] {
@@ -607,7 +608,7 @@ func commonElements(a, b []int32, weights []float32) float32 {
 			j++
 		}
 	}
-	return sum
+	return sum, count
 }
 
 func weightedSum(a []int32, weights []float32) float32 {
@@ -647,7 +648,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 	var modifiedTime, updateTime time.Time
 	// check cache
 	for _, category := range append([]string{""}, categories...) {
-		items, err := m.CacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, -1)
+		items, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, itemId, category), 0, -1)
 		if err != nil {
 			base.Logger().Error("failed to read item neighbors cache", zap.String("item_id", itemId), zap.Error(err))
 			return true
