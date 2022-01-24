@@ -86,6 +86,15 @@ num_feedback_fallback_item_based = 20
 # The default values is "auto".
 item_neighbor_type = "similar"
 
+# Enable approximate item neighbor searching using vector index.
+enable_item_neighbor_index = false
+
+# Minimal recall for approximate item neighbor searching.
+item_neighbor_index_recall = 0.8
+
+# Maximal number of fit epochs for approximate item neighbor searching vector index.
+item_neighbor_index_fit_epoch = 3
+
 # The type of neighbors for users. There are three types:
 #   similar: Neighbors are found by number of common labels.
 #   related: Neighbors are found by number of common liked items.
@@ -93,6 +102,15 @@ item_neighbor_type = "similar"
 #         If this user have no labels, neighbors are found by number of common liked items.
 # The default values is "auto".
 user_neighbor_type = "similar"
+
+# Enable approximate user neighbor searching using vector index.
+enable_user_neighbor_index = false
+
+# Minimal recall for approximate user neighbor searching.
+user_neighbor_index_recall = 0.8
+
+# Maximal number of fit epochs for approximate user neighbor searching vector index.
+user_neighbor_index_fit_epoch = 3
 
 # Enable latest recommendation during offline recommendation. The default values is false.
 enable_latest_recommend = true
