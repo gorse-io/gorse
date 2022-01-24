@@ -20,6 +20,8 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"go.uber.org/zap"
 	"math/rand"
+	"modernc.org/mathutil"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -70,7 +72,7 @@ func NewIVF(vectors []Vector, configs ...IVFConfig) *IVF {
 		k0:        int(math32.Pow(float32(len(vectors)), 2.0/3.0)),
 		k1:        int(math32.Pow(float32(len(vectors)), 1.0/3.0)),
 		errorRate: 0.05,
-		numProbe:  1,
+		numProbe:  16,
 		numJobs:   runtime.NumCPU(),
 	}
 	for _, config := range configs {
@@ -348,7 +350,8 @@ func (v *dictionaryCentroidVector) Distance(vector Vector) float32 {
 			}
 		}
 	default:
-		base.Logger().Fatal("vector type mismatch")
+		base.Logger().Fatal("vector type mismatch",
+			zap.String("vector_type", reflect.TypeOf(vector).String()))
 	}
 	return -sum
 }
@@ -404,7 +407,7 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF,
 	start := time.Now()
 	idx.Build()
 	buildTime := time.Since(start)
-	idx.numProbe = int(math32.Ceil(float32(b.k) / math32.Sqrt(float32(len(b.data)))))
+	idx.numProbe = mathutil.Max(idx.numProbe, int(math32.Ceil(float32(b.k)/math32.Sqrt(float32(len(b.data))))))
 	for i := 0; i < numEpoch; i++ {
 		score = b.evaluate(idx, prune0)
 		base.Logger().Info("try to build vector index",
