@@ -352,6 +352,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
 	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+		startTime := time.Now()
 		var neighbors map[string][]int32
 		var scores map[string][]float32
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
@@ -369,11 +370,15 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 					itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[category][i])
 					itemScores[i].Score = scores[category][i]
 				}
-				if err := m.CacheClient.AddSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId))), itemScores); err != nil {
+				if err := m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId))), itemScores); err != nil {
 					return errors.Trace(err)
 				}
 			}
 		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId)), time.Now()); err != nil {
+			return errors.Trace(err)
+		}
+		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		completed <- struct{}{}
 		return nil
 	})
@@ -561,6 +566,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
 	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		startTime := time.Now()
 		var neighbors []int32
 		var scores []float32
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
@@ -576,9 +582,13 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 			itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[i])
 			itemScores[i].Score = scores[i]
 		}
-		if err := m.CacheClient.AddSorted(cache.Key(cache.UserNeighbors, dataset.ItemIndex.ToName(int32(userId))), itemScores); err != nil {
+		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.ItemIndex.ToName(int32(userId))), itemScores); err != nil {
 			return errors.Trace(err)
 		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
+			return errors.Trace(err)
+		}
+		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		completed <- struct{}{}
 		return nil
 	})
