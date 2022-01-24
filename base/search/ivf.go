@@ -20,8 +20,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"go.uber.org/zap"
 	"math/rand"
-	"modernc.org/mathutil"
-	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -30,11 +28,9 @@ import (
 var _ VectorIndex = &IVF{}
 
 type IVF struct {
-	clusters0 []ivfCluster // bottom layer clusters
-	clusters1 []ivfCluster // top layer clusters
-	k0        int          // number of bottom layer clusters
-	k1        int          // number of top layer clusters
+	clusters  []ivfCluster
 	data      []Vector
+	k         int
 	errorRate float32
 	numProbe  int
 	numJobs   int
@@ -69,10 +65,9 @@ type ivfCluster struct {
 func NewIVF(vectors []Vector, configs ...IVFConfig) *IVF {
 	idx := &IVF{
 		data:      vectors,
-		k0:        int(math32.Pow(float32(len(vectors)), 2.0/3.0)),
-		k1:        int(math32.Pow(float32(len(vectors)), 1.0/3.0)),
+		k:         int(math32.Sqrt(float32(len(vectors)))),
 		errorRate: 0.05,
-		numProbe:  16,
+		numProbe:  1,
 		numJobs:   runtime.NumCPU(),
 	}
 	for _, config := range configs {
@@ -82,25 +77,16 @@ func NewIVF(vectors []Vector, configs ...IVFConfig) *IVF {
 }
 
 func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []float32) {
-	cq1 := heap.NewTopKFilter(idx.numProbe)
-	for c := range idx.clusters1 {
-		d := idx.clusters1[c].centroid.Distance(q)
-		cq1.Push(int32(c), -d)
-	}
-
-	cq0 := heap.NewTopKFilter(idx.numProbe)
-	clusters1, _ := cq1.PopAll()
-	for _, c := range clusters1 {
-		for _, i := range idx.clusters1[c].observations {
-			d := idx.clusters0[i].centroid.Distance(q)
-			cq0.Push(int32(i), -d)
-		}
+	cq := heap.NewTopKFilter(idx.numProbe)
+	for c := range idx.clusters {
+		d := idx.clusters[c].centroid.Distance(q)
+		cq.Push(int32(c), -d)
 	}
 
 	pq := heap.NewPriorityQueue(true)
-	clusters0, _ := cq0.PopAll()
-	for _, c := range clusters0 {
-		for _, i := range idx.clusters0[c].observations {
+	clusters, _ := cq.PopAll()
+	for _, c := range clusters {
+		for _, i := range idx.clusters[c].observations {
 			pq.Push(int32(i), q.Distance(idx.data[i]))
 			if pq.Len() > n {
 				pq.Pop()
@@ -120,8 +106,8 @@ func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []f
 
 func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (values map[string][]int32, scores map[string][]float32) {
 	cq := heap.NewTopKFilter(idx.numProbe)
-	for c := range idx.clusters0 {
-		d := idx.clusters0[c].centroid.Distance(q)
+	for c := range idx.clusters {
+		d := idx.clusters[c].centroid.Distance(q)
 		cq.Push(int32(c), -d)
 	}
 
@@ -135,7 +121,7 @@ func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (value
 	// search with terms
 	clusters, _ := cq.PopAll()
 	for _, c := range clusters {
-		for _, i := range idx.clusters0[c].observations {
+		for _, i := range idx.clusters[c].observations {
 			vec := idx.data[i]
 			queues[""].Push(int32(i), q.Distance(vec))
 			if queues[""].Len() > n {
@@ -169,32 +155,27 @@ func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (value
 }
 
 func (idx *IVF) Build() {
-	idx.clusteringBottomLayer()
-	idx.clusteringTopLayer()
-}
-
-func (idx *IVF) clusteringBottomLayer() {
-	if idx.k0 > len(idx.data) {
-		base.Logger().Fatal("the number of vectors must at least equal k0")
+	if idx.k > len(idx.data) {
+		base.Logger().Fatal("the size of the observations set must at least equal k")
 	}
 
-	// initialize bottom clusters
-	clusters := make([]ivfCluster, idx.k0)
+	// initialize clusters
+	clusters := make([]ivfCluster, idx.k)
 	assignments := make([]int, len(idx.data))
 	for i := range idx.data {
-		c := rand.Intn(idx.k0)
+		c := rand.Intn(idx.k)
 		clusters[c].observations = append(clusters[c].observations, int32(i))
 		assignments[i] = c
 	}
 	for c := range clusters {
-		clusters[c].centroid = newBottomCentroidVector(idx.data, clusters[c].observations)
+		clusters[c].centroid = newDictionaryCentroidVector(idx.data, clusters[c].observations)
 	}
 
 	for {
 		errorCount := 0
 
 		// reassign clusters
-		nextClusters := make([]ivfCluster, idx.k0)
+		nextClusters := make([]ivfCluster, idx.k)
 		_ = base.Parallel(len(idx.data), idx.numJobs, func(_, i int) error {
 			nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
 			for c := range clusters {
@@ -214,68 +195,14 @@ func (idx *IVF) clusteringBottomLayer() {
 			return nil
 		})
 
-		base.Logger().Info("bottom layer spatial k means clustering",
+		base.Logger().Debug("spatial k means clustering",
 			zap.Int("changes", errorCount))
 		if float32(errorCount)/float32(len(idx.data)) < idx.errorRate {
-			idx.clusters0 = clusters
+			idx.clusters = clusters
 			break
 		}
 		for c := range clusters {
-			nextClusters[c].centroid = newBottomCentroidVector(idx.data, nextClusters[c].observations)
-		}
-		clusters = nextClusters
-	}
-}
-
-func (idx *IVF) clusteringTopLayer() {
-	if idx.k1 > len(idx.clusters0) {
-		base.Logger().Fatal("the size of bottom layer clusters set must at least equal k1")
-	}
-
-	// initialize top clusters
-	clusters := make([]ivfCluster, idx.k1)
-	assignments := make([]int, len(idx.clusters0))
-	for i := range idx.clusters0 {
-		c := rand.Intn(idx.k1)
-		clusters[c].observations = append(clusters[c].observations, int32(i))
-		assignments[i] = c
-	}
-	for c := range clusters {
-		clusters[c].centroid = newTopCentroidVector(idx.clusters0, clusters[c].observations)
-	}
-
-	for {
-		errorCount := 0
-
-		// reassign clusters
-		nextClusters := make([]ivfCluster, idx.k1)
-		_ = base.Parallel(len(idx.clusters0), idx.numJobs, func(_, i int) error {
-			nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
-			for c := range clusters {
-				d := clusters[c].centroid.Distance(idx.clusters0[i].centroid)
-				if d < nextDistance {
-					nextCluster = c
-					nextDistance = d
-				}
-			}
-			if nextCluster != assignments[i] {
-				errorCount++
-			}
-			nextClusters[nextCluster].mu.Lock()
-			defer nextClusters[nextCluster].mu.Unlock()
-			nextClusters[nextCluster].observations = append(nextClusters[nextCluster].observations, int32(i))
-			assignments[i] = nextCluster
-			return nil
-		})
-
-		base.Logger().Info("top layer spatial k means clustering",
-			zap.Int("changes", errorCount))
-		if float32(errorCount)/float32(len(idx.clusters0)) < idx.errorRate {
-			idx.clusters1 = clusters
-			break
-		}
-		for c := range clusters {
-			nextClusters[c].centroid = newTopCentroidVector(idx.clusters0, nextClusters[c].observations)
+			nextClusters[c].centroid = newDictionaryCentroidVector(idx.data, nextClusters[c].observations)
 		}
 		clusters = nextClusters
 	}
@@ -286,9 +213,8 @@ type dictionaryCentroidVector struct {
 	norm float32
 }
 
-func newBottomCentroidVector(vectors []Vector, indices []int32) *dictionaryCentroidVector {
+func newDictionaryCentroidVector(vectors []Vector, indices []int32) *dictionaryCentroidVector {
 	data := make(map[int32]float32)
-	var norm float32
 	for _, i := range indices {
 		vector, isDictVector := vectors[i].(*DictionaryVector)
 		if !isDictVector {
@@ -298,27 +224,7 @@ func newBottomCentroidVector(vectors []Vector, indices []int32) *dictionaryCentr
 			data[i] += math32.Sqrt(vector.values[i])
 		}
 	}
-	for _, val := range data {
-		norm += val * val
-	}
-	norm = math32.Sqrt(norm)
-	for i := range data {
-		data[i] /= norm
-	}
-	return &dictionaryCentroidVector{
-		data: data,
-		norm: norm,
-	}
-}
-
-func newTopCentroidVector(clusters []ivfCluster, indices []int32) *dictionaryCentroidVector {
-	data := make(map[int32]float32)
 	var norm float32
-	for _, i := range indices {
-		for key := range clusters[i].centroid.data {
-			data[key] += math32.Sqrt(clusters[i].centroid.data[key])
-		}
-	}
 	for _, val := range data {
 		norm += val * val
 	}
@@ -334,30 +240,16 @@ func newTopCentroidVector(clusters []ivfCluster, indices []int32) *dictionaryCen
 
 func (v *dictionaryCentroidVector) Distance(vector Vector) float32 {
 	var sum float32
-	switch vector.(type) {
-	case *DictionaryVector:
-		dictVector := vector.(*DictionaryVector)
+	if dictVector, isDictVec := vector.(*DictionaryVector); !isDictVec {
+		base.Logger().Fatal("vector type mismatch")
+	} else {
 		for _, i := range dictVector.indices {
 			if val, exist := v.data[i]; exist {
 				sum += val * math32.Sqrt(v.data[i])
 			}
 		}
-	case *dictionaryCentroidVector:
-		centroidVector := vector.(*dictionaryCentroidVector)
-		for key, value1 := range centroidVector.data {
-			if value2, exist := v.data[key]; exist {
-				sum += math32.Sqrt(value1) * math32.Sqrt(value2)
-			}
-		}
-	default:
-		base.Logger().Fatal("vector type mismatch",
-			zap.String("vector_type", reflect.TypeOf(vector).String()))
 	}
 	return -sum
-}
-
-func (v *dictionaryCentroidVector) Terms() []string {
-	return nil
 }
 
 type IVFBuilder struct {
@@ -407,12 +299,11 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF,
 	start := time.Now()
 	idx.Build()
 	buildTime := time.Since(start)
-	idx.numProbe = mathutil.Max(idx.numProbe, int(math32.Ceil(float32(b.k)/math32.Sqrt(float32(len(b.data))))))
+	idx.numProbe = int(math32.Ceil(float32(b.k) / math32.Sqrt(float32(len(b.data)))))
 	for i := 0; i < numEpoch; i++ {
 		score = b.evaluate(idx, prune0)
 		base.Logger().Info("try to build vector index",
 			zap.String("index_type", "IVF"),
-			zap.Int("num_probe", idx.numProbe),
 			zap.Float32("recall", score),
 			zap.String("build_time", buildTime.String()))
 		if score > recall {
