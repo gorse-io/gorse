@@ -20,6 +20,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"go.uber.org/zap"
 	"math/rand"
+	"modernc.org/mathutil"
 	"runtime"
 	"sync"
 	"time"
@@ -275,7 +276,7 @@ func NewIVFBuilder(data []Vector, k, testSize int, configs ...IVFConfig) *IVFBui
 }
 
 func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
-	testSize := base.Min(b.testSize, len(b.data))
+	testSize := mathutil.Min(b.testSize, len(b.data))
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
@@ -316,7 +317,7 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF,
 }
 
 func (b *IVFBuilder) evaluateTermSearch(idx *IVF, prune0 bool, term string) float32 {
-	testSize := base.Min(b.testSize, len(b.data))
+	testSize := mathutil.Min(b.testSize, len(b.data))
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex

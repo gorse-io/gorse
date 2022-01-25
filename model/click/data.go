@@ -20,6 +20,7 @@ import (
 	"github.com/scylladb/go-set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
+	"modernc.org/mathutil"
 	"os"
 	"strconv"
 	"strings"
@@ -154,7 +155,7 @@ func LoadLibFMFile(path string) (features [][]int32, values [][]float32, targets
 					return nil, nil, base.Floats{}, 0, errors.Trace(err)
 				}
 				lineValues = append(lineValues, float32(value))
-				maxLabel = base.Max(maxLabel, lineFeatures...)
+				maxLabel = mathutil.MaxInt32Val(maxLabel, lineFeatures...)
 			}
 		}
 		features = append(features, lineFeatures)
@@ -181,7 +182,7 @@ func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 	if test.CtxFeatures, test.CtxValues, test.Target, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
 		return nil, nil, err
 	}
-	unifiedIndex := NewUnifiedDirectIndex(base.Max(trainMaxLabel, testMaxLabel) + 1)
+	unifiedIndex := NewUnifiedDirectIndex(mathutil.MaxInt32(trainMaxLabel, testMaxLabel) + 1)
 	train.Index = unifiedIndex
 	test.Index = unifiedIndex
 	return

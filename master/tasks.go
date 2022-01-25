@@ -30,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"modernc.org/mathutil"
 	"modernc.org/sortutil"
 	"sort"
 	"time"
@@ -73,7 +74,7 @@ func (m *Master) runLoadDatasetTask() error {
 	// save popular items to cache
 	for category, items := range popularItems {
 		for batchBegin := 0; batchBegin < len(items); batchBegin += batchSize {
-			batchEnd := base.Min(len(items), batchBegin+batchSize)
+			batchEnd := mathutil.Min(len(items), batchBegin+batchSize)
 			if err = m.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), items[batchBegin:batchEnd]); err != nil {
 				base.Logger().Error("failed to cache popular items", zap.Error(err))
 			}

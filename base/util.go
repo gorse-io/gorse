@@ -50,26 +50,6 @@ func SetDevelopmentLogger(outputPaths ...string) {
 	logger, _ = cfg.Build()
 }
 
-// Max finds the maximum in a vector of integers. Panic if the slice is empty.
-func Max(a int32, b ...int32) int32 {
-	for _, value := range b {
-		if value > a {
-			a = value
-		}
-	}
-	return a
-}
-
-// Min finds the minimum in a vector of integers. Panic if the slice is empty.
-func Min(a int, b ...int) int {
-	for _, value := range b {
-		if value < a {
-			a = value
-		}
-	}
-	return a
-}
-
 // RangeInt generate a slice [0, ..., n-1].
 func RangeInt(n int) []int {
 	a := make([]int, n)
