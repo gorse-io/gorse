@@ -30,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"modernc.org/mathutil"
 	"net/http"
 	"strconv"
 	"time"
@@ -981,7 +982,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		InternalServerError(response, err)
 		return
 	}
-	results = results[offset:]
+	results = results[mathutil.Min(offset, len(results)):]
 	// write back
 	if writeBackFeedback != "" {
 		for _, itemId := range results {

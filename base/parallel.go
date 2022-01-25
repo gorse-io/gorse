@@ -16,6 +16,7 @@ package base
 
 import (
 	"github.com/juju/errors"
+	"modernc.org/mathutil"
 	"sync"
 )
 
@@ -100,7 +101,7 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 		defer CheckPanic()
 		// send jobs
 		for i := 0; i < nJobs; i += batchSize {
-			c <- batchJob{beginId: i, endId: Min(i+batchSize, nJobs)}
+			c <- batchJob{beginId: i, endId: mathutil.Min(i+batchSize, nJobs)}
 		}
 		// send EOF
 		for i := 0; i < nWorkers; i++ {

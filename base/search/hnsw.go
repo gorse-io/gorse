@@ -21,6 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"go.uber.org/zap"
 	"math/rand"
+	"modernc.org/mathutil"
 	"time"
 )
 
@@ -130,7 +131,7 @@ func (h *HNSW) insert(q int32) {
 		enterPoints = h.selectNeighbors(h.vectors[q], w, 1)
 	}
 
-	for currentLayer := base.Min(topLayer, l); currentLayer >= 0; currentLayer-- {
+	for currentLayer := mathutil.Min(topLayer, l); currentLayer >= 0; currentLayer-- {
 		w = h.searchLayer(h.vectors[q], enterPoints, h.efConstruction, currentLayer)
 		neighbors := h.selectNeighbors(h.vectors[q], w, h.maxConnection)
 		// add bidirectional connections from upperNeighbors to q at layer l_c
@@ -268,7 +269,7 @@ func recall(expected, actual []int32) float32 {
 }
 
 func (b *HNSWBuilder) evaluate(idx VectorIndex, prune0 bool) float32 {
-	testSize := base.Min(b.testSize, len(b.data))
+	testSize := mathutil.Min(b.testSize, len(b.data))
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	for _, i := range samples {

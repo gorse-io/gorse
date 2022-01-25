@@ -22,14 +22,6 @@ import (
 	"time"
 )
 
-func TestMax(t *testing.T) {
-	assert.Equal(t, int32(10), Max(2, 4, 6, 8, 10))
-}
-
-func TestMin(t *testing.T) {
-	assert.Equal(t, 4, Min(12, 4, 6, 8, 10))
-}
-
 func TestNewMatrix32(t *testing.T) {
 	a := NewMatrix32(3, 4)
 	assert.Equal(t, 3, len(a))
