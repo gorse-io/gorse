@@ -229,20 +229,20 @@ func TestRecommend_ItemBased(t *testing.T) {
 	assert.NoError(t, err)
 
 	// insert similar items
-	err = w.cacheClient.SetScores(cache.ItemNeighbors, "21", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "21"), []cache.Scored{
 		{"22", 100000},
 		{"25", 1000000},
 		{"29", 1},
 	})
 	assert.NoError(t, err)
-	err = w.cacheClient.SetScores(cache.ItemNeighbors, "22", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "22"), []cache.Scored{
 		{"23", 100000},
 		{"25", 1000000},
 		{"28", 1},
 		{"29", 1},
 	})
 	assert.NoError(t, err)
-	err = w.cacheClient.SetScores(cache.ItemNeighbors, "23", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "23"), []cache.Scored{
 		{"24", 100000},
 		{"25", 1000000},
 		{"27", 1},
@@ -250,7 +250,7 @@ func TestRecommend_ItemBased(t *testing.T) {
 		{"29", 1},
 	})
 	assert.NoError(t, err)
-	err = w.cacheClient.SetScores(cache.ItemNeighbors, "24", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "24"), []cache.Scored{
 		{"21", 100000},
 		{"25", 1000000},
 		{"26", 1},
@@ -261,20 +261,20 @@ func TestRecommend_ItemBased(t *testing.T) {
 	assert.NoError(t, err)
 
 	// insert similar items in category
-	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "21", "*", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "21", "*"), []cache.Scored{
 		{"22", 100000},
 	})
 	assert.NoError(t, err)
-	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "22", "*", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "22", "*"), []cache.Scored{
 		{"28", 1},
 	})
 	assert.NoError(t, err)
-	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "23", "*", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "23", "*"), []cache.Scored{
 		{"24", 100000},
 		{"28", 1},
 	})
 	assert.NoError(t, err)
-	err = w.cacheClient.SetCategoryScores(cache.ItemNeighbors, "24", "*", []cache.Scored{
+	err = w.cacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "24", "*"), []cache.Scored{
 		{"26", 1},
 		{"28", 1},
 	})
@@ -307,7 +307,7 @@ func TestRecommend_UserBased(t *testing.T) {
 	w.cfg.Recommend.EnableColRecommend = false
 	w.cfg.Recommend.EnableUserBasedRecommend = true
 	// insert similar users
-	err := w.cacheClient.SetScores(cache.UserNeighbors, "0", []cache.Scored{
+	err := w.cacheClient.SetSorted(cache.Key(cache.UserNeighbors, "0"), []cache.Scored{
 		{"1", 2},
 		{"2", 1.5},
 		{"3", 1},

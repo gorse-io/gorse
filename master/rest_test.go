@@ -461,7 +461,7 @@ func TestMaster_GetUsers(t *testing.T) {
 		End()
 }
 
-func TestServer_ItemList(t *testing.T) {
+func TestServer_SortedItems(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
@@ -473,46 +473,6 @@ func TestServer_ItemList(t *testing.T) {
 	operators := []ListOperator{
 		{"Item Neighbors", cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.ItemNeighbors, "0/*", "/api/dashboard/item/0/neighbors/*"},
-	}
-	for i, operator := range operators {
-		t.Run(operator.Name, func(t *testing.T) {
-			// Put scores
-			scores := []cache.Scored{
-				{strconv.Itoa(i) + "0", 100},
-				{strconv.Itoa(i) + "1", 99},
-				{strconv.Itoa(i) + "2", 98},
-				{strconv.Itoa(i) + "3", 97},
-				{strconv.Itoa(i) + "4", 96},
-			}
-			err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
-			assert.NoError(t, err)
-			items := make([]data.Item, 0)
-			for _, score := range scores {
-				items = append(items, data.Item{ItemId: score.Id})
-				err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: score.Id}})
-				assert.NoError(t, err)
-			}
-			apitest.New().
-				Handler(s.handler).
-				Get(operator.Get).
-				Expect(t).
-				Status(http.StatusOK).
-				Body(marshal(t, items)).
-				End()
-		})
-	}
-}
-
-func TestServer_Sort(t *testing.T) {
-	s := newMockServer(t)
-	defer s.Close(t)
-	type ListOperator struct {
-		Name   string
-		Prefix string
-		Label  string
-		Get    string
-	}
-	operators := []ListOperator{
 		{"Latest Items", cache.LatestItems, "", "/api/dashboard/latest/"},
 		{"Popular Items", cache.PopularItems, "", "/api/dashboard/popular/"},
 		{"Latest Items in Category", cache.LatestItems, "*", "/api/dashboard/latest/*"},
@@ -547,7 +507,7 @@ func TestServer_Sort(t *testing.T) {
 	}
 }
 
-func TestServer_UserList(t *testing.T) {
+func TestServer_SortedUsers(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
@@ -568,7 +528,7 @@ func TestServer_UserList(t *testing.T) {
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.CacheClient.SetScores(operator.Prefix, operator.Label, scores)
+		err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 		assert.NoError(t, err)
 		users := make([]data.User, 0)
 		for _, score := range scores {
