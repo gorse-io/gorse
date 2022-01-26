@@ -55,7 +55,7 @@ func TestSplit(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"2", "5", "8"}, users)
 
-	users, err = split(userIndex, nodes, "d")
+	_, err = split(userIndex, nodes, "d")
 	assert.Error(t, err)
 }
 
@@ -68,12 +68,16 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.SetTime(cache.LastModifyUserTime, "0", time.Now().Add(-time.Hour))
+	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(-time.Hour*100))
+	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(time.Hour*100))
+	assert.NoError(t, err)
 	assert.False(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.ClearScores(cache.OfflineRecommend, "0")
+	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 }
 
@@ -283,6 +287,7 @@ func TestRecommend_ItemBased(t *testing.T) {
 	// insert items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "21"}, {ItemId: "22"}, {ItemId: "23"}, {ItemId: "24"},
 		{ItemId: "25"}, {ItemId: "26"}, {ItemId: "27"}, {ItemId: "28"}, {ItemId: "29"}})
+	assert.NoError(t, err)
 	// insert hidden items
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "25", IsHidden: true}})
 	assert.NoError(t, err)
