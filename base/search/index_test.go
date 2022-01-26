@@ -33,7 +33,7 @@ func TestHNSW_Cosine(t *testing.T) {
 	}
 	var vectors []Vector
 	for _, feedback := range trainSet.ItemFeedback {
-		vectors = append(vectors, NewDictionaryVector(feedback, values, nil))
+		vectors = append(vectors, NewDictionaryVector(feedback, values, nil, false))
 	}
 
 	// build vector index
@@ -81,7 +81,7 @@ func TestIVF_Cosine(t *testing.T) {
 		if big.NewInt(int64(i)).ProbablyPrime(0) {
 			terms = append(terms, "prime")
 		}
-		vectors = append(vectors, NewDictionaryVector(feedback, values, terms))
+		vectors = append(vectors, NewDictionaryVector(feedback, values, terms, false))
 	}
 
 	// build vector index

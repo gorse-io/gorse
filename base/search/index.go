@@ -27,6 +27,7 @@ import (
 type Vector interface {
 	Distance(vector Vector) float32
 	Terms() []string
+	IsHidden() bool
 }
 
 type DenseVector struct {
@@ -53,14 +54,19 @@ func (v *DenseVector) Terms() []string {
 	return nil
 }
 
-type DictionaryVector struct {
-	terms   []string
-	indices []int32
-	values  []float32
-	norm    float32
+func (v *DenseVector) IsHidden() bool {
+	return false
 }
 
-func NewDictionaryVector(indices []int32, values []float32, terms []string) *DictionaryVector {
+type DictionaryVector struct {
+	isHidden bool
+	terms    []string
+	indices  []int32
+	values   []float32
+	norm     float32
+}
+
+func NewDictionaryVector(indices []int32, values []float32, terms []string, isHidden bool) *DictionaryVector {
 	sort.Sort(sortutil.Int32Slice(indices))
 	var norm float32
 	for _, i := range indices {
@@ -68,10 +74,11 @@ func NewDictionaryVector(indices []int32, values []float32, terms []string) *Dic
 	}
 	norm = math32.Sqrt(norm)
 	return &DictionaryVector{
-		terms:   terms,
-		indices: indices,
-		values:  values,
-		norm:    norm,
+		isHidden: isHidden,
+		terms:    terms,
+		indices:  indices,
+		values:   values,
+		norm:     norm,
 	}
 }
 
@@ -111,6 +118,10 @@ func (v *DictionaryVector) Distance(vector Vector) float32 {
 
 func (v *DictionaryVector) Terms() []string {
 	return v.terms
+}
+
+func (v *DictionaryVector) IsHidden() bool {
+	return v.isHidden
 }
 
 type VectorIndex interface {

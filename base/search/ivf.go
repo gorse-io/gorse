@@ -88,7 +88,7 @@ func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []f
 	for _, c := range clusters {
 		for _, i := range idx.clusters[c].observations {
 			if idx.data[i] != q {
-				pq.Push(int32(i), q.Distance(idx.data[i]))
+				pq.Push(i, q.Distance(idx.data[i]))
 				if pq.Len() > n {
 					pq.Pop()
 				}
@@ -167,9 +167,11 @@ func (idx *IVF) Build() {
 	clusters := make([]ivfCluster, idx.k)
 	assignments := make([]int, len(idx.data))
 	for i := range idx.data {
-		c := rand.Intn(idx.k)
-		clusters[c].observations = append(clusters[c].observations, int32(i))
-		assignments[i] = c
+		if !idx.data[i].IsHidden() {
+			c := rand.Intn(idx.k)
+			clusters[c].observations = append(clusters[c].observations, int32(i))
+			assignments[i] = c
+		}
 	}
 	for c := range clusters {
 		clusters[c].centroid = newDictionaryCentroidVector(idx.data, clusters[c].observations)
@@ -181,21 +183,23 @@ func (idx *IVF) Build() {
 		// reassign clusters
 		nextClusters := make([]ivfCluster, idx.k)
 		_ = base.Parallel(len(idx.data), idx.numJobs, func(_, i int) error {
-			nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
-			for c := range clusters {
-				d := clusters[c].centroid.Distance(idx.data[i])
-				if d < nextDistance {
-					nextCluster = c
-					nextDistance = d
+			if !idx.data[i].IsHidden() {
+				nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
+				for c := range clusters {
+					d := clusters[c].centroid.Distance(idx.data[i])
+					if d < nextDistance {
+						nextCluster = c
+						nextDistance = d
+					}
 				}
+				if nextCluster != assignments[i] {
+					errorCount++
+				}
+				nextClusters[nextCluster].mu.Lock()
+				defer nextClusters[nextCluster].mu.Unlock()
+				nextClusters[nextCluster].observations = append(nextClusters[nextCluster].observations, int32(i))
+				assignments[i] = nextCluster
 			}
-			if nextCluster != assignments[i] {
-				errorCount++
-			}
-			nextClusters[nextCluster].mu.Lock()
-			defer nextClusters[nextCluster].mu.Unlock()
-			nextClusters[nextCluster].observations = append(nextClusters[nextCluster].observations, int32(i))
-			assignments[i] = nextCluster
 			return nil
 		})
 
