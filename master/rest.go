@@ -465,52 +465,6 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 	server.Ok(response, details)
 }
 
-func (m *Master) getList(prefix, name string, request *restful.Request, response *restful.Response, retType interface{}) {
-	var n, begin, end int
-	var err error
-	// read arguments
-	if begin, err = server.ParseInt(request, "offset", 0); err != nil {
-		server.BadRequest(response, err)
-		return
-	}
-	if n, err = server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN); err != nil {
-		server.BadRequest(response, err)
-		return
-	}
-	end = begin + n - 1
-	// Get the popular list
-	scores, err := m.CacheClient.GetScores(prefix, name, begin, end)
-	if err != nil {
-		server.InternalServerError(response, err)
-		return
-	}
-	// Send result
-	switch retType.(type) {
-	case data.Item:
-		details := make([]data.Item, len(scores))
-		for i := range scores {
-			details[i], err = m.DataClient.GetItem(scores[i].Id)
-			if err != nil {
-				server.InternalServerError(response, err)
-				return
-			}
-		}
-		server.Ok(response, details)
-	case data.User:
-		details := make([]data.User, len(scores))
-		for i := range scores {
-			details[i], err = m.DataClient.GetUser(scores[i].Id)
-			if err != nil {
-				server.InternalServerError(response, err)
-				return
-			}
-		}
-		server.Ok(response, details)
-	default:
-		base.Logger().Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
-	}
-}
-
 func (m *Master) getSort(key string, request *restful.Request, response *restful.Response, retType interface{}) {
 	var n, begin, end int
 	var err error
@@ -570,18 +524,18 @@ func (m *Master) getLatest(request *restful.Request, response *restful.Response)
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	m.getList(cache.ItemNeighbors, itemId, request, response, data.Item{})
+	m.getSort(cache.Key(cache.ItemNeighbors, itemId), request, response, data.Item{})
 }
 
 func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
-	m.getList(cache.ItemNeighbors, itemId+"/"+category, request, response, data.Item{})
+	m.getSort(cache.Key(cache.ItemNeighbors, itemId, category), request, response, data.Item{})
 }
 
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
-	m.getList(cache.UserNeighbors, userId, request, response, data.User{})
+	m.getSort(cache.Key(cache.UserNeighbors, userId), request, response, data.User{})
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {

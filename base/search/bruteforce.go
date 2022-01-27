@@ -39,9 +39,11 @@ func NewBruteforce(vectors []Vector) *Bruteforce {
 func (b *Bruteforce) Search(q Vector, n int, prune0 bool) (values []int32, scores []float32) {
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
-		pq.Push(int32(i), q.Distance(vec))
-		if pq.Len() > n {
-			pq.Pop()
+		if vec != q {
+			pq.Push(int32(i), q.Distance(vec))
+			if pq.Len() > n {
+				pq.Pop()
+			}
 		}
 	}
 	pq = pq.Reverse()
@@ -65,15 +67,17 @@ func (b *Bruteforce) MultiSearch(q Vector, terms []string, n int, prune0 bool) (
 
 	// search with terms
 	for i, vec := range b.vectors {
-		queues[""].Push(int32(i), q.Distance(vec))
-		if queues[""].Len() > n {
-			queues[""].Pop()
-		}
-		for _, term := range vec.Terms() {
-			if _, match := queues[term]; match {
-				queues[term].Push(int32(i), q.Distance(vec))
-				if queues[term].Len() > n {
-					queues[term].Pop()
+		if vec != q {
+			queues[""].Push(int32(i), q.Distance(vec))
+			if queues[""].Len() > n {
+				queues[""].Pop()
+			}
+			for _, term := range vec.Terms() {
+				if _, match := queues[term]; match {
+					queues[term].Push(int32(i), q.Distance(vec))
+					if queues[term].Len() > n {
+						queues[term].Pop()
+					}
 				}
 			}
 		}

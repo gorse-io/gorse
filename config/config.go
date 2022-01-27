@@ -179,7 +179,13 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			FallbackRecommend:            []string{"latest"},
 			NumFeedbackFallbackItemBased: 10,
 			ItemNeighborType:             "auto",
+			EnableItemNeighborIndex:      false,
+			ItemNeighborIndexRecall:      0.8,
+			ItemNeighborIndexFitEpoch:    3,
 			UserNeighborType:             "auto",
+			EnableUserNeighborIndex:      false,
+			UserNeighborIndexRecall:      0.8,
+			UserNeighborIndexFitEpoch:    3,
 			EnableLatestRecommend:        false,
 			EnablePopularRecommend:       false,
 			EnableUserBasedRecommend:     false,
@@ -254,7 +260,13 @@ func init() {
 	viper.SetDefault("recommend.fallback_recommend", defaultRecommendConfig.FallbackRecommend)
 	viper.SetDefault("recommend.num_feedback_fallback_item_based", defaultRecommendConfig.NumFeedbackFallbackItemBased)
 	viper.SetDefault("recommend.item_neighbor_type", defaultRecommendConfig.ItemNeighborType)
+	viper.SetDefault("recommend.enable_item_neighbor_index", defaultRecommendConfig.EnableItemNeighborIndex)
+	viper.SetDefault("recommend.item_neighbor_index_recall", defaultRecommendConfig.ItemNeighborIndexRecall)
+	viper.SetDefault("recommend.item_neighbor_index_fit_epoch", defaultRecommendConfig.ItemNeighborIndexFitEpoch)
 	viper.SetDefault("recommend.user_neighbor_type", defaultRecommendConfig.UserNeighborType)
+	viper.SetDefault("recommend.enable_user_neighbor_index", defaultRecommendConfig.EnableUserNeighborIndex)
+	viper.SetDefault("recommend.user_neighbor_index_recall", defaultRecommendConfig.UserNeighborIndexRecall)
+	viper.SetDefault("recommend.user_neighbor_index_fit_epoch", defaultRecommendConfig.UserNeighborIndexFitEpoch)
 	viper.SetDefault("recommend.enable_latest_recommend", defaultRecommendConfig.EnableLatestRecommend)
 	viper.SetDefault("recommend.enable_popular_recommend", defaultRecommendConfig.EnablePopularRecommend)
 	viper.SetDefault("recommend.enable_user_based_recommend", defaultRecommendConfig.EnableUserBasedRecommend)

@@ -265,12 +265,12 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 			for _, j := range adjacencyItems {
 				if j != int32(itemId) && !dataset.HiddenItems[j] {
-					commonLabels := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
-					if commonLabels > 0 {
-						score := commonLabels * commonLabels /
+					commonSum, commonCount := commonElements(dataset.ItemLabels[itemId], dataset.ItemLabels[j], labelIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.ItemLabels[itemId], labelIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
-							(commonLabels + similarityShrink)
+							(commonCount + similarityShrink)
 						nearItemsFilters[""].Push(j, score)
 						for _, category := range dataset.ItemCategories[j] {
 							nearItemsFilters[category].Push(j, score)
@@ -295,12 +295,12 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 			for _, j := range adjacencyItems {
 				if j != int32(itemId) && !dataset.HiddenItems[j] {
-					commonUsers := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
-					if commonUsers > 0 {
-						score := commonUsers * commonUsers /
+					commonSum, commonCount := commonElements(dataset.ItemFeedback[itemId], dataset.ItemFeedback[j], userIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[itemId], userIDF)) /
 							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
-							(commonUsers + similarityShrink)
+							(commonCount + similarityShrink)
 						nearItemsFilters[""].Push(j, score)
 						for _, category := range dataset.ItemCategories[j] {
 							nearItemsFilters[category].Push(j, score)
@@ -336,7 +336,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		itemLabelVectors = make([]search.Vector, dataset.ItemCount())
 		for i := range itemLabelVectors {
-			itemLabelVectors[i] = search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i])
+			itemLabelVectors[i] = search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
 		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
 		similarItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
@@ -346,13 +346,14 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
 		itemFeedbackVectors = make([]search.Vector, dataset.ItemCount())
 		for i := range itemFeedbackVectors {
-			itemFeedbackVectors[i] = search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i])
+			itemFeedbackVectors[i] = search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
 		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
 		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
 	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+		startTime := time.Now()
 		var neighbors map[string][]int32
 		var scores map[string][]float32
 		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
@@ -368,13 +369,17 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 				itemScores := make([]cache.Scored, len(neighbors[category]))
 				for i := range scores[category] {
 					itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[category][i])
-					itemScores[i].Score = scores[category][i]
+					itemScores[i].Score = -scores[category][i]
 				}
-				if err := m.CacheClient.AddSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId))), itemScores); err != nil {
+				if err := m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category), itemScores); err != nil {
 					return errors.Trace(err)
 				}
 			}
 		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId)), time.Now()); err != nil {
+			return errors.Trace(err)
+		}
+		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		completed <- struct{}{}
 		return nil
 	})
@@ -483,12 +488,12 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			}
 			for _, j := range adjacencyUsers {
 				if j != int32(userId) {
-					commonLabels := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
-					if commonLabels > 0 {
-						score := commonLabels * commonLabels /
+					commonSum, commonCount := commonElements(dataset.UserLabels[userId], dataset.UserLabels[j], labelIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.UserLabels[userId], labelIDF)) /
 							math32.Sqrt(weightedSum(dataset.UserLabels[j], labelIDF)) /
-							(commonLabels + similarityShrink)
+							(commonCount + similarityShrink)
 						nearUsers.Push(j, score)
 					}
 				}
@@ -510,12 +515,12 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			}
 			for _, j := range adjacencyUsers {
 				if j != int32(userId) {
-					commonItems := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
-					if commonItems > 0 {
-						score := commonItems * commonItems /
+					commonSum, commonCount := commonElements(dataset.UserFeedback[userId], dataset.UserFeedback[j], itemIDF)
+					if commonSum > 0 {
+						score := commonSum * commonCount /
 							math32.Sqrt(weightedSum(dataset.UserFeedback[userId], itemIDF)) /
 							math32.Sqrt(weightedSum(dataset.UserFeedback[j], itemIDF)) /
-							(commonItems + similarityShrink)
+							(commonCount + similarityShrink)
 						nearUsers.Push(j, score)
 					}
 				}
@@ -545,7 +550,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
 		userLabelVectors = make([]search.Vector, dataset.UserCount())
 		for i := range userLabelVectors {
-			userLabelVectors[i] = search.NewDictionaryVector(dataset.UserLabels[i], labelIDF, nil)
+			userLabelVectors[i] = search.NewDictionaryVector(dataset.UserLabels[i], labelIDF, nil, false)
 		}
 		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
 		similarUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
@@ -555,13 +560,14 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
 		userFeedbackVectors = make([]search.Vector, dataset.UserCount())
 		for i := range userFeedbackVectors {
-			userFeedbackVectors[i] = search.NewDictionaryVector(dataset.UserFeedback[i], itemIDF, nil)
+			userFeedbackVectors[i] = search.NewDictionaryVector(dataset.UserFeedback[i], itemIDF, nil, false)
 		}
 		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
 		relatedUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
 	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		startTime := time.Now()
 		var neighbors []int32
 		var scores []float32
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
@@ -575,21 +581,26 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		itemScores := make([]cache.Scored, len(neighbors))
 		for i := range scores {
 			itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[i])
-			itemScores[i].Score = scores[i]
+			itemScores[i].Score = -scores[i]
 		}
-		if err := m.CacheClient.AddSorted(cache.Key(cache.UserNeighbors, dataset.ItemIndex.ToName(int32(userId))), itemScores); err != nil {
+		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.ItemIndex.ToName(int32(userId))), itemScores); err != nil {
 			return errors.Trace(err)
 		}
+		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
+			return errors.Trace(err)
+		}
+		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		completed <- struct{}{}
 		return nil
 	})
 }
 
-func commonElements(a, b []int32, weights []float32) float32 {
-	i, j, sum := 0, 0, float32(0)
+func commonElements(a, b []int32, weights []float32) (float32, float32) {
+	i, j, sum, count := 0, 0, float32(0), float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
 			sum += weights[a[i]]
+			count++
 			i++
 			j++
 		} else if a[i] < b[j] {
@@ -598,7 +609,7 @@ func commonElements(a, b []int32, weights []float32) float32 {
 			j++
 		}
 	}
-	return sum
+	return sum, count
 }
 
 func weightedSum(a []int32, weights []float32) float32 {
@@ -638,7 +649,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 	var modifiedTime, updateTime time.Time
 	// check cache
 	for _, category := range append([]string{""}, categories...) {
-		items, err := m.CacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, -1)
+		items, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, itemId, category), 0, -1)
 		if err != nil {
 			base.Logger().Error("failed to read item neighbors cache", zap.String("item_id", itemId), zap.Error(err))
 			return true

@@ -88,9 +88,11 @@ func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []f
 	clusters, _ := cq.PopAll()
 	for _, c := range clusters {
 		for _, i := range idx.clusters[c].observations {
-			pq.Push(int32(i), q.Distance(idx.data[i]))
-			if pq.Len() > n {
-				pq.Pop()
+			if idx.data[i] != q {
+				pq.Push(i, q.Distance(idx.data[i]))
+				if pq.Len() > n {
+					pq.Pop()
+				}
 			}
 		}
 	}
@@ -123,16 +125,18 @@ func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (value
 	clusters, _ := cq.PopAll()
 	for _, c := range clusters {
 		for _, i := range idx.clusters[c].observations {
-			vec := idx.data[i]
-			queues[""].Push(int32(i), q.Distance(vec))
-			if queues[""].Len() > n {
-				queues[""].Pop()
-			}
-			for _, term := range vec.Terms() {
-				if _, match := queues[term]; match {
-					queues[term].Push(int32(i), q.Distance(vec))
-					if queues[term].Len() > n {
-						queues[term].Pop()
+			if idx.data[i] != q {
+				vec := idx.data[i]
+				queues[""].Push(i, q.Distance(vec))
+				if queues[""].Len() > n {
+					queues[""].Pop()
+				}
+				for _, term := range vec.Terms() {
+					if _, match := queues[term]; match {
+						queues[term].Push(i, q.Distance(vec))
+						if queues[term].Len() > n {
+							queues[term].Pop()
+						}
 					}
 				}
 			}
@@ -164,9 +168,11 @@ func (idx *IVF) Build() {
 	clusters := make([]ivfCluster, idx.k)
 	assignments := make([]int, len(idx.data))
 	for i := range idx.data {
-		c := rand.Intn(idx.k)
-		clusters[c].observations = append(clusters[c].observations, int32(i))
-		assignments[i] = c
+		if !idx.data[i].IsHidden() {
+			c := rand.Intn(idx.k)
+			clusters[c].observations = append(clusters[c].observations, int32(i))
+			assignments[i] = c
+		}
 	}
 	for c := range clusters {
 		clusters[c].centroid = newDictionaryCentroidVector(idx.data, clusters[c].observations)
@@ -178,21 +184,23 @@ func (idx *IVF) Build() {
 		// reassign clusters
 		nextClusters := make([]ivfCluster, idx.k)
 		_ = base.Parallel(len(idx.data), idx.numJobs, func(_, i int) error {
-			nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
-			for c := range clusters {
-				d := clusters[c].centroid.Distance(idx.data[i])
-				if d < nextDistance {
-					nextCluster = c
-					nextDistance = d
+			if !idx.data[i].IsHidden() {
+				nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
+				for c := range clusters {
+					d := clusters[c].centroid.Distance(idx.data[i])
+					if d < nextDistance {
+						nextCluster = c
+						nextDistance = d
+					}
 				}
+				if nextCluster != assignments[i] {
+					errorCount++
+				}
+				nextClusters[nextCluster].mu.Lock()
+				defer nextClusters[nextCluster].mu.Unlock()
+				nextClusters[nextCluster].observations = append(nextClusters[nextCluster].observations, int32(i))
+				assignments[i] = nextCluster
 			}
-			if nextCluster != assignments[i] {
-				errorCount++
-			}
-			nextClusters[nextCluster].mu.Lock()
-			defer nextClusters[nextCluster].mu.Unlock()
-			nextClusters[nextCluster].observations = append(nextClusters[nextCluster].observations, int32(i))
-			assignments[i] = nextCluster
 			return nil
 		})
 
@@ -240,17 +248,18 @@ func newDictionaryCentroidVector(vectors []Vector, indices []int32) *dictionaryC
 }
 
 func (v *dictionaryCentroidVector) Distance(vector Vector) float32 {
-	var sum float32
+	var sum, common float32
 	if dictVector, isDictVec := vector.(*DictionaryVector); !isDictVec {
 		base.Logger().Fatal("vector type mismatch")
 	} else {
 		for _, i := range dictVector.indices {
 			if val, exist := v.data[i]; exist {
 				sum += val * math32.Sqrt(v.data[i])
+				common++
 			}
 		}
 	}
-	return -sum
+	return -sum * common / (common + similarityShrink)
 }
 
 type IVFBuilder struct {
@@ -305,9 +314,10 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF,
 		score = b.evaluate(idx, prune0)
 		base.Logger().Info("try to build vector index",
 			zap.String("index_type", "IVF"),
+			zap.Int("num_probe", idx.numProbe),
 			zap.Float32("recall", score),
 			zap.String("build_time", buildTime.String()))
-		if score > recall {
+		if score >= recall {
 			return
 		} else {
 			idx.numProbe <<= 1

@@ -481,7 +481,7 @@ func (w *Worker) Recommend(users []string) {
 				scores := make(map[string]float32)
 				for _, itemId := range positiveItems {
 					// load similar items
-					similarItems, err := w.cacheClient.GetCategoryScores(cache.ItemNeighbors, itemId, category, 0, w.cfg.Database.CacheSize)
+					similarItems, err := w.cacheClient.GetSorted(cache.Key(cache.ItemNeighbors, itemId, category), 0, w.cfg.Database.CacheSize)
 					if err != nil {
 						base.Logger().Error("failed to load similar items", zap.Error(err))
 						return errors.Trace(err)
@@ -509,7 +509,7 @@ func (w *Worker) Recommend(users []string) {
 			localStartTime := time.Now()
 			scores := make(map[string]float32)
 			// load similar users
-			similarUsers, err := w.cacheClient.GetScores(cache.UserNeighbors, userId, 0, w.cfg.Database.CacheSize)
+			similarUsers, err := w.cacheClient.GetSorted(cache.Key(cache.UserNeighbors, userId), 0, w.cfg.Database.CacheSize)
 			if err != nil {
 				base.Logger().Error("failed to load similar users", zap.Error(err))
 				return errors.Trace(err)

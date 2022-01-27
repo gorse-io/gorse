@@ -752,9 +752,6 @@ func TestServer_List(t *testing.T) {
 	operators := []ListOperator{
 		{"Offline Recommend", cache.OfflineRecommend, "0", "/api/intermediate/recommend/0"},
 		{"Offline Recommend in Category", cache.OfflineRecommend, "0/0", "/api/intermediate/recommend/0/0"},
-		{"Item Neighbors", cache.ItemNeighbors, "0", "/api/item/0/neighbors"},
-		{"Item Neighbors in Category", cache.ItemNeighbors, "0/0", "/api/item/0/neighbors/0"},
-		{"User Neighbors", cache.UserNeighbors, "0", "/api/user/0/neighbors"},
 	}
 
 	for i, operator := range operators {
@@ -823,6 +820,9 @@ func TestServer_Sort(t *testing.T) {
 		Get  string
 	}
 	operators := []ListOperator{
+		{"User Neighbors", cache.Key(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
+		{"Item Neighbors", cache.Key(cache.ItemNeighbors, "0"), "/api/item/0/neighbors"},
+		{"Item Neighbors in Category", cache.Key(cache.ItemNeighbors, "0", "0"), "/api/item/0/neighbors/0"},
 		{"Latest Items", cache.LatestItems, "/api/latest/"},
 		{"Latest Items in Category", cache.Key(cache.LatestItems, "0"), "/api/latest/0"},
 		{"Popular Items", cache.PopularItems, "/api/popular/"},
@@ -1109,25 +1109,25 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		End()
 
 	// insert similar items
-	err = s.CacheClient.SetScores(cache.ItemNeighbors, "1", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "1"), []cache.Scored{
 		{"2", 100000},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.ItemNeighbors, "2", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "2"), []cache.Scored{
 		{"3", 100000},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.ItemNeighbors, "3", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "3"), []cache.Scored{
 		{"4", 100000},
 		{"7", 1},
 		{"8", 1},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.ItemNeighbors, "4", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "4"), []cache.Scored{
 		{"1", 100000},
 		{"6", 1},
 		{"7", 1},
@@ -1135,7 +1135,7 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetScores(cache.ItemNeighbors, "5", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "5"), []cache.Scored{
 		{"1", 1},
 		{"6", 1},
 		{"7", 100000},
@@ -1145,21 +1145,21 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	assert.NoError(t, err)
 
 	// insert similar items of category *
-	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "1", "*", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "1", "*"), []cache.Scored{
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "2", "*", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "2", "*"), []cache.Scored{
 		{"3", 100000},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "3", "*", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "3", "*"), []cache.Scored{
 		{"7", 1},
 		{"9", 1},
 	})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetCategoryScores(cache.ItemNeighbors, "4", "*", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "4", "*"), []cache.Scored{
 		{"1", 100000},
 		{"7", 1},
 		{"9", 1},
@@ -1217,7 +1217,7 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 		Body(`{"RowAffected": 4}`).
 		End()
 	// insert similar users
-	err = s.CacheClient.SetScores(cache.UserNeighbors, "0", []cache.Scored{
+	err = s.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, "0"), []cache.Scored{
 		{"1", 2},
 		{"2", 1.5},
 		{"3", 1},

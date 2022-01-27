@@ -27,6 +27,7 @@ import (
 type Vector interface {
 	Distance(vector Vector) float32
 	Terms() []string
+	IsHidden() bool
 }
 
 type DenseVector struct {
@@ -53,14 +54,19 @@ func (v *DenseVector) Terms() []string {
 	return nil
 }
 
-type DictionaryVector struct {
-	terms   []string
-	indices []int32
-	values  []float32
-	norm    float32
+func (v *DenseVector) IsHidden() bool {
+	return false
 }
 
-func NewDictionaryVector(indices []int32, values []float32, terms []string) *DictionaryVector {
+type DictionaryVector struct {
+	isHidden bool
+	terms    []string
+	indices  []int32
+	values   []float32
+	norm     float32
+}
+
+func NewDictionaryVector(indices []int32, values []float32, terms []string, isHidden bool) *DictionaryVector {
 	sort.Sort(sortutil.Int32Slice(indices))
 	var norm float32
 	for _, i := range indices {
@@ -68,18 +74,20 @@ func NewDictionaryVector(indices []int32, values []float32, terms []string) *Dic
 	}
 	norm = math32.Sqrt(norm)
 	return &DictionaryVector{
-		terms:   terms,
-		indices: indices,
-		values:  values,
-		norm:    norm,
+		isHidden: isHidden,
+		terms:    terms,
+		indices:  indices,
+		values:   values,
+		norm:     norm,
 	}
 }
 
-func (v *DictionaryVector) Dot(vector *DictionaryVector) float32 {
-	i, j, sum := 0, 0, float32(0)
+func (v *DictionaryVector) Dot(vector *DictionaryVector) (float32, float32) {
+	i, j, sum, common := 0, 0, float32(0), float32(0)
 	for i < len(v.indices) && j < len(vector.indices) {
 		if v.indices[i] == vector.indices[j] {
 			sum += v.values[v.indices[i]]
+			common++
 			i++
 			j++
 		} else if v.indices[i] < vector.indices[j] {
@@ -88,8 +96,10 @@ func (v *DictionaryVector) Dot(vector *DictionaryVector) float32 {
 			j++
 		}
 	}
-	return sum
+	return sum, common
 }
+
+const similarityShrink = 100
 
 func (v *DictionaryVector) Distance(vector Vector) float32 {
 	var score float32
@@ -98,9 +108,9 @@ func (v *DictionaryVector) Distance(vector Vector) float32 {
 			zap.String("expect", reflect.TypeOf(v).String()),
 			zap.String("actual", reflect.TypeOf(vector).String()))
 	} else {
-		dot := v.Dot(dictVec)
+		dot, common := v.Dot(dictVec)
 		if dot > 0 {
-			score = -dot / v.norm / dictVec.norm
+			score = -dot / v.norm / dictVec.norm * common / (common + similarityShrink)
 		}
 	}
 	return score
@@ -108,6 +118,10 @@ func (v *DictionaryVector) Distance(vector Vector) float32 {
 
 func (v *DictionaryVector) Terms() []string {
 	return v.terms
+}
+
+func (v *DictionaryVector) IsHidden() bool {
+	return v.isHidden
 }
 
 type VectorIndex interface {

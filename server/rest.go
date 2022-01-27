@@ -540,7 +540,7 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
-	s.getList(cache.ItemNeighbors, itemId, request, response)
+	s.getSort(cache.Key(cache.ItemNeighbors, itemId), request, response)
 }
 
 // getItemCategorizedNeighbors gets categorized neighbors of an item from database.
@@ -552,7 +552,7 @@ func (s *RestServer) getItemCategorizedNeighbors(request *restful.Request, respo
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
-	s.getList(cache.ItemNeighbors, itemId+"/"+category, request, response)
+	s.getSort(cache.Key(cache.ItemNeighbors, itemId, category), request, response)
 }
 
 // getUserNeighbors gets neighbors of a user from database.
@@ -563,7 +563,7 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 	}
 	// Get item id
 	userId := request.PathParameter("user-id")
-	s.getList(cache.UserNeighbors, userId, request, response)
+	s.getSort(cache.Key(cache.UserNeighbors, userId), request, response)
 }
 
 // getSubscribe gets subscribed items of a user from database.
@@ -794,7 +794,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		start := time.Now()
 		candidates := make(map[string]float32)
 		// load similar users
-		similarUsers, err := s.CacheClient.GetScores(cache.UserNeighbors, ctx.userId, 0, s.GorseConfig.Database.CacheSize)
+		similarUsers, err := s.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, ctx.userId), 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -852,7 +852,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		candidates := make(map[string]float32)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.GetCategoryScores(cache.ItemNeighbors, feedback.ItemId, ctx.category, 0, s.GorseConfig.Database.CacheSize)
+			similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.GorseConfig.Database.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
