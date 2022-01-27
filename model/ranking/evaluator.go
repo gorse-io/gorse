@@ -18,6 +18,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/i32set"
+	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/floats"
@@ -64,7 +65,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet *DataSet, topK, n
 			sum[j] += partSum[i][j]
 		}
 	}
-	count := floats.Sum(partCount)
+	count := funk.SumFloat32(partCount)
 	floats.MulConst(sum, 1/count)
 	return sum
 }

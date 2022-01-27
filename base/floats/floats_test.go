@@ -36,18 +36,6 @@ func TestZero(t *testing.T) {
 	assert.Equal(t, []float32{0, 0, 0, 0, 0, 0}, a)
 }
 
-func TestMin(t *testing.T) {
-	a := []float32{3, 2, 5, 6, 0, 0}
-	assert.Equal(t, float32(0), Min(a))
-	assert.Panics(t, func() { Min(nil) })
-}
-
-func TestMax(t *testing.T) {
-	a := []float32{3, 2, 5, 6, 0, 0}
-	assert.Equal(t, float32(6), Max(a))
-	assert.Panics(t, func() { Max(nil) })
-}
-
 func TestAdd(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
 	b := []float32{5, 6, 7, 8}
@@ -138,19 +126,4 @@ func TestDot(t *testing.T) {
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	assert.Equal(t, float32(770), Dot(a, b))
 	assert.Panics(t, func() { Dot([]float32{1}, nil) })
-}
-
-func TestSum(t *testing.T) {
-	a := []float32{3, 2, 5, 6, 0, 0}
-	assert.Equal(t, float32(16), Sum(a))
-}
-
-func TestMean(t *testing.T) {
-	a := []float32{3, 2, 5, 6, 0, 0, 0, 0}
-	assert.Equal(t, float32(2), Mean(a))
-}
-
-func TestStdDev(t *testing.T) {
-	a := []float32{1, 3, 5}
-	assert.Equal(t, float32(2), StdDev(a))
 }

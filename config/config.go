@@ -144,6 +144,9 @@ type RecommendConfig struct {
 	EnableUserBasedRecommend     bool               `mapstructure:"enable_user_based_recommend"`
 	EnableItemBasedRecommend     bool               `mapstructure:"enable_item_based_recommend"`
 	EnableColRecommend           bool               `mapstructure:"enable_collaborative_recommend"`
+	EnableColIndex               bool               `mapstructure:"enable_collaborative_index"`
+	ColIndexRecall               float32            `mapstructure:"collaborative_index_recall"`
+	ColIndexFitEpoch             int                `mapstructure:"collaborative_index_fit_epoch"`
 	EnableClickThroughPrediction bool               `mapstructure:"enable_click_through_prediction"`
 	exploreRecommendLock         sync.RWMutex
 }
@@ -191,6 +194,9 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			EnableUserBasedRecommend:     false,
 			EnableItemBasedRecommend:     false,
 			EnableColRecommend:           true,
+			EnableColIndex:               false,
+			ColIndexRecall:               0.9,
+			ColIndexFitEpoch:             3,
 			EnableClickThroughPrediction: false,
 		}
 	}
@@ -272,6 +278,9 @@ func init() {
 	viper.SetDefault("recommend.enable_user_based_recommend", defaultRecommendConfig.EnableUserBasedRecommend)
 	viper.SetDefault("recommend.enable_item_based_recommend", defaultRecommendConfig.EnableItemBasedRecommend)
 	viper.SetDefault("recommend.enable_collaborative_recommend", defaultRecommendConfig.EnableColRecommend)
+	viper.SetDefault("recommend.enable_collaborative_index", defaultRecommendConfig.EnableColIndex)
+	viper.SetDefault("recommend.collaborative_index_recall", defaultRecommendConfig.ColIndexRecall)
+	viper.SetDefault("recommend.collaborative_index_fit_epoch", defaultRecommendConfig.ColIndexFitEpoch)
 	viper.SetDefault("recommend.enable_click_through_prediction", defaultRecommendConfig.EnableClickThroughPrediction)
 }
 

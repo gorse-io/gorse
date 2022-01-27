@@ -14,10 +14,6 @@
 
 package floats
 
-import (
-	"github.com/chewxy/math32"
-)
-
 // MatZero fills zeros in a matrix of 32-bit floats.
 func MatZero(x [][]float32) {
 	for i := range x {
@@ -139,80 +135,5 @@ func Dot(a, b []float32) (ret float32) {
 	for i := range a {
 		ret += a[i] * b[i]
 	}
-	return
-}
-
-// Min element of a slice of 32-bit floats.
-func Min(x []float32) float32 {
-	if len(x) == 0 {
-		panic("floats: zero slice length")
-	}
-	min := x[0]
-	for _, v := range x[1:] {
-		if v < min {
-			min = v
-		}
-	}
-	return min
-}
-
-// Max element of a slice of 32-bit floats.
-func Max(x []float32) float32 {
-	if len(x) == 0 {
-		panic("floats: zero slice length")
-	}
-	max := x[0]
-	for _, v := range x[1:] {
-		if v > max {
-			max = v
-		}
-	}
-	return max
-}
-
-// Sum of a slice of 32-bit floats.
-func Sum(x []float32) float32 {
-	sum := float32(0)
-	for _, v := range x {
-		sum += v
-	}
-	return sum
-}
-
-// Mean of a slice of 32-bit floats.
-func Mean(x []float32) float32 {
-	return Sum(x) / float32(len(x))
-}
-
-// StdDev returns the sample standard deviation.
-func StdDev(x []float32) float32 {
-	_, variance := MeanVariance(x)
-	return math32.Sqrt(variance)
-}
-
-// MeanVariance computes the sample mean and unbiased variance, where the mean and variance are
-//  \sum_i w_i * x_i / (sum_i w_i)
-//  \sum_i w_i (x_i - mean)^2 / (sum_i w_i - 1)
-// respectively.
-// If weights is nil then all of the weights are 1. If weights is not nil, then
-// len(x) must equal len(weights).
-// When weights sum to 1 or less, a biased variance estimator should be used.
-func MeanVariance(x []float32) (mean, variance float32) {
-	// This uses the corrected two-pass algorithm (1.7), from "Algorithms for computing
-	// the sample variance: Analysis and recommendations" by Chan, Tony F., Gene H. Golub,
-	// and Randall J. LeVeque.
-
-	// note that this will panic if the slice lengths do not match
-	mean = Mean(x)
-	var (
-		ss           float32
-		compensation float32
-	)
-	for _, v := range x {
-		d := v - mean
-		ss += d * d
-		compensation += d
-	}
-	variance = (ss - compensation*compensation/float32(len(x))) / float32(len(x)-1)
 	return
 }

@@ -127,6 +127,15 @@ enable_item_based_recommend = false
 # Enable collaborative filtering recommendation during offline recommendation. The default values is true.
 enable_collaborative_recommend = true
 
+# Enable approximate collaborative filtering recommend using vector index.
+enable_collaborative_index = false
+
+# Minimal recall for approximate collaborative filtering recommend.
+collaborative_index_recall = 0.9
+
+# Maximal number of fit epochs for approximate collaborative filtering recommend vector index.
+collaborative_index_fit_epoch = 3
+
 # Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
 # would be merged randomly. The default values is true.
 enable_click_through_prediction = true
