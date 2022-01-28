@@ -50,6 +50,12 @@ var builtInDataSets = map[string]_BuiltInDataSet{
 		testFile:    "pinterest-20/test.txt",
 		format:      FormatNCF,
 	},
+	"ml-100k": {
+		downloadURL: "https://cdn.gorse.io/datasets/ml-100k.zip",
+		trainFile:   "ml-100k/train.txt",
+		testFile:    "ml-100k/test.txt",
+		format:      FormatNCF,
+	},
 	"ml-1m": {
 		downloadURL: "https://cdn.gorse.io/datasets/ml-1m.zip",
 		trainFile:   "ml-1m/train.txt",
