@@ -361,7 +361,7 @@ func (w *Worker) Recommend(users []string) {
 		zap.Int("n_jobs", w.jobs),
 		zap.Int("cache_size", w.cfg.Database.CacheSize))
 	// progress tracker
-	completed := make(chan interface{}, 1000)
+	completed := make(chan struct{}, 1000)
 	taskName := fmt.Sprintf("Generate offline recommendation [%s]", w.workerName)
 	if w.masterClient != nil {
 		if _, err := w.masterClient.StartTask(context.Background(),
@@ -403,6 +403,9 @@ func (w *Worker) Recommend(users []string) {
 	startTime := time.Now()
 	userFeedbackCache := NewFeedbackCache(w.dataClient, w.cfg.Database.PositiveFeedbackType...)
 	err = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
+		defer func() {
+			completed <- struct{}{}
+		}()
 		userStartTime := time.Now()
 		userId := users[jobId]
 		// convert to user index
@@ -441,32 +444,22 @@ func (w *Worker) Recommend(users []string) {
 
 		// Recommender #1: collaborative filtering.
 		if w.cfg.Recommend.EnableColRecommend && w.rankingModel != nil && w.rankingModel.IsUserPredictable(userIndex) {
-			itemIds := w.rankingModel.GetItemIndex().GetNames()
-			localStartTime := time.Now()
-			recItemsFilters := make(map[string]*heap.TopKStringFilter)
-			recItemsFilters[""] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
-			for _, category := range itemCategories {
-				recItemsFilters[category] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
+			var recommend map[string][]string
+			var usedTime time.Duration
+			if w.cfg.Recommend.EnableColIndex {
+				w.collaborativeRecommendHNSW()
+			} else {
+				recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
 			}
-			for itemIndex, itemId := range itemIds {
-				if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.rankingModel.IsItemPredictable(int32(itemIndex)) {
-					prediction := w.rankingModel.InternalPredict(userIndex, int32(itemIndex))
-					recItemsFilters[""].Push(itemId, prediction)
-					for _, category := range itemCache[itemId].Categories {
-						recItemsFilters[category].Push(itemId, prediction)
-					}
-				}
+			if err != nil {
+				base.Logger().Error("failed to recommend by collaborative filtering",
+					zap.String("user_id", userId), zap.Error(err))
+				return errors.Trace(err)
 			}
-			// save result
-			for category, recItemsFilter := range recItemsFilters {
-				recommendItems, recommendScores := recItemsFilter.PopAll()
-				candidates[category] = append(candidates[category], recommendItems)
-				if err = w.cacheClient.SetCategoryScores(cache.CollaborativeRecommend, userId, category, cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
-					base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.Error(err))
-					return errors.Trace(err)
-				}
+			for category, items := range recommend {
+				candidates[category] = append(candidates[category], items)
 			}
-			CollaborativeRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
+			CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
 		} else if w.rankingModel == nil {
 			base.Logger().Warn("no collaborative filtering model")
 		} else if !w.rankingModel.IsUserPredictable(userIndex) {
@@ -625,7 +618,6 @@ func (w *Worker) Recommend(users []string) {
 			base.Logger().Error("failed to refresh cache", zap.Error(err))
 			return errors.Trace(err)
 		}
-		completed <- nil
 		GenerateRecommendSeconds.Observe(time.Since(userStartTime).Seconds())
 		return nil
 	})
@@ -642,6 +634,41 @@ func (w *Worker) Recommend(users []string) {
 	}
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
+}
+
+func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet *strset.Set, itemCache ItemCache) (map[string][]string, time.Duration, error) {
+	userIndex := w.rankingModel.GetUserIndex().ToNumber(userId)
+	itemIds := w.rankingModel.GetItemIndex().GetNames()
+	localStartTime := time.Now()
+	recItemsFilters := make(map[string]*heap.TopKStringFilter)
+	recItemsFilters[""] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
+	for _, category := range itemCategories {
+		recItemsFilters[category] = heap.NewTopKStringFilter(w.cfg.Database.CacheSize)
+	}
+	for itemIndex, itemId := range itemIds {
+		if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.rankingModel.IsItemPredictable(int32(itemIndex)) {
+			prediction := w.rankingModel.InternalPredict(userIndex, int32(itemIndex))
+			recItemsFilters[""].Push(itemId, prediction)
+			for _, category := range itemCache[itemId].Categories {
+				recItemsFilters[category].Push(itemId, prediction)
+			}
+		}
+	}
+	// save result
+	recommend := make(map[string][]string)
+	for category, recItemsFilter := range recItemsFilters {
+		recommendItems, recommendScores := recItemsFilter.PopAll()
+		recommend[category] = recommendItems
+		if err := w.cacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, userId, category), cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
+			base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
+			return nil, 0, errors.Trace(err)
+		}
+	}
+	return recommend, time.Since(localStartTime), nil
+}
+
+func (w *Worker) collaborativeRecommendHNSW() {
+
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
