@@ -31,12 +31,16 @@ type Vector interface {
 }
 
 type DenseVector struct {
-	data []float32
+	data     []float32
+	terms    []string
+	isHidden bool
 }
 
-func NewDenseVector(data []float32) *DenseVector {
+func NewDenseVector(data []float32, terms []string, isHidden bool) *DenseVector {
 	return &DenseVector{
-		data: data,
+		data:     data,
+		terms:    terms,
+		isHidden: isHidden,
 	}
 }
 
@@ -51,11 +55,11 @@ func (v *DenseVector) Distance(vector Vector) float32 {
 }
 
 func (v *DenseVector) Terms() []string {
-	return nil
+	return v.terms
 }
 
 func (v *DenseVector) IsHidden() bool {
-	return false
+	return v.isHidden
 }
 
 type DictionaryVector struct {

@@ -86,6 +86,10 @@ type Model interface {
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
 	Unmarshal(r io.Reader) error
+	// GetUserFactor returns latent factor of a user.
+	GetUserFactor(userIndex int32) []float32
+	// GetItemFactor returns latent factor of an item.
+	GetItemFactor(itemIndex int32) []float32
 }
 
 type MatrixFactorization interface {
@@ -316,6 +320,16 @@ func NewBPR(params model.Params) *BPR {
 	bpr := new(BPR)
 	bpr.SetParams(params)
 	return bpr
+}
+
+// GetUserFactor returns the latent factor of a user.
+func (bpr *BPR) GetUserFactor(userIndex int32) []float32 {
+	return bpr.UserFactor[userIndex]
+}
+
+// GetItemFactor returns the latent factor of an item.
+func (bpr *BPR) GetItemFactor(itemIndex int32) []float32 {
+	return bpr.ItemFactor[itemIndex]
 }
 
 // SetParams sets hyper-parameters of the BPR model.
@@ -604,6 +618,16 @@ func NewALS(params model.Params) *ALS {
 	return als
 }
 
+// GetUserFactor returns the user latent factors.
+func (als *ALS) GetUserFactor(userIndex int32) []float32 {
+	panic("not implemented")
+}
+
+// GetItemFactor returns the item latent factors.
+func (als *ALS) GetItemFactor(itemIndex int32) []float32 {
+	panic("not implemented")
+}
+
 // SetParams sets hyper-parameters for the ALS model.
 func (als *ALS) SetParams(params model.Params) {
 	als.BaseMatrixFactorization.SetParams(params)
@@ -885,6 +909,16 @@ func NewCCD(params model.Params) *CCD {
 	fast := new(CCD)
 	fast.SetParams(params)
 	return fast
+}
+
+// GetUserFactor returns latent factor of a user.
+func (ccd *CCD) GetUserFactor(userIndex int32) []float32 {
+	return ccd.UserFactor[userIndex]
+}
+
+// GetItemFactor returns latent factor of an item.
+func (ccd *CCD) GetItemFactor(itemIndex int32) []float32 {
+	return ccd.ItemFactor[itemIndex]
 }
 
 // SetParams sets hyper-parameters for the ALS model.

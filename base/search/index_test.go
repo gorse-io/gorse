@@ -38,13 +38,19 @@ func TestHNSW_InnerProduct(t *testing.T) {
 	fitConfig := ranking.NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
 	m.Fit(trainSet, testSet, fitConfig)
 	var vectors []Vector
-	for _, itemFactor := range m.ItemFactor {
-		vectors = append(vectors, NewDenseVector(itemFactor))
+	for i, itemFactor := range m.ItemFactor {
+		var terms []string
+		if big.NewInt(int64(i)).ProbablyPrime(0) {
+			terms = append(terms, "prime")
+		}
+		vectors = append(vectors, NewDenseVector(itemFactor, terms, false))
 	}
 
 	// build vector index
 	builder := NewHNSWBuilder(vectors, 10, 1000)
-	_, recall := builder.Build(0.9, 5, false)
+	idx, recall := builder.Build(0.9, 5, false)
+	assert.Greater(t, recall, float32(0.9))
+	recall = builder.evaluateTermSearch(idx, true, "prime")
 	assert.Greater(t, recall, float32(0.9))
 }
 

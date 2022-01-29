@@ -22,6 +22,8 @@ import (
 	"go.uber.org/zap"
 	"math/rand"
 	"modernc.org/mathutil"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -305,7 +307,64 @@ func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool) (idx *HNSW,
 	return
 }
 
-func (h *HNSW) MultiSearch(_ Vector, _ []string, _ int, _ bool) (map[string][]int32, map[string][]float32) {
-	//TODO implement me
-	panic("implement me")
+func (b *HNSWBuilder) evaluateTermSearch(idx *HNSW, prune0 bool, term string) float32 {
+	testSize := mathutil.Min(b.testSize, len(b.data))
+	samples := b.rng.Sample(0, len(b.data), testSize)
+	var result, count float32
+	var mu sync.Mutex
+	_ = base.Parallel(len(samples), runtime.NumCPU(), func(_, i int) error {
+		sample := samples[i]
+		expected, _ := b.bruteForce.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
+		if len(expected) > 0 {
+			actual, _ := idx.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
+			mu.Lock()
+			defer mu.Unlock()
+			result += recall(expected[term], actual[term])
+			count++
+		}
+		return nil
+	})
+	return result / count
+}
+
+func (h *HNSW) MultiSearch(q Vector, terms []string, n int, prune0 bool) (values map[string][]int32, scores map[string][]float32) {
+	values = make(map[string][]int32)
+	scores = make(map[string][]float32)
+	for _, term := range terms {
+		values[term] = make([]int32, 0, n)
+		scores[term] = make([]float32, 0, n)
+	}
+
+	w := h.multiSearch(q, h.efConstruction)
+	for w.Len() > 0 {
+		value, score := w.Pop()
+		if !prune0 || score < 0 {
+			if len(values[""]) < n {
+				values[""] = append(values[""], value)
+				scores[""] = append(scores[""], score)
+			}
+			for _, term := range h.vectors[value].Terms() {
+				if _, exist := values[term]; exist && len(values[term]) < n {
+					values[term] = append(values[term], value)
+					scores[term] = append(scores[term], score)
+				}
+			}
+		}
+	}
+	return
+}
+
+func (h *HNSW) multiSearch(q Vector, ef int) *heap.PriorityQueue {
+	var (
+		w           *heap.PriorityQueue                    // set for the current the nearest element
+		enterPoints = h.distance(q, []int32{h.enterPoint}) // get enter point for hnsw
+		topLayer    = len(h.upperNeighbors)                // top layer for hnsw
+	)
+	for currentLayer := topLayer; currentLayer > 0; currentLayer-- {
+		w = h.searchLayer(q, enterPoints, 1, currentLayer)
+		enterPoints = heap.NewPriorityQueue(false)
+		enterPoints.Push(w.Peek())
+	}
+	w = h.searchLayer(q, enterPoints, ef, 0)
+	return w
 }

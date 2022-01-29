@@ -25,6 +25,7 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -72,6 +73,7 @@ type Worker struct {
 	latestRankingModelVersion  int64
 	currentRankingModelVersion int64
 	rankingModel               ranking.MatrixFactorization
+	rankingIndex               *search.HNSW
 
 	// click model
 	latestClickModelVersion  int64
@@ -236,6 +238,7 @@ func (w *Worker) Pull() {
 					base.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
 					w.rankingModel = rankingModel
+					w.rankingIndex = nil
 					w.currentRankingModelVersion = w.latestRankingModelVersion
 					base.Logger().Info("synced ranking model",
 						zap.String("version", base.Hex(w.currentRankingModelVersion)))
@@ -360,6 +363,7 @@ func (w *Worker) Recommend(users []string) {
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", w.jobs),
 		zap.Int("cache_size", w.cfg.Database.CacheSize))
+
 	// progress tracker
 	completed := make(chan struct{}, 1000)
 	taskName := fmt.Sprintf("Generate offline recommendation [%s]", w.workerName)
@@ -369,15 +373,37 @@ func (w *Worker) Recommend(users []string) {
 			base.Logger().Error("failed to report start task", zap.Error(err))
 		}
 	}
+
 	// pull items from database
 	itemCache, itemCategories, err := w.pullItems()
 	if err != nil {
 		base.Logger().Error("failed to pull items", zap.Error(err))
 		return
 	}
+
+	// build ranking index
+	if w.rankingModel != nil && w.rankingIndex == nil && w.cfg.Recommend.EnableColIndex {
+		startTime := time.Now()
+		base.Logger().Info("start building ranking index")
+		itemIndex := w.rankingModel.GetItemIndex()
+		vectors := make([]search.Vector, itemIndex.Len())
+		for i := int32(0); i < itemIndex.Len(); i++ {
+			itemId := itemIndex.ToName(i)
+			if itemCache.IsAvailable(itemId) {
+				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), itemCache[itemId].Categories, false)
+			} else {
+				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), nil, true)
+			}
+		}
+		builder := search.NewHNSWBuilder(vectors, w.cfg.Database.CacheSize, 1000)
+		w.rankingIndex, _ = builder.Build(w.cfg.Recommend.ColIndexRecall, w.cfg.Recommend.ColIndexFitEpoch, false)
+		base.Logger().Info("complete building ranking index",
+			zap.Duration("build_time", time.Since(startTime)))
+	}
+
 	go func() {
 		defer base.CheckPanic()
-		completedCount := 0
+		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(10 * time.Second)
 		for {
 			select {
@@ -387,15 +413,20 @@ func (w *Worker) Recommend(users []string) {
 				}
 				completedCount++
 			case <-ticker.C:
-				if w.masterClient != nil {
-					if _, err := w.masterClient.UpdateTask(context.Background(),
-						&protocol.UpdateTaskRequest{Name: taskName, Done: int64(completedCount)}); err != nil {
-						base.Logger().Error("failed to report update task", zap.Error(err))
+				throughput := completedCount - previousCount
+				previousCount = completedCount
+				if throughput > 0 {
+					if w.masterClient != nil {
+						if _, err := w.masterClient.UpdateTask(context.Background(),
+							&protocol.UpdateTaskRequest{Name: taskName, Done: int64(completedCount)}); err != nil {
+							base.Logger().Error("failed to report update task", zap.Error(err))
+						}
 					}
+					base.Logger().Info("ranking recommendation",
+						zap.Int("n_complete_users", completedCount),
+						zap.Int("n_working_users", len(users)),
+						zap.Int("throughput", throughput))
 				}
-				base.Logger().Info("ranking recommendation",
-					zap.Int("n_complete_users", completedCount),
-					zap.Int("n_working_users", len(users)))
 			}
 		}
 	}()
