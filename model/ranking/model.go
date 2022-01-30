@@ -422,7 +422,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
-		cost := float32(0.0)
+		cost := make([]float32, config.Jobs)
 		_ = base.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex int32
@@ -445,7 +445,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 			diff := bpr.InternalPredict(userIndex, posIndex) - bpr.InternalPredict(userIndex, negIndex)
-			cost += math32.Log(1 + math32.Exp(-diff))
+			cost[workerId] += math32.Log(1 + math32.Exp(-diff))
 			grad := math32.Exp(-diff) / (1.0 + math32.Exp(-diff))
 			// Pairwise update
 			copy(userFactor[workerId], bpr.UserFactor[userIndex])

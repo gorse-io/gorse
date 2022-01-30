@@ -85,6 +85,14 @@ type mockMatrixFactorizationForRecommend struct {
 	ranking.BaseMatrixFactorization
 }
 
+func (m *mockMatrixFactorizationForRecommend) GetUserFactor(_ int32) []float32 {
+	panic("implement me")
+}
+
+func (m *mockMatrixFactorizationForRecommend) GetItemFactor(_ int32) []float32 {
+	panic("implement me")
+}
+
 func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
 	panic("implement me")
 }

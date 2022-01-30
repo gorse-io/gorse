@@ -340,7 +340,8 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		for i := range itemLabelVectors {
 			itemLabelVectors[i] = search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
-		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		similarItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
@@ -350,7 +351,8 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		for i := range itemFeedbackVectors {
 			itemFeedbackVectors[i] = search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
-		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
@@ -561,7 +563,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		for i := range userLabelVectors {
 			userLabelVectors[i] = search.NewDictionaryVector(dataset.UserLabels[i], labelIDF, nil, false)
 		}
-		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		similarUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
@@ -571,7 +574,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		for i := range userFeedbackVectors {
 			userFeedbackVectors[i] = search.NewDictionaryVector(dataset.UserFeedback[i], itemIDF, nil, false)
 		}
-		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		relatedUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
