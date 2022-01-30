@@ -335,7 +335,7 @@ func (h *HNSW) MultiSearch(q Vector, terms []string, n int, prune0 bool) (values
 		scores[term] = make([]float32, 0, n)
 	}
 
-	w := h.multiSearch(q, h.efConstruction)
+	w := h.efSearch(q, h.efConstruction)
 	for w.Len() > 0 {
 		value, score := w.Pop()
 		if !prune0 || score < 0 {
@@ -354,7 +354,7 @@ func (h *HNSW) MultiSearch(q Vector, terms []string, n int, prune0 bool) (values
 	return
 }
 
-func (h *HNSW) multiSearch(q Vector, ef int) *heap.PriorityQueue {
+func (h *HNSW) efSearch(q Vector, ef int) *heap.PriorityQueue {
 	var (
 		w           *heap.PriorityQueue                    // set for the current the nearest element
 		enterPoints = h.distance(q, []int32{h.enterPoint}) // get enter point for hnsw

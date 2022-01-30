@@ -619,12 +619,12 @@ func NewALS(params model.Params) *ALS {
 }
 
 // GetUserFactor returns the user latent factors.
-func (als *ALS) GetUserFactor(userIndex int32) []float32 {
+func (als *ALS) GetUserFactor(_ int32) []float32 {
 	panic("not implemented")
 }
 
 // GetItemFactor returns the item latent factors.
-func (als *ALS) GetItemFactor(itemIndex int32) []float32 {
+func (als *ALS) GetItemFactor(_ int32) []float32 {
 	panic("not implemented")
 }
 

@@ -27,11 +27,11 @@ type mockMatrixFactorizationForSearch struct {
 	model.BaseModel
 }
 
-func (m *mockMatrixFactorizationForSearch) GetUserFactor(userIndex int32) []float32 {
+func (m *mockMatrixFactorizationForSearch) GetUserFactor(_ int32) []float32 {
 	panic("implement me")
 }
 
-func (m *mockMatrixFactorizationForSearch) GetItemFactor(itemIndex int32) []float32 {
+func (m *mockMatrixFactorizationForSearch) GetItemFactor(_ int32) []float32 {
 	panic("implement me")
 }
 
