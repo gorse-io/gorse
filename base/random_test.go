@@ -17,7 +17,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/thoas/go-funk"
 	"gonum.org/v1/gonum/stat"
 	"math"
 	"testing"
@@ -28,15 +28,15 @@ const randomEpsilon = 0.1
 func TestRandomGenerator_MakeNormalMatrix(t *testing.T) {
 	rng := NewRandomGenerator(0)
 	vec := rng.NormalMatrix(1, 1000, 1, 2)[0]
-	assert.False(t, math32.Abs(floats.Mean(vec)-1) > randomEpsilon)
-	assert.False(t, math32.Abs(floats.StdDev(vec)-2) > randomEpsilon)
+	assert.False(t, math32.Abs(mean(vec)-1) > randomEpsilon)
+	assert.False(t, math32.Abs(stdDev(vec)-2) > randomEpsilon)
 }
 
 func TestRandomGenerator_MakeUniformMatrix(t *testing.T) {
 	rng := NewRandomGenerator(0)
 	vec := rng.UniformMatrix(1, 1000, 1, 2)[0]
-	assert.False(t, floats.Min(vec) < 1)
-	assert.False(t, floats.Max(vec) > 2)
+	assert.False(t, funk.MinFloat32(vec) < 1)
+	assert.False(t, funk.MaxFloat32(vec) > 2)
 }
 
 func TestRandomGenerator_MakeNormalMatrix64(t *testing.T) {
@@ -66,4 +66,42 @@ func TestRandomGenerator_SampleInt32(t *testing.T) {
 			assert.False(t, excludeSet.Has(sampled[j]))
 		}
 	}
+}
+
+// mean of a slice of 32-bit floats.
+func mean(x []float32) float32 {
+	return funk.SumFloat32(x) / float32(len(x))
+}
+
+// stdDev returns the sample standard deviation.
+func stdDev(x []float32) float32 {
+	_, variance := meanVariance(x)
+	return math32.Sqrt(variance)
+}
+
+// meanVariance computes the sample mean and unbiased variance, where the mean and variance are
+//  \sum_i w_i * x_i / (sum_i w_i)
+//  \sum_i w_i (x_i - mean)^2 / (sum_i w_i - 1)
+// respectively.
+// If weights is nil then all of the weights are 1. If weights is not nil, then
+// len(x) must equal len(weights).
+// When weights sum to 1 or less, a biased variance estimator should be used.
+func meanVariance(x []float32) (m, variance float32) {
+	// This uses the corrected two-pass algorithm (1.7), from "Algorithms for computing
+	// the sample variance: Analysis and recommendations" by Chan, Tony F., Gene H. Golub,
+	// and Randall J. LeVeque.
+
+	// note that this will panic if the slice lengths do not match
+	m = mean(x)
+	var (
+		ss           float32
+		compensation float32
+	)
+	for _, v := range x {
+		d := v - m
+		ss += d * d
+		compensation += d
+	}
+	variance = (ss - compensation*compensation/float32(len(x))) / float32(len(x)-1)
+	return
 }

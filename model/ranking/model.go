@@ -86,6 +86,10 @@ type Model interface {
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
 	Unmarshal(r io.Reader) error
+	// GetUserFactor returns latent factor of a user.
+	GetUserFactor(userIndex int32) []float32
+	// GetItemFactor returns latent factor of an item.
+	GetItemFactor(itemIndex int32) []float32
 }
 
 type MatrixFactorization interface {
@@ -318,6 +322,16 @@ func NewBPR(params model.Params) *BPR {
 	return bpr
 }
 
+// GetUserFactor returns the latent factor of a user.
+func (bpr *BPR) GetUserFactor(userIndex int32) []float32 {
+	return bpr.UserFactor[userIndex]
+}
+
+// GetItemFactor returns the latent factor of an item.
+func (bpr *BPR) GetItemFactor(itemIndex int32) []float32 {
+	return bpr.ItemFactor[itemIndex]
+}
+
 // SetParams sets hyper-parameters of the BPR model.
 func (bpr *BPR) SetParams(params model.Params) {
 	bpr.BaseMatrixFactorization.SetParams(params)
@@ -408,7 +422,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
-		cost := float32(0.0)
+		cost := make([]float32, config.Jobs)
 		_ = base.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex int32
@@ -431,7 +445,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 			diff := bpr.InternalPredict(userIndex, posIndex) - bpr.InternalPredict(userIndex, negIndex)
-			cost += math32.Log(1 + math32.Exp(-diff))
+			cost[workerId] += math32.Log(1 + math32.Exp(-diff))
 			grad := math32.Exp(-diff) / (1.0 + math32.Exp(-diff))
 			// Pairwise update
 			copy(userFactor[workerId], bpr.UserFactor[userIndex])
@@ -602,6 +616,16 @@ func NewALS(params model.Params) *ALS {
 	als := new(ALS)
 	als.SetParams(params)
 	return als
+}
+
+// GetUserFactor returns the user latent factors.
+func (als *ALS) GetUserFactor(_ int32) []float32 {
+	panic("not implemented")
+}
+
+// GetItemFactor returns the item latent factors.
+func (als *ALS) GetItemFactor(_ int32) []float32 {
+	panic("not implemented")
 }
 
 // SetParams sets hyper-parameters for the ALS model.
@@ -885,6 +909,16 @@ func NewCCD(params model.Params) *CCD {
 	fast := new(CCD)
 	fast.SetParams(params)
 	return fast
+}
+
+// GetUserFactor returns latent factor of a user.
+func (ccd *CCD) GetUserFactor(userIndex int32) []float32 {
+	return ccd.UserFactor[userIndex]
+}
+
+// GetItemFactor returns latent factor of an item.
+func (ccd *CCD) GetItemFactor(itemIndex int32) []float32 {
+	return ccd.ItemFactor[itemIndex]
 }
 
 // SetParams sets hyper-parameters for the ALS model.

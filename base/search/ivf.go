@@ -18,6 +18,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"math/rand"
 	"modernc.org/mathutil"
@@ -51,7 +52,7 @@ func SetClusterErrorRate(errorRate float32) IVFConfig {
 	}
 }
 
-func SetNumJobs(numJobs int) IVFConfig {
+func SetIVFNumJobs(numJobs int) IVFConfig {
 	return func(ivf *IVF) {
 		ivf.numJobs = numJobs
 	}
@@ -179,7 +180,7 @@ func (idx *IVF) Build() {
 	}
 
 	for {
-		errorCount := 0
+		errorCount := atomic.NewInt32(0)
 
 		// reassign clusters
 		nextClusters := make([]ivfCluster, idx.k)
@@ -194,7 +195,7 @@ func (idx *IVF) Build() {
 					}
 				}
 				if nextCluster != assignments[i] {
-					errorCount++
+					errorCount.Inc()
 				}
 				nextClusters[nextCluster].mu.Lock()
 				defer nextClusters[nextCluster].mu.Unlock()
@@ -205,8 +206,8 @@ func (idx *IVF) Build() {
 		})
 
 		base.Logger().Debug("spatial k means clustering",
-			zap.Int("changes", errorCount))
-		if float32(errorCount)/float32(len(idx.data)) < idx.errorRate {
+			zap.Int32("changes", errorCount.Load()))
+		if float32(errorCount.Load())/float32(len(idx.data)) < idx.errorRate {
 			idx.clusters = clusters
 			break
 		}

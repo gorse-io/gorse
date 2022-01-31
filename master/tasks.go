@@ -240,10 +240,13 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledItems [][]int32,
 	labelIDF, userIDF []float32, completed chan struct{}) error {
 	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
-		startTime := time.Now()
+		defer func() {
+			completed <- struct{}{}
+		}()
 		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId)), dataset.CategorySet.List()) {
 			return nil
 		}
+		startTime := time.Now()
 		nearItemsFilters := make(map[string]*heap.TopKFilter)
 		nearItemsFilters[""] = heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 		for _, category := range dataset.CategorySet.List() {
@@ -324,7 +327,6 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			return errors.Trace(err)
 		}
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		completed <- struct{}{}
 		return nil
 	})
 }
@@ -338,7 +340,8 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		for i := range itemLabelVectors {
 			itemLabelVectors[i] = search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
-		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		similarItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
@@ -348,11 +351,18 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		for i := range itemFeedbackVectors {
 			itemFeedbackVectors[i] = search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
-		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
 	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+		defer func() {
+			completed <- struct{}{}
+		}()
+		if !m.checkItemNeighborCacheTimeout(dataset.ItemIndex.ToName(int32(itemId)), dataset.CategorySet.List()) {
+			return nil
+		}
 		startTime := time.Now()
 		var neighbors map[string][]int32
 		var scores map[string][]float32
@@ -380,7 +390,6 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 			return errors.Trace(err)
 		}
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		completed <- struct{}{}
 		return nil
 	})
 }
@@ -467,10 +476,13 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 
 func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}) error {
 	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
-		startTime := time.Now()
+		defer func() {
+			completed <- struct{}{}
+		}()
 		if !m.checkUserNeighborCacheTimeout(dataset.UserIndex.ToName(int32(userId))) {
 			return nil
 		}
+		startTime := time.Now()
 		nearUsers := heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
 
 		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
@@ -538,7 +550,6 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			return errors.Trace(err)
 		}
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		completed <- struct{}{}
 		return nil
 	})
 }
@@ -552,7 +563,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		for i := range userLabelVectors {
 			userLabelVectors[i] = search.NewDictionaryVector(dataset.UserLabels[i], labelIDF, nil, false)
 		}
-		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		similarUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
@@ -562,11 +574,18 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		for i := range userFeedbackVectors {
 			userFeedbackVectors[i] = search.NewDictionaryVector(dataset.UserFeedback[i], itemIDF, nil, false)
 		}
-		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000)
+		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000,
+			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		relatedUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
 	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+		defer func() {
+			completed <- struct{}{}
+		}()
+		if !m.checkUserNeighborCacheTimeout(dataset.UserIndex.ToName(int32(userId))) {
+			return nil
+		}
 		startTime := time.Now()
 		var neighbors []int32
 		var scores []float32
@@ -590,7 +609,6 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 			return errors.Trace(err)
 		}
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
-		completed <- struct{}{}
 		return nil
 	})
 }

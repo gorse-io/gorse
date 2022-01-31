@@ -25,7 +25,7 @@ import (
 
 func TestHNSW_InnerProduct(t *testing.T) {
 	// load dataset
-	trainSet, testSet, err := ranking.LoadDataFromBuiltIn("ml-1m")
+	trainSet, testSet, err := ranking.LoadDataFromBuiltIn("ml-100k")
 	assert.NoError(t, err)
 	m := ranking.NewBPR(model.Params{
 		model.NFactors:   8,
@@ -38,19 +38,25 @@ func TestHNSW_InnerProduct(t *testing.T) {
 	fitConfig := ranking.NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
 	m.Fit(trainSet, testSet, fitConfig)
 	var vectors []Vector
-	for _, itemFactor := range m.ItemFactor {
-		vectors = append(vectors, NewDenseVector(itemFactor))
+	for i, itemFactor := range m.ItemFactor {
+		var terms []string
+		if big.NewInt(int64(i)).ProbablyPrime(0) {
+			terms = append(terms, "prime")
+		}
+		vectors = append(vectors, NewDenseVector(itemFactor, terms, false))
 	}
 
 	// build vector index
-	builder := NewHNSWBuilder(vectors, 10, 1000)
-	_, recall := builder.Build(0.9, 5, false)
+	builder := NewHNSWBuilder(vectors, 10, 1000, runtime.NumCPU())
+	idx, recall := builder.Build(0.9, 5, false)
+	assert.Greater(t, recall, float32(0.9))
+	recall = builder.evaluateTermSearch(idx, true, "prime")
 	assert.Greater(t, recall, float32(0.9))
 }
 
 func TestIVF_Cosine(t *testing.T) {
 	// load dataset
-	trainSet, _, err := ranking.LoadDataFromBuiltIn("ml-1m")
+	trainSet, _, err := ranking.LoadDataFromBuiltIn("ml-100k")
 	assert.NoError(t, err)
 	values := make([]float32, trainSet.UserCount())
 	for i := range values {
@@ -70,5 +76,5 @@ func TestIVF_Cosine(t *testing.T) {
 	idx, recall := builder.Build(0.9, 5, true)
 	assert.Greater(t, recall, float32(0.9))
 	recall = builder.evaluateTermSearch(idx, true, "prime")
-	assert.Greater(t, recall, float32(0.75))
+	assert.Greater(t, recall, float32(0.8))
 }

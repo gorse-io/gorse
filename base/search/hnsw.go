@@ -22,6 +22,8 @@ import (
 	"go.uber.org/zap"
 	"math/rand"
 	"modernc.org/mathutil"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -31,20 +33,32 @@ var _ VectorIndex = &HNSW{}
 type HNSW struct {
 	vectors         []Vector
 	bottomNeighbors []*heap.PriorityQueue
-	upperNeighbors  []map[int32]*heap.PriorityQueue
+	upperNeighbors  []sync.Map
 	enterPoint      int32
+
+	nodeMutexes []sync.RWMutex
+	globalMutex sync.RWMutex
+	initOnce    sync.Once
 
 	levelFactor    float32
 	maxConnection  int // maximum number of connections for each element per layer
 	maxConnection0 int
 	efConstruction int
+	numJobs        int
 }
 
-// Config is the configuration function for HNSW.
-type Config func(*HNSW)
+// HNSWConfig is the configuration function for HNSW.
+type HNSWConfig func(*HNSW)
+
+// SetHNSWNumJobs sets the number of jobs for building index.
+func SetHNSWNumJobs(numJobs int) HNSWConfig {
+	return func(h *HNSW) {
+		h.numJobs = numJobs
+	}
+}
 
 // SetMaxConnection sets the number of connections in HNSW.
-func SetMaxConnection(maxConnection int) Config {
+func SetMaxConnection(maxConnection int) HNSWConfig {
 	return func(h *HNSW) {
 		h.levelFactor = 1.0 / math32.Log(float32(maxConnection))
 		h.maxConnection = maxConnection
@@ -53,20 +67,21 @@ func SetMaxConnection(maxConnection int) Config {
 }
 
 // SetEFConstruction sets efConstruction in HNSW.
-func SetEFConstruction(efConstruction int) Config {
+func SetEFConstruction(efConstruction int) HNSWConfig {
 	return func(h *HNSW) {
 		h.efConstruction = efConstruction
 	}
 }
 
 // NewHNSW builds a vector index based on Hierarchical Navigable Small Worlds.
-func NewHNSW(vectors []Vector, configs ...Config) *HNSW {
+func NewHNSW(vectors []Vector, configs ...HNSWConfig) *HNSW {
 	h := &HNSW{
 		vectors:        vectors,
 		levelFactor:    1.0 / math32.Log(48),
 		maxConnection:  48,
 		maxConnection0: 96,
 		efConstruction: 100,
+		numJobs:        runtime.NumCPU(),
 	}
 	for _, config := range configs {
 		config(h)
@@ -76,7 +91,7 @@ func NewHNSW(vectors []Vector, configs ...Config) *HNSW {
 
 // Search a vector in Hierarchical Navigable Small Worlds.
 func (h *HNSW) Search(q Vector, n int, prune0 bool) (values []int32, scores []float32) {
-	w := h.knnSearch(q, n, h.efConstruction)
+	w := h.knnSearch(q, n, mathutil.Max(h.efConstruction, n))
 	for w.Len() > 0 {
 		value, score := w.Pop()
 		if !prune0 || score < 0 {
@@ -104,39 +119,84 @@ func (h *HNSW) knnSearch(q Vector, k, ef int) *heap.PriorityQueue {
 
 // Build a vector index on data.
 func (h *HNSW) Build() {
-	for i := range h.vectors {
-		h.insert(int32(i))
-	}
+	completed := make(chan struct{}, h.numJobs)
+	go func() {
+		defer base.CheckPanic()
+		completedCount, previousCount := 0, 0
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case _, ok := <-completed:
+				if !ok {
+					return
+				}
+				completedCount++
+			case <-ticker.C:
+				throughput := completedCount - previousCount
+				previousCount = completedCount
+				if throughput > 0 {
+					base.Logger().Info("building index",
+						zap.Int("n_indexed_vectors", completedCount),
+						zap.Int("n_vectors", len(h.vectors)),
+						zap.Int("throughput", throughput))
+				}
+			}
+		}
+	}()
+
+	h.bottomNeighbors = make([]*heap.PriorityQueue, len(h.vectors))
+	h.nodeMutexes = make([]sync.RWMutex, len(h.vectors))
+	_ = base.Parallel(len(h.vectors), h.numJobs, func(_, jobId int) error {
+		h.insert(int32(jobId))
+		completed <- struct{}{}
+		return nil
+	})
+	close(completed)
 }
 
 // insert i-th vector into the vector index.
 func (h *HNSW) insert(q int32) {
-	if h.bottomNeighbors == nil {
-		h.bottomNeighbors = make([]*heap.PriorityQueue, 1)
-		h.bottomNeighbors[q] = heap.NewPriorityQueue(false)
-		h.upperNeighbors = make([]map[int32]*heap.PriorityQueue, 0)
-		h.enterPoint = q
+	// insert first point
+	var isFirstPoint bool
+	h.initOnce.Do(func() {
+		if h.upperNeighbors == nil {
+			h.bottomNeighbors[q] = heap.NewPriorityQueue(false)
+			h.upperNeighbors = make([]sync.Map, 0)
+			h.enterPoint = q
+			isFirstPoint = true
+			return
+		}
+	})
+	if isFirstPoint {
 		return
 	}
 
+	h.globalMutex.RLock()
 	var (
 		w           *heap.PriorityQueue                               // list for the currently found nearest elements
 		enterPoints = h.distance(h.vectors[q], []int32{h.enterPoint}) // get enter point for hnsw
 		l           = int(math32.Floor(-math32.Log(rand.Float32()) * h.levelFactor))
 		topLayer    = len(h.upperNeighbors)
 	)
+	h.globalMutex.RUnlock()
+	if l > topLayer {
+		h.globalMutex.Lock()
+		defer h.globalMutex.Unlock()
+	}
 
 	for currentLayer := topLayer; currentLayer >= l+1; currentLayer-- {
 		w = h.searchLayer(h.vectors[q], enterPoints, 1, currentLayer)
 		enterPoints = h.selectNeighbors(h.vectors[q], w, 1)
 	}
 
+	h.nodeMutexes[q].Lock()
 	for currentLayer := mathutil.Min(topLayer, l); currentLayer >= 0; currentLayer-- {
 		w = h.searchLayer(h.vectors[q], enterPoints, h.efConstruction, currentLayer)
 		neighbors := h.selectNeighbors(h.vectors[q], w, h.maxConnection)
 		// add bidirectional connections from upperNeighbors to q at layer l_c
 		h.setNeighbourhood(q, currentLayer, neighbors)
 		for _, e := range neighbors.Elems() {
+			h.nodeMutexes[e.Value].Lock()
 			h.getNeighbourhood(e.Value, currentLayer).Push(q, e.Weight)
 			connections := h.getNeighbourhood(e.Value, currentLayer)
 			var currentMaxConnection int
@@ -150,13 +210,17 @@ func (h *HNSW) insert(q int32) {
 				newConnections := h.selectNeighbors(h.vectors[q], connections, h.maxConnection)
 				h.setNeighbourhood(e.Value, currentLayer, newConnections)
 			}
+			h.nodeMutexes[e.Value].Unlock()
 		}
 		enterPoints = w
 	}
+	h.nodeMutexes[q].Unlock()
 
 	if l > topLayer {
 		// set enter point for hnsw to q
 		h.enterPoint = q
+		h.upperNeighbors = append(h.upperNeighbors, sync.Map{})
+		h.setNeighbourhood(q, topLayer+1, heap.NewPriorityQueue(false))
 	}
 }
 
@@ -177,7 +241,10 @@ func (h *HNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue, ef, curren
 		}
 
 		// update candidates and w
-		for _, e := range h.getNeighbourhood(c, currentLayer).Values() {
+		h.nodeMutexes[c].RLock()
+		neighbors := h.getNeighbourhood(c, currentLayer).Values()
+		h.nodeMutexes[c].RUnlock()
+		for _, e := range neighbors {
 			if !v.Has(e) {
 				v.Add(e)
 				// get the furthest element from w to q
@@ -198,15 +265,9 @@ func (h *HNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue, ef, curren
 
 func (h *HNSW) setNeighbourhood(e int32, currentLayer int, connections *heap.PriorityQueue) {
 	if currentLayer == 0 {
-		for len(h.bottomNeighbors) <= int(e) {
-			h.bottomNeighbors = append(h.bottomNeighbors, nil)
-		}
 		h.bottomNeighbors[e] = connections
 	} else {
-		for len(h.upperNeighbors) < currentLayer {
-			h.upperNeighbors = append(h.upperNeighbors, make(map[int32]*heap.PriorityQueue))
-		}
-		h.upperNeighbors[currentLayer][e] = connections
+		h.upperNeighbors[currentLayer-1].Store(e, connections)
 	}
 }
 
@@ -214,7 +275,8 @@ func (h *HNSW) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueue {
 	if currentLayer == 0 {
 		return h.bottomNeighbors[e]
 	} else {
-		return h.upperNeighbors[currentLayer-1][e]
+		temp, _ := h.upperNeighbors[currentLayer-1].Load(e)
+		return temp.(*heap.PriorityQueue)
 	}
 }
 
@@ -240,15 +302,17 @@ type HNSWBuilder struct {
 	testSize   int
 	k          int
 	rng        base.RandomGenerator
+	numJobs    int
 }
 
-func NewHNSWBuilder(data []Vector, k, testSize int) *HNSWBuilder {
+func NewHNSWBuilder(data []Vector, k, testSize, numJobs int) *HNSWBuilder {
 	b := &HNSWBuilder{
 		bruteForce: NewBruteforce(data),
 		data:       data,
 		testSize:   testSize,
 		k:          k,
 		rng:        base.NewRandomGenerator(0),
+		numJobs:    numJobs,
 	}
 	b.bruteForce.Build()
 	return b
@@ -287,7 +351,7 @@ func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool) (idx *HNSW,
 	ef := 1 << int(math32.Ceil(math32.Log2(float32(b.k))))
 	for i := 0; i < trials; i++ {
 		start := time.Now()
-		idx = NewHNSW(b.data, SetEFConstruction(ef))
+		idx = NewHNSW(b.data, SetEFConstruction(ef), SetHNSWNumJobs(b.numJobs))
 		idx.Build()
 		buildTime := time.Since(start)
 		score = b.evaluate(idx, prune0)
@@ -305,7 +369,64 @@ func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool) (idx *HNSW,
 	return
 }
 
-func (h *HNSW) MultiSearch(_ Vector, _ []string, _ int, _ bool) (map[string][]int32, map[string][]float32) {
-	//TODO implement me
-	panic("implement me")
+func (b *HNSWBuilder) evaluateTermSearch(idx *HNSW, prune0 bool, term string) float32 {
+	testSize := mathutil.Min(b.testSize, len(b.data))
+	samples := b.rng.Sample(0, len(b.data), testSize)
+	var result, count float32
+	var mu sync.Mutex
+	_ = base.Parallel(len(samples), runtime.NumCPU(), func(_, i int) error {
+		sample := samples[i]
+		expected, _ := b.bruteForce.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
+		if len(expected) > 0 {
+			actual, _ := idx.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
+			mu.Lock()
+			defer mu.Unlock()
+			result += recall(expected[term], actual[term])
+			count++
+		}
+		return nil
+	})
+	return result / count
+}
+
+func (h *HNSW) MultiSearch(q Vector, terms []string, n int, prune0 bool) (values map[string][]int32, scores map[string][]float32) {
+	values = make(map[string][]int32)
+	scores = make(map[string][]float32)
+	for _, term := range terms {
+		values[term] = make([]int32, 0, n)
+		scores[term] = make([]float32, 0, n)
+	}
+
+	w := h.efSearch(q, mathutil.Max(h.efConstruction, n))
+	for w.Len() > 0 {
+		value, score := w.Pop()
+		if !prune0 || score < 0 {
+			if len(values[""]) < n {
+				values[""] = append(values[""], value)
+				scores[""] = append(scores[""], score)
+			}
+			for _, term := range h.vectors[value].Terms() {
+				if _, exist := values[term]; exist && len(values[term]) < n {
+					values[term] = append(values[term], value)
+					scores[term] = append(scores[term], score)
+				}
+			}
+		}
+	}
+	return
+}
+
+func (h *HNSW) efSearch(q Vector, ef int) *heap.PriorityQueue {
+	var (
+		w           *heap.PriorityQueue                    // set for the current the nearest element
+		enterPoints = h.distance(q, []int32{h.enterPoint}) // get enter point for hnsw
+		topLayer    = len(h.upperNeighbors)                // top layer for hnsw
+	)
+	for currentLayer := topLayer; currentLayer > 0; currentLayer-- {
+		w = h.searchLayer(q, enterPoints, 1, currentLayer)
+		enterPoints = heap.NewPriorityQueue(false)
+		enterPoints.Push(w.Peek())
+	}
+	w = h.searchLayer(q, enterPoints, ef, 0)
+	return w
 }
