@@ -45,4 +45,35 @@ var (
 		Subsystem: "master",
 		Name:      "find_item_neighbors_seconds",
 	})
+
+	MatchingTop10NDCG = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "matching_model_ndcg_at_10",
+	})
+	MatchingTop10Precision = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "matching_model_precision_at_10",
+	})
+	MatchingTop10Recall = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "matching_model_recall_at_10",
+	})
+	RankingPrecision = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "ranking_model_precision",
+	})
+	RankingRecall = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "ranking_model_recall",
+	})
+	RankingAUC = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "ranking_model_auc",
+	})
 )

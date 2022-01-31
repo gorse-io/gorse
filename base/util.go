@@ -19,10 +19,11 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"go.uber.org/zap"
 	"io"
-	"time"
+	"strconv"
 )
 
 var logger *zap.Logger
@@ -84,16 +85,6 @@ func NewMatrixInt(row, col int) [][]int {
 		ret[i] = make([]int, col)
 	}
 	return ret
-}
-
-// Now returns the current time in the format of `2006-01-02T15:04:05Z07:00`.
-func Now() string {
-	return time.Now().Format("2006-01-02T15:04:05Z07:00")
-}
-
-func DateNow() time.Time {
-	timestamp := time.Now()
-	return time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // CheckPanic catches panic.
@@ -193,4 +184,16 @@ func ReadGob(r io.Reader, v interface{}) error {
 	buffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buffer)
 	return decoder.Decode(v)
+}
+
+func FormatFloat32(val float32) string {
+	return strconv.FormatFloat(float64(val), 'f', -1, 32)
+}
+
+func ParseFloat32(val string) float32 {
+	f, err := strconv.ParseFloat(val, 32)
+	if err != nil {
+		return math32.NaN()
+	}
+	return float32(f)
 }

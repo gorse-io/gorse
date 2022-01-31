@@ -224,69 +224,56 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 }
 
 type Status struct {
-	NumServers          int
-	NumWorkers          int
-	NumUsers            int
-	NumItems            int
-	NumUserLabels       int
-	NumItemLabels       int
-	NumTotalPosFeedback int
-	NumValidPosFeedback int
-	NumValidNegFeedback int
-	RankingScore        ranking.Score
-	ClickScore          click.Score
+	NumServers              int
+	NumWorkers              int
+	NumUsers                int
+	NumItems                int
+	NumUserLabels           int
+	NumItemLabels           int
+	NumTotalPosFeedback     int
+	NumValidPosFeedback     int
+	NumValidNegFeedback     int
+	PopularItemsUpdateTime  time.Time
+	LatestItemsUpdateTime   time.Time
+	MatchingModelFitTime    time.Time
+	MatchingModelScore      ranking.Score
+	RankingModelFitTime     time.Time
+	RankingModelScore       click.Score
+	UserNeighborIndexRecall float32
+	ItemNeighborIndexRecall float32
+	MatchingIndexRecall     float32
 }
 
 func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	status := Status{}
+	var err error
 	// read number of users
-	if measurements, err := m.DataClient.GetMeasurements(NumUsers, 1); err != nil {
-		server.InternalServerError(response, err)
-		return
-	} else if len(measurements) > 0 {
-		status.NumUsers = int(measurements[0].Value)
+	if status.NumUsers, err = m.CacheClient.GetInt(cache.GlobalMeta, cache.NumUsers); err != nil {
+		base.Logger().Warn("failed to get number of users", zap.Error(err))
 	}
 	// read number of items
-	if measurements, err := m.DataClient.GetMeasurements(NumItems, 1); err != nil {
-		server.InternalServerError(response, err)
-		return
-	} else if len(measurements) > 0 {
-		status.NumItems = int(measurements[0].Value)
+	if status.NumItems, err = m.CacheClient.GetInt(cache.GlobalMeta, cache.NumItems); err != nil {
+		base.Logger().Warn("failed to get number of items", zap.Error(err))
 	}
 	// read number of user labels
-	if measurements, err := m.DataClient.GetMeasurements(NumUserLabels, 1); err != nil {
-		server.InternalServerError(response, err)
-		return
-	} else if len(measurements) > 0 {
-		status.NumUserLabels = int(measurements[0].Value)
+	if status.NumUserLabels, err = m.CacheClient.GetInt(cache.GlobalMeta, cache.NumUserLabels); err != nil {
+		base.Logger().Warn("failed to get number of user labels", zap.Error(err))
 	}
 	// read number of item labels
-	if measurements, err := m.DataClient.GetMeasurements(NumItemLabels, 1); err != nil {
-		server.InternalServerError(response, err)
-		return
-	} else if len(measurements) > 0 {
-		status.NumItemLabels = int(measurements[0].Value)
+	if status.NumItemLabels, err = m.CacheClient.GetInt(cache.GlobalMeta, cache.NumItemLabels); err != nil {
+		base.Logger().Warn("failed to get number of item labels", zap.Error(err))
 	}
 	// read number of total positive feedback
-	if measurements, err := m.DataClient.GetMeasurements(NumTotalPosFeedbacks, 1); err != nil {
-		server.InternalServerError(response, err)
-		return
-	} else if len(measurements) > 0 {
-		status.NumTotalPosFeedback = int(measurements[0].Value)
+	if status.NumTotalPosFeedback, err = m.CacheClient.GetInt(cache.GlobalMeta, cache.NumTotalPosFeedbacks); err != nil {
+		base.Logger().Warn("failed to get number of total positive feedbacks", zap.Error(err))
 	}
 	// read number of valid positive feedback
-	if measurements, err := m.DataClient.GetMeasurements(NumValidPosFeedbacks, 1); err != nil {
-		server.InternalServerError(response, err)
-		return
-	} else if len(measurements) > 0 {
-		status.NumValidPosFeedback = int(measurements[0].Value)
+	if status.NumValidPosFeedback, err = m.CacheClient.GetInt(cache.GlobalMeta, cache.NumValidPosFeedbacks); err != nil {
+		base.Logger().Warn("failed to get number of valid positive feedbacks", zap.Error(err))
 	}
 	// read number of valid negative feedback
-	if measurements, err := m.DataClient.GetMeasurements(NumValidNegFeedbacks, 1); err != nil {
-		server.InternalServerError(response, err)
-		return
-	} else if len(measurements) > 0 {
-		status.NumValidNegFeedback = int(measurements[0].Value)
+	if status.NumValidNegFeedback, err = m.CacheClient.GetInt(cache.GlobalMeta, cache.NumValidNegFeedbacks); err != nil {
+		base.Logger().Warn("failed to get number of valid negative feedbacks", zap.Error(err))
 	}
 	// count the number of workers and servers
 	m.nodesInfoMutex.Lock()
@@ -299,8 +286,49 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		}
 	}
 	m.nodesInfoMutex.Unlock()
-	status.RankingScore = m.rankingScore
-	status.ClickScore = m.clickScore
+	// read popular items update time
+	if status.PopularItemsUpdateTime, err = m.CacheClient.GetTime(cache.GlobalMeta, cache.LastUpdatePopularItemsTime); err != nil {
+		base.Logger().Warn("failed to get popular items update time", zap.Error(err))
+	}
+	// read the latest items update time
+	if status.LatestItemsUpdateTime, err = m.CacheClient.GetTime(cache.GlobalMeta, cache.LastUpdateLatestItemsTime); err != nil {
+		base.Logger().Warn("failed to get latest items update time", zap.Error(err))
+	}
+	status.MatchingModelScore = m.rankingScore
+	status.RankingModelScore = m.clickScore
+	// read last fit matching model time
+	if status.MatchingModelFitTime, err = m.CacheClient.GetTime(cache.GlobalMeta, cache.LastFitMatchingModelTime); err != nil {
+		base.Logger().Warn("failed to get last fit matching model time", zap.Error(err))
+	}
+	// read last fit ranking model time
+	if status.RankingModelFitTime, err = m.CacheClient.GetTime(cache.GlobalMeta, cache.LastFitRankingModelTime); err != nil {
+		base.Logger().Warn("failed to get last fit ranking model time", zap.Error(err))
+	}
+	// read user neighbor index recall
+	var temp string
+	if m.GorseConfig.Recommend.EnableUserNeighborIndex {
+		if temp, err = m.CacheClient.GetString(cache.GlobalMeta, cache.UserNeighborIndexRecall); err != nil {
+			base.Logger().Warn("failed to get user neighbor index recall", zap.Error(err))
+		} else {
+			status.UserNeighborIndexRecall = base.ParseFloat32(temp)
+		}
+	}
+	// read item neighbor index recall
+	if m.GorseConfig.Recommend.EnableItemNeighborIndex {
+		if temp, err = m.CacheClient.GetString(cache.GlobalMeta, cache.ItemNeighborIndexRecall); err != nil {
+			base.Logger().Warn("failed to get item neighbor index recall", zap.Error(err))
+		} else {
+			status.ItemNeighborIndexRecall = base.ParseFloat32(temp)
+		}
+	}
+	// read matching index recall
+	if m.GorseConfig.Recommend.EnableColIndex {
+		if temp, err = m.CacheClient.GetString(cache.GlobalMeta, cache.MatchingIndexRecall); err != nil {
+			base.Logger().Warn("failed to get matching index recall", zap.Error(err))
+		} else {
+			status.MatchingIndexRecall = base.ParseFloat32(temp)
+		}
+	}
 	server.Ok(response, status)
 }
 

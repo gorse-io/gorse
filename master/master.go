@@ -36,16 +36,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
-const (
-	NumUsers             = "NumUsers"
-	NumItems             = "NumItems"
-	NumUserLabels        = "NumUserLabels"
-	NumItemLabels        = "NumItemLabels"
-	NumTotalPosFeedbacks = "NumTotalPosFeedbacks"
-	NumValidPosFeedbacks = "NumValidPosFeedbacks"
-	NumValidNegFeedbacks = "NumValidNegFeedbacks"
-)
-
 // Master is the master node.
 type Master struct {
 	protocol.UnimplementedMasterServer

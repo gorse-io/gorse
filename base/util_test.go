@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
 )
 
 func TestNewMatrix32(t *testing.T) {
@@ -55,20 +54,6 @@ func TestNewMatrixInt(t *testing.T) {
 	}
 }
 
-func TestNow(t *testing.T) {
-	s := Now()
-	assert.Regexp(t, "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\+\\d{2}:\\d{2}|Z)", s)
-}
-
-func TestDateNow(t *testing.T) {
-	date := DateNow()
-	assert.Zero(t, date.Hour())
-	assert.Zero(t, date.Minute())
-	assert.Zero(t, date.Second())
-	assert.Zero(t, date.Nanosecond())
-	assert.Equal(t, time.UTC, date.Location())
-}
-
 func TestWriteMatrix(t *testing.T) {
 	a := [][]float32{{1, 2}, {3, 4}}
 	buf := bytes.NewBuffer(nil)
@@ -100,4 +85,11 @@ func TestWriteGob(t *testing.T) {
 	err = ReadGob(buf, &b)
 	assert.NoError(t, err)
 	assert.Equal(t, a, b)
+}
+
+func TestFloat32(t *testing.T) {
+	a := FormatFloat32(1.23)
+	assert.Equal(t, "1.23", a)
+	b := ParseFloat32("1.23")
+	assert.Equal(t, float32(1.23), b)
 }

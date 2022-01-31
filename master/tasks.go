@@ -37,11 +37,7 @@ import (
 )
 
 const (
-	RankingTop10NDCG      = "NDCG@10"
-	RankingTop10Precision = "Precision@10"
-	RankingTop10Recall    = "Recall@10"
-	ClickPrecision        = "Precision"
-	ClickThroughRate      = "ClickThroughRate"
+	ClickThroughRate = "ClickThroughRate"
 
 	TaskLoadDataset        = "Load dataset"
 	TaskFindItemNeighbors  = "Find neighbors of items"
@@ -80,7 +76,7 @@ func (m *Master) runLoadDatasetTask() error {
 			}
 		}
 	}
-	if err = m.CacheClient.SetTime(cache.LastUpdatePopularItemsTime, "", time.Now()); err != nil {
+	if err = m.CacheClient.SetTime(cache.GlobalMeta, cache.LastUpdatePopularItemsTime, time.Now()); err != nil {
 		base.Logger().Error("failed to write latest update popular items time", zap.Error(err))
 	}
 
@@ -90,45 +86,30 @@ func (m *Master) runLoadDatasetTask() error {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 	}
-	if err = m.CacheClient.SetTime(cache.LastUpdateLatestItemsTime, "", time.Now()); err != nil {
+	if err = m.CacheClient.SetTime(cache.GlobalMeta, cache.LastUpdateLatestItemsTime, time.Now()); err != nil {
 		base.Logger().Error("failed to write latest update latest items time", zap.Error(err))
 	}
 
 	// write statistics to database
-	loadDataTime := base.DateNow()
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumUsers, Timestamp: loadDataTime, Value: float32(rankingDataset.UserCount()),
-	}); err != nil {
+	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumUsers, rankingDataset.UserCount()); err != nil {
 		base.Logger().Error("failed to write number of users", zap.Error(err))
 	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumItems, Timestamp: loadDataTime, Value: float32(rankingDataset.ItemCount()),
-	}); err != nil {
+	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumItems, rankingDataset.ItemCount()); err != nil {
 		base.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumTotalPosFeedbacks, Timestamp: loadDataTime, Value: float32(rankingDataset.Count()),
-	}); err != nil {
+	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumTotalPosFeedbacks, rankingDataset.Count()); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumUserLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountUserLabels()),
-	}); err != nil {
+	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumUserLabels, int(clickDataset.Index.CountUserLabels())); err != nil {
 		base.Logger().Error("failed to write number of user labels", zap.Error(err))
 	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumItemLabels, Timestamp: loadDataTime, Value: float32(clickDataset.Index.CountItemLabels()),
-	}); err != nil {
+	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumItemLabels, int(clickDataset.Index.CountItemLabels())); err != nil {
 		base.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumValidPosFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.PositiveCount),
-	}); err != nil {
+	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidPosFeedbacks, clickDataset.PositiveCount); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
-	if err = m.DataClient.InsertMeasurement(data.Measurement{
-		Name: NumValidNegFeedbacks, Timestamp: loadDataTime, Value: float32(clickDataset.NegativeCount),
-	}); err != nil {
+	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidNegFeedbacks, clickDataset.NegativeCount); err != nil {
 		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
 
@@ -228,7 +209,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		base.Logger().Error("failed to searching neighbors of items", zap.Error(err))
 		m.taskMonitor.Fail(TaskFindItemNeighbors, err.Error())
 	} else {
-		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime, base.Now()); err != nil {
+		if err := m.CacheClient.SetTime(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime, time.Now()); err != nil {
 			base.Logger().Error("failed to set neighbors of items update time", zap.Error(err))
 		}
 		base.Logger().Info("complete searching neighbors of items",
@@ -342,8 +323,12 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		}
 		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
 			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		similarItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
+		var recall float32
+		similarItemNeighbors, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
+		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.ItemNeighborIndexRecall, base.FormatFloat32(recall)); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
 		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
@@ -465,7 +450,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		base.Logger().Error("failed to searching neighbors of users", zap.Error(err))
 		m.taskMonitor.Fail(TaskFindUserNeighbors, err.Error())
 	} else {
-		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime, base.Now()); err != nil {
+		if err := m.CacheClient.SetTime(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime, time.Now()); err != nil {
 			base.Logger().Error("failed to set neighbors of users update time", zap.Error(err))
 		}
 		base.Logger().Info("complete searching neighbors of users",
@@ -565,8 +550,12 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		}
 		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
 			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		similarUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
+		var recall float32
+		similarUserNeighbors, recall = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
+		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.UserNeighborIndexRecall, base.FormatFloat32(recall)); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
 		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
@@ -781,19 +770,10 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
 	m.rankingModelMutex.Unlock()
 	base.Logger().Info("fit ranking model complete",
 		zap.String("version", fmt.Sprintf("%x", m.rankingModelVersion)))
-	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: RankingTop10NDCG, Value: score.NDCG, Timestamp: time.Now()}); err != nil {
-		base.Logger().Error("failed to insert measurement", zap.Error(err))
-	}
-	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: RankingTop10Recall, Value: score.Recall, Timestamp: time.Now()}); err != nil {
-		base.Logger().Error("failed to insert measurement", zap.Error(err))
-	}
-	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: RankingTop10Precision, Value: score.Precision, Timestamp: time.Now()}); err != nil {
-		base.Logger().Error("failed to insert measurement", zap.Error(err))
-	}
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastFitRankingModelTime, base.Now()); err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
-	}
-	if err := m.CacheClient.SetString(cache.GlobalMeta, cache.LastRankingModelVersion, fmt.Sprintf("%x", m.rankingModelVersion)); err != nil {
+	MatchingTop10NDCG.Set(float64(score.NDCG))
+	MatchingTop10Recall.Set(float64(score.Recall))
+	MatchingTop10Precision.Set(float64(score.Precision))
+	if err := m.CacheClient.SetTime(cache.GlobalMeta, cache.LastFitMatchingModelTime, time.Now()); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
@@ -928,8 +908,11 @@ func (m *Master) runFitClickModelTask(
 	m.clickModelMutex.Unlock()
 	base.Logger().Info("fit click model complete",
 		zap.String("version", fmt.Sprintf("%x", m.clickModelVersion)))
-	if err := m.DataClient.InsertMeasurement(data.Measurement{Name: ClickPrecision, Value: score.Precision, Timestamp: time.Now()}); err != nil {
-		base.Logger().Error("failed to insert measurement", zap.Error(err))
+	RankingPrecision.Set(float64(score.Precision))
+	RankingRecall.Set(float64(score.Recall))
+	RankingAUC.Set(float64(score.AUC))
+	if err = m.CacheClient.SetTime(cache.GlobalMeta, cache.LastFitRankingModelTime, time.Now()); err != nil {
+		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
 	// caching model
