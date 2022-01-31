@@ -86,11 +86,11 @@ type mockMatrixFactorizationForRecommend struct {
 }
 
 func (m *mockMatrixFactorizationForRecommend) GetUserFactor(_ int32) []float32 {
-	panic("implement me")
+	return []float32{1}
 }
 
-func (m *mockMatrixFactorizationForRecommend) GetItemFactor(_ int32) []float32 {
-	panic("implement me")
+func (m *mockMatrixFactorizationForRecommend) GetItemFactor(itemId int32) []float32 {
+	return []float32{float32(itemId)}
 }
 
 func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
@@ -166,11 +166,71 @@ func (w *mockWorker) Close(t *testing.T) {
 	w.cacheStoreServer.Close()
 }
 
-func TestRecommendMatrixFactorization(t *testing.T) {
+func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
 	w.cfg.Recommend.EnableColRecommend = true
+	// insert feedbacks
+	now := time.Now()
+	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "9"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "8"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "7"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "6"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "5"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "4"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "3"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "1"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Timestamp: now.Add(time.Hour)},
+	}, true, true, true)
+	assert.NoError(t, err)
+
+	// insert hidden items and categorized items
+	err = w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "10", IsHidden: true},
+		{ItemId: "11", IsHidden: true},
+		{ItemId: "3", Categories: []string{"*"}},
+		{ItemId: "1", Categories: []string{"*"}},
+	})
+	assert.NoError(t, err)
+
+	// create mock model
+	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
+	w.userIndex = w.rankingModel.GetUserIndex()
+	w.Recommend([]string{"0"})
+
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{
+		{"3", 0},
+		{"2", 0},
+		{"1", 0},
+		{"0", 0},
+	}, recommends)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{
+		{"3", 0},
+		{"1", 0},
+	}, recommends)
+
+	readCache, err := w.cacheClient.GetScores(cache.IgnoreItems, "0", 0, -1)
+	read := cache.RemoveScores(readCache)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"0", "1", "2", "3"}, read)
+	for _, v := range readCache {
+		assert.Greater(t, v.Score, float32(time.Now().Unix()))
+	}
+}
+
+func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Recommend.EnableColRecommend = true
+	w.cfg.Recommend.EnableColIndex = true
 	// insert feedbacks
 	now := time.Now()
 	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
