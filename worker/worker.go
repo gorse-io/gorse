@@ -395,7 +395,7 @@ func (w *Worker) Recommend(users []string) {
 				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), nil, true)
 			}
 		}
-		builder := search.NewHNSWBuilder(vectors, w.cfg.Database.CacheSize, 1000)
+		builder := search.NewHNSWBuilder(vectors, w.cfg.Database.CacheSize, 1000, w.jobs)
 		w.rankingIndex, _ = builder.Build(w.cfg.Recommend.ColIndexRecall, w.cfg.Recommend.ColIndexFitEpoch, false)
 		base.Logger().Info("complete building ranking index",
 			zap.Duration("build_time", time.Since(startTime)))
@@ -478,7 +478,7 @@ func (w *Worker) Recommend(users []string) {
 			var recommend map[string][]string
 			var usedTime time.Duration
 			if w.cfg.Recommend.EnableColIndex {
-				w.collaborativeRecommendHNSW()
+				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.rankingIndex, userId, itemCategories, excludeSet, itemCache)
 			} else {
 				recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
 			}
@@ -690,7 +690,7 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	for category, recItemsFilter := range recItemsFilters {
 		recommendItems, recommendScores := recItemsFilter.PopAll()
 		recommend[category] = recommendItems
-		if err := w.cacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, userId, category), cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
+		if err := w.cacheClient.SetCategoryScores(cache.CollaborativeRecommend, userId, category, cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 			return nil, 0, errors.Trace(err)
 		}
@@ -698,8 +698,31 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	return recommend, time.Since(localStartTime), nil
 }
 
-func (w *Worker) collaborativeRecommendHNSW() {
-
+func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId string, itemCategories []string, excludeSet *strset.Set, itemCache ItemCache) (map[string][]string, time.Duration, error) {
+	userIndex := w.rankingModel.GetUserIndex().ToNumber(userId)
+	localStartTime := time.Now()
+	values, scores := rankingIndex.MultiSearch(search.NewDenseVector(w.rankingModel.GetUserFactor(userIndex), nil, false),
+		itemCategories, w.cfg.Database.CacheSize+excludeSet.Size(), false)
+	// save result
+	recommend := make(map[string][]string)
+	for category, catValues := range values {
+		recommendItems := make([]string, 0, len(catValues))
+		recommendScores := make([]float32, 0, len(catValues))
+		for i := range catValues {
+			itemId := w.rankingModel.GetItemIndex().ToName(catValues[i])
+			if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
+				recommendItems = append(recommendItems, itemId)
+				recommendScores = append(recommendScores, scores[category][i])
+			}
+		}
+		recommend[category] = recommendItems
+		if err := w.cacheClient.SetCategoryScores(cache.CollaborativeRecommend, userId, category,
+			cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
+			base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
+			return nil, 0, errors.Trace(err)
+		}
+	}
+	return recommend, time.Since(localStartTime), nil
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.

@@ -47,7 +47,7 @@ func TestHNSW_InnerProduct(t *testing.T) {
 	}
 
 	// build vector index
-	builder := NewHNSWBuilder(vectors, 10, 1000)
+	builder := NewHNSWBuilder(vectors, 10, 1000, runtime.NumCPU())
 	idx, recall := builder.Build(0.9, 5, false)
 	assert.Greater(t, recall, float32(0.9))
 	recall = builder.evaluateTermSearch(idx, true, "prime")

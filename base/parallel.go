@@ -38,8 +38,6 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		c := make(chan int, chanSize)
 		// producer
 		go func() {
-			defer CheckPanic()
-
 			// send jobs
 			for i := 0; i < nJobs; i++ {
 				c <- i
@@ -56,7 +54,6 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		for j := 0; j < nWorkers; j++ {
 			// start workers
 			go func(workerId int) {
-				defer CheckPanic()
 				defer wg.Done()
 				for {
 					// read job
@@ -98,7 +95,6 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	c := make(chan batchJob, chanSize)
 	// producer
 	go func() {
-		defer CheckPanic()
 		// send jobs
 		for i := 0; i < nJobs; i += batchSize {
 			c <- batchJob{beginId: i, endId: mathutil.Min(i+batchSize, nJobs)}
@@ -115,7 +111,6 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	for j := 0; j < nWorkers; j++ {
 		// start workers
 		go func(workerId int) {
-			defer CheckPanic()
 			defer wg.Done()
 			for {
 				// read job
