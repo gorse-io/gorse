@@ -30,7 +30,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true", config.Database.DataStore)
 	assert.Equal(t, true, config.Database.AutoInsertUser)
 	assert.Equal(t, false, config.Database.AutoInsertItem)
-	assert.Equal(t, 200, config.Database.CacheSize)
+	assert.Equal(t, 100, config.Database.CacheSize)
 	assert.Equal(t, []string{"star", "like"}, config.Database.PositiveFeedbackType)
 	assert.Equal(t, []string{"read"}, config.Database.ReadFeedbackTypes)
 	assert.Equal(t, uint(0), config.Database.PositiveFeedbackTTL)

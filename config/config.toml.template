@@ -13,7 +13,7 @@ cache_store = "redis://localhost:6379/0"
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true"
 
 # The cache size for recommended/popular/latest items. The default value is 100.
-cache_size = 200
+cache_size = 100
 
 # Insert new users while inserting feedback. The default value is true.
 auto_insert_user = true
