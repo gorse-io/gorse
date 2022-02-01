@@ -382,13 +382,13 @@ func TestMaster_GetStats(t *testing.T) {
 	// set stats
 	s.rankingScore = ranking.Score{Precision: 0.1}
 	s.clickScore = click.Score{Precision: 0.2}
-	err := s.DataClient.InsertMeasurement(data.Measurement{Name: NumUsers, Timestamp: time.Now(), Value: 123})
+	err := s.CacheClient.SetInt(cache.GlobalMeta, cache.NumUsers, 123)
 	assert.NoError(t, err)
-	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumItems, Timestamp: time.Now(), Value: 234})
+	err = s.CacheClient.SetInt(cache.GlobalMeta, cache.NumItems, 234)
 	assert.NoError(t, err)
-	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumValidPosFeedbacks, Timestamp: time.Now(), Value: 345})
+	err = s.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidPosFeedbacks, 345)
 	assert.NoError(t, err)
-	err = s.DataClient.InsertMeasurement(data.Measurement{Name: NumValidNegFeedbacks, Timestamp: time.Now(), Value: 456})
+	err = s.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidNegFeedbacks, 456)
 	assert.NoError(t, err)
 	// get stats
 	apitest.New().
@@ -401,8 +401,8 @@ func TestMaster_GetStats(t *testing.T) {
 			NumItems:            234,
 			NumValidPosFeedback: 345,
 			NumValidNegFeedback: 456,
-			RankingScore:        ranking.Score{Precision: 0.1},
-			ClickScore:          click.Score{Precision: 0.2},
+			MatchingModelScore:  ranking.Score{Precision: 0.1},
+			RankingModelScore:   click.Score{Precision: 0.2},
 		})).
 		End()
 }

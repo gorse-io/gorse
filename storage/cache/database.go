@@ -25,24 +25,30 @@ import (
 const (
 	IgnoreItems = "ignore_items" // ignored items for each user
 	HiddenItems = "hidden_items" // hidden items
+
 	// ItemNeighbors is sorted set of neighbors for each item.
 	//  Global item neighbors      - item_neighbors/{item_id}
 	//  Categorized item neighbors - item_neighbors/{item_id}/{category}
 	ItemNeighbors = "item_neighbors"
+
 	// UserNeighbors is sorted set of neighbors for each user.
 	//  Global user neighbors      - user_neighbors/{user_id}
 	//  Categorized user neighbors - user_neighbors/{user_id}/{category}
-	UserNeighbors          = "user_neighbors"
+	UserNeighbors = "user_neighbors"
+
 	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
 	OfflineRecommend       = "offline_recommend"       // offline recommendation for each user
+
 	// PopularItems is sorted set of popular items. The format of key:
 	//  Global popular items      - latest_items
 	//  Categorized popular items - latest_items/{category}
 	PopularItems = "popular_items"
+
 	// LatestItems is sorted set of the latest items. The format of key:
 	//  Global latest items      - latest_items
-	//  Categorized latest items - latest_items/{category}
+	//  Categorized the latest items - latest_items/{category}
 	LatestItems = "latest_items"
+
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	//	Categories of an item  - item_categories/{item_id}
@@ -53,14 +59,24 @@ const (
 	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
 	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time" // the latest timestamp that a user's neighbors item was updated
 	LastUpdateItemNeighborsTime = "last_update_item_neighbors_time" // the latest timestamp that an item's neighbors was updated
-	LastUpdateLatestItemsTime   = "last_update_latest_items_time"   // the latest timestamp that latest items were updated
-	LastUpdatePopularItemsTime  = "last_update_popular_items_time"  // the latest timestamp that popular items were updated
 
 	// GlobalMeta is global meta information
-	GlobalMeta              = "global_meta"
-	DataImported            = "data_imported"
-	LastFitRankingModelTime = "last_fit_match_model_time"
-	LastRankingModelVersion = "latest_match_model_version"
+	GlobalMeta                 = "global_meta"
+	DataImported               = "data_imported"
+	NumUsers                   = "num_users"
+	NumItems                   = "num_items"
+	NumUserLabels              = "num_user_labels"
+	NumItemLabels              = "num_item_labels"
+	NumTotalPosFeedbacks       = "num_total_pos_feedbacks"
+	NumValidPosFeedbacks       = "num_valid_pos_feedbacks"
+	NumValidNegFeedbacks       = "num_valid_neg_feedbacks"
+	LastFitMatchingModelTime   = "last_fit_matching_model_time"
+	LastFitRankingModelTime    = "last_fit_ranking_model_time"
+	LastUpdateLatestItemsTime  = "last_update_latest_items_time"  // the latest timestamp that latest items were updated
+	LastUpdatePopularItemsTime = "last_update_popular_items_time" // the latest timestamp that popular items were updated
+	UserNeighborIndexRecall    = "user_neighbor_index_recall"
+	ItemNeighborIndexRecall    = "item_neighbor_index_recall"
+	MatchingIndexRecall        = "matching_index_recall"
 )
 
 var (
