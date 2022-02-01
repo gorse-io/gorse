@@ -33,7 +33,6 @@ const (
 
 	// UserNeighbors is sorted set of neighbors for each user.
 	//  Global user neighbors      - user_neighbors/{user_id}
-	//  Categorized user neighbors - user_neighbors/{user_id}/{category}
 	UserNeighbors = "user_neighbors"
 
 	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user

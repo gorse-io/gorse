@@ -588,10 +588,10 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		}
 		itemScores := make([]cache.Scored, len(neighbors))
 		for i := range scores {
-			itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[i])
+			itemScores[i].Id = dataset.UserIndex.ToName(neighbors[i])
 			itemScores[i].Score = -scores[i]
 		}
-		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.ItemIndex.ToName(int32(userId))), itemScores); err != nil {
+		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))), itemScores); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
