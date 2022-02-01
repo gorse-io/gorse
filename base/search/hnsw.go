@@ -332,18 +332,23 @@ func recall(expected, actual []int32) float32 {
 	return result / float32(len(actual))
 }
 
-func (b *HNSWBuilder) evaluate(idx VectorIndex, prune0 bool) float32 {
+func (b *HNSWBuilder) evaluate(idx *HNSW, prune0 bool) float32 {
 	testSize := mathutil.Min(b.testSize, len(b.data))
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
-	for _, i := range samples {
-		expected, _ := b.bruteForce.Search(b.data[i], b.k, prune0)
+	var mu sync.Mutex
+	_ = base.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+		sample := samples[i]
+		expected, _ := b.bruteForce.Search(b.data[sample], b.k, prune0)
 		if len(expected) > 0 {
-			actual, _ := idx.Search(b.data[i], b.k, prune0)
+			actual, _ := idx.Search(b.data[sample], b.k, prune0)
+			mu.Lock()
+			defer mu.Unlock()
 			result += recall(expected, actual)
 			count++
 		}
-	}
+		return nil
+	})
 	return result / count
 }
 
