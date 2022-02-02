@@ -18,6 +18,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f
 	github.com/juju/testing v0.0.0-20210324180055-18c50b0c2098 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.10 // indirect
 	github.com/lib/pq v1.10.2
 	github.com/mailru/go-clickhouse v1.6.0
 	github.com/orcaman/concurrent-map v1.0.0

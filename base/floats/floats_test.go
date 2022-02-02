@@ -127,3 +127,17 @@ func TestDot(t *testing.T) {
 	assert.Equal(t, float32(770), Dot(a, b))
 	assert.Panics(t, func() { Dot([]float32{1}, nil) })
 }
+
+func TestNative_Dot(t *testing.T) {
+	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
+	assert.Equal(t, float32(770), native{}.Dot(a, b))
+}
+
+func TestNative_MulConstAddTo(t *testing.T) {
+	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	dst := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	target := []float32{0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30}
+	native{}.MulConstAddTo(a, 2, dst)
+	assert.Equal(t, target, dst)
+}
