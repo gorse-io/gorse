@@ -141,3 +141,17 @@ func TestNative_MulConstAddTo(t *testing.T) {
 	native{}.MulConstAddTo(a, 2, dst)
 	assert.Equal(t, target, dst)
 }
+
+func TestNative_MulConstTo(t *testing.T) {
+	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	dst := make([]float32, 11)
+	target := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
+	native{}.MulConstTo(a, 2, dst)
+	assert.Equal(t, target, dst)
+}
+
+func TestNative_MulConst(t *testing.T) {
+	a := []float32{1, 2, 3, 4}
+	native{}.MulConst(a, 2)
+	assert.Equal(t, []float32{2, 4, 6, 8}, a)
+}
