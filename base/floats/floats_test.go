@@ -64,9 +64,10 @@ func TestSubTo(t *testing.T) {
 func TestMul(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
 	b := []float32{5, 6, 7, 8}
-	Mul(a, b)
-	assert.Equal(t, []float32{5, 12, 21, 32}, a)
-	assert.Panics(t, func() { Mul([]float32{1}, nil) })
+	c := make([]float32, 4)
+	MulTo(a, b, c)
+	assert.Equal(t, []float32{5, 12, 21, 32}, c)
+	assert.Panics(t, func() { MulTo([]float32{1}, nil, nil) })
 }
 
 func TestMulConst(t *testing.T) {
@@ -148,6 +149,14 @@ func TestNative_MulConstTo(t *testing.T) {
 	target := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	native{}.MulConstTo(a, 2, dst)
 	assert.Equal(t, target, dst)
+}
+
+func TestNative_MulTo(t *testing.T) {
+	a := []float32{1, 2, 3, 4}
+	b := []float32{5, 6, 7, 8}
+	c := make([]float32, 4)
+	native{}.MulTo(a, b, c)
+	assert.Equal(t, []float32{5, 12, 21, 32}, c)
 }
 
 func TestNative_MulConst(t *testing.T) {
