@@ -336,7 +336,7 @@ func (bpr *BPR) GetItemFactor(itemIndex int32) []float32 {
 func (bpr *BPR) SetParams(params model.Params) {
 	bpr.BaseMatrixFactorization.SetParams(params)
 	// Setup hyper-parameters
-	bpr.nFactors = bpr.Params.GetInt(model.NFactors, 10)
+	bpr.nFactors = bpr.Params.GetInt(model.NFactors, 16)
 	bpr.nEpochs = bpr.Params.GetInt(model.NEpochs, 100)
 	bpr.lr = bpr.Params.GetFloat32(model.Lr, 0.05)
 	bpr.reg = bpr.Params.GetFloat32(model.Reg, 0.01)
@@ -631,7 +631,7 @@ func (als *ALS) GetItemFactor(_ int32) []float32 {
 // SetParams sets hyper-parameters for the ALS model.
 func (als *ALS) SetParams(params model.Params) {
 	als.BaseMatrixFactorization.SetParams(params)
-	als.nFactors = als.Params.GetInt(model.NFactors, 15)
+	als.nFactors = als.Params.GetInt(model.NFactors, 16)
 	als.nEpochs = als.Params.GetInt(model.NEpochs, 50)
 	als.initMean = float64(als.Params.GetFloat32(model.InitMean, 0))
 	als.initStdDev = float64(als.Params.GetFloat32(model.InitStdDev, 0.1))
@@ -924,7 +924,7 @@ func (ccd *CCD) GetItemFactor(itemIndex int32) []float32 {
 // SetParams sets hyper-parameters for the ALS model.
 func (ccd *CCD) SetParams(params model.Params) {
 	ccd.BaseMatrixFactorization.SetParams(params)
-	ccd.nFactors = ccd.Params.GetInt(model.NFactors, 15)
+	ccd.nFactors = ccd.Params.GetInt(model.NFactors, 16)
 	ccd.nEpochs = ccd.Params.GetInt(model.NEpochs, 50)
 	ccd.initMean = ccd.Params.GetFloat32(model.InitMean, 0)
 	ccd.initStdDev = ccd.Params.GetFloat32(model.InitStdDev, 0.1)
