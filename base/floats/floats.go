@@ -16,6 +16,7 @@ package floats
 
 type implementation interface {
 	Dot(a, b []float32) float32
+	MulTo(a, b, c []float32)
 	MulConstAddTo(a []float32, b float32, c []float32)
 	MulConstTo(a []float32, b float32, c []float32)
 	MulConst(a []float32, b float32)
@@ -30,6 +31,12 @@ func (native) Dot(a, b []float32) (ret float32) {
 		ret += a[i] * b[i]
 	}
 	return
+}
+
+func (native) MulTo(a, b, c []float32) {
+	for i := range a {
+		c[i] = a[i] * b[i]
+	}
 }
 
 func (native) MulConstAddTo(a []float32, c float32, dst []float32) {
@@ -101,14 +108,11 @@ func Div(dst, s []float32) {
 	}
 }
 
-// Mul two vectors: dst = dst * s
-func Mul(dst, s []float32) {
-	if len(dst) != len(s) {
+func MulTo(a, b, c []float32) {
+	if len(a) != len(b) || len(a) != len(c) {
 		panic("floats: slice lengths do not match")
 	}
-	for i := range dst {
-		dst[i] *= s[i]
-	}
+	impl.MulTo(a, b, c)
 }
 
 // Sub one vector by another: dst = dst - s

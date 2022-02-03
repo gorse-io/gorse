@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
+	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/floats"
@@ -228,19 +229,20 @@ func (fm *FM) internalPredictImpl(features []int32, values []float32) float32 {
 		pred += fm.W[i] * values[it]
 	}
 	// \sum^n_{i=1}\sum^n_{j=i+1} <v_i,v_j> x_i x_j
-	sum := float32(0)
-	for f := 0; f < fm.nFactors; f++ {
-		a, b := float32(0), float32(0)
-		for it, i := range features {
-			// 1) \sum^n_{i=1} v^2_{i,f} x_i
-			a += fm.V[i][f] * values[it]
-			// 2) \sum^n_{i=1} v^2_{i,f} x^2_i
-			b += fm.V[i][f] * fm.V[i][f] * values[it] * values[it]
-		}
-		// 3) (\sum^n_{i=1} v^2_{i,f} x^2_i)^2 - \sum^n_{i=1} v^2_{i,f} x^2_i
-		sum += a*a - b
+	temp := make([]float32, fm.nFactors)
+	a := make([]float32, fm.nFactors)
+	b := make([]float32, fm.nFactors)
+	for it, i := range features {
+		// 1) \sum^n_{i=1} v^2_{i,f} x_i
+		floats.MulConstAddTo(fm.V[i], values[it], a)
+		// 2) \sum^n_{i=1} v^2_{i,f} x^2_i
+		floats.MulTo(fm.V[i], fm.V[i], temp)
+		floats.MulConstAddTo(temp, values[it]*values[it], b)
 	}
-	pred += sum / 2
+	// 3) (\sum^n_{i=1} v^2_{i,f} x^2_i)^2 - \sum^n_{i=1} v^2_{i,f} x^2_i
+	floats.MulTo(a, a, temp)
+	floats.MulConstAddTo(b, -1, temp)
+	pred += funk.SumFloat32(temp) / 2
 	return pred
 }
 
