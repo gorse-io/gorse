@@ -14,6 +14,42 @@
 
 package floats
 
+type implementation interface {
+	Dot(a, b []float32) float32
+	MulConstAddTo(a []float32, b float32, c []float32)
+	MulConstTo(a []float32, b float32, c []float32)
+	MulConst(a []float32, b float32)
+}
+
+var impl implementation = &native{}
+
+type native struct{}
+
+func (native) Dot(a, b []float32) (ret float32) {
+	for i := range a {
+		ret += a[i] * b[i]
+	}
+	return
+}
+
+func (native) MulConstAddTo(a []float32, c float32, dst []float32) {
+	for i := range a {
+		dst[i] += a[i] * c
+	}
+}
+
+func (n native) MulConstTo(a []float32, b float32, c []float32) {
+	for i := range a {
+		c[i] = a[i] * b
+	}
+}
+
+func (n native) MulConst(a []float32, b float32) {
+	for i := range a {
+		a[i] *= b
+	}
+}
+
 // MatZero fills zeros in a matrix of 32-bit floats.
 func MatZero(x [][]float32) {
 	for i := range x {
@@ -52,9 +88,7 @@ func Add(dst, s []float32) {
 
 // MulConst multiplies a vector with a const: dst = dst * c
 func MulConst(dst []float32, c float32) {
-	for i := range dst {
-		dst[i] *= c
-	}
+	impl.MulConst(dst, c)
 }
 
 // Div one vectors by another: dst = dst / s
@@ -92,9 +126,7 @@ func MulConstTo(a []float32, c float32, dst []float32) {
 	if len(a) != len(dst) {
 		panic("floats: slice lengths do not match")
 	}
-	for i := range a {
-		dst[i] = a[i] * c
-	}
+	impl.MulConstTo(a, c, dst)
 }
 
 // MulConstAddTo multiplies a vector and a const, then adds to dst: dst = dst + a * c
@@ -102,9 +134,7 @@ func MulConstAddTo(a []float32, c float32, dst []float32) {
 	if len(a) != len(dst) {
 		panic("floats: slice lengths do not match")
 	}
-	for i := range a {
-		dst[i] += a[i] * c
-	}
+	impl.MulConstAddTo(a, c, dst)
 }
 
 // MulAddTo multiplies a vector and a vector, then adds to a vector: c += a * b
@@ -132,8 +162,5 @@ func Dot(a, b []float32) (ret float32) {
 	if len(a) != len(b) {
 		panic("floats: slice lengths do not match")
 	}
-	for i := range a {
-		ret += a[i] * b[i]
-	}
-	return
+	return impl.Dot(a, b)
 }
