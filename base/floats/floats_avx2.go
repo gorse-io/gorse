@@ -28,7 +28,7 @@ func (avx2) MulConst(a []float32, b float32) {
 	__mm256_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
 }
 
-func (avx2) Dot(a []float32, b []float32) float32 {
+func (avx2) Dot(a, b []float32) float32 {
 	var ret float32
 	__mm256_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
 	return ret
