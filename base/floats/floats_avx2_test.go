@@ -39,6 +39,15 @@ func TestAVX2_MulConstTo(t *testing.T) {
 	assert.Equal(t, c, b)
 }
 
+func TestAVX2_MulTo(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	expected, actual := make([]float32, len(a)), make([]float32, len(a))
+	avx2{}.MulTo(a, b, actual)
+	native{}.MulTo(a, b, expected)
+	assert.Equal(t, expected, actual)
+}
+
 func TestAVX2_MulConst(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	avx2{}.MulConst(b, 2)
@@ -160,6 +169,34 @@ func BenchmarkAVX2MulConst(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				avx2{}.MulConst(v1, 2)
+			}
+		})
+	}
+}
+
+func BenchmarkMulTo(b *testing.B) {
+	for i := 16; i <= 128; i *= 2 {
+		b.Run(strconv.Itoa(i), func(b *testing.B) {
+			v1 := initializeFloat32Array(i)
+			v2 := initializeFloat32Array(i)
+			v3 := make([]float32, i)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				native{}.MulTo(v1, v2, v3)
+			}
+		})
+	}
+}
+
+func BenchmarkAVX2MulTo(b *testing.B) {
+	for i := 16; i <= 128; i *= 2 {
+		b.Run(strconv.Itoa(i), func(b *testing.B) {
+			v1 := initializeFloat32Array(i)
+			v2 := initializeFloat32Array(i)
+			v3 := make([]float32, i)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				avx2{}.MulTo(v1, v2, v3)
 			}
 		})
 	}

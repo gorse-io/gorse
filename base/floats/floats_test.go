@@ -61,7 +61,7 @@ func TestSubTo(t *testing.T) {
 	assert.Panics(t, func() { SubTo([]float32{1}, nil, nil) })
 }
 
-func TestMul(t *testing.T) {
+func TestMulTo(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
 	b := []float32{5, 6, 7, 8}
 	c := make([]float32, 4)
