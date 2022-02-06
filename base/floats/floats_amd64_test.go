@@ -15,10 +15,11 @@
 package floats
 
 import (
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAVX2_MulConstAddTo(t *testing.T) {
@@ -85,7 +86,7 @@ func BenchmarkDot(b *testing.B) {
 	}
 }
 
-func BenchmarkDot_Axv2(b *testing.B) {
+func BenchmarkDot_AXV2(b *testing.B) {
 	for i := 16; i <= 128; i *= 2 {
 		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			v1 := initializeFloat32Array(i)
@@ -111,7 +112,7 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 	}
 }
 
-func BenchmarkAVX2MulConstAddTo(b *testing.B) {
+func BenchmarkMulConstAddTo_AVX2(b *testing.B) {
 	for i := 16; i <= 128; i *= 2 {
 		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			v1 := initializeFloat32Array(i)
@@ -137,7 +138,7 @@ func BenchmarkMulConstTo(b *testing.B) {
 	}
 }
 
-func BenchmarkAVX2MulConstTo(b *testing.B) {
+func BenchmarkMulConstTo_AVX2(b *testing.B) {
 	for i := 16; i <= 128; i *= 2 {
 		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			v1 := initializeFloat32Array(i)
@@ -162,7 +163,7 @@ func BenchmarkMulConst(b *testing.B) {
 	}
 }
 
-func BenchmarkAVX2MulConst(b *testing.B) {
+func BenchmarkMulConst_AVX2(b *testing.B) {
 	for i := 16; i <= 128; i *= 2 {
 		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			v1 := initializeFloat32Array(i)
@@ -188,7 +189,7 @@ func BenchmarkMulTo(b *testing.B) {
 	}
 }
 
-func BenchmarkAVX2MulTo(b *testing.B) {
+func BenchmarkMulTo_AXV2(b *testing.B) {
 	for i := 16; i <= 128; i *= 2 {
 		b.Run(strconv.Itoa(i), func(b *testing.B) {
 			v1 := initializeFloat32Array(i)
