@@ -21,11 +21,11 @@ class Line:
         return plan9asm
 
 
-os.system("clang -O1 -S -mno-red-zone -mstackrealign -mllvm -inline-threshold=1000 \
+os.system("clang -O3 -S -mno-red-zone -mstackrealign -mllvm -inline-threshold=1000 \
     -fno-asynchronous-unwind-tables -fno-exceptions \
     -fno-rtti -c src/floats_arm64.c -o src/floats_arm64.s")
 
-os.system("clang -O1 -mno-red-zone -mstackrealign -mllvm -inline-threshold=1000 \
+os.system("clang -O3 -mno-red-zone -mstackrealign -mllvm -inline-threshold=1000 \
     -fno-asynchronous-unwind-tables -fno-exceptions \
     -fno-rtti -c src/floats_arm64.c -o src/floats_arm64.o")
 
