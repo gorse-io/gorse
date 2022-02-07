@@ -78,13 +78,32 @@ func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.Filt
 	}
 }
 
+func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	if s.IsDashboard || s.GorseConfig.Server.APIKey == "" {
+		chain.ProcessFilter(req, resp)
+		return
+	}
+	apikey := req.HeaderParameter("X-API-Key")
+	if apikey == s.GorseConfig.Server.APIKey {
+		chain.ProcessFilter(req, resp)
+		return
+	}
+	base.Logger().Error("unauthorized",
+		zap.String("api_key", s.GorseConfig.Server.APIKey),
+		zap.String("X-API-Key", apikey))
+	if err := resp.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
+		base.Logger().Error("failed to write error", zap.Error(err))
+	}
+}
+
 // CreateWebService creates web service.
 func (s *RestServer) CreateWebService() {
 	// Create a server
 	ws := s.WebService
 	ws.Path("/api/").
 		Produces(restful.MIME_JSON).
-		Filter(LogFilter)
+		Filter(LogFilter).
+		Filter(s.AuthFilter)
 
 	/* Interactions with data store */
 
@@ -482,20 +501,12 @@ func (s *RestServer) getSort(key string, request *restful.Request, response *res
 }
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	category := request.PathParameter("category")
 	base.Logger().Debug("get category popular items in category", zap.String("category", category))
 	s.getSort(cache.Key(cache.PopularItems, category), request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	category := request.PathParameter("category")
 	base.Logger().Debug("get category latest items in category", zap.String("category", category))
 	s.getSort(cache.Key(cache.LatestItems, category), request, response)
@@ -503,10 +514,6 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 
 // get feedback by item-id with feedback type
 func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
 	feedback, err := s.DataClient.GetItemFeedback(itemId, feedbackType)
@@ -519,10 +526,6 @@ func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *
 
 // get feedback by item-id
 func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	itemId := request.PathParameter("item-id")
 	feedback, err := s.DataClient.GetItemFeedback(itemId)
 	if err != nil {
@@ -534,10 +537,6 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 
 // getItemNeighbors gets neighbors of a item from database.
 func (s *RestServer) getItemNeighbors(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	s.getSort(cache.Key(cache.ItemNeighbors, itemId), request, response)
@@ -545,10 +544,6 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 
 // getItemCategorizedNeighbors gets categorized neighbors of an item from database.
 func (s *RestServer) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
@@ -557,10 +552,6 @@ func (s *RestServer) getItemCategorizedNeighbors(request *restful.Request, respo
 
 // getUserNeighbors gets neighbors of a user from database.
 func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get item id
 	userId := request.PathParameter("user-id")
 	s.getSort(cache.Key(cache.UserNeighbors, userId), request, response)
@@ -579,10 +570,6 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 
 // getCategorizedCollaborative gets cached categorized recommended items from database.
 func (s *RestServer) getCategorizedCollaborative(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get user id
 	userId := request.PathParameter("user-id")
 	category := request.PathParameter("category")
@@ -591,10 +578,6 @@ func (s *RestServer) getCategorizedCollaborative(request *restful.Request, respo
 
 // getCollaborative gets cached recommended items from database.
 func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get user id
 	userId := request.PathParameter("user-id")
 	s.getList(cache.OfflineRecommend, userId, request, response)
@@ -935,10 +918,6 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
 	startTime := time.Now()
-	// authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// parse arguments
 	userId := request.PathParameter("user-id")
 	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
@@ -1019,10 +998,6 @@ type Success struct {
 }
 
 func (s *RestServer) insertUser(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	temp := data.User{}
 	// get userInfo from request and put into temp
 	if err := request.ReadEntity(&temp); err != nil {
@@ -1041,10 +1016,6 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 }
 
 func (s *RestServer) modifyUser(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// get user id
 	userId := request.PathParameter("user-id")
 	// modify user
@@ -1065,10 +1036,6 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 }
 
 func (s *RestServer) getUser(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// get user id
 	userId := request.PathParameter("user-id")
 	// get user
@@ -1085,10 +1052,6 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 }
 
 func (s *RestServer) insertUsers(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	temp := new([]data.User)
 	// get param from request and put into temp
 	if err := request.ReadEntity(temp); err != nil {
@@ -1117,10 +1080,6 @@ type UserIterator struct {
 }
 
 func (s *RestServer) getUsers(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
@@ -1138,10 +1097,6 @@ func (s *RestServer) getUsers(request *restful.Request, response *restful.Respon
 
 // delete a user by user-id
 func (s *RestServer) deleteUser(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// get user-id and put into temp
 	userId := request.PathParameter("user-id")
 	if err := s.DataClient.DeleteUser(userId); err != nil {
@@ -1153,10 +1108,6 @@ func (s *RestServer) deleteUser(request *restful.Request, response *restful.Resp
 
 // get feedback by user-id with feedback type
 func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	feedback, err := s.DataClient.GetUserFeedback(userId, false, feedbackType)
@@ -1169,10 +1120,6 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 
 // get feedback by user-id
 func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	userId := request.PathParameter("user-id")
 	feedback, err := s.DataClient.GetUserFeedback(userId, false)
 	if err != nil {
@@ -1269,10 +1216,6 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 }
 
 func (s *RestServer) insertItems(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	var items []Item
 	if err := request.ReadEntity(&items); err != nil {
 		BadRequest(response, err)
@@ -1283,10 +1226,6 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 }
 
 func (s *RestServer) insertItem(request *restful.Request, response *restful.Response) {
-	// authorize
-	if !s.auth(request, response) {
-		return
-	}
 	var item Item
 	var err error
 	if err = request.ReadEntity(&item); err != nil {
@@ -1297,10 +1236,6 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 }
 
 func (s *RestServer) modifyItem(request *restful.Request, response *restful.Response) {
-	// authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// modify item
@@ -1372,10 +1307,6 @@ type ItemIterator struct {
 }
 
 func (s *RestServer) getItems(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
 	if err != nil {
@@ -1391,10 +1322,6 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 }
 
 func (s *RestServer) getItem(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get item
@@ -1411,10 +1338,6 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 }
 
 func (s *RestServer) deleteItem(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	itemId := request.PathParameter("item-id")
 	if err := s.DataClient.DeleteItem(itemId); err != nil {
 		InternalServerError(response, err)
@@ -1455,10 +1378,6 @@ func (s *RestServer) deleteItemFromLatestPopularCache(itemId string, deleteItem 
 }
 
 func (s *RestServer) insertItemCategory(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get item id and category
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
@@ -1498,10 +1417,6 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 }
 
 func (s *RestServer) deleteItemCategory(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Get item id and category
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
@@ -1550,10 +1465,6 @@ type Feedback struct {
 
 func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Request, response *restful.Response) {
 	return func(request *restful.Request, response *restful.Response) {
-		// authorize
-		if !s.auth(request, response) {
-			return
-		}
 		// add ratings
 		feedbackLiterTime := new([]Feedback)
 		if err := request.ReadEntity(feedbackLiterTime); err != nil {
@@ -1615,10 +1526,6 @@ type FeedbackIterator struct {
 }
 
 func (s *RestServer) getFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Parse parameters
 	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
@@ -1635,10 +1542,6 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 }
 
 func (s *RestServer) getTypedFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	cursor := request.QueryParameter("cursor")
@@ -1656,10 +1559,6 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 }
 
 func (s *RestServer) getUserItemFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
@@ -1671,10 +1570,6 @@ func (s *RestServer) getUserItemFeedback(request *restful.Request, response *res
 }
 
 func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
@@ -1686,10 +1581,6 @@ func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *
 }
 
 func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
@@ -1704,10 +1595,6 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 }
 
 func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
@@ -1720,10 +1607,6 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 }
 
 func (s *RestServer) getMeasurements(request *restful.Request, response *restful.Response) {
-	// Authorize
-	if !s.auth(request, response) {
-		return
-	}
 	// Parse parameters
 	name := request.PathParameter("name")
 	n, err := ParseInt(request, "n", 100)
@@ -1779,23 +1662,6 @@ func Text(response *restful.Response, content string) {
 	if _, err := response.Write([]byte(content)); err != nil {
 		base.Logger().Error("failed to write text", zap.Error(err))
 	}
-}
-
-func (s *RestServer) auth(request *restful.Request, response *restful.Response) bool {
-	if s.IsDashboard || s.GorseConfig.Server.APIKey == "" {
-		return true
-	}
-	apikey := request.HeaderParameter("X-API-Key")
-	if apikey == s.GorseConfig.Server.APIKey {
-		return true
-	}
-	base.Logger().Error("unauthorized",
-		zap.String("api_key", s.GorseConfig.Server.APIKey),
-		zap.String("X-API-Key", apikey))
-	if err := response.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
-		base.Logger().Error("failed to write error", zap.Error(err))
-	}
-	return false
 }
 
 // InsertFeedbackToCache inserts feedback to cache.

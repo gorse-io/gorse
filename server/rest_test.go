@@ -972,6 +972,14 @@ func TestServer_Measurement(t *testing.T) {
 			measurements[2],
 		})).
 		End()
+	// test auth fail
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/measurements/Test_NDCG").
+		Query("n", "3").
+		Expect(t).
+		Status(http.StatusUnauthorized).
+		End()
 }
 
 func TestServer_GetRecommends(t *testing.T) {
