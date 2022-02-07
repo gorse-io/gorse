@@ -17,6 +17,7 @@ package master
 import (
 	"bufio"
 	"fmt"
+	"github.com/gorilla/securecookie"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -44,6 +45,7 @@ func (m *Master) CreateWebService() {
 	ws := m.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
+	ws.Filter(m.AuthFilter)
 
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
@@ -177,16 +179,162 @@ func (fs *SinglePageAppFileSystem) Open(name string) (http.File, error) {
 
 func (m *Master) StartHttpServer() {
 	m.CreateWebService()
-	statikFS, err := fs.New()
-	if err != nil {
-		base.Logger().Fatal("failed to load statik files", zap.Error(err))
-	}
-	http.Handle("/", http.FileServer(&SinglePageAppFileSystem{statikFS}))
+	http.HandleFunc("/", m.dashboard)
+	http.HandleFunc("/login", m.login)
+	http.HandleFunc("/logout", m.logout)
 	http.HandleFunc("/api/bulk/users", m.importExportUsers)
 	http.HandleFunc("/api/bulk/items", m.importExportItems)
 	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
 	//http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
 	m.RestServer.StartHttpServer()
+}
+
+var (
+	cookieHandler = securecookie.New(
+		securecookie.GenerateRandomKey(64),
+		securecookie.GenerateRandomKey(32))
+	staticFileSystem http.FileSystem
+	staticFileServer http.Handler
+)
+
+func init() {
+	var err error
+	staticFileSystem, err = fs.New()
+	if err != nil {
+		base.Logger().Fatal("failed to load statik files", zap.Error(err))
+	}
+	staticFileServer = http.FileServer(&SinglePageAppFileSystem{staticFileSystem})
+}
+
+// Taken from https://github.com/mytrile/nocache
+var noCacheHeaders = map[string]string{
+	"Expires":         time.Unix(0, 0).Format(time.RFC1123),
+	"Cache-Control":   "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
+	"Pragma":          "no-cache",
+	"X-Accel-Expires": "0",
+}
+
+var etagHeaders = []string{
+	"ETag",
+	"If-Modified-Since",
+	"If-Match",
+	"If-None-Match",
+	"If-Range",
+	"If-Unmodified-Since",
+}
+
+// noCache is a simple piece of middleware that sets a number of HTTP headers to prevent
+// a router (or subrouter) from being cached by an upstream proxy and/or client.
+//
+// As per http://wiki.nginx.org/HttpProxyModule - noCache sets:
+//      Expires: Thu, 01 Jan 1970 00:00:00 UTC
+//      Cache-Control: no-cache, private, max-age=0
+//      X-Accel-Expires: 0
+//      Pragma: no-cache (for HTTP/1.0 proxies/clients)
+func noCache(h http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		// Delete any ETag headers that may have been set
+		for _, v := range etagHeaders {
+			if r.Header.Get(v) != "" {
+				r.Header.Del(v)
+			}
+		}
+		// Set our noCache headers
+		for k, v := range noCacheHeaders {
+			w.Header().Set(k, v)
+		}
+		h.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) {
+	_, err := staticFileSystem.Open(request.RequestURI)
+	if request.RequestURI == "/" || os.IsNotExist(err) {
+		if !m.checkAuth(request) {
+			http.Redirect(response, request, "/login", http.StatusFound)
+			base.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
+			return
+		}
+		noCache(staticFileServer).ServeHTTP(response, request)
+		return
+	}
+	staticFileServer.ServeHTTP(response, request)
+}
+
+func (m *Master) login(response http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case http.MethodGet:
+		base.Logger().Info("GET /login", zap.Int("status_code", http.StatusOK))
+		staticFileServer.ServeHTTP(response, request)
+	case http.MethodPost:
+		name := request.FormValue("user_name")
+		pass := request.FormValue("password")
+		if name == m.GorseConfig.Master.DashboardUserName && pass == m.GorseConfig.Master.DashboardPassword {
+			value := map[string]string{
+				"user_name": name,
+				"password":  pass,
+			}
+			if encoded, err := cookieHandler.Encode("session", value); err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			} else {
+				cookie := &http.Cookie{
+					Name:  "session",
+					Value: encoded,
+					Path:  "/",
+				}
+				http.SetCookie(response, cookie)
+				http.Redirect(response, request, "/", http.StatusFound)
+				base.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
+				return
+			}
+		} else {
+			http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
+			base.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
+			return
+		}
+	default:
+		server.BadRequest(restful.NewResponse(response), errors.New("unsupported method"))
+	}
+}
+
+func (m *Master) logout(response http.ResponseWriter, request *http.Request) {
+	cookie := &http.Cookie{
+		Name:   "session",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	}
+	http.SetCookie(response, cookie)
+	http.Redirect(response, request, "/login", http.StatusFound)
+	base.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.RequestURI), zap.Int("status_code", http.StatusFound))
+}
+
+func (m *Master) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	if m.checkAuth(req.Request) {
+		chain.ProcessFilter(req, resp)
+	} else {
+		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
+		if err != nil {
+			server.InternalServerError(resp, err)
+			return
+		}
+	}
+}
+
+func (m *Master) checkAuth(request *http.Request) bool {
+	if cookie, err := request.Cookie("session"); err == nil {
+		cookieValue := make(map[string]string)
+		if err = cookieHandler.Decode("session", cookie.Value, &cookieValue); err == nil {
+			userName := cookieValue["user_name"]
+			password := cookieValue["password"]
+			if userName == m.GorseConfig.Master.DashboardUserName && password == m.GorseConfig.Master.DashboardPassword {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Master) getCategories(_ *restful.Request, response *restful.Response) {
@@ -567,6 +715,15 @@ func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Re
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
+	if !m.checkAuth(request) {
+		resp := restful.NewResponse(response)
+		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
+		if err != nil {
+			server.InternalServerError(resp, err)
+			return
+		}
+		return
+	}
 	switch request.Method {
 	case http.MethodGet:
 		var err error
@@ -679,6 +836,15 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 }
 
 func (m *Master) importExportItems(response http.ResponseWriter, request *http.Request) {
+	if !m.checkAuth(request) {
+		resp := restful.NewResponse(response)
+		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
+		if err != nil {
+			server.InternalServerError(resp, err)
+			return
+		}
+		return
+	}
 	switch request.Method {
 	case http.MethodGet:
 		var err error
@@ -831,6 +997,15 @@ func formValue(request *http.Request, fieldName, defaultValue string) string {
 }
 
 func (m *Master) importExportFeedback(response http.ResponseWriter, request *http.Request) {
+	if !m.checkAuth(request) {
+		resp := restful.NewResponse(response)
+		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
+		if err != nil {
+			server.InternalServerError(resp, err)
+			return
+		}
+		return
+	}
 	switch request.Method {
 	case http.MethodGet:
 		var err error

@@ -42,7 +42,7 @@ type mockServer struct {
 	Master
 }
 
-func newMockServer(t *testing.T) *mockServer {
+func newMockServer(t *testing.T) (*mockServer, string) {
 	s := new(mockServer)
 	// create mock redis server
 	var err error
@@ -62,7 +62,13 @@ func newMockServer(t *testing.T) *mockServer {
 	// create handler
 	s.handler = restful.NewContainer()
 	s.handler.Add(s.WebService)
-	return s
+	// login
+	req, err := http.NewRequest("POST", "/login", bytes.NewBuffer([]byte(`{"username":"admin","password":"admin"}`)))
+	assert.NoError(t, err)
+	resp := httptest.NewRecorder()
+	s.login(resp, req)
+	assert.Equal(t, http.StatusFound, resp.Code)
+	return s, resp.Header().Get("Set-Cookie")
 }
 
 func (s *mockServer) Close(t *testing.T) {
@@ -81,7 +87,7 @@ func marshal(t *testing.T, v interface{}) string {
 }
 
 func TestMaster_ExportUsers(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// insert users
 	users := []data.User{
@@ -93,6 +99,7 @@ func TestMaster_ExportUsers(t *testing.T) {
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	req.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 	s.importExportUsers(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
@@ -105,7 +112,7 @@ func TestMaster_ExportUsers(t *testing.T) {
 }
 
 func TestMaster_ExportItems(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// insert items
 	items := []data.Item{
@@ -117,6 +124,7 @@ func TestMaster_ExportItems(t *testing.T) {
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	req.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 	s.importExportItems(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
@@ -129,7 +137,7 @@ func TestMaster_ExportItems(t *testing.T) {
 }
 
 func TestMaster_ExportFeedback(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// insert feedback
 	feedbacks := []data.Feedback{
@@ -141,6 +149,7 @@ func TestMaster_ExportFeedback(t *testing.T) {
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	req.Header.Set("Cookie", cookie)
 	w := httptest.NewRecorder()
 	s.importExportFeedback(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
@@ -153,7 +162,7 @@ func TestMaster_ExportFeedback(t *testing.T) {
 }
 
 func TestMaster_ImportUsers(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// send request
 	buf := bytes.NewBuffer(nil)
@@ -175,6 +184,7 @@ func TestMaster_ImportUsers(t *testing.T) {
 	err = writer.Close()
 	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
 	s.importExportUsers(w, req)
@@ -191,7 +201,7 @@ func TestMaster_ImportUsers(t *testing.T) {
 }
 
 func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// send request
 	buf := bytes.NewBuffer(nil)
@@ -206,6 +216,7 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	err = writer.Close()
 	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
 	s.importExportUsers(w, req)
@@ -222,7 +233,7 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 }
 
 func TestMaster_ImportItems(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// send request
 	buf := bytes.NewBuffer(nil)
@@ -244,6 +255,7 @@ func TestMaster_ImportItems(t *testing.T) {
 	err = writer.Close()
 	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
 	s.importExportItems(w, req)
@@ -260,7 +272,7 @@ func TestMaster_ImportItems(t *testing.T) {
 }
 
 func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// send request
 	buf := bytes.NewBuffer(nil)
@@ -275,6 +287,7 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	err = writer.Close()
 	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
 	s.importExportItems(w, req)
@@ -291,7 +304,7 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 }
 
 func TestMaster_ImportFeedback(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// send request
 	buf := bytes.NewBuffer(nil)
@@ -311,6 +324,7 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	err = writer.Close()
 	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
 	s.importExportFeedback(w, req)
@@ -327,7 +341,7 @@ func TestMaster_ImportFeedback(t *testing.T) {
 }
 
 func TestMaster_ImportFeedback_Default(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// send request
 	buf := bytes.NewBuffer(nil)
@@ -342,6 +356,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	err = writer.Close()
 	assert.NoError(t, err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
 	s.importExportFeedback(w, req)
@@ -358,7 +373,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 }
 
 func TestMaster_GetCluster(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// add nodes
 	serverNode := &Node{"alan turnin", ServerNode, "192.168.1.100", 1080}
@@ -370,6 +385,7 @@ func TestMaster_GetCluster(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/cluster").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []*Node{workerNode, serverNode})).
@@ -377,7 +393,7 @@ func TestMaster_GetCluster(t *testing.T) {
 }
 
 func TestMaster_GetStats(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// set stats
 	s.rankingScore = ranking.Score{Precision: 0.1}
@@ -394,6 +410,7 @@ func TestMaster_GetStats(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/stats").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, Status{
@@ -408,7 +425,7 @@ func TestMaster_GetStats(t *testing.T) {
 }
 
 func TestMaster_GetCategories(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// insert categories
 	err := s.CacheClient.SetSet(cache.ItemCategories, "a", "b", "c")
@@ -417,6 +434,7 @@ func TestMaster_GetCategories(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/categories").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"a", "b", "c"})).
@@ -424,7 +442,7 @@ func TestMaster_GetCategories(t *testing.T) {
 }
 
 func TestMaster_GetUsers(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// add users
 	users := []User{
@@ -444,6 +462,7 @@ func TestMaster_GetUsers(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/users").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, UserIterator{
@@ -455,6 +474,7 @@ func TestMaster_GetUsers(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/user/1").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, users[1])).
@@ -462,7 +482,7 @@ func TestMaster_GetUsers(t *testing.T) {
 }
 
 func TestServer_SortedItems(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
 		Name   string
@@ -499,6 +519,7 @@ func TestServer_SortedItems(t *testing.T) {
 			apitest.New().
 				Handler(s.handler).
 				Get(operator.Get).
+				Header("Cookie", cookie).
 				Expect(t).
 				Status(http.StatusOK).
 				Body(marshal(t, items)).
@@ -508,7 +529,7 @@ func TestServer_SortedItems(t *testing.T) {
 }
 
 func TestServer_SortedUsers(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
 		Prefix string
@@ -539,6 +560,7 @@ func TestServer_SortedUsers(t *testing.T) {
 		apitest.New().
 			Handler(s.handler).
 			Get(operator.Get).
+			Header("Cookie", cookie).
 			Expect(t).
 			Status(http.StatusOK).
 			Body(marshal(t, users)).
@@ -547,7 +569,7 @@ func TestServer_SortedUsers(t *testing.T) {
 }
 
 func TestServer_Feedback(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// insert feedback
 	feedback := []Feedback{
@@ -567,6 +589,7 @@ func TestServer_Feedback(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/user/0/feedback/click").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, feedback)).
@@ -574,7 +597,7 @@ func TestServer_Feedback(t *testing.T) {
 }
 
 func TestServer_GetRecommends(t *testing.T) {
-	s := newMockServer(t)
+	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// inset recommendation
 	itemIds := []cache.Scored{
@@ -604,6 +627,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/recommend/0/offline").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []data.Item{
@@ -615,6 +639,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/recommend/0/").
+		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []data.Item{

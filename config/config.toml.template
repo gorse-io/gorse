@@ -41,6 +41,8 @@ http_port = 8088                # HTTP API port
 http_host = "0.0.0.0"           # HTTP API host
 n_jobs = 4                      # number of working jobs
 meta_timeout = 10               # cluster meta timeout (second)
+dashboard_user_name = "admin"   # dashboard user name
+dashboard_password = "password" # dashboard password
 
 # This section declares settings for the server node.
 [server]
