@@ -13,12 +13,13 @@ require (
 	github.com/go-redis/redis/v8 v8.11.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/gorse-io/dashboard v0.0.0-20220201032146-a70dee4b39ff
+	github.com/gorilla/securecookie v1.1.1
+	github.com/gorse-io/dashboard v0.0.0-20220211023342-5f465b97b119
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f
 	github.com/juju/testing v0.0.0-20210324180055-18c50b0c2098 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.10 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.10
 	github.com/lib/pq v1.10.2
 	github.com/mailru/go-clickhouse v1.6.0
 	github.com/orcaman/concurrent-map v1.0.0

@@ -91,12 +91,14 @@ func (config *DatabaseConfig) validate() {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port        int    `mapstructure:"port"`         // master port
-	Host        string `mapstructure:"host"`         // master host
-	HttpPort    int    `mapstructure:"http_port"`    // HTTP port
-	HttpHost    string `mapstructure:"http_host"`    // HTTP host
-	NumJobs     int    `mapstructure:"n_jobs"`       // number of working jobs
-	MetaTimeout int    `mapstructure:"meta_timeout"` // cluster meta timeout (second)
+	Port              int    `mapstructure:"port"`                // master port
+	Host              string `mapstructure:"host"`                // master host
+	HttpPort          int    `mapstructure:"http_port"`           // HTTP port
+	HttpHost          string `mapstructure:"http_host"`           // HTTP host
+	NumJobs           int    `mapstructure:"n_jobs"`              // number of working jobs
+	MetaTimeout       int    `mapstructure:"meta_timeout"`        // cluster meta timeout (second)
+	DashboardUserName string `mapstructure:"dashboard_user_name"` // dashboard user name
+	DashboardPassword string `mapstructure:"dashboard_password"`  // dashboard password
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
@@ -300,6 +302,8 @@ func LoadConfig(path string) (*Config, error) {
 		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
 		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
 		{"master.n_jobs", "GORSE_MASTER_JOBS"},
+		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
+		{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
 		{"server.api_key", "GORSE_SERVER_API_KEY"},
 	}
 	for _, binding := range bindings {

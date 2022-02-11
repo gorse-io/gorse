@@ -43,6 +43,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "0.0.0.0", config.Master.HttpHost)
 	assert.Equal(t, 4, config.Master.NumJobs)
 	assert.Equal(t, 10, config.Master.MetaTimeout)
+	assert.Equal(t, "admin", config.Master.DashboardUserName)
+	assert.Equal(t, "password", config.Master.DashboardPassword)
 
 	// server configuration
 	assert.Equal(t, 20, config.Server.DefaultN)
@@ -108,6 +110,8 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_MASTER_HTTP_PORT", "456"},
 		{"GORSE_MASTER_HTTP_HOST", "<master_http_host>"},
 		{"GORSE_MASTER_JOBS", "789"},
+		{"GORSE_DASHBOARD_USER_NAME", "user_name"},
+		{"GORSE_DASHBOARD_PASSWORD", "password"},
 		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
 	}
 	for _, variable := range variables {
@@ -124,5 +128,7 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, 456, config.Master.HttpPort)
 	assert.Equal(t, "<master_http_host>", config.Master.HttpHost)
 	assert.Equal(t, 789, config.Master.NumJobs)
+	assert.Equal(t, "user_name", config.Master.DashboardUserName)
+	assert.Equal(t, "password", config.Master.DashboardPassword)
 	assert.Equal(t, "<server_api_key>", config.Server.APIKey)
 }
