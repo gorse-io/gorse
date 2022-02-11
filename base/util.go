@@ -23,6 +23,8 @@ import (
 	"github.com/juju/errors"
 	"go.uber.org/zap"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -39,16 +41,36 @@ func Logger() *zap.Logger {
 
 // SetProductionLogger set current logger in production mode.
 func SetProductionLogger(outputPaths ...string) {
+	for _, outputPath := range outputPaths {
+		err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+	}
 	cfg := zap.NewProductionConfig()
 	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
-	logger, _ = cfg.Build()
+	var err error
+	logger, err = cfg.Build()
+	if err != nil {
+		panic(err)
+	}
 }
 
 // SetDevelopmentLogger set current logger in development mode.
 func SetDevelopmentLogger(outputPaths ...string) {
+	for _, outputPath := range outputPaths {
+		err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+	}
 	cfg := zap.NewDevelopmentConfig()
 	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
-	logger, _ = cfg.Build()
+	var err error
+	logger, err = cfg.Build()
+	if err != nil {
+		panic(err)
+	}
 }
 
 // RangeInt generate a slice [0, ..., n-1].

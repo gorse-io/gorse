@@ -17,28 +17,27 @@ package master
 import (
 	"bufio"
 	"fmt"
+	"github.com/araddon/dateparse"
+	restfulspec "github.com/emicklei/go-restful-openapi/v2"
+	"github.com/emicklei/go-restful/v3"
 	"github.com/gorilla/securecookie"
+	_ "github.com/gorse-io/dashboard"
 	"github.com/juju/errors"
+	"github.com/rakyll/statik/fs"
+	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/araddon/dateparse"
-	restfulspec "github.com/emicklei/go-restful-openapi/v2"
-	"github.com/emicklei/go-restful/v3"
-	_ "github.com/gorse-io/dashboard"
-	"github.com/rakyll/statik/fs"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/server"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"go.uber.org/zap"
 )
 
 func (m *Master) CreateWebService() {
@@ -324,6 +323,9 @@ func (m *Master) AuthFilter(req *restful.Request, resp *restful.Response, chain 
 }
 
 func (m *Master) checkAuth(request *http.Request) bool {
+	if m.GorseConfig.Master.DashboardUserName == "" || m.GorseConfig.Master.DashboardPassword == "" {
+		return true
+	}
 	if cookie, err := request.Cookie("session"); err == nil {
 		cookieValue := make(map[string]string)
 		if err = cookieHandler.Decode("session", cookie.Value, &cookieValue); err == nil {
