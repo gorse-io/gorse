@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package worker
 
 import (
@@ -37,25 +38,30 @@ import (
 	"time"
 )
 
-func TestSplit(t *testing.T) {
+func TestPullUsers(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
 	// create user index
-	userIndex := base.NewMapIndex()
-	userIndex.Add("1")
-	userIndex.Add("2")
-	userIndex.Add("3")
-	userIndex.Add("4")
-	userIndex.Add("5")
-	userIndex.Add("6")
-	userIndex.Add("7")
-	userIndex.Add("8")
+	err := w.dataClient.BatchInsertUsers([]data.User{
+		{UserId: "1"},
+		{UserId: "2"},
+		{UserId: "3"},
+		{UserId: "4"},
+		{UserId: "5"},
+		{UserId: "6"},
+		{UserId: "7"},
+		{UserId: "8"},
+	})
+	assert.NoError(t, err)
 	// create nodes
 	nodes := []string{"a", "b", "c"}
 
-	users, err := split(userIndex, nodes, "b")
+	users, err := w.pullUsers(nodes, "b")
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"2", "5", "8"}, users)
+	assert.Equal(t, []string{"1", "3", "6"}, users)
 
-	_, err = split(userIndex, nodes, "d")
+	_, err = w.pullUsers(nodes, "d")
 	assert.Error(t, err)
 }
 

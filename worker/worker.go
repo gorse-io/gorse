@@ -19,10 +19,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
+	"github.com/lafikl/consistent"
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
+	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/search"
@@ -283,21 +285,17 @@ func (w *Worker) Serve() {
 	go w.ServeMetrics()
 
 	loop := func() {
-		if w.rankingModel == nil || w.rankingModel.GetUserIndex() == nil {
-			base.Logger().Debug("user index doesn't exist")
-		} else {
-			// split users
-			workingUsers, err := split(w.rankingModel.GetUserIndex(), w.peers, w.me)
-			if err != nil {
-				base.Logger().Error("failed to split users", zap.Error(err),
-					zap.String("me", w.me),
-					zap.Strings("workers", w.peers))
-				return
-			}
-
-			// recommendation
-			w.Recommend(workingUsers)
+		// pull users
+		workingUsers, err := w.pullUsers(w.peers, w.me)
+		if err != nil {
+			base.Logger().Error("failed to split users", zap.Error(err),
+				zap.String("me", w.me),
+				zap.Strings("workers", w.peers))
+			return
 		}
+
+		// recommendation
+		w.Recommend(workingUsers)
 	}
 
 	for {
@@ -321,7 +319,6 @@ func (w *Worker) Serve() {
 // 8. Refresh cache.
 func (w *Worker) Recommend(users []string) {
 	// load user index
-	userIndexer := w.rankingModel.GetUserIndex()
 	base.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", w.jobs),
@@ -406,8 +403,6 @@ func (w *Worker) Recommend(users []string) {
 		}()
 		userStartTime := time.Now()
 		userId := users[jobId]
-		// convert to user index
-		userIndex := userIndexer.ToNumber(userId)
 		// skip inactive users before max recommend period
 		if !w.checkRecommendCacheTimeout(userId, itemCategories) {
 			return nil
@@ -441,27 +436,29 @@ func (w *Worker) Recommend(users []string) {
 		}
 
 		// Recommender #1: collaborative filtering.
-		if w.cfg.Recommend.EnableColRecommend && w.rankingModel != nil && w.rankingModel.IsUserPredictable(userIndex) {
-			var recommend map[string][]string
-			var usedTime time.Duration
-			if w.cfg.Recommend.EnableColIndex {
-				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.rankingIndex, userId, itemCategories, excludeSet, itemCache)
-			} else {
-				recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
+		if w.cfg.Recommend.EnableColRecommend && w.rankingModel != nil {
+			if userIndex := w.rankingModel.GetUserIndex().ToNumber(userId); w.rankingModel.IsUserPredictable(userIndex) {
+				var recommend map[string][]string
+				var usedTime time.Duration
+				if w.cfg.Recommend.EnableColIndex {
+					recommend, usedTime, err = w.collaborativeRecommendHNSW(w.rankingIndex, userId, itemCategories, excludeSet, itemCache)
+				} else {
+					recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
+				}
+				if err != nil {
+					base.Logger().Error("failed to recommend by collaborative filtering",
+						zap.String("user_id", userId), zap.Error(err))
+					return errors.Trace(err)
+				}
+				for category, items := range recommend {
+					candidates[category] = append(candidates[category], items)
+				}
+				CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
+			} else if !w.rankingModel.IsUserPredictable(userIndex) {
+				base.Logger().Warn("user is unpredictable", zap.String("user_id", userId))
 			}
-			if err != nil {
-				base.Logger().Error("failed to recommend by collaborative filtering",
-					zap.String("user_id", userId), zap.Error(err))
-				return errors.Trace(err)
-			}
-			for category, items := range recommend {
-				candidates[category] = append(candidates[category], items)
-			}
-			CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
 		} else if w.rankingModel == nil {
 			base.Logger().Warn("no collaborative filtering model")
-		} else if !w.rankingModel.IsUserPredictable(userIndex) {
-			base.Logger().Warn("user is unpredictable", zap.String("user_id", userId))
 		}
 
 		// Recommender #2: item-based.
@@ -886,30 +883,6 @@ func (w *Worker) refreshCache(userId string) error {
 	return nil
 }
 
-// split users between worker nodes.
-func split(userIndex base.Index, nodes []string, me string) ([]string, error) {
-	// locate me
-	pos := -1
-	for i, node := range nodes {
-		if node == me {
-			pos = i
-		}
-	}
-	if pos == -1 {
-		return nil, fmt.Errorf("current node isn't in worker nodes")
-	}
-	// split users
-	users := userIndex.GetNames()
-	workingUsers := make([]string, 0)
-	for ; pos < len(users); pos += len(nodes) {
-		workingUsers = append(workingUsers, users[pos])
-	}
-	base.Logger().Info("allocate working users",
-		zap.Int("n_working_users", len(workingUsers)),
-		zap.Int("n_users", len(users)))
-	return workingUsers, nil
-}
-
 func (w *Worker) pullItems() (ItemCache, []string, error) {
 	// pull items from database
 	itemCache := make(ItemCache)
@@ -925,6 +898,36 @@ func (w *Worker) pullItems() (ItemCache, []string, error) {
 		return nil, nil, errors.Trace(err)
 	}
 	return itemCache, itemCategories.List(), nil
+}
+
+func (w *Worker) pullUsers(peers []string, me string) ([]string, error) {
+	// locate me
+	if !funk.ContainsString(peers, me) {
+		return nil, errors.New("current node isn't in worker nodes")
+	}
+	// create consistent hash ring
+	c := consistent.New()
+	for _, peer := range peers {
+		c.Add(peer)
+	}
+	// pull users from database
+	var users []string
+	userChan, errChan := w.dataClient.GetUserStream(batchSize)
+	for batchUsers := range userChan {
+		for _, user := range batchUsers {
+			p, err := c.Get(user.UserId)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			if p == me {
+				users = append(users, user.UserId)
+			}
+		}
+	}
+	if err := <-errChan; err != nil {
+		return nil, errors.Trace(err)
+	}
+	return users, nil
 }
 
 // ItemCache is alias of map[string]data.Item.

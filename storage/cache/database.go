@@ -23,7 +23,10 @@ import (
 )
 
 const (
-	IgnoreItems = "ignore_items" // ignored items for each user
+	// IgnoreItems is sorted set of ignored items for each user
+	//  Ignored items      - ignore_items/{user_id}
+	IgnoreItems = "ignore_items"
+
 	HiddenItems = "hidden_items" // hidden items
 
 	// ItemNeighbors is sorted set of neighbors for each item.
@@ -32,7 +35,7 @@ const (
 	ItemNeighbors = "item_neighbors"
 
 	// UserNeighbors is sorted set of neighbors for each user.
-	//  Global user neighbors      - user_neighbors/{user_id}
+	//  User neighbors      - user_neighbors/{user_id}
 	UserNeighbors = "user_neighbors"
 
 	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user

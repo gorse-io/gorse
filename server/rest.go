@@ -1009,6 +1009,7 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 	}
 	// insert modify timestamp
 	if err := s.CacheClient.SetTime(cache.LastModifyUserTime, temp.UserId, time.Now()); err != nil {
+		InternalServerError(response, err)
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
@@ -1066,6 +1067,7 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	for _, user := range *temp {
 		// insert modify timestamp
 		if err := s.CacheClient.SetTime(cache.LastModifyUserTime, user.UserId, time.Now()); err != nil {
+			InternalServerError(response, err)
 			return
 		}
 		count++
