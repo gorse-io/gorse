@@ -216,10 +216,10 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 		{"1", 0},
 	}, recommends)
 
-	readCache, err := w.cacheClient.GetScores(cache.IgnoreItems, "0", 0, -1)
+	readCache, err := w.cacheClient.GetSorted(cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2", "3"}, read)
+	assert.ElementsMatch(t, []string{"0", "1", "2", "3"}, read)
 	for _, v := range readCache {
 		assert.Greater(t, v.Score, float32(time.Now().Unix()))
 	}
@@ -276,10 +276,10 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 		{"1", 0},
 	}, recommends)
 
-	readCache, err := w.cacheClient.GetScores(cache.IgnoreItems, "0", 0, -1)
+	readCache, err := w.cacheClient.GetSorted(cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2", "3"}, read)
+	assert.ElementsMatch(t, []string{"0", "1", "2", "3"}, read)
 	for _, v := range readCache {
 		assert.Greater(t, v.Score, float32(time.Now().Unix()))
 	}

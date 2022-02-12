@@ -901,7 +901,7 @@ func (w *Worker) refreshCache(userId string) error {
 		return errors.Trace(err)
 	}
 	// clear cache
-	err = w.cacheClient.ClearScores(cache.IgnoreItems, userId)
+	err = w.cacheClient.SetSorted(cache.IgnoreItems, nil)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -916,7 +916,7 @@ func (w *Worker) refreshCache(userId string) error {
 			items = append(items, cache.Scored{Id: v.ItemId, Score: float32(v.Timestamp.Unix())})
 		}
 	}
-	err = w.cacheClient.AppendScores(cache.IgnoreItems, userId, items...)
+	err = w.cacheClient.AddSorted(cache.Key(cache.IgnoreItems, userId), items)
 	if err != nil {
 		return errors.Trace(err)
 	}

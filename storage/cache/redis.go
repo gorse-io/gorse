@@ -298,6 +298,24 @@ func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	return results, nil
 }
 
+func (r *Redis) GetSortedByScore(key string, begin, end float32) ([]Scored, error) {
+	ctx := context.Background()
+	members, err := r.client.ZRangeByScoreWithScores(ctx, key, &redis.ZRangeBy{
+		Min:    strconv.FormatFloat(float64(begin), 'f', -1, 32),
+		Max:    strconv.FormatFloat(float64(end), 'f', -1, 32),
+		Offset: 0,
+		Count:  -1,
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	results := make([]Scored, 0, len(members))
+	for _, member := range members {
+		results = append(results, Scored{Id: member.Member.(string), Score: float32(member.Score)})
+	}
+	return results, nil
+}
+
 // AddSorted add scores to sorted set.
 func (r *Redis) AddSorted(key string, scores []Scored) error {
 	if len(scores) == 0 {

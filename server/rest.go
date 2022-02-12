@@ -17,6 +17,7 @@ package server
 import (
 	"fmt"
 	"github.com/araddon/dateparse"
+	"github.com/chewxy/math32"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
@@ -654,15 +655,13 @@ type recommendContext struct {
 
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
-	ignoreItems, err := s.CacheClient.GetScores(cache.IgnoreItems, userId, 0, -1)
+	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId), math32.Inf(-1), float32(time.Now().Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	excludeSet := strset.New()
 	for _, item := range ignoreItems {
-		if item.Score <= float32(time.Now().Unix()) {
-			excludeSet.Add(item.Id)
-		}
+		excludeSet.Add(item.Id)
 	}
 	return &recommendContext{
 		userId:     userId,
@@ -1667,7 +1666,7 @@ func Text(response *restful.Response, content string) {
 // InsertFeedbackToCache inserts feedback to cache.
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 	for _, v := range feedback {
-		err := s.CacheClient.AppendScores(cache.IgnoreItems, v.UserId, cache.Scored{Id: v.ItemId, Score: float32(v.Timestamp.Unix())})
+		err := s.CacheClient.AddSorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float32(v.Timestamp.Unix())}})
 		if err != nil {
 			return errors.Trace(err)
 		}
