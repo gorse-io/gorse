@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	ClickThroughRate = "ClickThroughRate"
+	PositiveFeedbackRate = "PositiveFeedbackRate"
 
 	TaskLoadDataset        = "Load dataset"
 	TaskFindItemNeighbors  = "Find neighbors of items"
@@ -805,41 +805,45 @@ func (m *Master) runAnalyzeTask() error {
 	m.taskScheduler.Lock(TaskAnalyze)
 	defer m.taskScheduler.UnLock(TaskAnalyze)
 	base.Logger().Info("start analyzing click-through-rate")
-	m.taskMonitor.Start(TaskAnalyze, 30)
-	// pull existed click-through rates
-	clickThroughRates, err := m.DataClient.GetMeasurements(ClickThroughRate, 30)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	existed := strset.New()
-	for _, clickThroughRate := range clickThroughRates {
-		existed.Add(clickThroughRate.Timestamp.String())
-	}
-	// update click-through rate
-	for i := 1; i <= 30; i++ {
-		dateTime := time.Now().AddDate(0, 0, -i)
-		date := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC)
-		if !existed.Has(date.String()) {
-			// click through clickThroughRate
-			startTime := time.Now()
-			clickThroughRate, err := m.DataClient.GetClickThroughRate(date, m.GorseConfig.Database.PositiveFeedbackType, m.GorseConfig.Database.ReadFeedbackTypes)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			err = m.DataClient.InsertMeasurement(data.Measurement{
-				Name:      ClickThroughRate,
-				Timestamp: date,
-				Value:     float32(clickThroughRate),
-			})
-			if err != nil {
-				return errors.Trace(err)
-			}
-			base.Logger().Info("update click through rate",
-				zap.String("date", date.String()),
-				zap.Duration("time_used", time.Since(startTime)),
-				zap.Float64("click_through_rate", clickThroughRate))
+	m.taskMonitor.Start(TaskAnalyze, 30*len(m.GorseConfig.Database.PositiveFeedbackType))
+	for _, feedbackType := range m.GorseConfig.Database.PositiveFeedbackType {
+		measurement := cache.Key(PositiveFeedbackRate, feedbackType)
+		// pull existed click-through rates
+		clickThroughRates, err := m.DataClient.GetMeasurements(measurement, 30)
+		if err != nil {
+			return errors.Trace(err)
 		}
-		m.taskMonitor.Update(TaskAnalyze, i)
+		existed := strset.New()
+		for _, clickThroughRate := range clickThroughRates {
+			existed.Add(clickThroughRate.Timestamp.String())
+		}
+		// update click-through rate
+		for i := 1; i <= 30; i++ {
+			dateTime := time.Now().AddDate(0, 0, -i)
+			date := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC)
+			if !existed.Has(date.String()) {
+				// click through clickThroughRate
+				startTime := time.Now()
+				clickThroughRate, err := m.DataClient.GetClickThroughRate(date, []string{feedbackType}, m.GorseConfig.Database.ReadFeedbackTypes)
+				if err != nil {
+					return errors.Trace(err)
+				}
+				err = m.DataClient.InsertMeasurement(data.Measurement{
+					Name:      measurement,
+					Timestamp: date,
+					Value:     float32(clickThroughRate),
+				})
+				if err != nil {
+					return errors.Trace(err)
+				}
+				base.Logger().Info("update click through rate",
+					zap.String("date", date.String()),
+					zap.Duration("time_used", time.Since(startTime)),
+					zap.String("positive_feedback_type", feedbackType),
+					zap.Float64("positive_feedback_rate", clickThroughRate))
+			}
+			m.taskMonitor.Update(TaskAnalyze, i)
+		}
 	}
 	base.Logger().Info("complete analyzing click-through-rate")
 	m.taskMonitor.Finish(TaskAnalyze)
