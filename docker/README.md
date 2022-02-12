@@ -1,4 +1,4 @@
-# Run Gorse with Docker Compose
+# Run Gorse on Docker Compose
 
 The best practice to manage Gorse nodes is using orchestration tools such as Docker Compose, etc.. There are Docker images of the master node, the server node and the worker node.
 

@@ -30,6 +30,8 @@ services:
     volumes:
       - gorse_log:/var/log/gorse
       - worker_data:/var/lib/gorse
+    depends_on:
+      - master
 
   server:
     image: zhenghaoz/gorse-server
@@ -42,6 +44,8 @@ services:
     volumes:
       - gorse_log:/var/log/gorse
       - server_data:/var/lib/gorse
+    depends_on:
+      - master
 
   master:
     image: zhenghaoz/gorse-master
@@ -54,6 +58,9 @@ services:
       - ./config.toml:/etc/gorse/config.toml
       - gorse_log:/var/log/gorse
       - master_data:/var/lib/gorse
+    depends_on:
+      - redis
+      - mysql
 
 volumes:
   mysql_data:
