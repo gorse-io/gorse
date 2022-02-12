@@ -424,6 +424,45 @@ func TestMaster_GetStats(t *testing.T) {
 		End()
 }
 
+func TestMaster_GetRates(t *testing.T) {
+	s, cookie := newMockServer(t)
+	defer s.Close(t)
+	// write rates
+	s.GorseConfig.Database.PositiveFeedbackType = []string{"a", "b"}
+	err := s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 1.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC)})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 1, time.UTC)})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 1, time.UTC)})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 10.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC)})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 1, time.UTC)})
+	assert.NoError(t, err)
+	err = s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 1, time.UTC)})
+	assert.NoError(t, err)
+	// get rates
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/dashboard/rates").
+		Header("Cookie", cookie).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, map[string][]data.Measurement{
+			"a": {
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 1, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 1, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 1.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC)},
+			},
+			"b": {
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 1, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 1, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 10.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC)},
+			},
+		})).
+		End()
+}
+
 func TestMaster_GetCategories(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
