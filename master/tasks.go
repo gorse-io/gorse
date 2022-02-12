@@ -806,7 +806,7 @@ func (m *Master) runAnalyzeTask() error {
 	defer m.taskScheduler.UnLock(TaskAnalyze)
 	base.Logger().Info("start analyzing click-through-rate")
 	m.taskMonitor.Start(TaskAnalyze, 30*len(m.GorseConfig.Database.PositiveFeedbackType))
-	for _, feedbackType := range m.GorseConfig.Database.PositiveFeedbackType {
+	for j, feedbackType := range m.GorseConfig.Database.PositiveFeedbackType {
 		measurement := cache.Key(PositiveFeedbackRate, feedbackType)
 		// pull existed click-through rates
 		clickThroughRates, err := m.DataClient.GetMeasurements(measurement, 30)
@@ -842,7 +842,7 @@ func (m *Master) runAnalyzeTask() error {
 					zap.String("positive_feedback_type", feedbackType),
 					zap.Float64("positive_feedback_rate", clickThroughRate))
 			}
-			m.taskMonitor.Update(TaskAnalyze, i)
+			m.taskMonitor.Update(TaskAnalyze, i+j*30)
 		}
 	}
 	base.Logger().Info("complete analyzing click-through-rate")
