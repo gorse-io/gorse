@@ -64,11 +64,6 @@ type Worker struct {
 	// master connection
 	masterClient protocol.MasterClient
 
-	// user index
-	latestUserIndexVersion  int64
-	currentUserIndexVersion int64
-	userIndex               base.Index
-
 	// ranking model
 	latestRankingModelVersion  int64
 	currentRankingModelVersion int64
@@ -176,15 +171,6 @@ func (w *Worker) Sync() {
 			w.syncedChan <- true
 		}
 
-		// check user index version
-		w.latestUserIndexVersion = meta.UserIndexVersion
-		if w.latestUserIndexVersion != w.currentUserIndexVersion {
-			base.Logger().Info("new user index found",
-				zap.String("old_version", base.Hex(w.currentUserIndexVersion)),
-				zap.String("new_version", base.Hex(w.latestUserIndexVersion)))
-			w.syncedChan <- true
-		}
-
 		w.peers = meta.Workers
 		w.me = meta.Me
 	sleep:
@@ -200,29 +186,6 @@ func (w *Worker) Pull() {
 	defer base.CheckPanic()
 	for range w.syncedChan {
 		pulled := false
-
-		// pull user index
-		if w.latestUserIndexVersion != w.currentUserIndexVersion {
-			base.Logger().Info("start pull user index")
-			if userIndexReceiver, err := w.masterClient.GetUserIndex(context.Background(),
-				&protocol.VersionInfo{Version: w.latestUserIndexVersion},
-				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
-				base.Logger().Error("failed to pull user index", zap.Error(err))
-			} else {
-				// encode user index
-				var userIndex base.Index
-				userIndex, err = protocol.UnmarshalIndex(userIndexReceiver)
-				if err != nil {
-					base.Logger().Error("fail to unmarshal user index", zap.Error(err))
-				} else {
-					w.userIndex = userIndex
-					w.currentUserIndexVersion = w.latestUserIndexVersion
-					base.Logger().Info("synced user index",
-						zap.String("version", base.Hex(w.currentUserIndexVersion)))
-					pulled = true
-				}
-			}
-		}
 
 		// pull ranking model
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
@@ -320,11 +283,11 @@ func (w *Worker) Serve() {
 	go w.ServeMetrics()
 
 	loop := func() {
-		if w.userIndex == nil {
+		if w.rankingModel == nil || w.rankingModel.GetUserIndex() == nil {
 			base.Logger().Debug("user index doesn't exist")
 		} else {
 			// split users
-			workingUsers, err := split(w.userIndex, w.peers, w.me)
+			workingUsers, err := split(w.rankingModel.GetUserIndex(), w.peers, w.me)
 			if err != nil {
 				base.Logger().Error("failed to split users", zap.Error(err),
 					zap.String("me", w.me),
@@ -358,7 +321,7 @@ func (w *Worker) Serve() {
 // 8. Refresh cache.
 func (w *Worker) Recommend(users []string) {
 	// load user index
-	userIndexer := w.userIndex
+	userIndexer := w.rankingModel.GetUserIndex()
 	base.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", w.jobs),

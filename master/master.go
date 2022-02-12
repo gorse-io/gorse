@@ -50,11 +50,6 @@ type Master struct {
 	nodesInfo      map[string]*Node
 	nodesInfoMutex sync.RWMutex
 
-	// users index
-	userIndex        base.Index
-	userIndexVersion int64
-	userIndexMutex   sync.RWMutex
-
 	// ranking dataset
 	rankingTrainSet  *ranking.DataSet
 	rankingTestSet   *ranking.DataSet
@@ -105,7 +100,6 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		// init versions
 		rankingModelVersion: rand.Int63(),
 		clickModelVersion:   rand.Int63(),
-		userIndexVersion:    rand.Int63(),
 		// default ranking model
 		rankingModelName: "bpr",
 		rankingModel:     ranking.NewBPR(nil),

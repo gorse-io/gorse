@@ -76,13 +76,6 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	if err != nil {
 		return nil, err
 	}
-	// collect user index version
-	m.userIndexMutex.RLock()
-	var userIndexVersion int64
-	if m.userIndex != nil {
-		userIndexVersion = m.userIndexVersion
-	}
-	m.userIndexMutex.RUnlock()
 	// save ranking model version
 	m.rankingModelMutex.RLock()
 	var rankingModelVersion int64
@@ -112,7 +105,6 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	m.nodesInfoMutex.RUnlock()
 	return &protocol.Meta{
 		Config:              string(s),
-		UserIndexVersion:    userIndexVersion,
 		RankingModelVersion: rankingModelVersion,
 		ClickModelVersion:   clickModelVersion,
 		Me:                  nodeInfo.NodeName,
@@ -216,55 +208,6 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 		}
 	}
 	GetClickModelSeconds.Observe(time.Since(startTime).Seconds())
-	return encoderError
-}
-
-// GetUserIndex returns latest user index.
-func (m *Master) GetUserIndex(version *protocol.VersionInfo, sender protocol.Master_GetUserIndexServer) error {
-	startTime := time.Now()
-	m.userIndexMutex.RLock()
-	defer m.userIndexMutex.RUnlock()
-	// skip empty model
-	if m.userIndex == nil {
-		return errors.New("no valid index found")
-	}
-	// check empty model
-	if m.userIndexVersion != version.Version {
-		return errors.New("index version mismatch")
-	}
-	// encode model
-	reader, writer := io.Pipe()
-	var encoderError error
-	go func() {
-		defer func(writer *io.PipeWriter) {
-			err := writer.Close()
-			if err != nil {
-				base.Logger().Error("fail to close pipe", zap.Error(err))
-			}
-		}(writer)
-		err := base.MarshalIndex(writer, m.userIndex)
-		if err != nil {
-			base.Logger().Error("fail to marshal index", zap.Error(err))
-			encoderError = err
-			return
-		}
-	}()
-	// send model
-	for {
-		buf := make([]byte, batchSize)
-		n, err := reader.Read(buf)
-		if err == io.EOF {
-			base.Logger().Debug("complete sending user index")
-			break
-		} else if err != nil {
-			return err
-		}
-		err = sender.Send(&protocol.Fragment{Data: buf[:n]})
-		if err != nil {
-			return err
-		}
-	}
-	GetUserIndexSeconds.Observe(time.Since(startTime).Seconds())
 	return encoderError
 }
 

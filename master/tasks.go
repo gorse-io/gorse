@@ -725,13 +725,6 @@ func (m *Master) runRankingRelatedTasks(
 	rankingModel := m.rankingModel
 	m.rankingModelMutex.Unlock()
 
-	// update user index
-	if numUsersChanged {
-		m.userIndexMutex.Lock()
-		m.userIndex = m.rankingTrainSet.UserIndex
-		m.userIndexVersion++
-		m.userIndexMutex.Unlock()
-	}
 	// collect neighbors of items
 	if numItems == 0 {
 		m.taskMonitor.Fail(TaskFindItemNeighbors, "No item found.")
@@ -784,10 +777,6 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
 	m.localCache.RankingModel = rankingModel
 	m.localCache.RankingModelScore = score
 	m.rankingModelMutex.RUnlock()
-	m.userIndexMutex.RLock()
-	m.localCache.UserIndex = m.userIndex
-	m.localCache.UserIndexVersion = m.userIndexVersion
-	m.userIndexMutex.RUnlock()
 	if m.localCache.ClickModel == nil || m.localCache.ClickModel.Invalid() {
 		base.Logger().Info("wait click model")
 	} else if err := m.localCache.WriteLocalCache(); err != nil {

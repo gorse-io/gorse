@@ -22,49 +22,6 @@ import (
 	"io"
 )
 
-// UnmarshalIndex unmarshal index from gRPC.
-func UnmarshalIndex(receiver Master_GetUserIndexClient) (base.Index, error) {
-	// receive model
-	reader, writer := io.Pipe()
-	var receiverError error
-	go func() {
-		defer func(writer *io.PipeWriter) {
-			err := writer.Close()
-			if err != nil {
-				base.Logger().Error("fail to close pipe", zap.Error(err))
-			}
-		}(writer)
-		for {
-			// receive from stream
-			fragment, err := receiver.Recv()
-			if err == io.EOF {
-				base.Logger().Info("complete receiving user index")
-				break
-			} else if err != nil {
-				receiverError = err
-				base.Logger().Error("fail to receive stream", zap.Error(err))
-				return
-			}
-			// send to pipe
-			_, err = writer.Write(fragment.Data)
-			if err != nil {
-				receiverError = err
-				base.Logger().Error("fail to write pipe", zap.Error(err))
-				return
-			}
-		}
-	}()
-	// unmarshal model
-	index, err := base.UnmarshalIndex(reader)
-	if err != nil {
-		return nil, err
-	}
-	if receiverError != nil {
-		return nil, receiverError
-	}
-	return index, nil
-}
-
 // UnmarshalClickModel unmarshal click model from gRPC.
 func UnmarshalClickModel(receiver Master_GetClickModelClient) (click.FactorizationMachine, error) {
 	// receive model
