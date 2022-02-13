@@ -32,8 +32,6 @@ type LocalCache struct {
 	RankingModelVersion int64
 	RankingModel        ranking.Model
 	RankingModelScore   ranking.Score
-	UserIndexVersion    int64
-	UserIndex           base.Index
 	ClickModelVersion   int64
 	ClickModelScore     click.Score
 	ClickModel          click.FactorizationMachine
@@ -77,16 +75,6 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	}
 	// 4. ranking model score
 	err = base.ReadGob(f, &state.RankingModelScore)
-	if err != nil {
-		return state, errors.Trace(err)
-	}
-	// 5. user index version
-	err = binary.Read(f, binary.LittleEndian, &state.UserIndexVersion)
-	if err != nil {
-		return state, errors.Trace(err)
-	}
-	// 6. user index
-	state.UserIndex, err = base.UnmarshalIndex(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -146,16 +134,6 @@ func (c *LocalCache) WriteLocalCache() error {
 	}
 	// 4. ranking model score
 	err = base.WriteGob(f, c.RankingModelScore)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// 5. user index version
-	err = binary.Write(f, binary.LittleEndian, c.UserIndexVersion)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// 6. user index
-	err = base.MarshalIndex(f, c.UserIndex)
 	if err != nil {
 		return errors.Trace(err)
 	}

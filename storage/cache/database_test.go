@@ -197,6 +197,14 @@ func testSort(t *testing.T, db Database) {
 		{"1", 1.1},
 		{"0", 0},
 	}, totalItems)
+	// get scores by score
+	partItems, err := db.GetSortedByScore("sort", 1.1, 1.3)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"1", 1.1},
+		{"2", 1.2},
+		{"3", 1.3},
+	}, partItems)
 	// Increase score
 	err = db.IncrSorted("sort", "0")
 	assert.NoError(t, err)

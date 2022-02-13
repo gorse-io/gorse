@@ -17,13 +17,11 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"github.com/araddon/dateparse"
+	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"strconv"
 	"time"
-
-	"github.com/araddon/dateparse"
-
-	"github.com/go-redis/redis/v8"
 )
 
 // Redis cache storage.
@@ -288,6 +286,24 @@ func (r *Redis) GetSortedScore(key, member string) (float32, error) {
 func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	ctx := context.Background()
 	members, err := r.client.ZRevRangeWithScores(ctx, key, int64(begin), int64(end)).Result()
+	if err != nil {
+		return nil, err
+	}
+	results := make([]Scored, 0, len(members))
+	for _, member := range members {
+		results = append(results, Scored{Id: member.Member.(string), Score: float32(member.Score)})
+	}
+	return results, nil
+}
+
+func (r *Redis) GetSortedByScore(key string, begin, end float32) ([]Scored, error) {
+	ctx := context.Background()
+	members, err := r.client.ZRangeByScoreWithScores(ctx, key, &redis.ZRangeBy{
+		Min:    strconv.FormatFloat(float64(begin), 'g', -1, 64),
+		Max:    strconv.FormatFloat(float64(end), 'g', -1, 64),
+		Offset: 0,
+		Count:  -1,
+	}).Result()
 	if err != nil {
 		return nil, err
 	}

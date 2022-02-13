@@ -29,7 +29,6 @@ service Master {
   rpc GetMeta(NodeInfo) returns (Meta) {}
 
   /* data distribute */
-  rpc GetUserIndex(VersionInfo) returns (stream Fragment) {}
   rpc GetRankingModel(VersionInfo) returns (stream Fragment) {}
   rpc GetClickModel(VersionInfo) returns (stream Fragment) {}
 
@@ -42,7 +41,6 @@ service Master {
 
 message Meta {
   string config = 1;
-  int64 user_index_version = 2;
   int64 ranking_model_version = 3;
   int64 click_model_version = 4;
   string me = 5;

@@ -19,10 +19,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/juju/errors"
+	"github.com/lafikl/consistent"
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
+	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/search"
@@ -63,11 +65,6 @@ type Worker struct {
 
 	// master connection
 	masterClient protocol.MasterClient
-
-	// user index
-	latestUserIndexVersion  int64
-	currentUserIndexVersion int64
-	userIndex               base.Index
 
 	// ranking model
 	latestRankingModelVersion  int64
@@ -176,15 +173,6 @@ func (w *Worker) Sync() {
 			w.syncedChan <- true
 		}
 
-		// check user index version
-		w.latestUserIndexVersion = meta.UserIndexVersion
-		if w.latestUserIndexVersion != w.currentUserIndexVersion {
-			base.Logger().Info("new user index found",
-				zap.String("old_version", base.Hex(w.currentUserIndexVersion)),
-				zap.String("new_version", base.Hex(w.latestUserIndexVersion)))
-			w.syncedChan <- true
-		}
-
 		w.peers = meta.Workers
 		w.me = meta.Me
 	sleep:
@@ -200,29 +188,6 @@ func (w *Worker) Pull() {
 	defer base.CheckPanic()
 	for range w.syncedChan {
 		pulled := false
-
-		// pull user index
-		if w.latestUserIndexVersion != w.currentUserIndexVersion {
-			base.Logger().Info("start pull user index")
-			if userIndexReceiver, err := w.masterClient.GetUserIndex(context.Background(),
-				&protocol.VersionInfo{Version: w.latestUserIndexVersion},
-				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
-				base.Logger().Error("failed to pull user index", zap.Error(err))
-			} else {
-				// encode user index
-				var userIndex base.Index
-				userIndex, err = protocol.UnmarshalIndex(userIndexReceiver)
-				if err != nil {
-					base.Logger().Error("fail to unmarshal user index", zap.Error(err))
-				} else {
-					w.userIndex = userIndex
-					w.currentUserIndexVersion = w.latestUserIndexVersion
-					base.Logger().Info("synced user index",
-						zap.String("version", base.Hex(w.currentUserIndexVersion)))
-					pulled = true
-				}
-			}
-		}
 
 		// pull ranking model
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
@@ -320,21 +285,17 @@ func (w *Worker) Serve() {
 	go w.ServeMetrics()
 
 	loop := func() {
-		if w.userIndex == nil {
-			base.Logger().Debug("user index doesn't exist")
-		} else {
-			// split users
-			workingUsers, err := split(w.userIndex, w.peers, w.me)
-			if err != nil {
-				base.Logger().Error("failed to split users", zap.Error(err),
-					zap.String("me", w.me),
-					zap.Strings("workers", w.peers))
-				return
-			}
-
-			// recommendation
-			w.Recommend(workingUsers)
+		// pull users
+		workingUsers, err := w.pullUsers(w.peers, w.me)
+		if err != nil {
+			base.Logger().Error("failed to split users", zap.Error(err),
+				zap.String("me", w.me),
+				zap.Strings("workers", w.peers))
+			return
 		}
+
+		// recommendation
+		w.Recommend(workingUsers)
 	}
 
 	for {
@@ -358,7 +319,6 @@ func (w *Worker) Serve() {
 // 8. Refresh cache.
 func (w *Worker) Recommend(users []string) {
 	// load user index
-	userIndexer := w.userIndex
 	base.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", w.jobs),
@@ -443,8 +403,6 @@ func (w *Worker) Recommend(users []string) {
 		}()
 		userStartTime := time.Now()
 		userId := users[jobId]
-		// convert to user index
-		userIndex := userIndexer.ToNumber(userId)
 		// skip inactive users before max recommend period
 		if !w.checkRecommendCacheTimeout(userId, itemCategories) {
 			return nil
@@ -478,27 +436,29 @@ func (w *Worker) Recommend(users []string) {
 		}
 
 		// Recommender #1: collaborative filtering.
-		if w.cfg.Recommend.EnableColRecommend && w.rankingModel != nil && w.rankingModel.IsUserPredictable(userIndex) {
-			var recommend map[string][]string
-			var usedTime time.Duration
-			if w.cfg.Recommend.EnableColIndex {
-				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.rankingIndex, userId, itemCategories, excludeSet, itemCache)
-			} else {
-				recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
+		if w.cfg.Recommend.EnableColRecommend && w.rankingModel != nil {
+			if userIndex := w.rankingModel.GetUserIndex().ToNumber(userId); w.rankingModel.IsUserPredictable(userIndex) {
+				var recommend map[string][]string
+				var usedTime time.Duration
+				if w.cfg.Recommend.EnableColIndex {
+					recommend, usedTime, err = w.collaborativeRecommendHNSW(w.rankingIndex, userId, itemCategories, excludeSet, itemCache)
+				} else {
+					recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
+				}
+				if err != nil {
+					base.Logger().Error("failed to recommend by collaborative filtering",
+						zap.String("user_id", userId), zap.Error(err))
+					return errors.Trace(err)
+				}
+				for category, items := range recommend {
+					candidates[category] = append(candidates[category], items)
+				}
+				CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
+			} else if !w.rankingModel.IsUserPredictable(userIndex) {
+				base.Logger().Warn("user is unpredictable", zap.String("user_id", userId))
 			}
-			if err != nil {
-				base.Logger().Error("failed to recommend by collaborative filtering",
-					zap.String("user_id", userId), zap.Error(err))
-				return errors.Trace(err)
-			}
-			for category, items := range recommend {
-				candidates[category] = append(candidates[category], items)
-			}
-			CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
 		} else if w.rankingModel == nil {
 			base.Logger().Warn("no collaborative filtering model")
-		} else if !w.rankingModel.IsUserPredictable(userIndex) {
-			base.Logger().Warn("user is unpredictable", zap.String("user_id", userId))
 		}
 
 		// Recommender #2: item-based.
@@ -901,7 +861,7 @@ func (w *Worker) refreshCache(userId string) error {
 		return errors.Trace(err)
 	}
 	// clear cache
-	err = w.cacheClient.ClearScores(cache.IgnoreItems, userId)
+	err = w.cacheClient.SetSorted(cache.IgnoreItems, nil)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -916,35 +876,11 @@ func (w *Worker) refreshCache(userId string) error {
 			items = append(items, cache.Scored{Id: v.ItemId, Score: float32(v.Timestamp.Unix())})
 		}
 	}
-	err = w.cacheClient.AppendScores(cache.IgnoreItems, userId, items...)
+	err = w.cacheClient.AddSorted(cache.Key(cache.IgnoreItems, userId), items)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	return nil
-}
-
-// split users between worker nodes.
-func split(userIndex base.Index, nodes []string, me string) ([]string, error) {
-	// locate me
-	pos := -1
-	for i, node := range nodes {
-		if node == me {
-			pos = i
-		}
-	}
-	if pos == -1 {
-		return nil, fmt.Errorf("current node isn't in worker nodes")
-	}
-	// split users
-	users := userIndex.GetNames()
-	workingUsers := make([]string, 0)
-	for ; pos < len(users); pos += len(nodes) {
-		workingUsers = append(workingUsers, users[pos])
-	}
-	base.Logger().Info("allocate working users",
-		zap.Int("n_working_users", len(workingUsers)),
-		zap.Int("n_users", len(users)))
-	return workingUsers, nil
 }
 
 func (w *Worker) pullItems() (ItemCache, []string, error) {
@@ -962,6 +898,36 @@ func (w *Worker) pullItems() (ItemCache, []string, error) {
 		return nil, nil, errors.Trace(err)
 	}
 	return itemCache, itemCategories.List(), nil
+}
+
+func (w *Worker) pullUsers(peers []string, me string) ([]string, error) {
+	// locate me
+	if !funk.ContainsString(peers, me) {
+		return nil, errors.New("current node isn't in worker nodes")
+	}
+	// create consistent hash ring
+	c := consistent.New()
+	for _, peer := range peers {
+		c.Add(peer)
+	}
+	// pull users from database
+	var users []string
+	userChan, errChan := w.dataClient.GetUserStream(batchSize)
+	for batchUsers := range userChan {
+		for _, user := range batchUsers {
+			p, err := c.Get(user.UserId)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			if p == me {
+				users = append(users, user.UserId)
+			}
+		}
+	}
+	if err := <-errChan; err != nil {
+		return nil, errors.Trace(err)
+	}
+	return users, nil
 }
 
 // ItemCache is alias of map[string]data.Item.

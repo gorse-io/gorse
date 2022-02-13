@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package worker
 
 import (
@@ -37,25 +38,30 @@ import (
 	"time"
 )
 
-func TestSplit(t *testing.T) {
+func TestPullUsers(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
 	// create user index
-	userIndex := base.NewMapIndex()
-	userIndex.Add("1")
-	userIndex.Add("2")
-	userIndex.Add("3")
-	userIndex.Add("4")
-	userIndex.Add("5")
-	userIndex.Add("6")
-	userIndex.Add("7")
-	userIndex.Add("8")
+	err := w.dataClient.BatchInsertUsers([]data.User{
+		{UserId: "1"},
+		{UserId: "2"},
+		{UserId: "3"},
+		{UserId: "4"},
+		{UserId: "5"},
+		{UserId: "6"},
+		{UserId: "7"},
+		{UserId: "8"},
+	})
+	assert.NoError(t, err)
 	// create nodes
 	nodes := []string{"a", "b", "c"}
 
-	users, err := split(userIndex, nodes, "b")
+	users, err := w.pullUsers(nodes, "b")
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"2", "5", "8"}, users)
+	assert.Equal(t, []string{"1", "3", "6"}, users)
 
-	_, err = split(userIndex, nodes, "d")
+	_, err = w.pullUsers(nodes, "d")
 	assert.Error(t, err)
 }
 
@@ -198,7 +204,6 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 
 	// create mock model
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
-	w.userIndex = w.rankingModel.GetUserIndex()
 	w.Recommend([]string{"0"})
 
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
@@ -216,10 +221,10 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 		{"1", 0},
 	}, recommends)
 
-	readCache, err := w.cacheClient.GetScores(cache.IgnoreItems, "0", 0, -1)
+	readCache, err := w.cacheClient.GetSorted(cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2", "3"}, read)
+	assert.ElementsMatch(t, []string{"0", "1", "2", "3"}, read)
 	for _, v := range readCache {
 		assert.Greater(t, v.Score, float32(time.Now().Unix()))
 	}
@@ -258,7 +263,6 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 
 	// create mock model
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
-	w.userIndex = w.rankingModel.GetUserIndex()
 	w.Recommend([]string{"0"})
 
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
@@ -276,10 +280,10 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 		{"1", 0},
 	}, recommends)
 
-	readCache, err := w.cacheClient.GetScores(cache.IgnoreItems, "0", 0, -1)
+	readCache, err := w.cacheClient.GetSorted(cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2", "3"}, read)
+	assert.ElementsMatch(t, []string{"0", "1", "2", "3"}, read)
 	for _, v := range readCache {
 		assert.Greater(t, v.Score, float32(time.Now().Unix()))
 	}
@@ -363,7 +367,6 @@ func TestRecommend_ItemBased(t *testing.T) {
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "26", Categories: []string{"*"}}, {ItemId: "28", Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.userIndex = w.rankingModel.GetUserIndex()
 	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
@@ -414,7 +417,6 @@ func TestRecommend_UserBased(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.userIndex = w.rankingModel.GetUserIndex()
 	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
@@ -448,7 +450,6 @@ func TestRecommend_Popular(t *testing.T) {
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.userIndex = w.rankingModel.GetUserIndex()
 	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
@@ -482,7 +483,6 @@ func TestRecommend_Latest(t *testing.T) {
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.userIndex = w.rankingModel.GetUserIndex()
 	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
@@ -518,7 +518,6 @@ func TestRecommend_ColdStart(t *testing.T) {
 
 	// ranking model not exist
 	m := newMockMatrixFactorizationForRecommend(10, 100)
-	w.userIndex = m.GetUserIndex()
 	w.Recommend([]string{"0"})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
@@ -634,7 +633,6 @@ func newMockMaster(t *testing.T) *mockMaster {
 			Config:              marshal(t, cfg),
 			ClickModelVersion:   1,
 			RankingModelVersion: 2,
-			UserIndexVersion:    3,
 		},
 		cacheStore:   cacheStore,
 		dataStore:    dataStore,
@@ -654,10 +652,6 @@ func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, sender protocol.Ma
 
 func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
 	return sender.Send(&protocol.Fragment{Data: m.clickModel})
-}
-
-func (m *mockMaster) GetUserIndex(_ *protocol.VersionInfo, sender protocol.Master_GetUserIndexServer) error {
-	return sender.Send(&protocol.Fragment{Data: m.userIndex})
 }
 
 func (m *mockMaster) Start(t *testing.T) {
@@ -709,14 +703,11 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Equal(t, "redis://"+master.cacheStore.Addr(), serv.cachePath)
 	assert.Equal(t, int64(1), serv.latestClickModelVersion)
 	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
-	assert.Equal(t, int64(3), serv.latestUserIndexVersion)
 	assert.Zero(t, serv.currentClickModelVersion)
 	assert.Zero(t, serv.currentRankingModelVersion)
-	assert.Zero(t, serv.currentUserIndexVersion)
 	serv.Pull()
 	assert.Equal(t, int64(1), serv.currentClickModelVersion)
 	assert.Equal(t, int64(2), serv.currentRankingModelVersion)
-	assert.Equal(t, int64(3), serv.currentUserIndexVersion)
 	master.Stop()
 	done <- struct{}{}
 }

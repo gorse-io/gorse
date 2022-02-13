@@ -62,10 +62,6 @@ func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, _ protocol.Master_Ge
 	panic("not implement")
 }
 
-func (m *mockMaster) GetUserIndex(_ *protocol.VersionInfo, _ protocol.Master_GetUserIndexServer) error {
-	panic("not implement")
-}
-
 func (m *mockMaster) Start(t *testing.T) {
 	listen, err := net.Listen("tcp", ":0")
 	assert.NoError(t, err)

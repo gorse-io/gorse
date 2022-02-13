@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -47,8 +46,6 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	trainSet, testSet := newRankingDataset()
 	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
 	bpr.Fit(trainSet, testSet, nil)
-	// create user index
-	userIndex := base.NewMapIndex()
 	return &mockMasterRPC{
 		Master: Master{
 			taskMonitor:         NewTaskMonitor(),
@@ -58,8 +55,6 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 			rankingModel:        bpr,
 			clickModelVersion:   456,
 			clickModel:          fm,
-			userIndexVersion:    789,
-			userIndex:           userIndex,
 			RestServer: server.RestServer{
 				GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
 			},
@@ -131,13 +126,6 @@ func TestRPC(t *testing.T) {
 	rpcServer.rankingModel.SetParams(rpcServer.rankingModel.GetParams())
 	assert.Equal(t, rpcServer.rankingModel, rankingModel)
 
-	// test get user index
-	userIndexReceiver, err := client.GetUserIndex(ctx, &protocol.VersionInfo{Version: 789})
-	assert.NoError(t, err)
-	userIndex, err := protocol.UnmarshalIndex(userIndexReceiver)
-	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.userIndex, userIndex)
-
 	// test get meta
 	_, err = client.GetMeta(ctx,
 		&protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
@@ -147,14 +135,13 @@ func TestRPC(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(123), metaResp.RankingModelVersion)
 	assert.Equal(t, int64(456), metaResp.ClickModelVersion)
-	assert.Equal(t, int64(789), metaResp.UserIndexVersion)
 	assert.Equal(t, "worker1", metaResp.Me)
 	assert.Equal(t, []string{"server1"}, metaResp.Servers)
 	assert.Equal(t, []string{"worker1"}, metaResp.Workers)
 	var cfg config.Config
 	err = json.Unmarshal([]byte(metaResp.Config), &cfg)
 	assert.NoError(t, err)
-	assert.Equal(t, *rpcServer.GorseConfig, cfg)
+	assert.Equal(t, rpcServer.GorseConfig, &cfg)
 
 	time.Sleep(time.Second * 2)
 	metaResp, err = client.GetMeta(ctx,
