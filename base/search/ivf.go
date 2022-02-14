@@ -302,6 +302,9 @@ func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 		}
 		return nil
 	})
+	if count == 0 {
+		return 0
+	}
 	return result / count
 }
 
