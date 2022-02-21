@@ -116,9 +116,9 @@ func TestMaster_ExportItems(t *testing.T) {
 	defer s.Close(t)
 	// insert items
 	items := []data.Item{
-		{"1", false, nil, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
-		{"2", false, nil, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
-		{"3", false, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
+		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
+		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
+		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), nil, "\"three\""},
 	}
 	err := s.DataClient.BatchInsertItems(items)
 	assert.NoError(t, err)
@@ -130,10 +130,10 @@ func TestMaster_ExportItems(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment;filename=items.csv", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, "item_id,time_stamp,labels,description\r\n"+
-		"1,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,\"o,n,e\"\r\n"+
-		"2,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,\"t\r\nw\r\no\"\r\n"+
-		"3,2022-01-01 01:01:01.000000001 +0000 UTC,c|d,\"\"\"three\"\"\"\r\n", w.Body.String())
+	assert.Equal(t, "item_id,is_hidden,categories,time_stamp,labels,description\r\n"+
+		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,\"o,n,e\"\r\n"+
+		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,\"t\r\nw\r\no\"\r\n"+
+		"3,true,,2022-01-01 01:01:01.000000001 +0000 UTC,,\"\"\"three\"\"\"\r\n", w.Body.String())
 }
 
 func TestMaster_ExportFeedback(t *testing.T) {
@@ -244,13 +244,13 @@ func TestMaster_ImportItems(t *testing.T) {
 	assert.NoError(t, err)
 	err = writer.WriteField("label-sep", "::")
 	assert.NoError(t, err)
-	err = writer.WriteField("format", "ilct")
+	err = writer.WriteField("format", "ildtch")
 	assert.NoError(t, err)
 	file, err := writer.CreateFormFile("file", "items.csv")
 	assert.NoError(t, err)
-	_, err = file.Write([]byte("1\ta::b\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\n" +
-		"2\tb::c\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\n" +
-		"3\tc::d\t\"\"\"three\"\"\"\t2022-01-01 01:01:01.000000001 +0000 UTC\n"))
+	_, err = file.Write([]byte("1\ta::b\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\tx\t0\n" +
+		"2\tb::c\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\tx::y\t0\n" +
+		"3\tc::d\t\"\"\"three\"\"\"\t2022-01-01 01:01:01.000000001 +0000 UTC\t\t1\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -265,9 +265,9 @@ func TestMaster_ImportItems(t *testing.T) {
 	_, items, err := s.DataClient.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", false, nil, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
-		{"2", false, nil, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
-		{"3", false, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
+		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
+		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
+		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
 	}, items)
 }
 
@@ -279,10 +279,10 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "items.csv")
 	assert.NoError(t, err)
-	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n" +
-		"1,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\r\n" +
-		"2,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\r\n" +
-		"3,2022-01-01 01:01:01.000000001 +0000 UTC,c|d,three\r\n"))
+	_, err = file.Write([]byte("item_id,is_hidden,categories,time_stamp,labels,description\r\n" +
+		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\r\n" +
+		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\r\n" +
+		"3,true,,2022-01-01 01:01:01.000000001 +0000 UTC,,three\r\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -297,9 +297,9 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	_, items, err := s.DataClient.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", false, nil, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
-		{"2", false, nil, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
-		{"3", false, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "three"},
+		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
+		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
+		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), nil, "three"},
 	}, items)
 }
 
