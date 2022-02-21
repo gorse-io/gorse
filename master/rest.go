@@ -36,6 +36,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -876,7 +877,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		response.Header().Set("Content-Type", "text/csv")
 		response.Header().Set("Content-Disposition", "attachment;filename=items.csv")
 		// write header
-		if _, err = response.Write([]byte("item_id,time_stamp,labels,description\r\n")); err != nil {
+		if _, err = response.Write([]byte("item_id,is_hidden,categories,time_stamp,labels,description\r\n")); err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return
 		}
@@ -884,8 +885,9 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		itemChan, errChan := m.DataClient.GetItemStream(batchSize, nil)
 		for items := range itemChan {
 			for _, item := range items {
-				if _, err = response.Write([]byte(fmt.Sprintf("%s,%v,%s,%s\r\n",
-					base.Escape(item.ItemId), item.Timestamp, base.Escape(strings.Join(item.Labels, "|")), base.Escape(item.Comment)))); err != nil {
+				if _, err = response.Write([]byte(fmt.Sprintf("%s,%t,%s,%v,%s,%s\r\n",
+					base.Escape(item.ItemId), item.IsHidden, base.Escape(strings.Join(item.Categories, "|")),
+					item.Timestamp, base.Escape(strings.Join(item.Labels, "|")), base.Escape(item.Comment)))); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -904,7 +906,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			return
 		}
 		labelSep := formValue(request, "label-sep", "|")
-		fmtString := formValue(request, "format", "itlc")
+		fmtString := formValue(request, "format", "ihctld")
 		file, _, err := request.FormFile("file")
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
@@ -926,7 +928,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 			hasHeader = false
 			return true
 		}
-		splits, err = format(fmtString, "itlc", splits, lineNumber)
+		splits, err = format(fmtString, "ihctld", splits, lineNumber)
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
 			return false
@@ -938,28 +940,48 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 			return false
 		}
 		item := data.Item{ItemId: splits[0]}
-		// 2. timestamp
+		// 2. hidden
 		if splits[1] != "" {
-			item.Timestamp, err = dateparse.ParseAny(splits[1])
+			item.IsHidden, err = strconv.ParseBool(splits[1])
+			if err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("invalid hidden value `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
+				return false
+			}
+		}
+		// 3. categories
+		if splits[2] != "" {
+			item.Categories = strings.Split(splits[2], labelSep)
+			for _, category := range item.Categories {
+				if err = base.ValidateId(category); err != nil {
+					server.BadRequest(restful.NewResponse(response),
+						fmt.Errorf("invalid category `%v` at line %d (%s)", category, lineNumber, err.Error()))
+					return false
+				}
+			}
+		}
+		// 4. timestamp
+		if splits[3] != "" {
+			item.Timestamp, err = dateparse.ParseAny(splits[3])
 			if err != nil {
 				server.BadRequest(restful.NewResponse(response),
 					fmt.Errorf("failed to parse datetime `%v` at line %v", splits[1], lineNumber))
 				return false
 			}
 		}
-		// 3. labels
-		if splits[2] != "" {
-			item.Labels = strings.Split(splits[2], labelSep)
+		// 5. labels
+		if splits[4] != "" {
+			item.Labels = strings.Split(splits[4], labelSep)
 			for _, label := range item.Labels {
 				if err = base.ValidateLabel(label); err != nil {
 					server.BadRequest(restful.NewResponse(response),
-						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+						fmt.Errorf("invalid label `%v` at line %d (%s)", label, lineNumber, err.Error()))
 					return false
 				}
 			}
 		}
-		// 4. comment
-		item.Comment = splits[3]
+		// 6. comment
+		item.Comment = splits[5]
 		items = append(items, item)
 		// batch insert
 		if len(items) == batchSize {
