@@ -135,6 +135,9 @@ func (w *Worker) Sync() {
 		}
 		w.cfg.Recommend.UnLock()
 
+		// reset ticker
+		w.ticker.Reset(time.Duration(w.cfg.Recommend.CheckRecommendPeriod) * time.Minute)
+
 		// connect to data store
 		if w.dataPath != w.cfg.Database.DataStore {
 			base.Logger().Info("connect data store", zap.String("database", w.cfg.Database.DataStore))

@@ -46,7 +46,7 @@ dashboard_password = "password" # dashboard password
 
 # This section declares settings for the server node.
 [server]
-default_n = 20                  # default number of returned items
+default_n = 10                  # default number of returned items
 api_key = ""                    # secret key for RESTful APIs (SSL required)
 
 # This section declares settings for recommendation.
@@ -67,6 +67,9 @@ search_epoch = 100
 # The number of trials for model searching. The default values is 10.
 search_trials = 10
 
+# The time period to check recommendation for users (minutes). The default values is 1.
+check_recommend_period = 1
+
 # The time period to refresh recommendation for inactive users (days). The default values is 5.
 refresh_recommend_period = 1
 
@@ -78,7 +81,7 @@ refresh_recommend_period = 1
 fallback_recommend = ["item_based", "latest"]
 
 # The number of feedback used in fallback item-based similar recommendation. The default values is 10.
-num_feedback_fallback_item_based = 20
+num_feedback_fallback_item_based = 10
 
 # The type of neighbors for items. There are three types:
 #   similar: Neighbors are found by number of common labels.
@@ -145,5 +148,5 @@ enable_click_through_prediction = true
 # The explore recommendation method is used to inject popular items or latest items into recommended result:
 #   popular: Recommend popular items to cold-start users.
 #   latest: Recommend latest items to cold-start users.
-# Recommenders are used in order. The default values is { popular = 0.0, latest = 0.0 }.
+# The default values is { popular = 0.0, latest = 0.0 }.
 explore_recommend = { popular = 0.1, latest = 0.2 }
