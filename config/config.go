@@ -129,6 +129,7 @@ type RecommendConfig struct {
 	SearchPeriod                 int                `mapstructure:"search_period"`
 	SearchEpoch                  int                `mapstructure:"search_epoch"`
 	SearchTrials                 int                `mapstructure:"search_trials"`
+	CheckRecommendPeriod         int                `mapstructure:"check_recommend_period"`
 	RefreshRecommendPeriod       int                `mapstructure:"refresh_recommend_period"`
 	FallbackRecommend            []string           `mapstructure:"fallback_recommend"`
 	NumFeedbackFallbackItemBased int                `mapstructure:"num_feedback_fallback_item_based"`
@@ -180,6 +181,7 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			SearchPeriod:                 180,
 			SearchEpoch:                  100,
 			SearchTrials:                 10,
+			CheckRecommendPeriod:         1,
 			RefreshRecommendPeriod:       5,
 			FallbackRecommend:            []string{"latest"},
 			NumFeedbackFallbackItemBased: 10,
@@ -264,6 +266,7 @@ func init() {
 	viper.SetDefault("recommend.search_period", defaultRecommendConfig.SearchPeriod)
 	viper.SetDefault("recommend.search_epoch", defaultRecommendConfig.SearchEpoch)
 	viper.SetDefault("recommend.search_trials", defaultRecommendConfig.SearchTrials)
+	viper.SetDefault("recommend.check_recommend_period", defaultRecommendConfig.CheckRecommendPeriod)
 	viper.SetDefault("recommend.refresh_recommend_period", defaultRecommendConfig.RefreshRecommendPeriod)
 	viper.SetDefault("recommend.fallback_recommend", defaultRecommendConfig.FallbackRecommend)
 	viper.SetDefault("recommend.num_feedback_fallback_item_based", defaultRecommendConfig.NumFeedbackFallbackItemBased)

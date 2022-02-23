@@ -682,6 +682,7 @@ func TestWorker_Sync(t *testing.T) {
 		masterClient: protocol.NewMasterClient(conn),
 		cfg:          (*config.Config)(nil).LoadDefaultIfNil(),
 		syncedChan:   make(chan bool, 1024),
+		ticker:       time.NewTicker(time.Minute),
 	}
 
 	// This clause is used to test race condition.
