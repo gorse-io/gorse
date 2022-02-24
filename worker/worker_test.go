@@ -59,7 +59,7 @@ func TestPullUsers(t *testing.T) {
 
 	users, err := w.pullUsers(nodes, "b")
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"1", "3", "6"}, users)
+	assert.Equal(t, []data.User{{UserId: "1"}, {UserId: "3"}, {UserId: "6"}}, users)
 
 	_, err = w.pullUsers(nodes, "d")
 	assert.Error(t, err)
@@ -91,6 +91,21 @@ type mockMatrixFactorizationForRecommend struct {
 	ranking.BaseMatrixFactorization
 }
 
+func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixFactorizationForRecommend {
+	m := new(mockMatrixFactorizationForRecommend)
+	m.UserIndex = base.NewMapIndex()
+	m.ItemIndex = base.NewMapIndex()
+	for i := 0; i < numUsers; i++ {
+		m.UserIndex.Add(strconv.Itoa(i))
+	}
+	for i := 0; i < numItems; i++ {
+		m.ItemIndex.Add(strconv.Itoa(i))
+	}
+	m.UserPredictable = bitset.New(uint(numUsers)).Complement()
+	m.ItemPredictable = bitset.New(uint(numItems)).Complement()
+	return m
+}
+
 func (m *mockMatrixFactorizationForRecommend) GetUserFactor(_ int32) []float32 {
 	return []float32{1}
 }
@@ -107,23 +122,12 @@ func (m *mockMatrixFactorizationForRecommend) Fit(_, _ *ranking.DataSet, _ *rank
 	panic("implement me")
 }
 
-func (m *mockMatrixFactorizationForRecommend) Predict(_, _ string) float32 {
-	panic("implement me")
-}
-
-func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixFactorizationForRecommend {
-	m := new(mockMatrixFactorizationForRecommend)
-	m.UserIndex = base.NewMapIndex()
-	m.ItemIndex = base.NewMapIndex()
-	for i := 0; i < numUsers; i++ {
-		m.UserIndex.Add(strconv.Itoa(i))
+func (m *mockMatrixFactorizationForRecommend) Predict(_, itemId string) float32 {
+	itemIndex, err := strconv.Atoi(itemId)
+	if err != nil {
+		panic(err)
 	}
-	for i := 0; i < numItems; i++ {
-		m.ItemIndex.Add(strconv.Itoa(i))
-	}
-	m.UserPredictable = bitset.New(uint(numUsers)).Complement()
-	m.ItemPredictable = bitset.New(uint(numItems)).Complement()
-	return m
+	return float32(itemIndex)
 }
 
 func (m *mockMatrixFactorizationForRecommend) InternalPredict(_, itemId int32) float32 {
@@ -204,21 +208,21 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 
 	// create mock model
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
-	w.Recommend([]string{"0"})
+	w.Recommend([]data.User{{UserId: "0"}})
 
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{"3", 0},
-		{"2", 0},
-		{"1", 0},
+		{"3", 3},
+		{"2", 2},
+		{"1", 1},
 		{"0", 0},
 	}, recommends)
 	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{"3", 0},
-		{"1", 0},
+		{"3", 3},
+		{"1", 1},
 	}, recommends)
 
 	readCache, err := w.cacheClient.GetSorted(cache.Key(cache.IgnoreItems, "0"), 0, -1)
@@ -263,21 +267,21 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 
 	// create mock model
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
-	w.Recommend([]string{"0"})
+	w.Recommend([]data.User{{UserId: "0"}})
 
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{"3", 0},
-		{"2", 0},
-		{"1", 0},
+		{"3", 3},
+		{"2", 2},
+		{"1", 1},
 		{"0", 0},
 	}, recommends)
 	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{"3", 0},
-		{"1", 0},
+		{"3", 3},
+		{"1", 1},
 	}, recommends)
 
 	readCache, err := w.cacheClient.GetSorted(cache.Key(cache.IgnoreItems, "0"), 0, -1)
@@ -367,13 +371,13 @@ func TestRecommend_ItemBased(t *testing.T) {
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "26", Categories: []string{"*"}}, {ItemId: "28", Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend([]string{"0"})
+	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"29", 0}, {"28", 0}, {"27", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"29", 29}, {"28", 28}, {"27", 27}}, recommends)
 	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, 2)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"28", 0}, {"26", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"28", 28}, {"26", 26}}, recommends)
 }
 
 func TestRecommend_UserBased(t *testing.T) {
@@ -417,13 +421,13 @@ func TestRecommend_UserBased(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend([]string{"0"})
+	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"48", 0}, {"11", 0}, {"12", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"48", 48}, {"13", 13}, {"12", 12}}, recommends)
 	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, 2)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"48", 0}, {"12", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"48", 48}, {"12", 12}}, recommends)
 }
 
 func TestRecommend_Popular(t *testing.T) {
@@ -450,13 +454,13 @@ func TestRecommend_Popular(t *testing.T) {
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend([]string{"0"})
+	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, recommends)
 	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, recommends)
 }
 
 func TestRecommend_Latest(t *testing.T) {
@@ -483,13 +487,13 @@ func TestRecommend_Latest(t *testing.T) {
 	err = w.dataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
-	w.Recommend([]string{"0"})
+	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, recommends)
 	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
+	assert.Equal(t, []cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, recommends)
 }
 
 func TestRecommend_ColdStart(t *testing.T) {
@@ -518,7 +522,7 @@ func TestRecommend_ColdStart(t *testing.T) {
 
 	// ranking model not exist
 	m := newMockMatrixFactorizationForRecommend(10, 100)
-	w.Recommend([]string{"0"})
+	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
@@ -528,7 +532,7 @@ func TestRecommend_ColdStart(t *testing.T) {
 
 	// user not predictable
 	w.rankingModel = m
-	w.Recommend([]string{"100"})
+	w.Recommend([]data.User{{UserId: "100"}})
 	recommends, err = w.cacheClient.GetScores(cache.OfflineRecommend, "100", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
@@ -749,6 +753,26 @@ func (m mockFactorizationMachine) Marshal(_ io.Writer) error {
 	panic("implement me")
 }
 
+func TestRankByCollaborativeFiltering(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	// insert a user
+	err := w.dataClient.BatchInsertUsers([]data.User{{UserId: "1"}})
+	assert.NoError(t, err)
+	// insert items
+	itemCache := make(map[string]data.Item)
+	for i := 1; i <= 5; i++ {
+		itemCache[strconv.Itoa(i)] = data.Item{ItemId: strconv.Itoa(i)}
+	}
+	// rank items
+	w.rankingModel = newMockMatrixFactorizationForRecommend(10, 10)
+	result, err := w.rankByCollaborativeFiltering("1", [][]string{{"1", "2", "3", "4", "5"}})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"5", "4", "3", "2", "1"}, cache.RemoveScores(result))
+	assert.IsDecreasing(t, cache.GetScores(result))
+}
+
 func TestRankByClickTroughRate(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
@@ -763,7 +787,105 @@ func TestRankByClickTroughRate(t *testing.T) {
 	}
 	// rank items
 	w.clickModel = new(mockFactorizationMachine)
-	result, err := w.rankByClickTroughRate("1", [][]string{{"1", "2", "3", "4", "5"}}, itemCache)
+	result, err := w.rankByClickTroughRate(data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"5", "4", "3", "2", "1"}, cache.RemoveScores(result))
+	assert.IsDecreasing(t, cache.GetScores(result))
+}
+
+func TestReplacement_ClickThroughRate(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Database.PositiveFeedbackType = []string{"p"}
+	w.cfg.Database.ReadFeedbackTypes = []string{"n"}
+	w.cfg.Recommend.EnableColRecommend = false
+	w.cfg.Recommend.EnablePopularRecommend = true
+	w.cfg.Recommend.EnableReplacement = true
+	w.cfg.Recommend.EnableClickThroughPrediction = true
+
+	// 1. Insert historical items into empty recommendation.
+	// insert items
+	err := w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"}, {ItemId: "7"}, {ItemId: "6"}, {ItemId: "5"},
+	})
+	assert.NoError(t, err)
+	// insert feedback
+	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "p", UserId: "0", ItemId: "10"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "n", UserId: "0", ItemId: "9"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
+	}, true, false, true)
+	assert.NoError(t, err)
+	w.clickModel = new(mockFactorizationMachine)
+	w.Recommend([]data.User{{UserId: "0"}})
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}}, recommends)
+
+	// 2. Insert historical items into non-empty recommendation.
+	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().AddDate(-1, 0, 0))
+	assert.NoError(t, err)
+	// insert popular items
+	err = w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"7", 10}, {"6", 9}, {"5", 8}})
+	assert.NoError(t, err)
+	// insert feedback
+	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "p", UserId: "0", ItemId: "10"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "n", UserId: "0", ItemId: "9"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
+	}, true, false, true)
+	assert.NoError(t, err)
+	w.Recommend([]data.User{{UserId: "0"}})
+	recommends, err = w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, recommends)
+}
+
+func TestReplacement_CollaborativeFiltering(t *testing.T) {
+	// create mock worker
+	w := newMockWorker(t)
+	defer w.Close(t)
+	w.cfg.Database.PositiveFeedbackType = []string{"p"}
+	w.cfg.Database.ReadFeedbackTypes = []string{"n"}
+	w.cfg.Recommend.EnableColRecommend = false
+	w.cfg.Recommend.EnablePopularRecommend = true
+	w.cfg.Recommend.EnableReplacement = true
+
+	// 1. Insert historical items into empty recommendation.
+	// insert items
+	err := w.dataClient.BatchInsertItems([]data.Item{
+		{ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"}, {ItemId: "7"}, {ItemId: "6"}, {ItemId: "5"},
+	})
+	assert.NoError(t, err)
+	// insert feedback
+	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "p", UserId: "0", ItemId: "10"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "n", UserId: "0", ItemId: "9"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
+	}, true, false, true)
+	assert.NoError(t, err)
+	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.Recommend([]data.User{{UserId: "0"}})
+	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}}, recommends)
+
+	// 2. Insert historical items into non-empty recommendation.
+	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().AddDate(-1, 0, 0))
+	assert.NoError(t, err)
+	// insert popular items
+	err = w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"7", 10}, {"6", 9}, {"5", 8}})
+	assert.NoError(t, err)
+	// insert feedback
+	err = w.dataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "p", UserId: "0", ItemId: "10"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "n", UserId: "0", ItemId: "9"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
+	}, true, false, true)
+	assert.NoError(t, err)
+	w.Recommend([]data.User{{UserId: "0"}})
+	recommends, err = w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, recommends)
 }

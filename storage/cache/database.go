@@ -114,6 +114,15 @@ func RemoveScores(items []Scored) []string {
 	return ids
 }
 
+// GetScores resolve scores for a slice of Scored.
+func GetScores(s []Scored) []float32 {
+	scores := make([]float32, len(s))
+	for i := range s {
+		scores[i] = s[i].Score
+	}
+	return scores
+}
+
 // SortScores sorts scores from high score to low score.
 func SortScores(scores []Scored) {
 	sort.Sort(scoresSorter(scores))

@@ -151,6 +151,9 @@ type RecommendConfig struct {
 	ColIndexRecall               float32            `mapstructure:"collaborative_index_recall"`
 	ColIndexFitEpoch             int                `mapstructure:"collaborative_index_fit_epoch"`
 	EnableClickThroughPrediction bool               `mapstructure:"enable_click_through_prediction"`
+	EnableReplacement            bool               `mapstructure:"enable_replacement"`
+	PositiveReplacementDecay     float32            `mapstructure:"positive_replacement_decay"`
+	ReadReplacementDecay         float32            `mapstructure:"read_replacement_decay"`
 	exploreRecommendLock         sync.RWMutex
 }
 
@@ -202,6 +205,9 @@ func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
 			ColIndexRecall:               0.9,
 			ColIndexFitEpoch:             3,
 			EnableClickThroughPrediction: false,
+			EnableReplacement:            false,
+			PositiveReplacementDecay:     0.8,
+			ReadReplacementDecay:         0.6,
 		}
 	}
 	return config
@@ -287,6 +293,9 @@ func init() {
 	viper.SetDefault("recommend.collaborative_index_recall", defaultRecommendConfig.ColIndexRecall)
 	viper.SetDefault("recommend.collaborative_index_fit_epoch", defaultRecommendConfig.ColIndexFitEpoch)
 	viper.SetDefault("recommend.enable_click_through_prediction", defaultRecommendConfig.EnableClickThroughPrediction)
+	viper.SetDefault("recommend.enable_positive_replacement", defaultRecommendConfig.EnableReplacement)
+	viper.SetDefault("recommend.positive_replacement_decay", defaultRecommendConfig.PositiveReplacementDecay)
+	viper.SetDefault("recommend.read_replacement_decay", defaultRecommendConfig.ReadReplacementDecay)
 }
 
 type configBinding struct {
