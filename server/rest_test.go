@@ -1090,6 +1090,55 @@ func TestServer_GetRecommends(t *testing.T) {
 		End()
 }
 
+func TestServer_GetRecommends_Replacement(t *testing.T) {
+	s := newMockServer(t)
+	s.GorseConfig.Recommend.EnableReplacement = true
+	defer s.Close(t)
+	// insert hidden items
+	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 100}})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetInt(cache.HiddenItems, "0", 1)
+	assert.NoError(t, err)
+	// insert recommendation
+	err = s.CacheClient.AppendScores(cache.OfflineRecommend, "0",
+		cache.Scored{Id: "1", Score: 99},
+		cache.Scored{Id: "2", Score: 98},
+		cache.Scored{Id: "3", Score: 97},
+		cache.Scored{Id: "4", Score: 96},
+		cache.Scored{Id: "5", Score: 95},
+		cache.Scored{Id: "6", Score: 94},
+		cache.Scored{Id: "7", Score: 93},
+		cache.Scored{Id: "8", Score: 92},
+	)
+	assert.NoError(t, err)
+	// insert feedback
+	feedback := []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Now().Add(time.Hour)},
+	}
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON(feedback).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 3}`).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []string{"1", "2", "3"})).
+		End()
+}
+
 func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	s := newMockServer(t)
 	s.GorseConfig.Recommend.NumFeedbackFallbackItemBased = 4

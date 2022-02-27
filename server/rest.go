@@ -1667,10 +1667,12 @@ func Text(response *restful.Response, content string) {
 
 // InsertFeedbackToCache inserts feedback to cache.
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
-	for _, v := range feedback {
-		err := s.CacheClient.AddSorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float32(v.Timestamp.Unix())}})
-		if err != nil {
-			return errors.Trace(err)
+	if !s.GorseConfig.Recommend.EnableReplacement {
+		for _, v := range feedback {
+			err := s.CacheClient.AddSorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float32(v.Timestamp.Unix())}})
+			if err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 	return nil
