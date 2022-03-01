@@ -362,6 +362,7 @@ func (w *Worker) Recommend(users []data.User) {
 		builder := search.NewHNSWBuilder(vectors, w.cfg.Database.CacheSize, 1000, w.jobs)
 		var recall float32
 		w.rankingIndex, recall = builder.Build(w.cfg.Recommend.ColIndexRecall, w.cfg.Recommend.ColIndexFitEpoch, false)
+		MatchingIndexRecall.Set(float64(recall))
 		if err = w.cacheClient.SetString(cache.GlobalMeta, cache.MatchingIndexRecall, base.FormatFloat32(recall)); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}

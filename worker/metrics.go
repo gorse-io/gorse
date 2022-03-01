@@ -55,4 +55,10 @@ var (
 		Subsystem: "worker",
 		Name:      "load_popular_recommend_cache_seconds",
 	})
+
+	MatchingIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "worker",
+		Name:      "matching_index_recall",
+	})
 )
