@@ -172,7 +172,7 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, mongoPrefix) {
+	} else if strings.HasPrefix(path, mongoPrefix) || strings.HasPrefix(path, "mongodb+srv://") {
 		// connect to database
 		database := new(MongoDB)
 		if database.client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(path)); err != nil {
