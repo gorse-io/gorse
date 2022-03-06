@@ -398,13 +398,13 @@ func TestMaster_GetStats(t *testing.T) {
 	// set stats
 	s.rankingScore = ranking.Score{Precision: 0.1}
 	s.clickScore = click.Score{Precision: 0.2}
-	err := s.CacheClient.SetInt(cache.GlobalMeta, cache.NumUsers, 123)
+	err := s.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumUsers), 123)
 	assert.NoError(t, err)
-	err = s.CacheClient.SetInt(cache.GlobalMeta, cache.NumItems, 234)
+	err = s.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumItems), 234)
 	assert.NoError(t, err)
-	err = s.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidPosFeedbacks, 345)
+	err = s.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), 345)
 	assert.NoError(t, err)
-	err = s.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidNegFeedbacks, 456)
+	err = s.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), 456)
 	assert.NoError(t, err)
 	// get stats
 	apitest.New().
@@ -492,9 +492,9 @@ func TestMaster_GetUsers(t *testing.T) {
 	for _, user := range users {
 		err := s.DataClient.BatchInsertUsers([]data.User{user.User})
 		assert.NoError(t, err)
-		err = s.CacheClient.SetTime(cache.LastModifyUserTime, user.UserId, user.LastActiveTime)
+		err = s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, user.UserId), user.LastActiveTime)
 		assert.NoError(t, err)
-		err = s.CacheClient.SetTime(cache.LastUpdateUserRecommendTime, user.UserId, user.LastUpdateTime)
+		err = s.CacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId), user.LastUpdateTime)
 		assert.NoError(t, err)
 	}
 	// get users
@@ -649,7 +649,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", itemIds)
+	err := s.CacheClient.SetScores(cache.Key(cache.OfflineRecommend, "0"), itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{

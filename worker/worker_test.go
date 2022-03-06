@@ -70,19 +70,19 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	w := newMockWorker(t)
 	defer w.Close(t)
 	// insert cache
-	err := w.cacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 0}})
+	err := w.cacheClient.SetScores(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
-	err = w.cacheClient.SetTime(cache.LastModifyUserTime, "0", time.Now().Add(-time.Hour))
+	err = w.cacheClient.SetTime(cache.Key(cache.Key(cache.LastModifyUserTime, "0")), time.Now().Add(-time.Hour))
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
-	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(-time.Hour*100))
+	err = w.cacheClient.SetTime(cache.Key(cache.Key(cache.LastUpdateUserRecommendTime, "0")), time.Now().Add(-time.Hour*100))
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
-	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().Add(time.Hour*100))
+	err = w.cacheClient.SetTime(cache.Key(cache.Key(cache.LastUpdateUserRecommendTime, "0")), time.Now().Add(time.Hour*100))
 	assert.NoError(t, err)
 	assert.False(t, w.checkRecommendCacheTimeout("0", nil))
-	err = w.cacheClient.ClearScores(cache.OfflineRecommend, "0")
+	err = w.cacheClient.ClearScores(cache.Key(cache.OfflineRecommend, "0"))
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 }
@@ -210,7 +210,7 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
 	w.Recommend([]data.User{{UserId: "0"}})
 
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{"3", 3},
@@ -218,7 +218,7 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 		{"1", 1},
 		{"0", 0},
 	}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{"3", 3},
@@ -269,7 +269,7 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
 	w.Recommend([]data.User{{UserId: "0"}})
 
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{"3", 3},
@@ -277,7 +277,7 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 		{"1", 1},
 		{"0", 0},
 	}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{"3", 3},
@@ -372,10 +372,10 @@ func TestRecommend_ItemBased(t *testing.T) {
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"29", 29}, {"28", 28}, {"27", 27}}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, 2)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"28", 28}, {"26", 26}}, recommends)
 }
@@ -422,10 +422,10 @@ func TestRecommend_UserBased(t *testing.T) {
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"48", 48}, {"13", 13}, {"12", 12}}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, 2)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*", 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"48", 48}, {"12", 12}}, recommends)
 }
@@ -455,10 +455,10 @@ func TestRecommend_Popular(t *testing.T) {
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, recommends)
 }
@@ -488,10 +488,10 @@ func TestRecommend_Latest(t *testing.T) {
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, recommends)
 }
@@ -523,20 +523,20 @@ func TestRecommend_ColdStart(t *testing.T) {
 	// ranking model not exist
 	m := newMockMatrixFactorizationForRecommend(10, 100)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, -1)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "0", "*", 0, -1)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
 
 	// user not predictable
 	w.rankingModel = m
 	w.Recommend([]data.User{{UserId: "100"}})
-	recommends, err = w.cacheClient.GetScores(cache.OfflineRecommend, "100", 0, -1)
+	recommends, err = w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "100"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 0}, {"9", 0}, {"8", 0}}, recommends)
-	recommends, err = w.cacheClient.GetCategoryScores(cache.OfflineRecommend, "100", "*", 0, -1)
+	recommends, err = w.cacheClient.GetCategoryScores(cache.Key(cache.OfflineRecommend, "100"), "*", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"20", 0}, {"19", 0}, {"18", 0}}, recommends)
 }
@@ -819,12 +819,12 @@ func TestReplacement_ClickThroughRate(t *testing.T) {
 	assert.NoError(t, err)
 	w.clickModel = new(mockFactorizationMachine)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}}, recommends)
 
 	// 2. Insert historical items into non-empty recommendation.
-	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().AddDate(-1, 0, 0))
+	err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0))
 	assert.NoError(t, err)
 	// insert popular items
 	err = w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"7", 10}, {"6", 9}, {"5", 8}})
@@ -837,7 +837,7 @@ func TestReplacement_ClickThroughRate(t *testing.T) {
 	}, true, false, true)
 	assert.NoError(t, err)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err = w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	recommends, err = w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, recommends)
 }
@@ -867,12 +867,12 @@ func TestReplacement_CollaborativeFiltering(t *testing.T) {
 	assert.NoError(t, err)
 	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	recommends, err := w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}}, recommends)
 
 	// 2. Insert historical items into non-empty recommendation.
-	err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, "0", time.Now().AddDate(-1, 0, 0))
+	err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0))
 	assert.NoError(t, err)
 	// insert popular items
 	err = w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"7", 10}, {"6", 9}, {"5", 8}})
@@ -885,7 +885,7 @@ func TestReplacement_CollaborativeFiltering(t *testing.T) {
 	}, true, false, true)
 	assert.NoError(t, err)
 	w.Recommend([]data.User{{UserId: "0"}})
-	recommends, err = w.cacheClient.GetScores(cache.OfflineRecommend, "0", 0, 2)
+	recommends, err = w.cacheClient.GetScores(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, recommends)
 }

@@ -25,77 +25,77 @@ func (NoDatabase) Close() error {
 }
 
 // SetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetScores(_, _ string, _ []Scored) error {
+func (NoDatabase) SetScores(_ string, _ []Scored) error {
 	return ErrNoDatabase
 }
 
 // GetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetScores(_, _ string, _, _ int) ([]Scored, error) {
+func (NoDatabase) GetScores(_ string, _, _ int) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
 // SetCategoryScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetCategoryScores(_, _, _ string, _ []Scored) error {
+func (NoDatabase) SetCategoryScores(_, _ string, _ []Scored) error {
 	return ErrNoDatabase
 }
 
 // GetCategoryScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetCategoryScores(_, _, _ string, _, _ int) ([]Scored, error) {
+func (NoDatabase) GetCategoryScores(_, _ string, _, _ int) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
 // ClearScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) ClearScores(_, _ string) error {
+func (NoDatabase) ClearScores(_ string) error {
 	return ErrNoDatabase
 }
 
 // AppendScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AppendScores(_, _ string, _ ...Scored) error {
+func (NoDatabase) AppendScores(_ string, _ ...Scored) error {
 	return ErrNoDatabase
 }
 
 // GetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetString(_, _ string) (string, error) {
+func (NoDatabase) GetString(_ string) (string, error) {
 	return "", ErrNoDatabase
 }
 
 // SetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetString(_, _, _ string) error {
+func (NoDatabase) SetString(_, _ string) error {
 	return ErrNoDatabase
 }
 
 // GetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetInt(_, _ string) (int, error) {
+func (NoDatabase) GetInt(_ string) (int, error) {
 	return 0, ErrNoDatabase
 }
 
 // SetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetInt(_, _ string, _ int) error {
+func (NoDatabase) SetInt(_ string, _ int) error {
 	return ErrNoDatabase
 }
 
 // GetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetTime(_, _ string) (time.Time, error) {
+func (NoDatabase) GetTime(_ string) (time.Time, error) {
 	return time.Time{}, ErrNoDatabase
 }
 
 // SetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetTime(_, _ string, _ time.Time) error {
+func (NoDatabase) SetTime(_ string, _ time.Time) error {
 	return ErrNoDatabase
 }
 
 // IncrInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) IncrInt(_, _ string) error {
+func (NoDatabase) IncrInt(_ string) error {
 	return ErrNoDatabase
 }
 
 // Delete method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) Delete(_, _ string) error {
+func (NoDatabase) Delete(_ string) error {
 	return ErrNoDatabase
 }
 
 // Exists method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) Exists(_ string, _ ...string) ([]int, error) {
+func (NoDatabase) Exists(_ ...string) ([]int, error) {
 	return nil, ErrNoDatabase
 }
 

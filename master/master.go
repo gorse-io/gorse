@@ -313,13 +313,13 @@ func (m *Master) RunRagtagTasksLoop() {
 }
 
 func (m *Master) checkDataImported() bool {
-	isDataImported, err := m.CacheClient.GetInt(cache.GlobalMeta, cache.DataImported)
+	isDataImported, err := m.CacheClient.GetInt(cache.Key(cache.GlobalMeta, cache.DataImported))
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return false
 	}
 	if isDataImported > 0 {
-		err = m.CacheClient.SetInt(cache.GlobalMeta, cache.DataImported, 0)
+		err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.DataImported), 0)
 		if err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
@@ -329,7 +329,7 @@ func (m *Master) checkDataImported() bool {
 }
 
 func (m *Master) notifyDataImported() {
-	err := m.CacheClient.IncrInt(cache.GlobalMeta, cache.DataImported)
+	err := m.CacheClient.IncrInt(cache.Key(cache.GlobalMeta, cache.DataImported))
 	if err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}

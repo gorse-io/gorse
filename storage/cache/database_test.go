@@ -23,37 +23,37 @@ import (
 
 func testMeta(t *testing.T, db Database) {
 	// Set meta string
-	err := db.SetString("meta", "1", "2")
+	err := db.SetString(Key("meta", "1"), "2")
 	assert.NoError(t, err)
 	// Get meta string
-	value, err := db.GetString("meta", "1")
+	value, err := db.GetString(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, "2", value)
 	// Delete string
-	err = db.Delete("meta", "1")
+	err = db.Delete(Key("meta", "1"))
 	assert.NoError(t, err)
 	// Get meta not existed
-	value, err = db.GetString("meta", "1")
+	value, err = db.GetString(Key("meta", "1"))
 	assert.True(t, errors.IsNotFound(err))
 	assert.Equal(t, "", value)
 	// Set meta int
-	err = db.SetInt("meta", "1", 2)
+	err = db.SetInt(Key("meta", "1"), 2)
 	assert.NoError(t, err)
 	// Get meta int
-	valInt, err := db.GetInt("meta", "1")
+	valInt, err := db.GetInt(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, 2, valInt)
 	// increase meta int
-	err = db.IncrInt("meta", "1")
+	err = db.IncrInt(Key("meta", "1"))
 	assert.NoError(t, err)
-	valInt, err = db.GetInt("meta", "1")
+	valInt, err = db.GetInt(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, valInt)
 	// set meta time
-	err = db.SetTime("meta", "1", time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC))
+	err = db.SetTime(Key("meta", "1"), time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC))
 	assert.NoError(t, err)
 	// get meta time
-	valTime, err := db.GetTime("meta", "1")
+	valTime, err := db.GetTime(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1996, valTime.Year())
 	assert.Equal(t, time.Month(4), valTime.Month())
@@ -73,22 +73,22 @@ func testScores(t *testing.T, db Database) {
 		{"3", 1.3},
 		{"4", 1.4},
 	}
-	err := db.SetScores("list", "0", scores)
+	err := db.SetScores(Key("list", "0"), scores)
 	assert.NoError(t, err)
 	// Get scores
-	totalItems, err := db.GetScores("list", "0", 0, -1)
+	totalItems, err := db.GetScores(Key("list", "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, scores, totalItems)
 	// Get n scores
-	headItems, err := db.GetScores("list", "0", 0, 2)
+	headItems, err := db.GetScores(Key("list", "0"), 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, scores[:3], headItems)
 	// Get n scores with offset
-	offsetItems, err := db.GetScores("list", "0", 1, 3)
+	offsetItems, err := db.GetScores(Key("list", "0"), 1, 3)
 	assert.NoError(t, err)
 	assert.Equal(t, scores[1:4], offsetItems)
 	// Get empty
-	noItems, err := db.GetScores("list", "1", 0, 0)
+	noItems, err := db.GetScores(Key("list", "1"), 0, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(noItems))
 	// test overwrite
@@ -99,27 +99,27 @@ func testScores(t *testing.T, db Database) {
 		{"13", 10.3},
 		{"14", 10.4},
 	}
-	err = db.SetScores("list", "0", overwriteScores)
+	err = db.SetScores(Key("list", "0"), overwriteScores)
 	assert.NoError(t, err)
-	totalItems, err = db.GetScores("list", "0", 0, -1)
+	totalItems, err = db.GetScores(Key("list", "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, overwriteScores, totalItems)
 	// test append
-	err = db.AppendScores("append", "0", scores...)
+	err = db.AppendScores(Key("append", "0"), scores...)
 	assert.NoError(t, err)
-	totalItems, err = db.GetScores("append", "0", 0, -1)
+	totalItems, err = db.GetScores(Key("append", "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, scores, totalItems)
 	// append
-	err = db.AppendScores("append", "0", overwriteScores...)
+	err = db.AppendScores(Key("append", "0"), overwriteScores...)
 	assert.NoError(t, err)
-	totalItems, err = db.GetScores("append", "0", 0, -1)
+	totalItems, err = db.GetScores(Key("append", "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, append(scores, overwriteScores...), totalItems)
 	// clear
-	err = db.ClearScores("append", "0")
+	err = db.ClearScores(Key("append", "0"))
 	assert.NoError(t, err)
-	totalItems, err = db.GetScores("append", "0", 0, -1)
+	totalItems, err = db.GetScores(Key("append", "0"), 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, totalItems)
 
@@ -131,10 +131,10 @@ func testScores(t *testing.T, db Database) {
 		{"3", 1.3},
 		{"4", 1.4},
 	}
-	err = db.SetCategoryScores("list", "0", "cat", scores)
+	err = db.SetCategoryScores(Key("list", "0"), "cat", scores)
 	assert.NoError(t, err)
 	// Get scores in category
-	totalItems, err = db.GetCategoryScores("list", "0", "cat", 0, -1)
+	totalItems, err = db.GetCategoryScores(Key("list", "0"), "cat", 0, -1)
 	assert.NoError(t, err)
 	assert.Equal(t, scores, totalItems)
 }
