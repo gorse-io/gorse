@@ -164,21 +164,21 @@ func Key(keys ...string) string {
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
-	SetScores(prefix, name string, items []Scored) error
-	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
-	ClearScores(prefix, name string) error
-	AppendScores(prefix, name string, items ...Scored) error
-	SetCategoryScores(prefix, name, category string, items []Scored) error
-	GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error)
-	GetString(prefix, name string) (string, error)
-	SetString(prefix, name string, val string) error
-	GetTime(prefix, name string) (time.Time, error)
-	SetTime(prefix, name string, val time.Time) error
-	GetInt(prefix, name string) (int, error)
-	SetInt(prefix, name string, val int) error
-	IncrInt(prefix, name string) error
-	Delete(prefix, name string) error
-	Exists(prefix string, names ...string) ([]int, error)
+	SetScores(name string, items []Scored) error
+	GetScores(name string, begin int, end int) ([]Scored, error)
+	ClearScores(name string) error
+	AppendScores(name string, items ...Scored) error
+	SetCategoryScores(name, category string, items []Scored) error
+	GetCategoryScores(name, category string, begin, end int) ([]Scored, error)
+	GetString(name string) (string, error)
+	SetString(name string, val string) error
+	GetTime(name string) (time.Time, error)
+	SetTime(name string, val time.Time) error
+	GetInt(name string) (int, error)
+	SetInt(name string, val int) error
+	IncrInt(name string) error
+	Delete(name string) error
+	Exists(names ...string) ([]int, error)
 
 	GetSet(key string) ([]string, error)
 	SetSet(key string, members ...string) error
