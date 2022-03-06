@@ -161,6 +161,12 @@ func Key(keys ...string) string {
 	return builder.String()
 }
 
+func KeyVariadic(key0 string, keys ...string) string {
+	keys0 := []string{key0}
+	keys0 = append(keys0, keys...)
+	return Key(keys0...)
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error

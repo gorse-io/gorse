@@ -339,7 +339,7 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
-	isHidden, err := s.CacheClient.GetInt(cache.HiddenItems, "6")
+	isHidden, err := s.CacheClient.GetInt(cache.Key(cache.HiddenItems, "6"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, isHidden)
 	categories, err = s.CacheClient.GetSet(cache.Key(cache.ItemCategories, "6"))
@@ -436,7 +436,7 @@ func TestServer_Items(t *testing.T) {
 			Timestamp:  timestamp,
 		})).
 		End()
-	isHidden, err = s.CacheClient.GetInt(cache.HiddenItems, "2")
+	isHidden, err = s.CacheClient.GetInt(cache.Key(cache.HiddenItems, "2"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, isHidden)
 	// get latest items
@@ -764,7 +764,7 @@ func TestServer_List(t *testing.T) {
 				{strconv.Itoa(i) + "3", 97},
 				{strconv.Itoa(i) + "4", 96},
 			}
-			err := s.CacheClient.SetScores(operator.Prefix, operator.Ident, scores)
+			err := s.CacheClient.SetScores(cache.Key(operator.Prefix, operator.Ident), scores)
 			assert.NoError(t, err)
 			apitest.New().
 				Handler(s.handler).
@@ -986,12 +986,12 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert hidden items
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 100}})
+	err := s.CacheClient.SetScores(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetInt(cache.HiddenItems, "0", 1)
+	err = s.CacheClient.SetInt(cache.Key(cache.HiddenItems, "0"), 1)
 	assert.NoError(t, err)
 	// insert recommendation
-	err = s.CacheClient.AppendScores(cache.OfflineRecommend, "0",
+	err = s.CacheClient.AppendScores(cache.Key(cache.OfflineRecommend, "0"),
 		cache.Scored{Id: "1", Score: 99},
 		cache.Scored{Id: "2", Score: 98},
 		cache.Scored{Id: "3", Score: 97},
@@ -1095,12 +1095,12 @@ func TestServer_GetRecommends_Replacement(t *testing.T) {
 	s.GorseConfig.Recommend.EnableReplacement = true
 	defer s.Close(t)
 	// insert hidden items
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 100}})
+	err := s.CacheClient.SetScores(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetInt(cache.HiddenItems, "0", 1)
+	err = s.CacheClient.SetInt(cache.Key(cache.HiddenItems, "0"), 1)
 	assert.NoError(t, err)
 	// insert recommendation
-	err = s.CacheClient.AppendScores(cache.OfflineRecommend, "0",
+	err = s.CacheClient.AppendScores(cache.Key(cache.OfflineRecommend, "0"),
 		cache.Scored{Id: "1", Score: 99},
 		cache.Scored{Id: "2", Score: 98},
 		cache.Scored{Id: "3", Score: 97},
@@ -1144,7 +1144,7 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	s.GorseConfig.Recommend.NumFeedbackFallbackItemBased = 4
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
+	err := s.CacheClient.SetScores(cache.Key(cache.OfflineRecommend, "0"),
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert feedback
@@ -1254,7 +1254,7 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
+	err := s.CacheClient.SetScores(cache.Key(cache.OfflineRecommend, "0"),
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert feedback
@@ -1334,10 +1334,10 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert offline recommendation
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
+	err := s.CacheClient.SetScores(cache.Key(cache.OfflineRecommend, "0"),
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetCategoryScores(cache.OfflineRecommend, "0", "*",
+	err = s.CacheClient.SetCategoryScores(cache.Key(cache.OfflineRecommend, "0"), "*",
 		[]cache.Scored{{"101", 99}, {"102", 98}, {"103", 97}, {"104", 96}})
 	assert.NoError(t, err)
 	// insert latest
@@ -1355,10 +1355,10 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		[]cache.Scored{{"109", 91}, {"110", 90}, {"111", 89}, {"112", 88}})
 	assert.NoError(t, err)
 	// insert collaborative filtering
-	err = s.CacheClient.SetScores(cache.CollaborativeRecommend, "0",
+	err = s.CacheClient.SetScores(cache.Key(cache.CollaborativeRecommend, "0"),
 		[]cache.Scored{{"13", 79}, {"14", 78}, {"15", 77}, {"16", 76}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetCategoryScores(cache.CollaborativeRecommend, "0", "*",
+	err = s.CacheClient.SetCategoryScores(cache.Key(cache.CollaborativeRecommend, "0"), "*",
 		[]cache.Scored{{"113", 79}, {"114", 78}, {"115", 77}, {"116", 76}})
 	assert.NoError(t, err)
 	// test popular fallback
