@@ -150,3 +150,12 @@ enable_click_through_prediction = true
 #   latest: Recommend latest items to cold-start users.
 # The default values is { popular = 0.0, latest = 0.0 }.
 explore_recommend = { popular = 0.1, latest = 0.2 }
+
+# Replace historical items back to recommendations.
+enable_replacement = false
+
+# Decay the weights of replaced items from positive feedbacks.
+positive_replacement_decay = 0.8
+
+# Decay the weights of replaced items from read feedbacks.
+read_replacement_decay = 0.6

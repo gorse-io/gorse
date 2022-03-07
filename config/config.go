@@ -293,7 +293,7 @@ func init() {
 	viper.SetDefault("recommend.collaborative_index_recall", defaultRecommendConfig.ColIndexRecall)
 	viper.SetDefault("recommend.collaborative_index_fit_epoch", defaultRecommendConfig.ColIndexFitEpoch)
 	viper.SetDefault("recommend.enable_click_through_prediction", defaultRecommendConfig.EnableClickThroughPrediction)
-	viper.SetDefault("recommend.enable_positive_replacement", defaultRecommendConfig.EnableReplacement)
+	viper.SetDefault("recommend.enable_replacement", defaultRecommendConfig.EnableReplacement)
 	viper.SetDefault("recommend.positive_replacement_decay", defaultRecommendConfig.PositiveReplacementDecay)
 	viper.SetDefault("recommend.read_replacement_decay", defaultRecommendConfig.ReadReplacementDecay)
 }

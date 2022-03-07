@@ -91,24 +91,31 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// write statistics to database
+	UsersTotal.Set(float64(rankingDataset.UserCount()))
 	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumUsers, rankingDataset.UserCount()); err != nil {
 		base.Logger().Error("failed to write number of users", zap.Error(err))
 	}
+	ItemsTotal.Set(float64(rankingDataset.ItemCount()))
 	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumItems, rankingDataset.ItemCount()); err != nil {
 		base.Logger().Error("failed to write number of items", zap.Error(err))
 	}
+	FeedbacksTotal.Set(float64(rankingDataset.Count()))
 	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumTotalPosFeedbacks, rankingDataset.Count()); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
+	UserLabelsTotal.Set(float64(clickDataset.Index.CountUserLabels()))
 	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumUserLabels, int(clickDataset.Index.CountUserLabels())); err != nil {
 		base.Logger().Error("failed to write number of user labels", zap.Error(err))
 	}
+	ItemLabelsTotal.Set(float64(clickDataset.Index.CountItemLabels()))
 	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumItemLabels, int(clickDataset.Index.CountItemLabels())); err != nil {
 		base.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
+	PositiveFeedbacksTotal.Set(float64(clickDataset.PositiveCount))
 	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidPosFeedbacks, clickDataset.PositiveCount); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
+	NegativeFeedbackTotal.Set(float64(clickDataset.NegativeCount))
 	if err = m.CacheClient.SetInt(cache.GlobalMeta, cache.NumValidNegFeedbacks, clickDataset.NegativeCount); err != nil {
 		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
@@ -326,6 +333,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		var recall float32
 		similarItemNeighbors, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
+		ItemNeighborIndexRecall.Set(float64(recall))
 		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.ItemNeighborIndexRecall, base.FormatFloat32(recall)); err != nil {
 			return errors.Trace(err)
 		}
@@ -553,6 +561,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		var recall float32
 		similarUserNeighbors, recall = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
+		UserNeighborIndexRecall.Set(float64(recall))
 		if err := m.CacheClient.SetString(cache.GlobalMeta, cache.UserNeighborIndexRecall, base.FormatFloat32(recall)); err != nil {
 			return errors.Trace(err)
 		}
