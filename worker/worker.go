@@ -1039,7 +1039,9 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user data.User
 				if !math32.IsInf(upperBound, 1) && !math32.IsInf(lowerBound, -1) {
 					// decay item
 					score -= lowerBound
-					if positiveItems.Has(itemId) {
+					if score < 0 {
+						continue
+					} else if positiveItems.Has(itemId) {
 						score *= w.cfg.Recommend.PositiveReplacementDecay
 					} else {
 						score *= w.cfg.Recommend.ReadReplacementDecay
