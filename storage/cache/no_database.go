@@ -24,36 +24,6 @@ func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
-// SetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetScores(_, _ string, _ []Scored) error {
-	return ErrNoDatabase
-}
-
-// GetScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetScores(_, _ string, _, _ int) ([]Scored, error) {
-	return nil, ErrNoDatabase
-}
-
-// SetCategoryScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetCategoryScores(_, _, _ string, _ []Scored) error {
-	return ErrNoDatabase
-}
-
-// GetCategoryScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetCategoryScores(_, _, _ string, _, _ int) ([]Scored, error) {
-	return nil, ErrNoDatabase
-}
-
-// ClearScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) ClearScores(_, _ string) error {
-	return ErrNoDatabase
-}
-
-// AppendScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AppendScores(_, _ string, _ ...Scored) error {
-	return ErrNoDatabase
-}
-
 // GetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetString(_, _ string) (string, error) {
 	return "", ErrNoDatabase

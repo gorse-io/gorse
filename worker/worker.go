@@ -622,7 +622,7 @@ func (w *Worker) Recommend(users []data.User) {
 				return errors.Trace(err)
 			}
 
-			if err = w.cacheClient.SetCategoryScores(cache.OfflineRecommend, userId, category, results[category]); err != nil {
+			if err = w.cacheClient.SetSorted(cache.Key(cache.OfflineRecommend, userId, category), results[category]); err != nil {
 				base.Logger().Error("failed to cache recommendation", zap.Error(err))
 				return errors.Trace(err)
 			}
@@ -678,7 +678,7 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	for category, recItemsFilter := range recItemsFilters {
 		recommendItems, recommendScores := recItemsFilter.PopAll()
 		recommend[category] = recommendItems
-		if err := w.cacheClient.SetCategoryScores(cache.CollaborativeRecommend, userId, category, cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
+		if err := w.cacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, userId, category), cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 			return nil, 0, errors.Trace(err)
 		}
@@ -704,7 +704,7 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId st
 			}
 		}
 		recommend[category] = recommendItems
-		if err := w.cacheClient.SetCategoryScores(cache.CollaborativeRecommend, userId, category,
+		if err := w.cacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, userId, category),
 			cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
 			base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 			return nil, 0, errors.Trace(err)
@@ -794,7 +794,7 @@ func mergeAndShuffle(candidates [][]string) []cache.Scored {
 		pos[j]++
 		if !memo.Has(candidateId) {
 			memo.Add(candidateId)
-			recommend = append(recommend, cache.Scored{Score: 0, Id: candidateId})
+			recommend = append(recommend, cache.Scored{Score: math32.Exp(float32(-len(recommend))), Id: candidateId})
 		}
 	}
 	return recommend
@@ -828,18 +828,27 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 	}
 	// explore recommendation
 	var exploreRecommend []cache.Scored
+	score := float32(1)
+	if len(exploitRecommend) > 0 {
+		score += exploitRecommend[0].Score
+	}
 	for range exploitRecommend {
 		dice := rand.Float64()
 		var recommendItem cache.Scored
 		if dice < explorePopularThreshold && len(popularItems) > 0 {
+			score -= 1e-5
 			recommendItem = popularItems[0]
+			recommendItem.Score = score
 			popularItems = popularItems[1:]
 		} else if dice < exploreLatestThreshold && len(latestItems) > 0 {
+			score -= 1e-5
 			recommendItem = latestItems[0]
+			recommendItem.Score = score
 			latestItems = latestItems[1:]
 		} else if len(exploitRecommend) > 0 {
 			recommendItem = exploitRecommend[0]
 			exploitRecommend = exploitRecommend[1:]
+			score = recommendItem.Score
 		} else {
 			break
 		}
@@ -859,7 +868,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	var activeTime, recommendTime time.Time
 	// check cache
 	for _, category := range append([]string{""}, categories...) {
-		items, err := w.cacheClient.GetCategoryScores(cache.OfflineRecommend, userId, category, 0, -1)
+		items, err := w.cacheClient.GetSorted(cache.Key(cache.OfflineRecommend, userId, category), 0, -1)
 		if err != nil {
 			base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
 			return true

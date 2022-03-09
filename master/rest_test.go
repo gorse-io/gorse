@@ -549,6 +549,8 @@ func TestServer_SortedItems(t *testing.T) {
 			}
 			err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
+			err = s.CacheClient.SetInt(cache.HiddenItems, strconv.Itoa(i)+"3", 1)
+			assert.NoError(t, err)
 			items := make([]data.Item, 0)
 			for _, score := range scores {
 				items = append(items, data.Item{ItemId: score.Id})
@@ -561,7 +563,7 @@ func TestServer_SortedItems(t *testing.T) {
 				Header("Cookie", cookie).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, items)).
+				Body(marshal(t, []data.Item{items[0], items[1], items[2], items[4]})).
 				End()
 		})
 	}
@@ -649,7 +651,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", itemIds)
+	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
