@@ -38,8 +38,15 @@ const (
 	//  User neighbors      - user_neighbors/{user_id}
 	UserNeighbors = "user_neighbors"
 
+	// CollaborativeRecommend is sorted set of collaborative filtering recommendations for each user.
+	//  Global recommendation      - collaborative_recommend/{user_id}
+	//  Categorized recommendation - collaborative_recommend/{user_id}/{category}
 	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
-	OfflineRecommend       = "offline_recommend"       // offline recommendation for each user
+
+	// OfflineRecommend is sorted set of offline recommendation for each user.
+	//  Global recommendation      - offline_recommend/{user_id}
+	//  Categorized recommendation - offline_recommend/{user_id}/{category}
+	OfflineRecommend = "offline_recommend" // offline recommendation for each user
 
 	// PopularItems is sorted set of popular items. The format of key:
 	//  Global popular items      - latest_items
@@ -164,12 +171,6 @@ func Key(keys ...string) string {
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
-	SetScores(prefix, name string, items []Scored) error
-	GetScores(prefix, name string, begin int, end int) ([]Scored, error)
-	ClearScores(prefix, name string) error
-	AppendScores(prefix, name string, items ...Scored) error
-	SetCategoryScores(prefix, name, category string, items []Scored) error
-	GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error)
 	GetString(prefix, name string) (string, error)
 	SetString(prefix, name string, val string) error
 	GetTime(prefix, name string) (time.Time, error)

@@ -439,6 +439,17 @@ func TestServer_Items(t *testing.T) {
 	isHidden, err = s.CacheClient.GetInt(cache.HiddenItems, "2")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, isHidden)
+	apitest.New().
+		Handler(s.handler).
+		Patch("/api/item/2").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{
+			IsHidden: proto.Bool(false),
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
 	// get latest items
 	apitest.New().
 		Handler(s.handler).
@@ -507,7 +518,7 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, data.Item{
 			ItemId:     "2",
-			IsHidden:   true,
+			IsHidden:   false,
 			Categories: []string{"-", "@"},
 			Comment:    "modified",
 			Labels:     []string{"a", "b", "c"},
@@ -563,7 +574,7 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, data.Item{
 			ItemId:     "2",
-			IsHidden:   true,
+			IsHidden:   false,
 			Categories: []string{"-"},
 			Comment:    "modified",
 			Labels:     []string{"a", "b", "c"},
@@ -740,77 +751,6 @@ func TestServer_Feedback(t *testing.T) {
 	assert.Equal(t, "override", ret[0].Comment)
 }
 
-func TestServer_List(t *testing.T) {
-	s := newMockServer(t)
-	defer s.Close(t)
-	type ListOperator struct {
-		Name   string
-		Prefix string
-		Ident  string
-		Get    string
-	}
-	operators := []ListOperator{
-		{"Offline Recommend", cache.OfflineRecommend, "0", "/api/intermediate/recommend/0"},
-		{"Offline Recommend in Category", cache.OfflineRecommend, "0/0", "/api/intermediate/recommend/0/0"},
-	}
-
-	for i, operator := range operators {
-		t.Run(operator.Name, func(t *testing.T) {
-			// Put scores
-			scores := []cache.Scored{
-				{strconv.Itoa(i) + "0", 100},
-				{strconv.Itoa(i) + "1", 99},
-				{strconv.Itoa(i) + "2", 98},
-				{strconv.Itoa(i) + "3", 97},
-				{strconv.Itoa(i) + "4", 96},
-			}
-			err := s.CacheClient.SetScores(operator.Prefix, operator.Ident, scores)
-			assert.NoError(t, err)
-			apitest.New().
-				Handler(s.handler).
-				Get(operator.Get).
-				Header("X-API-Key", apiKey).
-				Expect(t).
-				Status(http.StatusOK).
-				Body(marshal(t, scores)).
-				End()
-			apitest.New().
-				Handler(s.handler).
-				Get(operator.Get).
-				Header("X-API-Key", apiKey).
-				QueryParams(map[string]string{
-					"offset": "0",
-					"n":      "3"}).
-				Expect(t).
-				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2]})).
-				End()
-			apitest.New().
-				Handler(s.handler).
-				Get(operator.Get).
-				Header("X-API-Key", apiKey).
-				QueryParams(map[string]string{
-					"offset": "1",
-					"n":      "3"}).
-				Expect(t).
-				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[1], scores[2], scores[3]})).
-				End()
-			apitest.New().
-				Handler(s.handler).
-				Get(operator.Get).
-				Header("X-API-Key", apiKey).
-				QueryParams(map[string]string{
-					"offset": "0",
-					"n":      "0"}).
-				Expect(t).
-				Status(http.StatusOK).
-				Body(marshal(t, scores)).
-				End()
-		})
-	}
-}
-
 func TestServer_Sort(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
@@ -827,6 +767,8 @@ func TestServer_Sort(t *testing.T) {
 		{"Latest Items in Category", cache.Key(cache.LatestItems, "0"), "/api/latest/0"},
 		{"Popular Items", cache.PopularItems, "/api/popular/"},
 		{"Popular Items in Category", cache.Key(cache.PopularItems, "0"), "/api/popular/0"},
+		{"Offline Recommend", cache.Key(cache.OfflineRecommend, "0"), "/api/intermediate/recommend/0"},
+		{"Offline Recommend in Category", cache.Key(cache.OfflineRecommend, "0", "0"), "/api/intermediate/recommend/0/0"},
 	}
 
 	for i, operator := range operators {
@@ -841,13 +783,15 @@ func TestServer_Sort(t *testing.T) {
 			}
 			err := s.CacheClient.SetSorted(operator.Key, scores)
 			assert.NoError(t, err)
+			err = s.CacheClient.SetInt(cache.HiddenItems, strconv.Itoa(i)+"3", 1)
+			assert.NoError(t, err)
 			apitest.New().
 				Handler(s.handler).
 				Get(operator.Get).
 				Header("X-API-Key", apiKey).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, scores)).
+				Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
 				End()
 			apitest.New().
 				Handler(s.handler).
@@ -869,7 +813,7 @@ func TestServer_Sort(t *testing.T) {
 					"n":      "3"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[1], scores[2], scores[3]})).
+				Body(marshal(t, []cache.Scored{scores[1], scores[2], scores[4]})).
 				End()
 			apitest.New().
 				Handler(s.handler).
@@ -880,7 +824,7 @@ func TestServer_Sort(t *testing.T) {
 					"n":      "0"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, scores)).
+				Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
 				End()
 		})
 	}
@@ -986,21 +930,21 @@ func TestServer_GetRecommends(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert hidden items
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 100}})
+	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
 	err = s.CacheClient.SetInt(cache.HiddenItems, "0", 1)
 	assert.NoError(t, err)
 	// insert recommendation
-	err = s.CacheClient.AppendScores(cache.OfflineRecommend, "0",
-		cache.Scored{Id: "1", Score: 99},
-		cache.Scored{Id: "2", Score: 98},
-		cache.Scored{Id: "3", Score: 97},
-		cache.Scored{Id: "4", Score: 96},
-		cache.Scored{Id: "5", Score: 95},
-		cache.Scored{Id: "6", Score: 94},
-		cache.Scored{Id: "7", Score: 93},
-		cache.Scored{Id: "8", Score: 92},
-	)
+	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{
+		{Id: "1", Score: 99},
+		{Id: "2", Score: 98},
+		{Id: "3", Score: 97},
+		{Id: "4", Score: 96},
+		{Id: "5", Score: 95},
+		{Id: "6", Score: 94},
+		{Id: "7", Score: 93},
+		{Id: "8", Score: 92},
+	})
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -1095,21 +1039,21 @@ func TestServer_GetRecommends_Replacement(t *testing.T) {
 	s.GorseConfig.Recommend.EnableReplacement = true
 	defer s.Close(t)
 	// insert hidden items
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0", []cache.Scored{{"0", 100}})
+	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
 	err = s.CacheClient.SetInt(cache.HiddenItems, "0", 1)
 	assert.NoError(t, err)
 	// insert recommendation
-	err = s.CacheClient.AppendScores(cache.OfflineRecommend, "0",
-		cache.Scored{Id: "1", Score: 99},
-		cache.Scored{Id: "2", Score: 98},
-		cache.Scored{Id: "3", Score: 97},
-		cache.Scored{Id: "4", Score: 96},
-		cache.Scored{Id: "5", Score: 95},
-		cache.Scored{Id: "6", Score: 94},
-		cache.Scored{Id: "7", Score: 93},
-		cache.Scored{Id: "8", Score: 92},
-	)
+	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{
+		{Id: "1", Score: 99},
+		{Id: "2", Score: 98},
+		{Id: "3", Score: 97},
+		{Id: "4", Score: 96},
+		{Id: "5", Score: 95},
+		{Id: "6", Score: 94},
+		{Id: "7", Score: 93},
+		{Id: "8", Score: 92},
+	})
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -1144,7 +1088,7 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	s.GorseConfig.Recommend.NumFeedbackFallbackItemBased = 4
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
+	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"),
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert feedback
@@ -1254,7 +1198,7 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert recommendation
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
+	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"),
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
 	// insert feedback
@@ -1334,10 +1278,10 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
 	// insert offline recommendation
-	err := s.CacheClient.SetScores(cache.OfflineRecommend, "0",
+	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"),
 		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetCategoryScores(cache.OfflineRecommend, "0", "*",
+	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0", "*"),
 		[]cache.Scored{{"101", 99}, {"102", 98}, {"103", 97}, {"104", 96}})
 	assert.NoError(t, err)
 	// insert latest
@@ -1355,10 +1299,10 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		[]cache.Scored{{"109", 91}, {"110", 90}, {"111", 89}, {"112", 88}})
 	assert.NoError(t, err)
 	// insert collaborative filtering
-	err = s.CacheClient.SetScores(cache.CollaborativeRecommend, "0",
+	err = s.CacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, "0"),
 		[]cache.Scored{{"13", 79}, {"14", 78}, {"15", 77}, {"16", 76}})
 	assert.NoError(t, err)
-	err = s.CacheClient.SetCategoryScores(cache.CollaborativeRecommend, "0", "*",
+	err = s.CacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, "0", "*"),
 		[]cache.Scored{{"113", 79}, {"114", 78}, {"115", 77}, {"116", 76}})
 	assert.NoError(t, err)
 	// test popular fallback

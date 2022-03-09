@@ -455,34 +455,11 @@ func ParseInt(request *restful.Request, name string, fallback int) (value int, e
 	return
 }
 
-func (s *RestServer) getList(prefix, name string, request *restful.Request, response *restful.Response) {
-	var n, begin, end int
-	var err error
-	// read arguments
-	if begin, err = ParseInt(request, "offset", 0); err != nil {
-		BadRequest(response, err)
-		return
-	}
-	if n, err = ParseInt(request, "n", s.GorseConfig.Server.DefaultN); err != nil {
-		BadRequest(response, err)
-		return
-	}
-	end = begin + n - 1
-	// Get the popular list
-	items, err := s.CacheClient.GetScores(prefix, name, begin, end)
-	if err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// Send result
-	Ok(response, items)
-}
-
 func (s *RestServer) getSort(key string, request *restful.Request, response *restful.Response) {
-	var n, begin, end int
+	var n, offset int
 	var err error
 	// read arguments
-	if begin, err = ParseInt(request, "offset", 0); err != nil {
+	if offset, err = ParseInt(request, "offset", 0); err != nil {
 		BadRequest(response, err)
 		return
 	}
@@ -490,12 +467,15 @@ func (s *RestServer) getSort(key string, request *restful.Request, response *res
 		BadRequest(response, err)
 		return
 	}
-	end = begin + n - 1
 	// Get the popular list
-	items, err := s.CacheClient.GetSorted(key, begin, end)
+	items, err := s.CacheClient.GetSorted(key, offset, s.GorseConfig.Database.CacheSize)
 	if err != nil {
 		InternalServerError(response, err)
 		return
+	}
+	items = s.FilterOutHiddenScores(items)
+	if n > 0 && len(items) > n {
+		items = items[:n]
 	}
 	// Send result
 	Ok(response, items)
@@ -574,14 +554,14 @@ func (s *RestServer) getCategorizedCollaborative(request *restful.Request, respo
 	// Get user id
 	userId := request.PathParameter("user-id")
 	category := request.PathParameter("category")
-	s.getList(cache.OfflineRecommend, userId+"/"+category, request, response)
+	s.getSort(cache.Key(cache.OfflineRecommend, userId, category), request, response)
 }
 
 // getCollaborative gets cached recommended items from database.
 func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
 	// Get user id
 	userId := request.PathParameter("user-id")
-	s.getList(cache.OfflineRecommend, userId, request, response)
+	s.getSort(cache.Key(cache.OfflineRecommend, userId), request, response)
 }
 
 // Recommend items to users.
@@ -687,13 +667,13 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 	return nil
 }
 
-func (s *RestServer) filterOutHiddenScores(items []cache.Scored) []cache.Scored {
+func (s *RestServer) FilterOutHiddenScores(items []cache.Scored) []cache.Scored {
 	isHidden, err := s.CacheClient.Exists(cache.HiddenItems, cache.RemoveScores(items)...)
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return items
 	}
-	var results []cache.Scored
+	results := make([]cache.Scored, 0, len(items))
 	for i := range isHidden {
 		if isHidden[i] == 0 {
 			results = append(results, items[i])
@@ -726,11 +706,11 @@ type Recommender func(ctx *recommendContext) error
 func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		recommendation, err := s.CacheClient.GetCategoryScores(cache.OfflineRecommend, ctx.userId, ctx.category, 0, s.GorseConfig.Database.CacheSize)
+		recommendation, err := s.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		recommendation = s.filterOutHiddenScores(recommendation)
+		recommendation = s.FilterOutHiddenScores(recommendation)
 		for _, item := range recommendation {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -748,11 +728,11 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.GetCategoryScores(cache.CollaborativeRecommend, ctx.userId, ctx.category, 0, s.GorseConfig.Database.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		collaborativeRecommendation = s.filterOutHiddenScores(collaborativeRecommendation)
+		collaborativeRecommendation = s.FilterOutHiddenScores(collaborativeRecommendation)
 		for _, item := range collaborativeRecommendation {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -839,7 +819,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 				return errors.Trace(err)
 			}
 			// add unseen items
-			similarItems = s.filterOutHiddenScores(similarItems)
+			similarItems = s.FilterOutHiddenScores(similarItems)
 			for _, item := range similarItems {
 				if !ctx.excludeSet.Has(item.Id) {
 					candidates[item.Id] += item.Score
@@ -874,7 +854,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		items = s.filterOutHiddenScores(items)
+		items = s.FilterOutHiddenScores(items)
 		for _, item := range items {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -900,7 +880,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		items = s.filterOutHiddenScores(items)
+		items = s.FilterOutHiddenScores(items)
 		for _, item := range items {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)

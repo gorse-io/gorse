@@ -668,10 +668,10 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 }
 
 func (m *Master) getSort(key string, request *restful.Request, response *restful.Response, retType interface{}) {
-	var n, begin, end int
+	var n, offset int
 	var err error
 	// read arguments
-	if begin, err = server.ParseInt(request, "offset", 0); err != nil {
+	if offset, err = server.ParseInt(request, "offset", 0); err != nil {
 		server.BadRequest(response, err)
 		return
 	}
@@ -679,12 +679,15 @@ func (m *Master) getSort(key string, request *restful.Request, response *restful
 		server.BadRequest(response, err)
 		return
 	}
-	end = begin + n - 1
 	// Get the popular list
-	scores, err := m.CacheClient.GetSorted(key, begin, end)
+	scores, err := m.CacheClient.GetSorted(key, offset, m.GorseConfig.Database.CacheSize)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
+	}
+	scores = m.FilterOutHiddenScores(scores)
+	if n > 0 && len(scores) > n {
+		scores = scores[:n]
 	}
 	// Send result
 	switch retType.(type) {
