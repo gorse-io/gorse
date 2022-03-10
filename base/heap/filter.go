@@ -49,7 +49,7 @@ func (filter *TopKFilter) PopAll() ([]int32, []float32) {
 
 type weightedString struct {
 	item   string
-	weight float32
+	weight float64
 }
 
 // TopKStringFilter filters out top k strings with maximum weights.
@@ -80,7 +80,7 @@ func (filter *TopKStringFilter) Less(i, j int) bool {
 
 // Push pushes the element x onto the heap.
 // The complexity is O(log n) where n = h.Count().
-func (filter *TopKStringFilter) Push(item string, weight float32) {
+func (filter *TopKStringFilter) Push(item string, weight float64) {
 	filter.items = append(filter.items, weightedString{item, weight})
 	filter.up(filter.Len() - 1)
 	if filter.Len() > filter.k {
@@ -91,7 +91,7 @@ func (filter *TopKStringFilter) Push(item string, weight float32) {
 // Pop removes and returns the minimum element (according to Less) from the heap.
 // The complexity is O(log n) where n = h.Count().
 // Pop is equivalent to Remove(h, 0).
-func (filter *TopKStringFilter) pop() (string, float32) {
+func (filter *TopKStringFilter) pop() (string, float64) {
 	n := filter.Len() - 1
 	filter.Swap(0, n)
 	filter.down(0, n)
@@ -132,9 +132,9 @@ func (filter *TopKStringFilter) down(i0, n int) bool {
 }
 
 // PopAll pops all strings in the filter with decreasing order.
-func (filter *TopKStringFilter) PopAll() ([]string, []float32) {
+func (filter *TopKStringFilter) PopAll() ([]string, []float64) {
 	items := make([]string, filter.Len())
-	weights := make([]float32, filter.Len())
+	weights := make([]float64, filter.Len())
 	for i := len(items) - 1; i >= 0; i-- {
 		items[i], weights[i] = filter.pop()
 	}

@@ -87,8 +87,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.True(t, config.Recommend.EnableLatestRecommend)
 	assert.True(t, config.Recommend.EnableClickThroughPrediction)
 	assert.False(t, config.Recommend.EnableReplacement)
-	assert.Equal(t, float32(0.8), config.Recommend.PositiveReplacementDecay)
-	assert.Equal(t, float32(0.6), config.Recommend.ReadReplacementDecay)
+	assert.Equal(t, 0.8, config.Recommend.PositiveReplacementDecay)
+	assert.Equal(t, 0.6, config.Recommend.ReadReplacementDecay)
 }
 
 func TestSetDefault(t *testing.T) {

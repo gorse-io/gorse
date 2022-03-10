@@ -493,16 +493,16 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	latest, err := m.CacheClient.GetSorted(cache.Key(cache.LatestItems, ""), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
-		{items[7].ItemId, float32(items[7].Timestamp.Unix())},
-		{items[6].ItemId, float32(items[6].Timestamp.Unix())},
+		{items[8].ItemId, float64(items[8].Timestamp.Unix())},
+		{items[7].ItemId, float64(items[7].Timestamp.Unix())},
+		{items[6].ItemId, float64(items[6].Timestamp.Unix())},
 	}, latest)
 	latest, err = m.CacheClient.GetSorted(cache.Key(cache.LatestItems, "2"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
-		{items[8].ItemId, float32(items[8].Timestamp.Unix())},
-		{items[5].ItemId, float32(items[5].Timestamp.Unix())},
-		{items[2].ItemId, float32(items[2].Timestamp.Unix())},
+		{items[8].ItemId, float64(items[8].Timestamp.Unix())},
+		{items[5].ItemId, float64(items[5].Timestamp.Unix())},
+		{items[2].ItemId, float64(items[2].Timestamp.Unix())},
 	}, latest)
 
 	// check popular items

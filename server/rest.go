@@ -17,7 +17,6 @@ package server
 import (
 	"fmt"
 	"github.com/araddon/dateparse"
-	"github.com/chewxy/math32"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
@@ -31,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"math"
 	"modernc.org/mathutil"
 	"net/http"
 	"strconv"
@@ -635,7 +635,7 @@ type recommendContext struct {
 
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
-	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId), math32.Inf(-1), float32(time.Now().Unix()))
+	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId), math.Inf(-1), float64(float32(time.Now().Unix())))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -754,7 +754,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		candidates := make(map[string]float32)
+		candidates := make(map[string]float64)
 		// load similar users
 		similarUsers, err := s.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, ctx.userId), 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
@@ -811,7 +811,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 			userFeedback = userFeedback[:s.GorseConfig.Recommend.NumFeedbackFallbackItemBased]
 		}
 		// collect candidates
-		candidates := make(map[string]float32)
+		candidates := make(map[string]float64)
 		for _, feedback := range userFeedback {
 			// load similar items
 			similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.GorseConfig.Database.CacheSize)
@@ -1144,7 +1144,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		for _, category := range append([]string{""}, item.Categories...) {
 			timeScores[category] = append(timeScores[category], cache.Scored{
 				Id:    item.ItemId,
-				Score: float32(timestamp.Unix()),
+				Score: float64(timestamp.Unix()),
 			})
 			if popularScore > 0 {
 				popularScores[category] = append(popularScores[category], cache.Scored{
@@ -1262,7 +1262,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		}
 		popularScore, _ := s.CacheClient.GetSortedScore(cache.PopularItems, itemId)
 		for _, category := range append([]string{""}, item.Categories...) {
-			if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float32(item.Timestamp.Unix())}}); err != nil {
+			if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}); err != nil {
 				InternalServerError(response, err)
 				return
 			}
@@ -1385,7 +1385,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		}
 	}
 	// insert item to latest
-	if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float32(item.Timestamp.Unix())}}); err != nil {
+	if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1649,7 +1649,7 @@ func Text(response *restful.Response, content string) {
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 	if !s.GorseConfig.Recommend.EnableReplacement {
 		for _, v := range feedback {
-			err := s.CacheClient.AddSorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float32(v.Timestamp.Unix())}})
+			err := s.CacheClient.AddSorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float64(v.Timestamp.Unix())}})
 			if err != nil {
 				return errors.Trace(err)
 			}

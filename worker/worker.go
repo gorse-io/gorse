@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/lafikl/consistent"
 	cmap "github.com/orcaman/concurrent-map"
@@ -472,7 +471,7 @@ func (w *Worker) Recommend(users []data.User) {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
 				// collect candidates
-				scores := make(map[string]float32)
+				scores := make(map[string]float64)
 				for _, itemId := range positiveItems {
 					// load similar items
 					similarItems, err := w.cacheClient.GetSorted(cache.Key(cache.ItemNeighbors, itemId, category), 0, w.cfg.Database.CacheSize)
@@ -501,7 +500,7 @@ func (w *Worker) Recommend(users []data.User) {
 		// Recommender #3: insert user-based items
 		if w.cfg.Recommend.EnableUserBasedRecommend {
 			localStartTime := time.Now()
-			scores := make(map[string]float32)
+			scores := make(map[string]float64)
 			// load similar users
 			similarUsers, err := w.cacheClient.GetSorted(cache.Key(cache.UserNeighbors, userId), 0, w.cfg.Database.CacheSize)
 			if err != nil {
@@ -667,9 +666,9 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	for itemIndex, itemId := range itemIds {
 		if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.rankingModel.IsItemPredictable(int32(itemIndex)) {
 			prediction := w.rankingModel.InternalPredict(userIndex, int32(itemIndex))
-			recItemsFilters[""].Push(itemId, prediction)
+			recItemsFilters[""].Push(itemId, float64(prediction))
 			for _, category := range itemCache[itemId].Categories {
-				recItemsFilters[category].Push(itemId, prediction)
+				recItemsFilters[category].Push(itemId, float64(prediction))
 			}
 		}
 	}
@@ -695,12 +694,12 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId st
 	recommend := make(map[string][]string)
 	for category, catValues := range values {
 		recommendItems := make([]string, 0, len(catValues))
-		recommendScores := make([]float32, 0, len(catValues))
+		recommendScores := make([]float64, 0, len(catValues))
 		for i := range catValues {
 			itemId := w.rankingModel.GetItemIndex().ToName(catValues[i])
 			if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
 				recommendItems = append(recommendItems, itemId)
-				recommendScores = append(recommendScores, scores[category][i])
+				recommendScores = append(recommendScores, float64(scores[category][i]))
 			}
 		}
 		recommend[category] = recommendItems
@@ -730,7 +729,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 	for _, itemId := range itemIds {
 		topItems = append(topItems, cache.Scored{
 			Id:    itemId,
-			Score: w.rankingModel.Predict(userId, itemId),
+			Score: float64(w.rankingModel.Predict(userId, itemId)),
 		})
 	}
 	cache.SortScores(topItems)
@@ -765,7 +764,7 @@ func (w *Worker) rankByClickTroughRate(user data.User, candidates [][]string, it
 	for _, item := range items {
 		topItems = append(topItems, cache.Scored{
 			Id:    item.ItemId,
-			Score: w.clickModel.Predict(user.UserId, item.ItemId, user.Labels, item.Labels),
+			Score: float64(w.clickModel.Predict(user.UserId, item.ItemId, user.Labels, item.Labels)),
 		})
 	}
 	cache.SortScores(topItems)
@@ -794,7 +793,7 @@ func mergeAndShuffle(candidates [][]string) []cache.Scored {
 		pos[j]++
 		if !memo.Has(candidateId) {
 			memo.Add(candidateId)
-			recommend = append(recommend, cache.Scored{Score: math32.Exp(float32(-len(recommend))), Id: candidateId})
+			recommend = append(recommend, cache.Scored{Score: math.Exp(float64(-len(recommend))), Id: candidateId})
 		}
 	}
 	return recommend
@@ -828,7 +827,7 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 	}
 	// explore recommendation
 	var exploreRecommend []cache.Scored
-	score := float32(1)
+	score := 1.0
 	if len(exploitRecommend) > 0 {
 		score += exploitRecommend[0].Score
 	}
@@ -932,7 +931,7 @@ func (w *Worker) refreshCache(userId string) error {
 		var items []cache.Scored
 		for _, v := range feedback {
 			if v.Timestamp.Unix() > timeLimit.Unix() {
-				items = append(items, cache.Scored{Id: v.ItemId, Score: float32(v.Timestamp.Unix())})
+				items = append(items, cache.Scored{Id: v.ItemId, Score: float64(v.Timestamp.Unix())})
 			}
 		}
 		err = w.cacheClient.AddSorted(cache.Key(cache.IgnoreItems, userId), items)
@@ -992,18 +991,18 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 
 // replacement inserts historical items back to recommendation.
 func (w *Worker) replacement(recommend map[string][]cache.Scored, user data.User, feedbacks []data.Feedback, itemCache ItemCache) (map[string][]cache.Scored, error) {
-	upperBounds := make(map[string]float32)
-	lowerBounds := make(map[string]float32)
+	upperBounds := make(map[string]float64)
+	lowerBounds := make(map[string]float64)
 	newRecommend := make(map[string][]cache.Scored)
 	for category, scores := range recommend {
 		// find minimal score
 		if len(scores) > 0 {
 			s := cache.GetScores(scores)
-			upperBounds[category] = funk.MaxFloat32(s)
-			lowerBounds[category] = funk.MinFloat32(s)
+			upperBounds[category] = funk.MaxFloat64(s)
+			lowerBounds[category] = funk.MinFloat64(s)
 		} else {
-			upperBounds[category] = math32.Inf(1)
-			lowerBounds[category] = math32.Inf(-1)
+			upperBounds[category] = math.Inf(1)
+			lowerBounds[category] = math.Inf(-1)
 		}
 		// add scores to filters
 		newRecommend[category] = append(newRecommend[category], scores...)
@@ -1027,25 +1026,25 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user data.User
 			// 1. If click-through rate prediction model is available, use it.
 			// 2. If collaborative filtering model is available, use it.
 			// 3. Otherwise, give a random score.
-			var score float32
+			var score float64
 			if w.cfg.Recommend.EnableClickThroughPrediction && w.clickModel != nil {
-				score = w.clickModel.Predict(user.UserId, itemId, user.Labels, item.Labels)
+				score = float64(w.clickModel.Predict(user.UserId, itemId, user.Labels, item.Labels))
 			} else if w.rankingModel != nil && w.rankingModel.IsUserPredictable(w.rankingModel.GetUserIndex().ToNumber(user.UserId)) {
-				score = w.rankingModel.Predict(user.UserId, itemId)
+				score = float64(w.rankingModel.Predict(user.UserId, itemId))
 			} else {
 				upper := upperBounds[""]
 				lower := lowerBounds[""]
-				if !math32.IsInf(upper, 1) && !math32.IsInf(lower, -1) {
-					score = lower + rand.Float32()*(upper-lower)
+				if !math.IsInf(upper, 1) && !math.IsInf(lower, -1) {
+					score = lower + rand.Float64()*(upper-lower)
 				} else {
-					score = rand.Float32()
+					score = rand.Float64()
 				}
 			}
 			// replace item
 			for _, category := range append([]string{""}, item.Categories...) {
 				upperBound := upperBounds[category]
 				lowerBound := lowerBounds[category]
-				if !math32.IsInf(upperBound, 1) && !math32.IsInf(lowerBound, -1) {
+				if !math.IsInf(upperBound, 1) && !math.IsInf(lowerBound, -1) {
 					// decay item
 					score -= lowerBound
 					if score < 0 {

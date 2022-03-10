@@ -96,11 +96,11 @@ var (
 // Scored associate a id with a score.
 type Scored struct {
 	Id    string
-	Score float32
+	Score float64
 }
 
 // CreateScoredItems from items and scores.
-func CreateScoredItems(itemIds []string, scores []float32) []Scored {
+func CreateScoredItems(itemIds []string, scores []float64) []Scored {
 	if len(itemIds) != len(scores) {
 		panic("the length of itemIds and scores should be equal")
 	}
@@ -122,8 +122,8 @@ func RemoveScores(items []Scored) []string {
 }
 
 // GetScores resolve scores for a slice of Scored.
-func GetScores(s []Scored) []float32 {
-	scores := make([]float32, len(s))
+func GetScores(s []Scored) []float64 {
+	scores := make([]float64, len(s))
 	for i := range s {
 		scores[i] = s[i].Score
 	}
@@ -186,9 +186,9 @@ type Database interface {
 	AddSet(key string, members ...string) error
 	RemSet(key string, members ...string) error
 
-	GetSortedScore(key, member string) (float32, error)
+	GetSortedScore(key, member string) (float64, error)
 	GetSorted(key string, begin, end int) ([]Scored, error)
-	GetSortedByScore(key string, begin, end float32) ([]Scored, error)
+	GetSortedByScore(key string, begin, end float64) ([]Scored, error)
 	AddSorted(key string, scores []Scored) error
 	SetSorted(key string, scores []Scored) error
 	IncrSorted(key, member string) error

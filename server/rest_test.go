@@ -265,9 +265,9 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[4].ItemId, Score: float32(items[4].Timestamp.Unix())},
-			{Id: items[3].ItemId, Score: float32(items[3].Timestamp.Unix())},
-			{Id: items[2].ItemId, Score: float32(items[2].Timestamp.Unix())},
+			{Id: items[4].ItemId, Score: float64(items[4].Timestamp.Unix())},
+			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
+			{Id: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
 		})).
 		End()
 	apitest.New().
@@ -280,8 +280,8 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[3].ItemId, Score: float32(items[3].Timestamp.Unix())},
-			{Id: items[1].ItemId, Score: float32(items[1].Timestamp.Unix())},
+			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
+			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
 	// get popular items
@@ -356,9 +356,9 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[4].ItemId, Score: float32(items[4].Timestamp.Unix())},
-			{Id: items[2].ItemId, Score: float32(items[2].Timestamp.Unix())},
-			{Id: items[1].ItemId, Score: float32(items[1].Timestamp.Unix())},
+			{Id: items[4].ItemId, Score: float64(items[4].Timestamp.Unix())},
+			{Id: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
+			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
 	apitest.New().
@@ -371,7 +371,7 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[1].ItemId, Score: float32(items[1].Timestamp.Unix())},
+			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
 	// get popular items
@@ -461,7 +461,7 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: "2", Score: float32(timestamp.Unix())},
+			{Id: "2", Score: float64(timestamp.Unix())},
 		})).
 		End()
 	apitest.New().
@@ -539,7 +539,7 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: "2", Score: float32(timestamp.Unix())},
+			{Id: "2", Score: float64(timestamp.Unix())},
 		})).
 		End()
 	// get popular items

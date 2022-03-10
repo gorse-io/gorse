@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/bits-and-blooms/bitset"
-	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set/strset"
 	"github.com/stretchr/testify/assert"
 	"github.com/thoas/go-funk"
@@ -232,7 +231,7 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{"0", "1", "2", "3"}, read)
 	for _, v := range readCache {
-		assert.Greater(t, v.Score, float32(time.Now().Unix()))
+		assert.Greater(t, v.Score, float64(time.Now().Unix()))
 	}
 }
 
@@ -291,7 +290,7 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{"0", "1", "2", "3"}, read)
 	for _, v := range readCache {
-		assert.Greater(t, v.Score, float32(time.Now().Unix()))
+		assert.Greater(t, v.Score, float64(time.Now().Unix()))
 	}
 }
 
@@ -527,20 +526,20 @@ func TestRecommend_ColdStart(t *testing.T) {
 	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.cacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"10", math32.Exp(0)}, {"9", math32.Exp(-1)}, {"8", math32.Exp(-2)}}, recommends)
+	assert.Equal(t, []string{"10", "9", "8"}, cache.RemoveScores(recommends))
 	recommends, err = w.cacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0", "*"), 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"20", math32.Exp(0)}, {"19", math32.Exp(-1)}, {"18", math32.Exp(-2)}}, recommends)
+	assert.Equal(t, []string{"20", "19", "18"}, cache.RemoveScores(recommends))
 
 	// user not predictable
 	w.rankingModel = m
 	w.Recommend([]data.User{{UserId: "100"}})
 	recommends, err = w.cacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "100"), 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"10", math32.Exp(0)}, {"9", math32.Exp(-1)}, {"8", math32.Exp(-2)}}, recommends)
+	assert.Equal(t, []string{"10", "9", "8"}, cache.RemoveScores(recommends))
 	recommends, err = w.cacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "100", "*"), 0, -1)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{{"20", math32.Exp(0)}, {"19", math32.Exp(-1)}, {"18", math32.Exp(-2)}}, recommends)
+	assert.Equal(t, []string{"20", "19", "18"}, cache.RemoveScores(recommends))
 }
 
 func TestMergeAndShuffle(t *testing.T) {
@@ -562,7 +561,7 @@ func TestExploreRecommend(t *testing.T) {
 
 	recommend, err := w.exploreRecommend(cache.CreateScoredItems(
 		funk.ReverseStrings([]string{"1", "2", "3", "4", "5", "6", "7", "8"}),
-		funk.ReverseFloat32([]float32{1, 2, 3, 4, 5, 6, 7, 8})), strset.New(), "")
+		funk.ReverseFloat64([]float64{1, 2, 3, 4, 5, 6, 7, 8})), strset.New(), "")
 	assert.NoError(t, err)
 	items := cache.RemoveScores(recommend)
 	assert.Contains(t, items, "latest")
