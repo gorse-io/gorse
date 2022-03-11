@@ -15,6 +15,7 @@ package cache
 
 import (
 	"github.com/juju/errors"
+	"math"
 	"testing"
 	"time"
 
@@ -130,6 +131,17 @@ func testSort(t *testing.T, db Database) {
 		{"2", 1.2},
 		{"3", 1.3},
 	}, partItems)
+	// remove scores by score
+	err = db.AddSorted("sort", []Scored{
+		{"5", -5},
+		{"6", -6},
+	})
+	assert.NoError(t, err)
+	err = db.RemSortedByScore("sort", math.Inf(-1), -1)
+	assert.NoError(t, err)
+	partItems, err = db.GetSortedByScore("sort", math.Inf(-1), -1)
+	assert.NoError(t, err)
+	assert.Empty(t, partItems)
 	// Increase score
 	err = db.IncrSorted("sort", "0")
 	assert.NoError(t, err)

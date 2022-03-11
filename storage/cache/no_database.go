@@ -104,6 +104,11 @@ func (NoDatabase) GetSortedByScore(_ string, _, _ float64) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
+// RemSortedByScore method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) RemSortedByScore(_ string, _, _ float64) error {
+	return ErrNoDatabase
+}
+
 // AddSorted method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) AddSorted(_ string, _ []Scored) error {
 	return ErrNoDatabase

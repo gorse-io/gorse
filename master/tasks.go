@@ -30,7 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"modernc.org/mathutil"
+	"math"
 	"modernc.org/sortutil"
 	"sort"
 	"time"
@@ -69,10 +69,14 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save popular items to cache
 	for category, items := range popularItems {
-		for batchBegin := 0; batchBegin < len(items); batchBegin += batchSize {
-			batchEnd := mathutil.Min(len(items), batchBegin+batchSize)
-			if err = m.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), items[batchBegin:batchEnd]); err != nil {
-				base.Logger().Error("failed to cache popular items", zap.Error(err))
+		if err = m.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), items); err != nil {
+			base.Logger().Error("failed to cache popular items", zap.Error(err))
+		}
+		// reclaim "unpopular" items
+		if len(items) > 0 {
+			threshold := items[len(items)-1].Score - 1
+			if err = m.CacheClient.RemSortedByScore(cache.Key(cache.PopularItems, category), math.Inf(-1), threshold); err != nil {
+				base.Logger().Error("failed to reclaim \"unpopular\" items", zap.Error(err))
 			}
 		}
 	}
@@ -84,6 +88,13 @@ func (m *Master) runLoadDatasetTask() error {
 	for category, items := range latestItems {
 		if err = m.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), items); err != nil {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
+		}
+		// reclaim outdated items
+		if len(items) > 0 {
+			threshold := items[len(items)-1].Score - 1
+			if err = m.CacheClient.RemSortedByScore(cache.Key(cache.LatestItems, category), math.Inf(-1), threshold); err != nil {
+				base.Logger().Error("failed to reclaim outdated items", zap.Error(err))
+			}
 		}
 	}
 	if err = m.CacheClient.SetTime(cache.GlobalMeta, cache.LastUpdateLatestItemsTime, time.Now()); err != nil {
@@ -123,12 +134,6 @@ func (m *Master) runLoadDatasetTask() error {
 	// write categories to cache
 	if err = m.CacheClient.SetSet(cache.ItemCategories, rankingDataset.CategorySet.List()...); err != nil {
 		base.Logger().Error("failed to write categories to cache", zap.Error(err))
-	}
-	for i, categories := range rankingDataset.ItemCategories {
-		itemId := rankingDataset.ItemIndex.ToName(int32(i))
-		if err = m.CacheClient.SetSet(cache.Key(cache.ItemCategories, itemId), categories...); err != nil {
-			base.Logger().Error("failed to write categories to cache", zap.Error(err))
-		}
 	}
 
 	// split ranking dataset
@@ -1208,18 +1213,22 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	}
 
 	// collect popular items
-	popularItems = make(map[string][]cache.Scored)
+	popularItemFilters := make(map[string]*heap.TopKStringFilter)
+	popularItemFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 	for itemIndex, val := range popularCount {
-		popularItems[""] = append(popularItems[""], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float64(val)})
+		itemId := rankingDataset.ItemIndex.ToName(int32(itemIndex))
+		popularItemFilters[""].Push(itemId, float64(val))
 		for _, category := range rankingDataset.ItemCategories[itemIndex] {
-			if _, exist := popularItems[category]; !exist {
-				popularItems[category] = make([]cache.Scored, 0)
+			if _, exist := popularItemFilters[category]; !exist {
+				popularItemFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 			}
-			popularItems[category] = append(popularItems[category], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float64(val)})
+			popularItemFilters[category].Push(itemId, float64(val))
 		}
 	}
-	for _, items := range popularItems {
-		cache.SortScores(items)
+	popularItems = make(map[string][]cache.Scored)
+	for category, popularItemFilter := range popularItemFilters {
+		items, scores := popularItemFilter.PopAll()
+		popularItems[category] = cache.CreateScoredItems(items, scores)
 	}
 
 	m.taskMonitor.Finish(TaskLoadDataset)

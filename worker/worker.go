@@ -938,6 +938,10 @@ func (w *Worker) refreshCache(userId string) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		err = w.cacheClient.RemSortedByScore(cache.Key(cache.IgnoreItems, userId), math.Inf(-1), float64(timeLimit.Unix())-1)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }

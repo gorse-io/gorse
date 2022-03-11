@@ -635,7 +635,7 @@ type recommendContext struct {
 
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
-	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId), math.Inf(-1), float64(float32(time.Now().Unix())))
+	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId), math.Inf(-1), float64(time.Now().Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -770,11 +770,11 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !ctx.excludeSet.Has(feedback.ItemId) {
-					categories, err := s.CacheClient.GetSet(cache.Key(cache.ItemCategories, feedback.ItemId))
+					item, err := s.DataClient.GetItem(feedback.ItemId)
 					if err != nil {
 						return errors.Trace(err)
 					}
-					if ctx.category == "" || funk.ContainsString(categories, ctx.category) {
+					if ctx.category == "" || funk.ContainsString(item.Categories, ctx.category) {
 						candidates[feedback.ItemId] += user.Score
 					}
 				}
@@ -1153,6 +1153,10 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 				})
 			}
 		}
+		if err = s.deleteItemFromLatestPopularCache(item.ItemId, false); err != nil {
+			InternalServerError(response, err)
+			return
+		}
 		count++
 	}
 	err := s.DataClient.BatchInsertItems(items)
@@ -1167,14 +1171,6 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 			return
 		}
 		if err = s.CacheClient.AddSet(cache.ItemCategories, item.Categories...); err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		if err = s.deleteItemFromLatestPopularCache(item.ItemId, false); err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		if err = s.CacheClient.AddSet(cache.Key(cache.ItemCategories, item.ItemId), item.Categories...); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1225,6 +1221,13 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
+	// refresh category cache
+	if patch.Categories != nil {
+		if err := s.deleteItemFromLatestPopularCache(itemId, false); err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
 	if err := s.DataClient.ModifyItem(itemId, patch); err != nil {
 		InternalServerError(response, err)
 		return
@@ -1238,17 +1241,6 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 			err = s.CacheClient.Delete(cache.HiddenItems, itemId)
 		}
 		if err != nil && !errors.IsNotFound(err) {
-			InternalServerError(response, err)
-			return
-		}
-	}
-	// refresh category cache
-	if patch.Categories != nil {
-		if err := s.deleteItemFromLatestPopularCache(itemId, false); err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		if err := s.CacheClient.AddSet(cache.Key(cache.ItemCategories, itemId), patch.Categories...); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1320,17 +1312,17 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 
 func (s *RestServer) deleteItem(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
+	// delete items from latest and popular
+	if err := s.deleteItemFromLatestPopularCache(itemId, true); err != nil {
+		InternalServerError(response, err)
+		return
+	}
 	if err := s.DataClient.DeleteItem(itemId); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	// insert deleted item to cache
 	if err := s.CacheClient.SetInt(cache.HiddenItems, itemId, 1); err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// delete items from latest and popular
-	if err := s.deleteItemFromLatestPopularCache(itemId, true); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1342,10 +1334,15 @@ func (s *RestServer) deleteItemFromLatestPopularCache(itemId string, deleteItem 
 	if deleteItem {
 		deleteKeys = []string{cache.LatestItems, cache.PopularItems}
 	}
-	if categories, err := s.CacheClient.GetSet(cache.Key(cache.ItemCategories, itemId)); err != nil {
-		return err
+	if item, err := s.DataClient.GetItem(itemId); err != nil {
+		if errors.IsNotFound(err) {
+			// do nothing if the item doesn't exist
+			return nil
+		} else {
+			return err
+		}
 	} else {
-		for _, category := range categories {
+		for _, category := range item.Categories {
 			deleteKeys = append(deleteKeys, cache.Key(cache.LatestItems, category))
 			deleteKeys = append(deleteKeys, cache.Key(cache.PopularItems, category))
 		}
@@ -1355,7 +1352,7 @@ func (s *RestServer) deleteItemFromLatestPopularCache(itemId string, deleteItem 
 			return err
 		}
 	}
-	return s.CacheClient.Delete(cache.ItemCategories, itemId)
+	return nil
 }
 
 func (s *RestServer) insertItemCategory(request *restful.Request, response *restful.Response) {
@@ -1386,11 +1383,6 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 	}
 	// insert item to latest
 	if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}); err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// add category to cache
-	if err = s.CacheClient.AddSet(cache.Key(cache.ItemCategories, itemId), category); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1426,11 +1418,6 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 	}
 	// remove item from latest
 	if err = s.CacheClient.RemSorted(cache.Key(cache.LatestItems, category), itemId); err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// remove category from cache
-	if err = s.CacheClient.RemSet(cache.Key(cache.ItemCategories, itemId), category); err != nil {
 		InternalServerError(response, err)
 		return
 	}

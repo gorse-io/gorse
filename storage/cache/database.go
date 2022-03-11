@@ -60,7 +60,6 @@ const (
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
-	//	Categories of an item  - item_categories/{item_id}
 	ItemCategories = "item_categories"
 
 	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
@@ -189,6 +188,7 @@ type Database interface {
 	GetSortedScore(key, member string) (float64, error)
 	GetSorted(key string, begin, end int) ([]Scored, error)
 	GetSortedByScore(key string, begin, end float64) ([]Scored, error)
+	RemSortedByScore(key string, begin, end float64) error
 	AddSorted(key string, scores []Scored) error
 	SetSorted(key string, scores []Scored) error
 	IncrSorted(key, member string) error
