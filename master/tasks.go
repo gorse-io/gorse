@@ -307,7 +307,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 				recommends[i] = dataset.ItemIndex.ToName(elem[i])
 			}
 			if err := m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category),
-				cache.CreateScoredItems(recommends, scores)); err != nil {
+				cache.CreateScoredItems(recommends, base.ToFloat64s(scores))); err != nil {
 				return errors.Trace(err)
 			}
 		}
@@ -372,7 +372,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 				itemScores := make([]cache.Scored, len(neighbors[category]))
 				for i := range scores[category] {
 					itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[category][i])
-					itemScores[i].Score = -scores[category][i]
+					itemScores[i].Score = float64(-scores[category][i])
 				}
 				if err := m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category), itemScores); err != nil {
 					return errors.Trace(err)
@@ -536,7 +536,8 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		for i := range recommends {
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))), cache.CreateScoredItems(recommends, scores)); err != nil {
+		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))),
+			cache.CreateScoredItems(recommends, base.ToFloat64s(scores))); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.SetTime(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId)), time.Now()); err != nil {
@@ -598,7 +599,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		itemScores := make([]cache.Scored, len(neighbors))
 		for i := range scores {
 			itemScores[i].Id = dataset.UserIndex.ToName(neighbors[i])
-			itemScores[i].Score = -scores[i]
+			itemScores[i].Score = float64(-scores[i])
 		}
 		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))), itemScores); err != nil {
 			return errors.Trace(err)
@@ -1069,12 +1070,12 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
 			} else if !item.Timestamp.IsZero() { // add items to the latest items filter
-				latestItemsFilters[""].Push(item.ItemId, float32(item.Timestamp.Unix()))
+				latestItemsFilters[""].Push(item.ItemId, float64(item.Timestamp.Unix()))
 				for _, category := range item.Categories {
 					if _, exist := latestItemsFilters[category]; !exist {
 						latestItemsFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
 					}
-					latestItemsFilters[category].Push(item.ItemId, float32(item.Timestamp.Unix()))
+					latestItemsFilters[category].Push(item.ItemId, float64(item.Timestamp.Unix()))
 				}
 			}
 		}
@@ -1209,12 +1210,12 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	// collect popular items
 	popularItems = make(map[string][]cache.Scored)
 	for itemIndex, val := range popularCount {
-		popularItems[""] = append(popularItems[""], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float32(val)})
+		popularItems[""] = append(popularItems[""], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float64(val)})
 		for _, category := range rankingDataset.ItemCategories[itemIndex] {
 			if _, exist := popularItems[category]; !exist {
 				popularItems[category] = make([]cache.Scored, 0)
 			}
-			popularItems[category] = append(popularItems[category], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float32(val)})
+			popularItems[category] = append(popularItems[category], cache.Scored{Id: rankingDataset.ItemIndex.ToName(int32(itemIndex)), Score: float64(val)})
 		}
 	}
 	for _, items := range popularItems {

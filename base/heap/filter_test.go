@@ -50,7 +50,7 @@ func TestTopKStringFilter(t *testing.T) {
 	a.Push("30", 1)
 	elem, scores := a.PopAll()
 	assert.Equal(t, []string{"20", "10", "30"}, elem)
-	assert.Equal(t, []float32{8, 2, 1}, scores)
+	assert.Equal(t, []float64{8, 2, 1}, scores)
 	// Test a full adjacent vec
 	a = NewTopKStringFilter(3)
 	a.Push("10", 2)
@@ -63,5 +63,5 @@ func TestTopKStringFilter(t *testing.T) {
 	a.Push("32", 9)
 	elem, scores = a.PopAll()
 	assert.Equal(t, []string{"12", "32", "20"}, elem)
-	assert.Equal(t, []float32{10, 9, 8}, scores)
+	assert.Equal(t, []float64{10, 9, 8}, scores)
 }

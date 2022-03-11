@@ -12,13 +12,12 @@ require (
 	github.com/emicklei/go-restful/v3 v3.5.2
 	github.com/go-redis/redis/v8 v8.11.0
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorse-io/dashboard v0.0.0-20220221123215-3c20525d5e96
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.12
-	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f
-	github.com/juju/testing v0.0.0-20210324180055-18c50b0c2098 // indirect
+	github.com/juju/errors v0.0.0-20220203013757-bd733f3c86b9
+	github.com/juju/testing v0.0.0-20220203020004-a0ff61f03494 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.10
 	github.com/lafikl/consistent v0.0.0-20210222184039-5e8acd7e59f2
 	github.com/lib/pq v1.10.2
@@ -32,7 +31,6 @@ require (
 	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.0
 	github.com/thoas/go-funk v0.9.1
-	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
 	go.mongodb.org/mongo-driver v1.5.1
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.17.0

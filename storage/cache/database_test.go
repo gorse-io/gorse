@@ -158,7 +158,7 @@ func testSort(t *testing.T, db Database) {
 	// Get score
 	score, err := db.GetSortedScore("sort", "2")
 	assert.NoError(t, err)
-	assert.Equal(t, float32(1.2), score)
+	assert.Equal(t, 1.2, score)
 
 	// test set empty
 	err = db.SetSorted("sort", []Scored{})
@@ -174,7 +174,7 @@ func testSort(t *testing.T, db Database) {
 
 func TestScored(t *testing.T) {
 	itemIds := []string{"2", "4", "6"}
-	scores := []float32{2, 4, 6}
+	scores := []float64{2, 4, 6}
 	scored := []Scored{{Id: "2", Score: 2}, {Id: "4", Score: 4}, {Id: "6", Score: 6}}
 	assert.Equal(t, scored, CreateScoredItems(itemIds, scores))
 	assert.Equal(t, itemIds, RemoveScores(scored))

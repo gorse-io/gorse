@@ -270,7 +270,7 @@ func (r *Redis) RemSet(key string, members ...string) error {
 }
 
 // GetSortedScore get the score of a member from sorted set.
-func (r *Redis) GetSortedScore(key, member string) (float32, error) {
+func (r *Redis) GetSortedScore(key, member string) (float64, error) {
 	ctx := context.Background()
 	score, err := r.client.ZScore(ctx, key, member).Result()
 	if err != nil {
@@ -279,7 +279,7 @@ func (r *Redis) GetSortedScore(key, member string) (float32, error) {
 		}
 		return 0, err
 	}
-	return float32(score), nil
+	return score, nil
 }
 
 // GetSorted get scores from sorted set.
@@ -291,16 +291,16 @@ func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	}
 	results := make([]Scored, 0, len(members))
 	for _, member := range members {
-		results = append(results, Scored{Id: member.Member.(string), Score: float32(member.Score)})
+		results = append(results, Scored{Id: member.Member.(string), Score: member.Score})
 	}
 	return results, nil
 }
 
-func (r *Redis) GetSortedByScore(key string, begin, end float32) ([]Scored, error) {
+func (r *Redis) GetSortedByScore(key string, begin, end float64) ([]Scored, error) {
 	ctx := context.Background()
 	members, err := r.client.ZRangeByScoreWithScores(ctx, key, &redis.ZRangeBy{
-		Min:    strconv.FormatFloat(float64(begin), 'g', -1, 64),
-		Max:    strconv.FormatFloat(float64(end), 'g', -1, 64),
+		Min:    strconv.FormatFloat(begin, 'g', -1, 64),
+		Max:    strconv.FormatFloat(end, 'g', -1, 64),
 		Offset: 0,
 		Count:  -1,
 	}).Result()
@@ -309,7 +309,7 @@ func (r *Redis) GetSortedByScore(key string, begin, end float32) ([]Scored, erro
 	}
 	results := make([]Scored, 0, len(members))
 	for _, member := range members {
-		results = append(results, Scored{Id: member.Member.(string), Score: float32(member.Score)})
+		results = append(results, Scored{Id: member.Member.(string), Score: member.Score})
 	}
 	return results, nil
 }
