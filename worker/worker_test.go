@@ -794,7 +794,7 @@ func TestRankByClickTroughRate(t *testing.T) {
 	}
 	// rank items
 	w.clickModel = new(mockFactorizationMachine)
-	result, err := w.rankByClickTroughRate(data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache)
+	result, err := w.rankByClickTroughRate(&data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"5", "4", "3", "2", "1"}, cache.RemoveScores(result))
 	assert.IsDecreasing(t, cache.GetScores(result))
