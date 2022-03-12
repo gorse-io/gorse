@@ -10,10 +10,11 @@ cache_store = "redis://redis:6379"
 #   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 data_store = "mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse?parseTime=true"
 
 # The cache size for recommended/popular/latest items. The default value is 100.
-cache_size = 200
+cache_size = 100
 
 # Insert new users while inserting feedback. The default value is true.
 auto_insert_user = true
@@ -44,7 +45,7 @@ meta_timeout = 10               # cluster meta timeout (second)
 
 # This section declares settings for the server node.
 [server]
-default_n = 20                  # default number of returned items
+default_n = 10                  # default number of returned items
 api_key = ""                    # secret key for RESTful APIs (SSL required)
 
 # This section declares settings for recommendation.
@@ -54,7 +55,7 @@ api_key = ""                    # secret key for RESTful APIs (SSL required)
 popular_window = 30
 
 # The time period for model fitting (minutes). The default values is 60.
-fit_period = 10
+fit_period = 360
 
 # The time period for model searching (minutes). The default values is 100.
 search_period = 60
@@ -64,6 +65,9 @@ search_epoch = 100
 
 # The number of trials for model searching. The default values is 10.
 search_trials = 10
+
+# The time period to check recommendation for users (minutes). The default values is 1.
+check_recommend_period = 1
 
 # The time period to refresh recommendation for inactive users (days). The default values is 5.
 refresh_recommend_period = 1
@@ -75,6 +79,9 @@ refresh_recommend_period = 1
 # Recommenders are used in order. The default values is ["latest"].
 fallback_recommend = ["item_based", "latest"]
 
+# The number of feedback used in fallback item-based similar recommendation. The default values is 10.
+num_feedback_fallback_item_based = 10
+
 # The type of neighbors for items. There are three types:
 #   similar: Neighbors are found by number of common labels.
 #   related: Neighbors are found by number of common users.
@@ -83,6 +90,15 @@ fallback_recommend = ["item_based", "latest"]
 # The default values is "auto".
 item_neighbor_type = "similar"
 
+# Enable approximate item neighbor searching using vector index.
+enable_item_neighbor_index = false
+
+# Minimal recall for approximate item neighbor searching.
+item_neighbor_index_recall = 0.8
+
+# Maximal number of fit epochs for approximate item neighbor searching vector index.
+item_neighbor_index_fit_epoch = 3
+
 # The type of neighbors for users. There are three types:
 #   similar: Neighbors are found by number of common labels.
 #   related: Neighbors are found by number of common liked items.
@@ -90,6 +106,15 @@ item_neighbor_type = "similar"
 #         If this user have no labels, neighbors are found by number of common liked items.
 # The default values is "auto".
 user_neighbor_type = "similar"
+
+# Enable approximate user neighbor searching using vector index.
+enable_user_neighbor_index = false
+
+# Minimal recall for approximate user neighbor searching.
+user_neighbor_index_recall = 0.8
+
+# Maximal number of fit epochs for approximate user neighbor searching vector index.
+user_neighbor_index_fit_epoch = 3
 
 # Enable latest recommendation during offline recommendation. The default values is false.
 enable_latest_recommend = true
@@ -106,6 +131,15 @@ enable_item_based_recommend = false
 # Enable collaborative filtering recommendation during offline recommendation. The default values is true.
 enable_collaborative_recommend = true
 
+# Enable approximate collaborative filtering recommend using vector index.
+enable_collaborative_index = false
+
+# Minimal recall for approximate collaborative filtering recommend.
+collaborative_index_recall = 0.9
+
+# Maximal number of fit epochs for approximate collaborative filtering recommend vector index.
+collaborative_index_fit_epoch = 3
+
 # Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
 # would be merged randomly. The default values is true.
 enable_click_through_prediction = true
@@ -113,5 +147,14 @@ enable_click_through_prediction = true
 # The explore recommendation method is used to inject popular items or latest items into recommended result:
 #   popular: Recommend popular items to cold-start users.
 #   latest: Recommend latest items to cold-start users.
-# Recommenders are used in order. The default values is { popular = 0.0, latest = 0.0 }.
+# The default values is { popular = 0.0, latest = 0.0 }.
 explore_recommend = { popular = 0.1, latest = 0.2 }
+
+# Replace historical items back to recommendations.
+enable_replacement = false
+
+# Decay the weights of replaced items from positive feedbacks.
+positive_replacement_decay = 0.8
+
+# Decay the weights of replaced items from read feedbacks.
+read_replacement_decay = 0.6
