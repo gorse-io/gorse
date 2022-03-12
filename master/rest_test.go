@@ -679,7 +679,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
 	apitest.New().
 		Handler(s.handler).
-		Get("/api/dashboard/recommend/0/").
+		Get("/api/dashboard/recommend/0/_").
 		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).

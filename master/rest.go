@@ -596,7 +596,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		results, err = m.Recommend(userId, category, n, m.RecommendUserBased)
 	case "item_based":
 		results, err = m.Recommend(userId, category, n, m.RecommendItemBased)
-	case "":
+	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
 		for _, recommender := range m.GorseConfig.Recommend.FallbackRecommend {
 			switch recommender {

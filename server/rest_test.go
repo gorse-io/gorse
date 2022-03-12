@@ -1074,6 +1074,7 @@ func TestServer_GetRecommends_Replacement(t *testing.T) {
 func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	s := newMockServer(t)
 	s.GorseConfig.Recommend.NumFeedbackFallbackItemBased = 4
+	s.GorseConfig.Database.PositiveFeedbackType = []string{"a"}
 	defer s.Close(t)
 	// insert recommendation
 	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"),

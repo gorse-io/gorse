@@ -806,9 +806,14 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		start := time.Now()
 		// truncate user feedback
 		data.SortFeedbacks(ctx.userFeedback)
-		userFeedback := ctx.userFeedback
-		if s.GorseConfig.Recommend.NumFeedbackFallbackItemBased < len(userFeedback) {
-			userFeedback = userFeedback[:s.GorseConfig.Recommend.NumFeedbackFallbackItemBased]
+		userFeedback := make([]data.Feedback, 0, s.GorseConfig.Recommend.NumFeedbackFallbackItemBased)
+		for _, feedback := range ctx.userFeedback {
+			if s.GorseConfig.Recommend.NumFeedbackFallbackItemBased <= len(userFeedback) {
+				break
+			}
+			if funk.ContainsString(s.GorseConfig.Database.PositiveFeedbackType, feedback.FeedbackType) {
+				userFeedback = append(userFeedback, feedback)
+			}
 		}
 		// collect candidates
 		candidates := make(map[string]float64)
