@@ -25,7 +25,8 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be a 
 ## Quick Start
 
 - [Run Gorse manually](https://github.com/zhenghaoz/gorse/tree/master/cmd)
-- [Run Gorse with Docker Compose](https://github.com/zhenghaoz/gorse/tree/master/docker)
+- [Run Gorse on Docker Compose](https://github.com/zhenghaoz/gorse/tree/master/docker)
+- [Run Gorse on Kubernetes](https://github.com/zhenghaoz/gorse/tree/master/docker/deployments)
 - [Use Gorse to recommend awesome GitHub repositories](https://github.com/zhenghaoz/gitrec)
 - [Read official documents](https://docs.gorse.io/)
 - [Read develop roadmap](https://github.com/zhenghaoz/gorse/projects)
