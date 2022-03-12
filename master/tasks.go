@@ -69,15 +69,8 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// save popular items to cache
 	for category, items := range popularItems {
-		if err = m.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), items); err != nil {
+		if err = m.CacheClient.SetSorted(cache.Key(cache.PopularItems, category), items); err != nil {
 			base.Logger().Error("failed to cache popular items", zap.Error(err))
-		}
-		// reclaim "unpopular" items
-		if len(items) > 0 {
-			threshold := items[len(items)-1].Score - 1
-			if err = m.CacheClient.RemSortedByScore(cache.Key(cache.PopularItems, category), math.Inf(-1), threshold); err != nil {
-				base.Logger().Error("failed to reclaim \"unpopular\" items", zap.Error(err))
-			}
 		}
 	}
 	if err = m.CacheClient.SetTime(cache.GlobalMeta, cache.LastUpdatePopularItemsTime, time.Now()); err != nil {
