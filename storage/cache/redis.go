@@ -314,6 +314,14 @@ func (r *Redis) GetSortedByScore(key string, begin, end float64) ([]Scored, erro
 	return results, nil
 }
 
+func (r *Redis) RemSortedByScore(key string, begin, end float64) error {
+	ctx := context.Background()
+	return r.client.ZRemRangeByScore(ctx, key,
+		strconv.FormatFloat(begin, 'g', -1, 64),
+		strconv.FormatFloat(end, 'g', -1, 64)).
+		Err()
+}
+
 // AddSorted add scores to sorted set.
 func (r *Redis) AddSorted(key string, scores []Scored) error {
 	if len(scores) == 0 {

@@ -525,8 +525,4 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	categories, err := m.CacheClient.GetSet(cache.ItemCategories)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "1", "2"}, categories)
-	categories, err = m.CacheClient.GetSet(cache.Key(cache.ItemCategories, "2"))
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"2"}, categories)
-
 }

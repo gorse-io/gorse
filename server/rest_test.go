@@ -318,9 +318,6 @@ func TestServer_Items(t *testing.T) {
 	categories, err := s.CacheClient.GetSet(cache.ItemCategories)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"*"}, categories)
-	categories, err = s.CacheClient.GetSet(cache.Key(cache.ItemCategories, "2"))
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"*"}, categories)
 
 	// delete item
 	apitest.New().
@@ -342,9 +339,6 @@ func TestServer_Items(t *testing.T) {
 	isHidden, err := s.CacheClient.GetInt(cache.HiddenItems, "6")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, isHidden)
-	categories, err = s.CacheClient.GetSet(cache.Key(cache.ItemCategories, "6"))
-	assert.NoError(t, err)
-	assert.Empty(t, categories)
 	// get latest items
 	apitest.New().
 		Handler(s.handler).
@@ -525,9 +519,6 @@ func TestServer_Items(t *testing.T) {
 			Timestamp:  timestamp,
 		})).
 		End()
-	categories, err = s.CacheClient.GetSet(cache.Key(cache.ItemCategories, "2"))
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"-", "@"}, categories)
 	// get latest items
 	apitest.New().
 		Handler(s.handler).
@@ -581,9 +572,6 @@ func TestServer_Items(t *testing.T) {
 			Timestamp:  timestamp,
 		})).
 		End()
-	categories, err = s.CacheClient.GetSet(cache.Key(cache.ItemCategories, "2"))
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"-"}, categories)
 	// get latest items
 	apitest.New().
 		Handler(s.handler).
@@ -1243,10 +1231,6 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 		{ItemId: "12", Categories: []string{"*"}},
 		{ItemId: "48", Categories: []string{"*"}},
 	})
-	assert.NoError(t, err)
-	err = s.CacheClient.AddSet(cache.Key(cache.ItemCategories, "12"), "*")
-	assert.NoError(t, err)
-	err = s.CacheClient.AddSet(cache.Key(cache.ItemCategories, "48"), "*")
 	assert.NoError(t, err)
 	// test fallback
 	s.GorseConfig.Recommend.FallbackRecommend = []string{"user_based"}

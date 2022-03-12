@@ -51,7 +51,7 @@ func TestHNSW_InnerProduct(t *testing.T) {
 	idx, recall := builder.Build(0.9, 5, false)
 	assert.Greater(t, recall, float32(0.9))
 	recall = builder.evaluateTermSearch(idx, true, "prime")
-	assert.Greater(t, recall, float32(0.9))
+	assert.Greater(t, recall, float32(0.85))
 }
 
 func TestIVF_Cosine(t *testing.T) {
