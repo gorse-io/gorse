@@ -588,7 +588,7 @@ func (w *Worker) Recommend(users []data.User) {
 		results := make(map[string][]cache.Scored)
 		for category, catCandidates := range candidates {
 			if w.cfg.Recommend.EnableClickThroughPrediction && w.clickModel != nil {
-				results[category], err = w.rankByClickTroughRate(user, catCandidates, itemCache)
+				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache)
 				if err != nil {
 					base.Logger().Error("failed to rank items", zap.Error(err))
 					return errors.Trace(err)
@@ -607,7 +607,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// replacement
 		if w.cfg.Recommend.EnableReplacement {
-			if results, err = w.replacement(results, user, feedbacks, itemCache); err != nil {
+			if results, err = w.replacement(results, &user, feedbacks, itemCache); err != nil {
 				base.Logger().Error("failed to replace items", zap.Error(err))
 				return errors.Trace(err)
 			}
@@ -737,7 +737,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(user data.User, candidates [][]string, itemCache map[string]data.Item) ([]cache.Scored, error) {
+func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache map[string]data.Item) ([]cache.Scored, error) {
 	startTime := time.Now()
 	// concat candidates
 	memo := strset.New()
@@ -994,7 +994,7 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 }
 
 // replacement inserts historical items back to recommendation.
-func (w *Worker) replacement(recommend map[string][]cache.Scored, user data.User, feedbacks []data.Feedback, itemCache ItemCache) (map[string][]cache.Scored, error) {
+func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.User, feedbacks []data.Feedback, itemCache ItemCache) (map[string][]cache.Scored, error) {
 	upperBounds := make(map[string]float64)
 	lowerBounds := make(map[string]float64)
 	newRecommend := make(map[string][]cache.Scored)
