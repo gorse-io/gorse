@@ -956,7 +956,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 					ItemId:       itemId,
 					FeedbackType: writeBackFeedback,
 				},
-				Timestamp: time.Now().Add(time.Minute * time.Duration(writeBackDelay)),
+				Timestamp: time.Now().Add(time.Minute*time.Duration(writeBackDelay) - time.Second),
 			}
 			err = s.DataClient.BatchInsertFeedback([]data.Feedback{feedback}, false, false, false)
 			if err != nil {
