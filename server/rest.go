@@ -45,6 +45,7 @@ type RestServer struct {
 	HttpHost    string
 	HttpPort    int
 	IsDashboard bool
+	DisableLog  bool
 	WebService  *restful.WebService
 }
 
@@ -70,9 +71,9 @@ func (s *RestServer) StartHttpServer() {
 		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), nil)))
 }
 
-func LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	chain.ProcessFilter(req, resp)
-	if req.Request.URL.Path != "/api/dashboard/cluster" &&
+	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
 		base.Logger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
 			zap.Int("status_code", resp.StatusCode()))
@@ -103,7 +104,7 @@ func (s *RestServer) CreateWebService() {
 	ws := s.WebService
 	ws.Path("/api/").
 		Produces(restful.MIME_JSON).
-		Filter(LogFilter).
+		Filter(s.LogFilter).
 		Filter(s.AuthFilter)
 
 	/* Interactions with data store */
@@ -295,7 +296,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
 		Returns(200, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
-	ws.Route(ws.GET("/user/{user-id}/feedback/").To(s.getFeedbackByUser).
+	ws.Route(ws.GET("/user/{user-id}/feedback").To(s.getFeedbackByUser).
 		Doc("Get feedbacks by user id.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
