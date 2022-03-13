@@ -228,15 +228,17 @@ func (config *RecommendConfig) validate() {
 
 // ServerConfig is the configuration for the server.
 type ServerConfig struct {
-	APIKey   string `mapstructure:"api_key"`   // default number of returned items
-	DefaultN int    `mapstructure:"default_n"` // secret key for RESTful APIs (SSL required)
+	APIKey      string `mapstructure:"api_key"`      // default number of returned items
+	DefaultN    int    `mapstructure:"default_n"`    // secret key for RESTful APIs (SSL required)
+	EpsilonTime int    `mapstructure:"epsilon_time"` // clock error in the cluster in seconds
 }
 
 // LoadDefaultIfNil loads default settings if config is nil.
 func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
 	if config == nil {
 		return &ServerConfig{
-			DefaultN: 10,
+			DefaultN:    10,
+			EpsilonTime: 5,
 		}
 	}
 	return config
@@ -265,6 +267,7 @@ func init() {
 	defaultServerConfig := *(*ServerConfig)(nil).LoadDefaultIfNil()
 	viper.SetDefault("server.api_key", defaultServerConfig.APIKey)
 	viper.SetDefault("server.default_n", defaultServerConfig.DefaultN)
+	viper.SetDefault("server.epsilon_time", defaultServerConfig.EpsilonTime)
 	// Default recommend config
 	defaultRecommendConfig := *(*RecommendConfig)(nil).LoadDefaultIfNil()
 	viper.SetDefault("recommend.popular_window", defaultRecommendConfig.PopularWindow)
