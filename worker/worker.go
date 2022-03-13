@@ -917,13 +917,13 @@ func (w *Worker) refreshCache(userId string) error {
 	} else {
 		return errors.Trace(err)
 	}
-	// clear cache
-	err = w.cacheClient.SetSorted(cache.IgnoreItems, nil)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// load cache
-	if !w.cfg.Recommend.EnableReplacement {
+	// reload cache
+	if w.cfg.Recommend.EnableReplacement {
+		err = w.cacheClient.SetSorted(cache.IgnoreItems, nil)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
 		feedback, err := w.dataClient.GetUserFeedback(userId, true)
 		if err != nil {
 			return errors.Trace(err)

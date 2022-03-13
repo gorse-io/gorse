@@ -635,7 +635,8 @@ type recommendContext struct {
 
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
-	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId), math.Inf(-1), float64(time.Now().Unix()))
+	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId),
+		math.Inf(-1), float64(time.Now().Add(time.Duration(s.GorseConfig.Server.EpsilonTime)*time.Second).Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -956,7 +957,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 					ItemId:       itemId,
 					FeedbackType: writeBackFeedback,
 				},
-				Timestamp: time.Now().Add(time.Minute * time.Duration(writeBackDelay)),
+				Timestamp: startTime.Add(time.Minute * time.Duration(writeBackDelay)),
 			}
 			err = s.DataClient.BatchInsertFeedback([]data.Feedback{feedback}, false, false, false)
 			if err != nil {

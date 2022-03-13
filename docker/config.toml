@@ -47,6 +47,7 @@ meta_timeout = 10               # cluster meta timeout (second)
 [server]
 default_n = 10                  # default number of returned items
 api_key = ""                    # secret key for RESTful APIs (SSL required)
+epsilon_time = 5                # clock error in the cluster in seconds
 
 # This section declares settings for recommendation.
 [recommend]

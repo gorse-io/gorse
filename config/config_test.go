@@ -49,6 +49,7 @@ func TestLoadConfig(t *testing.T) {
 	// server configuration
 	assert.Equal(t, 10, config.Server.DefaultN)
 	assert.Equal(t, "", config.Server.APIKey)
+	assert.Equal(t, 5, config.Server.EpsilonTime)
 
 	// recommend configuration
 	assert.Equal(t, 30, config.Recommend.PopularWindow)
