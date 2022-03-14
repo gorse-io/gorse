@@ -161,10 +161,11 @@ func Key(keys ...string) string {
 	return builder.String()
 }
 
-func KeyVariadic(key0 string, keys ...string) string {
-	keys0 := []string{key0}
-	keys0 = append(keys0, keys...)
-	return Key(keys0...)
+func BatchKey(prefix string, keys ...string) []string {
+	for i, key := range keys {
+		keys[i] = Key(prefix, key)
+	}
+	return keys
 }
 
 // Database is the common interface for cache store.

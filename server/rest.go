@@ -689,7 +689,7 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 
 func (s *RestServer) filterOutHiddenScores(items []cache.Scored) []cache.Scored {
 	//isHidden, err := s.CacheClient.Exists(cache.Key()cache.HiddenItems, cache.RemoveScores(items)...)
-	isHidden, err := s.CacheClient.Exists(cache.KeyVariadic(cache.HiddenItems, cache.RemoveScores(items)...))
+	isHidden, err := s.CacheClient.Exists(cache.BatchKey(cache.HiddenItems, cache.RemoveScores(items)...)...)
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return items
@@ -708,7 +708,7 @@ func (s *RestServer) filterOutHiddenFeedback(feedbacks []data.Feedback) []data.F
 	for i, item := range feedbacks {
 		names[i] = item.ItemId
 	}
-	isHidden, err := s.CacheClient.Exists(cache.KeyVariadic(cache.HiddenItems, names...))
+	isHidden, err := s.CacheClient.Exists(cache.BatchKey(cache.HiddenItems, names...)...)
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return feedbacks

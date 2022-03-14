@@ -46,7 +46,7 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetScores(Key("", ""), 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.AppendScores(KeyVariadic("", ""))
+	err = database.AppendScores(Key("", ""))
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.ClearScores(Key("", ""))
 	assert.ErrorIs(t, err, ErrNoDatabase)

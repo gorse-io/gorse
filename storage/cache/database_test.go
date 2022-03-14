@@ -59,7 +59,7 @@ func testMeta(t *testing.T, db Database) {
 	assert.Equal(t, time.Month(4), valTime.Month())
 	assert.Equal(t, 8, valTime.Day())
 	// test exists
-	exists, err := db.Exists("meta", "1", "10000")
+	exists, err := db.Exists(BatchKey("meta", "1", "10000")...)
 	assert.NoError(t, err)
 	assert.Equal(t, []int{1, 0}, exists)
 }
