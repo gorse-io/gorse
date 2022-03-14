@@ -669,7 +669,7 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 }
 
 func (s *RestServer) FilterOutHiddenScores(items []cache.Scored) []cache.Scored {
-	isHidden, err := s.CacheClient.Exists(cache.HiddenItems, cache.RemoveScores(items)...)
+	isHidden, err := s.CacheClient.Exists(cache.BatchKey(cache.HiddenItems, cache.RemoveScores(items)...)...)
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return items
@@ -688,7 +688,7 @@ func (s *RestServer) filterOutHiddenFeedback(feedbacks []data.Feedback) []data.F
 	for i, item := range feedbacks {
 		names[i] = item.ItemId
 	}
-	isHidden, err := s.CacheClient.Exists(cache.HiddenItems, names...)
+	isHidden, err := s.CacheClient.Exists(cache.BatchKey(cache.HiddenItems, names...)...)
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return feedbacks
@@ -994,7 +994,7 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.SetTime(cache.LastModifyUserTime, temp.UserId, time.Now()); err != nil {
+	if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, temp.UserId), time.Now()); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1015,7 +1015,7 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.SetTime(cache.LastModifyUserTime, userId, time.Now()); err != nil {
+	if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, userId), time.Now()); err != nil {
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
@@ -1052,7 +1052,7 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	}
 	for _, user := range *temp {
 		// insert modify timestamp
-		if err := s.CacheClient.SetTime(cache.LastModifyUserTime, user.UserId, time.Now()); err != nil {
+		if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, user.UserId), time.Now()); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1172,7 +1172,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	}
 	// insert modify timestamp and categories
 	for _, item := range items {
-		if err = s.CacheClient.SetTime(cache.LastModifyItemTime, item.ItemId, time.Now()); err != nil {
+		if err = s.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, item.ItemId), time.Now()); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1242,9 +1242,9 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	if patch.IsHidden != nil {
 		var err error
 		if *patch.IsHidden {
-			err = s.CacheClient.SetInt(cache.HiddenItems, itemId, 1)
+			err = s.CacheClient.SetInt(cache.Key(cache.HiddenItems, itemId), 1)
 		} else {
-			err = s.CacheClient.Delete(cache.HiddenItems, itemId)
+			err = s.CacheClient.Delete(cache.Key(cache.HiddenItems, itemId))
 		}
 		if err != nil && !errors.IsNotFound(err) {
 			InternalServerError(response, err)
@@ -1273,7 +1273,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		}
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now()); err != nil {
+	if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, itemId), time.Now()); err != nil {
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
@@ -1328,7 +1328,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert deleted item to cache
-	if err := s.CacheClient.SetInt(cache.HiddenItems, itemId, 1); err != nil {
+	if err := s.CacheClient.SetInt(cache.Key(cache.HiddenItems, itemId), 1); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1476,14 +1476,14 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 		}
 
 		for _, userId := range users.List() {
-			err = s.CacheClient.SetTime(cache.LastModifyUserTime, userId, time.Now())
+			err = s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, userId), time.Now())
 			if err != nil {
 				InternalServerError(response, err)
 				return
 			}
 		}
 		for _, itemId := range items.List() {
-			err = s.CacheClient.SetTime(cache.LastModifyItemTime, itemId, time.Now())
+			err = s.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, itemId), time.Now())
 			if err != nil {
 				InternalServerError(response, err)
 				return

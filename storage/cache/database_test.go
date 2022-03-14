@@ -24,43 +24,43 @@ import (
 
 func testMeta(t *testing.T, db Database) {
 	// Set meta string
-	err := db.SetString("meta", "1", "2")
+	err := db.SetString(Key("meta", "1"), "2")
 	assert.NoError(t, err)
 	// Get meta string
-	value, err := db.GetString("meta", "1")
+	value, err := db.GetString(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, "2", value)
 	// Delete string
-	err = db.Delete("meta", "1")
+	err = db.Delete(Key("meta", "1"))
 	assert.NoError(t, err)
 	// Get meta not existed
-	value, err = db.GetString("meta", "1")
+	value, err = db.GetString(Key("meta", "1"))
 	assert.True(t, errors.IsNotFound(err))
 	assert.Equal(t, "", value)
 	// Set meta int
-	err = db.SetInt("meta", "1", 2)
+	err = db.SetInt(Key("meta", "1"), 2)
 	assert.NoError(t, err)
 	// Get meta int
-	valInt, err := db.GetInt("meta", "1")
+	valInt, err := db.GetInt(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, 2, valInt)
 	// increase meta int
-	err = db.IncrInt("meta", "1")
+	err = db.IncrInt(Key("meta", "1"))
 	assert.NoError(t, err)
-	valInt, err = db.GetInt("meta", "1")
+	valInt, err = db.GetInt(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, valInt)
 	// set meta time
-	err = db.SetTime("meta", "1", time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC))
+	err = db.SetTime(Key("meta", "1"), time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC))
 	assert.NoError(t, err)
 	// get meta time
-	valTime, err := db.GetTime("meta", "1")
+	valTime, err := db.GetTime(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1996, valTime.Year())
 	assert.Equal(t, time.Month(4), valTime.Month())
 	assert.Equal(t, 8, valTime.Day())
 	// test exists
-	exists, err := db.Exists("meta", "1", "10000")
+	exists, err := db.Exists(BatchKey("meta", "1", "10000")...)
 	assert.NoError(t, err)
 	assert.Equal(t, []int{1, 0}, exists)
 }

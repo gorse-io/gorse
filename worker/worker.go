@@ -362,7 +362,7 @@ func (w *Worker) Recommend(users []data.User) {
 		var recall float32
 		w.rankingIndex, recall = builder.Build(w.cfg.Recommend.ColIndexRecall, w.cfg.Recommend.ColIndexFitEpoch, false)
 		MatchingIndexRecall.Set(float64(recall))
-		if err = w.cacheClient.SetString(cache.GlobalMeta, cache.MatchingIndexRecall, base.FormatFloat32(recall)); err != nil {
+		if err = w.cacheClient.SetString(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), base.FormatFloat32(recall)); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		base.Logger().Info("complete building ranking index",
@@ -626,7 +626,7 @@ func (w *Worker) Recommend(users []data.User) {
 				return errors.Trace(err)
 			}
 		}
-		if err = w.cacheClient.SetTime(cache.LastUpdateUserRecommendTime, userId, time.Now()); err != nil {
+		if err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, userId), time.Now()); err != nil {
 			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
 
@@ -877,13 +877,13 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	}
 	// read active time
 	var err error
-	activeTime, err = w.cacheClient.GetTime(cache.LastModifyUserTime, userId)
+	activeTime, err = w.cacheClient.GetTime(cache.Key(cache.LastModifyUserTime, userId))
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
 	}
 	// read recommend time
-	recommendTime, err = w.cacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId)
+	recommendTime, err = w.cacheClient.GetTime(cache.Key(cache.LastUpdateUserRecommendTime, userId))
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
@@ -911,7 +911,7 @@ func loadUserHistoricalItems(database data.Database, userId string) ([]string, [
 func (w *Worker) refreshCache(userId string) error {
 	var timeLimit *time.Time
 	// read recommend time
-	recommendTime, err := w.cacheClient.GetTime(cache.LastUpdateUserRecommendTime, userId)
+	recommendTime, err := w.cacheClient.GetTime(cache.Key(cache.LastUpdateUserRecommendTime, userId))
 	if err == nil {
 		timeLimit = &recommendTime
 	} else {
