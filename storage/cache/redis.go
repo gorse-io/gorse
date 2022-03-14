@@ -35,10 +35,9 @@ func (r *Redis) Close() error {
 }
 
 // SetScores save a list of scored items to Redis.
-func (r *Redis) SetScores(prefix, name string, items []Scored) error {
+func (r *Redis) SetScores(key string, items []Scored) error {
 	startTime := time.Now()
 	var ctx = context.Background()
-	key := prefix + "/" + name
 	err := r.client.Del(ctx, key).Err()
 	if err != nil {
 		return errors.Trace(err)
@@ -58,10 +57,9 @@ func (r *Redis) SetScores(prefix, name string, items []Scored) error {
 }
 
 // GetScores returns a list of scored items from Redis.
-func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error) {
+func (r *Redis) GetScores(key string, begin, end int) ([]Scored, error) {
 	startTime := time.Now()
 	var ctx = context.Background()
-	key := prefix + "/" + name
 	res := make([]Scored, 0)
 	data, err := r.client.LRange(ctx, key, int64(begin), int64(end)).Result()
 	if err != nil {
@@ -80,26 +78,25 @@ func (r *Redis) GetScores(prefix, name string, begin, end int) ([]Scored, error)
 }
 
 // SetCategoryScores method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) SetCategoryScores(prefix, name, category string, items []Scored) error {
+func (r *Redis) SetCategoryScores(name, category string, items []Scored) error {
 	if category != "" {
 		name += "/" + category
 	}
-	return r.SetScores(prefix, name, items)
+	return r.SetScores(name, items)
 }
 
 // GetCategoryScores method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) GetCategoryScores(prefix, name, category string, begin, end int) ([]Scored, error) {
+func (r *Redis) GetCategoryScores(name, category string, begin, end int) ([]Scored, error) {
 	if category != "" {
 		name += "/" + category
 	}
-	return r.GetScores(prefix, name, begin, end)
+	return r.GetScores(name, begin, end)
 }
 
 // ClearScores clears a list of scored items in Redis.
-func (r *Redis) ClearScores(prefix, name string) error {
+func (r *Redis) ClearScores(key string) error {
 	startTime := time.Now()
 	var ctx = context.Background()
-	key := prefix + "/" + name
 	err := r.client.Del(ctx, key).Err()
 	if err == nil {
 		ClearScoresSeconds.Observe(time.Since(startTime).Seconds())
@@ -108,10 +105,9 @@ func (r *Redis) ClearScores(prefix, name string) error {
 }
 
 // AppendScores appends a list of scored items to Redis.
-func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
+func (r *Redis) AppendScores(key string, items ...Scored) error {
 	startTime := time.Now()
 	var ctx = context.Background()
-	key := prefix + "/" + name
 	for _, item := range items {
 		data, err := json.Marshal(item)
 		if err != nil {
@@ -127,9 +123,8 @@ func (r *Redis) AppendScores(prefix, name string, items ...Scored) error {
 }
 
 // GetString returns a string from Redis.
-func (r *Redis) GetString(prefix, name string) (string, error) {
+func (r *Redis) GetString(key string) (string, error) {
 	var ctx = context.Background()
-	key := prefix + "/" + name
 	val, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
@@ -141,9 +136,8 @@ func (r *Redis) GetString(prefix, name string) (string, error) {
 }
 
 // SetString saves a string to Redis.
-func (r *Redis) SetString(prefix, name, val string) error {
+func (r *Redis) SetString(key, val string) error {
 	var ctx = context.Background()
-	key := prefix + "/" + name
 	if err := r.client.Set(ctx, key, val, 0).Err(); err != nil {
 		return errors.Trace(err)
 	}
@@ -151,8 +145,8 @@ func (r *Redis) SetString(prefix, name, val string) error {
 }
 
 // GetInt returns a integer from Redis.
-func (r *Redis) GetInt(prefix, name string) (int, error) {
-	val, err := r.GetString(prefix, name)
+func (r *Redis) GetInt(key string) (int, error) {
+	val, err := r.GetString(key)
 	if err != nil {
 		return 0, nil
 	}
@@ -164,19 +158,18 @@ func (r *Redis) GetInt(prefix, name string) (int, error) {
 }
 
 // Exists check keys in Redis.
-func (r *Redis) Exists(prefix string, names ...string) ([]int, error) {
+func (r *Redis) Exists(key ...string) ([]int, error) {
 	ctx := context.Background()
 	pipeline := r.client.Pipeline()
-	commands := make([]*redis.IntCmd, len(names))
-	for i, name := range names {
-		key := prefix + "/" + name
-		commands[i] = pipeline.Exists(ctx, key)
+	commands := make([]*redis.IntCmd, len(key))
+	for i, name := range key {
+		commands[i] = pipeline.Exists(ctx, name)
 	}
 	_, err := pipeline.Exec(ctx)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	existences := make([]int, len(names))
+	existences := make([]int, len(key))
 	for i := range existences {
 		existences[i] = int(commands[i].Val())
 	}
@@ -184,14 +177,13 @@ func (r *Redis) Exists(prefix string, names ...string) ([]int, error) {
 }
 
 // SetInt saves a integer from Redis.
-func (r *Redis) SetInt(prefix, name string, val int) error {
-	return r.SetString(prefix, name, strconv.Itoa(val))
+func (r *Redis) SetInt(key string, val int) error {
+	return r.SetString(key, strconv.Itoa(val))
 }
 
 // IncrInt increase a integer in Redis.
-func (r *Redis) IncrInt(prefix, name string) error {
+func (r *Redis) IncrInt(key string) error {
 	var ctx = context.Background()
-	key := prefix + "/" + name
 	if err := r.client.Incr(ctx, key).Err(); err != nil {
 		return errors.Trace(err)
 	}
@@ -199,8 +191,8 @@ func (r *Redis) IncrInt(prefix, name string) error {
 }
 
 // GetTime returns a time from Redis.
-func (r *Redis) GetTime(prefix, name string) (time.Time, error) {
-	val, err := r.GetString(prefix, name)
+func (r *Redis) GetTime(key string) (time.Time, error) {
+	val, err := r.GetString(key)
 	if err != nil {
 		return time.Time{}, nil
 	}
@@ -212,14 +204,13 @@ func (r *Redis) GetTime(prefix, name string) (time.Time, error) {
 }
 
 // SetTime saves a time from Redis.
-func (r *Redis) SetTime(prefix, name string, val time.Time) error {
-	return r.SetString(prefix, name, val.String())
+func (r *Redis) SetTime(key string, val time.Time) error {
+	return r.SetString(key, val.String())
 }
 
 // Delete object from Redis.
-func (r *Redis) Delete(prefix, name string) error {
+func (r *Redis) Delete(key string) error {
 	ctx := context.Background()
-	key := prefix + "/" + name
 	return r.client.Del(ctx, key).Err()
 }
 

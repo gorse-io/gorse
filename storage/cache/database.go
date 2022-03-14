@@ -161,6 +161,13 @@ func Key(keys ...string) string {
 	return builder.String()
 }
 
+func BatchKey(prefix string, keys ...string) []string {
+	for i, key := range keys {
+		keys[i] = Key(prefix, key)
+	}
+	return keys
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
