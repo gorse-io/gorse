@@ -167,18 +167,25 @@ func Key(keys ...string) string {
 	return builder.String()
 }
 
+func BatchKey(prefix string, keys ...string) []string {
+	for i, key := range keys {
+		keys[i] = Key(prefix, key)
+	}
+	return keys
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
-	GetString(prefix, name string) (string, error)
-	SetString(prefix, name string, val string) error
-	GetTime(prefix, name string) (time.Time, error)
-	SetTime(prefix, name string, val time.Time) error
-	GetInt(prefix, name string) (int, error)
-	SetInt(prefix, name string, val int) error
-	IncrInt(prefix, name string) error
-	Delete(prefix, name string) error
-	Exists(prefix string, names ...string) ([]int, error)
+	GetString(name string) (string, error)
+	SetString(name string, val string) error
+	GetTime(name string) (time.Time, error)
+	SetTime(name string, val time.Time) error
+	GetInt(name string) (int, error)
+	SetInt(name string, val int) error
+	IncrInt(name string) error
+	Delete(name string) error
+	Exists(names ...string) ([]int, error)
 
 	GetSet(key string) ([]string, error)
 	SetSet(key string, members ...string) error

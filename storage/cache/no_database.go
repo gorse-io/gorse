@@ -25,47 +25,47 @@ func (NoDatabase) Close() error {
 }
 
 // GetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetString(_, _ string) (string, error) {
+func (NoDatabase) GetString(_ string) (string, error) {
 	return "", ErrNoDatabase
 }
 
 // SetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetString(_, _, _ string) error {
+func (NoDatabase) SetString(_, _ string) error {
 	return ErrNoDatabase
 }
 
 // GetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetInt(_, _ string) (int, error) {
+func (NoDatabase) GetInt(_ string) (int, error) {
 	return 0, ErrNoDatabase
 }
 
 // SetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetInt(_, _ string, _ int) error {
+func (NoDatabase) SetInt(_ string, _ int) error {
 	return ErrNoDatabase
 }
 
 // GetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetTime(_, _ string) (time.Time, error) {
+func (NoDatabase) GetTime(_ string) (time.Time, error) {
 	return time.Time{}, ErrNoDatabase
 }
 
 // SetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetTime(_, _ string, _ time.Time) error {
+func (NoDatabase) SetTime(_ string, _ time.Time) error {
 	return ErrNoDatabase
 }
 
 // IncrInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) IncrInt(_, _ string) error {
+func (NoDatabase) IncrInt(_ string) error {
 	return ErrNoDatabase
 }
 
 // Delete method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) Delete(_, _ string) error {
+func (NoDatabase) Delete(_ string) error {
 	return ErrNoDatabase
 }
 
 // Exists method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) Exists(_ string, _ ...string) ([]int, error) {
+func (NoDatabase) Exists(_ ...string) ([]int, error) {
 	return nil, ErrNoDatabase
 }
 
