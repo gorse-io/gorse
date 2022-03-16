@@ -7,7 +7,7 @@ on:
 
 jobs:
   docker_images:
-    name: Docker Images
+    name: docker images
     runs-on: ubuntu-latest
     strategy:
       matrix:

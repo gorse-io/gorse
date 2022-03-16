@@ -107,7 +107,6 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 			features = append(features, position+feature)
 		}
 		values = append(values, base.RepeatFloat32s(len(itemFeatures), dataset.NormValues.Get(i))...)
-		position += dataset.Index.CountItemLabels()
 	}
 	// append context features
 	if dataset.CtxFeatures != nil {

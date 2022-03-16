@@ -219,11 +219,3 @@ func ParseFloat32(val string) float32 {
 	}
 	return float32(f)
 }
-
-func ToFloat64s(a []float32) []float64 {
-	ret := make([]float64, len(a))
-	for i := range a {
-		ret[i] = float64(a[i])
-	}
-	return ret
-}

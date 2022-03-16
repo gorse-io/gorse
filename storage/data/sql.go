@@ -420,7 +420,6 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 			builder.WriteString(delimiter)
 			builder.WriteString("time_stamp = ?")
 			args = append(args, patch.Timestamp)
-			delimiter = ", "
 		}
 		builder.WriteString(" WHERE item_id = ?")
 		args = append(args, itemId)
@@ -456,7 +455,6 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 			builder.WriteString(delimiter)
 			builder.WriteString(fmt.Sprintf("time_stamp = $%d", len(args)+1))
 			args = append(args, patch.Timestamp)
-			delimiter = ", "
 		}
 		builder.WriteString(fmt.Sprintf(" WHERE item_id = $%d", len(args)+1))
 		args = append(args, itemId)
@@ -492,7 +490,6 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 			builder.WriteString(delimiter)
 			builder.WriteString("time_stamp = ?")
 			args = append(args, patch.Timestamp)
-			delimiter = ", "
 		}
 		builder.WriteString(" WHERE item_id = ?")
 		args = append(args, itemId)
@@ -803,7 +800,6 @@ func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
 			text, _ := json.Marshal(patch.Labels)
 			builder.WriteString("`labels` = ?")
 			args = append(args, text)
-			delimiter = ", "
 		}
 		builder.WriteString(" WHERE user_id = ?")
 		args = append(args, userId)
@@ -820,7 +816,6 @@ func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
 			text, _ := json.Marshal(patch.Labels)
 			builder.WriteString(fmt.Sprintf("labels = $%d", len(args)+1))
 			args = append(args, text)
-			delimiter = ", "
 		}
 		builder.WriteString(fmt.Sprintf(" WHERE user_id = $%d", len(args)+1))
 		args = append(args, userId)
@@ -837,7 +832,6 @@ func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
 			text, _ := json.Marshal(patch.Labels)
 			builder.WriteString("`labels` = ?")
 			args = append(args, string(text))
-			delimiter = ", "
 		}
 		builder.WriteString(" WHERE user_id = ?")
 		args = append(args, userId)

@@ -102,7 +102,6 @@ func TestMap(t *testing.T) {
 type Foo struct {
 	A int64
 	B []string
-	c int
 }
 
 type Bar struct {

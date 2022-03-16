@@ -1,0 +1,12 @@
+run:
+  go: 1.18
+
+linters-settings:
+  govet:
+    disable:
+      - composites
+
+linters:
+  disable:
+    - deadcode
+    - varcheck
