@@ -33,20 +33,20 @@ func init() {
 	redisDSN = env("REDIS_URI", "redis://127.0.0.1:6379/")
 }
 
-type mockRedis struct {
+type testRedis struct {
 	Database
 }
 
-func newMockRedis(t *testing.T) *mockRedis {
+func newMockRedis(t *testing.T) *testRedis {
 	var err error
-	db := new(mockRedis)
+	db := new(testRedis)
 	assert.NoError(t, err)
 	db.Database, err = Open(redisDSN)
 	assert.NoError(t, err)
 	return db
 }
 
-func (db *mockRedis) Close(t *testing.T) {
+func (db *testRedis) Close(t *testing.T) {
 	err := db.Database.Close()
 	assert.NoError(t, err)
 }

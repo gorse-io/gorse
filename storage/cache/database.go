@@ -15,8 +15,12 @@
 package cache
 
 import (
+	"context"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"sort"
 	"strings"
 	"time"
@@ -177,13 +181,14 @@ func BatchKey(prefix string, keys ...string) []string {
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
+	Init() error
+
 	GetString(name string) (string, error)
 	SetString(name string, val string) error
 	GetTime(name string) (time.Time, error)
 	SetTime(name string, val time.Time) error
 	GetInt(name string) (int, error)
 	SetInt(name string, val int) error
-	IncrInt(name string) error
 	Delete(name string) error
 	Exists(names ...string) ([]int, error)
 
@@ -198,14 +203,19 @@ type Database interface {
 	RemSortedByScore(key string, begin, end float64) error
 	AddSorted(key string, scores []Scored) error
 	SetSorted(key string, scores []Scored) error
-	IncrSorted(key, member string) error
 	RemSorted(key, member string) error
 }
 
-const redisPrefix = "redis://"
+const (
+	mySQLPrefix    = "mysql://"
+	mongoPrefix    = "mongodb://"
+	redisPrefix    = "redis://"
+	postgresPrefix = "postgres://"
+)
 
 // Open a connection to a database.
 func Open(path string) (Database, error) {
+	var err error
 	if strings.HasPrefix(path, redisPrefix) {
 		opt, err := redis.ParseURL(path)
 		if err != nil {
@@ -213,6 +223,19 @@ func Open(path string) (Database, error) {
 		}
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
+		return database, nil
+	} else if strings.HasPrefix(path, mongoPrefix) || strings.HasPrefix(path, "mongodb+srv://") {
+		// connect to database
+		database := new(MongoDB)
+		if database.client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(path)); err != nil {
+			return nil, errors.Trace(err)
+		}
+		// parse DSN and extract database name
+		if cs, err := connstring.ParseAndValidate(path); err != nil {
+			return nil, errors.Trace(err)
+		} else {
+			database.dbName = cs.Database
+		}
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
