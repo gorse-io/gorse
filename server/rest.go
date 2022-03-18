@@ -385,7 +385,7 @@ func (s *RestServer) CreateWebService() {
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("item-id", "item id").DataType("string")).
+		Param(ws.PathParameter("item-id", "item id").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
 		Returns(200, "OK", []string{}).
@@ -404,7 +404,7 @@ func (s *RestServer) CreateWebService() {
 		Doc("get neighbors of a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("user-id", "user id").DataType("string")).
+		Param(ws.PathParameter("user-id", "user id").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("integer")).
 		Param(ws.QueryParameter("offset", "offset of returned users").DataType("integer")).
 		Returns(200, "OK", []string{}).
