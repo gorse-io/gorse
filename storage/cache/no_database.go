@@ -24,6 +24,11 @@ func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
+// Init method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) Init() error {
+	return ErrNoDatabase
+}
+
 // GetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetString(_ string) (string, error) {
 	return "", ErrNoDatabase
@@ -51,11 +56,6 @@ func (NoDatabase) GetTime(_ string) (time.Time, error) {
 
 // SetTime method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) SetTime(_ string, _ time.Time) error {
-	return ErrNoDatabase
-}
-
-// IncrInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) IncrInt(_ string) error {
 	return ErrNoDatabase
 }
 
@@ -116,11 +116,6 @@ func (NoDatabase) AddSorted(_ string, _ []Scored) error {
 
 // SetSorted method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) SetSorted(_ string, _ []Scored) error {
-	return ErrNoDatabase
-}
-
-// IncrSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) IncrSorted(_, _ string) error {
 	return ErrNoDatabase
 }
 

@@ -34,6 +34,11 @@ func (r *Redis) Close() error {
 	return r.client.Close()
 }
 
+// Init nothing.
+func (r *Redis) Init() error {
+	return nil
+}
+
 // SetScores save a list of scored items to Redis.
 func (r *Redis) SetScores(key string, items []Scored) error {
 	startTime := time.Now()
@@ -163,15 +168,6 @@ func (r *Redis) Exists(keys ...string) ([]int, error) {
 // SetInt saves a integer from Redis.
 func (r *Redis) SetInt(key string, val int) error {
 	return r.SetString(key, strconv.Itoa(val))
-}
-
-// IncrInt increase a integer in Redis.
-func (r *Redis) IncrInt(key string) error {
-	var ctx = context.Background()
-	if err := r.client.Incr(ctx, key).Err(); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
 }
 
 // GetTime returns a time from Redis.
@@ -324,12 +320,6 @@ func (r *Redis) SetSorted(key string, scores []Scored) error {
 	}
 	_, err := pipeline.Exec(ctx)
 	return err
-}
-
-// IncrSorted increase score in sorted set.
-func (r *Redis) IncrSorted(key, member string) error {
-	ctx := context.Background()
-	return r.client.ZIncrBy(ctx, key, 1, member).Err()
 }
 
 // RemSorted method of NoDatabase returns ErrNoDatabase.
