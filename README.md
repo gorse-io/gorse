@@ -46,7 +46,11 @@ In addition, the administrator can perform system monitoring, data import and ex
   <img src="https://contrib.rocks/image?repo=zhenghaoz/gorse" />
 </a>
 
-Any contribution is appreciated: report a bug, give advice or even create a pull request.
+Any contribution is appreciated: report a bug, give advice or create a pull request. For new contributors:
+
+- Issues labeled ["help wanted"](https://github.com/zhenghaoz/gorse/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22) is friendly to new contributors (claim one by publishing an `/assign` comment).
+- Setup develop environment based on [Chapter 4: Developer's Guide](https://docs.gorse.io/chapter_4.html).
+- Discuss with other developers on [Discord](https://discord.gg/x6gAtNNkAE).
 
 ## Acknowledgments
 

@@ -1,0 +1,16 @@
+name: 'assign issues'
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  assign_issues:
+    name: Assign issues
+    if: ${{ !github.event.issue.pull_request && github.event.comment.body == '/assign' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Assign issue'
+        uses: pozil/auto-assign-issue@v1.4.0
+        with:
+          assignees: ${{ github.event.comment.user.login }}
