@@ -1,0 +1,16 @@
+name: 'assign issues'
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  assign_issues:
+    name: Assign issues
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo A comment on issue $NUMBER
+        env:
+          NUMBER: ${{ github.event.issue.number }}
