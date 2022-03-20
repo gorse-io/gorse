@@ -10,7 +10,7 @@ jobs:
     if: ${{ !github.event.issue.pull_request && github.event.comment.body == '/assign' }}
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          assign $NUMBER
-        env:
-          NUMBER: ${{ github.event.issue.number }}
+      - name: 'Assign issue'
+        uses: pozil/auto-assign-issue@v1.4.0
+        with:
+          assignees: ${{ github.event.comment.user.login }}
