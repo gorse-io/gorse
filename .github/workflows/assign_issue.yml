@@ -2,15 +2,15 @@ name: 'assign issues'
 
 on:
   issue_comment:
-    types: [created]
+    types: [created, edited]
 
 jobs:
   assign_issues:
     name: Assign issues
-    if: ${{ !github.event.issue.pull_request }}
+    if: ${{ !github.event.issue.pull_request && github.event.comment.body == '/assign' }}
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo A comment on issue $NUMBER
+          assign $NUMBER
         env:
           NUMBER: ${{ github.event.issue.number }}
