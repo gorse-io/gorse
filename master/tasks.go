@@ -305,7 +305,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 				recommends[i] = dataset.ItemIndex.ToName(elem[i])
 			}
 			if err := m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, dataset.ItemIndex.ToName(int32(itemId)), category),
-				cache.CreateScoredItems(recommends, base.ToFloat64s(scores))); err != nil {
+				cache.CreateScoredItems(recommends, scores)); err != nil {
 				return errors.Trace(err)
 			}
 		}
@@ -535,7 +535,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
 		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))),
-			cache.CreateScoredItems(recommends, base.ToFloat64s(scores))); err != nil {
+			cache.CreateScoredItems(recommends, scores)); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.SetTime(cache.Key(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId))), time.Now()); err != nil {

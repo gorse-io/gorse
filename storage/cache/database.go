@@ -103,14 +103,14 @@ type Scored struct {
 }
 
 // CreateScoredItems from items and scores.
-func CreateScoredItems(itemIds []string, scores []float64) []Scored {
+func CreateScoredItems[T float64 | float32](itemIds []string, scores []T) []Scored {
 	if len(itemIds) != len(scores) {
 		panic("the length of itemIds and scores should be equal")
 	}
 	items := make([]Scored, len(itemIds))
 	for i := range items {
 		items[i].Id = itemIds[i]
-		items[i].Score = scores[i]
+		items[i].Score = float64(scores[i])
 	}
 	return items
 }

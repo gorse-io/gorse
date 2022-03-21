@@ -134,8 +134,3 @@ func TestSetProductionLogger(t *testing.T) {
 		SetProductionLogger("/gorse/gorse.log")
 	})
 }
-
-func TestToFloat64s(t *testing.T) {
-	a := ToFloat64s([]float32{1, 2, 3})
-	assert.Equal(t, []float64{1, 2, 3}, a)
-}

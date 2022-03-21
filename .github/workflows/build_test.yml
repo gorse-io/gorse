@@ -10,7 +10,7 @@ on:
 
 jobs:
   unit_test:
-    name: Unit Test
+    name: unit tests
     runs-on: ubuntu-latest
 
     services:
@@ -76,10 +76,10 @@ jobs:
         unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
 
-    - name: Set up Go 1.17.x
+    - name: Set up Go 1.18.x
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17.x
+        go-version: 1.18.x
       id: go
 
     - name: Check out code into the Go module directory
@@ -114,7 +114,7 @@ jobs:
       run: bash <(curl -s https://codecov.io/bash)
 
   integrate_test:
-    name: Integrate Test
+    name: integrate tests
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
@@ -142,7 +142,7 @@ jobs:
       run: mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
 
   compat_test:
-    name: Compatibility Test
+    name: compatibility tests
     runs-on: ubuntu-latest
 
     services:
@@ -159,10 +159,10 @@ jobs:
           - 9221
 
     steps:
-      - name: Set up Go 1.17.x
+      - name: Set up Go 1.18.x
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17.x
+          go-version: 1.18.x
         id: go
 
       - name: Check out code into the Go module directory
@@ -177,3 +177,16 @@ jobs:
         run: go test ./storage/cache -run ^TestRedis_
         env:
           REDIS_URI: redis://localhost:${{ job.services.pika.ports[9221] }}/
+
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.18.x
+      - uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          args: --timeout 20m

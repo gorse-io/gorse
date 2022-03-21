@@ -6,7 +6,7 @@ on:
 
 jobs:
   assign_issues:
-    name: Assign issues
+    name: assign issues
     if: ${{ !github.event.issue.pull_request && github.event.comment.body == '/assign' }}
     runs-on: ubuntu-latest
     steps:
