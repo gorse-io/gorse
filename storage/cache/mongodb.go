@@ -299,7 +299,7 @@ func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {
 	for r.Next(ctx) {
 		var doc bson.Raw
 		if err = r.Decode(&doc); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 		scores = append(scores, Scored{
 			Id:    doc.Lookup("member").StringValue(),
