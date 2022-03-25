@@ -23,6 +23,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"gonum.org/v1/gonum/mat"
@@ -423,7 +424,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		fitStart := time.Now()
 		// Training epoch
 		cost := make([]float32, config.Jobs)
-		_ = base.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
+		_ = parallel.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex int32
 			var ratingCount int
@@ -723,7 +724,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Y^T Y
 		c.Mul(als.ItemFactor.T(), als.ItemFactor)
 		c.Scale(als.weight, c)
-		err := base.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
+		err := parallel.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
 			a[workerId].Copy(c)
 			b := mat.NewVecDense(als.nFactors, nil)
 			for _, itemIndex := range trainSet.UserFeedback[userIndex] {
@@ -747,7 +748,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// X^T X
 		c.Mul(als.UserFactor.T(), als.UserFactor)
 		c.Scale(als.weight, c)
-		err = base.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
+		err = parallel.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
 			a[workerId].Copy(c)
 			b := mat.NewVecDense(als.nFactors, nil)
 			for _, index := range trainSet.ItemFeedback[itemIndex] {
@@ -1059,7 +1060,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 		}
-		_ = base.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
+		_ = parallel.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
 			userFeedback := trainSet.UserFeedback[userIndex]
 			for _, i := range userFeedback {
 				userPredictions[workerId][i] = ccd.InternalPredict(int32(userIndex), i)
@@ -1100,7 +1101,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 		}
-		_ = base.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
+		_ = parallel.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
 			itemFeedback := trainSet.ItemFeedback[itemIndex]
 			for _, u := range itemFeedback {
 				itemPredictions[workerId][u] = ccd.InternalPredict(u, int32(itemIndex))

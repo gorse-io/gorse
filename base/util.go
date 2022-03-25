@@ -73,6 +73,16 @@ func SetDevelopmentLogger(outputPaths ...string) {
 	}
 }
 
+func CloseLogger() {
+	cfg := zap.NewProductionConfig()
+	cfg.Level = zap.NewAtomicLevelAt(zap.FatalLevel)
+	var err error
+	logger, err = cfg.Build()
+	if err != nil {
+		panic(err)
+	}
+}
+
 // RangeInt generate a slice [0, ..., n-1].
 func RangeInt(n int) []int {
 	a := make([]int, n)

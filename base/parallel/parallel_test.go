@@ -11,18 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package base
+package parallel
 
 import (
 	"fmt"
 	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base"
 	"testing"
 	"time"
 )
 
 func TestParallel(t *testing.T) {
-	a := RangeInt(10000)
+	a := base.RangeInt(10000)
 	b := make([]int, len(a))
 	workerIds := make([]int, len(a))
 	// multiple threads
@@ -48,7 +49,7 @@ func TestParallel(t *testing.T) {
 }
 
 func TestBatchParallel(t *testing.T) {
-	a := RangeInt(10000)
+	a := base.RangeInt(10000)
 	b := make([]int, len(a))
 	workerIds := make([]int, len(a))
 	// multiple threads
