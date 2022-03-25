@@ -96,7 +96,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.Equal(t, []string{"8", "6", "4"}, cache.RemoveScores(similar))
 
 	// similar items (common labels)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeSimilar
 	m.runFindItemNeighborsTask(dataset)
@@ -111,9 +111,9 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.Equal(t, []string{"0", "2", "3"}, cache.RemoveScores(similar))
 
 	// similar items (auto)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, "9"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeAuto
 	m.runFindItemNeighborsTask(dataset)
@@ -202,7 +202,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.Equal(t, []string{"8", "6", "4"}, cache.RemoveScores(similar))
 
 	// similar items (common labels)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeSimilar
 	m.runFindItemNeighborsTask(dataset)
@@ -217,9 +217,9 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.Equal(t, []string{"0", "2", "3"}, cache.RemoveScores(similar))
 
 	// similar items (auto)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, "9"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeAuto
 	m.runFindItemNeighborsTask(dataset)
@@ -285,7 +285,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeSimilar
 	m.runFindUserNeighborsTask(dataset)
@@ -296,9 +296,9 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, "9"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeAuto
 	m.runFindUserNeighborsTask(dataset)
@@ -367,7 +367,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeSimilar
 	m.runFindUserNeighborsTask(dataset)
@@ -378,9 +378,9 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, "8"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	err = m.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, "9"), time.Now())
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeAuto
 	m.runFindUserNeighborsTask(dataset)

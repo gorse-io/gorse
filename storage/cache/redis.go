@@ -16,10 +16,10 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/araddon/dateparse"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"strconv"
 	"time"
 )
@@ -39,76 +39,16 @@ func (r *Redis) Init() error {
 	return nil
 }
 
-// SetScores save a list of scored items to Redis.
-func (r *Redis) SetScores(key string, items []Scored) error {
-	startTime := time.Now()
+func (r *Redis) Set(values ...Value) error {
 	var ctx = context.Background()
-	err := r.client.Del(ctx, key).Err()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	for _, item := range items {
-		data, err := json.Marshal(item)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = r.client.RPush(ctx, key, data).Err()
-		if err != nil {
+	p := r.client.Pipeline()
+	for _, v := range values {
+		if err := p.Set(ctx, v.name, v.value, 0).Err(); err != nil {
 			return errors.Trace(err)
 		}
 	}
-	SetScoresSeconds.Observe(time.Since(startTime).Seconds())
-	return nil
-}
-
-// GetScores returns a list of scored items from Redis.
-func (r *Redis) GetScores(key string, begin, end int) ([]Scored, error) {
-	startTime := time.Now()
-	var ctx = context.Background()
-	res := make([]Scored, 0)
-	data, err := r.client.LRange(ctx, key, int64(begin), int64(end)).Result()
-	if err != nil {
-		return nil, err
-	}
-	for _, s := range data {
-		var item Scored
-		err = json.Unmarshal([]byte(s), &item)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, item)
-	}
-	GetScoresSeconds.Observe(time.Since(startTime).Seconds())
-	return res, err
-}
-
-// ClearScores clears a list of scored items in Redis.
-func (r *Redis) ClearScores(key string) error {
-	startTime := time.Now()
-	var ctx = context.Background()
-	err := r.client.Del(ctx, key).Err()
-	if err == nil {
-		ClearScoresSeconds.Observe(time.Since(startTime).Seconds())
-	}
-	return err
-}
-
-// AppendScores appends a list of scored items to Redis.
-func (r *Redis) AppendScores(key string, items ...Scored) error {
-	startTime := time.Now()
-	var ctx = context.Background()
-	for _, item := range items {
-		data, err := json.Marshal(item)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = r.client.RPush(ctx, key, data).Err()
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	AppendScoresSeconds.Observe(time.Since(startTime).Seconds())
-	return nil
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 // GetString returns a string from Redis.
@@ -122,15 +62,6 @@ func (r *Redis) GetString(key string) (string, error) {
 		return "", err
 	}
 	return val, err
-}
-
-// SetString saves a string to Redis.
-func (r *Redis) SetString(key, val string) error {
-	var ctx = context.Background()
-	if err := r.client.Set(ctx, key, val, 0).Err(); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
 }
 
 // GetInt returns a integer from Redis.
@@ -165,11 +96,6 @@ func (r *Redis) Exists(keys ...string) ([]int, error) {
 	return existences, nil
 }
 
-// SetInt saves a integer from Redis.
-func (r *Redis) SetInt(key string, val int) error {
-	return r.SetString(key, strconv.Itoa(val))
-}
-
 // GetTime returns a time from Redis.
 func (r *Redis) GetTime(key string) (time.Time, error) {
 	val, err := r.GetString(key)
@@ -181,11 +107,6 @@ func (r *Redis) GetTime(key string) (time.Time, error) {
 		return time.Time{}, nil
 	}
 	return tm, nil
-}
-
-// SetTime saves a time from Redis.
-func (r *Redis) SetTime(key string, val time.Time) error {
-	return r.SetString(key, val.String())
 }
 
 // Delete object from Redis.
@@ -240,17 +161,29 @@ func (r *Redis) RemSet(key string, members ...string) error {
 	return r.client.SRem(ctx, key, members).Err()
 }
 
-// GetSortedScore get the score of a member from sorted set.
-func (r *Redis) GetSortedScore(key, member string) (float64, error) {
+// GetSortedScores get scores of members from sorted sets.
+func (r *Redis) GetSortedScores(members ...SetMember) ([]float64, error) {
 	ctx := context.Background()
-	score, err := r.client.ZScore(ctx, key, member).Result()
-	if err != nil {
-		if err == redis.Nil {
-			return 0, errors.Annotate(ErrObjectNotExist, key)
-		}
-		return 0, err
+	p := r.client.Pipeline()
+	results := lo.Map(members, func(member SetMember, i int) *redis.FloatCmd {
+		return p.ZScore(ctx, member.name, member.member)
+	})
+	_, err := p.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return nil, errors.Trace(err)
 	}
-	return score, nil
+	scores := make([]float64, len(members))
+	for i, result := range results {
+		score, err := result.Result()
+		if err == redis.Nil {
+			scores[i] = 0
+		} else if err != nil {
+			return nil, errors.Trace(err)
+		} else {
+			scores[i] = score
+		}
+	}
+	return scores, nil
 }
 
 // GetSorted get scores from sorted set.
@@ -294,16 +227,20 @@ func (r *Redis) RemSortedByScore(key string, begin, end float64) error {
 }
 
 // AddSorted add scores to sorted set.
-func (r *Redis) AddSorted(key string, scores []Scored) error {
-	if len(scores) == 0 {
-		return nil
-	}
+func (r *Redis) AddSorted(sortedSets ...SortedSet) error {
 	ctx := context.Background()
-	members := make([]*redis.Z, 0, len(scores))
-	for _, score := range scores {
-		members = append(members, &redis.Z{Member: score.Id, Score: float64(score.Score)})
+	p := r.client.Pipeline()
+	for _, sorted := range sortedSets {
+		if len(sorted.scores) > 0 {
+			members := make([]*redis.Z, 0, len(sorted.scores))
+			for _, score := range sorted.scores {
+				members = append(members, &redis.Z{Member: score.Id, Score: score.Score})
+			}
+			p.ZAdd(ctx, sorted.name, members...)
+		}
 	}
-	return r.client.ZAdd(ctx, key, members...).Err()
+	_, err := p.Exec(ctx)
+	return err
 }
 
 // SetSorted set scores in sorted set and clear previous scores.

@@ -362,7 +362,7 @@ func (w *Worker) Recommend(users []data.User) {
 		var recall float32
 		w.rankingIndex, recall = builder.Build(w.cfg.Recommend.ColIndexRecall, w.cfg.Recommend.ColIndexFitEpoch, false)
 		MatchingIndexRecall.Set(float64(recall))
-		if err = w.cacheClient.SetString(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), base.FormatFloat32(recall)); err != nil {
+		if err = w.cacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), base.FormatFloat32(recall))); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		base.Logger().Info("complete building ranking index",
@@ -626,7 +626,7 @@ func (w *Worker) Recommend(users []data.User) {
 				return errors.Trace(err)
 			}
 		}
-		if err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, userId), time.Now()); err != nil {
+		if err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, userId), time.Now())); err != nil {
 			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
 
@@ -934,7 +934,7 @@ func (w *Worker) refreshCache(userId string) error {
 				items = append(items, cache.Scored{Id: v.ItemId, Score: float64(v.Timestamp.Unix())})
 			}
 		}
-		err = w.cacheClient.AddSorted(cache.Key(cache.IgnoreItems, userId), items)
+		err = w.cacheClient.AddSorted(cache.Sorted(cache.Key(cache.IgnoreItems, userId), items))
 		if err != nil {
 			return errors.Trace(err)
 		}

@@ -319,7 +319,7 @@ func (m *Master) checkDataImported() bool {
 		return false
 	}
 	if isDataImported > 0 {
-		err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.DataImported), 0)
+		err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 0))
 		if err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}
@@ -329,7 +329,7 @@ func (m *Master) checkDataImported() bool {
 }
 
 func (m *Master) notifyDataImported() {
-	err := m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.DataImported), 1)
+	err := m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 1))
 	if err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}

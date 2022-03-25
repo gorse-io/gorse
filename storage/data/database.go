@@ -115,6 +115,7 @@ type Database interface {
 	Close() error
 	Optimize() error
 	BatchInsertItems(items []Item) error
+	BatchGetItems(itemIds []string) ([]Item, error)
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
 	ModifyItem(itemId string, patch ItemPatch) error

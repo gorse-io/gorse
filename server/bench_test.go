@@ -390,16 +390,16 @@ func BenchmarkInsertItem(b *testing.B) {
 			SetBody(&data.Item{
 				ItemId: fmt.Sprintf("item_%v", i),
 				Labels: []string{
-					fmt.Sprintf("label%d001", i),
-					fmt.Sprintf("label%d002", i),
+					fmt.Sprintf("label_%d", i),
+					fmt.Sprintf("label_%d", i*2),
 				},
 				Categories: []string{
-					fmt.Sprintf("category%d001", i),
-					fmt.Sprintf("category%d001", i),
+					fmt.Sprintf("category_%d", i),
+					fmt.Sprintf("category_%d", i*2),
 				},
 				IsHidden:  i%2 == 0,
 				Timestamp: time.Now(),
-				Comment:   fmt.Sprintf("add label for item: %d", i),
+				Comment:   fmt.Sprintf("comment_%d", i),
 			}).
 			Post(s.address + "/api/item")
 		require.NoError(b, err)
@@ -417,7 +417,6 @@ func BenchmarkPatchItem(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		itemIndex := i % numInitItems
 		times := i / numInitItems
-		comment := fmt.Sprintf("add label for item: %d, updated %d times", itemIndex, times)
 		isHidden := false
 		if i%2 == 0 {
 			isHidden = true
@@ -426,13 +425,13 @@ func BenchmarkPatchItem(b *testing.B) {
 		r, err := client.R().
 			SetBody(&data.ItemPatch{
 				Labels: []string{
-					fmt.Sprintf("label%d001,updated %d times", itemIndex, times),
-					fmt.Sprintf("label%d002,updated %d times", itemIndex, times),
+					fmt.Sprintf("label%d_%d", itemIndex, times),
+					fmt.Sprintf("label%d_%d", itemIndex, times),
 				},
-				Comment: &comment,
+				Comment: proto.String(fmt.Sprintf("modified_comment_%d", i)),
 				Categories: []string{
-					fmt.Sprintf("category%d001, updated %d times", i, times),
-					fmt.Sprintf("category%d001, updated %d times", i, times),
+					fmt.Sprintf("category%d_%d", i, times),
+					fmt.Sprintf("category%d_%d", i, times),
 				},
 				IsHidden:  &isHidden,
 				Timestamp: &now,
@@ -483,10 +482,10 @@ func BenchmarkInsertItems(b *testing.B) {
 					items = append(items, data.Item{
 						ItemId: itemId,
 						Labels: []string{
-							fmt.Sprintf("label001 for item:%s", itemId),
-							fmt.Sprintf("label002 for item:%s", itemId),
+							fmt.Sprintf("label_%d", j),
+							fmt.Sprintf("label_%d", j*2),
 						},
-						Comment: fmt.Sprintf("add label for item: %s", itemId),
+						Comment: fmt.Sprintf("comment_%d", j),
 					})
 				}
 				r, err := client.R().
@@ -587,7 +586,7 @@ func BenchmarkPutFeedback(b *testing.B) {
 				for j := 0; j < batchSize; j++ {
 					feedbacks = append(feedbacks, data.Feedback{
 						FeedbackKey: data.FeedbackKey{
-							FeedbackType: fmt.Sprintf("feedback_type"),
+							FeedbackType: fmt.Sprintf("feedback_type_%d", batchSize),
 							ItemId:       fmt.Sprintf("init_item_%d", rand.Intn(numInitItems)),
 							UserId:       fmt.Sprintf("init_user_%d", rand.Intn(numInitUsers)),
 						},
@@ -618,7 +617,7 @@ func BenchmarkInsertFeedback(b *testing.B) {
 				for j := 0; j < batchSize; j++ {
 					feedbacks = append(feedbacks, data.Feedback{
 						FeedbackKey: data.FeedbackKey{
-							FeedbackType: fmt.Sprintf("feedback_type"),
+							FeedbackType: fmt.Sprintf("feedback_type_%d", batchSize),
 							ItemId:       fmt.Sprintf("init_item_%d", rand.Intn(numInitItems)),
 							UserId:       fmt.Sprintf("init_user_%d", rand.Intn(numInitUsers)),
 						},
@@ -642,37 +641,54 @@ func BenchmarkGetFeedback(b *testing.B) {
 
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
+			response := make([]*resty.Response, b.N)
 			client := resty.New()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				r, err := client.R().
+				var err error
+				response[i], err = client.R().
 					Get(s.address + fmt.Sprintf("/api/feedback?n=%d", batchSize))
 				require.NoError(b, err)
-				require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
 			}
 			b.StopTimer()
+			for _, r := range response {
+				require.Equal(b, http.StatusOK, r.StatusCode())
+				var it FeedbackIterator
+				err := json.Unmarshal(r.Body(), &it)
+				require.NoError(b, err)
+				require.Equal(b, batchSize, len(it.Feedback))
+			}
 		})
 	}
 }
 
-func BenchmarkGetFeedbackByUserIdAndItemId(b *testing.B) {
+func BenchmarkGetUserItemFeedback(b *testing.B) {
 	s := newBenchServer(b)
 	defer s.Close(b)
 
+	response := make([]*resty.Response, b.N)
 	client := resty.New()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		userIndex := i % numInitUsers
 		itemIndex := i % numInitItems
-		r, err := client.R().
+		var err error
+		response[i], err = client.R().
 			Get(s.address + fmt.Sprintf("/api/feedback/init_user_%d/init_item_%d", userIndex, itemIndex))
 		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
 	}
 	b.StopTimer()
+
+	for _, r := range response {
+		require.Equal(b, http.StatusOK, r.StatusCode())
+		var feedback []data.Feedback
+		err := json.Unmarshal(r.Body(), &feedback)
+		require.NoError(b, err)
+		require.Equal(b, 1, len(feedback))
+	}
 }
 
-func BenchmarkDeleteFeedbackByUserIdAndItemId(b *testing.B) {
+func BenchmarkDeleteUserItemFeedback(b *testing.B) {
 	s := newBenchServer(b)
 	defer s.Close(b)
 
@@ -684,126 +700,57 @@ func BenchmarkDeleteFeedbackByUserIdAndItemId(b *testing.B) {
 		r, err := client.R().
 			Delete(s.address + fmt.Sprintf("/api/feedback/init_user_%d/init_item_%d", userIndex, itemIndex))
 		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
+		require.Equal(b, http.StatusOK, r.StatusCode())
 	}
 	b.StopTimer()
 }
 
-func BenchmarkGetFeedbackByFeedbackType(b *testing.B) {
+func BenchmarkGetUserFeedback(b *testing.B) {
 	s := newBenchServer(b)
 	defer s.Close(b)
 
-	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
-		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
-			client := resty.New()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				r, err := client.R().
-					Get(s.address + fmt.Sprintf("/api/feedback/feedback_type?n=%d", batchSize))
-				require.NoError(b, err)
-				require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
-			}
-			b.StopTimer()
-		})
-	}
-}
-
-func BenchmarkDeleteFeedbackByFeedbackTypeAndUserIdAndItemId(b *testing.B) {
-	s := newBenchServer(b)
-	defer s.Close(b)
-
+	response := make([]*resty.Response, b.N)
 	client := resty.New()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		userIndex := i % numInitUsers
-		itemIndex := i % numInitItems
-		r, err := client.R().
-			Delete(s.address + fmt.Sprintf("/api/feedback/feedback_type/init_user_%d/init_item_%d", userIndex, itemIndex))
+		var err error
+		response[i], err = client.R().
+			Get(s.address + fmt.Sprintf("/api/user/init_user_%d/feedback", i%numInitUsers))
 		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
 	}
 	b.StopTimer()
+
+	for _, r := range response {
+		require.Equal(b, http.StatusOK, r.StatusCode())
+		var feedback []data.Feedback
+		err := json.Unmarshal(r.Body(), &feedback)
+		require.NoError(b, err)
+		require.Equal(b, 1, len(feedback))
+	}
 }
 
-func BenchmarkGetFeedbackByFeedbackTypeAndUserIdAndItemId(b *testing.B) {
+func BenchmarkGetItemFeedback(b *testing.B) {
 	s := newBenchServer(b)
 	defer s.Close(b)
 
+	response := make([]*resty.Response, b.N)
 	client := resty.New()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		userIndex := i % numInitUsers
-		itemIndex := i % numInitItems
-		r, err := client.R().
-			Get(s.address + fmt.Sprintf("/api/feedback/feedback_type/init_user_%d/init_item_%d", userIndex, itemIndex))
+		var err error
+		response[i], err = client.R().
+			Get(s.address + fmt.Sprintf("/api/item/init_item_%d/feedback", i%numInitItems))
 		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
 	}
 	b.StopTimer()
-}
 
-func BenchmarkGetFeedbackByFeedbackTypeAndUserId(b *testing.B) {
-	s := newBenchServer(b)
-	defer s.Close(b)
-
-	client := resty.New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		userIndex := i % numInitUsers
-		r, err := client.R().
-			Get(s.address + fmt.Sprintf("/api/user/init_user_%d/feedback/feedback_type", userIndex))
+	for _, r := range response {
+		require.Equal(b, http.StatusOK, r.StatusCode())
+		var feedback []data.Feedback
+		err := json.Unmarshal(r.Body(), &feedback)
 		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
+		require.GreaterOrEqual(b, 1, len(feedback))
 	}
-	b.StopTimer()
-}
-
-func BenchmarkGetFeedbackByUserId(b *testing.B) {
-	s := newBenchServer(b)
-	defer s.Close(b)
-
-	client := resty.New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		userIndex := i % numInitUsers
-		r, err := client.R().
-			Get(s.address + fmt.Sprintf("/api/user/init_user_%d/feedback", userIndex))
-		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
-	}
-	b.StopTimer()
-}
-
-func BenchmarkGetFeedbackByFeedbackTypeAndItemId(b *testing.B) {
-	s := newBenchServer(b)
-	defer s.Close(b)
-
-	client := resty.New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		itemIndex := i % numInitItems
-		r, err := client.R().
-			Get(s.address + fmt.Sprintf("/api/item/init_item_%d/feedback/feedback_type", itemIndex))
-		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
-	}
-	b.StopTimer()
-}
-
-func BenchmarkGetFeedbackByItemId(b *testing.B) {
-	s := newBenchServer(b)
-	defer s.Close(b)
-
-	client := resty.New()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		itemIndex := i % numInitItems
-		r, err := client.R().
-			Get(s.address + fmt.Sprintf("/api/item/init_item_%d/feedback", itemIndex))
-		require.NoError(b, err)
-		require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
-	}
-	b.StopTimer()
 }
 
 func BenchmarkGetRecommendCache(b *testing.B) {
@@ -820,7 +767,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 				if i%2 == 0 {
 					expects[i/2] = scores[i]
 				} else {
-					err := s.CacheClient.SetInt(cache.Key(cache.HiddenItems, strconv.Itoa(i)), 1)
+					err := s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, strconv.Itoa(i)), 1))
 					require.NoError(b, err)
 				}
 			}

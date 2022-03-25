@@ -22,6 +22,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -178,17 +179,50 @@ func BatchKey(prefix string, keys ...string) []string {
 	return keys
 }
 
+type Value struct {
+	name  string
+	value string
+}
+
+func String(name, value string) Value {
+	return Value{name: name, value: value}
+}
+
+func Integer(name string, value int) Value {
+	return Value{name: name, value: strconv.Itoa(value)}
+}
+
+func Time(name string, value time.Time) Value {
+	return Value{name: name, value: value.String()}
+}
+
+type SortedSet struct {
+	name   string
+	scores []Scored
+}
+
+func Sorted(name string, scores []Scored) SortedSet {
+	return SortedSet{name: name, scores: scores}
+}
+
+type SetMember struct {
+	name   string
+	member string
+}
+
+func Member(name, member string) SetMember {
+	return SetMember{name: name, member: member}
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
 	Init() error
 
+	Set(values ...Value) error
 	GetString(name string) (string, error)
-	SetString(name string, val string) error
 	GetTime(name string) (time.Time, error)
-	SetTime(name string, val time.Time) error
 	GetInt(name string) (int, error)
-	SetInt(name string, val int) error
 	Delete(name string) error
 	Exists(names ...string) ([]int, error)
 
@@ -197,11 +231,11 @@ type Database interface {
 	AddSet(key string, members ...string) error
 	RemSet(key string, members ...string) error
 
-	GetSortedScore(key, member string) (float64, error)
+	AddSorted(sortedSets ...SortedSet) error
+	GetSortedScores(members ...SetMember) ([]float64, error)
 	GetSorted(key string, begin, end int) ([]Scored, error)
 	GetSortedByScore(key string, begin, end float64) ([]Scored, error)
 	RemSortedByScore(key string, begin, end float64) error
-	AddSorted(key string, scores []Scored) error
 	SetSorted(key string, scores []Scored) error
 	RemSorted(key, member string) error
 }

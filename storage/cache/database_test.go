@@ -24,7 +24,7 @@ import (
 
 func testMeta(t *testing.T, db Database) {
 	// Set meta string
-	err := db.SetString(Key("meta", "1"), "2")
+	err := db.Set(String(Key("meta", "1"), "2"))
 	assert.NoError(t, err)
 	// Get meta string
 	value, err := db.GetString(Key("meta", "1"))
@@ -38,14 +38,14 @@ func testMeta(t *testing.T, db Database) {
 	assert.True(t, errors.IsNotFound(err), err)
 	assert.Equal(t, "", value)
 	// Set meta int
-	err = db.SetInt(Key("meta", "1"), 2)
+	err = db.Set(Integer(Key("meta", "1"), 2))
 	assert.NoError(t, err)
 	// Get meta int
 	valInt, err := db.GetInt(Key("meta", "1"))
 	assert.NoError(t, err)
 	assert.Equal(t, 2, valInt)
 	// set meta time
-	err = db.SetTime(Key("meta", "1"), time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC))
+	err = db.Set(Time(Key("meta", "1"), time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC)))
 	assert.NoError(t, err)
 	// get meta time
 	valTime, err := db.GetTime(Key("meta", "1"))
@@ -105,7 +105,7 @@ func testSort(t *testing.T, db Database) {
 	}
 	err := db.SetSorted("sort", scores[:3])
 	assert.NoError(t, err)
-	err = db.AddSorted("sort", scores[3:])
+	err = db.AddSorted(SortedSet{"sort", scores[3:]})
 	assert.NoError(t, err)
 	// Get scores
 	totalItems, err := db.GetSorted("sort", 0, -1)
@@ -126,10 +126,10 @@ func testSort(t *testing.T, db Database) {
 		{"3", 1.3},
 	}, partItems)
 	// remove scores by score
-	err = db.AddSorted("sort", []Scored{
+	err = db.AddSorted(SortedSet{"sort", []Scored{
 		{"5", -5},
 		{"6", -6},
-	})
+	}})
 	assert.NoError(t, err)
 	err = db.RemSortedByScore("sort", math.Inf(-1), -1)
 	assert.NoError(t, err)
@@ -148,23 +148,26 @@ func testSort(t *testing.T, db Database) {
 		{"1", 1.1},
 	}, totalItems)
 	// Get score
-	score, err := db.GetSortedScore("sort", "2")
-	assert.NoError(t, err)
-	assert.Equal(t, 1.2, score)
-	score, err = db.GetSortedScore("sort", "200")
-	assert.True(t, errors.IsNotFound(err), err)
-	assert.Zero(t, score)
+	ret, err := db.GetSortedScores(Member("sort", "4"), Member("sort", "2"), Member("sort", "200"))
+	assert.NoError(t, err, err)
+	assert.Equal(t, []float64{1.4, 1.2, 0}, ret)
 
 	// test set empty
 	err = db.SetSorted("sort", []Scored{})
+	assert.NoError(t, err)
+	// test add empty
+	err = db.AddSorted()
+	assert.NoError(t, err)
+	err = db.AddSorted(SortedSet{})
 	assert.NoError(t, err)
 	// test get empty
 	scores, err = db.GetSorted("sort", 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, scores)
 	// test get non-existed score
-	_, err = db.GetSortedScore("sort", "10086")
-	assert.True(t, errors.IsNotFound(err), err)
+	ret, err = db.GetSortedScores(Member("sort", "10086"))
+	assert.NoError(t, err)
+	assert.Equal(t, []float64{0}, ret)
 }
 
 func TestScored(t *testing.T) {
