@@ -31,6 +31,8 @@ func TestNoDatabase(t *testing.T) {
 
 	err = database.BatchInsertItems(nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.BatchGetItems(nil)
+	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.ModifyItem("", ItemPatch{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetItem("")

@@ -387,6 +387,10 @@ func testItems(t *testing.T, db Database) {
 		assert.NoError(t, err)
 		assert.Equal(t, item, ret)
 	}
+	// batch get items
+	batchItem, err := db.BatchGetItems([]string{"2", "6"})
+	assert.NoError(t, err)
+	assert.Equal(t, []Item{items[1], items[3]}, batchItem)
 	// Delete item
 	err = db.DeleteItem("0")
 	assert.NoError(t, err)

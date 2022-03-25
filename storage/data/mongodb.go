@@ -201,6 +201,25 @@ func (db *MongoDB) BatchInsertItems(items []Item) error {
 	return errors.Trace(err)
 }
 
+func (db *MongoDB) BatchGetItems(itemIds []string) ([]Item, error) {
+	ctx := context.Background()
+	c := db.client.Database(db.dbName).Collection("items")
+	r, err := c.Find(ctx, bson.M{"itemid": bson.M{"$in": itemIds}})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	items := make([]Item, 0)
+	defer r.Close(ctx)
+	for r.Next(ctx) {
+		var item Item
+		if err = r.Decode(&item); err != nil {
+			return nil, errors.Trace(err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
 // ModifyItem modify an item in MongoDB.
 func (db *MongoDB) ModifyItem(itemId string, patch ItemPatch) error {
 	// create update

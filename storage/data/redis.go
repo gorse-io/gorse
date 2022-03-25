@@ -20,6 +20,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
+	"github.com/thoas/go-funk"
 	"sort"
 	"strconv"
 	"strings"
@@ -142,6 +143,40 @@ func (r *Redis) BatchInsertItems(items []Item) error {
 		}
 	}
 	return nil
+}
+
+func (r *Redis) BatchGetItems(itemIds []string) ([]Item, error) {
+	ctx := context.Background()
+	var (
+		items  []Item
+		cursor uint64
+		err    error
+		keys   []string
+	)
+	for {
+		keys, cursor, err = r.client.Scan(ctx, cursor, prefixItem+"*", -1).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			data, err := r.client.Get(ctx, key).Result()
+			if err != nil {
+				return nil, err
+			}
+			var item Item
+			err = json.Unmarshal([]byte(data), &item)
+			if err != nil {
+				return nil, err
+			}
+			if funk.ContainsString(itemIds, item.ItemId) {
+				items = append(items, item)
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	return items, nil
 }
 
 func (r *Redis) ForFeedback(ctx context.Context, action func(key, thisFeedbackType, thisUserId, thisItemId string) error) error {

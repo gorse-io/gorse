@@ -74,13 +74,13 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	err := w.cacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
-	err = w.cacheClient.SetTime(cache.Key(cache.LastModifyUserTime, "0"), time.Now().Add(-time.Hour))
+	err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().Add(-time.Hour)))
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
-	err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(-time.Hour*100))
+	err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(-time.Hour*100)))
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
-	err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(time.Hour*100))
+	err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(time.Hour*100)))
 	assert.NoError(t, err)
 	assert.False(t, w.checkRecommendCacheTimeout("0", nil))
 	err = w.cacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), nil)
@@ -831,7 +831,7 @@ func TestReplacement_ClickThroughRate(t *testing.T) {
 	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}}, recommends)
 
 	// 2. Insert historical items into non-empty recommendation.
-	err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0))
+	err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
 	assert.NoError(t, err)
 	// insert popular items
 	err = w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"7", 10}, {"6", 9}, {"5", 8}})
@@ -879,7 +879,7 @@ func TestReplacement_CollaborativeFiltering(t *testing.T) {
 	assert.Equal(t, []cache.Scored{{"10", 10}, {"9", 9}}, recommends)
 
 	// 2. Insert historical items into non-empty recommendation.
-	err = w.cacheClient.SetTime(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0))
+	err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
 	assert.NoError(t, err)
 	// insert popular items
 	err = w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"7", 10}, {"6", 9}, {"5", 8}})

@@ -29,14 +29,13 @@ func (NoDatabase) Init() error {
 	return ErrNoDatabase
 }
 
+func (NoDatabase) Set(_ ...Value) error {
+	return ErrNoDatabase
+}
+
 // GetString method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetString(_ string) (string, error) {
 	return "", ErrNoDatabase
-}
-
-// SetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetString(_, _ string) error {
-	return ErrNoDatabase
 }
 
 // GetInt method of NoDatabase returns ErrNoDatabase.
@@ -44,19 +43,9 @@ func (NoDatabase) GetInt(_ string) (int, error) {
 	return 0, ErrNoDatabase
 }
 
-// SetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetInt(_ string, _ int) error {
-	return ErrNoDatabase
-}
-
 // GetTime method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetTime(_ string) (time.Time, error) {
 	return time.Time{}, ErrNoDatabase
-}
-
-// SetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetTime(_ string, _ time.Time) error {
-	return ErrNoDatabase
 }
 
 // Delete method of NoDatabase returns ErrNoDatabase.
@@ -89,9 +78,9 @@ func (NoDatabase) RemSet(_ string, _ ...string) error {
 	return ErrNoDatabase
 }
 
-// GetSortedScore method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSortedScore(_, _ string) (float64, error) {
-	return 0, ErrNoDatabase
+// GetSortedScores method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetSortedScores(_ ...SetMember) ([]float64, error) {
+	return nil, ErrNoDatabase
 }
 
 // GetSorted method of NoDatabase returns ErrNoDatabase.
@@ -110,7 +99,7 @@ func (NoDatabase) RemSortedByScore(_ string, _, _ float64) error {
 }
 
 // AddSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AddSorted(_ string, _ []Scored) error {
+func (NoDatabase) AddSorted(_ ...SortedSet) error {
 	return ErrNoDatabase
 }
 

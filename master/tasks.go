@@ -73,13 +73,13 @@ func (m *Master) runLoadDatasetTask() error {
 			base.Logger().Error("failed to cache popular items", zap.Error(err))
 		}
 	}
-	if err = m.CacheClient.SetTime(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), time.Now()); err != nil {
+	if err = m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), time.Now())); err != nil {
 		base.Logger().Error("failed to write latest update popular items time", zap.Error(err))
 	}
 
 	// save the latest items to cache
 	for category, items := range latestItems {
-		if err = m.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), items); err != nil {
+		if err = m.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.LatestItems, category), items)); err != nil {
 			base.Logger().Error("failed to cache latest items", zap.Error(err))
 		}
 		// reclaim outdated items
@@ -90,37 +90,37 @@ func (m *Master) runLoadDatasetTask() error {
 			}
 		}
 	}
-	if err = m.CacheClient.SetTime(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime), time.Now()); err != nil {
+	if err = m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime), time.Now())); err != nil {
 		base.Logger().Error("failed to write latest update latest items time", zap.Error(err))
 	}
 
 	// write statistics to database
 	UsersTotal.Set(float64(rankingDataset.UserCount()))
-	if err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumUsers), rankingDataset.UserCount()); err != nil {
+	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), rankingDataset.UserCount())); err != nil {
 		base.Logger().Error("failed to write number of users", zap.Error(err))
 	}
 	ItemsTotal.Set(float64(rankingDataset.ItemCount()))
-	if err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumItems), rankingDataset.ItemCount()); err != nil {
+	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), rankingDataset.ItemCount())); err != nil {
 		base.Logger().Error("failed to write number of items", zap.Error(err))
 	}
 	FeedbacksTotal.Set(float64(rankingDataset.Count()))
-	if err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), rankingDataset.Count()); err != nil {
+	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), rankingDataset.Count())); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
 	UserLabelsTotal.Set(float64(clickDataset.Index.CountUserLabels()))
-	if err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumUserLabels), int(clickDataset.Index.CountUserLabels())); err != nil {
+	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUserLabels), int(clickDataset.Index.CountUserLabels()))); err != nil {
 		base.Logger().Error("failed to write number of user labels", zap.Error(err))
 	}
 	ItemLabelsTotal.Set(float64(clickDataset.Index.CountItemLabels()))
-	if err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(clickDataset.Index.CountItemLabels())); err != nil {
+	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(clickDataset.Index.CountItemLabels()))); err != nil {
 		base.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
 	PositiveFeedbacksTotal.Set(float64(clickDataset.PositiveCount))
-	if err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), clickDataset.PositiveCount); err != nil {
+	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), clickDataset.PositiveCount)); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
 	NegativeFeedbackTotal.Set(float64(clickDataset.NegativeCount))
-	if err = m.CacheClient.SetInt(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), clickDataset.NegativeCount); err != nil {
+	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), clickDataset.NegativeCount)); err != nil {
 		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
 
@@ -214,7 +214,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		base.Logger().Error("failed to searching neighbors of items", zap.Error(err))
 		m.taskMonitor.Fail(TaskFindItemNeighbors, err.Error())
 	} else {
-		if err := m.CacheClient.SetTime(cache.Key(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime), time.Now()); err != nil {
+		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime), time.Now())); err != nil {
 			base.Logger().Error("failed to set neighbors of items update time", zap.Error(err))
 		}
 		base.Logger().Info("complete searching neighbors of items",
@@ -309,7 +309,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 				return errors.Trace(err)
 			}
 		}
-		if err := m.CacheClient.SetTime(cache.Key(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId))), time.Now()); err != nil {
+		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId))), time.Now())); err != nil {
 			return errors.Trace(err)
 		}
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
@@ -332,7 +332,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		similarItemNeighbors, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 		ItemNeighborIndexRecall.Set(float64(recall))
-		if err := m.CacheClient.SetString(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), base.FormatFloat32(recall)); err != nil {
+		if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -377,7 +377,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 				}
 			}
 		}
-		if err := m.CacheClient.SetTime(cache.Key(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId))), time.Now()); err != nil {
+		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, dataset.ItemIndex.ToName(int32(itemId))), time.Now())); err != nil {
 			return errors.Trace(err)
 		}
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
@@ -456,7 +456,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		base.Logger().Error("failed to searching neighbors of users", zap.Error(err))
 		m.taskMonitor.Fail(TaskFindUserNeighbors, err.Error())
 	} else {
-		if err := m.CacheClient.SetTime(cache.Key(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime), time.Now()); err != nil {
+		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime), time.Now())); err != nil {
 			base.Logger().Error("failed to set neighbors of users update time", zap.Error(err))
 		}
 		base.Logger().Info("complete searching neighbors of users",
@@ -538,7 +538,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			cache.CreateScoredItems(recommends, scores)); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.SetTime(cache.Key(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId))), time.Now()); err != nil {
+		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId))), time.Now())); err != nil {
 			return errors.Trace(err)
 		}
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
@@ -561,7 +561,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		similarUserNeighbors, recall = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 		UserNeighborIndexRecall.Set(float64(recall))
-		if err := m.CacheClient.SetString(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), base.FormatFloat32(recall)); err != nil {
+		if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -602,7 +602,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		if err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, dataset.UserIndex.ToName(int32(userId))), itemScores); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.SetTime(cache.Key(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId))), time.Now()); err != nil {
+		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, dataset.UserIndex.ToName(int32(userId))), time.Now())); err != nil {
 			return errors.Trace(err)
 		}
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
@@ -774,7 +774,7 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
 	MatchingTop10NDCG.Set(float64(score.NDCG))
 	MatchingTop10Recall.Set(float64(score.Recall))
 	MatchingTop10Precision.Set(float64(score.Precision))
-	if err := m.CacheClient.SetTime(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now()); err != nil {
+	if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
@@ -912,7 +912,7 @@ func (m *Master) runFitClickModelTask(
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
-	if err = m.CacheClient.SetTime(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now()); err != nil {
+	if err = m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now())); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
 

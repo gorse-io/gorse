@@ -17,7 +17,6 @@ package cache
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
 )
 
 func TestNoDatabase(t *testing.T) {
@@ -26,15 +25,11 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Init()
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetString(Key("", ""), "")
+	err = database.Set()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetString(Key("", ""))
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetInt(Key("", ""), 0)
-	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetInt(Key("", ""))
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetTime(Key("", ""), time.Time{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetTime(Key("", ""))
 	assert.ErrorIs(t, err, ErrNoDatabase)
@@ -52,7 +47,7 @@ func TestNoDatabase(t *testing.T) {
 	err = database.RemSet("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	_, err = database.GetSortedScore("", "")
+	_, err = database.GetSortedScores()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetSorted("", 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
@@ -62,7 +57,7 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.SetSorted("", nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.AddSorted("", nil)
+	err = database.AddSorted()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.RemSorted("", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)

@@ -25,6 +25,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/json"
 	"go.uber.org/zap"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -303,6 +304,53 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 		BatchInsertItemsSeconds.Observe(time.Since(startTime).Seconds())
 	}
 	return errors.Trace(err)
+}
+
+func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
+	// compose the query
+	builder := strings.Builder{}
+	switch d.driver {
+	case MySQL, ClickHouse:
+		builder.WriteString("SELECT item_id, is_hidden, categories, time_stamp, labels, `comment` FROM items WHERE item_id IN (")
+	case Postgres:
+		builder.WriteString("SELECT item_id, is_hidden, categories, time_stamp, labels, comment FROM items WHERE item_id IN (")
+	}
+	var args []interface{}
+	for i, itemId := range itemIds {
+		switch d.driver {
+		case MySQL, ClickHouse:
+			builder.WriteString("?")
+		case Postgres:
+			builder.WriteString("$" + strconv.Itoa(i+1))
+		}
+		args = append(args, itemId)
+		if i+1 < len(itemIds) {
+			builder.WriteString(",")
+		}
+	}
+	builder.WriteString(")")
+
+	result, err := d.client.Query(builder.String(), args...)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer result.Close()
+	var items []Item
+	for result.Next() {
+		var item Item
+		var labels, categories string
+		if err = result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &item.Comment); err != nil {
+			return nil, errors.Trace(err)
+		}
+		if err = json.Unmarshal([]byte(labels), &item.Labels); err != nil {
+			return nil, err
+		}
+		if err = json.Unmarshal([]byte(categories), &item.Categories); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 // DeleteItem deletes a item from MySQL.

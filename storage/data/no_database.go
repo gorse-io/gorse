@@ -41,6 +41,11 @@ func (NoDatabase) BatchInsertItems(_ []Item) error {
 	return ErrNoDatabase
 }
 
+// BatchGetItems method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) BatchGetItems(_ []string) ([]Item, error) {
+	return nil, ErrNoDatabase
+}
+
 // DeleteItem method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) DeleteItem(_ string) error {
 	return ErrNoDatabase

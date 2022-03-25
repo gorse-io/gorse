@@ -21,6 +21,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/samber/lo"
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
@@ -995,7 +996,7 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, temp.UserId), time.Now()); err != nil {
+	if err := s.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, temp.UserId), time.Now())); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1016,7 +1017,7 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, userId), time.Now()); err != nil {
+	if err := s.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, userId), time.Now())); err != nil {
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
@@ -1039,27 +1040,27 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 }
 
 func (s *RestServer) insertUsers(request *restful.Request, response *restful.Response) {
-	temp := new([]data.User)
+	var temp []data.User
 	// get param from request and put into temp
-	if err := request.ReadEntity(temp); err != nil {
+	if err := request.ReadEntity(&temp); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	var count int
 	// range temp and achieve user
-	if err := s.DataClient.BatchInsertUsers(*temp); err != nil {
+	if err := s.DataClient.BatchInsertUsers(temp); err != nil {
 		InternalServerError(response, err)
 		return
 	}
-	for _, user := range *temp {
-		// insert modify timestamp
-		if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, user.UserId), time.Now()); err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		count++
+	// insert modify timestamp
+	values := make([]cache.Value, len(temp))
+	for i, user := range temp {
+		values[i] = cache.Time(cache.Key(cache.LastModifyUserTime, user.UserId), time.Now())
 	}
-	Ok(response, Success{RowAffected: count})
+	if err := s.CacheClient.Set(values...); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	Ok(response, Success{RowAffected: len(temp)})
 }
 
 type UserIterator struct {
@@ -1132,7 +1133,12 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	items := make([]data.Item, 0, len(temp))
 	timeScores := make(map[string][]cache.Scored)
 	popularScores := make(map[string][]cache.Scored)
-	for _, item := range temp {
+	var itemIds []string
+	members := lo.Map(temp, func(item Item, i int) cache.SetMember {
+		return cache.Member(cache.PopularItems, item.ItemId)
+	})
+	popularScore, _ := s.CacheClient.GetSortedScores(members...)
+	for i, item := range temp {
 		// parse datetime
 		timestamp, err := dateparse.ParseAny(item.Timestamp)
 		if err != nil {
@@ -1147,24 +1153,24 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 			Labels:     item.Labels,
 			Comment:    item.Comment,
 		})
-		popularScore, _ := s.CacheClient.GetSortedScore(cache.PopularItems, item.ItemId)
 		for _, category := range append([]string{""}, item.Categories...) {
 			timeScores[category] = append(timeScores[category], cache.Scored{
 				Id:    item.ItemId,
 				Score: float64(timestamp.Unix()),
 			})
-			if popularScore > 0 {
+			if popularScore[i] > 0 {
 				popularScores[category] = append(popularScores[category], cache.Scored{
 					Id:    item.ItemId,
-					Score: popularScore,
+					Score: popularScore[i],
 				})
 			}
 		}
-		if err = s.deleteItemFromLatestPopularCache(item.ItemId, false); err != nil {
-			InternalServerError(response, err)
-			return
-		}
+		itemIds = append(itemIds, item.ItemId)
 		count++
+	}
+	if err := s.deleteItemFromLatestPopularCache(itemIds, false); err != nil {
+		InternalServerError(response, err)
+		return
 	}
 	err := s.DataClient.BatchInsertItems(items)
 	if err != nil {
@@ -1172,29 +1178,31 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		return
 	}
 	// insert modify timestamp and categories
-	for _, item := range items {
-		if err = s.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, item.ItemId), time.Now()); err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		if err = s.CacheClient.AddSet(cache.ItemCategories, item.Categories...); err != nil {
-			InternalServerError(response, err)
-			return
-		}
+	categories := strset.New()
+	values := make([]cache.Value, len(items))
+	for i, item := range items {
+		values[i] = cache.Time(cache.Key(cache.LastModifyItemTime, item.ItemId), time.Now())
+		categories.Add(item.Categories...)
 	}
-	// insert timestamp score
+	if err = s.CacheClient.Set(values...); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	if err = s.CacheClient.AddSet(cache.ItemCategories, categories.List()...); err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	// insert timestamp score and popular score
+	sortedSets := make([]cache.SortedSet, 0, len(timeScores)+len(popularScores))
 	for category, score := range timeScores {
-		if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), score); err != nil {
-			InternalServerError(response, err)
-			return
-		}
+		sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.LatestItems, category), score))
 	}
-	// insert popular score
 	for category, score := range popularScores {
-		if err = s.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), score); err != nil {
-			InternalServerError(response, err)
-			return
-		}
+		sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.PopularItems, category), score))
+	}
+	if err = s.CacheClient.AddSorted(sortedSets...); err != nil {
+		InternalServerError(response, err)
+		return
 	}
 	Ok(response, Success{RowAffected: count})
 }
@@ -1230,7 +1238,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	}
 	// refresh category cache
 	if patch.Categories != nil {
-		if err := s.deleteItemFromLatestPopularCache(itemId, false); err != nil {
+		if err := s.deleteItemFromLatestPopularCache([]string{itemId}, false); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1243,7 +1251,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	if patch.IsHidden != nil {
 		var err error
 		if *patch.IsHidden {
-			err = s.CacheClient.SetInt(cache.Key(cache.HiddenItems, itemId), 1)
+			err = s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, itemId), 1))
 		} else {
 			err = s.CacheClient.Delete(cache.Key(cache.HiddenItems, itemId))
 		}
@@ -1259,22 +1267,21 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 			InternalServerError(response, err)
 			return
 		}
-		popularScore, _ := s.CacheClient.GetSortedScore(cache.PopularItems, itemId)
+		popularScores, _ := s.CacheClient.GetSortedScores(cache.Member(cache.PopularItems, itemId))
+		var sortedSets []cache.SortedSet
 		for _, category := range append([]string{""}, item.Categories...) {
-			if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}); err != nil {
-				InternalServerError(response, err)
-				return
+			sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}))
+			if popularScores[0] > 0 {
+				sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScores[0]}}))
 			}
-			if popularScore > 0 {
-				if err = s.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}}); err != nil {
-					InternalServerError(response, err)
-					return
-				}
-			}
+		}
+		if err = s.CacheClient.AddSorted(sortedSets...); err != nil {
+			InternalServerError(response, err)
+			return
 		}
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, itemId), time.Now()); err != nil {
+	if err := s.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now())); err != nil {
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
@@ -1320,7 +1327,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 func (s *RestServer) deleteItem(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	// delete items from latest and popular
-	if err := s.deleteItemFromLatestPopularCache(itemId, true); err != nil {
+	if err := s.deleteItemFromLatestPopularCache([]string{itemId}, true); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1329,19 +1336,19 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert deleted item to cache
-	if err := s.CacheClient.SetInt(cache.Key(cache.HiddenItems, itemId), 1); err != nil {
+	if err := s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, itemId), 1)); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
 }
 
-func (s *RestServer) deleteItemFromLatestPopularCache(itemId string, deleteItem bool) error {
+func (s *RestServer) deleteItemFromLatestPopularCache(itemIds []string, deleteItem bool) error {
 	var deleteKeys []string
 	if deleteItem {
 		deleteKeys = []string{cache.LatestItems, cache.PopularItems}
 	}
-	if item, err := s.DataClient.GetItem(itemId); err != nil {
+	if items, err := s.DataClient.BatchGetItems(itemIds); err != nil {
 		if errors.IsNotFound(err) {
 			// do nothing if the item doesn't exist
 			return nil
@@ -1349,14 +1356,16 @@ func (s *RestServer) deleteItemFromLatestPopularCache(itemId string, deleteItem 
 			return err
 		}
 	} else {
-		for _, category := range item.Categories {
-			deleteKeys = append(deleteKeys, cache.Key(cache.LatestItems, category))
-			deleteKeys = append(deleteKeys, cache.Key(cache.PopularItems, category))
-		}
-	}
-	for _, deleteKey := range deleteKeys {
-		if err := s.CacheClient.RemSorted(deleteKey, itemId); err != nil {
-			return err
+		for _, item := range items {
+			for _, category := range item.Categories {
+				deleteKeys = append(deleteKeys, cache.Key(cache.LatestItems, category))
+				deleteKeys = append(deleteKeys, cache.Key(cache.PopularItems, category))
+			}
+			for _, deleteKey := range deleteKeys {
+				if err = s.CacheClient.RemSorted(deleteKey, item.ItemId); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
@@ -1381,15 +1390,15 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		return
 	}
 	// insert to popular
-	popularScore, _ := s.CacheClient.GetSortedScore(cache.PopularItems, itemId)
-	if popularScore > 0 {
-		if err = s.CacheClient.AddSorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}}); err != nil {
+	popularScores, _ := s.CacheClient.GetSortedScores(cache.Member(cache.PopularItems, itemId))
+	if popularScores[0] > 0 {
+		if err = s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScores[0]}})); err != nil {
 			InternalServerError(response, err)
 			return
 		}
 	}
 	// insert item to latest
-	if err = s.CacheClient.AddSorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}); err != nil {
+	if err = s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}})); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1475,20 +1484,16 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 			InternalServerError(response, err)
 			return
 		}
-
+		values := make([]cache.Value, 0, users.Size()+items.Size())
 		for _, userId := range users.List() {
-			err = s.CacheClient.SetTime(cache.Key(cache.LastModifyUserTime, userId), time.Now())
-			if err != nil {
-				InternalServerError(response, err)
-				return
-			}
+			values = append(values, cache.Time(cache.Key(cache.LastModifyUserTime, userId), time.Now()))
 		}
 		for _, itemId := range items.List() {
-			err = s.CacheClient.SetTime(cache.Key(cache.LastModifyItemTime, itemId), time.Now())
-			if err != nil {
-				InternalServerError(response, err)
-				return
-			}
+			values = append(values, cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now()))
+		}
+		if err = s.CacheClient.Set(values...); err != nil {
+			InternalServerError(response, err)
+			return
 		}
 		Ok(response, Success{RowAffected: len(feedback)})
 	}
@@ -1642,11 +1647,12 @@ func Text(response *restful.Response, content string) {
 // InsertFeedbackToCache inserts feedback to cache.
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
 	if !s.GorseConfig.Recommend.EnableReplacement {
-		for _, v := range feedback {
-			err := s.CacheClient.AddSorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float64(v.Timestamp.Unix())}})
-			if err != nil {
-				return errors.Trace(err)
-			}
+		sortedSets := make([]cache.SortedSet, len(feedback))
+		for i, v := range feedback {
+			sortedSets[i] = cache.Sorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float64(v.Timestamp.Unix())}})
+		}
+		if err := s.CacheClient.AddSorted(sortedSets...); err != nil {
+			return errors.Trace(err)
 		}
 	}
 	return nil

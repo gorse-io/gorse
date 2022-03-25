@@ -18,6 +18,7 @@ import (
 	"context"
 	"github.com/araddon/dateparse"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -103,6 +104,20 @@ func (m MongoDB) Close() error {
 	return m.client.Disconnect(context.Background())
 }
 
+func (m MongoDB) Set(values ...Value) error {
+	ctx := context.Background()
+	c := m.client.Database(m.dbName).Collection("values")
+	var models []mongo.WriteModel
+	for _, value := range values {
+		models = append(models, mongo.NewUpdateOneModel().
+			SetUpsert(true).
+			SetFilter(bson.M{"_id": bson.M{"$eq": value.name}}).
+			SetUpdate(bson.M{"$set": bson.M{"_id": value.name, "value": value.value}}))
+	}
+	_, err := c.BulkWrite(ctx, models)
+	return errors.Trace(err)
+}
+
 func (m MongoDB) GetString(name string) (string, error) {
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("values")
@@ -119,17 +134,6 @@ func (m MongoDB) GetString(name string) (string, error) {
 	}
 }
 
-func (m MongoDB) SetString(name, value string) error {
-	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("values")
-	opt := options.Update()
-	opt.SetUpsert(true)
-	_, err := c.UpdateOne(ctx,
-		bson.M{"_id": bson.M{"$eq": name}},
-		bson.M{"$set": bson.M{"_id": name, "value": value}}, opt)
-	return errors.Trace(err)
-}
-
 func (m MongoDB) GetInt(name string) (int, error) {
 	val, err := m.GetString(name)
 	if err != nil {
@@ -142,10 +146,6 @@ func (m MongoDB) GetInt(name string) (int, error) {
 	return buf, err
 }
 
-func (m MongoDB) SetInt(name string, value int) error {
-	return m.SetString(name, strconv.Itoa(value))
-}
-
 func (m MongoDB) GetTime(name string) (time.Time, error) {
 	val, err := m.GetString(name)
 	if err != nil {
@@ -156,10 +156,6 @@ func (m MongoDB) GetTime(name string) (time.Time, error) {
 		return time.Time{}, nil
 	}
 	return tm, nil
-}
-
-func (m MongoDB) SetTime(name string, value time.Time) error {
-	return m.SetString(name, value.String())
 }
 
 func (m MongoDB) Delete(name string) error {
@@ -257,20 +253,34 @@ func (m MongoDB) RemSet(name string, members ...string) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetSortedScore(name, member string) (float64, error) {
+func (m MongoDB) GetSortedScores(members ...SetMember) ([]float64, error) {
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("sorted_sets")
-	r := c.FindOne(ctx, bson.M{"name": name, "member": member})
-	if err := r.Err(); err == mongo.ErrNoDocuments {
-		return 0, errors.Annotate(ErrObjectNotExist, name)
-	} else if err != nil {
-		return 0, errors.Trace(err)
+	conditions := lo.Map(members, func(member SetMember, _ int) bson.D {
+		return bson.D{
+			{"name", member.name},
+			{"member", member.member},
+		}
+	})
+	r, err := c.Find(ctx, bson.D{{"$or", conditions}})
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-	if raw, err := r.DecodeBytes(); err != nil {
-		return 0, errors.Trace(err)
-	} else {
-		return raw.Lookup("score").Double(), nil
+	resultsMap := make(map[SetMember]float64)
+	for r.Next(ctx) {
+		var doc bson.Raw
+		if err = r.Decode(&doc); err != nil {
+			return nil, err
+		}
+		member := SetMember{
+			name:   doc.Lookup("name").StringValue(),
+			member: doc.Lookup("member").StringValue(),
+		}
+		resultsMap[member] = doc.Lookup("score").Double()
 	}
+	return lo.Map(members, func(member SetMember, _ int) float64 {
+		return resultsMap[member]
+	}), nil
 }
 
 func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {
@@ -289,7 +299,7 @@ func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {
 	for r.Next(ctx) {
 		var doc bson.Raw
 		if err = r.Decode(&doc); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 		scores = append(scores, Scored{
 			Id:    doc.Lookup("member").StringValue(),
@@ -340,18 +350,20 @@ func (m MongoDB) RemSortedByScore(name string, begin, end float64) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) AddSorted(name string, scores []Scored) error {
-	if len(scores) == 0 {
-		return nil
-	}
+func (m MongoDB) AddSorted(sortedSets ...SortedSet) error {
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("sorted_sets")
 	var models []mongo.WriteModel
-	for _, score := range scores {
-		models = append(models, mongo.NewUpdateOneModel().
-			SetUpsert(true).
-			SetFilter(bson.M{"name": bson.M{"$eq": name}, "member": bson.M{"$eq": score.Id}}).
-			SetUpdate(bson.M{"$set": bson.M{"name": name, "member": score.Id, "score": score.Score}}))
+	for _, sorted := range sortedSets {
+		for _, score := range sorted.scores {
+			models = append(models, mongo.NewUpdateOneModel().
+				SetUpsert(true).
+				SetFilter(bson.M{"name": bson.M{"$eq": sorted.name}, "member": bson.M{"$eq": score.Id}}).
+				SetUpdate(bson.M{"$set": bson.M{"name": sorted.name, "member": score.Id, "score": score.Score}}))
+		}
+	}
+	if len(models) == 0 {
+		return nil
 	}
 	_, err := c.BulkWrite(ctx, models)
 	return errors.Trace(err)
