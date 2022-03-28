@@ -18,6 +18,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"math/rand"
@@ -184,7 +185,7 @@ func (idx *IVF) Build() {
 
 		// reassign clusters
 		nextClusters := make([]ivfCluster, idx.k)
-		_ = base.Parallel(len(idx.data), idx.numJobs, func(_, i int) error {
+		_ = parallel.Parallel(len(idx.data), idx.numJobs, func(_, i int) error {
 			if !idx.data[i].IsHidden() {
 				nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
 				for c := range clusters {
@@ -290,7 +291,7 @@ func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = base.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+	_ = parallel.Parallel(len(samples), idx.numJobs, func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.Search(b.data[sample], b.k, prune0)
 		if len(expected) > 0 {
@@ -335,7 +336,7 @@ func (b *IVFBuilder) evaluateTermSearch(idx *IVF, prune0 bool, term string) floa
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = base.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+	_ = parallel.Parallel(len(samples), idx.numJobs, func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
 		if len(expected) > 0 {

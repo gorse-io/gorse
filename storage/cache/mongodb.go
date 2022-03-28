@@ -111,7 +111,7 @@ func (m MongoDB) Set(values ...Value) error {
 	for _, value := range values {
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
-			SetFilter(bson.M{"_id": bson.M{"$eq": value.name}}).
+			SetFilter(bson.M{"_id": value.name}).
 			SetUpdate(bson.M{"$set": bson.M{"_id": value.name, "value": value.value}}))
 	}
 	_, err := c.BulkWrite(ctx, models)
@@ -358,7 +358,7 @@ func (m MongoDB) AddSorted(sortedSets ...SortedSet) error {
 		for _, score := range sorted.scores {
 			models = append(models, mongo.NewUpdateOneModel().
 				SetUpsert(true).
-				SetFilter(bson.M{"name": bson.M{"$eq": sorted.name}, "member": bson.M{"$eq": score.Id}}).
+				SetFilter(bson.M{"name": sorted.name, "member": score.Id}).
 				SetUpdate(bson.M{"$set": bson.M{"name": sorted.name, "member": score.Id, "score": score.Score}}))
 		}
 	}

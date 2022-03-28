@@ -181,6 +181,9 @@ func (m *Master) Serve() {
 		base.Logger().Fatal("failed to connect cache database", zap.Error(err),
 			zap.String("database", m.GorseConfig.Database.CacheStore))
 	}
+	if err = m.CacheClient.Init(); err != nil {
+		base.Logger().Fatal("failed to init database", zap.Error(err))
+	}
 
 	// pre-lock privileged tasks
 	tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}

@@ -23,6 +23,7 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -225,7 +226,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 
 func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledItems [][]int32,
 	labelIDF, userIDF []float32, completed chan struct{}) error {
-	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+	return parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -347,7 +348,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
 			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
 	}
-	return base.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
+	return parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -466,7 +467,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 }
 
 func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}) error {
-	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+	return parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -576,7 +577,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		relatedUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
 			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
 	}
-	return base.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
+	return parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()

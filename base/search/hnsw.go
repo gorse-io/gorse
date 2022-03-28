@@ -19,6 +19,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"go.uber.org/zap"
 	"math/rand"
 	"modernc.org/mathutil"
@@ -146,7 +147,7 @@ func (h *HNSW) Build() {
 
 	h.bottomNeighbors = make([]*heap.PriorityQueue, len(h.vectors))
 	h.nodeMutexes = make([]sync.RWMutex, len(h.vectors))
-	_ = base.Parallel(len(h.vectors), h.numJobs, func(_, jobId int) error {
+	_ = parallel.Parallel(len(h.vectors), h.numJobs, func(_, jobId int) error {
 		h.insert(int32(jobId))
 		completed <- struct{}{}
 		return nil
@@ -337,7 +338,7 @@ func (b *HNSWBuilder) evaluate(idx *HNSW, prune0 bool) float32 {
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = base.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+	_ = parallel.Parallel(len(samples), idx.numJobs, func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.Search(b.data[sample], b.k, prune0)
 		if len(expected) > 0 {
@@ -382,7 +383,7 @@ func (b *HNSWBuilder) evaluateTermSearch(idx *HNSW, prune0 bool, term string) fl
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = base.Parallel(len(samples), runtime.NumCPU(), func(_, i int) error {
+	_ = parallel.Parallel(len(samples), runtime.NumCPU(), func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
 		if len(expected) > 0 {

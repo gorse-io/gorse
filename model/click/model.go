@@ -23,6 +23,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"io"
@@ -300,7 +301,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		}
 		fitStart := time.Now()
 		cost := float32(0)
-		_ = base.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
+		_ = parallel.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
 				prediction := fm.internalPredictImpl(features, values)

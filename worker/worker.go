@@ -27,6 +27,7 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -401,7 +402,7 @@ func (w *Worker) Recommend(users []data.User) {
 	// recommendation
 	startTime := time.Now()
 	userFeedbackCache := NewFeedbackCache(w.dataClient, w.cfg.Database.PositiveFeedbackType...)
-	err = base.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
+	err = parallel.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()

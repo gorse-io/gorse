@@ -22,7 +22,9 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-redis/redis/v8"
 	"github.com/go-resty/resty/v2"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -58,8 +60,8 @@ func init() {
 		}
 		return defaultValue
 	}
-	benchDataStore = env("BENCH_DATA_STORE", "mysql://root:password@tcp(127.0.0.1:3306)/")
-	benchCacheStore = env("BENCH_CACHE_STORE", "redis://127.0.0.1:6379/")
+	benchDataStore = env("BENCH_DATA_STORE", "mongodb://root:password@127.0.0.1:27017/")
+	benchCacheStore = env("BENCH_CACHE_STORE", "mongodb://root:password@127.0.0.1:27017/")
 }
 
 type benchServer struct {
@@ -98,6 +100,8 @@ func newBenchServer(b *testing.B) *benchServer {
 	err = s.DataClient.Init()
 	require.NoError(b, err)
 	s.CacheClient, err = cache.Open(cacheStoreURL)
+	require.NoError(b, err)
+	err = s.CacheClient.Init()
 	require.NoError(b, err)
 
 	// insert users
@@ -771,8 +775,8 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 					require.NoError(b, err)
 				}
 			}
-			cache.SortScores(scores)
-			cache.SortScores(expects)
+			lo.Reverse(scores)
+			lo.Reverse(expects)
 			err := s.CacheClient.SetSorted(cache.PopularItems, scores)
 			require.NoError(b, err)
 			s.GorseConfig.Database.CacheSize = len(scores)
@@ -792,6 +796,158 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 				err = json.Unmarshal(r.Body(), &ret)
 				require.NoError(b, err)
 				require.Equal(b, expects[:batchSize], ret)
+			}
+		})
+	}
+}
+
+func BenchmarkRecommendFromOfflineCache(b *testing.B) {
+	base.CloseLogger()
+	s := newBenchServer(b)
+	defer s.Close(b)
+
+	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
+		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
+			scores := make([]cache.Scored, batchSize*2)
+			expects := make([]string, batchSize)
+			for i := range scores {
+				scores[i].Id = strconv.Itoa(i)
+				scores[i].Score = float64(i)
+				if i%2 == 0 {
+					expects[i/2] = scores[i].Id
+				} else {
+					err := s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.IgnoreItems, "init_user_1"), []cache.Scored{{scores[i].Id, 0}}))
+					require.NoError(b, err)
+				}
+			}
+			lo.Reverse(scores)
+			lo.Reverse(expects)
+			err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "init_user_1"), scores)
+			require.NoError(b, err)
+			s.GorseConfig.Database.CacheSize = len(scores)
+
+			response := make([]*resty.Response, b.N)
+			client := resty.New()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				response[i], err = client.R().Get(s.address + fmt.Sprintf("/api/recommend/init_user_1?n=%d", batchSize))
+				require.NoError(b, err)
+			}
+			b.StopTimer()
+
+			for _, r := range response {
+				require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
+				var ret []string
+				err = json.Unmarshal(r.Body(), &ret)
+				require.NoError(b, err)
+				require.Equal(b, expects[:batchSize], ret)
+			}
+		})
+	}
+}
+
+func BenchmarkRecommendFromLatest(b *testing.B) {
+	base.CloseLogger()
+	s := newBenchServer(b)
+	defer s.Close(b)
+
+	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
+		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
+			scores := make([]cache.Scored, batchSize*2)
+			expects := make([]string, batchSize)
+			for i := range scores {
+				scores[i].Id = strconv.Itoa(i)
+				scores[i].Score = float64(i)
+				if i%2 == 0 {
+					expects[i/2] = scores[i].Id
+				} else {
+					err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
+						FeedbackKey: data.FeedbackKey{
+							FeedbackType: "feedback_type",
+							UserId:       "init_user_1",
+							ItemId:       scores[i].Id,
+						},
+					}}, true, true, true)
+					require.NoError(b, err)
+				}
+			}
+			lo.Reverse(scores)
+			lo.Reverse(expects)
+			err := s.CacheClient.SetSorted(cache.LatestItems, scores)
+			require.NoError(b, err)
+			s.GorseConfig.Database.CacheSize = len(scores)
+
+			response := make([]*resty.Response, b.N)
+			client := resty.New()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				response[i], err = client.R().Get(s.address + fmt.Sprintf("/api/recommend/init_user_1?n=%d", batchSize))
+				require.NoError(b, err)
+			}
+			b.StopTimer()
+
+			for _, r := range response {
+				require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
+				var ret []string
+				err = json.Unmarshal(r.Body(), &ret)
+				require.NoError(b, err)
+				require.Equal(b, expects[:batchSize], ret)
+			}
+		})
+	}
+}
+
+func BenchmarkRecommendFromItemBased(b *testing.B) {
+	base.CloseLogger()
+	s := newBenchServer(b)
+	defer s.Close(b)
+
+	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
+		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
+			// insert user feedbacks
+			scores := make([]cache.Scored, batchSize*2)
+			for i := range scores {
+				scores[i].Id = fmt.Sprintf("init_item_%d", i)
+				scores[i].Score = float64(i)
+				if i < s.GorseConfig.Recommend.NumFeedbackFallbackItemBased {
+					err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
+						FeedbackKey: data.FeedbackKey{
+							FeedbackType: "feedback_type_positive",
+							UserId:       "init_user_1",
+							ItemId:       fmt.Sprintf("init_item_%d", i),
+						},
+						Timestamp: time.Now().Add(-time.Minute),
+					}}, true, true, true)
+					require.NoError(b, err)
+				}
+			}
+
+			// insert user neighbors
+			for i := 0; i < s.GorseConfig.Recommend.NumFeedbackFallbackItemBased; i++ {
+				err := s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, fmt.Sprintf("init_item_%d", i)), scores)
+				require.NoError(b, err)
+			}
+
+			s.GorseConfig.Database.CacheSize = len(scores)
+			s.GorseConfig.Database.PositiveFeedbackType = []string{"feedback_type_positive"}
+			s.GorseConfig.Recommend.FallbackRecommend = []string{"item_based"}
+
+			response := make([]*resty.Response, b.N)
+			client := resty.New()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				var err error
+				response[i], err = client.R().Get(s.address + fmt.Sprintf("/api/recommend/init_user_1?n=%d", batchSize))
+				require.NoError(b, err)
+			}
+			b.StopTimer()
+
+			for _, r := range response {
+				require.Equal(b, http.StatusOK, r.StatusCode(), r.String())
+				var ret []string
+				err := json.Unmarshal(r.Body(), &ret)
+				require.NoError(b, err)
+				require.Equal(b, batchSize, len(ret))
 			}
 		})
 	}

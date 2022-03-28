@@ -858,7 +858,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, ctx.n-len(ctx.results))
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -884,7 +884,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, ctx.n-len(ctx.results))
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, s.GorseConfig.Database.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
