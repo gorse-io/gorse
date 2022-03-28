@@ -15,7 +15,7 @@
 package cache
 
 import (
-	"context"
+	"database/sql"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"runtime"
@@ -24,7 +24,8 @@ import (
 )
 
 var (
-	mongoUri string
+	mySqlDSN    string
+	postgresDSN string
 )
 
 func init() {
@@ -35,27 +36,28 @@ func init() {
 		}
 		return defaultValue
 	}
-	mongoUri = env("MONGO_URI", "mongodb://root:password@127.0.0.1:27017/")
+	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
+	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
 }
 
-type testMongo struct {
+type testSQLDatabase struct {
 	Database
 }
 
-func (db *testMongo) GetMongoDB(t *testing.T) *MongoDB {
-	var mongoDatabase *MongoDB
+func (db *testSQLDatabase) GetComm(t *testing.T) *sql.DB {
+	var sqlDatabase *SQLDatabase
 	var ok bool
-	mongoDatabase, ok = db.Database.(*MongoDB)
+	sqlDatabase, ok = db.Database.(*SQLDatabase)
 	assert.True(t, ok)
-	return mongoDatabase
+	return sqlDatabase.client
 }
 
-func (db *testMongo) Close(t *testing.T) {
+func (db *testSQLDatabase) Close(t *testing.T) {
 	err := db.Database.Close()
 	assert.NoError(t, err)
 }
 
-func newTestMongo(t *testing.T) *testMongo {
+func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	var testName string
 	pc, _, _, ok := runtime.Caller(1)
@@ -67,43 +69,42 @@ func newTestMongo(t *testing.T) *testMongo {
 		t.Fatalf("failed to retrieve test name")
 	}
 
-	ctx := context.Background()
-	database := new(testMongo)
+	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(mongoUri)
+	database.Database, err = Open(postgresDSN + "?sslmode=disable&TimeZone=UTC")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	databaseComm := database.GetMongoDB(t)
+	databaseComm := database.GetComm(t)
+	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
-	err = databaseComm.client.Database(dbName).Drop(ctx)
-	if err == nil {
-		t.Log("delete existed database:", dbName)
-	}
+	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	assert.NoError(t, err)
 	err = database.Database.Close()
 	assert.NoError(t, err)
-	// create schema
-	database.Database, err = Open(mongoUri + dbName + "?authSource=admin&connect=direct")
+	// connect database
+	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC")
 	assert.NoError(t, err)
+	// create schema
 	err = database.Init()
 	assert.NoError(t, err)
 	return database
 }
 
-func TestMongo_Meta(t *testing.T) {
-	db := newTestMongo(t)
+func TestPostgres_Meta(t *testing.T) {
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testMeta(t, db.Database)
 }
 
-func TestMongo_Sort(t *testing.T) {
-	db := newTestMongo(t)
-	//defer db.Close(t)
+func TestPostgres_Sort(t *testing.T) {
+	db := newTestPostgresDatabase(t)
+	defer db.Close(t)
 	testSort(t, db.Database)
 }
 
-func TestMongo_Set(t *testing.T) {
-	db := newTestMongo(t)
+func TestPostgres_Set(t *testing.T) {
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testSet(t, db.Database)
 }

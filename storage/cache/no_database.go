@@ -14,8 +14,6 @@
 
 package cache
 
-import "time"
-
 // NoDatabase means no database used for cache.
 type NoDatabase struct{}
 
@@ -33,19 +31,9 @@ func (NoDatabase) Set(_ ...Value) error {
 	return ErrNoDatabase
 }
 
-// GetString method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetString(_ string) (string, error) {
-	return "", ErrNoDatabase
-}
-
-// GetInt method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetInt(_ string) (int, error) {
-	return 0, ErrNoDatabase
-}
-
-// GetTime method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetTime(_ string) (time.Time, error) {
-	return time.Time{}, ErrNoDatabase
+// Get method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) Get(_ string) *ReturnValue {
+	return &ReturnValue{err: ErrNoDatabase}
 }
 
 // Delete method of NoDatabase returns ErrNoDatabase.

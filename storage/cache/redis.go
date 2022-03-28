@@ -16,12 +16,10 @@ package cache
 
 import (
 	"context"
-	"github.com/araddon/dateparse"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"strconv"
-	"time"
 )
 
 // Redis cache storage.
@@ -51,30 +49,17 @@ func (r *Redis) Set(values ...Value) error {
 	return errors.Trace(err)
 }
 
-// GetString returns a string from Redis.
-func (r *Redis) GetString(key string) (string, error) {
+// Get returns a value from Redis.
+func (r *Redis) Get(key string) *ReturnValue {
 	var ctx = context.Background()
 	val, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return "", errors.Annotate(ErrObjectNotExist, key)
+			return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, key)}
 		}
-		return "", err
+		return &ReturnValue{err: err}
 	}
-	return val, err
-}
-
-// GetInt returns a integer from Redis.
-func (r *Redis) GetInt(key string) (int, error) {
-	val, err := r.GetString(key)
-	if err != nil {
-		return 0, nil
-	}
-	buf, err := strconv.Atoi(val)
-	if err != nil {
-		return 0, err
-	}
-	return buf, err
+	return &ReturnValue{value: val}
 }
 
 // Exists check keys in Redis.
@@ -94,19 +79,6 @@ func (r *Redis) Exists(keys ...string) ([]int, error) {
 		existences[i] = int(commands[i].Val())
 	}
 	return existences, nil
-}
-
-// GetTime returns a time from Redis.
-func (r *Redis) GetTime(key string) (time.Time, error) {
-	val, err := r.GetString(key)
-	if err != nil {
-		return time.Time{}, nil
-	}
-	tm, err := dateparse.ParseAny(val)
-	if err != nil {
-		return time.Time{}, nil
-	}
-	return tm, nil
 }
 
 // Delete object from Redis.
@@ -157,6 +129,9 @@ func (r *Redis) AddSet(key string, members ...string) error {
 
 // RemSet removes members from a set in Redis.
 func (r *Redis) RemSet(key string, members ...string) error {
+	if len(members) == 0 {
+		return nil
+	}
 	ctx := context.Background()
 	return r.client.SRem(ctx, key, members).Err()
 }

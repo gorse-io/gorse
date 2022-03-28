@@ -878,13 +878,13 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	}
 	// read active time
 	var err error
-	activeTime, err = w.cacheClient.GetTime(cache.Key(cache.LastModifyUserTime, userId))
+	activeTime, err = w.cacheClient.Get(cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
 	}
 	// read recommend time
-	recommendTime, err = w.cacheClient.GetTime(cache.Key(cache.LastUpdateUserRecommendTime, userId))
+	recommendTime, err = w.cacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
@@ -912,7 +912,7 @@ func loadUserHistoricalItems(database data.Database, userId string) ([]string, [
 func (w *Worker) refreshCache(userId string) error {
 	var timeLimit *time.Time
 	// read recommend time
-	recommendTime, err := w.cacheClient.GetTime(cache.Key(cache.LastUpdateUserRecommendTime, userId))
+	recommendTime, err := w.cacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err == nil {
 		timeLimit = &recommendTime
 	} else {

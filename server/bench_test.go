@@ -221,6 +221,16 @@ func (s *benchServer) prepareCache(b *testing.B, url, benchName string) string {
 		err = cli.Disconnect(ctx)
 		require.NoError(b, err)
 		return url + dbName + "?authSource=admin&connect=direct"
+	} else if strings.HasPrefix(url, "postgres://") {
+		db, err := sql.Open("postgres", url+"?sslmode=disable&TimeZone=UTC")
+		require.NoError(b, err)
+		_, err = db.Exec("DROP DATABASE IF EXISTS " + dbName)
+		require.NoError(b, err)
+		_, err = db.Exec("CREATE DATABASE " + dbName)
+		require.NoError(b, err)
+		err = db.Close()
+		require.NoError(b, err)
+		return url + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC"
 	} else {
 		b.Fatal("unsupported cache store type")
 		return ""

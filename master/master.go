@@ -316,7 +316,7 @@ func (m *Master) RunRagtagTasksLoop() {
 }
 
 func (m *Master) checkDataImported() bool {
-	isDataImported, err := m.CacheClient.GetInt(cache.Key(cache.GlobalMeta, cache.DataImported))
+	isDataImported, err := m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return false

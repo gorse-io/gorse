@@ -16,6 +16,8 @@ package cache
 
 import (
 	"context"
+	"database/sql"
+	"github.com/araddon/dateparse"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -196,6 +198,29 @@ func Time(name string, value time.Time) Value {
 	return Value{name: name, value: value.String()}
 }
 
+type ReturnValue struct {
+	value string
+	err   error
+}
+
+func (r *ReturnValue) String() (string, error) {
+	return r.value, r.err
+}
+
+func (r *ReturnValue) Integer() (int, error) {
+	if r.err != nil {
+		return 0, r.err
+	}
+	return strconv.Atoi(r.value)
+}
+
+func (r *ReturnValue) Time() (time.Time, error) {
+	if r.err != nil {
+		return time.Time{}, r.err
+	}
+	return dateparse.ParseAny(r.value)
+}
+
 type SortedSet struct {
 	name   string
 	scores []Scored
@@ -220,9 +245,7 @@ type Database interface {
 	Init() error
 
 	Set(values ...Value) error
-	GetString(name string) (string, error)
-	GetTime(name string) (time.Time, error)
-	GetInt(name string) (int, error)
+	Get(name string) *ReturnValue
 	Delete(name string) error
 	Exists(names ...string) ([]int, error)
 
@@ -269,6 +292,13 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		} else {
 			database.dbName = cs.Database
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, postgresPrefix) {
+		database := new(SQLDatabase)
+		database.driver = Postgres
+		if database.client, err = sql.Open("postgres", path); err != nil {
+			return nil, errors.Trace(err)
 		}
 		return database, nil
 	}

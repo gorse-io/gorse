@@ -258,6 +258,9 @@ func (d *SQLDatabase) GetMeasurements(name string, n int) ([]Measurement, error)
 
 // BatchInsertItems inserts a batch of items into MySQL.
 func (d *SQLDatabase) BatchInsertItems(items []Item) error {
+	if len(items) == 0 {
+		return nil
+	}
 	startTime := time.Now()
 	builder := strings.Builder{}
 	switch d.driver {
@@ -307,6 +310,9 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 }
 
 func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
+	if len(itemIds) == 0 {
+		return nil, nil
+	}
 	// compose the query
 	builder := strings.Builder{}
 	switch d.driver {
@@ -701,6 +707,9 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 
 // BatchInsertUsers inserts users into MySQL.
 func (d *SQLDatabase) BatchInsertUsers(users []User) error {
+	if len(users) == 0 {
+		return nil
+	}
 	startTime := time.Now()
 	builder := strings.Builder{}
 	switch d.driver {
