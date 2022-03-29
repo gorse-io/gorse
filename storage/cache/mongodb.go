@@ -16,15 +16,12 @@ package cache
 
 import (
 	"context"
-	"github.com/araddon/dateparse"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"strconv"
-	"time"
 )
 
 type MongoDB struct {
@@ -105,6 +102,9 @@ func (m MongoDB) Close() error {
 }
 
 func (m MongoDB) Set(values ...Value) error {
+	if len(values) == 0 {
+		return nil
+	}
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("values")
 	var models []mongo.WriteModel
@@ -118,44 +118,20 @@ func (m MongoDB) Set(values ...Value) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetString(name string) (string, error) {
+func (m MongoDB) Get(name string) *ReturnValue {
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("values")
 	r := c.FindOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	if err := r.Err(); err == mongo.ErrNoDocuments {
-		return "", errors.Annotate(ErrObjectNotExist, name)
+		return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, name)}
 	} else if err != nil {
-		return "", errors.Trace(err)
+		return &ReturnValue{err: errors.Trace(err)}
 	}
 	if raw, err := r.DecodeBytes(); err != nil {
-		return "", errors.Trace(err)
+		return &ReturnValue{err: errors.Trace(err)}
 	} else {
-		return raw.Lookup("value").StringValue(), nil
+		return &ReturnValue{value: raw.Lookup("value").StringValue()}
 	}
-}
-
-func (m MongoDB) GetInt(name string) (int, error) {
-	val, err := m.GetString(name)
-	if err != nil {
-		return 0, nil
-	}
-	buf, err := strconv.Atoi(val)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	return buf, err
-}
-
-func (m MongoDB) GetTime(name string) (time.Time, error) {
-	val, err := m.GetString(name)
-	if err != nil {
-		return time.Time{}, nil
-	}
-	tm, err := dateparse.ParseAny(val)
-	if err != nil {
-		return time.Time{}, nil
-	}
-	return tm, nil
 }
 
 func (m MongoDB) Delete(name string) error {
@@ -166,6 +142,9 @@ func (m MongoDB) Delete(name string) error {
 }
 
 func (m MongoDB) Exists(names ...string) ([]int, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("values")
 	opt := options.Find()
@@ -242,6 +221,9 @@ func (m MongoDB) AddSet(name string, members ...string) error {
 }
 
 func (m MongoDB) RemSet(name string, members ...string) error {
+	if len(members) == 0 {
+		return nil
+	}
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("sets")
 	var models []mongo.WriteModel
@@ -254,6 +236,9 @@ func (m MongoDB) RemSet(name string, members ...string) error {
 }
 
 func (m MongoDB) GetSortedScores(members ...SetMember) ([]float64, error) {
+	if len(members) == 0 {
+		return nil, nil
+	}
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("sorted_sets")
 	conditions := lo.Map(members, func(member SetMember, _ int) bson.D {

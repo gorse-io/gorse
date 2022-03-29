@@ -17,6 +17,8 @@ import (
 	"context"
 	"github.com/stretchr/testify/assert"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -52,14 +54,25 @@ func (db *testMongoDatabase) Close(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func newTestMongoDatabase(t *testing.T, dbName string) *testMongoDatabase {
+func newTestMongoDatabase(t *testing.T) *testMongoDatabase {
+	// retrieve test name
+	var testName string
+	pc, _, _, ok := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		splits := strings.Split(details.Name(), ".")
+		testName = splits[len(splits)-1]
+	} else {
+		t.Fatalf("failed to retrieve test name")
+	}
+
 	ctx := context.Background()
 	database := new(testMongoDatabase)
 	var err error
 	// create database
 	database.Database, err = Open(mongoUri)
 	assert.NoError(t, err)
-	dbName = "gorse_" + dbName
+	dbName := "gorse_" + testName
 	databaseComm := database.GetMongoDB(t)
 	assert.NoError(t, err)
 	err = databaseComm.client.Database(dbName).Drop(ctx)
@@ -77,55 +90,55 @@ func newTestMongoDatabase(t *testing.T, dbName string) *testMongoDatabase {
 }
 
 func TestMongoDatabase_Users(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestSQLDatabase_Users")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testUsers(t, db.Database)
 }
 
 func TestMongoDatabase_Feedback(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestSQLDatabase_Feedback")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testFeedback(t, db.Database)
 }
 
 func TestMongoDatabase_Item(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestSQLDatabase_Item")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testItems(t, db.Database)
 }
 
 func TestMongoDatabase_DeleteUser(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestSQLDatabase_DeleteUser")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testDeleteUser(t, db.Database)
 }
 
 func TestMongoDatabase_DeleteItem(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestSQLDatabase_DeleteItem")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
 
 func TestMongoDatabase_DeleteFeedback(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestSQLDatabase_DeleteFeedback")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testDeleteFeedback(t, db.Database)
 }
 
 func TestMongoDatabase_Measurements(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestSQLDatabase_Measurements")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testMeasurements(t, db.Database)
 }
 
 func TestMongoDatabase_TimeLimit(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestMongoDatabase_TimeLimit")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testTimeLimit(t, db.Database)
 }
 
 func TestMongoDatabase_GetClickThroughRate(t *testing.T) {
-	db := newTestMongoDatabase(t, "TestMongoDatabase_GetClickThroughRate")
+	db := newTestMongoDatabase(t)
 	defer db.Close(t)
 	testGetClickThroughRate(t, db.Database)
 }

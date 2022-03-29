@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"github.com/stretchr/testify/assert"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -58,13 +59,24 @@ func (db *testSQLDatabase) Close(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func newTestMySQLDatabase(t *testing.T, dbName string) *testSQLDatabase {
+func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
+	// retrieve test name
+	var testName string
+	pc, _, _, ok := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		splits := strings.Split(details.Name(), ".")
+		testName = splits[len(splits)-1]
+	} else {
+		t.Fatalf("failed to retrieve test name")
+	}
+
 	database := new(testSQLDatabase)
 	var err error
 	// create database
 	database.Database, err = Open(mySqlDSN + "?timeout=30s&parseTime=true")
 	assert.NoError(t, err)
-	dbName = "gorse_" + dbName
+	dbName := "gorse_" + testName
 	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
@@ -82,66 +94,77 @@ func newTestMySQLDatabase(t *testing.T, dbName string) *testSQLDatabase {
 }
 
 func TestMySQL_Users(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_Users")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testUsers(t, db.Database)
 }
 
 func TestMySQL_Feedback(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_Feedback")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testFeedback(t, db.Database)
 }
 
 func TestMySQL_Item(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_Item")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testItems(t, db.Database)
 }
 
 func TestMySQL_DeleteUser(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_DeleteUser")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testDeleteUser(t, db.Database)
 }
 
 func TestMySQL_DeleteItem(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_DeleteItem")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
 
 func TestMySQL_DeleteFeedback(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_DeleteFeedback")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testDeleteFeedback(t, db.Database)
 }
 
 func TestMySQL_Measurements(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_Measurements")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testMeasurements(t, db.Database)
 }
 
 func TestMySQL_TimeLimit(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_TimeLimit")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testTimeLimit(t, db.Database)
 }
 
 func TestMySQL_GetClickThroughRate(t *testing.T) {
-	db := newTestMySQLDatabase(t, "TestMySQL_GetClickThroughRate")
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testGetClickThroughRate(t, db.Database)
 }
 
-func newTestPostgresDatabase(t *testing.T, dbName string) *testSQLDatabase {
+func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
+	// retrieve test name
+	var testName string
+	pc, _, _, ok := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		splits := strings.Split(details.Name(), ".")
+		testName = splits[len(splits)-1]
+	} else {
+		t.Fatalf("failed to retrieve test name")
+	}
+
 	database := new(testSQLDatabase)
 	var err error
 	// create database
 	database.Database, err = Open(postgresDSN + "?sslmode=disable&TimeZone=UTC")
 	assert.NoError(t, err)
-	dbName = "gorse_" + dbName
+	dbName := "gorse_" + testName
 	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
@@ -159,66 +182,77 @@ func newTestPostgresDatabase(t *testing.T, dbName string) *testSQLDatabase {
 }
 
 func TestPostgres_Users(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_Users")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testUsers(t, db.Database)
 }
 
 func TestPostgres_Feedback(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_Feedback")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testFeedback(t, db.Database)
 }
 
 func TestPostgres_Item(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_Item")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testItems(t, db.Database)
 }
 
 func TestPostgres_DeleteUser(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_DeleteUser")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testDeleteUser(t, db.Database)
 }
 
 func TestPostgres_DeleteItem(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_DeleteItem")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
 
 func TestPostgres_DeleteFeedback(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_DeleteFeedback")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testDeleteFeedback(t, db.Database)
 }
 
 func TestPostgres_Measurements(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_Measurements")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testMeasurements(t, db.Database)
 }
 
 func TestPostgres_TimeLimit(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_TimeLimit")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testTimeLimit(t, db.Database)
 }
 
 func TestPostgres_GetClickThroughRate(t *testing.T) {
-	db := newTestPostgresDatabase(t, "TestPostgres_GetClickThroughRate")
+	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
 	testGetClickThroughRate(t, db.Database)
 }
 
-func newTestClickHouseDatabase(t *testing.T, dbName string) *testSQLDatabase {
+func newTestClickHouseDatabase(t *testing.T) *testSQLDatabase {
+	// retrieve test name
+	var testName string
+	pc, _, _, ok := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		splits := strings.Split(details.Name(), ".")
+		testName = splits[len(splits)-1]
+	} else {
+		t.Fatalf("failed to retrieve test name")
+	}
+
 	database := new(testSQLDatabase)
 	var err error
 	// create database
 	database.Database, err = Open(clickhouseDSN)
 	assert.NoError(t, err)
-	dbName = "gorse_" + dbName
+	dbName := "gorse_" + testName
 	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
@@ -236,55 +270,55 @@ func newTestClickHouseDatabase(t *testing.T, dbName string) *testSQLDatabase {
 }
 
 func TestClickHouse_Users(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_Users")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testUsers(t, db.Database)
 }
 
 func TestClickHouse_Feedback(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_Feedback")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testFeedback(t, db.Database)
 }
 
 func TestClickHouse_Item(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_Item")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testItems(t, db.Database)
 }
 
 func TestClickHouse_DeleteUser(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_DeleteUser")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testDeleteUser(t, db.Database)
 }
 
 func TestClickHouse_DeleteItem(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_DeleteItem")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testDeleteItem(t, db.Database)
 }
 
 func TestClickHouse_DeleteFeedback(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_DeleteFeedback")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testDeleteFeedback(t, db.Database)
 }
 
 func TestClickHouse_Measurements(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_Measurements")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testMeasurements(t, db.Database)
 }
 
 func TestClickHouse_TimeLimit(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_TimeLimit")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testTimeLimit(t, db.Database)
 }
 
 func TestClickHouse_GetClickThroughRate(t *testing.T) {
-	db := newTestClickHouseDatabase(t, "TestClickHouse_GetClickThroughRate")
+	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testGetClickThroughRate(t, db.Database)
 }

@@ -183,6 +183,9 @@ func (db *MongoDB) GetMeasurements(name string, n int) ([]Measurement, error) {
 
 // BatchInsertItems insert items into MongoDB.
 func (db *MongoDB) BatchInsertItems(items []Item) error {
+	if len(items) == 0 {
+		return nil
+	}
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("items")
@@ -201,6 +204,9 @@ func (db *MongoDB) BatchInsertItems(items []Item) error {
 }
 
 func (db *MongoDB) BatchGetItems(itemIds []string) ([]Item, error) {
+	if len(itemIds) == 0 {
+		return nil, nil
+	}
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("items")
 	r, err := c.Find(ctx, bson.M{"itemid": bson.M{"$in": itemIds}})
@@ -389,6 +395,9 @@ func (db *MongoDB) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Fe
 
 // BatchInsertUsers inserts a user into MongoDB.
 func (db *MongoDB) BatchInsertUsers(users []User) error {
+	if len(users) == 0 {
+		return nil
+	}
 	startTime := time.Now()
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection("users")

@@ -175,6 +175,10 @@ func testUsers(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Equal(t, "modify", user.Comment)
 	assert.Equal(t, []string{"a", "b", "c"}, user.Labels)
+
+	// test insert empty
+	err = db.BatchInsertUsers(nil)
+	assert.NoError(t, err)
 }
 
 func testFeedback(t *testing.T, db Database) {
@@ -422,6 +426,14 @@ func testItems(t *testing.T, db Database) {
 	assert.Equal(t, "modify", item.Comment)
 	assert.Equal(t, []string{"a", "b", "c"}, item.Labels)
 	assert.Equal(t, timestamp, item.Timestamp)
+
+	// test insert empty
+	err = db.BatchInsertItems(nil)
+	assert.NoError(t, err)
+	// test get empty
+	items, err = db.BatchGetItems(nil)
+	assert.NoError(t, err)
+	assert.Empty(t, items)
 }
 
 func testDeleteUser(t *testing.T, db Database) {

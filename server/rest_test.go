@@ -336,7 +336,7 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
-	isHidden, err := s.CacheClient.GetInt(cache.Key(cache.HiddenItems, "6"))
+	isHidden, err := s.CacheClient.Get(cache.Key(cache.HiddenItems, "6")).Integer()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, isHidden)
 	// get latest items
@@ -430,7 +430,7 @@ func TestServer_Items(t *testing.T) {
 			Timestamp:  timestamp,
 		})).
 		End()
-	isHidden, err = s.CacheClient.GetInt(cache.Key(cache.HiddenItems, "2"))
+	isHidden, err = s.CacheClient.Get(cache.Key(cache.HiddenItems, "2")).Integer()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, isHidden)
 	apitest.New().

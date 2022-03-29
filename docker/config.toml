@@ -3,6 +3,9 @@
 
 # The database for caching, support Redis only:
 #   redis://<user>:<password>@<host>:<port>/<db_number>
+#   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 cache_store = "redis://redis:6379"
 
 # The database for persist data, support MySQL, Postgres, ClickHouse and MongoDB:

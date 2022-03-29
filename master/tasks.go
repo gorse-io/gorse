@@ -643,13 +643,13 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 	var modifiedTime, updateTime time.Time
 	var err error
 	// read modified time
-	modifiedTime, err = m.CacheClient.GetTime(cache.Key(cache.LastModifyUserTime, userId))
+	modifiedTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
 	}
 	// read update time
-	updateTime, err = m.CacheClient.GetTime(cache.Key(cache.LastUpdateUserNeighborsTime, userId))
+	updateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserNeighborsTime, userId)).Time()
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
@@ -675,13 +675,13 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 	}
 	// read modified time
 	var err error
-	modifiedTime, err = m.CacheClient.GetTime(cache.Key(cache.LastModifyItemTime, itemId))
+	modifiedTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyItemTime, itemId)).Time()
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
 	}
 	// read update time
-	updateTime, err = m.CacheClient.GetTime(cache.Key(cache.LastUpdateItemNeighborsTime, itemId))
+	updateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateItemNeighborsTime, itemId)).Time()
 	if err != nil {
 		base.Logger().Error("failed to read meta", zap.Error(err))
 		return true
