@@ -301,6 +301,14 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
+	} else if strings.HasPrefix(path, mySQLPrefix) {
+		name := path[len(mySQLPrefix):]
+		database := new(SQLDatabase)
+		database.driver = MySQL
+		if database.client, err = sql.Open("mysql", name); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
 }
