@@ -17,6 +17,8 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"github.com/chewxy/math32"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
@@ -69,6 +71,31 @@ func (db *SQLDatabase) Init() error {
 		if _, err := db.client.Exec("CREATE INDEX IF NOT EXISTS sorted_sets_index ON sorted_sets(name, score)"); err != nil {
 			return errors.Trace(err)
 		}
+	case MySQL:
+		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS `values` (" +
+			"name VARCHAR(128) PRIMARY KEY, " +
+			"value VARCHAR(128) NOT NULL" +
+			")"); err != nil {
+			return errors.Trace(err)
+		}
+
+		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sets (" +
+			"name VARCHAR(128) NOT NULL," +
+			"member VARCHAR(128) NOT NULL," +
+			"PRIMARY KEY (name, member)" +
+			")"); err != nil {
+			return errors.Trace(err)
+		}
+
+		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sorted_sets (" +
+			"name VARCHAR(128) NOT NULL," +
+			"member VARCHAR(128) NOT NULL," +
+			"score DOUBLE PRECISION NOT NULL," +
+			"PRIMARY KEY (name, member)," +
+			"INDEX (name, score)" +
+			")"); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }
@@ -79,30 +106,52 @@ func (db *SQLDatabase) Set(values ...Value) error {
 	}
 	var builder strings.Builder
 	var args []interface{}
-	builder.WriteString("INSERT INTO values(name, value) VALUES ")
+	switch db.driver {
+	case Postgres:
+		builder.WriteString("INSERT INTO values(name, value) VALUES ")
+	case MySQL:
+		builder.WriteString("INSERT INTO `values`(name, value) VALUES ")
+	}
 	for i, value := range values {
 		if i > 0 {
 			builder.WriteRune(',')
 		}
-		builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		switch db.driver {
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		case MySQL:
+			builder.WriteString("(?,?)")
+		}
 		args = append(args, value.name, value.value)
 	}
-	builder.WriteString("ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value")
+	switch db.driver {
+	case Postgres:
+		builder.WriteString("ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value")
+	case MySQL:
+		builder.WriteString("ON DUPLICATE KEY UPDATE value = VALUES(value)")
+	}
 	_, err := db.client.Exec(builder.String(), args...)
 	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) Get(name string) *ReturnValue {
-	rs, err := db.client.Query("SELECT value FROM values WHERE name = $1", name)
+	var rs *sql.Rows
+	var err error
+	switch db.driver {
+	case Postgres:
+		rs, err = db.client.Query("SELECT value FROM values WHERE name = $1", name)
+	case MySQL:
+		rs, err = db.client.Query("SELECT value FROM `values` WHERE name = ?", name)
+	}
 	if err != nil {
-		return &ReturnValue{err: err}
+		return &ReturnValue{err: errors.Trace(err)}
 	}
 	defer rs.Close()
 	if rs.Next() {
 		var value string
 		err := rs.Scan(&value)
 		if err != nil {
-			return &ReturnValue{err: err}
+			return &ReturnValue{err: errors.Trace(err)}
 		}
 		return &ReturnValue{value: value}
 	}
@@ -110,7 +159,13 @@ func (db *SQLDatabase) Get(name string) *ReturnValue {
 }
 
 func (db *SQLDatabase) Delete(name string) error {
-	_, err := db.client.Exec("DELETE FROM values WHERE name = $1", name)
+	var err error
+	switch db.driver {
+	case Postgres:
+		_, err = db.client.Exec("DELETE FROM values WHERE name = $1", name)
+	case MySQL:
+		_, err = db.client.Exec("DELETE FROM `values` WHERE name = ?", name)
+	}
 	return errors.Trace(err)
 }
 
@@ -120,12 +175,22 @@ func (db *SQLDatabase) Exists(names ...string) ([]int, error) {
 	}
 	var builder strings.Builder
 	var args []interface{}
-	builder.WriteString("SELECT name FROM values WHERE name IN (")
+	switch db.driver {
+	case Postgres:
+		builder.WriteString("SELECT name FROM values WHERE name IN (")
+	case MySQL:
+		builder.WriteString("SELECT name FROM `values` WHERE name IN (")
+	}
 	for i, name := range names {
 		if i > 0 {
 			builder.WriteRune(',')
 		}
-		builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
+		switch db.driver {
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
+		case MySQL:
+			builder.WriteString("?")
+		}
 		args = append(args, name)
 	}
 	builder.WriteString(")")
@@ -151,7 +216,14 @@ func (db *SQLDatabase) Exists(names ...string) ([]int, error) {
 }
 
 func (db *SQLDatabase) GetSet(key string) ([]string, error) {
-	rs, err := db.client.Query("SELECT member FROM sets WHERE name = $1", key)
+	var rs *sql.Rows
+	var err error
+	switch db.driver {
+	case Postgres:
+		rs, err = db.client.Query("SELECT member FROM sets WHERE name = $1", key)
+	case MySQL:
+		rs, err = db.client.Query("SELECT member FROM sets WHERE name = ?", key)
+	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -172,21 +244,39 @@ func (db *SQLDatabase) SetSet(key string, members ...string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if _, err = txn.Exec("DELETE FROM sets WHERE name = $1", key); err != nil {
+	switch db.driver {
+	case Postgres:
+		_, err = txn.Exec("DELETE FROM sets WHERE name = $1", key)
+	case MySQL:
+		_, err = txn.Exec("DELETE FROM sets WHERE name = ?", key)
+	}
+	if err != nil {
 		return errors.Trace(err)
 	}
 	if len(members) > 0 {
 		var args []interface{}
 		var builder strings.Builder
-		builder.WriteString("INSERT INTO sets (name, member) VALUES ")
+		switch db.driver {
+		case Postgres:
+			builder.WriteString("INSERT INTO sets (name, member) VALUES ")
+		case MySQL:
+			builder.WriteString("INSERT IGNORE sets (name, member) VALUES ")
+		}
 		for i, member := range members {
 			if i > 0 {
 				builder.WriteRune(',')
 			}
-			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+			switch db.driver {
+			case Postgres:
+				builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+			case MySQL:
+				builder.WriteString("(?,?)")
+			}
 			args = append(args, key, member)
 		}
-		builder.WriteString("ON CONFLICT (name, member) DO NOTHING")
+		if db.driver == Postgres {
+			builder.WriteString("ON CONFLICT (name, member) DO NOTHING")
+		}
 		if _, err = txn.Exec(builder.String(), args...); err != nil {
 			return errors.Trace(err)
 		}
@@ -200,15 +290,27 @@ func (db *SQLDatabase) AddSet(key string, members ...string) error {
 	}
 	var args []interface{}
 	var builder strings.Builder
-	builder.WriteString("INSERT INTO sets (name, member) VALUES ")
+	switch db.driver {
+	case Postgres:
+		builder.WriteString("INSERT INTO sets (name, member) VALUES ")
+	case MySQL:
+		builder.WriteString("INSERT IGNORE sets (name, member) VALUES ")
+	}
 	for i, member := range members {
 		if i > 0 {
 			builder.WriteRune(',')
 		}
-		builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		switch db.driver {
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		case MySQL:
+			builder.WriteString("(?,?)")
+		}
 		args = append(args, key, member)
 	}
-	builder.WriteString("ON CONFLICT (name, member) DO NOTHING")
+	if db.driver == Postgres {
+		builder.WriteString("ON CONFLICT (name, member) DO NOTHING")
+	}
 	if _, err := db.client.Exec(builder.String(), args...); err != nil {
 		return errors.Trace(err)
 	}
@@ -226,7 +328,12 @@ func (db *SQLDatabase) RemSet(key string, members ...string) error {
 		if i > 0 {
 			builder.WriteRune(',')
 		}
-		builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		switch db.driver {
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		case MySQL:
+			builder.WriteString("(?,?)")
+		}
 		args = append(args, key, member)
 	}
 	builder.WriteString(")")
@@ -245,11 +352,21 @@ func (db *SQLDatabase) AddSorted(sortedSets ...SortedSet) error {
 			if len(args) > 0 {
 				builder.WriteRune(',')
 			}
-			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
+			switch db.driver {
+			case Postgres:
+				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
+			case MySQL:
+				builder.WriteString("(?,?,?)")
+			}
 			args = append(args, sortedSet.name, member.Id, member.Score)
 		}
 	}
-	builder.WriteString("ON CONFLICT (name, member) DO UPDATE SET score = EXCLUDED.score")
+	switch db.driver {
+	case Postgres:
+		builder.WriteString("ON CONFLICT (name, member) DO UPDATE SET score = EXCLUDED.score")
+	case MySQL:
+		builder.WriteString("ON DUPLICATE KEY UPDATE score = VALUES(score)")
+	}
 	if len(args) == 0 {
 		return nil
 	}
@@ -270,7 +387,12 @@ func (db *SQLDatabase) GetSortedScores(members ...SetMember) ([]float64, error) 
 		if len(args) > 0 {
 			builder.WriteRune(',')
 		}
-		builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		switch db.driver {
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		case MySQL:
+			builder.WriteString("(?,?)")
+		}
 		args = append(args, member.name, member.member)
 	}
 	builder.WriteString(")")
@@ -296,9 +418,19 @@ func (db *SQLDatabase) GetSorted(key string, begin, end int) ([]Scored, error) {
 	var rs *sql.Rows
 	var err error
 	if end < begin {
-		rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 ORDER BY score DESC OFFSET $2", key, begin)
+		switch db.driver {
+		case Postgres:
+			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 ORDER BY score DESC OFFSET $2", key, begin)
+		case MySQL:
+			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = ? ORDER BY score DESC LIMIT ?, ?", key, begin, math32.MaxInt64)
+		}
 	} else {
-		rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 ORDER BY score DESC OFFSET $2 LIMIT $3", key, begin, end-begin+1)
+		switch db.driver {
+		case Postgres:
+			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 ORDER BY score DESC OFFSET $2 LIMIT $3", key, begin, end-begin+1)
+		case MySQL:
+			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = ? ORDER BY score DESC LIMIT ?, ?", key, begin, end-begin+1)
+		}
 	}
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -316,8 +448,14 @@ func (db *SQLDatabase) GetSorted(key string, begin, end int) ([]Scored, error) {
 }
 
 func (db *SQLDatabase) GetSortedByScore(key string, begin, end float64) ([]Scored, error) {
-	rs, err := db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 AND $2 <= score AND score <= $3 ORDER BY score",
-		key, begin, end)
+	var rs *sql.Rows
+	var err error
+	switch db.driver {
+	case Postgres:
+		rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 AND $2 <= score AND score <= $3 ORDER BY score", key, begin, end)
+	case MySQL:
+		rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = ? AND ? <= score AND score <= ? ORDER BY score", key, begin, end)
+	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -334,7 +472,13 @@ func (db *SQLDatabase) GetSortedByScore(key string, begin, end float64) ([]Score
 }
 
 func (db *SQLDatabase) RemSortedByScore(key string, begin, end float64) error {
-	_, err := db.client.Exec("DELETE FROM sorted_sets WHERE name = $1 AND $2 <= score AND score <= $3", key, begin, end)
+	var err error
+	switch db.driver {
+	case Postgres:
+		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE name = $1 AND $2 <= score AND score <= $3", key, begin, end)
+	case MySQL:
+		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE name = ? AND ? <= score AND score <= ?", key, begin, end)
+	}
 	return errors.Trace(err)
 }
 
@@ -343,7 +487,13 @@ func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if _, err = txn.Exec("DELETE FROM sorted_sets WHERE name = $1", key); err != nil {
+	switch db.driver {
+	case Postgres:
+		_, err = txn.Exec("DELETE FROM sorted_sets WHERE name = $1", key)
+	case MySQL:
+		_, err = txn.Exec("DELETE FROM sorted_sets WHERE name = ?", key)
+	}
+	if err != nil {
 		return errors.Trace(err)
 	}
 	if len(scores) > 0 {
@@ -354,10 +504,20 @@ func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
 			if i > 0 {
 				builder.WriteRune(',')
 			}
-			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
+			switch db.driver {
+			case Postgres:
+				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
+			case MySQL:
+				builder.WriteString("(?,?,?)")
+			}
 			args = append(args, key, member.Id, member.Score)
 		}
-		builder.WriteString("ON CONFLICT (name, member) DO UPDATE SET score = EXCLUDED.score")
+		switch db.driver {
+		case Postgres:
+			builder.WriteString("ON CONFLICT (name, member) DO UPDATE SET score = EXCLUDED.score")
+		case MySQL:
+			builder.WriteString("ON DUPLICATE KEY UPDATE score = VALUES(score)")
+		}
 		if _, err = txn.Exec(builder.String(), args...); err != nil {
 			return errors.Trace(err)
 		}
@@ -366,6 +526,12 @@ func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
 }
 
 func (db *SQLDatabase) RemSorted(key, member string) error {
-	_, err := db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN (($1, $2))", key, member)
+	var err error
+	switch db.driver {
+	case Postgres:
+		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN (($1, $2))", key, member)
+	case MySQL:
+		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN ((?, ?))", key, member)
+	}
 	return errors.Trace(err)
 }

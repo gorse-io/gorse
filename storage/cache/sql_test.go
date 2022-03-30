@@ -108,3 +108,55 @@ func TestPostgres_Set(t *testing.T) {
 	defer db.Close(t)
 	testSet(t, db.Database)
 }
+
+func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
+	// retrieve test name
+	var testName string
+	pc, _, _, ok := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		splits := strings.Split(details.Name(), ".")
+		testName = splits[len(splits)-1]
+	} else {
+		t.Fatalf("failed to retrieve test name")
+	}
+
+	database := new(testSQLDatabase)
+	var err error
+	// create database
+	database.Database, err = Open(mySqlDSN + "?timeout=30s&parseTime=true")
+	assert.NoError(t, err)
+	dbName := "gorse_" + testName
+	databaseComm := database.GetComm(t)
+	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
+	assert.NoError(t, err)
+	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	assert.NoError(t, err)
+	err = database.Database.Close()
+	assert.NoError(t, err)
+	// connect database
+	database.Database, err = Open(mySqlDSN + dbName + "?timeout=30s&parseTime=true")
+	assert.NoError(t, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(t, err)
+	return database
+}
+
+func TestMySQL_Meta(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	testMeta(t, db.Database)
+}
+
+func TestMySQL_Sort(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	testSort(t, db.Database)
+}
+
+func TestMySQL_Set(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	testSet(t, db.Database)
+}
