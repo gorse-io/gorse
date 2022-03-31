@@ -53,7 +53,7 @@ func newMockServer(t *testing.T) *mockServer {
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.NoError(t, err)
 	// configuration
-	s.GorseConfig = (*config.Config)(nil).LoadDefaultIfNil()
+	s.GorseConfig = config.GetDefaultConfig()
 	s.GorseConfig.Server.APIKey = apiKey
 	s.WebService = new(restful.WebService)
 	s.CreateWebService()
@@ -1003,7 +1003,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		QueryParams(map[string]string{
 			"n":                "3",
 			"write-back-type":  "read",
-			"write-back-delay": "10",
+			"write-back-delay": "10m",
 		}).
 		Expect(t).
 		Status(http.StatusOK).
@@ -1024,7 +1024,7 @@ func TestServer_GetRecommends(t *testing.T) {
 
 func TestServer_GetRecommends_Replacement(t *testing.T) {
 	s := newMockServer(t)
-	s.GorseConfig.Recommend.EnableReplacement = true
+	s.GorseConfig.Recommend.Replacement.EnableReplacement = true
 	defer s.Close(t)
 	// insert hidden items
 	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
@@ -1073,8 +1073,8 @@ func TestServer_GetRecommends_Replacement(t *testing.T) {
 
 func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	s := newMockServer(t)
-	s.GorseConfig.Recommend.NumFeedbackFallbackItemBased = 4
-	s.GorseConfig.Database.PositiveFeedbackType = []string{"a"}
+	s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased = 4
+	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
 	defer s.Close(t)
 	// insert recommendation
 	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"),
@@ -1157,7 +1157,7 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 	assert.NoError(t, err)
 
 	// test fallback
-	s.GorseConfig.Recommend.FallbackRecommend = []string{"item_based"}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"item_based"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -1169,7 +1169,7 @@ func TestServer_GetRecommends_Fallback_ItemBasedSimilar(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, []string{"9", "8", "7"})).
 		End()
-	s.GorseConfig.Recommend.FallbackRecommend = []string{"item_based"}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"item_based"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0/*").
@@ -1234,7 +1234,7 @@ func TestServer_GetRecommends_Fallback_UserBasedSimilar(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	// test fallback
-	s.GorseConfig.Recommend.FallbackRecommend = []string{"user_based"}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"user_based"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -1291,7 +1291,7 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		[]cache.Scored{{"113", 79}, {"114", 78}, {"115", 77}, {"116", 76}})
 	assert.NoError(t, err)
 	// test popular fallback
-	s.GorseConfig.Recommend.FallbackRecommend = []string{"popular"}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"popular"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -1315,7 +1315,7 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		Body(marshal(t, []string{"101", "102", "103", "104", "109", "110", "111", "112"})).
 		End()
 	// test latest fallback
-	s.GorseConfig.Recommend.FallbackRecommend = []string{"latest"}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"latest"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -1339,7 +1339,7 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		Body(marshal(t, []string{"101", "102", "103", "104", "105", "106", "107", "108"})).
 		End()
 	// test collaborative filtering
-	s.GorseConfig.Recommend.FallbackRecommend = []string{"collaborative"}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"collaborative"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").
@@ -1363,7 +1363,7 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		Body(marshal(t, []string{"101", "102", "103", "104", "113", "114", "115", "116"})).
 		End()
 	// test wrong fallback
-	s.GorseConfig.Recommend.FallbackRecommend = []string{""}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{""}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/recommend/0").

@@ -163,7 +163,7 @@ func newMockWorker(t *testing.T) *mockWorker {
 	w.cacheClient, err = cache.Open("redis://" + w.cacheStoreServer.Addr())
 	assert.NoError(t, err)
 	// configuration
-	w.cfg = (*config.Config)(nil).LoadDefaultIfNil()
+	w.cfg = config.GetDefaultConfig()
 	w.jobs = 1
 	return w
 }
@@ -181,7 +181,7 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.EnableColRecommend = true
+	w.cfg.Recommend.Offline.EnableColRecommend = true
 	// insert feedbacks
 	now := time.Now()
 	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
@@ -239,8 +239,8 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.EnableColRecommend = true
-	w.cfg.Recommend.EnableColIndex = true
+	w.cfg.Recommend.Offline.EnableColRecommend = true
+	w.cfg.Recommend.Collaborative.EnableIndex = true
 	// insert feedbacks
 	now := time.Now()
 	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
@@ -298,8 +298,8 @@ func TestRecommend_ItemBased(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.EnableColRecommend = false
-	w.cfg.Recommend.EnableItemBasedRecommend = true
+	w.cfg.Recommend.Offline.EnableColRecommend = false
+	w.cfg.Recommend.Offline.EnableItemBasedRecommend = true
 	// insert feedback
 	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "21"}},
@@ -385,8 +385,8 @@ func TestRecommend_UserBased(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.EnableColRecommend = false
-	w.cfg.Recommend.EnableUserBasedRecommend = true
+	w.cfg.Recommend.Offline.EnableColRecommend = false
+	w.cfg.Recommend.Offline.EnableUserBasedRecommend = true
 	// insert similar users
 	err := w.cacheClient.SetSorted(cache.Key(cache.UserNeighbors, "0"), []cache.Scored{
 		{"1", 2},
@@ -435,8 +435,8 @@ func TestRecommend_Popular(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.EnableColRecommend = false
-	w.cfg.Recommend.EnablePopularRecommend = true
+	w.cfg.Recommend.Offline.EnableColRecommend = false
+	w.cfg.Recommend.Offline.EnablePopularRecommend = true
 	// insert popular items
 	err := w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
@@ -468,8 +468,8 @@ func TestRecommend_Latest(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.EnableColRecommend = false
-	w.cfg.Recommend.EnableLatestRecommend = true
+	w.cfg.Recommend.Offline.EnableColRecommend = false
+	w.cfg.Recommend.Offline.EnableLatestRecommend = true
 	// insert latest items
 	err := w.cacheClient.SetSorted(cache.LatestItems, []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
@@ -501,8 +501,8 @@ func TestRecommend_ColdStart(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.EnableColRecommend = true
-	w.cfg.Recommend.EnableLatestRecommend = true
+	w.cfg.Recommend.Offline.EnableColRecommend = true
+	w.cfg.Recommend.Offline.EnableLatestRecommend = true
 	// insert latest items
 	err := w.cacheClient.SetSorted(cache.LatestItems, []cache.Scored{{"11", 11}, {"10", 10}, {"9", 9}, {"8", 8}})
 	assert.NoError(t, err)
@@ -551,7 +551,7 @@ func TestExploreRecommend(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Recommend.ExploreRecommend = map[string]float64{"popular": 0.3, "latest": 0.3}
+	w.cfg.Recommend.Offline.ExploreRecommend = map[string]float64{"popular": 0.3, "latest": 0.3}
 	// insert popular items
 	err := w.cacheClient.SetSorted(cache.PopularItems, []cache.Scored{{"popular", 0}})
 	assert.NoError(t, err)
@@ -613,7 +613,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	assert.NoError(t, err)
 	dataStore, err := miniredis.Run()
 	assert.NoError(t, err)
-	cfg := (*config.Config)(nil).LoadDefaultIfNil()
+	cfg := config.GetDefaultConfig()
 	cfg.Database.DataStore = "redis://" + dataStore.Addr()
 	cfg.Database.CacheStore = "redis://" + cacheStore.Addr()
 
@@ -691,7 +691,7 @@ func TestWorker_Sync(t *testing.T) {
 	serv := &Worker{
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
-		cfg:          (*config.Config)(nil).LoadDefaultIfNil(),
+		cfg:          config.GetDefaultConfig(),
 		syncedChan:   make(chan bool, 1024),
 		ticker:       time.NewTicker(time.Minute),
 	}
@@ -704,7 +704,7 @@ func TestWorker_Sync(t *testing.T) {
 			case <-done:
 				return
 			default:
-				p, _ := serv.cfg.Recommend.GetExploreRecommend("popular")
+				p, _ := serv.cfg.Recommend.Offline.GetExploreRecommend("popular")
 				assert.Zero(t, p)
 			}
 		}
@@ -804,12 +804,12 @@ func TestReplacement_ClickThroughRate(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Database.PositiveFeedbackType = []string{"p"}
-	w.cfg.Database.ReadFeedbackTypes = []string{"n"}
-	w.cfg.Recommend.EnableColRecommend = false
-	w.cfg.Recommend.EnablePopularRecommend = true
-	w.cfg.Recommend.EnableReplacement = true
-	w.cfg.Recommend.EnableClickThroughPrediction = true
+	w.cfg.Recommend.DataSource.PositiveFeedbackTypes = []string{"p"}
+	w.cfg.Recommend.DataSource.ReadFeedbackTypes = []string{"n"}
+	w.cfg.Recommend.Offline.EnableColRecommend = false
+	w.cfg.Recommend.Offline.EnablePopularRecommend = true
+	w.cfg.Recommend.Replacement.EnableReplacement = true
+	w.cfg.Recommend.Offline.EnableClickThroughPrediction = true
 
 	// 1. Insert historical items into empty recommendation.
 	// insert items
@@ -853,11 +853,11 @@ func TestReplacement_CollaborativeFiltering(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	w.cfg.Database.PositiveFeedbackType = []string{"p"}
-	w.cfg.Database.ReadFeedbackTypes = []string{"n"}
-	w.cfg.Recommend.EnableColRecommend = false
-	w.cfg.Recommend.EnablePopularRecommend = true
-	w.cfg.Recommend.EnableReplacement = true
+	w.cfg.Recommend.DataSource.PositiveFeedbackTypes = []string{"p"}
+	w.cfg.Recommend.DataSource.ReadFeedbackTypes = []string{"n"}
+	w.cfg.Recommend.Offline.EnableColRecommend = false
+	w.cfg.Recommend.Offline.EnablePopularRecommend = true
+	w.cfg.Recommend.Replacement.EnableReplacement = true
 
 	// 1. Insert historical items into empty recommendation.
 	// insert items

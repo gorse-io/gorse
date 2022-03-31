@@ -57,13 +57,15 @@ const (
 func (m *Master) runLoadDatasetTask() error {
 
 	base.Logger().Info("load dataset",
-		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType),
-		zap.Strings("read_feedback_types", m.GorseConfig.Database.ReadFeedbackTypes),
-		zap.Uint("item_ttl", m.GorseConfig.Database.ItemTTL),
-		zap.Uint("feedback_ttl", m.GorseConfig.Database.PositiveFeedbackTTL),
-		zap.Strings("positive_feedback_types", m.GorseConfig.Database.PositiveFeedbackType))
-	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(m.DataClient, m.GorseConfig.Database.PositiveFeedbackType,
-		m.GorseConfig.Database.ReadFeedbackTypes, m.GorseConfig.Database.ItemTTL, m.GorseConfig.Database.PositiveFeedbackTTL)
+		zap.Strings("positive_feedback_types", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes),
+		zap.Strings("read_feedback_types", m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes),
+		zap.Uint("item_ttl", m.GorseConfig.Recommend.DataSource.ItemTTL),
+		zap.Uint("feedback_ttl", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL))
+	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(m.DataClient,
+		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes,
+		m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes,
+		m.GorseConfig.Recommend.DataSource.ItemTTL,
+		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -147,7 +149,8 @@ func (m *Master) runLoadDatasetTask() error {
 // runFindItemNeighborsTask updates neighbors of items.
 func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	m.taskMonitor.Start(TaskFindItemNeighbors, dataset.ItemCount())
-	base.Logger().Info("start searching neighbors of items", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+	base.Logger().Info("start searching neighbors of items",
+		zap.Int("n_cache", m.GorseConfig.Recommend.CacheSize))
 	// create progress tracker
 	completed := make(chan struct{}, 1000)
 	go func() {
@@ -175,8 +178,8 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	}()
 
 	userIDF := make([]float32, dataset.UserCount())
-	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
-		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
 		for _, feedbacks := range dataset.ItemFeedback {
 			sort.Sort(sortutil.Int32Slice(feedbacks))
 		}
@@ -187,8 +190,8 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	}
 	labeledItems := make([][]int32, dataset.NumItemLabels)
 	labelIDF := make([]float32, dataset.NumItemLabels)
-	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
-		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
 		for i, itemLabels := range dataset.ItemLabels {
 			sort.Sort(sortutil.Int32Slice(itemLabels))
 			for _, label := range itemLabels {
@@ -203,7 +206,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 
 	start := time.Now()
 	var err error
-	if m.GorseConfig.Recommend.EnableItemNeighborIndex {
+	if m.GorseConfig.Recommend.ItemNeighbors.EnableIndex {
 		err = m.findItemNeighborsIVF(dataset, labelIDF, userIDF, completed)
 	} else {
 		err = m.findItemNeighborsBruteForce(dataset, labeledItems, labelIDF, userIDF, completed)
@@ -235,13 +238,13 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		}
 		startTime := time.Now()
 		nearItemsFilters := make(map[string]*heap.TopKFilter)
-		nearItemsFilters[""] = heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+		nearItemsFilters[""] = heap.NewTopKFilter(m.GorseConfig.Recommend.CacheSize)
 		for _, category := range dataset.CategorySet.List() {
-			nearItemsFilters[category] = heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+			nearItemsFilters[category] = heap.NewTopKFilter(m.GorseConfig.Recommend.CacheSize)
 		}
 
-		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
-			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto) {
+		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
+			(m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto) {
 			labels := dataset.ItemLabels[itemId]
 			itemSet := bitset.New(uint(dataset.ItemCount()))
 			var adjacencyItems []int32
@@ -270,8 +273,8 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 		}
 
-		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
-			(m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && nearItemsFilters[""].Len() == 0) {
+		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
+			(m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto && nearItemsFilters[""].Len() == 0) {
 			users := dataset.ItemFeedback[itemId]
 			itemSet := bitset.New(uint(dataset.ItemCount()))
 			var adjacencyItems []int32
@@ -321,32 +324,32 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userIDF []float32, completed chan struct{}) error {
 	var similarItemNeighbors, relatedItemNeighbors search.VectorIndex
 	var itemLabelVectors, itemFeedbackVectors []search.Vector
-	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
-		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
 		itemLabelVectors = make([]search.Vector, dataset.ItemCount())
 		for i := range itemLabelVectors {
 			itemLabelVectors[i] = search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
-		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
+		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Recommend.CacheSize, 1000,
 			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		var recall float32
-		similarItemNeighbors, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
-			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
+		similarItemNeighbors, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighbors.IndexRecall,
+			m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch, true)
 		ItemNeighborIndexRecall.Set(float64(recall))
 		if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
 			return errors.Trace(err)
 		}
 	}
-	if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
-		m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
 		itemFeedbackVectors = make([]search.Vector, dataset.ItemCount())
 		for i := range itemFeedbackVectors {
 			itemFeedbackVectors[i] = search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		}
-		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000,
+		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Recommend.CacheSize, 1000,
 			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighborIndexRecall,
-			m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch, true)
+		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighbors.IndexRecall,
+			m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch, true)
 	}
 	return parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemId int) error {
 		defer func() {
@@ -358,13 +361,15 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		startTime := time.Now()
 		var neighbors map[string][]int32
 		var scores map[string][]float32
-		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeSimilar ||
-			m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto {
-			neighbors, scores = similarItemNeighbors.MultiSearch(itemLabelVectors[itemId], dataset.CategorySet.List(), m.GorseConfig.Database.CacheSize, true)
+		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
+			m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
+			neighbors, scores = similarItemNeighbors.MultiSearch(itemLabelVectors[itemId], dataset.CategorySet.List(),
+				m.GorseConfig.Recommend.CacheSize, true)
 		}
-		if m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeRelated ||
-			m.GorseConfig.Recommend.ItemNeighborType == config.NeighborTypeAuto && len(neighbors[""]) == 0 {
-			neighbors, scores = relatedItemNeighbors.MultiSearch(itemFeedbackVectors[itemId], dataset.CategorySet.List(), m.GorseConfig.Database.CacheSize, true)
+		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
+			m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto && len(neighbors[""]) == 0 {
+			neighbors, scores = relatedItemNeighbors.MultiSearch(itemFeedbackVectors[itemId], dataset.CategorySet.List(),
+				m.GorseConfig.Recommend.CacheSize, true)
 		}
 		for category := range neighbors {
 			if categoryNeighbors, exist := neighbors[category]; exist && len(categoryNeighbors) > 0 {
@@ -389,7 +394,8 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 // runFindUserNeighborsTask updates neighbors of users.
 func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	m.taskMonitor.Start(TaskFindUserNeighbors, dataset.UserCount())
-	base.Logger().Info("start searching neighbors of users", zap.Int("n_cache", m.GorseConfig.Database.CacheSize))
+	base.Logger().Info("start searching neighbors of users",
+		zap.Int("n_cache", m.GorseConfig.Recommend.CacheSize))
 	// create progress tracker
 	completed := make(chan struct{}, 1000)
 	go func() {
@@ -417,8 +423,8 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	}()
 
 	itemIDF := make([]float32, dataset.ItemCount())
-	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
-		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
 		for _, feedbacks := range dataset.UserFeedback {
 			sort.Sort(sortutil.Int32Slice(feedbacks))
 		}
@@ -429,8 +435,8 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	}
 	labeledUsers := make([][]int32, dataset.NumUserLabels)
 	labelIDF := make([]float32, dataset.NumUserLabels)
-	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
-		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
 		for i, userLabels := range dataset.UserLabels {
 			sort.Sort(sortutil.Int32Slice(userLabels))
 			for _, label := range userLabels {
@@ -445,7 +451,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 
 	start := time.Now()
 	var err error
-	if m.GorseConfig.Recommend.EnableUserNeighborIndex {
+	if m.GorseConfig.Recommend.UserNeighbors.EnableIndex {
 		err = m.findUserNeighborsIVF(dataset, labelIDF, itemIDF, completed)
 	} else {
 		err = m.findUserNeighborsBruteForce(dataset, labeledUsers, labelIDF, itemIDF, completed)
@@ -475,10 +481,10 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			return nil
 		}
 		startTime := time.Now()
-		nearUsers := heap.NewTopKFilter(m.GorseConfig.Database.CacheSize)
+		nearUsers := heap.NewTopKFilter(m.GorseConfig.Recommend.CacheSize)
 
-		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
-			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto) {
+		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
+			(m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto) {
 			labels := dataset.UserLabels[userId]
 			userSet := bitset.New(uint(dataset.UserCount()))
 			var adjacencyUsers []int32
@@ -504,8 +510,8 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			}
 		}
 
-		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
-			(m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
+		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
+			(m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
 			items := dataset.UserFeedback[userId]
 			userSet := bitset.New(uint(dataset.UserCount()))
 			var adjacencyUsers []int32
@@ -550,32 +556,34 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}) error {
 	var similarUserNeighbors, relatedUserNeighbors search.VectorIndex
 	var userLabelVectors, userFeedbackVectors []search.Vector
-	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
-		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
+		m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
 		userLabelVectors = make([]search.Vector, dataset.UserCount())
 		for i := range userLabelVectors {
 			userLabelVectors[i] = search.NewDictionaryVector(dataset.UserLabels[i], labelIDF, nil, false)
 		}
-		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Database.CacheSize, 1000,
+		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Recommend.CacheSize, 1000,
 			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 		var recall float32
-		similarUserNeighbors, recall = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
-			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
+		similarUserNeighbors, recall = builder.Build(
+			m.GorseConfig.Recommend.UserNeighbors.IndexRecall,
+			m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch, true)
 		UserNeighborIndexRecall.Set(float64(recall))
 		if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
 			return errors.Trace(err)
 		}
 	}
-	if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
-		m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
+	if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
+		m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
 		userFeedbackVectors = make([]search.Vector, dataset.UserCount())
 		for i := range userFeedbackVectors {
 			userFeedbackVectors[i] = search.NewDictionaryVector(dataset.UserFeedback[i], itemIDF, nil, false)
 		}
-		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Database.CacheSize, 1000,
+		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Recommend.CacheSize, 1000,
 			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		relatedUserNeighbors, _ = builder.Build(m.GorseConfig.Recommend.UserNeighborIndexRecall,
-			m.GorseConfig.Recommend.UserNeighborIndexFitEpoch, true)
+		relatedUserNeighbors, _ = builder.Build(
+			m.GorseConfig.Recommend.UserNeighbors.IndexRecall,
+			m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch, true)
 	}
 	return parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userId int) error {
 		defer func() {
@@ -587,13 +595,13 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		startTime := time.Now()
 		var neighbors []int32
 		var scores []float32
-		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeSimilar ||
-			m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto {
-			neighbors, scores = similarUserNeighbors.Search(userLabelVectors[userId], m.GorseConfig.Database.CacheSize, true)
+		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
+			m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
+			neighbors, scores = similarUserNeighbors.Search(userLabelVectors[userId], m.GorseConfig.Recommend.CacheSize, true)
 		}
-		if m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeRelated ||
-			m.GorseConfig.Recommend.UserNeighborType == config.NeighborTypeAuto && len(neighbors) == 0 {
-			neighbors, scores = relatedUserNeighbors.Search(userFeedbackVectors[userId], m.GorseConfig.Database.CacheSize, true)
+		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
+			m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto && len(neighbors) == 0 {
+			neighbors, scores = relatedUserNeighbors.Search(userFeedbackVectors[userId], m.GorseConfig.Recommend.CacheSize, true)
 		}
 		itemScores := make([]cache.Scored, len(neighbors))
 		for i := range scores {
@@ -706,7 +714,7 @@ func (m *Master) runRankingRelatedTasks(
 
 	if numUsers == 0 && numItems == 0 && numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+			zap.Strings("positive_feedback_type", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
 		return
 	}
 	numFeedbackChanged := numFeedback != lastNumFeedback
@@ -803,8 +811,8 @@ func (m *Master) runAnalyzeTask() error {
 	m.taskScheduler.Lock(TaskAnalyze)
 	defer m.taskScheduler.UnLock(TaskAnalyze)
 	base.Logger().Info("start analyzing click-through-rate")
-	m.taskMonitor.Start(TaskAnalyze, 30*len(m.GorseConfig.Database.PositiveFeedbackType))
-	for j, feedbackType := range m.GorseConfig.Database.PositiveFeedbackType {
+	m.taskMonitor.Start(TaskAnalyze, 30*len(m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
+	for j, feedbackType := range m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes {
 		measurement := cache.Key(PositiveFeedbackRate, feedbackType)
 		// pull existed click-through rates
 		clickThroughRates, err := m.DataClient.GetMeasurements(measurement, 30)
@@ -822,7 +830,8 @@ func (m *Master) runAnalyzeTask() error {
 			if !existed.Has(date.String()) {
 				// click through clickThroughRate
 				startTime := time.Now()
-				clickThroughRate, err := m.DataClient.GetClickThroughRate(date, []string{feedbackType}, m.GorseConfig.Database.ReadFeedbackTypes)
+				clickThroughRate, err := m.DataClient.GetClickThroughRate(date, []string{feedbackType},
+					m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -865,7 +874,7 @@ func (m *Master) runFitClickModelTask(
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+			zap.Strings("positive_feedback_type", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
 		m.taskMonitor.Fail(TaskFitClickModel, "No feedback found.")
 		return
 	} else if numUsers != lastNumUsers ||
@@ -950,7 +959,7 @@ func (m *Master) runSearchRankingModelTask(
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+			zap.Strings("positive_feedback_type", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
 		m.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&
@@ -979,7 +988,7 @@ func (m *Master) runSearchClickModelTask(
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		base.Logger().Warn("empty click dataset",
-			zap.Strings("positive_feedback_type", m.GorseConfig.Database.PositiveFeedbackType))
+			zap.Strings("positive_feedback_type", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
 		m.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
 		return
 	} else if numUsers == lastNumUsers &&
@@ -1010,14 +1019,14 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		feedbackTimeLimit = &temp
 	}
 	timeWindowLimit := time.Time{}
-	if m.GorseConfig.Recommend.PopularWindow > 0 {
-		timeWindowLimit = time.Now().AddDate(0, 0, -m.GorseConfig.Recommend.PopularWindow)
+	if m.GorseConfig.Recommend.Popular.PopularWindow > 0 {
+		timeWindowLimit = time.Now().Add(-m.GorseConfig.Recommend.Popular.PopularWindow)
 	}
 	rankingDataset = ranking.NewMapIndexDataset()
 
 	// create filers for latest items
 	latestItemsFilters := make(map[string]*heap.TopKStringFilter)
-	latestItemsFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	latestItemsFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
 
 	// STEP 1: pull users
 	userLabelIndex := base.NewMapIndex()
@@ -1072,7 +1081,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				latestItemsFilters[""].Push(item.ItemId, float64(item.Timestamp.Unix()))
 				for _, category := range item.Categories {
 					if _, exist := latestItemsFilters[category]; !exist {
-						latestItemsFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+						latestItemsFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
 					}
 					latestItemsFilters[category].Push(item.ItemId, float64(item.Timestamp.Unix()))
 				}
@@ -1208,13 +1217,13 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 
 	// collect popular items
 	popularItemFilters := make(map[string]*heap.TopKStringFilter)
-	popularItemFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+	popularItemFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
 	for itemIndex, val := range popularCount {
 		itemId := rankingDataset.ItemIndex.ToName(int32(itemIndex))
 		popularItemFilters[""].Push(itemId, float64(val))
 		for _, category := range rankingDataset.ItemCategories[itemIndex] {
 			if _, exist := popularItemFilters[category]; !exist {
-				popularItemFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Database.CacheSize)
+				popularItemFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
 			}
 			popularItemFilters[category].Push(itemId, float64(val))
 		}

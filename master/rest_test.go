@@ -56,7 +56,7 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.NoError(t, err)
 	// create server
-	s.GorseConfig = (*config.Config)(nil).LoadDefaultIfNil()
+	s.GorseConfig = config.GetDefaultConfig()
 	s.WebService = new(restful.WebService)
 	s.CreateWebService()
 	// create handler
@@ -428,7 +428,7 @@ func TestMaster_GetRates(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// write rates
-	s.GorseConfig.Database.PositiveFeedbackType = []string{"a", "b"}
+	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
 	err := s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 1.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC)})
 	assert.NoError(t, err)
 	err = s.DataClient.InsertMeasurement(data.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 1, time.UTC)})
@@ -676,7 +676,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		})).
 		End()
 
-	s.GorseConfig.Recommend.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/recommend/0/_").

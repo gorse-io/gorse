@@ -462,7 +462,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	}
 	// read user neighbor index recall
 	var temp string
-	if m.GorseConfig.Recommend.EnableUserNeighborIndex {
+	if m.GorseConfig.Recommend.UserNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
 			base.Logger().Warn("failed to get user neighbor index recall", zap.Error(err))
 		} else {
@@ -470,7 +470,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		}
 	}
 	// read item neighbor index recall
-	if m.GorseConfig.Recommend.EnableItemNeighborIndex {
+	if m.GorseConfig.Recommend.ItemNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
 			base.Logger().Warn("failed to get item neighbor index recall", zap.Error(err))
 		} else {
@@ -478,7 +478,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		}
 	}
 	// read matching index recall
-	if m.GorseConfig.Recommend.EnableColIndex {
+	if m.GorseConfig.Recommend.Collaborative.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
 			base.Logger().Warn("failed to get matching index recall", zap.Error(err))
 		} else {
@@ -500,8 +500,8 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 		server.BadRequest(response, err)
 		return
 	}
-	measurements := make(map[string][]data.Measurement, len(m.GorseConfig.Database.PositiveFeedbackType))
-	for _, feedbackType := range m.GorseConfig.Database.PositiveFeedbackType {
+	measurements := make(map[string][]data.Measurement, len(m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
+	for _, feedbackType := range m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes {
 		measurements[feedbackType], err = m.DataClient.GetMeasurements(cache.Key(PositiveFeedbackRate, feedbackType), n)
 		if err != nil {
 			server.InternalServerError(response, err)
@@ -598,7 +598,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		results, err = m.Recommend(userId, category, n, m.RecommendItemBased)
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
-		for _, recommender := range m.GorseConfig.Recommend.FallbackRecommend {
+		for _, recommender := range m.GorseConfig.Recommend.Online.FallbackRecommend {
 			switch recommender {
 			case "collaborative":
 				recommenders = append(recommenders, m.RecommendCollaborative)
@@ -680,7 +680,7 @@ func (m *Master) getSort(key string, request *restful.Request, response *restful
 		return
 	}
 	// Get the popular list
-	scores, err := m.CacheClient.GetSorted(key, offset, m.GorseConfig.Database.CacheSize)
+	scores, err := m.CacheClient.GetSorted(key, offset, m.GorseConfig.Recommend.CacheSize)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1165,8 +1165,8 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	}
 	// insert to data store
 	err = m.DataClient.BatchInsertFeedback(feedbacks,
-		m.GorseConfig.Database.AutoInsertUser,
-		m.GorseConfig.Database.AutoInsertItem, true)
+		m.GorseConfig.Server.AutoInsertUser,
+		m.GorseConfig.Server.AutoInsertItem, true)
 	if err != nil {
 		server.InternalServerError(restful.NewResponse(response), err)
 		return
@@ -1190,7 +1190,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 //func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
 //// load dataset
 //dataSet, err := click.LoadDataFromDatabase(m.DataClient,
-//	m.GorseConfig.Database.PositiveFeedbackType,
+//	m.GorseConfig.Database.PositiveFeedbackTypes,
 //	m.GorseConfig.Database.ReadFeedbackType)
 //if err != nil {
 //	server.InternalServerError(restful.NewResponse(response), err)

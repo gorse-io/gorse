@@ -417,7 +417,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
 		Param(ws.PathParameter("user-id", "user id").DataType("string")).
 		Param(ws.QueryParameter("write-back-type", "type of write back feedback").DataType("string")).
-		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback in minutes").DataType("integer")).
+		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
 		Returns(200, "OK", []string{}).
@@ -429,7 +429,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("user-id", "user id").DataType("string")).
 		Param(ws.PathParameter("category", "item category").DataType("string")).
 		Param(ws.QueryParameter("write-back-type", "type of write back feedback").DataType("string")).
-		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback in minutes").DataType("integer")).
+		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
 		Returns(200, "OK", []string{}).
@@ -457,6 +457,15 @@ func ParseInt(request *restful.Request, name string, fallback int) (value int, e
 	return
 }
 
+// ParseDuration parses duration from the query parameter.
+func ParseDuration(request *restful.Request, name string) (time.Duration, error) {
+	valueString := request.QueryParameter(name)
+	if valueString == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(valueString)
+}
+
 func (s *RestServer) getSort(key string, request *restful.Request, response *restful.Response) {
 	var n, offset int
 	var err error
@@ -470,7 +479,7 @@ func (s *RestServer) getSort(key string, request *restful.Request, response *res
 		return
 	}
 	// Get the popular list
-	items, err := s.CacheClient.GetSorted(key, offset, s.GorseConfig.Database.CacheSize)
+	items, err := s.CacheClient.GetSorted(key, offset, s.GorseConfig.Recommend.CacheSize)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -638,7 +647,7 @@ type recommendContext struct {
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
 	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId),
-		math.Inf(-1), float64(time.Now().Add(time.Duration(s.GorseConfig.Server.EpsilonTime)*time.Second).Unix()))
+		math.Inf(-1), float64(time.Now().Add(s.GorseConfig.Server.ClockError).Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -709,7 +718,7 @@ type Recommender func(ctx *recommendContext) error
 func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		recommendation, err := s.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Database.CacheSize)
+		recommendation, err := s.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -731,7 +740,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Database.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -759,13 +768,13 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		start := time.Now()
 		candidates := make(map[string]float64)
 		// load similar users
-		similarUsers, err := s.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, ctx.userId), 0, s.GorseConfig.Database.CacheSize)
+		similarUsers, err := s.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, ctx.userId), 0, s.GorseConfig.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, false, s.GorseConfig.Database.PositiveFeedbackType...)
+			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, false, s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -809,12 +818,12 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		start := time.Now()
 		// truncate user feedback
 		data.SortFeedbacks(ctx.userFeedback)
-		userFeedback := make([]data.Feedback, 0, s.GorseConfig.Recommend.NumFeedbackFallbackItemBased)
+		userFeedback := make([]data.Feedback, 0, s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased)
 		for _, feedback := range ctx.userFeedback {
-			if s.GorseConfig.Recommend.NumFeedbackFallbackItemBased <= len(userFeedback) {
+			if s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased <= len(userFeedback) {
 				break
 			}
-			if funk.ContainsString(s.GorseConfig.Database.PositiveFeedbackType, feedback.FeedbackType) {
+			if funk.ContainsString(s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
 				userFeedback = append(userFeedback, feedback)
 			}
 		}
@@ -822,7 +831,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		candidates := make(map[string]float64)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.GorseConfig.Database.CacheSize)
+			similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -858,7 +867,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, s.GorseConfig.Database.CacheSize)
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -884,7 +893,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, s.GorseConfig.Database.CacheSize)
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -919,14 +928,14 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	writeBackFeedback := request.QueryParameter("write-back-type")
-	writeBackDelay, err := ParseInt(request, "write-back-delay", 0)
+	writeBackDelay, err := ParseDuration(request, "write-back-delay")
 	if err != nil {
 		BadRequest(response, err)
 		return
 	}
 	// online recommendation
 	recommenders := []Recommender{s.RecommendOffline}
-	for _, recommender := range s.GorseConfig.Recommend.FallbackRecommend {
+	for _, recommender := range s.GorseConfig.Recommend.Online.FallbackRecommend {
 		switch recommender {
 		case "collaborative":
 			recommenders = append(recommenders, s.RecommendCollaborative)
@@ -959,7 +968,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 					ItemId:       itemId,
 					FeedbackType: writeBackFeedback,
 				},
-				Timestamp: startTime.Add(time.Minute * time.Duration(writeBackDelay)),
+				Timestamp: startTime.Add(writeBackDelay),
 			}
 			err = s.DataClient.BatchInsertFeedback([]data.Feedback{feedback}, false, false, false)
 			if err != nil {
@@ -1473,8 +1482,8 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 		}
 		// insert feedback to data store
 		err = s.DataClient.BatchInsertFeedback(feedback,
-			s.GorseConfig.Database.AutoInsertUser,
-			s.GorseConfig.Database.AutoInsertItem, overwrite)
+			s.GorseConfig.Server.AutoInsertUser,
+			s.GorseConfig.Server.AutoInsertItem, overwrite)
 		if err != nil {
 			InternalServerError(response, err)
 			return
@@ -1646,7 +1655,7 @@ func Text(response *restful.Response, content string) {
 
 // InsertFeedbackToCache inserts feedback to cache.
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
-	if !s.GorseConfig.Recommend.EnableReplacement {
+	if !s.GorseConfig.Recommend.Replacement.EnableReplacement {
 		sortedSets := make([]cache.SortedSet, len(feedback))
 		for i, v := range feedback {
 			sortedSets[i] = cache.Sorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float64(v.Timestamp.Unix())}})
