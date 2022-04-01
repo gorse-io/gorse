@@ -642,6 +642,55 @@ func testGetClickThroughRate(t *testing.T, db Database) {
 	assert.Equal(t, 0.375, rate)
 }
 
+func testTimeZone(t *testing.T, db Database) {
+	loc, err := time.LoadLocation("Asia/Tokyo")
+	assert.NoError(t, err)
+	// insert feedbacks
+	err = db.BatchInsertFeedback([]Feedback{
+		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Now().In(loc)},
+		{FeedbackKey: FeedbackKey{"read", "1", "2"}, Timestamp: time.Now().In(loc)},
+		{FeedbackKey: FeedbackKey{"read", "2", "2"}, Timestamp: time.Now().In(loc)},
+		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
+		{FeedbackKey: FeedbackKey{"like", "1", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
+		{FeedbackKey: FeedbackKey{"like", "2", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
+	}, true, true, true)
+	assert.NoError(t, err)
+	// get feedback stream
+	feedback := getFeedback(t, db, 10)
+	assert.Equal(t, 3, len(feedback))
+	// get feedback
+	_, feedback, err = db.GetFeedback("", 10, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(feedback))
+	// get user feedback
+	feedback, err = db.GetUserFeedback("1", false)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(feedback))
+	// get item feedback
+	feedback, err = db.GetItemFeedback("2") // no future feedback by default
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(feedback))
+	// get user item feedback
+	feedback, err = db.GetUserItemFeedback("1", "1") // return future feedback by default
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(feedback))
+
+	// insert items
+	now := time.Now().In(loc)
+	err = db.BatchInsertItems([]Item{{ItemId: "100", Timestamp: now}, {ItemId: "200"}})
+	assert.NoError(t, err)
+	err = db.ModifyItem("200", ItemPatch{Timestamp: &now})
+	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
+	item, err := db.GetItem("100")
+	assert.NoError(t, err)
+	assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+	item, err = db.GetItem("200")
+	assert.NoError(t, err)
+	assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+}
+
 func isClickHouse(db Database) bool {
 	if sqlDB, isSQL := db.(*SQLDatabase); !isSQL {
 		return false

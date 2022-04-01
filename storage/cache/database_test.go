@@ -64,6 +64,9 @@ func testMeta(t *testing.T, db Database) {
 	// test set empty
 	err = db.Set()
 	assert.NoError(t, err)
+	// test set duplicate
+	err = db.Set(String("100", "1"), String("100", "2"))
+	assert.NoError(t, err)
 	// test exists of empty args
 	exists, err = db.Exists()
 	assert.NoError(t, err)
@@ -182,10 +185,19 @@ func testSort(t *testing.T, db Database) {
 	// test set empty
 	err = db.SetSorted("sort", []Scored{})
 	assert.NoError(t, err)
+	// test set duplicate
+	err = db.SetSorted("sort1000", []Scored{
+		{"100", 1},
+		{"100", 2},
+	})
+	assert.NoError(t, err)
 	// test add empty
 	err = db.AddSorted()
 	assert.NoError(t, err)
 	err = db.AddSorted(SortedSet{})
+	assert.NoError(t, err)
+	// test add duplicate
+	err = db.AddSorted(SortedSet{"sort1000", []Scored{{"100", 1}, {"100", 2}}})
 	assert.NoError(t, err)
 	// test get empty
 	scores, err = db.GetSorted("sort", 0, -1)
