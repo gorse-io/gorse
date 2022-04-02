@@ -19,6 +19,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -683,27 +684,33 @@ func testTimeZone(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
-	if isClickHouse(db) {
-		item, err := db.GetItem("100")
-		assert.NoError(t, err)
-		assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
-		item, err = db.GetItem("200")
-		assert.NoError(t, err)
-		assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
-	} else if isMongo(db) {
+	switch db.(type) {
+	case *SQLDatabase:
+		switch db.(*SQLDatabase).driver {
+		case Postgres:
+			item, err := db.GetItem("100")
+			assert.NoError(t, err)
+			assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
+			item, err = db.GetItem("200")
+			assert.NoError(t, err)
+			assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
+		default:
+			item, err := db.GetItem("100")
+			assert.NoError(t, err)
+			assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+			item, err = db.GetItem("200")
+			assert.NoError(t, err)
+			assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+		}
+	case *MongoDB:
 		item, err := db.GetItem("100")
 		assert.NoError(t, err)
 		assert.Equal(t, now.Truncate(time.Millisecond).In(time.UTC), item.Timestamp)
 		item, err = db.GetItem("200")
 		assert.NoError(t, err)
 		assert.Equal(t, now.Truncate(time.Millisecond).In(time.UTC), item.Timestamp)
-	} else {
-		item, err := db.GetItem("100")
-		assert.NoError(t, err)
-		assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
-		item, err = db.GetItem("200")
-		assert.NoError(t, err)
-		assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
+	default:
+		t.Fatalf("unknown database: %v", reflect.TypeOf(db))
 	}
 }
 
@@ -713,11 +720,6 @@ func isClickHouse(db Database) bool {
 	} else {
 		return sqlDB.driver == ClickHouse
 	}
-}
-
-func isMongo(db Database) bool {
-	_, isMongo := db.(*MongoDB)
-	return isMongo
 }
 
 func TestSortFeedbacks(t *testing.T) {

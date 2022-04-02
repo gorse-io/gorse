@@ -148,7 +148,7 @@ func TestMySQL_GetClickThroughRate(t *testing.T) {
 }
 
 func TestMySQL_Timezone(t *testing.T) {
-	db := newTestPostgresDatabase(t)
+	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testTimeZone(t, db.Database)
 }
