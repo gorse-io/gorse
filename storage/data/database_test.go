@@ -683,12 +683,28 @@ func testTimeZone(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
-	item, err := db.GetItem("100")
-	assert.NoError(t, err)
-	assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
-	item, err = db.GetItem("200")
-	assert.NoError(t, err)
-	assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+	if isClickHouse(db) {
+		item, err := db.GetItem("100")
+		assert.NoError(t, err)
+		assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+		item, err = db.GetItem("200")
+		assert.NoError(t, err)
+		assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+	} else if isMongo(db) {
+		item, err := db.GetItem("100")
+		assert.NoError(t, err)
+		assert.Equal(t, now.Truncate(time.Millisecond).In(time.UTC), item.Timestamp)
+		item, err = db.GetItem("200")
+		assert.NoError(t, err)
+		assert.Equal(t, now.Truncate(time.Millisecond).In(time.UTC), item.Timestamp)
+	} else {
+		item, err := db.GetItem("100")
+		assert.NoError(t, err)
+		assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
+		item, err = db.GetItem("200")
+		assert.NoError(t, err)
+		assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
+	}
 }
 
 func isClickHouse(db Database) bool {
@@ -697,6 +713,11 @@ func isClickHouse(db Database) bool {
 	} else {
 		return sqlDB.driver == ClickHouse
 	}
+}
+
+func isMongo(db Database) bool {
+	_, isMongo := db.(*MongoDB)
+	return isMongo
 }
 
 func TestSortFeedbacks(t *testing.T) {
