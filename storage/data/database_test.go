@@ -648,9 +648,9 @@ func testTimeZone(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	// insert feedbacks
 	err = db.BatchInsertFeedback([]Feedback{
-		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Now().In(loc)},
-		{FeedbackKey: FeedbackKey{"read", "1", "2"}, Timestamp: time.Now().In(loc)},
-		{FeedbackKey: FeedbackKey{"read", "2", "2"}, Timestamp: time.Now().In(loc)},
+		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
+		{FeedbackKey: FeedbackKey{"read", "1", "2"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
+		{FeedbackKey: FeedbackKey{"read", "2", "2"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
 		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
 		{FeedbackKey: FeedbackKey{"like", "1", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
 		{FeedbackKey: FeedbackKey{"like", "2", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
@@ -690,17 +690,26 @@ func testTimeZone(t *testing.T, db Database) {
 		case Postgres:
 			item, err := db.GetItem("100")
 			assert.NoError(t, err)
-			assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
+			assert.Equal(t, now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
 			item, err = db.GetItem("200")
 			assert.NoError(t, err)
-			assert.Equal(t, now.Truncate(time.Microsecond).In(time.UTC), item.Timestamp)
-		default:
+			assert.Equal(t, now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
+		case MySQL:
+			item, err := db.GetItem("100")
+			assert.NoError(t, err)
+			assert.Equal(t, now.Round(time.Second).In(time.UTC), item.Timestamp)
+			item, err = db.GetItem("200")
+			assert.NoError(t, err)
+			assert.Equal(t, now.Round(time.Second).In(time.UTC), item.Timestamp)
+		case ClickHouse:
 			item, err := db.GetItem("100")
 			assert.NoError(t, err)
 			assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
 			item, err = db.GetItem("200")
 			assert.NoError(t, err)
 			assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+		default:
+			t.Fatalf("unknown sql database: %v", db.(*SQLDatabase).driver)
 		}
 	case *MongoDB:
 		item, err := db.GetItem("100")
