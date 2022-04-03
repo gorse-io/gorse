@@ -189,6 +189,17 @@ func (s *benchServer) prepareData(b *testing.B, url, benchName string) string {
 		err = db.Close()
 		require.NoError(b, err)
 		return url + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC"
+	} else if strings.HasPrefix(url, "clickhouse://") {
+		uri := "http://" + url[len("clickhouse://"):]
+		db, err := sql.Open("clickhouse", uri)
+		require.NoError(b, err)
+		_, err = db.Exec("DROP DATABASE IF EXISTS " + dbName)
+		require.NoError(b, err)
+		_, err = db.Exec("CREATE DATABASE " + dbName)
+		require.NoError(b, err)
+		err = db.Close()
+		require.NoError(b, err)
+		return url + dbName + "?mutations_sync=2"
 	} else if strings.HasPrefix(url, "mongodb://") {
 		ctx := context.Background()
 		cli, err := mongo.Connect(ctx, options.Client().ApplyURI(url+"?authSource=admin&connect=direct"))
@@ -231,6 +242,16 @@ func (s *benchServer) prepareCache(b *testing.B, url, benchName string) string {
 		err = db.Close()
 		require.NoError(b, err)
 		return url + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC"
+	} else if strings.HasPrefix(url, "mysql://") {
+		db, err := sql.Open("mysql", url[len("mysql://"):]+"?timeout=30s&parseTime=true")
+		require.NoError(b, err)
+		_, err = db.Exec("DROP DATABASE IF EXISTS " + dbName)
+		require.NoError(b, err)
+		_, err = db.Exec("CREATE DATABASE " + dbName)
+		require.NoError(b, err)
+		err = db.Close()
+		require.NoError(b, err)
+		return url + dbName + "?timeout=30s&parseTime=true"
 	} else {
 		b.Fatal("unsupported cache store type")
 		return ""

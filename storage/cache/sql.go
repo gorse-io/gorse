@@ -112,17 +112,21 @@ func (db *SQLDatabase) Set(values ...Value) error {
 	case MySQL:
 		builder.WriteString("INSERT INTO `values`(name, value) VALUES ")
 	}
-	for i, value := range values {
-		if i > 0 {
-			builder.WriteRune(',')
+	valueSet := strset.New()
+	for _, value := range values {
+		if !valueSet.Has(value.name) {
+			if len(args) > 0 {
+				builder.WriteRune(',')
+			}
+			switch db.driver {
+			case Postgres:
+				builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+			case MySQL:
+				builder.WriteString("(?,?)")
+			}
+			args = append(args, value.name, value.value)
+			valueSet.Add(value.name)
 		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
-		case MySQL:
-			builder.WriteString("(?,?)")
-		}
-		args = append(args, value.name, value.value)
 	}
 	switch db.driver {
 	case Postgres:
@@ -347,18 +351,22 @@ func (db *SQLDatabase) AddSorted(sortedSets ...SortedSet) error {
 	var args []interface{}
 	var builder strings.Builder
 	builder.WriteString("INSERT INTO sorted_sets (name, member, score) VALUES ")
+	memberSets := make(map[lo.Tuple2[string, string]]struct{})
 	for _, sortedSet := range sortedSets {
 		for _, member := range sortedSet.scores {
-			if len(args) > 0 {
-				builder.WriteRune(',')
+			if _, exist := memberSets[lo.Tuple2[string, string]{sortedSet.name, member.Id}]; !exist {
+				if len(args) > 0 {
+					builder.WriteRune(',')
+				}
+				switch db.driver {
+				case Postgres:
+					builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
+				case MySQL:
+					builder.WriteString("(?,?,?)")
+				}
+				args = append(args, sortedSet.name, member.Id, member.Score)
+				memberSets[lo.Tuple2[string, string]{sortedSet.name, member.Id}] = struct{}{}
 			}
-			switch db.driver {
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
-			case MySQL:
-				builder.WriteString("(?,?,?)")
-			}
-			args = append(args, sortedSet.name, member.Id, member.Score)
 		}
 	}
 	switch db.driver {
@@ -500,17 +508,21 @@ func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
 		var args []interface{}
 		var builder strings.Builder
 		builder.WriteString("INSERT INTO sorted_sets (name, member, score) VALUES ")
-		for i, member := range scores {
-			if i > 0 {
-				builder.WriteRune(',')
+		memberSets := make(map[lo.Tuple2[string, string]]struct{})
+		for _, member := range scores {
+			if _, exist := memberSets[lo.Tuple2[string, string]{key, member.Id}]; !exist {
+				if len(args) > 0 {
+					builder.WriteRune(',')
+				}
+				switch db.driver {
+				case Postgres:
+					builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
+				case MySQL:
+					builder.WriteString("(?,?,?)")
+				}
+				args = append(args, key, member.Id, member.Score)
+				memberSets[lo.Tuple2[string, string]{key, member.Id}] = struct{}{}
 			}
-			switch db.driver {
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
-			case MySQL:
-				builder.WriteString("(?,?,?)")
-			}
-			args = append(args, key, member.Id, member.Score)
 		}
 		switch db.driver {
 		case Postgres:

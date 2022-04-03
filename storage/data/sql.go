@@ -292,7 +292,11 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 		if i+1 < len(items) {
 			builder.WriteString(",")
 		}
-		args = append(args, item.ItemId, item.IsHidden, string(categories), item.Timestamp, string(labels), item.Comment)
+		if d.driver == ClickHouse {
+			args = append(args, item.ItemId, item.IsHidden, string(categories), item.Timestamp.In(time.UTC), string(labels), item.Comment)
+		} else {
+			args = append(args, item.ItemId, item.IsHidden, string(categories), item.Timestamp, string(labels), item.Comment)
+		}
 	}
 	switch d.driver {
 	case MySQL:
@@ -434,7 +438,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 // ModifyItem modify an item in MySQL.
 func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 	// ignore empty patch
-	if patch.Labels == nil && patch.Comment == nil && patch.Timestamp != nil {
+	if patch.Labels == nil && patch.Comment == nil && patch.Timestamp == nil {
 		base.Logger().Debug("empty item patch")
 		return nil
 	}
@@ -543,7 +547,7 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 		if patch.Timestamp != nil {
 			builder.WriteString(delimiter)
 			builder.WriteString("time_stamp = ?")
-			args = append(args, patch.Timestamp)
+			args = append(args, patch.Timestamp.In(time.UTC))
 		}
 		builder.WriteString(" WHERE item_id = ?")
 		args = append(args, itemId)
@@ -1197,7 +1201,11 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)",
 					len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5))
 			}
-			args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
+			if d.driver == ClickHouse {
+				args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp.In(time.UTC), f.Comment)
+			} else {
+				args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
+			}
 		}
 	}
 	if len(args) == 0 {
