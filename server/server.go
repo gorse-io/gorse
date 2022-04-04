@@ -53,7 +53,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 		RestServer: RestServer{
 			DataClient:  &data.NoDatabase{},
 			CacheClient: &cache.NoDatabase{},
-			GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
+			GorseConfig: config.GetDefaultConfig(),
 			HttpHost:    serverHost,
 			HttpPort:    serverPort,
 			WebService:  new(restful.WebService),
@@ -99,7 +99,7 @@ func (s *Server) Serve() {
 // Sync this server to the master.
 func (s *Server) Sync() {
 	defer base.CheckPanic()
-	base.Logger().Info("start meta sync", zap.Int("meta_timeout", s.GorseConfig.Master.MetaTimeout))
+	base.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.GorseConfig.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
 		var err error
@@ -144,6 +144,6 @@ func (s *Server) Sync() {
 		if s.testMode {
 			return
 		}
-		time.Sleep(time.Duration(s.GorseConfig.Master.MetaTimeout) * time.Second)
+		time.Sleep(s.GorseConfig.Master.MetaTimeout)
 	}
 }

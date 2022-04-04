@@ -60,8 +60,8 @@ func init() {
 		}
 		return defaultValue
 	}
-	benchDataStore = env("BENCH_DATA_STORE", "mongodb://root:password@127.0.0.1:27017/")
-	benchCacheStore = env("BENCH_CACHE_STORE", "mongodb://root:password@127.0.0.1:27017/")
+	benchDataStore = env("BENCH_DATA_STORE", "clickhouse://127.0.0.1:8123/")
+	benchCacheStore = env("BENCH_CACHE_STORE", "redis://127.0.0.1:6379/")
 }
 
 type benchServer struct {
@@ -84,7 +84,7 @@ func newBenchServer(b *testing.B) *benchServer {
 
 	// configuration
 	s := &benchServer{}
-	s.GorseConfig = (*config.Config)(nil).LoadDefaultIfNil()
+	s.GorseConfig = config.GetDefaultConfig()
 	s.DisableLog = true
 	s.WebService = new(restful.WebService)
 	cacheStoreURL := s.prepareCache(b, benchCacheStore, benchName)
@@ -810,7 +810,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 			lo.Reverse(expects)
 			err := s.CacheClient.SetSorted(cache.PopularItems, scores)
 			require.NoError(b, err)
-			s.GorseConfig.Database.CacheSize = len(scores)
+			s.GorseConfig.Recommend.CacheSize = len(scores)
 
 			response := make([]*resty.Response, b.N)
 			client := resty.New()
@@ -855,7 +855,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 			lo.Reverse(expects)
 			err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "init_user_1"), scores)
 			require.NoError(b, err)
-			s.GorseConfig.Database.CacheSize = len(scores)
+			s.GorseConfig.Recommend.CacheSize = len(scores)
 
 			response := make([]*resty.Response, b.N)
 			client := resty.New()
@@ -906,7 +906,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 			lo.Reverse(expects)
 			err := s.CacheClient.SetSorted(cache.LatestItems, scores)
 			require.NoError(b, err)
-			s.GorseConfig.Database.CacheSize = len(scores)
+			s.GorseConfig.Recommend.CacheSize = len(scores)
 
 			response := make([]*resty.Response, b.N)
 			client := resty.New()
@@ -940,7 +940,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 			for i := range scores {
 				scores[i].Id = fmt.Sprintf("init_item_%d", i)
 				scores[i].Score = float64(i)
-				if i < s.GorseConfig.Recommend.NumFeedbackFallbackItemBased {
+				if i < s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased {
 					err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
 						FeedbackKey: data.FeedbackKey{
 							FeedbackType: "feedback_type_positive",
@@ -954,14 +954,14 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 			}
 
 			// insert user neighbors
-			for i := 0; i < s.GorseConfig.Recommend.NumFeedbackFallbackItemBased; i++ {
+			for i := 0; i < s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased; i++ {
 				err := s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, fmt.Sprintf("init_item_%d", i)), scores)
 				require.NoError(b, err)
 			}
 
-			s.GorseConfig.Database.CacheSize = len(scores)
-			s.GorseConfig.Database.PositiveFeedbackType = []string{"feedback_type_positive"}
-			s.GorseConfig.Recommend.FallbackRecommend = []string{"item_based"}
+			s.GorseConfig.Recommend.CacheSize = len(scores)
+			s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"feedback_type_positive"}
+			s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"item_based"}
 
 			response := make([]*resty.Response, b.N)
 			client := resty.New()

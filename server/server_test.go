@@ -39,7 +39,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	assert.NoError(t, err)
 	dataStore, err := miniredis.Run()
 	assert.NoError(t, err)
-	cfg := (*config.Config)(nil).LoadDefaultIfNil()
+	cfg := config.GetDefaultConfig()
 	cfg.Database.DataStore = "redis://" + dataStore.Addr()
 	cfg.Database.CacheStore = "redis://" + cacheStore.Addr()
 	return &mockMaster{
@@ -89,7 +89,7 @@ func TestServer_Sync(t *testing.T) {
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
 		RestServer: RestServer{
-			GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
+			GorseConfig: config.GetDefaultConfig(),
 		},
 	}
 	serv.Sync()

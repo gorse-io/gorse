@@ -56,7 +56,7 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 			clickModelVersion:   456,
 			clickModel:          fm,
 			RestServer: server.RestServer{
-				GorseConfig: (*config.Config)(nil).LoadDefaultIfNil(),
+				GorseConfig: config.GetDefaultConfig(),
 			},
 		},
 		addr: make(chan string),

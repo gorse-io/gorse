@@ -104,14 +104,14 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		rankingModelName: "bpr",
 		rankingModel:     ranking.NewBPR(nil),
 		rankingModelSearcher: ranking.NewModelSearcher(
-			cfg.Recommend.SearchEpoch,
-			cfg.Recommend.SearchTrials,
+			cfg.Recommend.Collaborative.ModelSearchEpoch,
+			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Master.NumJobs),
 		// default click model
 		clickModel: click.NewFM(click.FMClassification, nil),
 		clickModelSearcher: click.NewModelSearcher(
-			cfg.Recommend.SearchEpoch,
-			cfg.Recommend.SearchTrials,
+			cfg.Recommend.Collaborative.ModelSearchEpoch,
+			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Master.NumJobs,
 		),
 		RestServer: server.RestServer{
@@ -121,7 +121,7 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 			IsDashboard: true,
 			WebService:  new(restful.WebService),
 		},
-		fitTicker:    time.NewTicker(time.Duration(cfg.Recommend.FitPeriod) * time.Minute),
+		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.ModelFitPeriod),
 		importedChan: make(chan bool),
 	}
 }
@@ -160,9 +160,7 @@ func (m *Master) Serve() {
 	m.ttlCache = ttlcache.NewCache()
 	m.ttlCache.SetExpirationCallback(m.nodeDown)
 	m.ttlCache.SetNewItemCallback(m.nodeUp)
-	if err = m.ttlCache.SetTTL(
-		time.Duration(m.GorseConfig.Master.MetaTimeout+10) * time.Second,
-	); err != nil {
+	if err = m.ttlCache.SetTTL(m.GorseConfig.Master.MetaTimeout + 10*time.Second); err != nil {
 		base.Logger().Fatal("failed to set TTL", zap.Error(err))
 	}
 
@@ -193,9 +191,9 @@ func (m *Master) Serve() {
 
 	go m.StartHttpServer()
 	go m.RunPrivilegedTasksLoop()
-	base.Logger().Info("start model fit", zap.Int("period", m.GorseConfig.Recommend.FitPeriod))
+	base.Logger().Info("start model fit", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelFitPeriod))
 	go m.RunRagtagTasksLoop()
-	base.Logger().Info("start model searcher", zap.Int("period", m.GorseConfig.Recommend.SearchPeriod))
+	base.Logger().Info("start model searcher", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod))
 
 	// start rpc server
 	base.Logger().Info("start rpc server",
@@ -311,7 +309,7 @@ func (m *Master) RunRagtagTasksLoop() {
 			time.Sleep(time.Minute)
 			continue
 		}
-		time.Sleep(time.Duration(m.GorseConfig.Recommend.SearchPeriod) * time.Minute)
+		time.Sleep(m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod)
 	}
 }
 

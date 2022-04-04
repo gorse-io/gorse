@@ -1,7 +1,6 @@
-# This section declares settings for the database.
 [database]
 
-# The database for caching, support Redis only:
+# The database for caching, support Redis, MySQL, Postgres and MongoDB:
 #   redis://<user>:<password>@<host>:<port>/<db_number>
 #   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
@@ -16,14 +15,55 @@ cache_store = "redis://localhost:6379/0"
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true"
 
-# The cache size for recommended/popular/latest items. The default value is 100.
-cache_size = 100
+[master]
+
+# GRPC port of the master node. The default value is 8086.
+port = 8086
+
+# gRPC host of the master node. The default values is "0.0.0.0".
+host = "0.0.0.0"
+
+# HTTP port of the master node. The default values is 8088.
+http_port = 8088
+
+# HTTP host of the master node. The default values is "0.0.0.0".
+http_host = "0.0.0.0"
+
+# Number of working jobs in the master node. The default value is 1.
+n_jobs = 1
+
+# Meta information timeout. The default value is 10s.
+meta_timeout = "10s"
+
+# Username for the master node dashboard.
+dashboard_user_name = ""
+
+# Password for the master node dashboard.
+dashboard_password = ""
+
+[server]
+
+# Default number of returned items. The default value is 10.
+default_n = 10
+
+# Secret key for RESTful APIs (SSL required).
+api_key = ""
+
+# Clock error in the cluster. The default value is 5s.
+clock_error = "5s"
 
 # Insert new users while inserting feedback. The default value is true.
 auto_insert_user = true
 
 # Insert new items while inserting feedback. The default value is true.
 auto_insert_item = false
+
+[recommend]
+
+# The cache size for recommended/popular/latest items. The default value is 10.
+cache_size = 100
+
+[recommend.data_source]
 
 # The feedback types for positive events.
 positive_feedback_types = ["star","like"]
@@ -37,46 +77,117 @@ positive_feedback_ttl = 0
 # The time-to-live (days) of items, 0 means disabled. The default value is 0.
 item_ttl = 0
 
-# This section declares settings for the master node.
-[master]
-port = 8086                     # master port
-host = "0.0.0.0"                # master host
-http_port = 8088                # HTTP API port
-http_host = "0.0.0.0"           # HTTP API host
-n_jobs = 4                      # number of working jobs
-meta_timeout = 10               # cluster meta timeout (second)
-dashboard_user_name = "admin"   # dashboard user name
-dashboard_password = "password" # dashboard password
+[recommend.popular]
 
-# This section declares settings for the server node.
-[server]
-default_n = 10                  # default number of returned items
-api_key = ""                    # secret key for RESTful APIs (SSL required)
-epsilon_time = 5                # clock error in the cluster in seconds
+# The time window of popular items. The default values is 4320h.
+popular_window = "720h"
 
-# This section declares settings for recommendation.
-[recommend]
+[recommend.user_neighbors]
 
-# The time window of popular items (days). The default values is 180.
-popular_window = 30
+# The type of neighbors for users. There are three types:
+#   similar: Neighbors are found by number of common labels.
+#   related: Neighbors are found by number of common liked items.
+#   auto: If a user have labels, neighbors are found by number of common labels.
+#         If this user have no labels, neighbors are found by number of common liked items.
+# The default value is "auto".
+neighbor_type = "similar"
 
-# The time period for model fitting (minutes). The default values is 60.
-fit_period = 360
+# Enable approximate user neighbor searching using vector index. The default value is true.
+enable_index = true
 
-# The time period for model searching (minutes). The default values is 100.
-search_period = 60
+# Minimal recall for approximate user neighbor searching. The default value is 0.8.
+index_recall = 0.8
 
-# The number of epochs for model searching. The default values is 100.
-search_epoch = 100
+# Maximal number of fit epochs for approximate user neighbor searching vector index. The default value is 3.
+index_fit_epoch = 3
 
-# The number of trials for model searching. The default values is 10.
-search_trials = 10
+[recommend.item_neighbors]
 
-# The time period to check recommendation for users (minutes). The default values is 1.
-check_recommend_period = 1
+# The type of neighbors for items. There are three types:
+#   similar: Neighbors are found by number of common labels.
+#   related: Neighbors are found by number of common users.
+#   auto: If a item have labels, neighbors are found by number of common labels.
+#         If this item have no labels, neighbors are found by number of common users.
+# The default value is "auto".
+neighbor_type = "similar"
 
-# The time period to refresh recommendation for inactive users (days). The default values is 5.
-refresh_recommend_period = 1
+# Enable approximate item neighbor searching using vector index. The default value is true.
+enable_index = true
+
+# Minimal recall for approximate item neighbor searching. The default value is 0.8.
+index_recall = 0.8
+
+# Maximal number of fit epochs for approximate item neighbor searching vector index. The default value is 3.
+index_fit_epoch = 3
+
+[recommend.collaborative]
+
+# Enable approximate collaborative filtering recommend using vector index. The default value is true.
+enable_index = true
+
+# Minimal recall for approximate collaborative filtering recommend. The default value is 0.9.
+index_recall = 0.9
+
+# Maximal number of fit epochs for approximate collaborative filtering recommend vector index. The default value is 3.
+index_fit_epoch = 3
+
+# The time period for model fitting. The default value is "60m".
+model_fit_period = "60m"
+
+# The time period for model searching. The default value is "360m".
+model_search_period = "360m"
+
+# The number of epochs for model searching. The default value is 100.
+model_search_epoch = 100
+
+# The number of trials for model searching. The default value is 10.
+model_search_trials = 10
+
+[recommend.replacement]
+
+# Replace historical items back to recommendations. The default value is false.
+enable_replacement = false
+
+# Decay the weights of replaced items from positive feedbacks. The default value is 0.8.
+positive_replacement_decay = 0.8
+
+# Decay the weights of replaced items from read feedbacks. The default value is 0.6.
+read_replacement_decay = 0.6
+
+[recommend.offline]
+
+# The time period to check recommendation for users. The default values is 1m.
+check_recommend_period = "1m"
+
+# The time period to refresh recommendation for inactive users. The default values is 120h.
+refresh_recommend_period = "24h"
+
+# Enable latest recommendation during offline recommendation. The default value is false.
+enable_latest_recommend = true
+
+# Enable popular recommendation during offline recommendation. The default value is false.
+enable_popular_recommend = false
+
+# Enable user-based similarity recommendation during offline recommendation. The default value is false.
+enable_user_based_recommend = true
+
+# Enable item-based similarity recommendation during offline recommendation. The default value is false.
+enable_item_based_recommend = false
+
+# Enable collaborative filtering recommendation during offline recommendation. The default value is true.
+enable_collaborative_recommend = true
+
+# Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
+# would be merged randomly. The default value is false.
+enable_click_through_prediction = true
+
+# The explore recommendation method is used to inject popular items or latest items into recommended result:
+#   popular: Recommend popular items to cold-start users.
+#   latest: Recommend latest items to cold-start users.
+# The default values is { popular = 0.0, latest = 0.0 }.
+explore_recommend = { popular = 0.1, latest = 0.2 }
+
+[recommend.online]
 
 # The fallback recommendation method is used when cached recommendation drained out:
 #   item_based: Recommend similar items to cold-start users.
@@ -87,80 +198,3 @@ fallback_recommend = ["item_based", "latest"]
 
 # The number of feedback used in fallback item-based similar recommendation. The default values is 10.
 num_feedback_fallback_item_based = 10
-
-# The type of neighbors for items. There are three types:
-#   similar: Neighbors are found by number of common labels.
-#   related: Neighbors are found by number of common users.
-#   auto: If a item have labels, neighbors are found by number of common labels.
-#         If this item have no labels, neighbors are found by number of common users.
-# The default values is "auto".
-item_neighbor_type = "similar"
-
-# Enable approximate item neighbor searching using vector index.
-enable_item_neighbor_index = false
-
-# Minimal recall for approximate item neighbor searching.
-item_neighbor_index_recall = 0.8
-
-# Maximal number of fit epochs for approximate item neighbor searching vector index.
-item_neighbor_index_fit_epoch = 3
-
-# The type of neighbors for users. There are three types:
-#   similar: Neighbors are found by number of common labels.
-#   related: Neighbors are found by number of common liked items.
-#   auto: If a user have labels, neighbors are found by number of common labels.
-#         If this user have no labels, neighbors are found by number of common liked items.
-# The default values is "auto".
-user_neighbor_type = "similar"
-
-# Enable approximate user neighbor searching using vector index.
-enable_user_neighbor_index = false
-
-# Minimal recall for approximate user neighbor searching.
-user_neighbor_index_recall = 0.8
-
-# Maximal number of fit epochs for approximate user neighbor searching vector index.
-user_neighbor_index_fit_epoch = 3
-
-# Enable latest recommendation during offline recommendation. The default values is false.
-enable_latest_recommend = true
-
-# Enable popular recommendation during offline recommendation. The default values is false.
-enable_popular_recommend = false
-
-# Enable user-based similarity recommendation during offline recommendation. The default values is false.
-enable_user_based_recommend = true
-
-# Enable item-based similarity recommendation during offline recommendation. The default values is false.
-enable_item_based_recommend = false
-
-# Enable collaborative filtering recommendation during offline recommendation. The default values is true.
-enable_collaborative_recommend = true
-
-# Enable approximate collaborative filtering recommend using vector index.
-enable_collaborative_index = false
-
-# Minimal recall for approximate collaborative filtering recommend.
-collaborative_index_recall = 0.9
-
-# Maximal number of fit epochs for approximate collaborative filtering recommend vector index.
-collaborative_index_fit_epoch = 3
-
-# Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
-# would be merged randomly. The default values is true.
-enable_click_through_prediction = true
-
-# The explore recommendation method is used to inject popular items or latest items into recommended result:
-#   popular: Recommend popular items to cold-start users.
-#   latest: Recommend latest items to cold-start users.
-# The default values is { popular = 0.0, latest = 0.0 }.
-explore_recommend = { popular = 0.1, latest = 0.2 }
-
-# Replace historical items back to recommendations.
-enable_replacement = false
-
-# Decay the weights of replaced items from positive feedbacks.
-positive_replacement_decay = 0.8
-
-# Decay the weights of replaced items from read feedbacks.
-read_replacement_decay = 0.6

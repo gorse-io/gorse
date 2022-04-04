@@ -20,6 +20,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"go.uber.org/zap"
 	"sync"
+	"time"
 )
 
 const (
@@ -36,136 +37,172 @@ type Config struct {
 	Recommend RecommendConfig `mapstructure:"recommend"`
 }
 
-// LoadDefaultIfNil loads default settings if config is nil.
-func (config *Config) LoadDefaultIfNil() *Config {
-	if config == nil {
-		return &Config{
-			Database:  *(*DatabaseConfig)(nil).LoadDefaultIfNil(),
-			Master:    *(*MasterConfig)(nil).LoadDefaultIfNil(),
-			Server:    *(*ServerConfig)(nil).LoadDefaultIfNil(),
-			Recommend: *(*RecommendConfig)(nil).LoadDefaultIfNil(),
-		}
-	}
-	return config
-}
-
-// validate Config.
-func (config *Config) validate() {
-	config.Database.validate()
-	config.Master.validate()
-	config.Server.validate()
-	config.Recommend.validate()
-}
-
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore            string   `mapstructure:"data_store"`              // database for data store
-	CacheStore           string   `mapstructure:"cache_store"`             // database for cache store
-	AutoInsertUser       bool     `mapstructure:"auto_insert_user"`        // insert new users while inserting feedback
-	AutoInsertItem       bool     `mapstructure:"auto_insert_item"`        // insert new items while inserting feedback
-	CacheSize            int      `mapstructure:"cache_size"`              // cache size for recommended/popular/latest items
-	PositiveFeedbackType []string `mapstructure:"positive_feedback_types"` // positive feedback type
-	ReadFeedbackTypes    []string `mapstructure:"read_feedback_types"`     // feedback type for read event
-	PositiveFeedbackTTL  uint     `mapstructure:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
-	ItemTTL              uint     `mapstructure:"item_ttl"`                // item-to-live of items
-}
-
-// LoadDefaultIfNil loads default settings if config is nil.
-func (config *DatabaseConfig) LoadDefaultIfNil() *DatabaseConfig {
-	if config == nil {
-		return &DatabaseConfig{
-			AutoInsertUser: true,
-			AutoInsertItem: true,
-			CacheSize:      100,
-		}
-	}
-	return config
-}
-
-// validate MasterConfig.
-func (config *DatabaseConfig) validate() {
-	validatePositive("cache_size", config.CacheSize)
-	validateNotEmpty("positive_feedback_types", config.PositiveFeedbackType)
-	validateNotEmpty("read_feedback_types", config.ReadFeedbackTypes)
+	DataStore  string `mapstructure:"data_store"`  // database for data store
+	CacheStore string `mapstructure:"cache_store"` // database for cache store
 }
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port              int    `mapstructure:"port"`                // master port
-	Host              string `mapstructure:"host"`                // master host
-	HttpPort          int    `mapstructure:"http_port"`           // HTTP port
-	HttpHost          string `mapstructure:"http_host"`           // HTTP host
-	NumJobs           int    `mapstructure:"n_jobs"`              // number of working jobs
-	MetaTimeout       int    `mapstructure:"meta_timeout"`        // cluster meta timeout (second)
-	DashboardUserName string `mapstructure:"dashboard_user_name"` // dashboard user name
-	DashboardPassword string `mapstructure:"dashboard_password"`  // dashboard password
+	Port              int           `mapstructure:"port"`                // master port
+	Host              string        `mapstructure:"host"`                // master host
+	HttpPort          int           `mapstructure:"http_port"`           // HTTP port
+	HttpHost          string        `mapstructure:"http_host"`           // HTTP host
+	NumJobs           int           `mapstructure:"n_jobs"`              // number of working jobs
+	MetaTimeout       time.Duration `mapstructure:"meta_timeout"`        // cluster meta timeout (second)
+	DashboardUserName string        `mapstructure:"dashboard_user_name"` // dashboard user name
+	DashboardPassword string        `mapstructure:"dashboard_password"`  // dashboard password
 }
 
-// LoadDefaultIfNil loads default settings if config is nil.
-func (config *MasterConfig) LoadDefaultIfNil() *MasterConfig {
-	if config == nil {
-		return &MasterConfig{
-			Port:        8086,
-			Host:        "127.0.0.1",
-			HttpPort:    8088,
-			HttpHost:    "127.0.0.1",
-			NumJobs:     1,
-			MetaTimeout: 60,
-		}
-	}
-	return config
-}
-
-// validate MasterConfig.
-func (config *MasterConfig) validate() {
-	validatePositive("n_jobs", config.NumJobs)
-	validatePositive("meta_timeout", config.MetaTimeout)
+// ServerConfig is the configuration for the server.
+type ServerConfig struct {
+	APIKey         string        `mapstructure:"api_key"`          // default number of returned items
+	DefaultN       int           `mapstructure:"default_n"`        // secret key for RESTful APIs (SSL required)
+	ClockError     time.Duration `mapstructure:"clock_error"`      // clock error in the cluster in seconds
+	AutoInsertUser bool          `mapstructure:"auto_insert_user"` // insert new users while inserting feedback
+	AutoInsertItem bool          `mapstructure:"auto_insert_item"` // insert new items while inserting feedback
 }
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	PopularWindow                int                `mapstructure:"popular_window"`
-	FitPeriod                    int                `mapstructure:"fit_period"`
-	SearchPeriod                 int                `mapstructure:"search_period"`
-	SearchEpoch                  int                `mapstructure:"search_epoch"`
-	SearchTrials                 int                `mapstructure:"search_trials"`
-	CheckRecommendPeriod         int                `mapstructure:"check_recommend_period"`
-	RefreshRecommendPeriod       int                `mapstructure:"refresh_recommend_period"`
-	FallbackRecommend            []string           `mapstructure:"fallback_recommend"`
-	NumFeedbackFallbackItemBased int                `mapstructure:"num_feedback_fallback_item_based"`
+	CacheSize     int                 `mapstructure:"cache_size"`
+	DataSource    DataSourceConfig    `mapstructure:"data_source"`
+	Popular       PopularConfig       `mapstructure:"popular"`
+	UserNeighbors NeighborsConfig     `mapstructure:"user_neighbors"`
+	ItemNeighbors NeighborsConfig     `mapstructure:"item_neighbors"`
+	Collaborative CollaborativeConfig `mapstructure:"collaborative"`
+	Replacement   ReplacementConfig   `mapstructure:"replacement"`
+	Offline       OfflineConfig       `mapstructure:"offline"`
+	Online        OnlineConfig        `mapstructure:"online"`
+}
+
+type DataSourceConfig struct {
+	PositiveFeedbackTypes []string `mapstructure:"positive_feedback_types"` // positive feedback type
+	ReadFeedbackTypes     []string `mapstructure:"read_feedback_types"`     // feedback type for read event
+	PositiveFeedbackTTL   uint     `mapstructure:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
+	ItemTTL               uint     `mapstructure:"item_ttl"`                // item-to-live of items
+}
+
+type PopularConfig struct {
+	PopularWindow time.Duration `mapstructure:"popular_window"`
+}
+
+type NeighborsConfig struct {
+	NeighborType  string  `mapstructure:"neighbor_type"`
+	EnableIndex   bool    `mapstructure:"enable_index"`
+	IndexRecall   float32 `mapstructure:"index_recall"`
+	IndexFitEpoch int     `mapstructure:"index_fit_epoch"`
+}
+
+type CollaborativeConfig struct {
+	ModelFitPeriod    time.Duration `mapstructure:"model_fit_period"`
+	ModelSearchPeriod time.Duration `mapstructure:"model_search_period"`
+	ModelSearchEpoch  int           `mapstructure:"model_search_epoch"`
+	ModelSearchTrials int           `mapstructure:"model_search_trials"`
+	EnableIndex       bool          `mapstructure:"enable_index"`
+	IndexRecall       float32       `mapstructure:"index_recall"`
+	IndexFitEpoch     int           `mapstructure:"index_fit_epoch"`
+}
+
+type ReplacementConfig struct {
+	EnableReplacement        bool    `mapstructure:"enable_replacement"`
+	PositiveReplacementDecay float64 `mapstructure:"positive_replacement_decay"`
+	ReadReplacementDecay     float64 `mapstructure:"read_replacement_decay"`
+}
+
+type OfflineConfig struct {
+	CheckRecommendPeriod         time.Duration      `mapstructure:"check_recommend_period"`
+	RefreshRecommendPeriod       time.Duration      `mapstructure:"refresh_recommend_period"`
 	ExploreRecommend             map[string]float64 `mapstructure:"explore_recommend"`
-	EnableItemNeighborIndex      bool               `mapstructure:"enable_item_neighbor_index"`
-	ItemNeighborType             string             `mapstructure:"item_neighbor_type"`
-	ItemNeighborIndexRecall      float32            `mapstructure:"item_neighbor_index_recall"`
-	ItemNeighborIndexFitEpoch    int                `mapstructure:"item_neighbor_index_fit_epoch"`
-	EnableUserNeighborIndex      bool               `mapstructure:"enable_user_neighbor_index"`
-	UserNeighborType             string             `mapstructure:"user_neighbor_type"`
-	UserNeighborIndexRecall      float32            `mapstructure:"user_neighbor_index_recall"`
-	UserNeighborIndexFitEpoch    int                `mapstructure:"user_neighbor_index_fit_epoch"`
 	EnableLatestRecommend        bool               `mapstructure:"enable_latest_recommend"`
 	EnablePopularRecommend       bool               `mapstructure:"enable_popular_recommend"`
 	EnableUserBasedRecommend     bool               `mapstructure:"enable_user_based_recommend"`
 	EnableItemBasedRecommend     bool               `mapstructure:"enable_item_based_recommend"`
 	EnableColRecommend           bool               `mapstructure:"enable_collaborative_recommend"`
-	EnableColIndex               bool               `mapstructure:"enable_collaborative_index"`
-	ColIndexRecall               float32            `mapstructure:"collaborative_index_recall"`
-	ColIndexFitEpoch             int                `mapstructure:"collaborative_index_fit_epoch"`
 	EnableClickThroughPrediction bool               `mapstructure:"enable_click_through_prediction"`
-	EnableReplacement            bool               `mapstructure:"enable_replacement"`
-	PositiveReplacementDecay     float64            `mapstructure:"positive_replacement_decay"`
-	ReadReplacementDecay         float64            `mapstructure:"read_replacement_decay"`
 	exploreRecommendLock         sync.RWMutex
 }
 
-func (config *RecommendConfig) Lock() {
+type OnlineConfig struct {
+	FallbackRecommend            []string `mapstructure:"fallback_recommend"`
+	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based"`
+}
+
+func GetDefaultConfig() *Config {
+	return &Config{
+		Master: MasterConfig{
+			Port:        8086,
+			Host:        "0.0.0.0",
+			HttpPort:    8088,
+			HttpHost:    "0.0.0.0",
+			NumJobs:     1,
+			MetaTimeout: 10 * time.Second,
+		},
+		Server: ServerConfig{
+			DefaultN:       10,
+			ClockError:     5 * time.Second,
+			AutoInsertUser: true,
+			AutoInsertItem: true,
+		},
+		Recommend: RecommendConfig{
+			CacheSize: 100,
+			Popular: PopularConfig{
+				PopularWindow: 180 * 24 * time.Hour,
+			},
+			UserNeighbors: NeighborsConfig{
+				NeighborType:  "auto",
+				EnableIndex:   true,
+				IndexRecall:   0.8,
+				IndexFitEpoch: 3,
+			},
+			ItemNeighbors: NeighborsConfig{
+				NeighborType:  "auto",
+				EnableIndex:   true,
+				IndexRecall:   0.8,
+				IndexFitEpoch: 3,
+			},
+			Collaborative: CollaborativeConfig{
+				ModelFitPeriod:    60 * time.Minute,
+				ModelSearchPeriod: 180 * time.Minute,
+				ModelSearchEpoch:  100,
+				ModelSearchTrials: 10,
+				EnableIndex:       true,
+				IndexRecall:       0.9,
+				IndexFitEpoch:     3,
+			},
+			Replacement: ReplacementConfig{
+				EnableReplacement:        false,
+				PositiveReplacementDecay: 0.8,
+				ReadReplacementDecay:     0.6,
+			},
+			Offline: OfflineConfig{
+				CheckRecommendPeriod:         time.Minute,
+				RefreshRecommendPeriod:       120 * time.Hour,
+				EnableLatestRecommend:        false,
+				EnablePopularRecommend:       false,
+				EnableUserBasedRecommend:     false,
+				EnableItemBasedRecommend:     false,
+				EnableColRecommend:           true,
+				EnableClickThroughPrediction: false,
+			},
+			Online: OnlineConfig{
+				FallbackRecommend:            []string{"latest"},
+				NumFeedbackFallbackItemBased: 10,
+			},
+		},
+	}
+}
+
+func (config *OfflineConfig) Lock() {
 	config.exploreRecommendLock.Lock()
 }
 
-func (config *RecommendConfig) UnLock() {
+func (config *OfflineConfig) UnLock() {
 	config.exploreRecommendLock.Unlock()
 }
 
-func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, exist bool) {
+func (config *OfflineConfig) GetExploreRecommend(key string) (value float64, exist bool) {
 	if config == nil {
 		return 0.0, false
 	}
@@ -175,130 +212,59 @@ func (config *RecommendConfig) GetExploreRecommend(key string) (value float64, e
 	return
 }
 
-// LoadDefaultIfNil loads default settings if config is nil.
-func (config *RecommendConfig) LoadDefaultIfNil() *RecommendConfig {
-	if config == nil {
-		return &RecommendConfig{
-			PopularWindow:                180,
-			FitPeriod:                    60,
-			SearchPeriod:                 180,
-			SearchEpoch:                  100,
-			SearchTrials:                 10,
-			CheckRecommendPeriod:         1,
-			RefreshRecommendPeriod:       5,
-			FallbackRecommend:            []string{"latest"},
-			NumFeedbackFallbackItemBased: 10,
-			ItemNeighborType:             "auto",
-			EnableItemNeighborIndex:      false,
-			ItemNeighborIndexRecall:      0.8,
-			ItemNeighborIndexFitEpoch:    3,
-			UserNeighborType:             "auto",
-			EnableUserNeighborIndex:      false,
-			UserNeighborIndexRecall:      0.8,
-			UserNeighborIndexFitEpoch:    3,
-			EnableLatestRecommend:        false,
-			EnablePopularRecommend:       false,
-			EnableUserBasedRecommend:     false,
-			EnableItemBasedRecommend:     false,
-			EnableColRecommend:           true,
-			EnableColIndex:               false,
-			ColIndexRecall:               0.9,
-			ColIndexFitEpoch:             3,
-			EnableClickThroughPrediction: false,
-			EnableReplacement:            false,
-			PositiveReplacementDecay:     0.8,
-			ReadReplacementDecay:         0.6,
-		}
-	}
-	return config
-}
-
-// validate RecommendConfig.
-func (config *RecommendConfig) validate() {
-	validateNotNegative("popular_window", config.PopularWindow)
-	validatePositive("fit_period", config.FitPeriod)
-	validatePositive("search_period", config.SearchPeriod)
-	validatePositive("search_epoch", config.SearchEpoch)
-	validatePositive("search_trials", config.SearchTrials)
-	validatePositive("refresh_recommend_period", config.RefreshRecommendPeriod)
-	validateSubset("fallback_recommend", config.FallbackRecommend, []string{"item_based", "popular", "latest"})
-	validateIn("item_neighbor_type", config.ItemNeighborType, []string{"similar", "related", "auto"})
-	validateIn("user_neighbor_type", config.UserNeighborType, []string{"similar", "related", "auto"})
-}
-
-// ServerConfig is the configuration for the server.
-type ServerConfig struct {
-	APIKey      string `mapstructure:"api_key"`      // default number of returned items
-	DefaultN    int    `mapstructure:"default_n"`    // secret key for RESTful APIs (SSL required)
-	EpsilonTime int    `mapstructure:"epsilon_time"` // clock error in the cluster in seconds
-}
-
-// LoadDefaultIfNil loads default settings if config is nil.
-func (config *ServerConfig) LoadDefaultIfNil() *ServerConfig {
-	if config == nil {
-		return &ServerConfig{
-			DefaultN:    10,
-			EpsilonTime: 5,
-		}
-	}
-	return config
-}
-
-// validate ServerConfig.
-func (config *ServerConfig) validate() {
-	validatePositive("default_n", config.DefaultN)
-}
-
-func init() {
-	// Default database config
-	defaultDBConfig := *(*DatabaseConfig)(nil).LoadDefaultIfNil()
-	viper.SetDefault("database.auto_insert_user", defaultDBConfig.AutoInsertUser)
-	viper.SetDefault("database.auto_insert_item", defaultDBConfig.AutoInsertItem)
-	viper.SetDefault("database.cache_size", defaultDBConfig.CacheSize)
-	// Default master config
-	defaultMasterConfig := *(*MasterConfig)(nil).LoadDefaultIfNil()
-	viper.SetDefault("master.port", defaultMasterConfig.Port)
-	viper.SetDefault("master.host", defaultMasterConfig.Host)
-	viper.SetDefault("master.http_port", defaultMasterConfig.HttpPort)
-	viper.SetDefault("master.http_host", defaultMasterConfig.HttpHost)
-	viper.SetDefault("master.n_jobs", defaultMasterConfig.NumJobs)
-	viper.SetDefault("master.meta_timeout", defaultMasterConfig.MetaTimeout)
-	// Default server config
-	defaultServerConfig := *(*ServerConfig)(nil).LoadDefaultIfNil()
-	viper.SetDefault("server.api_key", defaultServerConfig.APIKey)
-	viper.SetDefault("server.default_n", defaultServerConfig.DefaultN)
-	viper.SetDefault("server.epsilon_time", defaultServerConfig.EpsilonTime)
-	// Default recommend config
-	defaultRecommendConfig := *(*RecommendConfig)(nil).LoadDefaultIfNil()
-	viper.SetDefault("recommend.popular_window", defaultRecommendConfig.PopularWindow)
-	viper.SetDefault("recommend.fit_period", defaultRecommendConfig.FitPeriod)
-	viper.SetDefault("recommend.search_period", defaultRecommendConfig.SearchPeriod)
-	viper.SetDefault("recommend.search_epoch", defaultRecommendConfig.SearchEpoch)
-	viper.SetDefault("recommend.search_trials", defaultRecommendConfig.SearchTrials)
-	viper.SetDefault("recommend.check_recommend_period", defaultRecommendConfig.CheckRecommendPeriod)
-	viper.SetDefault("recommend.refresh_recommend_period", defaultRecommendConfig.RefreshRecommendPeriod)
-	viper.SetDefault("recommend.fallback_recommend", defaultRecommendConfig.FallbackRecommend)
-	viper.SetDefault("recommend.num_feedback_fallback_item_based", defaultRecommendConfig.NumFeedbackFallbackItemBased)
-	viper.SetDefault("recommend.item_neighbor_type", defaultRecommendConfig.ItemNeighborType)
-	viper.SetDefault("recommend.enable_item_neighbor_index", defaultRecommendConfig.EnableItemNeighborIndex)
-	viper.SetDefault("recommend.item_neighbor_index_recall", defaultRecommendConfig.ItemNeighborIndexRecall)
-	viper.SetDefault("recommend.item_neighbor_index_fit_epoch", defaultRecommendConfig.ItemNeighborIndexFitEpoch)
-	viper.SetDefault("recommend.user_neighbor_type", defaultRecommendConfig.UserNeighborType)
-	viper.SetDefault("recommend.enable_user_neighbor_index", defaultRecommendConfig.EnableUserNeighborIndex)
-	viper.SetDefault("recommend.user_neighbor_index_recall", defaultRecommendConfig.UserNeighborIndexRecall)
-	viper.SetDefault("recommend.user_neighbor_index_fit_epoch", defaultRecommendConfig.UserNeighborIndexFitEpoch)
-	viper.SetDefault("recommend.enable_latest_recommend", defaultRecommendConfig.EnableLatestRecommend)
-	viper.SetDefault("recommend.enable_popular_recommend", defaultRecommendConfig.EnablePopularRecommend)
-	viper.SetDefault("recommend.enable_user_based_recommend", defaultRecommendConfig.EnableUserBasedRecommend)
-	viper.SetDefault("recommend.enable_item_based_recommend", defaultRecommendConfig.EnableItemBasedRecommend)
-	viper.SetDefault("recommend.enable_collaborative_recommend", defaultRecommendConfig.EnableColRecommend)
-	viper.SetDefault("recommend.enable_collaborative_index", defaultRecommendConfig.EnableColIndex)
-	viper.SetDefault("recommend.collaborative_index_recall", defaultRecommendConfig.ColIndexRecall)
-	viper.SetDefault("recommend.collaborative_index_fit_epoch", defaultRecommendConfig.ColIndexFitEpoch)
-	viper.SetDefault("recommend.enable_click_through_prediction", defaultRecommendConfig.EnableClickThroughPrediction)
-	viper.SetDefault("recommend.enable_replacement", defaultRecommendConfig.EnableReplacement)
-	viper.SetDefault("recommend.positive_replacement_decay", defaultRecommendConfig.PositiveReplacementDecay)
-	viper.SetDefault("recommend.read_replacement_decay", defaultRecommendConfig.ReadReplacementDecay)
+func setDefault() {
+	defaultConfig := GetDefaultConfig()
+	// [master]
+	viper.SetDefault("master.port", defaultConfig.Master.Port)
+	viper.SetDefault("master.host", defaultConfig.Master.Host)
+	viper.SetDefault("master.http_port", defaultConfig.Master.HttpPort)
+	viper.SetDefault("master.http_host", defaultConfig.Master.HttpHost)
+	viper.SetDefault("master.n_jobs", defaultConfig.Master.NumJobs)
+	viper.SetDefault("master.meta_timeout", defaultConfig.Master.MetaTimeout)
+	// [server]
+	viper.SetDefault("server.api_key", defaultConfig.Server.APIKey)
+	viper.SetDefault("server.default_n", defaultConfig.Server.DefaultN)
+	viper.SetDefault("server.clock_error", defaultConfig.Server.ClockError)
+	viper.SetDefault("server.auto_insert_user", defaultConfig.Server.AutoInsertUser)
+	viper.SetDefault("server.auto_insert_item", defaultConfig.Server.AutoInsertItem)
+	// [recommend]
+	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
+	// [recommend.popular]
+	viper.SetDefault("recommend.popular.popular_window", defaultConfig.Recommend.Popular.PopularWindow)
+	// [recommend.user_neighbors]
+	viper.SetDefault("recommend.user_neighbors.neighbor_type", defaultConfig.Recommend.UserNeighbors.NeighborType)
+	viper.SetDefault("recommend.user_neighbors.enable_index", defaultConfig.Recommend.UserNeighbors.EnableIndex)
+	viper.SetDefault("recommend.user_neighbors.index_recall", defaultConfig.Recommend.UserNeighbors.IndexRecall)
+	viper.SetDefault("recommend.user_neighbors.index_fit_epoch", defaultConfig.Recommend.UserNeighbors.IndexFitEpoch)
+	// [recommend.item_neighbors]
+	viper.SetDefault("recommend.item_neighbors.neighbor_type", defaultConfig.Recommend.ItemNeighbors.NeighborType)
+	viper.SetDefault("recommend.item_neighbors.enable_index", defaultConfig.Recommend.ItemNeighbors.EnableIndex)
+	viper.SetDefault("recommend.item_neighbors.index_recall", defaultConfig.Recommend.ItemNeighbors.IndexRecall)
+	viper.SetDefault("recommend.item_neighbors.index_fit_epoch", defaultConfig.Recommend.ItemNeighbors.IndexFitEpoch)
+	// [recommend.collaborative]
+	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
+	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)
+	viper.SetDefault("recommend.collaborative.model_search_epoch", defaultConfig.Recommend.Collaborative.ModelSearchEpoch)
+	viper.SetDefault("recommend.collaborative.model_search_trials", defaultConfig.Recommend.Collaborative.ModelSearchTrials)
+	viper.SetDefault("recommend.collaborative.enable_index", defaultConfig.Recommend.Collaborative.EnableIndex)
+	viper.SetDefault("recommend.collaborative.index_recall", defaultConfig.Recommend.Collaborative.IndexRecall)
+	viper.SetDefault("recommend.collaborative.index_fit_epoch", defaultConfig.Recommend.Collaborative.IndexFitEpoch)
+	// [recommend.replacement]
+	viper.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
+	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
+	viper.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
+	// [recommend.offline]
+	viper.SetDefault("recommend.offline.check_recommend_period", defaultConfig.Recommend.Offline.CheckRecommendPeriod)
+	viper.SetDefault("recommend.offline.refresh_recommend_period", defaultConfig.Recommend.Offline.RefreshRecommendPeriod)
+	viper.SetDefault("recommend.offline.enable_latest_recommend", defaultConfig.Recommend.Offline.EnableLatestRecommend)
+	viper.SetDefault("recommend.offline.enable_popular_recommend", defaultConfig.Recommend.Offline.EnablePopularRecommend)
+	viper.SetDefault("recommend.offline.enable_user_based_recommend", defaultConfig.Recommend.Offline.EnableUserBasedRecommend)
+	viper.SetDefault("recommend.offline.enable_item_based_recommend", defaultConfig.Recommend.Offline.EnableItemBasedRecommend)
+	viper.SetDefault("recommend.offline.enable_collaborative_recommend", defaultConfig.Recommend.Offline.EnableColRecommend)
+	viper.SetDefault("recommend.offline.enable_click_through_prediction", defaultConfig.Recommend.Offline.EnableClickThroughPrediction)
+	// [recommend.online]
+	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)
+	viper.SetDefault("recommend.online.num_feedback_fallback_item_based", defaultConfig.Recommend.Online.NumFeedbackFallbackItemBased)
 }
 
 type configBinding struct {
@@ -308,6 +274,9 @@ type configBinding struct {
 
 // LoadConfig loads configuration from toml file.
 func LoadConfig(path string) (*Config, error) {
+	// set default config
+	setDefault()
+
 	// bind environment bindings
 	bindings := []configBinding{
 		{"database.cache_store", "GORSE_CACHE_STORE"},
@@ -340,6 +309,5 @@ func LoadConfig(path string) (*Config, error) {
 	if err := viper.Unmarshal(&conf); err != nil {
 		return nil, errors.Trace(err)
 	}
-	conf.validate()
 	return &conf, nil
 }

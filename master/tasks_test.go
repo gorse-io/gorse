@@ -30,7 +30,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.GorseConfig = &config.Config{}
-	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Recommend.CacheSize = 3
 	m.GorseConfig.Master.NumJobs = 4
 	// collect similar
 	items := []data.Item{
@@ -83,7 +83,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 
 	// similar items (common users)
-	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeRelated
+	m.GorseConfig.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	m.runFindItemNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
@@ -98,7 +98,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeSimilar
+	m.GorseConfig.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -115,7 +115,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeAuto
+	m.GorseConfig.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -133,11 +133,11 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.GorseConfig = &config.Config{}
-	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Recommend.CacheSize = 3
 	m.GorseConfig.Master.NumJobs = 4
-	m.GorseConfig.Recommend.EnableItemNeighborIndex = true
-	m.GorseConfig.Recommend.ItemNeighborIndexRecall = 1
-	m.GorseConfig.Recommend.ItemNeighborIndexFitEpoch = 10
+	m.GorseConfig.Recommend.ItemNeighbors.EnableIndex = true
+	m.GorseConfig.Recommend.ItemNeighbors.IndexRecall = 1
+	m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch = 10
 	// collect similar
 	items := []data.Item{
 		{"0", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d"}, ""},
@@ -189,7 +189,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 
 	// similar items (common users)
-	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeRelated
+	m.GorseConfig.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	m.runFindItemNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
@@ -204,7 +204,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeSimilar
+	m.GorseConfig.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -221,7 +221,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.ItemNeighborType = config.NeighborTypeAuto
+	m.GorseConfig.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -239,7 +239,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.GorseConfig = &config.Config{}
-	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Recommend.CacheSize = 3
 	m.GorseConfig.Master.NumJobs = 4
 	// collect similar
 	users := []data.User{
@@ -276,7 +276,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 
 	// similar items (common users)
-	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeRelated
+	m.GorseConfig.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	m.runFindUserNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
@@ -287,7 +287,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeSimilar
+	m.GorseConfig.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -300,7 +300,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeAuto
+	m.GorseConfig.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -318,11 +318,11 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.GorseConfig = &config.Config{}
-	m.GorseConfig.Database.CacheSize = 3
+	m.GorseConfig.Recommend.CacheSize = 3
 	m.GorseConfig.Master.NumJobs = 4
-	m.GorseConfig.Recommend.EnableUserNeighborIndex = true
-	m.GorseConfig.Recommend.UserNeighborIndexRecall = 1
-	m.GorseConfig.Recommend.UserNeighborIndexFitEpoch = 10
+	m.GorseConfig.Recommend.UserNeighbors.EnableIndex = true
+	m.GorseConfig.Recommend.UserNeighbors.IndexRecall = 1
+	m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch = 10
 	// collect similar
 	users := []data.User{
 		{"0", []string{"a", "b", "c", "d"}, nil, ""},
@@ -358,7 +358,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 
 	// similar items (common users)
-	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeRelated
+	m.GorseConfig.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	m.runFindUserNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
@@ -369,7 +369,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeSimilar
+	m.GorseConfig.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -382,7 +382,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	assert.NoError(t, err)
-	m.GorseConfig.Recommend.UserNeighborType = config.NeighborTypeAuto
+	m.GorseConfig.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
@@ -400,9 +400,9 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	defer m.Close()
 	// create config
 	m.GorseConfig = &config.Config{}
-	m.GorseConfig.Database.CacheSize = 3
-	m.GorseConfig.Database.PositiveFeedbackType = []string{"positive"}
-	m.GorseConfig.Database.ReadFeedbackTypes = []string{"negative"}
+	m.GorseConfig.Recommend.CacheSize = 3
+	m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes = []string{"negative"}
 
 	// insert items
 	var items []data.Item

@@ -153,11 +153,6 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: password
 
-      pika:
-        image: zhenghaoz/pika
-        ports:
-          - 9221
-
     steps:
       - name: Set up Go 1.18.x
         uses: actions/setup-go@v2
@@ -172,11 +167,6 @@ jobs:
         run: go test ./storage/data -run ^TestMySQL_
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
-
-      - name: Test Pika
-        run: go test ./storage/cache -run ^TestRedis_
-        env:
-          REDIS_URI: redis://localhost:${{ job.services.pika.ports[9221] }}/
 
   golangci:
     name: lint
