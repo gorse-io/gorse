@@ -157,5 +157,5 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "<server_api_key>", config.Server.APIKey)
 
 	// check default values
-	assert.Equal(t, 10, config.Recommend.CacheSize)
+	assert.Equal(t, 100, config.Recommend.CacheSize)
 }
