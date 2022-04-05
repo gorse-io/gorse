@@ -20,7 +20,7 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be a 
 - **RESTful API**: Provide RESTful APIs for data CRUD and recommendation requests.
 - **Dashboard**: Provide dashboard for data import and export, monitoring, and cluster status checking.
 
-<img width=720 src="assets/dashboard.png"/>
+<img width=720 src="assets/dashboard.jpeg"/>
 
 ## Quick Start
 
