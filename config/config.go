@@ -15,10 +15,16 @@
 package config
 
 import (
+	"github.com/go-playground/locales/en"
+	ut "github.com/go-playground/universal-translator"
+	"github.com/go-playground/validator/v10"
+	en_translations "github.com/go-playground/validator/v10/translations/en"
 	"github.com/juju/errors"
 	"github.com/spf13/viper"
 	"github.com/zhenghaoz/gorse/base"
 	"go.uber.org/zap"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 )
@@ -39,34 +45,34 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore  string `mapstructure:"data_store"`  // database for data store
-	CacheStore string `mapstructure:"cache_store"` // database for cache store
+	DataStore  string `mapstructure:"data_store" validate:"required"`  // database for data store
+	CacheStore string `mapstructure:"cache_store" validate:"required"` // database for cache store
 }
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port              int           `mapstructure:"port"`                // master port
-	Host              string        `mapstructure:"host"`                // master host
-	HttpPort          int           `mapstructure:"http_port"`           // HTTP port
-	HttpHost          string        `mapstructure:"http_host"`           // HTTP host
-	NumJobs           int           `mapstructure:"n_jobs"`              // number of working jobs
-	MetaTimeout       time.Duration `mapstructure:"meta_timeout"`        // cluster meta timeout (second)
-	DashboardUserName string        `mapstructure:"dashboard_user_name"` // dashboard user name
-	DashboardPassword string        `mapstructure:"dashboard_password"`  // dashboard password
+	Port              int           `mapstructure:"port" validate:"gte=0"`        // master port
+	Host              string        `mapstructure:"host"`                         // master host
+	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
+	HttpHost          string        `mapstructure:"http_host"`                    // HTTP host
+	NumJobs           int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
+	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
+	DashboardUserName string        `mapstructure:"dashboard_user_name"`          // dashboard user name
+	DashboardPassword string        `mapstructure:"dashboard_password"`           // dashboard password
 }
 
 // ServerConfig is the configuration for the server.
 type ServerConfig struct {
-	APIKey         string        `mapstructure:"api_key"`          // default number of returned items
-	DefaultN       int           `mapstructure:"default_n"`        // secret key for RESTful APIs (SSL required)
-	ClockError     time.Duration `mapstructure:"clock_error"`      // clock error in the cluster in seconds
-	AutoInsertUser bool          `mapstructure:"auto_insert_user"` // insert new users while inserting feedback
-	AutoInsertItem bool          `mapstructure:"auto_insert_item"` // insert new items while inserting feedback
+	APIKey         string        `mapstructure:"api_key"`                      // default number of returned items
+	DefaultN       int           `mapstructure:"default_n" validate:"gt=0"`    // secret key for RESTful APIs (SSL required)
+	ClockError     time.Duration `mapstructure:"clock_error" validate:"gte=0"` // clock error in the cluster in seconds
+	AutoInsertUser bool          `mapstructure:"auto_insert_user"`             // insert new users while inserting feedback
+	AutoInsertItem bool          `mapstructure:"auto_insert_item"`             // insert new items while inserting feedback
 }
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	CacheSize     int                 `mapstructure:"cache_size"`
+	CacheSize     int                 `mapstructure:"cache_size" validate:"gt=0"`
 	DataSource    DataSourceConfig    `mapstructure:"data_source"`
 	Popular       PopularConfig       `mapstructure:"popular"`
 	UserNeighbors NeighborsConfig     `mapstructure:"user_neighbors"`
@@ -78,42 +84,42 @@ type RecommendConfig struct {
 }
 
 type DataSourceConfig struct {
-	PositiveFeedbackTypes []string `mapstructure:"positive_feedback_types"` // positive feedback type
-	ReadFeedbackTypes     []string `mapstructure:"read_feedback_types"`     // feedback type for read event
-	PositiveFeedbackTTL   uint     `mapstructure:"positive_feedback_ttl"`   // time-to-live of positive feedbacks
-	ItemTTL               uint     `mapstructure:"item_ttl"`                // item-to-live of items
+	PositiveFeedbackTypes []string `mapstructure:"positive_feedback_types" validate:"min=1,dive,required"` // positive feedback type
+	ReadFeedbackTypes     []string `mapstructure:"read_feedback_types" validate:"min=1,dive,required"`     // feedback type for read event
+	PositiveFeedbackTTL   uint     `mapstructure:"positive_feedback_ttl" validate:"gte=0"`                 // time-to-live of positive feedbacks
+	ItemTTL               uint     `mapstructure:"item_ttl" validate:"gte=0"`                              // item-to-live of items
 }
 
 type PopularConfig struct {
-	PopularWindow time.Duration `mapstructure:"popular_window"`
+	PopularWindow time.Duration `mapstructure:"popular_window" validate:"gte=0"`
 }
 
 type NeighborsConfig struct {
-	NeighborType  string  `mapstructure:"neighbor_type"`
+	NeighborType  string  `mapstructure:"neighbor_type" validate:"oneof=auto similar related ''"`
 	EnableIndex   bool    `mapstructure:"enable_index"`
-	IndexRecall   float32 `mapstructure:"index_recall"`
-	IndexFitEpoch int     `mapstructure:"index_fit_epoch"`
+	IndexRecall   float32 `mapstructure:"index_recall" validate:"gt=0"`
+	IndexFitEpoch int     `mapstructure:"index_fit_epoch" validate:"gt=0"`
 }
 
 type CollaborativeConfig struct {
-	ModelFitPeriod    time.Duration `mapstructure:"model_fit_period"`
-	ModelSearchPeriod time.Duration `mapstructure:"model_search_period"`
-	ModelSearchEpoch  int           `mapstructure:"model_search_epoch"`
-	ModelSearchTrials int           `mapstructure:"model_search_trials"`
+	ModelFitPeriod    time.Duration `mapstructure:"model_fit_period" validate:"gt=0"`
+	ModelSearchPeriod time.Duration `mapstructure:"model_search_period" validate:"gt=0"`
+	ModelSearchEpoch  int           `mapstructure:"model_search_epoch" validate:"gt=0"`
+	ModelSearchTrials int           `mapstructure:"model_search_trials" validate:"gt=0"`
 	EnableIndex       bool          `mapstructure:"enable_index"`
-	IndexRecall       float32       `mapstructure:"index_recall"`
-	IndexFitEpoch     int           `mapstructure:"index_fit_epoch"`
+	IndexRecall       float32       `mapstructure:"index_recall" validate:"gt=0"`
+	IndexFitEpoch     int           `mapstructure:"index_fit_epoch" validate:"gt=0"`
 }
 
 type ReplacementConfig struct {
 	EnableReplacement        bool    `mapstructure:"enable_replacement"`
-	PositiveReplacementDecay float64 `mapstructure:"positive_replacement_decay"`
-	ReadReplacementDecay     float64 `mapstructure:"read_replacement_decay"`
+	PositiveReplacementDecay float64 `mapstructure:"positive_replacement_decay" validate:"gt=0"`
+	ReadReplacementDecay     float64 `mapstructure:"read_replacement_decay" validate:"gt=0"`
 }
 
 type OfflineConfig struct {
-	CheckRecommendPeriod         time.Duration      `mapstructure:"check_recommend_period"`
-	RefreshRecommendPeriod       time.Duration      `mapstructure:"refresh_recommend_period"`
+	CheckRecommendPeriod         time.Duration      `mapstructure:"check_recommend_period" validate:"gt=0"`
+	RefreshRecommendPeriod       time.Duration      `mapstructure:"refresh_recommend_period" validate:"gt=0"`
 	ExploreRecommend             map[string]float64 `mapstructure:"explore_recommend"`
 	EnableLatestRecommend        bool               `mapstructure:"enable_latest_recommend"`
 	EnablePopularRecommend       bool               `mapstructure:"enable_popular_recommend"`
@@ -126,7 +132,7 @@ type OfflineConfig struct {
 
 type OnlineConfig struct {
 	FallbackRecommend            []string `mapstructure:"fallback_recommend"`
-	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based"`
+	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based" validate:"gt=0"`
 }
 
 func GetDefaultConfig() *Config {
@@ -308,6 +314,24 @@ func LoadConfig(path string) (*Config, error) {
 	var conf Config
 	if err := viper.Unmarshal(&conf); err != nil {
 		return nil, errors.Trace(err)
+	}
+
+	// validate config file
+	validate := validator.New()
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		return strings.SplitN(fld.Tag.Get("mapstructure"), ",", 2)[0]
+	})
+	err := validate.Struct(&conf)
+	if err != nil {
+		// translate errors
+		trans := ut.New(en.New()).GetFallback()
+		if err := en_translations.RegisterDefaultTranslations(validate, trans); err != nil {
+			return nil, errors.Trace(err)
+		}
+		errs := err.(validator.ValidationErrors)
+		for _, e := range errs {
+			return nil, errors.New(e.Translate(trans))
+		}
 	}
 	return &conf, nil
 }
