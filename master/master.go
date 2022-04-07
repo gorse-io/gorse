@@ -17,6 +17,7 @@ package master
 import (
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
@@ -316,7 +317,9 @@ func (m *Master) RunRagtagTasksLoop() {
 func (m *Master) checkDataImported() bool {
 	isDataImported, err := m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
 	if err != nil {
-		base.Logger().Error("failed to read meta", zap.Error(err))
+		if !errors.IsNotFound(err) {
+			base.Logger().Error("failed to read meta", zap.Error(err))
+		}
 		return false
 	}
 	if isDataImported > 0 {
