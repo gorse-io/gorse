@@ -226,8 +226,8 @@ github.com/gorilla/securecookie v1.1.1 h1:miw7JPhV+b/lAHSXz4qd/nN9jRiAFV5FwjeKyC
 github.com/gorilla/securecookie v1.1.1/go.mod h1:ra0sb63/xPlUeL+yeDciTfxMRAA+MP+HVt/4epWDjd4=
 github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
-github.com/gorse-io/dashboard v0.0.0-20220312053149-edd363d0232a h1:LlFvpY6VVr2oBpnRsL8eK+snwj25ib7gc66G0LNpJ1g=
-github.com/gorse-io/dashboard v0.0.0-20220312053149-edd363d0232a/go.mod h1:14j0KVMmOAAN0xvsa2wxFoV/X8Aa/gCeNFRLjtYP6+M=
+github.com/gorse-io/dashboard v0.0.0-20220408144940-c6c403c315c1 h1:Ijw9vJ6Zcnf+g1ysg/ShFiCFDmKWQjigmS3wVoL/JNU=
+github.com/gorse-io/dashboard v0.0.0-20220408144940-c6c403c315c1/go.mod h1:14j0KVMmOAAN0xvsa2wxFoV/X8Aa/gCeNFRLjtYP6+M=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=
