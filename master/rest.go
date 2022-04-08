@@ -23,7 +23,9 @@ import (
 	"github.com/gorilla/securecookie"
 	_ "github.com/gorse-io/dashboard"
 	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
 	"github.com/rakyll/statik/fs"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -375,8 +377,34 @@ func (m *Master) getCluster(_ *restful.Request, response *restful.Response) {
 	server.Ok(response, nodes)
 }
 
+func formatConfig(configMap map[string]interface{}) map[string]interface{} {
+	return lo.MapValues(configMap, func(v interface{}, _ string) interface{} {
+		switch value := v.(type) {
+		case time.Duration:
+			s := value.String()
+			if strings.HasSuffix(s, "m0s") {
+				s = s[:len(s)-2]
+			}
+			if strings.HasSuffix(s, "h0m") {
+				s = s[:len(s)-2]
+			}
+			return s
+		case map[string]interface{}:
+			return formatConfig(value)
+		default:
+			return v
+		}
+	})
+}
+
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
-	server.Ok(response, m.GorseConfig)
+	var configMap map[string]interface{}
+	err := mapstructure.Decode(m.GorseConfig, &configMap)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Ok(response, formatConfig(configMap))
 }
 
 type Status struct {

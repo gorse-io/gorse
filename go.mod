@@ -10,11 +10,14 @@ require (
 	github.com/chewxy/math32 v1.0.8
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.5.2
+	github.com/go-playground/locales v0.14.0
+	github.com/go-playground/universal-translator v0.18.0
+	github.com/go-playground/validator/v10 v10.10.1
 	github.com/go-redis/redis/v8 v8.11.0
 	github.com/go-resty/resty/v2 v2.7.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20220312053149-edd363d0232a
+	github.com/gorse-io/dashboard v0.0.0-20220408144940-c6c403c315c1
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v0.0.0-20220203013757-bd733f3c86b9
@@ -22,6 +25,7 @@ require (
 	github.com/lafikl/consistent v0.0.0-20210222184039-5e8acd7e59f2
 	github.com/lib/pq v1.10.2
 	github.com/mailru/go-clickhouse v1.6.0
+	github.com/mitchellh/mapstructure v1.4.3
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.10.0
 	github.com/rakyll/statik v0.1.7
@@ -66,11 +70,11 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/juju/testing v0.0.0-20220203020004-a0ff61f03494 // indirect
 	github.com/klauspost/compress v1.9.5 // indirect
+	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
-	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
@@ -92,9 +96,9 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
+	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3 // indirect
 	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17 // indirect
-	golang.org/x/net v0.0.0-20211029224645-99673261e6eb // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20211210111614-af8b64212486 // indirect
 	golang.org/x/text v0.3.7 // indirect
