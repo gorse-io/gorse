@@ -141,7 +141,7 @@ jobs:
       run: wget https://cdn.gorse.io/example/github.sql
 
     - name: Import dataset
-      run: mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
+      run: mysql -h localhost -u gorse -pgorse_pass gorse < github.sql
 
   compat_test:
     name: compatibility tests
