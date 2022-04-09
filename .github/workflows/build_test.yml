@@ -123,8 +123,6 @@ jobs:
       working-directory: ./docker
       run: docker-compose up -d
 
-    - run: docker ps
-
     - name: Check the deployed service URL
       uses: jtalk/url-health-check-action@v2
       with:
