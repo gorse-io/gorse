@@ -123,19 +123,19 @@ jobs:
       working-directory: ./docker
       run: docker-compose up -d
 
-    - run: docker ps
-
-    - name: Check the deployed service URL
-      uses: jtalk/url-health-check-action@v2
-      with:
-        # Check the following URLs one by one sequentially
-        url: http://127.0.0.1:8088/metrics|http://127.0.0.1:8087/metrics|http://127.0.0.1:8089/metrics
-        # Fail this action after this many failed attempts
-        max-attempts: 5
-        # Delay between retries
-        retry-delay: 5s
-        # Retry all errors, including 404. This option might trigger curl upgrade.
-        retry-all: true
+#    - run: docker ps
+#
+#    - name: Check the deployed service URL
+#      uses: jtalk/url-health-check-action@v2
+#      with:
+#        # Check the following URLs one by one sequentially
+#        url: http://127.0.0.1:8088/metrics|http://127.0.0.1:8087/metrics|http://127.0.0.1:8089/metrics
+#        # Fail this action after this many failed attempts
+#        max-attempts: 5
+#        # Delay between retries
+#        retry-delay: 5s
+#        # Retry all errors, including 404. This option might trigger curl upgrade.
+#        retry-all: true
 
     - name: Download dataset
       run: wget https://cdn.gorse.io/example/github.sql
