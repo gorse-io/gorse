@@ -46,23 +46,23 @@ func (db *SQLDatabase) Init() error {
 	switch db.driver {
 	case Postgres:
 		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS values (" +
-			"name VARCHAR(128) PRIMARY KEY, " +
-			"value VARCHAR(128) NOT NULL" +
+			"name VARCHAR(256) PRIMARY KEY, " +
+			"value VARCHAR(256) NOT NULL" +
 			")"); err != nil {
 			return errors.Trace(err)
 		}
 
 		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sets (" +
-			"name VARCHAR(128) NOT NULL," +
-			"member VARCHAR(128) NOT NULL," +
+			"name VARCHAR(256) NOT NULL," +
+			"member VARCHAR(256) NOT NULL," +
 			"PRIMARY KEY (name, member)" +
 			")"); err != nil {
 			return errors.Trace(err)
 		}
 
 		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sorted_sets (" +
-			"name VARCHAR(128) NOT NULL," +
-			"member VARCHAR(128) NOT NULL," +
+			"name VARCHAR(256) NOT NULL," +
+			"member VARCHAR(256) NOT NULL," +
 			"score DOUBLE PRECISION NOT NULL," +
 			"PRIMARY KEY (name, member)" +
 			")"); err != nil {
@@ -73,23 +73,23 @@ func (db *SQLDatabase) Init() error {
 		}
 	case MySQL:
 		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS `values` (" +
-			"name VARCHAR(128) PRIMARY KEY, " +
-			"value VARCHAR(128) NOT NULL" +
+			"name VARCHAR(256) PRIMARY KEY, " +
+			"value VARCHAR(256) NOT NULL" +
 			")"); err != nil {
 			return errors.Trace(err)
 		}
 
 		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sets (" +
-			"name VARCHAR(128) NOT NULL," +
-			"member VARCHAR(128) NOT NULL," +
+			"name VARCHAR(256) NOT NULL," +
+			"member VARCHAR(256) NOT NULL," +
 			"PRIMARY KEY (name, member)" +
 			")"); err != nil {
 			return errors.Trace(err)
 		}
 
 		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sorted_sets (" +
-			"name VARCHAR(128) NOT NULL," +
-			"member VARCHAR(128) NOT NULL," +
+			"name VARCHAR(256) NOT NULL," +
+			"member VARCHAR(256) NOT NULL," +
 			"score DOUBLE PRECISION NOT NULL," +
 			"PRIMARY KEY (name, member)," +
 			"INDEX (name, score)" +
