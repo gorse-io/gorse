@@ -33,6 +33,10 @@ case $CACHE_ARG in
   mongodb)
     export BENCH_CACHE_STORE='mongodb://root:password@127.0.0.1:27017/'
     ;;
+  *)
+    echo "Unknown database $1"
+    exit 1
+    ;;
 esac
 
 case $DATA_ARG in
@@ -47,6 +51,10 @@ case $DATA_ARG in
     ;;
   mongodb)
     export BENCH_DATA_STORE='mongodb://root:password@127.0.0.1:27017/'
+    ;;
+  *)
+    echo "Unknown database $1"
+    exit 1
     ;;
 esac
 
