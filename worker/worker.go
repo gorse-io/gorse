@@ -880,7 +880,9 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	var err error
 	activeTime, err = w.cacheClient.Get(cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
-		base.Logger().Error("failed to read meta", zap.Error(err))
+		if !errors.IsNotFound(err) {
+			base.Logger().Error("failed to read meta", zap.Error(err))
+		}
 		return true
 	}
 	// read recommend time
