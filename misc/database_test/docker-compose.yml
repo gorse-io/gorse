@@ -5,18 +5,15 @@ services:
     ports:
       - 6379:6379
 
-  pika:
-    image: zhenghaoz/pika
-    restart: unless-stopped
-    ports:
-      - 9221:9221
-
   mysql:
     image: mysql:8.0
     ports:
       - 3306:3306
     environment:
       MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: gorse
+      MYSQL_USER: gorse
+      MYSQL_PASSWORD: gorse_pass
 
   postgres:
     image: postgres:10.0

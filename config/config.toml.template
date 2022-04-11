@@ -13,7 +13,7 @@ cache_store = "redis://localhost:6379/0"
 #   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-data_store = "postgres://gorse:gorse_pass@127.0.0.1/?sslmode=disable&TimeZone=UTC"
+data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true"
 
 [master]
 
