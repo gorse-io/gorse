@@ -28,6 +28,16 @@ cd misc/database_test
 docker-compose up -d
 ```
 
+If you need import sample data, download the SQL file github.sql and import to the MySQL instance.
+
+```bash
+# Download sample data.
+wget https://cdn.gorse.io/example/github.sql
+
+# Import sample data.
+mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
+```
+
 ### Run Nodes
 
 - Start the master node with the configuration file.
