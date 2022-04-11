@@ -596,6 +596,17 @@ func TestServer_Items(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{})).
 		End()
+
+	// insert items without timestamp
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "256"}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
 }
 
 func TestServer_Feedback(t *testing.T) {
@@ -737,6 +748,17 @@ func TestServer_Feedback(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
+
+	// insert feedback without timestamp
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{UserId: "100", ItemId: "100", FeedbackType: "Type"}}}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
 }
 
 func TestServer_Sort(t *testing.T) {
