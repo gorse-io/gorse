@@ -1149,10 +1149,13 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	popularScore, _ := s.CacheClient.GetSortedScores(members...)
 	for i, item := range temp {
 		// parse datetime
-		timestamp, err := dateparse.ParseAny(item.Timestamp)
-		if err != nil {
-			BadRequest(response, err)
-			return
+		var timestamp time.Time
+		var err error
+		if item.Timestamp != "" {
+			if timestamp, err = dateparse.ParseAny(item.Timestamp); err != nil {
+				BadRequest(response, err)
+				return
+			}
 		}
 		items = append(items, data.Item{
 			ItemId:     item.ItemId,
@@ -1459,25 +1462,27 @@ type Feedback struct {
 func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Request, response *restful.Response) {
 	return func(request *restful.Request, response *restful.Response) {
 		// add ratings
-		feedbackLiterTime := new([]Feedback)
-		if err := request.ReadEntity(feedbackLiterTime); err != nil {
+		var feedbackLiterTime []Feedback
+		if err := request.ReadEntity(&feedbackLiterTime); err != nil {
 			BadRequest(response, err)
 			return
 		}
 		// parse datetime
 		var err error
-		feedback := make([]data.Feedback, len(*feedbackLiterTime))
+		feedback := make([]data.Feedback, len(feedbackLiterTime))
 		users := set.NewStringSet()
 		items := set.NewStringSet()
 		for i := range feedback {
-			users.Add((*feedbackLiterTime)[i].UserId)
-			items.Add((*feedbackLiterTime)[i].ItemId)
-			feedback[i].FeedbackKey = (*feedbackLiterTime)[i].FeedbackKey
-			feedback[i].Comment = (*feedbackLiterTime)[i].Comment
-			feedback[i].Timestamp, err = dateparse.ParseAny((*feedbackLiterTime)[i].Timestamp)
-			if err != nil {
-				BadRequest(response, err)
-				return
+			users.Add(feedbackLiterTime[i].UserId)
+			items.Add(feedbackLiterTime[i].ItemId)
+			feedback[i].FeedbackKey = feedbackLiterTime[i].FeedbackKey
+			feedback[i].Comment = feedbackLiterTime[i].Comment
+			if feedbackLiterTime[i].Timestamp != "" {
+				feedback[i].Timestamp, err = dateparse.ParseAny(feedbackLiterTime[i].Timestamp)
+				if err != nil {
+					BadRequest(response, err)
+					return
+				}
 			}
 		}
 		// insert feedback to data store

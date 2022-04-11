@@ -6,7 +6,10 @@ Reading and following these guidelines will help us make the contribution proces
 
 * [Getting Started](#getting-started)
   * [Setup Develop Environment](#setup-develop-environment)
+  * [Run Nodes](#run-nodes)
   * [Run Unit Tests](#run-unit-tests)
+* [Your First Contribution](#your-first-contribution)
+  * [Contribution Workflow](#contribution-workflow)
 * [Getting Help](#getting-help)
 
 ## Getting Started
@@ -23,6 +26,36 @@ These following installations are required:
 cd misc/database_test
 
 docker-compose up -d
+```
+
+If you need import sample data, download the SQL file github.sql and import to the MySQL instance.
+
+```bash
+# Download sample data.
+wget https://cdn.gorse.io/example/github.sql
+
+# Import sample data.
+mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
+```
+
+### Run Nodes
+
+- Start the master node with the configuration file.
+
+```bash
+go run cmd/gorse-master/main.go --config config/config.toml.template
+```
+
+- Start the worker node.
+
+```bash
+go run cmd/gorse-worker/main.go 
+```
+
+- Start the server node.
+
+```bash
+go run cmd/gorse-server/main.go 
 ```
 
 ### Run Unit Tests
