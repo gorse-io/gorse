@@ -42,7 +42,7 @@ services:
       - 8087:8087
     environment:
       GORSE_CACHE_STORE: redis://redis:6379
-      GORSE_DATA_STORE: ysql://gorse:gorse_pass@tcp(mysql:3306)/gorse?parseTime=true
+      GORSE_DATA_STORE: mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse?parseTime=true
     command: >
       --master-host master --master-port 8086 
       --http-host 0.0.0.0 --http-port 8087
