@@ -1397,3 +1397,127 @@ func TestServer_GetRecommends_Fallback_PreCached(t *testing.T) {
 		Status(http.StatusInternalServerError).
 		End()
 }
+
+func TestServer_SessionRecommend(t *testing.T) {
+	s := newMockServer(t)
+	s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased = 4
+	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
+	defer s.Close(t)
+
+	// TODO: Hidde hidden items
+	// insert hidden items
+	//apitest.New().
+	//	Handler(s.handler).
+	//	Post("/api/item").
+	//	Header("X-API-Key", apiKey).
+	//	JSON(Item{ItemId: "100", IsHidden: true}).
+	//	Expect(t).
+	//	Status(http.StatusOK).
+	//	Body(`{"RowAffected": 1}`).
+	//	End()
+
+	// insert similar items
+	err := s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "1"), []cache.Scored{
+		{"2", 100000},
+		{"9", 1},
+		//{"100", 100000},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "2"), []cache.Scored{
+		{"3", 100000},
+		{"8", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "3"), []cache.Scored{
+		{"4", 100000},
+		{"7", 1},
+		{"8", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "4"), []cache.Scored{
+		{"1", 100000},
+		{"6", 1},
+		{"7", 1},
+		{"8", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "5"), []cache.Scored{
+		{"1", 1},
+		{"6", 1},
+		{"7", 100000},
+		{"8", 100},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+
+	// insert similar items of category *
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "1", "*"), []cache.Scored{
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "2", "*"), []cache.Scored{
+		{"3", 100000},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "3", "*"), []cache.Scored{
+		{"7", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "4", "*"), []cache.Scored{
+		{"1", 100000},
+		{"7", 1},
+		{"9", 1},
+	})
+	assert.NoError(t, err)
+
+	// test fallback
+	feedback := []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}, Timestamp: time.Date(2009, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}, Timestamp: time.Date(2008, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}, Timestamp: time.Date(2007, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "5"}, Timestamp: time.Date(2006, 1, 1, 1, 1, 1, 1, time.UTC)},
+	}
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/session/recommend").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		JSON(feedback).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{{"9", 4}, {"8", 3}, {"7", 2}})).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/session/recommend").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"offset": "100",
+		}).
+		JSON(feedback).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored(nil))).
+		End()
+	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"item_based"}
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/session/recommend/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		JSON(feedback).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, []cache.Scored{{"9", 4}, {"7", 2}})).
+		End()
+}
