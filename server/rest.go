@@ -434,6 +434,25 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
 		Returns(200, "OK", []string{}).
 		Writes([]string{}))
+	ws.Route(ws.POST("/session/recommend").To(s.sessionRecommend).
+		Doc("Get recommendation for session.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Reads([]Feedback{}).
+		Returns(200, "OK", []string{}).
+		Writes([]string{}))
+	ws.Route(ws.POST("/session/recommend/{category}").To(s.sessionRecommend).
+		Doc("Get recommendation for session.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
+		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Param(ws.PathParameter("category", "item category").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Reads([]Feedback{}).
+		Returns(200, "OK", []string{}).
+		Writes([]string{}))
 
 	/* Interaction with measurements */
 
@@ -988,6 +1007,82 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	Ok(response, results)
 }
 
+func (s *RestServer) sessionRecommend(request *restful.Request, response *restful.Response) {
+	// parse arguments
+	var feedbacks []Feedback
+	if err := request.ReadEntity(&feedbacks); err != nil {
+		BadRequest(response, err)
+		return
+	}
+	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	category := request.PathParameter("category")
+	offset, err := ParseInt(request, "offset", 0)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+
+	// pre-process feedback
+	dataFeedback := make([]data.Feedback, len(feedbacks))
+	for i := range dataFeedback {
+		var err error
+		dataFeedback[i], err = feedbacks[i].ToDataFeedback()
+		if err != nil {
+			BadRequest(response, err)
+			return
+		}
+	}
+	data.SortFeedbacks(dataFeedback)
+
+	// item-based recommendation
+	var excludeSet = strset.New()
+	var userFeedback []data.Feedback
+	for _, feedback := range dataFeedback {
+		excludeSet.Add(feedback.ItemId)
+		if s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased <= len(userFeedback) {
+			break
+		}
+		if funk.ContainsString(s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+			userFeedback = append(userFeedback, feedback)
+		}
+	}
+	// collect candidates
+	candidates := make(map[string]float64)
+	for _, feedback := range userFeedback {
+		// load similar items
+		similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, category), 0, s.GorseConfig.Recommend.CacheSize)
+		if err != nil {
+			BadRequest(response, err)
+			return
+		}
+		// add unseen items
+		similarItems = s.FilterOutHiddenScores(similarItems)
+		for _, item := range similarItems {
+			if !excludeSet.Has(item.Id) {
+				candidates[item.Id] += item.Score
+			}
+		}
+	}
+	// collect top k
+	filter := heap.NewTopKStringFilter(n + offset)
+	for id, score := range candidates {
+		filter.Push(id, score)
+	}
+	result := cache.CreateScoredItems(filter.PopAll())
+	if len(result) > offset {
+		result = result[offset:]
+	} else {
+		result = nil
+	}
+	result = result[:lo.Min([]int{len(result), n})]
+	// Send result
+	Ok(response, result)
+}
+
 // Success is the returned data structure for data insert operations.
 type Success struct {
 	RowAffected int
@@ -1459,6 +1554,20 @@ type Feedback struct {
 	Comment   string
 }
 
+func (f Feedback) ToDataFeedback() (data.Feedback, error) {
+	var feedback data.Feedback
+	feedback.FeedbackKey = f.FeedbackKey
+	feedback.Comment = f.Comment
+	if f.Timestamp != "" {
+		var err error
+		feedback.Timestamp, err = dateparse.ParseAny(f.Timestamp)
+		if err != nil {
+			return data.Feedback{}, err
+		}
+	}
+	return feedback, nil
+}
+
 func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Request, response *restful.Response) {
 	return func(request *restful.Request, response *restful.Response) {
 		// add ratings
@@ -1475,14 +1584,10 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 		for i := range feedback {
 			users.Add(feedbackLiterTime[i].UserId)
 			items.Add(feedbackLiterTime[i].ItemId)
-			feedback[i].FeedbackKey = feedbackLiterTime[i].FeedbackKey
-			feedback[i].Comment = feedbackLiterTime[i].Comment
-			if feedbackLiterTime[i].Timestamp != "" {
-				feedback[i].Timestamp, err = dateparse.ParseAny(feedbackLiterTime[i].Timestamp)
-				if err != nil {
-					BadRequest(response, err)
-					return
-				}
+			feedback[i], err = feedbackLiterTime[i].ToDataFeedback()
+			if err != nil {
+				BadRequest(response, err)
+				return
 			}
 		}
 		// insert feedback to data store
