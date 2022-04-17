@@ -210,7 +210,6 @@ func (d *SQLDatabase) Close() error {
 
 // InsertMeasurement insert a measurement into MySQL.
 func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
-	startTime := time.Now()
 	var err error
 	switch d.driver {
 	case MySQL:
@@ -224,9 +223,6 @@ func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
 	case ClickHouse:
 		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
 			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
-	}
-	if err == nil {
-		InsertMeasurementSeconds.Observe(time.Since(startTime).Seconds())
 	}
 	return errors.Trace(err)
 }
@@ -261,7 +257,6 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 	if len(items) == 0 {
 		return nil
 	}
-	startTime := time.Now()
 	builder := strings.Builder{}
 	switch d.driver {
 	case MySQL:
@@ -307,9 +302,6 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 			"DO UPDATE SET is_hidden = EXCLUDED.is_hidden, categories = EXCLUDED.categories, time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
 	}
 	_, err := d.client.Exec(builder.String(), args...)
-	if err == nil {
-		BatchInsertItemsSeconds.Observe(time.Since(startTime).Seconds())
-	}
 	return errors.Trace(err)
 }
 
@@ -365,7 +357,6 @@ func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
 
 // DeleteItem deletes a item from MySQL.
 func (d *SQLDatabase) DeleteItem(itemId string) error {
-	startTime := time.Now()
 	txn, err := d.client.Begin()
 	if err != nil {
 		return errors.Trace(err)
@@ -398,13 +389,11 @@ func (d *SQLDatabase) DeleteItem(itemId string) error {
 		}
 		return errors.Trace(err)
 	}
-	DeleteItemSeconds.Observe(time.Since(startTime).Seconds())
 	return txn.Commit()
 }
 
 // GetItem get a item from MySQL.
 func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
-	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	switch d.driver {
@@ -429,7 +418,6 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 		if err := json.Unmarshal([]byte(categories), &item.Categories); err != nil {
 			return Item{}, err
 		}
-		GetItemSeconds.Observe(time.Since(startTime).Seconds())
 		return item, nil
 	}
 	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
@@ -665,7 +653,6 @@ func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan [
 
 // GetItemFeedback returns feedback of a item from MySQL.
 func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	var builder strings.Builder
@@ -705,7 +692,6 @@ func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
-	GetItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 
@@ -714,7 +700,6 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 	if len(users) == 0 {
 		return nil
 	}
-	startTime := time.Now()
 	builder := strings.Builder{}
 	switch d.driver {
 	case MySQL:
@@ -756,15 +741,11 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 			"DO UPDATE SET labels = EXCLUDED.labels, subscribe = EXCLUDED.subscribe, comment = EXCLUDED.comment")
 	}
 	_, err := d.client.Exec(builder.String(), args...)
-	if err == nil {
-		BatchInsertUsersSeconds.Observe(time.Since(startTime).Seconds())
-	}
 	return errors.Trace(err)
 }
 
 // DeleteUser deletes a user from MySQL.
 func (d *SQLDatabase) DeleteUser(userId string) error {
-	startTime := time.Now()
 	txn, err := d.client.Begin()
 	if err != nil {
 		return errors.Trace(err)
@@ -797,13 +778,11 @@ func (d *SQLDatabase) DeleteUser(userId string) error {
 		}
 		return errors.Trace(err)
 	}
-	DeleteUserSeconds.Observe(time.Since(startTime).Seconds())
 	return txn.Commit()
 }
 
 // GetUser returns a user from MySQL.
 func (d *SQLDatabase) GetUser(userId string) (User, error) {
-	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	switch d.driver {
@@ -831,7 +810,6 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 		if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
 			return User{}, errors.Trace(err)
 		}
-		GetUserSeconds.Observe(time.Since(startTime).Seconds())
 		return user, nil
 	}
 	return User{}, errors.Annotate(ErrUserNotExist, userId)
@@ -999,7 +977,6 @@ func (d *SQLDatabase) GetUserStream(batchSize int) (chan []User, chan error) {
 
 // GetUserFeedback returns feedback of a user from MySQL.
 func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
-	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	var builder strings.Builder
@@ -1042,7 +1019,6 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
-	GetUserFeedbackSeconds.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 
@@ -1050,7 +1026,6 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 // If insertUser set, new users will be insert to user table.
 // If insertItem set, new items will be insert to item table.
 func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error {
-	startTime := time.Now()
 	// skip empty list
 	if len(feedback) == 0 {
 		return nil
@@ -1225,7 +1200,6 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 	if err != nil {
 		return errors.Trace(err)
 	}
-	BatchInsertFeedbackSeconds.Observe(time.Since(startTime).Seconds())
 	return nil
 }
 
@@ -1376,7 +1350,6 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 
 // GetUserItemFeedback gets a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	startTime := time.Now()
 	var result *sql.Rows
 	var err error
 	var builder strings.Builder
@@ -1416,13 +1389,11 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
-	GetUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
 	return feedbacks, nil
 }
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
-	startTime := time.Now()
 	var rs sql.Result
 	var err error
 	var builder strings.Builder
@@ -1459,13 +1430,11 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 	if err != nil && d.driver != ClickHouse {
 		return 0, errors.Trace(err)
 	}
-	DeleteUserItemFeedbackSeconds.Observe(time.Since(startTime).Seconds())
 	return int(deleteCount), nil
 }
 
 // GetClickThroughRate computes the click-through-rate of a specified date.
 func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes, readTypes []string) (float64, error) {
-	startTime := time.Now()
 	builder := strings.Builder{}
 	// Get the average of click-through rates
 	switch d.driver {
@@ -1548,7 +1517,6 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes, readTyp
 		if err = rs.Scan(&ctr); err != nil {
 			return 0, errors.Trace(err)
 		}
-		GetClickThroughRateSeconds.Observe(time.Since(startTime).Seconds())
 		return ctr, nil
 	}
 	return 0, nil
