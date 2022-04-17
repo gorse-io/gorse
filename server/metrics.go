@@ -20,39 +20,14 @@ import (
 )
 
 var (
-	GetRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+	RecommendAPIRequestSecondsVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "server",
-		Name:      "get_recommend_seconds",
-	})
-	LoadCTRRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:      "recommend_api_request_seconds",
+	}, []string{"execution"})
+	RestAPIRequestSecondsVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "server",
-		Name:      "load_ctr_recommend_cache_seconds",
-	})
-	LoadCollaborativeRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "server",
-		Name:      "load_collaborative_recommend_cache_seconds",
-	})
-	ItemBasedRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "server",
-		Name:      "item_based_recommend_seconds",
-	})
-	UserBasedRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "server",
-		Name:      "user_based_recommend_seconds",
-	})
-	LoadLatestRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "server",
-		Name:      "load_latest_recommend_cache_seconds",
-	})
-	LoadPopularRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "server",
-		Name:      "load_popular_recommend_cache_seconds",
-	})
+		Name:      "rest_api_request_seconds",
+	}, []string{"api"})
 )

@@ -102,6 +102,15 @@ func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, ch
 	}
 }
 
+func (s *RestServer) MetricsFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	startTime := time.Now()
+	chain.ProcessFilter(req, resp)
+	if !s.IsDashboard && resp.StatusCode() == http.StatusOK {
+		RestAPIRequestSecondsVec.WithLabelValues(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path)).
+			Observe(time.Since(startTime).Seconds())
+	}
+}
+
 // CreateWebService creates web service.
 func (s *RestServer) CreateWebService() {
 	// Create a server
@@ -109,7 +118,8 @@ func (s *RestServer) CreateWebService() {
 	ws.Path("/api/").
 		Produces(restful.MIME_JSON).
 		Filter(s.LogFilter).
-		Filter(s.AuthFilter)
+		Filter(s.AuthFilter).
+		Filter(s.MetricsFilter)
 
 	/* Interactions with data store */
 
@@ -645,6 +655,7 @@ type recommendContext struct {
 
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
+	startTime := time.Now()
 	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId),
 		math.Inf(-1), float64(time.Now().Add(s.GorseConfig.Server.ClockError).Unix()))
 	if err != nil {
@@ -654,6 +665,7 @@ func (s *RestServer) createRecommendContext(userId, category string, n int) (*re
 	for _, item := range ignoreItems {
 		excludeSet.Add(item.Id)
 	}
+	RecommendAPIRequestSecondsVec.WithLabelValues("load_feedback_cache").Observe(time.Since(startTime).Seconds())
 	return &recommendContext{
 		userId:     userId,
 		category:   category,
@@ -674,6 +686,7 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 			ctx.excludeSet.Add(feedback.ItemId)
 		}
 		ctx.loadLoadHistTime = time.Since(start)
+		RecommendAPIRequestSecondsVec.WithLabelValues("load_feedback_data").Observe(ctx.loadLoadHistTime.Seconds())
 	}
 	return nil
 }
@@ -729,9 +742,9 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 			}
 		}
 		ctx.loadOfflineRecTime = time.Since(start)
-		LoadCTRRecommendCacheSeconds.Observe(ctx.loadOfflineRecTime.Seconds())
 		ctx.numFromOffline = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
+		RecommendAPIRequestSecondsVec.WithLabelValues("offline_recommend").Observe(ctx.loadOfflineRecTime.Seconds())
 	}
 	return nil
 }
@@ -751,9 +764,9 @@ func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 			}
 		}
 		ctx.loadColRecTime = time.Since(start)
-		LoadCollaborativeRecommendCacheSeconds.Observe(ctx.loadColRecTime.Seconds())
 		ctx.numFromCollaborative = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
+		RecommendAPIRequestSecondsVec.WithLabelValues("collaborative_recommend").Observe(ctx.loadColRecTime.Seconds())
 	}
 	return nil
 }
@@ -801,9 +814,9 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		ctx.results = append(ctx.results, ids...)
 		ctx.excludeSet.Add(ids...)
 		ctx.userBasedTime = time.Since(start)
-		UserBasedRecommendSeconds.Observe(ctx.userBasedTime.Seconds())
 		ctx.numFromUserBased = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
+		RecommendAPIRequestSecondsVec.WithLabelValues("user_based_recommend").Observe(ctx.userBasedTime.Seconds())
 	}
 	return nil
 }
@@ -852,9 +865,9 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		ctx.results = append(ctx.results, ids...)
 		ctx.excludeSet.Add(ids...)
 		ctx.itemBasedTime = time.Since(start)
-		ItemBasedRecommendSeconds.Observe(ctx.itemBasedTime.Seconds())
 		ctx.numFromItemBased = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
+		RecommendAPIRequestSecondsVec.WithLabelValues("item_based_recommend").Observe(ctx.itemBasedTime.Seconds())
 	}
 	return nil
 }
@@ -878,9 +891,9 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 			}
 		}
 		ctx.loadLatestTime = time.Since(start)
-		LoadLatestRecommendCacheSeconds.Observe(ctx.loadLatestTime.Seconds())
 		ctx.numFromLatest = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
+		RecommendAPIRequestSecondsVec.WithLabelValues("latest_recommend").Observe(ctx.loadLatestTime.Seconds())
 	}
 	return nil
 }
@@ -904,15 +917,14 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 			}
 		}
 		ctx.loadPopularTime = time.Since(start)
-		LoadPopularRecommendCacheSeconds.Observe(ctx.loadPopularTime.Seconds())
 		ctx.numFromPopular = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
+		RecommendAPIRequestSecondsVec.WithLabelValues("popular_recommend").Observe(ctx.loadPopularTime.Seconds())
 	}
 	return nil
 }
 
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
-	startTime := time.Now()
 	// parse arguments
 	userId := request.PathParameter("user-id")
 	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
@@ -959,6 +971,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	results = results[mathutil.Min(offset, len(results)):]
 	// write back
 	if writeBackFeedback != "" {
+		startTime := time.Now()
 		for _, itemId := range results {
 			// insert to data store
 			feedback := data.Feedback{
@@ -981,8 +994,8 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 				return
 			}
 		}
+		RecommendAPIRequestSecondsVec.WithLabelValues("write_back").Observe(time.Since(startTime).Seconds())
 	}
-	GetRecommendSeconds.Observe(time.Since(startTime).Seconds())
 	// Send result
 	Ok(response, results)
 }
