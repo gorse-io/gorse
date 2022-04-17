@@ -464,7 +464,7 @@ func (w *Worker) Recommend(users []data.User) {
 				collaborativeUsed = true
 				CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
 			} else if !w.rankingModel.IsUserPredictable(userIndex) {
-				base.Logger().Warn("user is unpredictable", zap.String("user_id", userId))
+				base.Logger().Info("user is unpredictable", zap.String("user_id", userId))
 			}
 		} else if w.rankingModel == nil {
 			base.Logger().Warn("no collaborative filtering model")
