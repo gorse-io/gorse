@@ -16,46 +16,24 @@ package base
 
 const batchSize = 1024 * 1024
 
-type Integers struct {
-	Data [][]int32
+type Array[T any] struct {
+	Data [][]T
 }
 
-func (i *Integers) Len() int {
-	if len(i.Data) == 0 {
+func (a *Array[T]) Len() int {
+	if len(a.Data) == 0 {
 		return 0
 	}
-	return len(i.Data)*batchSize - batchSize + len(i.Data[len(i.Data)-1])
+	return len(a.Data)*batchSize - batchSize + len(a.Data[len(a.Data)-1])
 }
 
-func (i *Integers) Get(index int) int32 {
-	return i.Data[index/batchSize][index%batchSize]
+func (a *Array[T]) Get(index int) T {
+	return a.Data[index/batchSize][index%batchSize]
 }
 
-func (i *Integers) Append(val int32) {
-	if len(i.Data) == 0 || len(i.Data[len(i.Data)-1]) == batchSize {
-		i.Data = append(i.Data, make([]int32, 0, batchSize))
+func (a *Array[T]) Append(val T) {
+	if len(a.Data) == 0 || len(a.Data[len(a.Data)-1]) == batchSize {
+		a.Data = append(a.Data, make([]T, 0, batchSize))
 	}
-	i.Data[len(i.Data)-1] = append(i.Data[len(i.Data)-1], val)
-}
-
-type Floats struct {
-	Data [][]float32
-}
-
-func (i *Floats) Len() int {
-	if len(i.Data) == 0 {
-		return 0
-	}
-	return len(i.Data)*batchSize - batchSize + len(i.Data[len(i.Data)-1])
-}
-
-func (i *Floats) Get(index int) float32 {
-	return i.Data[index/batchSize][index%batchSize]
-}
-
-func (i *Floats) Append(val float32) {
-	if len(i.Data) == 0 || len(i.Data[len(i.Data)-1]) == batchSize {
-		i.Data = append(i.Data, make([]float32, 0, batchSize))
-	}
-	i.Data[len(i.Data)-1] = append(i.Data[len(i.Data)-1], val)
+	a.Data[len(a.Data)-1] = append(a.Data[len(a.Data)-1], val)
 }

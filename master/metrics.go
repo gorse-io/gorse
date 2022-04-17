@@ -20,15 +20,10 @@ import (
 )
 
 var (
-	GetRankingModelSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+	LoadDatasetSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "get_ranking_model_seconds",
-	})
-	GetClickModelSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "get_click_model_seconds",
+		Name:      "load_dataset_seconds",
 	})
 	FindUserNeighborsSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
@@ -41,20 +36,20 @@ var (
 		Name:      "find_item_neighbors_seconds",
 	})
 
-	MatchingTop10NDCG = promauto.NewGauge(prometheus.GaugeOpts{
+	CollaborativeFilteringNDCG10 = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "matching_model_ndcg_at_10",
+		Name:      "collaborative_filtering_ndcg_10",
 	})
-	MatchingTop10Precision = promauto.NewGauge(prometheus.GaugeOpts{
+	CollaborativeFilteringPrecision10 = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "matching_model_precision_at_10",
+		Name:      "collaborative_filtering_precision_10",
 	})
-	MatchingTop10Recall = promauto.NewGauge(prometheus.GaugeOpts{
+	CollaborativeFilteringRecall10 = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "matching_model_recall_at_10",
+		Name:      "collaborative_filtering_recall_10",
 	})
 	RankingPrecision = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
@@ -87,10 +82,30 @@ var (
 		Subsystem: "master",
 		Name:      "users_total",
 	})
+	ActiveUsersTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "active_users_total",
+	})
+	InactiveUsersTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "inactive_users_total",
+	})
 	ItemsTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "items_total",
+	})
+	ActiveItemsTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "active_items_total",
+	})
+	InactiveItemsTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "inactive_items_total",
 	})
 	UserLabelsTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
@@ -107,6 +122,11 @@ var (
 		Subsystem: "master",
 		Name:      "feedbacks_total",
 	})
+	ImplicitFeedbacksTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "implicit_feedbacks_total",
+	})
 	PositiveFeedbacksTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
@@ -117,4 +137,9 @@ var (
 		Subsystem: "master",
 		Name:      "negative_feedbacks_total",
 	})
+	PositiveFeedbackRateVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "positive_feedback_rate",
+	}, []string{"feedback_type"})
 )

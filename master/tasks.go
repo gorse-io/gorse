@@ -55,6 +55,7 @@ const (
 
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask() error {
+	startTime := time.Now()
 
 	base.Logger().Info("load dataset",
 		zap.Strings("positive_feedback_types", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes),
@@ -118,6 +119,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(clickDataset.Index.CountItemLabels()))); err != nil {
 		base.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
+	ImplicitFeedbacksTotal.Set(float64(rankingDataset.Count()))
 	PositiveFeedbacksTotal.Set(float64(clickDataset.PositiveCount))
 	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), clickDataset.PositiveCount)); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
@@ -126,6 +128,27 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), clickDataset.NegativeCount)); err != nil {
 		base.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
+
+	// collect active users and items
+	activeUsers, activeItems, inactiveUsers, inactiveItems := 0, 0, 0, 0
+	for _, userFeedback := range rankingDataset.UserFeedback {
+		if len(userFeedback) > 0 {
+			activeUsers++
+		} else {
+			inactiveUsers++
+		}
+	}
+	for _, itemFeedback := range rankingDataset.ItemFeedback {
+		if len(itemFeedback) > 0 {
+			activeItems++
+		} else {
+			inactiveItems++
+		}
+	}
+	ActiveUsersTotal.Set(float64(activeUsers))
+	ActiveItemsTotal.Set(float64(activeItems))
+	InactiveUsersTotal.Set(float64(inactiveUsers))
+	InactiveItemsTotal.Set(float64(inactiveItems))
 
 	// write categories to cache
 	if err = m.CacheClient.SetSet(cache.ItemCategories, rankingDataset.CategorySet.List()...); err != nil {
@@ -143,6 +166,8 @@ func (m *Master) runLoadDatasetTask() error {
 	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
 	clickDataset = nil
 	m.clickModelMutex.Unlock()
+
+	LoadDatasetSeconds.Observe(time.Since(startTime).Seconds())
 	return nil
 }
 
@@ -784,9 +809,9 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
 	m.rankingModelMutex.Unlock()
 	base.Logger().Info("fit ranking model complete",
 		zap.String("version", fmt.Sprintf("%x", m.rankingModelVersion)))
-	MatchingTop10NDCG.Set(float64(score.NDCG))
-	MatchingTop10Recall.Set(float64(score.Recall))
-	MatchingTop10Precision.Set(float64(score.Precision))
+	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
+	CollaborativeFilteringRecall10.Set(float64(score.Recall))
+	CollaborativeFilteringPrecision10.Set(float64(score.Precision))
 	if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
 		base.Logger().Error("failed to write meta", zap.Error(err))
 	}
@@ -839,6 +864,7 @@ func (m *Master) runAnalyzeTask() error {
 				if err != nil {
 					return errors.Trace(err)
 				}
+				PositiveFeedbackRateVec.WithLabelValues(feedbackType).Set(float64(len(clickThroughRates)))
 				err = m.DataClient.InsertMeasurement(data.Measurement{
 					Name:      measurement,
 					Timestamp: date,

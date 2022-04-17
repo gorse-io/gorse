@@ -362,7 +362,7 @@ func (w *Worker) Recommend(users []data.User) {
 		builder := search.NewHNSWBuilder(vectors, w.cfg.Recommend.CacheSize, 1000, w.jobs)
 		var recall float32
 		w.rankingIndex, recall = builder.Build(w.cfg.Recommend.Collaborative.IndexRecall, w.cfg.Recommend.Collaborative.IndexFitEpoch, false)
-		MatchingIndexRecall.Set(float64(recall))
+		CollaborativeFilteringIndexRecall.Set(float64(recall))
 		if err = w.cacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), base.FormatFloat32(recall))); err != nil {
 			base.Logger().Error("failed to write meta", zap.Error(err))
 		}

@@ -32,8 +32,8 @@ import (
 type DataSet struct {
 	UserIndex      base.Index
 	ItemIndex      base.Index
-	FeedbackUsers  base.Integers
-	FeedbackItems  base.Integers
+	FeedbackUsers  base.Array[int32]
+	FeedbackItems  base.Array[int32]
 	UserFeedback   [][]int32
 	ItemFeedback   [][]int32
 	Negatives      [][]int32
