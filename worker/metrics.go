@@ -56,9 +56,9 @@ var (
 		Name:      "load_popular_recommend_cache_seconds",
 	})
 
-	MatchingIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
+	CollaborativeFilteringIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "matching_index_recall",
+		Name:      "collaborative_filtering_index_recall",
 	})
 )

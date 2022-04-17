@@ -33,12 +33,12 @@ type Dataset struct {
 	UserFeatures [][]int32 // features of users
 	ItemFeatures [][]int32 // features of items
 
-	Users       base.Integers
-	Items       base.Integers
+	Users       base.Array[int32]
+	Items       base.Array[int32]
 	CtxFeatures [][]int32
 	CtxValues   [][]float32
-	NormValues  base.Floats
-	Target      base.Floats
+	NormValues  base.Array[float32]
+	Target      base.Array[float32]
 
 	PositiveCount int
 	NegativeCount int
@@ -117,11 +117,11 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 }
 
 // LoadLibFMFile loads libFM format file.
-func LoadLibFMFile(path string) (features [][]int32, values [][]float32, targets base.Floats, maxLabel int32, err error) {
+func LoadLibFMFile(path string) (features [][]int32, values [][]float32, targets base.Array[float32], maxLabel int32, err error) {
 	// open file
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, nil, base.Floats{}, 0, errors.Trace(err)
+		return nil, nil, base.Array[float32]{}, 0, errors.Trace(err)
 	}
 	defer file.Close()
 	// read lines
@@ -132,7 +132,7 @@ func LoadLibFMFile(path string) (features [][]int32, values [][]float32, targets
 		// fetch target
 		target, err := strconv.ParseFloat(fields[0], 32)
 		if err != nil {
-			return nil, nil, base.Floats{}, 0, errors.Trace(err)
+			return nil, nil, base.Array[float32]{}, 0, errors.Trace(err)
 		}
 		targets.Append(float32(target))
 		// fetch features
@@ -145,13 +145,13 @@ func LoadLibFMFile(path string) (features [][]int32, values [][]float32, targets
 				// append feature
 				feature, err := strconv.Atoi(k)
 				if err != nil {
-					return nil, nil, base.Floats{}, 0, errors.Trace(err)
+					return nil, nil, base.Array[float32]{}, 0, errors.Trace(err)
 				}
 				lineFeatures = append(lineFeatures, int32(feature))
 				// append value
 				value, err := strconv.ParseFloat(v, 32)
 				if err != nil {
-					return nil, nil, base.Floats{}, 0, errors.Trace(err)
+					return nil, nil, base.Array[float32]{}, 0, errors.Trace(err)
 				}
 				lineValues = append(lineValues, float32(value))
 				maxLabel = mathutil.MaxInt32Val(maxLabel, lineFeatures...)
@@ -162,7 +162,7 @@ func LoadLibFMFile(path string) (features [][]int32, values [][]float32, targets
 	}
 	// check error
 	if err = scanner.Err(); err != nil {
-		return nil, nil, base.Floats{}, 0, errors.Trace(err)
+		return nil, nil, base.Array[float32]{}, 0, errors.Trace(err)
 	}
 	return
 }
