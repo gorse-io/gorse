@@ -109,7 +109,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), rankingDataset.ItemCount())); err != nil {
 		base.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	FeedbacksTotal.Set(float64(rankingDataset.Count()))
+	ImplicitFeedbacksTotal.Set(float64(rankingDataset.Count()))
 	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), rankingDataset.Count())); err != nil {
 		base.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
@@ -1276,10 +1276,12 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	}
 
 	// STEP 3: pull positive feedback
+	var feedbackCount float64
 	start = time.Now()
 	feedbackChan, errChan := database.GetFeedbackStream(batchSize, feedbackTimeLimit, posFeedbackTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
+			feedbackCount++
 			rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
 			// insert feedback to positive set
 			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
@@ -1316,6 +1318,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	feedbackChan, errChan = database.GetFeedbackStream(batchSize, feedbackTimeLimit, readTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
+			feedbackCount++
 			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
 			if userIndex == base.NotId {
 				continue
@@ -1333,6 +1336,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	m.taskMonitor.Update(TaskLoadDataset, 4)
+	FeedbacksTotal.Set(feedbackCount)
 
 	// STEP 5: create click dataset
 	unifiedIndex := click.NewUnifiedMapIndexBuilder()
