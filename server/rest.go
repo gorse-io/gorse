@@ -105,8 +105,8 @@ func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, ch
 func (s *RestServer) MetricsFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	startTime := time.Now()
 	chain.ProcessFilter(req, resp)
-	if !s.IsDashboard && resp.StatusCode() == http.StatusOK {
-		RestAPIRequestSecondsVec.WithLabelValues(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path)).
+	if !s.IsDashboard && req.SelectedRoute() != nil && resp.StatusCode() == http.StatusOK {
+		RestAPIRequestSecondsVec.WithLabelValues(fmt.Sprintf("%s %s", req.Request.Method, req.SelectedRoutePath())).
 			Observe(time.Since(startTime).Seconds())
 	}
 }
