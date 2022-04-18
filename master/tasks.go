@@ -57,8 +57,7 @@ const (
 
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask() error {
-	startTime := time.Now()
-
+	initialStartTime := time.Now()
 	base.Logger().Info("load dataset",
 		zap.Strings("positive_feedback_types", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes),
 		zap.Strings("read_feedback_types", m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes),
@@ -158,18 +157,22 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// split ranking dataset
+	startTime := time.Now()
 	m.rankingModelMutex.Lock()
 	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
 	rankingDataset = nil
 	m.rankingModelMutex.Unlock()
+	LoadDatasetStepSecondsVec.WithLabelValues("split_ranking_dataset").Set(time.Since(startTime).Seconds())
 
 	// split click dataset
+	startTime = time.Now()
 	m.clickModelMutex.Lock()
 	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
 	clickDataset = nil
 	m.clickModelMutex.Unlock()
+	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
 
-	LoadDatasetSeconds.Observe(time.Since(startTime).Seconds())
+	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return nil
 }
 
@@ -1225,6 +1228,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		zap.Int("n_users", rankingDataset.UserCount()),
 		zap.Int32("n_user_labels", userLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
+	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
 
 	// STEP 2: pull items
 	itemLabelIndex := base.NewMapIndex()
@@ -1267,6 +1271,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		zap.Int("n_items", rankingDataset.ItemCount()),
 		zap.Int32("n_item_labels", itemLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
+	LoadDatasetStepSecondsVec.WithLabelValues("load_items").Set(time.Since(start).Seconds())
 
 	// create positive set
 	popularCount := make([]int32, rankingDataset.ItemCount())
@@ -1306,6 +1311,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	base.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", rankingDataset.Count()),
 		zap.Duration("used_time", time.Since(start)))
+	LoadDatasetStepSecondsVec.WithLabelValues("load_positive_feedback").Set(time.Since(start).Seconds())
 
 	// create negative set
 	negativeSet := make([]*i32set.Set, rankingDataset.UserCount())
@@ -1337,8 +1343,12 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	}
 	m.taskMonitor.Update(TaskLoadDataset, 4)
 	FeedbacksTotal.Set(feedbackCount)
+	base.Logger().Debug("pulled negative feedback from database",
+		zap.Duration("used_time", time.Since(start)))
+	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())
 
 	// STEP 5: create click dataset
+	start = time.Now()
 	unifiedIndex := click.NewUnifiedMapIndexBuilder()
 	unifiedIndex.ItemIndex = rankingDataset.ItemIndex
 	unifiedIndex.UserIndex = rankingDataset.UserIndex
@@ -1376,11 +1386,12 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		positiveSet[userIndex] = nil
 		negativeSet[userIndex] = nil
 	}
-	base.Logger().Debug("pulled negative feedback from database",
+	base.Logger().Debug("created ranking dataset",
 		zap.Int("n_valid_positive", clickDataset.PositiveCount),
 		zap.Int("n_valid_negative", clickDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	m.taskMonitor.Update(TaskLoadDataset, 5)
+	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
 
 	// collect latest items
 	latestItems = make(map[string][]cache.Scored)

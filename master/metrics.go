@@ -20,10 +20,15 @@ import (
 )
 
 var (
-	LoadDatasetSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+	LoadDatasetStepSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
-		Name:      "load_dataset_seconds",
+		Name:      "load_dataset_step_seconds",
+	}, []string{"step"})
+	LoadDatasetTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "load_dataset_total_seconds",
 	})
 	FindUserNeighborsSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "gorse",
