@@ -20,42 +20,11 @@ import (
 )
 
 var (
-	GenerateRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+	OfflineRecommendStepSecondsVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
-		Name:      "get_recommend_seconds",
-	})
-	CTRRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "ctr_recommend_seconds",
-	})
-	CollaborativeRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "collaborative_recommend_seconds",
-	})
-	ItemBasedRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "item_based_recommend_seconds",
-	})
-	UserBasedRecommendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "user_based_recommend_seconds",
-	})
-	LoadLatestRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "load_latest_recommend_cache_seconds",
-	})
-	LoadPopularRecommendCacheSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "load_popular_recommend_cache_seconds",
-	})
-
+		Name:      "offline_recommend_step_seconds",
+	}, []string{"stage"})
 	CollaborativeFilteringIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",

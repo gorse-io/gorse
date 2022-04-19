@@ -1036,15 +1036,13 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	var userFeedback []data.Feedback
 	for _, feedback := range dataFeedback {
 		excludeSet.Add(feedback.ItemId)
-		if s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased <= len(userFeedback) {
-			break
-		}
 		if funk.ContainsString(s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
 			userFeedback = append(userFeedback, feedback)
 		}
 	}
 	// collect candidates
 	candidates := make(map[string]float64)
+	usedFeedbackCount := 0
 	for _, feedback := range userFeedback {
 		// load similar items
 		similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, category), 0, s.GorseConfig.Recommend.CacheSize)
@@ -1057,6 +1055,13 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		for _, item := range similarItems {
 			if !excludeSet.Has(item.Id) {
 				candidates[item.Id] += item.Score
+			}
+		}
+		// finish recommendation if the number of used feedbacks is enough
+		if len(similarItems) > 0 {
+			usedFeedbackCount++
+			if usedFeedbackCount >= s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased {
+				break
 			}
 		}
 	}

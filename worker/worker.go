@@ -407,7 +407,6 @@ func (w *Worker) Recommend(users []data.User) {
 		defer func() {
 			completed <- struct{}{}
 		}()
-		userStartTime := time.Now()
 		user := users[jobId]
 		userId := user.UserId
 		// skip inactive users before max recommend period
@@ -416,6 +415,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// load historical items
+		startTime := time.Now()
 		historyItems, feedbacks, err := loadUserHistoricalItems(w.dataClient, userId)
 		excludeSet := set.NewStringSet(historyItems...)
 		if err != nil {
@@ -423,6 +423,7 @@ func (w *Worker) Recommend(users []data.User) {
 				zap.String("user_id", userId), zap.Error(err))
 			return errors.Trace(err)
 		}
+		OfflineRecommendStepSecondsVec.WithLabelValues("load_user_historical_items").Observe(time.Since(startTime).Seconds())
 
 		// load positive items
 		var positiveItems []string
@@ -508,7 +509,7 @@ func (w *Worker) Recommend(users []data.User) {
 				ids, _ := filter.PopAll()
 				candidates[category] = append(candidates[category], ids)
 			}
-			ItemBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
+			OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Observe(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #3: insert user-based items
@@ -562,7 +563,7 @@ func (w *Worker) Recommend(users []data.User) {
 				ids, _ := filter.PopAll()
 				candidates[category] = append(candidates[category], ids)
 			}
-			UserBasedRecommendSeconds.Observe(time.Since(localStartTime).Seconds())
+			OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Observe(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #4: latest items.
@@ -582,7 +583,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				candidates[category] = append(candidates[category], recommend)
 			}
-			LoadLatestRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
+			OfflineRecommendStepSecondsVec.WithLabelValues("load_latest_items").Observe(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #5: popular items.
@@ -602,7 +603,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				candidates[category] = append(candidates[category], recommend)
 			}
-			LoadPopularRecommendCacheSeconds.Observe(time.Since(localStartTime).Seconds())
+			OfflineRecommendStepSecondsVec.WithLabelValues("load_popular_items").Observe(time.Since(localStartTime).Seconds())
 		}
 
 		// rank items from different recommenders
@@ -669,7 +670,6 @@ func (w *Worker) Recommend(users []data.User) {
 			base.Logger().Error("failed to refresh cache", zap.Error(err))
 			return errors.Trace(err)
 		}
-		GenerateRecommendSeconds.Observe(time.Since(userStartTime).Seconds())
 		return nil
 	})
 	close(completed)
@@ -801,7 +801,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 		})
 	}
 	cache.SortScores(topItems)
-	CTRRecommendSeconds.Observe(time.Since(startTime).Seconds())
+	OfflineRecommendStepSecondsVec.WithLabelValues("rank_by_click_trough_rate").Observe(time.Since(startTime).Seconds())
 	return topItems, nil
 }
 
