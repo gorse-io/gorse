@@ -159,3 +159,230 @@ func TestBindEnv(t *testing.T) {
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 }
+
+func TestConfig_UserNeighborDigest(t *testing.T) {
+	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.UserNeighbors.NeighborType = "auto"
+	cfg2.Recommend.UserNeighbors.NeighborType = "manual"
+	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.UserNeighbors.EnableIndex = true
+	cfg2.Recommend.UserNeighbors.EnableIndex = false
+	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.UserNeighbors.NeighborType = "auto"
+	cfg2.Recommend.UserNeighbors.NeighborType = "auto"
+	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
+	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.UserNeighbors.NeighborType = "related"
+	cfg2.Recommend.UserNeighbors.NeighborType = "related"
+	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
+	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.UserNeighbors.NeighborType = "similar"
+	cfg2.Recommend.UserNeighbors.NeighborType = "similar"
+	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
+	assert.Equal(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.UserNeighbors.EnableIndex = true
+	cfg2.Recommend.UserNeighbors.EnableIndex = true
+	cfg1.Recommend.UserNeighbors.IndexRecall = 0.5
+	cfg2.Recommend.UserNeighbors.IndexRecall = 0.6
+	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.UserNeighbors.EnableIndex = true
+	cfg2.Recommend.UserNeighbors.EnableIndex = true
+	cfg1.Recommend.UserNeighbors.IndexFitEpoch = 10
+	cfg2.Recommend.UserNeighbors.IndexFitEpoch = 11
+	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
+}
+
+func TestConfig_ItemNeighborDigest(t *testing.T) {
+	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.ItemNeighbors.NeighborType = "auto"
+	cfg2.Recommend.ItemNeighbors.NeighborType = "related"
+	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.ItemNeighbors.EnableIndex = true
+	cfg2.Recommend.ItemNeighbors.EnableIndex = false
+	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.ItemNeighbors.NeighborType = "auto"
+	cfg2.Recommend.ItemNeighbors.NeighborType = "auto"
+	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
+	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.ItemNeighbors.NeighborType = "related"
+	cfg2.Recommend.ItemNeighbors.NeighborType = "related"
+	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
+	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.ItemNeighbors.NeighborType = "similar"
+	cfg2.Recommend.ItemNeighbors.NeighborType = "similar"
+	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
+	assert.Equal(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.ItemNeighbors.EnableIndex = true
+	cfg2.Recommend.ItemNeighbors.EnableIndex = true
+	cfg1.Recommend.ItemNeighbors.IndexRecall = 0.5
+	cfg2.Recommend.ItemNeighbors.IndexRecall = 0.6
+	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.ItemNeighbors.EnableIndex = true
+	cfg2.Recommend.ItemNeighbors.EnableIndex = true
+	cfg1.Recommend.ItemNeighbors.IndexFitEpoch = 10
+	cfg2.Recommend.ItemNeighbors.IndexFitEpoch = 11
+	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
+}
+
+func TestConfig_OfflineRecommendDigest(t *testing.T) {
+	// test explore recommendation
+	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.ExploreRecommend = map[string]float64{"a": 0.5, "b": 0.6}
+	cfg2.Recommend.Offline.ExploreRecommend = map[string]float64{"a": 0.6, "b": 0.5}
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	// test latest recommendation
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableLatestRecommend = true
+	cfg2.Recommend.Offline.EnableLatestRecommend = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	// test popular recommendation
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnablePopularRecommend = true
+	cfg2.Recommend.Offline.EnablePopularRecommend = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnablePopularRecommend = true
+	cfg2.Recommend.Offline.EnablePopularRecommend = true
+	cfg1.Recommend.Popular.PopularWindow = 10
+	cfg2.Recommend.Popular.PopularWindow = 11
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnablePopularRecommend = false
+	cfg2.Recommend.Offline.EnablePopularRecommend = false
+	cfg1.Recommend.Popular.PopularWindow = 10
+	cfg2.Recommend.Popular.PopularWindow = 11
+	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	// test user-based recommendation
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableUserBasedRecommend = true
+	cfg2.Recommend.Offline.EnableUserBasedRecommend = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableUserBasedRecommend = true
+	cfg2.Recommend.Offline.EnableUserBasedRecommend = true
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithUserNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithUserNeighborDigest("2")))
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableUserBasedRecommend = false
+	cfg2.Recommend.Offline.EnableUserBasedRecommend = false
+	assert.Equal(t, cfg1.OfflineRecommendDigest(WithUserNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithUserNeighborDigest("2")))
+
+	// test item-based recommendation
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableItemBasedRecommend = true
+	cfg2.Recommend.Offline.EnableItemBasedRecommend = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableItemBasedRecommend = true
+	cfg2.Recommend.Offline.EnableItemBasedRecommend = true
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithItemNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithItemNeighborDigest("2")))
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableItemBasedRecommend = false
+	cfg2.Recommend.Offline.EnableItemBasedRecommend = false
+	assert.Equal(t, cfg1.OfflineRecommendDigest(WithItemNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithItemNeighborDigest("2")))
+
+	// test collaborative-filtering recommendation
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableColRecommend = true
+	cfg2.Recommend.Offline.EnableColRecommend = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableColRecommend = true
+	cfg2.Recommend.Offline.EnableColRecommend = true
+	cfg1.Recommend.Collaborative.EnableIndex = true
+	cfg2.Recommend.Collaborative.EnableIndex = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableColRecommend = true
+	cfg2.Recommend.Offline.EnableColRecommend = true
+	cfg1.Recommend.Collaborative.EnableIndex = true
+	cfg2.Recommend.Collaborative.EnableIndex = true
+	cfg1.Recommend.Collaborative.IndexRecall = 0.4
+	cfg2.Recommend.Collaborative.IndexRecall = 0.5
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableColRecommend = true
+	cfg2.Recommend.Offline.EnableColRecommend = true
+	cfg1.Recommend.Collaborative.EnableIndex = false
+	cfg2.Recommend.Collaborative.EnableIndex = false
+	cfg1.Recommend.Collaborative.IndexRecall = 0.4
+	cfg2.Recommend.Collaborative.IndexRecall = 0.5
+	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableColRecommend = false
+	cfg2.Recommend.Offline.EnableColRecommend = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithCollaborative(true)), cfg2.OfflineRecommendDigest())
+
+	// test click-through rate prediction recommendation
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableClickThroughPrediction = true
+	cfg2.Recommend.Offline.EnableClickThroughPrediction = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Offline.EnableClickThroughPrediction = false
+	cfg2.Recommend.Offline.EnableClickThroughPrediction = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithRanking(true)), cfg2.OfflineRecommendDigest())
+
+	// test replacement
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Replacement.EnableReplacement = true
+	cfg2.Recommend.Replacement.EnableReplacement = false
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Replacement.EnableReplacement = true
+	cfg2.Recommend.Replacement.EnableReplacement = true
+	cfg1.Recommend.Replacement.PositiveReplacementDecay = 0.1
+	cfg2.Recommend.Replacement.PositiveReplacementDecay = 0.2
+	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+
+	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Replacement.EnableReplacement = false
+	cfg2.Recommend.Replacement.EnableReplacement = false
+	cfg1.Recommend.Replacement.PositiveReplacementDecay = 0.1
+	cfg2.Recommend.Replacement.PositiveReplacementDecay = 0.2
+	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+}

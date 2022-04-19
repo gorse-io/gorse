@@ -70,10 +70,16 @@ func TestCheckRecommendCacheTimeout(t *testing.T) {
 	// create mock worker
 	w := newMockWorker(t)
 	defer w.Close(t)
-	// insert cache
+
+	// empty cache
+	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
 	err := w.cacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 0}})
 	assert.NoError(t, err)
+
+	// digest mismatch
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))
+	err = w.cacheClient.Set(cache.String(cache.Key(cache.OfflineRecommendDigest, "0"), w.cfg.OfflineRecommendDigest()))
+
 	err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().Add(-time.Hour)))
 	assert.NoError(t, err)
 	assert.True(t, w.checkRecommendCacheTimeout("0", nil))

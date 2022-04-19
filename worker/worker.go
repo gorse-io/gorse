@@ -40,6 +40,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -442,6 +443,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #1: collaborative filtering.
+		collaborativeUsed := false
 		if w.cfg.Recommend.Offline.EnableColRecommend && w.rankingModel != nil {
 			if userIndex := w.rankingModel.GetUserIndex().ToNumber(userId); w.rankingModel.IsUserPredictable(userIndex) {
 				var recommend map[string][]string
@@ -459,6 +461,7 @@ func (w *Worker) Recommend(users []data.User) {
 				for category, items := range recommend {
 					candidates[category] = append(candidates[category], items)
 				}
+				collaborativeUsed = true
 				CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
 			} else if !w.rankingModel.IsUserPredictable(userIndex) {
 				base.Logger().Warn("user is unpredictable", zap.String("user_id", userId))
@@ -468,6 +471,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #2: item-based.
+		itemNeighborDigests := strset.New()
 		if w.cfg.Recommend.Offline.EnableItemBasedRecommend {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
@@ -486,6 +490,15 @@ func (w *Worker) Recommend(users []data.User) {
 							scores[item.Id] += item.Score
 						}
 					}
+					// load item neighbors digest
+					digest, err := w.cacheClient.Get(cache.Key(cache.ItemNeighborsDigest, itemId)).String()
+					if err != nil {
+						if !errors.IsNotFound(err) {
+							base.Logger().Error("failed to load item neighbors digest", zap.Error(err))
+							return errors.Trace(err)
+						}
+					}
+					itemNeighborDigests.Add(digest)
 				}
 				// collect top k
 				filter := heap.NewTopKStringFilter(w.cfg.Recommend.CacheSize)
@@ -499,6 +512,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #3: insert user-based items
+		userNeighborDigests := strset.New()
 		if w.cfg.Recommend.Offline.EnableUserBasedRecommend {
 			localStartTime := time.Now()
 			scores := make(map[string]float64)
@@ -522,6 +536,15 @@ func (w *Worker) Recommend(users []data.User) {
 						scores[itemId] += user.Score
 					}
 				}
+				// load user neighbors digest
+				digest, err := w.cacheClient.Get(cache.Key(cache.UserNeighborsDigest, user.Id)).String()
+				if err != nil {
+					if !errors.IsNotFound(err) {
+						base.Logger().Error("failed to load user neighbors digest", zap.Error(err))
+						return errors.Trace(err)
+					}
+				}
+				userNeighborDigests.Add(digest)
 			}
 			// collect top k
 			filters := make(map[string]*heap.TopKStringFilter)
@@ -586,6 +609,7 @@ func (w *Worker) Recommend(users []data.User) {
 		// 1. If click-through rate prediction model is available, use it to rank items.
 		// 2. If collaborative filtering model is available, use it to rank items.
 		// 3. Otherwise, merge all recommenders' results randomly.
+		ctrUsed := false
 		results := make(map[string][]cache.Scored)
 		for category, catCandidates := range candidates {
 			if w.cfg.Recommend.Offline.EnableClickThroughPrediction && w.clickModel != nil {
@@ -594,6 +618,7 @@ func (w *Worker) Recommend(users []data.User) {
 					base.Logger().Error("failed to rank items", zap.Error(err))
 					return errors.Trace(err)
 				}
+				ctrUsed = true
 			} else if w.rankingModel != nil &&
 				w.rankingModel.IsUserPredictable(w.rankingModel.GetUserIndex().ToNumber(userId)) {
 				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
@@ -627,7 +652,14 @@ func (w *Worker) Recommend(users []data.User) {
 				return errors.Trace(err)
 			}
 		}
-		if err = w.cacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, userId), time.Now())); err != nil {
+		if err = w.cacheClient.Set(
+			cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, userId), time.Now()),
+			cache.String(cache.Key(cache.OfflineRecommendDigest, userId), w.cfg.OfflineRecommendDigest(
+				config.WithCollaborative(collaborativeUsed),
+				config.WithRanking(ctrUsed),
+				config.WithItemNeighborDigest(strings.Join(itemNeighborDigests.List(), "-")),
+				config.WithUserNeighborDigest(strings.Join(userNeighborDigests.List(), "-")),
+			))); err != nil {
 			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
 
@@ -865,36 +897,53 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 // 2. if active time > recommend time, stale.
 // 3. if recommend time + timeout < now, stale.
 func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) bool {
-	var activeTime, recommendTime time.Time
+	var (
+		activeTime    time.Time
+		recommendTime time.Time
+		cacheDigest   string
+		err           error
+	)
 	// check cache
 	for _, category := range append([]string{""}, categories...) {
 		items, err := w.cacheClient.GetSorted(cache.Key(cache.OfflineRecommend, userId, category), 0, -1)
 		if err != nil {
-			base.Logger().Error("failed to read meta", zap.String("user_id", userId), zap.Error(err))
+			base.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
 			return true
 		} else if len(items) == 0 {
 			return true
 		}
 	}
+	// read digest
+	cacheDigest, err = w.cacheClient.Get(cache.Key(cache.OfflineRecommendDigest, userId)).String()
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			base.Logger().Error("failed to load offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
+		}
+		return true
+	}
+	if cacheDigest != w.cfg.OfflineRecommendDigest() {
+		return true
+	}
 	// read active time
-	var err error
 	activeTime, err = w.cacheClient.Get(cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			base.Logger().Error("failed to read meta", zap.Error(err))
+			base.Logger().Error("failed to read last modify user time", zap.Error(err))
 		}
 		return true
 	}
 	// read recommend time
 	recommendTime, err = w.cacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err != nil {
-		base.Logger().Error("failed to read meta", zap.Error(err))
+		if !errors.IsNotFound(err) {
+			base.Logger().Error("failed to read last update user recommend time", zap.Error(err))
+		}
 		return true
 	}
 	// check time
-	if activeTime.Unix() < recommendTime.Unix() {
+	if activeTime.Before(recommendTime) {
 		timeoutTime := recommendTime.Add(w.cfg.Recommend.Offline.RefreshRecommendPeriod)
-		return timeoutTime.Unix() < time.Now().Unix()
+		return timeoutTime.Before(time.Now())
 	}
 	return true
 }
