@@ -109,6 +109,12 @@ func TestPostgres_Set(t *testing.T) {
 	testSet(t, db.Database)
 }
 
+func TestPostgres_Scan(t *testing.T) {
+	db := newTestPostgresDatabase(t)
+	defer db.Close(t)
+	testScan(t, db.Database)
+}
+
 func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	var testName string
@@ -159,4 +165,10 @@ func TestMySQL_Set(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testSet(t, db.Database)
+}
+
+func TestMySQL_Scan(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	testScan(t, db.Database)
 }

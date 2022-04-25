@@ -16,11 +16,16 @@ package cache
 
 import (
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
 	"os"
+	"strconv"
 	"testing"
 )
 
-var redisDSN string
+var (
+	redisDSN string
+	database atomic.Int64
+)
 
 func init() {
 	// get environment variables
@@ -41,7 +46,8 @@ func newMockRedis(t *testing.T) *testRedis {
 	var err error
 	db := new(testRedis)
 	assert.NoError(t, err)
-	db.Database, err = Open(redisDSN)
+	database.Inc()
+	db.Database, err = Open(redisDSN + strconv.Itoa(int(database.Load())))
 	assert.NoError(t, err)
 	return db
 }
@@ -67,4 +73,10 @@ func TestRedis_Set(t *testing.T) {
 	db := newMockRedis(t)
 	defer db.Close(t)
 	testSet(t, db.Database)
+}
+
+func TestRedis_Scan(t *testing.T) {
+	db := newMockRedis(t)
+	defer db.Close(t)
+	testScan(t, db.Database)
 }

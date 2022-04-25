@@ -37,6 +37,29 @@ func (r *Redis) Init() error {
 	return nil
 }
 
+func (r *Redis) Scan(work func(string) error) error {
+	var (
+		ctx    = context.Background()
+		result []string
+		cursor uint64
+		err    error
+	)
+	for {
+		result, cursor, err = r.client.Scan(ctx, cursor, "", 0).Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		for _, key := range result {
+			if err = work(key); err != nil {
+				return errors.Trace(err)
+			}
+		}
+		if cursor == 0 {
+			return nil
+		}
+	}
+}
+
 func (r *Redis) Set(values ...Value) error {
 	var ctx = context.Background()
 	p := r.client.Pipeline()

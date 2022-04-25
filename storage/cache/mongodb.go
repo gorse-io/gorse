@@ -101,6 +101,72 @@ func (m MongoDB) Close() error {
 	return m.client.Disconnect(context.Background())
 }
 
+func (m MongoDB) Scan(work func(string) error) error {
+	ctx := context.Background()
+
+	// scan values
+	valuesCollection := m.client.Database(m.dbName).Collection("values")
+	valuesIterator, err := valuesCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer valuesIterator.Close(ctx)
+	for valuesIterator.Next(ctx) {
+		var row bson.Raw
+		if err = valuesIterator.Decode(&row); err != nil {
+			return errors.Trace(err)
+		}
+		if err = work(row.Lookup("_id").StringValue()); err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	// scan sets
+	setCollection := m.client.Database(m.dbName).Collection("sets")
+	setIterator, err := setCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer setIterator.Close(ctx)
+	prevKey := ""
+	for setIterator.Next(ctx) {
+		var row bson.Raw
+		if err = setIterator.Decode(&row); err != nil {
+			return errors.Trace(err)
+		}
+		key := row.Lookup("name").StringValue()
+		if key != prevKey {
+			if err = work(key); err != nil {
+				return errors.Trace(err)
+			}
+			prevKey = key
+		}
+	}
+
+	// scan sorted sets
+	sortedSetCollection := m.client.Database(m.dbName).Collection("sorted_sets")
+	sortedSetIterator, err := sortedSetCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer sortedSetIterator.Close(ctx)
+	prevKey = ""
+	for sortedSetIterator.Next(ctx) {
+		var row bson.Raw
+		if err = sortedSetIterator.Decode(&row); err != nil {
+			return errors.Trace(err)
+		}
+		key := row.Lookup("name").StringValue()
+		if key != prevKey {
+			if err = work(key); err != nil {
+				return errors.Trace(err)
+			}
+			prevKey = key
+		}
+	}
+	return nil
+}
+
 func (m MongoDB) Set(values ...Value) error {
 	if len(values) == 0 {
 		return nil

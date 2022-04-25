@@ -255,6 +255,7 @@ func Member(name, member string) SetMember {
 type Database interface {
 	Close() error
 	Init() error
+	Scan(work func(string) error) error
 
 	Set(values ...Value) error
 	Get(name string) *ReturnValue

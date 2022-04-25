@@ -107,3 +107,9 @@ func TestMongo_Set(t *testing.T) {
 	defer db.Close(t)
 	testSet(t, db.Database)
 }
+
+func TestMongo_Scan(t *testing.T) {
+	db := newTestMongo(t)
+	defer db.Close(t)
+	testScan(t, db.Database)
+}
