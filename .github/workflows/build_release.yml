@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v1
         
       - name: Install gox
-        run: go get -v github.com/mitchellh/gox
+        run: go install github.com/mitchellh/gox@latest
         
       - name: Build release
         run: >

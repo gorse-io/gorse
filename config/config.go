@@ -15,11 +15,14 @@
 package config
 
 import (
+	"crypto/md5"
+	"fmt"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	en_translations "github.com/go-playground/validator/v10/translations/en"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"github.com/zhenghaoz/gorse/base"
 	"go.uber.org/zap"
@@ -198,6 +201,126 @@ func GetDefaultConfig() *Config {
 			},
 		},
 	}
+}
+
+func (config *Config) UserNeighborDigest() string {
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("%v-%v", config.Recommend.UserNeighbors.NeighborType, config.Recommend.UserNeighbors.EnableIndex))
+	// feedback option
+	if lo.Contains([]string{"auto", "related"}, config.Recommend.UserNeighbors.NeighborType) {
+		builder.WriteString(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-")))
+	} else {
+		builder.WriteString("-")
+	}
+	// index option
+	if config.Recommend.UserNeighbors.EnableIndex {
+		builder.WriteString(fmt.Sprintf("-%v-%v", config.Recommend.UserNeighbors.IndexRecall, config.Recommend.UserNeighbors.IndexFitEpoch))
+	} else {
+		builder.WriteString("--")
+	}
+
+	digest := md5.Sum([]byte(builder.String()))
+	return string(digest[:])
+}
+
+func (config *Config) ItemNeighborDigest() string {
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("%v-%v", config.Recommend.ItemNeighbors.NeighborType, config.Recommend.ItemNeighbors.EnableIndex))
+	// feedback option
+	if lo.Contains([]string{"auto", "related"}, config.Recommend.ItemNeighbors.NeighborType) {
+		builder.WriteString(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-")))
+	} else {
+		builder.WriteString("-")
+	}
+	// index option
+	if config.Recommend.ItemNeighbors.EnableIndex {
+		builder.WriteString(fmt.Sprintf("-%v-%v", config.Recommend.ItemNeighbors.IndexRecall, config.Recommend.ItemNeighbors.IndexFitEpoch))
+	} else {
+		builder.WriteString("--")
+	}
+
+	digest := md5.Sum([]byte(builder.String()))
+	return string(digest[:])
+}
+
+type digestOptions struct {
+	userNeighborDigest  string
+	itemNeighborDigest  string
+	enableCollaborative bool
+	enableRanking       bool
+}
+
+type DigestOption func(option *digestOptions)
+
+func WithUserNeighborDigest(digest string) DigestOption {
+	return func(option *digestOptions) {
+		option.userNeighborDigest = digest
+	}
+}
+
+func WithItemNeighborDigest(digest string) DigestOption {
+	return func(option *digestOptions) {
+		option.itemNeighborDigest = digest
+	}
+}
+
+func WithCollaborative(v bool) DigestOption {
+	return func(option *digestOptions) {
+		option.enableCollaborative = v
+	}
+}
+
+func WithRanking(v bool) DigestOption {
+	return func(option *digestOptions) {
+		option.enableRanking = v
+	}
+}
+
+func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
+	options := digestOptions{
+		userNeighborDigest:  config.UserNeighborDigest(),
+		itemNeighborDigest:  config.ItemNeighborDigest(),
+		enableCollaborative: config.Recommend.Offline.EnableColRecommend,
+		enableRanking:       config.Recommend.Offline.EnableClickThroughPrediction,
+	}
+	lo.ForEach(option, func(opt DigestOption, _ int) {
+		opt(&options)
+	})
+
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v-%v",
+		config.Recommend.Offline.ExploreRecommend,
+		config.Recommend.Offline.EnableLatestRecommend,
+		config.Recommend.Offline.EnablePopularRecommend,
+		config.Recommend.Offline.EnableUserBasedRecommend,
+		config.Recommend.Offline.EnableItemBasedRecommend,
+		options.enableCollaborative,
+		options.enableRanking,
+		config.Recommend.Replacement.EnableReplacement,
+	))
+	if config.Recommend.Offline.EnablePopularRecommend {
+		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Popular.PopularWindow))
+	}
+	if config.Recommend.Offline.EnableUserBasedRecommend {
+		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
+	}
+	if config.Recommend.Offline.EnableItemBasedRecommend {
+		builder.WriteString(fmt.Sprintf("-%v", options.itemNeighborDigest))
+	}
+	if options.enableCollaborative {
+		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Collaborative.EnableIndex))
+		if config.Recommend.Collaborative.EnableIndex {
+			builder.WriteString(fmt.Sprintf("-%v-%v",
+				config.Recommend.Collaborative.IndexRecall, config.Recommend.Collaborative.IndexFitEpoch))
+		}
+	}
+	if config.Recommend.Replacement.EnableReplacement {
+		builder.WriteString(fmt.Sprintf("-%v-%v",
+			config.Recommend.Replacement.PositiveReplacementDecay, config.Recommend.Replacement.ReadReplacementDecay))
+	}
+
+	digest := md5.Sum([]byte(builder.String()))
+	return string(digest[:])
 }
 
 func (config *OfflineConfig) Lock() {

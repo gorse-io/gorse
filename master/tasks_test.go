@@ -526,3 +526,77 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "1", "2"}, categories)
 }
+
+func TestCheckItemNeighborCacheTimeout(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+	m.GorseConfig = config.GetDefaultConfig()
+
+	// empty cache
+	assert.True(t, m.checkItemNeighborCacheTimeout("1", nil))
+	err := m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "1"), []cache.Scored{
+		{Id: "2", Score: 1},
+		{Id: "3", Score: 2},
+		{Id: "4", Score: 3},
+	})
+	assert.NoError(t, err)
+
+	// digest mismatch
+	err = m.CacheClient.Set(cache.String(cache.Key(cache.ItemNeighborsDigest, "1"), "digest"))
+	assert.NoError(t, err)
+	assert.True(t, m.checkItemNeighborCacheTimeout("1", nil))
+
+	// staled cache
+	err = m.CacheClient.Set(cache.String(cache.Key(cache.ItemNeighborsDigest, "1"), m.GorseConfig.ItemNeighborDigest()))
+	assert.NoError(t, err)
+	assert.True(t, m.checkItemNeighborCacheTimeout("1", nil))
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "1"), time.Now().Add(-time.Minute)))
+	assert.NoError(t, err)
+	assert.True(t, m.checkItemNeighborCacheTimeout("1", nil))
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, "1"), time.Now().Add(-time.Hour)))
+	assert.NoError(t, err)
+	assert.True(t, m.checkItemNeighborCacheTimeout("1", nil))
+
+	// not staled cache
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, "1"), time.Now()))
+	assert.NoError(t, err)
+	assert.False(t, m.checkItemNeighborCacheTimeout("1", nil))
+}
+
+func TestCheckUserNeighborCacheTimeout(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+	m.GorseConfig = config.GetDefaultConfig()
+
+	// empty cache
+	assert.True(t, m.checkUserNeighborCacheTimeout("1"))
+	err := m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, "1"), []cache.Scored{
+		{Id: "1", Score: 1},
+		{Id: "2", Score: 2},
+		{Id: "3", Score: 3},
+	})
+	assert.NoError(t, err)
+
+	// digest mismatch
+	err = m.CacheClient.Set(cache.String(cache.Key(cache.UserNeighborsDigest, "1"), "digest"))
+	assert.NoError(t, err)
+	assert.True(t, m.checkUserNeighborCacheTimeout("1"))
+
+	// staled cache
+	err = m.CacheClient.Set(cache.String(cache.Key(cache.UserNeighborsDigest, "1"), m.GorseConfig.UserNeighborDigest()))
+	assert.NoError(t, err)
+	assert.True(t, m.checkUserNeighborCacheTimeout("1"))
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "1"), time.Now().Add(-time.Minute)))
+	assert.NoError(t, err)
+	assert.True(t, m.checkUserNeighborCacheTimeout("1"))
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, "1"), time.Now().Add(-time.Hour)))
+	assert.NoError(t, err)
+	assert.True(t, m.checkUserNeighborCacheTimeout("1"))
+
+	// not staled cache
+	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, "1"), time.Now()))
+	assert.NoError(t, err)
+	assert.False(t, m.checkUserNeighborCacheTimeout("1"))
+}
