@@ -34,20 +34,22 @@ import (
 	"math"
 	"modernc.org/sortutil"
 	"sort"
+	"strings"
 	"time"
 )
 
 const (
 	PositiveFeedbackRate = "PositiveFeedbackRate"
 
-	TaskLoadDataset        = "Load dataset"
-	TaskFindItemNeighbors  = "Find neighbors of items"
-	TaskFindUserNeighbors  = "Find neighbors of users"
-	TaskAnalyze            = "Analyze click-through rate"
-	TaskFitRankingModel    = "Fit collaborative filtering model"
-	TaskFitClickModel      = "Fit click-through rate prediction model"
-	TaskSearchRankingModel = "Search collaborative filtering  model"
-	TaskSearchClickModel   = "Search click-through rate prediction model"
+	TaskLoadDataset            = "Load dataset"
+	TaskFindItemNeighbors      = "Find neighbors of items"
+	TaskFindUserNeighbors      = "Find neighbors of users"
+	TaskAnalyze                = "Analyze click-through rate"
+	TaskFitRankingModel        = "Fit collaborative filtering model"
+	TaskFitClickModel          = "Fit click-through rate prediction model"
+	TaskSearchRankingModel     = "Search collaborative filtering  model"
+	TaskSearchClickModel       = "Search click-through rate prediction model"
+	TaskCacheGarbageCollection = "Collect garbage in cache"
 
 	batchSize        = 10000
 	similarityShrink = 100
@@ -1084,6 +1086,79 @@ func (m *Master) runSearchClickModelTask(
 	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet,
 		m.taskMonitor.NewTaskTracker(TaskSearchClickModel), m.taskScheduler.NewRunner(TaskSearchClickModel))
 	return
+}
+
+func (m *Master) runCacheGarbageCollectionTask() error {
+	if m.rankingTrainSet == nil {
+		return nil
+	}
+	base.Logger().Info("start cache garbage collection")
+	m.taskMonitor.Start(TaskCacheGarbageCollection, m.rankingTrainSet.UserCount()*9+m.rankingTrainSet.ItemCount()*4)
+	var scanCount int
+	err := m.CacheClient.Scan(func(s string) error {
+		splits := strings.Split(s, "/")
+		if len(splits) <= 1 {
+			return nil
+		}
+		scanCount++
+		m.taskMonitor.Update(TaskCacheGarbageCollection, scanCount)
+		switch splits[0] {
+		case cache.UserNeighbors, cache.UserNeighborsDigest, cache.IgnoreItems,
+			cache.OfflineRecommend, cache.OfflineRecommendDigest, cache.CollaborativeRecommend,
+			cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
+			userId := splits[1]
+			// check user in dataset
+			if m.rankingTrainSet != nil && m.rankingTrainSet.UserIndex.ToNumber(userId) != base.NotId {
+				return nil
+			}
+			// check user in database
+			_, err := m.DataClient.GetUser(userId)
+			if !errors.IsNotFound(err) {
+				if err != nil {
+					base.Logger().Error("failed to load user", zap.String("user_id", userId), zap.Error(err))
+				}
+				return err
+			}
+			// delete user cache
+			switch splits[0] {
+			case cache.UserNeighbors, cache.IgnoreItems, cache.CollaborativeRecommend, cache.OfflineRecommend:
+				err = m.CacheClient.SetSorted(s, nil)
+			case cache.UserNeighborsDigest, cache.OfflineRecommendDigest,
+				cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
+				err = m.CacheClient.Delete(s)
+			}
+			if err != nil {
+				return errors.Trace(err)
+			}
+		case cache.ItemNeighbors, cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
+			itemId := splits[1]
+			// check item in dataset
+			if m.rankingTrainSet != nil && m.rankingTrainSet.ItemIndex.ToNumber(itemId) != base.NotId {
+				return nil
+			}
+			// check item in database
+			_, err := m.DataClient.GetItem(itemId)
+			if !errors.IsNotFound(err) {
+				if err != nil {
+					base.Logger().Error("failed to load item", zap.String("item_id", itemId), zap.Error(err))
+				}
+				return err
+			}
+			// delete item cache
+			switch splits[0] {
+			case cache.ItemNeighbors:
+				err = m.CacheClient.SetSorted(s, nil)
+			case cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
+				err = m.CacheClient.Delete(s)
+			}
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+		return nil
+	})
+	m.taskMonitor.Finish(TaskCacheGarbageCollection)
+	return errors.Trace(err)
 }
 
 // LoadDataFromDatabase loads dataset from data store.
