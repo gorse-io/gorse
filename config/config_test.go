@@ -56,6 +56,7 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, 5*time.Second, config.Server.ClockError)
 	assert.True(t, config.Server.AutoInsertUser)
 	assert.False(t, config.Server.AutoInsertItem)
+	assert.Equal(t, 10*time.Second, config.Server.CacheExpire)
 	// [recommend]
 	assert.Equal(t, 100, config.Recommend.CacheSize)
 	// [recommend.data_source]

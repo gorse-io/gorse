@@ -58,6 +58,9 @@ auto_insert_user = true
 # Insert new items while inserting feedback. The default value is true.
 auto_insert_item = false
 
+# Server-side cache expire time. The default value is 10s.
+cache_expire = "10s"
+
 [recommend]
 
 # The cache size for recommended/popular/latest items. The default value is 10.
