@@ -100,6 +100,77 @@ func (db *SQLDatabase) Init() error {
 	return nil
 }
 
+func (db *SQLDatabase) Scan(work func(string) error) error {
+	var (
+		valuerRows *sql.Rows
+		setRows    *sql.Rows
+		sortedRows *sql.Rows
+		err        error
+	)
+
+	// scan values
+	switch db.driver {
+	case Postgres:
+		valuerRows, err = db.client.Query("SELECT name FROM values")
+	case MySQL:
+		valuerRows, err = db.client.Query("SELECT name FROM `values`")
+	}
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer valuerRows.Close()
+	for valuerRows.Next() {
+		var key string
+		if err = valuerRows.Scan(&key); err != nil {
+			return errors.Trace(err)
+		}
+		if err = work(key); err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	// scan sets
+	setRows, err = db.client.Query("SELECT name FROM sets")
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer setRows.Close()
+	var prevKey string
+	for setRows.Next() {
+		var key string
+		if err = setRows.Scan(&key); err != nil {
+			return errors.Trace(err)
+		}
+		if key != prevKey {
+			if err = work(key); err != nil {
+				return errors.Trace(err)
+			}
+			prevKey = key
+		}
+	}
+
+	// scan sorted sets
+	sortedRows, err = db.client.Query("SELECT name FROM sorted_sets")
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer sortedRows.Close()
+	prevKey = ""
+	for sortedRows.Next() {
+		var key string
+		if err = sortedRows.Scan(&key); err != nil {
+			return errors.Trace(err)
+		}
+		if key != prevKey {
+			if err = work(key); err != nil {
+				return errors.Trace(err)
+			}
+			prevKey = key
+		}
+	}
+	return nil
+}
+
 func (db *SQLDatabase) Set(values ...Value) error {
 	if len(values) == 0 {
 		return nil

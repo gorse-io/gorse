@@ -15,6 +15,7 @@
 package master
 
 import (
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -599,4 +600,140 @@ func TestCheckUserNeighborCacheTimeout(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, "1"), time.Now()))
 	assert.NoError(t, err)
 	assert.False(t, m.checkUserNeighborCacheTimeout("1"))
+}
+
+func TestRunCacheGarbageCollectionTask(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+	m.GorseConfig = config.GetDefaultConfig()
+
+	// insert data
+	err := m.DataClient.BatchInsertFeedback([]data.Feedback{{FeedbackKey: data.FeedbackKey{UserId: "1", ItemId: "10"}}}, true, true, true)
+	assert.NoError(t, err)
+	err = m.runLoadDatasetTask()
+	assert.NoError(t, err)
+
+	// insert cache
+	timestamp := time.Now()
+	err = m.CacheClient.Set(
+		cache.String(cache.Key(cache.UserNeighborsDigest, "1"), "digest"),
+		cache.String(cache.Key(cache.OfflineRecommendDigest, "1"), "digest"),
+		cache.Time(cache.Key(cache.LastModifyUserTime, "1"), timestamp),
+		cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, "1"), timestamp),
+		cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "1"), timestamp),
+	)
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, "1"), []cache.Scored{{Id: "1", Score: 1}})
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, "1"), []cache.Scored{{Id: "1", Score: 1}})
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "1"), []cache.Scored{{Id: "1", Score: 1}})
+	assert.NoError(t, err)
+	err = m.CacheClient.Set(
+		cache.String(cache.Key(cache.ItemNeighborsDigest, "10"), "digest"),
+		cache.Time(cache.Key(cache.LastModifyItemTime, "10"), timestamp),
+		cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, "10"), timestamp),
+	)
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "10"), []cache.Scored{{Id: "1", Score: 1}})
+	assert.NoError(t, err)
+
+	err = m.CacheClient.Set(
+		cache.String(cache.Key(cache.UserNeighborsDigest, "2"), "digest"),
+		cache.String(cache.Key(cache.OfflineRecommendDigest, "2"), "digest"),
+		cache.Time(cache.Key(cache.LastModifyUserTime, "2"), timestamp),
+		cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, "2"), timestamp),
+		cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "2"), timestamp),
+	)
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.UserNeighbors, "2"), []cache.Scored{{Id: "1", Score: 1}})
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, "2"), []cache.Scored{{Id: "1", Score: 1}})
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "2"), []cache.Scored{{Id: "1", Score: 1}})
+	assert.NoError(t, err)
+	err = m.CacheClient.Set(
+		cache.String(cache.Key(cache.ItemNeighborsDigest, "20"), "digest"),
+		cache.Time(cache.Key(cache.LastModifyItemTime, "20"), timestamp),
+		cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, "20"), timestamp),
+	)
+	assert.NoError(t, err)
+	err = m.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "20"), []cache.Scored{{Id: "2", Score: 1}})
+	assert.NoError(t, err)
+
+	// remove cache
+	assert.NotNil(t, m.rankingTrainSet)
+	err = m.runCacheGarbageCollectionTask()
+	assert.NoError(t, err)
+
+	var s string
+	s, err = m.CacheClient.Get(cache.Key(cache.UserNeighborsDigest, "1")).String()
+	assert.NoError(t, err)
+	assert.Equal(t, "digest", s)
+	s, err = m.CacheClient.Get(cache.Key(cache.OfflineRecommendDigest, "1")).String()
+	assert.NoError(t, err)
+	assert.Equal(t, "digest", s)
+	var ts time.Time
+	ts, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, "1")).Time()
+	assert.NoError(t, err)
+	assert.Equal(t, timestamp.Truncate(time.Second), ts.Truncate(time.Second))
+	ts, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserNeighborsTime, "1")).Time()
+	assert.NoError(t, err)
+	assert.Equal(t, timestamp.Truncate(time.Second), ts.Truncate(time.Second))
+	ts, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, "1")).Time()
+	assert.NoError(t, err)
+	assert.Equal(t, timestamp.Truncate(time.Second), ts.Truncate(time.Second))
+	sorted, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "1"), 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{Id: "1", Score: 1}}, sorted)
+	sorted, err = m.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, "1"), 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{Id: "1", Score: 1}}, sorted)
+	sorted, err = m.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "1"), 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{Id: "1", Score: 1}}, sorted)
+
+	s, err = m.CacheClient.Get(cache.Key(cache.ItemNeighborsDigest, "10")).String()
+	assert.NoError(t, err)
+	assert.Equal(t, "digest", s)
+	ts, err = m.CacheClient.Get(cache.Key(cache.LastModifyItemTime, "10")).Time()
+	assert.NoError(t, err)
+	assert.Equal(t, timestamp.Truncate(time.Second), ts.Truncate(time.Second))
+	ts, err = m.CacheClient.Get(cache.Key(cache.LastUpdateItemNeighborsTime, "10")).Time()
+	assert.NoError(t, err)
+	assert.Equal(t, timestamp.Truncate(time.Second), ts.Truncate(time.Second))
+	sorted, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "10"), 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []cache.Scored{{Id: "1", Score: 1}}, sorted)
+
+	_, err = m.CacheClient.Get(cache.Key(cache.UserNeighborsDigest, "2")).String()
+	assert.True(t, errors.IsNotFound(err))
+	_, err = m.CacheClient.Get(cache.Key(cache.OfflineRecommendDigest, "2")).String()
+	assert.True(t, errors.IsNotFound(err))
+	_, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, "2")).Time()
+	assert.True(t, errors.IsNotFound(err))
+	_, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserNeighborsTime, "2")).Time()
+	assert.True(t, errors.IsNotFound(err))
+	_, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, "2")).Time()
+	assert.True(t, errors.IsNotFound(err))
+	sorted, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "2"), 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, sorted)
+	sorted, err = m.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, "2"), 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, sorted)
+	sorted, err = m.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "2"), 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, sorted)
+
+	_, err = m.CacheClient.Get(cache.Key(cache.ItemNeighborsDigest, "20")).String()
+	assert.True(t, errors.IsNotFound(err))
+	_, err = m.CacheClient.Get(cache.Key(cache.LastModifyItemTime, "20")).Time()
+	assert.True(t, errors.IsNotFound(err))
+	_, err = m.CacheClient.Get(cache.Key(cache.LastUpdateItemNeighborsTime, "20")).Time()
+	assert.True(t, errors.IsNotFound(err))
+	sorted, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "20"), 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, sorted)
 }

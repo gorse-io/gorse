@@ -215,6 +215,23 @@ func testSort(t *testing.T, db Database) {
 	assert.Equal(t, []float64{0}, ret)
 }
 
+func testScan(t *testing.T, db Database) {
+	err := db.Set(String("1", "1"))
+	assert.NoError(t, err)
+	err = db.SetSet("2", "21", "22", "23")
+	assert.NoError(t, err)
+	err = db.SetSorted("3", []Scored{{"1", 1}, {"2", 2}, {"3", 3}})
+	assert.NoError(t, err)
+
+	var keys []string
+	err = db.Scan(func(s string) error {
+		keys = append(keys, s)
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"1", "2", "3"}, keys)
+}
+
 func TestScored(t *testing.T) {
 	itemIds := []string{"2", "4", "6"}
 	scores := []float64{2, 4, 6}

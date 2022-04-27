@@ -27,6 +27,10 @@ func (NoDatabase) Init() error {
 	return ErrNoDatabase
 }
 
+func (NoDatabase) Scan(_ func(string) error) error {
+	return ErrNoDatabase
+}
+
 func (NoDatabase) Set(_ ...Value) error {
 	return ErrNoDatabase
 }

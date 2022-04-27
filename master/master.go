@@ -89,7 +89,8 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 	// create task monitor
 	taskMonitor := NewTaskMonitor()
 	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,
-		TaskFitRankingModel, TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel} {
+		TaskFitRankingModel, TaskFitClickModel, TaskAnalyze, TaskSearchRankingModel, TaskSearchClickModel,
+		TaskCacheGarbageCollection} {
 		taskMonitor.Pending(taskName)
 	}
 	return &Master{
@@ -288,9 +289,14 @@ func (m *Master) RunRagtagTasksLoop() {
 	)
 	for {
 		// analyze click-through-rate
-		if err := m.runAnalyzeTask(); err != nil {
+		if err = m.runAnalyzeTask(); err != nil {
 			base.Logger().Error("failed to analyze", zap.Error(err))
 			m.taskMonitor.Fail(TaskAnalyze, err.Error())
+		}
+		// garbage collection
+		if err = m.runCacheGarbageCollectionTask(); err != nil {
+			base.Logger().Error("failed to collect garbage", zap.Error(err))
+			m.taskMonitor.Fail(TaskCacheGarbageCollection, err.Error())
 		}
 		// search optimal ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
