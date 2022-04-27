@@ -806,7 +806,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		}
 		// collect top k
 		k := ctx.n - len(ctx.results)
-		filter := heap.NewTopKStringFilter(k)
+		filter := heap.NewTopKFilter[string, float64](k)
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
@@ -857,7 +857,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		}
 		// collect top k
 		k := ctx.n - len(ctx.results)
-		filter := heap.NewTopKStringFilter(k)
+		filter := heap.NewTopKFilter[string, float64](k)
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
@@ -1066,7 +1066,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		}
 	}
 	// collect top k
-	filter := heap.NewTopKStringFilter(n + offset)
+	filter := heap.NewTopKFilter[string, float64](n + offset)
 	for id, score := range candidates {
 		filter.Push(id, score)
 	}

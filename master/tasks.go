@@ -30,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"math"
 	"modernc.org/sortutil"
@@ -259,7 +260,8 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 
 func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledItems [][]int32,
 	labelIDF, userIDF []float32, completed chan struct{}) error {
-	return parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemIndex int) error {
+	var updateItemCount atomic.Float64
+	err := parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -267,11 +269,12 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.List()) {
 			return nil
 		}
+		updateItemCount.Add(1)
 		startTime := time.Now()
-		nearItemsFilters := make(map[string]*heap.TopKFilter)
-		nearItemsFilters[""] = heap.NewTopKFilter(m.GorseConfig.Recommend.CacheSize)
+		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float32])
+		nearItemsFilters[""] = heap.NewTopKFilter[int32, float32](m.GorseConfig.Recommend.CacheSize)
 		for _, category := range dataset.CategorySet.List() {
-			nearItemsFilters[category] = heap.NewTopKFilter(m.GorseConfig.Recommend.CacheSize)
+			nearItemsFilters[category] = heap.NewTopKFilter[int32, float32](m.GorseConfig.Recommend.CacheSize)
 		}
 
 		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
@@ -352,6 +355,11 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		return nil
 	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	UpdateItemNeighborsTotal.Set(updateItemCount.Load())
+	return nil
 }
 
 func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userIDF []float32, completed chan struct{}) error {
@@ -384,7 +392,8 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighbors.IndexRecall,
 			m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch, true)
 	}
-	return parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemIndex int) error {
+	var updateItemCount atomic.Float64
+	err := parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -392,6 +401,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.List()) {
 			return nil
 		}
+		updateItemCount.Add(1)
 		startTime := time.Now()
 		var neighbors map[string][]int32
 		var scores map[string][]float32
@@ -425,6 +435,11 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		FindItemNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		return nil
 	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	UpdateItemNeighborsTotal.Set(updateItemCount.Load())
+	return nil
 }
 
 // runFindUserNeighborsTask updates neighbors of users.
@@ -509,7 +524,8 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 }
 
 func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}) error {
-	return parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userIndex int) error {
+	var updateUserCount atomic.Float64
+	err := parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -517,8 +533,9 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		if !m.checkUserNeighborCacheTimeout(userId) {
 			return nil
 		}
+		updateUserCount.Add(1)
 		startTime := time.Now()
-		nearUsers := heap.NewTopKFilter(m.GorseConfig.Recommend.CacheSize)
+		nearUsers := heap.NewTopKFilter[int32, float32](m.GorseConfig.Recommend.CacheSize)
 
 		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
 			(m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto) {
@@ -590,6 +607,11 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		return nil
 	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	UpdateUserNeighborsTotal.Set(updateUserCount.Load())
+	return nil
 }
 
 func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}) error {
@@ -624,7 +646,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 			m.GorseConfig.Recommend.UserNeighbors.IndexRecall,
 			m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch, true)
 	}
-	return parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userIndex int) error {
+	var updateUserCount atomic.Float64
+	err := parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -632,6 +655,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		if !m.checkUserNeighborCacheTimeout(userId) {
 			return nil
 		}
+		updateUserCount.Add(1)
 		startTime := time.Now()
 		var neighbors []int32
 		var scores []float32
@@ -659,6 +683,11 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		FindUserNeighborsSeconds.Observe(time.Since(startTime).Seconds())
 		return nil
 	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	UpdateUserNeighborsTotal.Set(updateUserCount.Load())
+	return nil
 }
 
 func commonElements(a, b []int32, weights []float32) (float32, float32) {
@@ -1105,7 +1134,8 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 	}
 	base.Logger().Info("start cache garbage collection")
 	m.taskMonitor.Start(TaskCacheGarbageCollection, m.rankingTrainSet.UserCount()*9+m.rankingTrainSet.ItemCount()*4)
-	var scanCount int
+	var scanCount, reclaimCount int
+	start := time.Now()
 	err := m.CacheClient.Scan(func(s string) error {
 		splits := strings.Split(s, "/")
 		if len(splits) <= 1 {
@@ -1141,6 +1171,7 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
+			reclaimCount++
 		case cache.ItemNeighbors, cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
 			itemId := splits[1]
 			// check item in dataset
@@ -1165,6 +1196,7 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
+			reclaimCount++
 		}
 		return nil
 	})
@@ -1173,6 +1205,9 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 		return errors.Trace(err)
 	}
 	m.taskMonitor.Finish(TaskCacheGarbageCollection)
+	CacheScannedTotal.Set(float64(scanCount))
+	CacheReclaimedTotal.Set(float64(reclaimCount))
+	CacheScannedSeconds.Set(time.Since(start).Seconds())
 	return errors.Trace(err)
 }
 
@@ -1198,8 +1233,8 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	rankingDataset = ranking.NewMapIndexDataset()
 
 	// create filers for latest items
-	latestItemsFilters := make(map[string]*heap.TopKStringFilter)
-	latestItemsFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
+	latestItemsFilters := make(map[string]*heap.TopKFilter[string, float64])
+	latestItemsFilters[""] = heap.NewTopKFilter[string, float64](m.GorseConfig.Recommend.CacheSize)
 
 	// STEP 1: pull users
 	userLabelIndex := base.NewMapIndex()
@@ -1255,7 +1290,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				latestItemsFilters[""].Push(item.ItemId, float64(item.Timestamp.Unix()))
 				for _, category := range item.Categories {
 					if _, exist := latestItemsFilters[category]; !exist {
-						latestItemsFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
+						latestItemsFilters[category] = heap.NewTopKFilter[string, float64](m.GorseConfig.Recommend.CacheSize)
 					}
 					latestItemsFilters[category].Push(item.ItemId, float64(item.Timestamp.Unix()))
 				}
@@ -1401,14 +1436,14 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	}
 
 	// collect popular items
-	popularItemFilters := make(map[string]*heap.TopKStringFilter)
-	popularItemFilters[""] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
+	popularItemFilters := make(map[string]*heap.TopKFilter[string, float64])
+	popularItemFilters[""] = heap.NewTopKFilter[string, float64](m.GorseConfig.Recommend.CacheSize)
 	for itemIndex, val := range popularCount {
 		itemId := rankingDataset.ItemIndex.ToName(int32(itemIndex))
 		popularItemFilters[""].Push(itemId, float64(val))
 		for _, category := range rankingDataset.ItemCategories[itemIndex] {
 			if _, exist := popularItemFilters[category]; !exist {
-				popularItemFilters[category] = heap.NewTopKStringFilter(m.GorseConfig.Recommend.CacheSize)
+				popularItemFilters[category] = heap.NewTopKFilter[string, float64](m.GorseConfig.Recommend.CacheSize)
 			}
 			popularItemFilters[category].Push(itemId, float64(val))
 		}

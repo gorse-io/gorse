@@ -35,6 +35,7 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"math"
@@ -369,6 +370,8 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 		base.Logger().Info("complete building ranking index",
 			zap.Duration("build_time", time.Since(startTime)))
+	} else if w.rankingModel != nil {
+		CollaborativeFilteringIndexRecall.Set(1)
 	}
 
 	go func() {
@@ -402,6 +405,14 @@ func (w *Worker) Recommend(users []data.User) {
 	}()
 	// recommendation
 	startTime := time.Now()
+	var (
+		updateUserCount            atomic.Float64
+		collaborativeRecommendTime atomic.Float64
+		userBasedRecommendTime     atomic.Float64
+		itemBasedRecommendTime     atomic.Float64
+		latestRecommendTime        atomic.Float64
+		popularRecommendTime       atomic.Float64
+	)
 	userFeedbackCache := NewFeedbackCache(w.dataClient, w.cfg.Recommend.DataSource.PositiveFeedbackTypes...)
 	err = parallel.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		defer func() {
@@ -413,9 +424,9 @@ func (w *Worker) Recommend(users []data.User) {
 		if !w.checkRecommendCacheTimeout(userId, itemCategories) {
 			return nil
 		}
+		updateUserCount.Add(1)
 
 		// load historical items
-		startTime := time.Now()
 		historyItems, feedbacks, err := loadUserHistoricalItems(w.dataClient, userId)
 		excludeSet := set.NewStringSet(historyItems...)
 		if err != nil {
@@ -423,7 +434,6 @@ func (w *Worker) Recommend(users []data.User) {
 				zap.String("user_id", userId), zap.Error(err))
 			return errors.Trace(err)
 		}
-		OfflineRecommendStepSecondsVec.WithLabelValues("load_user_historical_items").Observe(time.Since(startTime).Seconds())
 
 		// load positive items
 		var positiveItems []string
@@ -463,7 +473,7 @@ func (w *Worker) Recommend(users []data.User) {
 					candidates[category] = append(candidates[category], items)
 				}
 				collaborativeUsed = true
-				CollaborativeRecommendSeconds.Observe(usedTime.Seconds())
+				collaborativeRecommendTime.Add(usedTime.Seconds())
 			} else if !w.rankingModel.IsUserPredictable(userIndex) {
 				base.Logger().Info("user is unpredictable", zap.String("user_id", userId))
 			}
@@ -502,14 +512,14 @@ func (w *Worker) Recommend(users []data.User) {
 					itemNeighborDigests.Add(digest)
 				}
 				// collect top k
-				filter := heap.NewTopKStringFilter(w.cfg.Recommend.CacheSize)
+				filter := heap.NewTopKFilter[string, float64](w.cfg.Recommend.CacheSize)
 				for id, score := range scores {
 					filter.Push(id, score)
 				}
 				ids, _ := filter.PopAll()
 				candidates[category] = append(candidates[category], ids)
 			}
-			OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Observe(time.Since(localStartTime).Seconds())
+			itemBasedRecommendTime.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #3: insert user-based items
@@ -548,10 +558,10 @@ func (w *Worker) Recommend(users []data.User) {
 				userNeighborDigests.Add(digest)
 			}
 			// collect top k
-			filters := make(map[string]*heap.TopKStringFilter)
-			filters[""] = heap.NewTopKStringFilter(w.cfg.Recommend.CacheSize)
+			filters := make(map[string]*heap.TopKFilter[string, float64])
+			filters[""] = heap.NewTopKFilter[string, float64](w.cfg.Recommend.CacheSize)
 			for _, category := range itemCategories {
-				filters[category] = heap.NewTopKStringFilter(w.cfg.Recommend.CacheSize)
+				filters[category] = heap.NewTopKFilter[string, float64](w.cfg.Recommend.CacheSize)
 			}
 			for id, score := range scores {
 				filters[""].Push(id, score)
@@ -563,7 +573,7 @@ func (w *Worker) Recommend(users []data.User) {
 				ids, _ := filter.PopAll()
 				candidates[category] = append(candidates[category], ids)
 			}
-			OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Observe(time.Since(localStartTime).Seconds())
+			userBasedRecommendTime.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #4: latest items.
@@ -583,7 +593,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				candidates[category] = append(candidates[category], recommend)
 			}
-			OfflineRecommendStepSecondsVec.WithLabelValues("load_latest_items").Observe(time.Since(localStartTime).Seconds())
+			latestRecommendTime.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #5: popular items.
@@ -603,7 +613,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				candidates[category] = append(candidates[category], recommend)
 			}
-			OfflineRecommendStepSecondsVec.WithLabelValues("load_popular_items").Observe(time.Since(localStartTime).Seconds())
+			popularRecommendTime.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// rank items from different recommenders
@@ -685,16 +695,21 @@ func (w *Worker) Recommend(users []data.User) {
 	}
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
+	UpdateUserRecommendTotal.Set(updateUserCount.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Set(itemBasedRecommendTime.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendTime.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("latest_recommend").Set(latestRecommendTime.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendTime.Load())
 }
 
 func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet *strset.Set, itemCache ItemCache) (map[string][]string, time.Duration, error) {
 	userIndex := w.rankingModel.GetUserIndex().ToNumber(userId)
 	itemIds := w.rankingModel.GetItemIndex().GetNames()
 	localStartTime := time.Now()
-	recItemsFilters := make(map[string]*heap.TopKStringFilter)
-	recItemsFilters[""] = heap.NewTopKStringFilter(w.cfg.Recommend.CacheSize)
+	recItemsFilters := make(map[string]*heap.TopKFilter[string, float64])
+	recItemsFilters[""] = heap.NewTopKFilter[string, float64](w.cfg.Recommend.CacheSize)
 	for _, category := range itemCategories {
-		recItemsFilters[category] = heap.NewTopKStringFilter(w.cfg.Recommend.CacheSize)
+		recItemsFilters[category] = heap.NewTopKFilter[string, float64](w.cfg.Recommend.CacheSize)
 	}
 	for itemIndex, itemId := range itemIds {
 		if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.rankingModel.IsItemPredictable(int32(itemIndex)) {
@@ -771,7 +786,6 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
 func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache map[string]data.Item) ([]cache.Scored, error) {
-	startTime := time.Now()
 	// concat candidates
 	memo := strset.New()
 	var itemIds []string
@@ -801,7 +815,6 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 		})
 	}
 	cache.SortScores(topItems)
-	OfflineRecommendStepSecondsVec.WithLabelValues("rank_by_click_trough_rate").Observe(time.Since(startTime).Seconds())
 	return topItems, nil
 }
 

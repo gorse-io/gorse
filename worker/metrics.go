@@ -20,7 +20,12 @@ import (
 )
 
 var (
-	OfflineRecommendStepSecondsVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	UpdateUserRecommendTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "worker",
+		Name:      "update_user_recommend_total",
+	})
+	OfflineRecommendStepSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
 		Name:      "offline_recommend_step_seconds",

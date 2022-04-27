@@ -20,7 +20,7 @@ import (
 
 func TestTopKFilter(t *testing.T) {
 	// Test a adjacent vec
-	a := NewTopKFilter(3)
+	a := NewTopKFilter[int32, float32](3)
 	a.Push(10, 2)
 	a.Push(20, 8)
 	a.Push(30, 1)
@@ -28,7 +28,7 @@ func TestTopKFilter(t *testing.T) {
 	assert.Equal(t, []int32{20, 10, 30}, elem)
 	assert.Equal(t, []float32{8, 2, 1}, scores)
 	// Test a full adjacent vec
-	a = NewTopKFilter(3)
+	a = NewTopKFilter[int32, float32](3)
 	a.Push(10, 2)
 	a.Push(20, 8)
 	a.Push(30, 1)
@@ -44,7 +44,7 @@ func TestTopKFilter(t *testing.T) {
 
 func TestTopKStringFilter(t *testing.T) {
 	// Test a adjacent vec
-	a := NewTopKStringFilter(3)
+	a := NewTopKFilter[string, float64](3)
 	a.Push("10", 2)
 	a.Push("20", 8)
 	a.Push("30", 1)
@@ -52,7 +52,7 @@ func TestTopKStringFilter(t *testing.T) {
 	assert.Equal(t, []string{"20", "10", "30"}, elem)
 	assert.Equal(t, []float64{8, 2, 1}, scores)
 	// Test a full adjacent vec
-	a = NewTopKStringFilter(3)
+	a = NewTopKFilter[string, float64](3)
 	a.Push("10", 2)
 	a.Push("20", 8)
 	a.Push("30", 1)

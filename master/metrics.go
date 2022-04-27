@@ -40,6 +40,31 @@ var (
 		Subsystem: "master",
 		Name:      "find_item_neighbors_seconds",
 	})
+	UpdateUserNeighborsTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "update_user_neighbors_total",
+	})
+	UpdateItemNeighborsTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "update_item_neighbors_total",
+	})
+	CacheScannedTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "cache_scanned_total",
+	})
+	CacheReclaimedTotal = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "cache_reclaimed_total",
+	})
+	CacheScannedSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "cache_scanned_seconds",
+	})
 
 	CollaborativeFilteringNDCG10 = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
