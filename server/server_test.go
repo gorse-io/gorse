@@ -20,8 +20,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/storage/cache"
 	"google.golang.org/grpc"
 	"net"
+	"strconv"
 	"testing"
 )
 
@@ -96,4 +98,32 @@ func TestServer_Sync(t *testing.T) {
 	assert.Equal(t, "redis://"+master.dataStore.Addr(), serv.dataPath)
 	assert.Equal(t, "redis://"+master.cacheStore.Addr(), serv.cachePath)
 	master.Stop()
+}
+
+func TestSortedSet(t *testing.T) {
+	var scores []cache.Scored
+	for i := 0; i < 100; i++ {
+		scores = append(scores, cache.Scored{Id: strconv.Itoa(i), Score: float64(i)})
+	}
+	// create sorted set
+	sortedSet := NewSortSet(scores)
+	for i := 0; i < 100; i++ {
+		score, exist := sortedSet.GetScore(strconv.Itoa(i))
+		assert.True(t, exist)
+		assert.Equal(t, float64(i), score)
+	}
+	assert.Equal(t, 100, sortedSet.Size())
+	// add scores
+	for i := 0; i < 100; i++ {
+		sortedSet.AddScore(strconv.Itoa(i), float64(i*2))
+		score, exist := sortedSet.GetScore(strconv.Itoa(i))
+		assert.True(t, exist)
+		assert.Equal(t, float64(i*2), score)
+	}
+	assert.Equal(t, 100, sortedSet.Size())
+	sortedSet.AddScore(strconv.Itoa(101), float64(101))
+	score, exist := sortedSet.GetScore(strconv.Itoa(101))
+	assert.True(t, exist)
+	assert.Equal(t, float64(101), score)
+	assert.Equal(t, 101, sortedSet.Size())
 }

@@ -19,9 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
-	"math/rand"
-	"time"
-
+	"github.com/emirpasic/gods/trees/redblacktree"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -29,6 +27,9 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"math/rand"
+	"sync"
+	"time"
 )
 
 // Server manages states of a server node.
@@ -146,4 +147,100 @@ func (s *Server) Sync() {
 		}
 		time.Sleep(s.GorseConfig.Master.MetaTimeout)
 	}
+}
+
+type ServerCache struct {
+	data   sync.Map
+	server *Server
+}
+
+func (sc *ServerCache) sync() {
+	// load categories
+	categories, err := sc.server.CacheClient.GetSet(cache.ItemCategories)
+	if err != nil {
+		base.Logger().Error("failed to get categories", zap.Error(err))
+		return
+	}
+	for _, category := range append([]string{""}, categories...) {
+		// load the latest items
+		items, err := sc.server.CacheClient.GetSorted(cache.Key(cache.LatestItems, category), 0, -1)
+		if err != nil {
+			base.Logger().Error("failed to get latest items", zap.Error(err))
+			return
+		}
+		sc.data.Store(cache.Key(cache.LatestItems, category), NewSortSet(items))
+		// load popular items
+		items, err = sc.server.CacheClient.GetSorted(cache.Key(cache.PopularItems, category), 0, -1)
+		if err != nil {
+			base.Logger().Error("failed to get popular items", zap.Error(err))
+			return
+		}
+		sc.data.Store(cache.Key(cache.PopularItems, category), NewSortSet(items))
+	}
+}
+
+func (sc *ServerCache) GetSortedScore() {
+
+}
+
+func (sc *ServerCache) SetSorted() {
+
+}
+
+type SortedSet struct {
+	hashTable map[string]float64 // map members to scores
+	rbTree    *redblacktree.Tree // map scores to members
+	lock      sync.RWMutex
+}
+
+func NewSortSet(scores []cache.Scored) *SortedSet {
+	s := &SortedSet{
+		hashTable: make(map[string]float64),
+		rbTree: redblacktree.NewWith(func(a, b interface{}) int {
+			s1 := a.(cache.Scored)
+			s2 := b.(cache.Scored)
+			if s1.Score < s2.Score {
+				return -1
+			} else if s1.Score > s2.Score {
+				return 1
+			} else if s1.Id < s2.Id {
+				return -1
+			} else if s1.Id > s2.Id {
+				return 1
+			}
+			return 0
+		}),
+	}
+	for _, score := range scores {
+		s.hashTable[score.Id] = score.Score
+		s.rbTree.Put(score, nil)
+	}
+	return s
+}
+
+func (s *SortedSet) GetScore(member string) (float64, bool) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	score, ok := s.hashTable[member]
+	return score, ok
+}
+
+func (s *SortedSet) AddScore(member string, score float64) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	prevScore, exist := s.hashTable[member]
+	if exist {
+		s.rbTree.Remove(cache.Scored{Id: member, Score: prevScore})
+	}
+	s.hashTable[member] = score
+	s.rbTree.Put(cache.Scored{Id: member, Score: score}, nil)
+}
+
+func (s *SortedSet) Size() int {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	if len(s.hashTable) != s.rbTree.Size() {
+		panic("length must be equal")
+	}
+	return len(s.hashTable)
 }
