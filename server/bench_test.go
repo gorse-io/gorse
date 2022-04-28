@@ -802,7 +802,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 				if i%2 == 0 {
 					expects[i/2] = scores[i]
 				} else {
-					err := s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, strconv.Itoa(i)), 1))
+					err := s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{strconv.Itoa(i), float64(time.Now().Unix())}}))
 					require.NoError(b, err)
 				}
 			}

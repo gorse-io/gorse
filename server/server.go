@@ -19,6 +19,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/juju/errors"
+	"github.com/samber/lo"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -26,6 +29,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -59,7 +63,8 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 			WebService:  new(restful.WebService),
 		},
 	}
-	s.RestServer.ServerCache = NewPopularItemsCache(&s.RestServer)
+	s.RestServer.PopularItemsCache = NewPopularItemsCache(&s.RestServer)
+	s.RestServer.HiddenItemsCache = NewHiddenItemsCache(&s.RestServer)
 	return s
 }
 
@@ -165,7 +170,7 @@ func NewPopularItemsCache(s *RestServer) *PopularItemsCache {
 	go func() {
 		for {
 			sc.sync()
-			base.Logger().Info("refresh server side cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
+			base.Logger().Debug("refresh server side popular items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
 			time.Sleep(s.GorseConfig.Server.CacheExpire)
 		}
 	}()
@@ -185,7 +190,9 @@ func (sc *PopularItemsCache) sync() {
 	// load popular items
 	items, err := sc.server.CacheClient.GetSorted(cache.Key(cache.PopularItems), 0, -1)
 	if err != nil {
-		base.Logger().Error("failed to get popular items", zap.Error(err))
+		if !errors.IsNotAssigned(err) {
+			base.Logger().Error("failed to get popular items", zap.Error(err))
+		}
 		return
 	}
 	scores := make(map[string]float64)
@@ -205,4 +212,63 @@ func (sc *PopularItemsCache) GetSortedScore(member string) float64 {
 	defer sc.mu.RUnlock()
 	score, _ := sc.scores[member]
 	return score
+}
+
+type HiddenItemsCache struct {
+	server      *RestServer
+	mu          sync.RWMutex
+	hiddenItems *strset.Set
+	updateTime  time.Time
+	test        bool
+}
+
+func NewHiddenItemsCache(s *RestServer) *HiddenItemsCache {
+	hc := &HiddenItemsCache{
+		server:      s,
+		hiddenItems: strset.New(),
+	}
+	go func() {
+		for {
+			hc.sync()
+			base.Logger().Debug("refresh server side hidden items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
+			time.Sleep(hc.server.GorseConfig.Server.CacheExpire)
+		}
+	}()
+	return hc
+}
+
+func (hc *HiddenItemsCache) sync() {
+	ts := time.Now()
+	// load hidden items
+	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(ts.Unix()))
+	if err != nil {
+		if !errors.IsNotAssigned(err) {
+			base.Logger().Error("failed to load hidden items", zap.Error(err))
+		}
+		return
+	}
+	if len(score) > 0 {
+		fmt.Println(score)
+	}
+	hiddenItems := strset.New(cache.RemoveScores(score)...)
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	hc.hiddenItems = hiddenItems
+	hc.updateTime = ts
+}
+
+func (hc *HiddenItemsCache) IsHidden(members []string) ([]bool, error) {
+	hc.mu.RLock()
+	hiddenItems := hc.hiddenItems
+	updateTime := hc.updateTime
+	hc.mu.RUnlock()
+	// load hidden items
+	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, float64(updateTime.Unix()), float64(time.Now().Unix()))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	deltaHiddenItems := strset.New(cache.RemoveScores(score)...)
+	return lo.Map(members, func(t string, i int) bool {
+		return hiddenItems.Has(t) || deltaHiddenItems.Has(t)
+	}), nil
 }

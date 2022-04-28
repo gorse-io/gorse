@@ -77,6 +77,7 @@ type ServerConfig struct {
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
 	CacheSize     int                 `mapstructure:"cache_size" validate:"gt=0"`
+	CacheExpire   time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
 	DataSource    DataSourceConfig    `mapstructure:"data_source"`
 	Popular       PopularConfig       `mapstructure:"popular"`
 	UserNeighbors NeighborsConfig     `mapstructure:"user_neighbors"`
@@ -157,7 +158,8 @@ func GetDefaultConfig() *Config {
 			CacheExpire:    10 * time.Second,
 		},
 		Recommend: RecommendConfig{
-			CacheSize: 100,
+			CacheSize:   100,
+			CacheExpire: 72 * time.Hour,
 			Popular: PopularConfig{
 				PopularWindow: 180 * 24 * time.Hour,
 			},
@@ -361,6 +363,7 @@ func setDefault() {
 	viper.SetDefault("server.cache_expire", defaultConfig.Server.CacheExpire)
 	// [recommend]
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
+	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
 	// [recommend.popular]
 	viper.SetDefault("recommend.popular.popular_window", defaultConfig.Recommend.Popular.PopularWindow)
 	// [recommend.user_neighbors]

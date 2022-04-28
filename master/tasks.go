@@ -727,6 +727,10 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 		}
 		return true
 	}
+	// check cache expire
+	if updateTime.Before(time.Now().Add(-m.GorseConfig.Recommend.CacheExpire)) {
+		return true
+	}
 	// check time
 	return updateTime.Unix() <= modifiedTime.Unix()
 }
@@ -776,6 +780,10 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 		if !errors.IsNotFound(err) {
 			base.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
 		}
+		return true
+	}
+	// check cache expire
+	if updateTime.Before(time.Now().Add(-m.GorseConfig.Recommend.CacheExpire)) {
 		return true
 	}
 	// check time
@@ -1157,6 +1165,10 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 		}
 		return nil
 	})
+	// remove stale hidden items
+	if err := m.CacheClient.RemSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(time.Now().Add(-m.GorseConfig.Recommend.CacheExpire).Unix())); err != nil {
+		return errors.Trace(err)
+	}
 	m.taskMonitor.Finish(TaskCacheGarbageCollection)
 	return errors.Trace(err)
 }

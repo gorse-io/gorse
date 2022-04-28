@@ -59,6 +59,7 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, 10*time.Second, config.Server.CacheExpire)
 	// [recommend]
 	assert.Equal(t, 100, config.Recommend.CacheSize)
+	assert.Equal(t, 72*time.Hour, config.Recommend.CacheExpire)
 	// [recommend.data_source]
 	assert.Equal(t, []string{"star", "like"}, config.Recommend.DataSource.PositiveFeedbackTypes)
 	assert.Equal(t, []string{"read"}, config.Recommend.DataSource.ReadFeedbackTypes)
