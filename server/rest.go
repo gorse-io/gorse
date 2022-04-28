@@ -40,7 +40,6 @@ import (
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
-	ServerCache *PopularItemsCache
 	CacheClient cache.Database
 	DataClient  data.Database
 	GorseConfig *config.Config
@@ -49,6 +48,9 @@ type RestServer struct {
 	IsDashboard bool
 	DisableLog  bool
 	WebService  *restful.WebService
+
+	PopularItemsCache *PopularItemsCache
+	HiddenItemsCache  *HiddenItemsCache
 }
 
 // StartHttpServer starts the REST-ful API server.
@@ -700,14 +702,14 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 }
 
 func (s *RestServer) FilterOutHiddenScores(items []cache.Scored) []cache.Scored {
-	isHidden, err := s.CacheClient.Exists(cache.BatchKey(cache.HiddenItems, cache.RemoveScores(items)...)...)
+	isHidden, err := s.HiddenItemsCache.IsHidden(cache.RemoveScores(items))
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return items
 	}
 	results := make([]cache.Scored, 0, len(items))
 	for i := range isHidden {
-		if isHidden[i] == 0 {
+		if !isHidden[i] {
 			results = append(results, items[i])
 		}
 	}
@@ -719,14 +721,14 @@ func (s *RestServer) filterOutHiddenFeedback(feedbacks []data.Feedback) []data.F
 	for i, item := range feedbacks {
 		names[i] = item.ItemId
 	}
-	isHidden, err := s.CacheClient.Exists(cache.BatchKey(cache.HiddenItems, names...)...)
+	isHidden, err := s.HiddenItemsCache.IsHidden(names)
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return feedbacks
 	}
 	var results []data.Feedback
 	for i := range isHidden {
-		if isHidden[i] == 0 {
+		if !isHidden[i] {
 			results = append(results, feedbacks[i])
 		}
 	}
@@ -1240,7 +1242,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	popularScores := make(map[string][]cache.Scored)
 	var itemIds []string
 	popularScore := lo.Map(temp, func(item Item, i int) float64 {
-		return s.ServerCache.GetSortedScore(item.ItemId)
+		return s.PopularItemsCache.GetSortedScore(item.ItemId)
 	})
 	for i, item := range temp {
 		// parse datetime
@@ -1358,9 +1360,9 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	if patch.IsHidden != nil {
 		var err error
 		if *patch.IsHidden {
-			err = s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, itemId), 1))
+			err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{itemId, float64(time.Now().Unix())}}))
 		} else {
-			err = s.CacheClient.Delete(cache.Key(cache.HiddenItems, itemId))
+			err = s.CacheClient.RemSorted(cache.HiddenItemsV2, itemId)
 		}
 		if err != nil && !errors.IsNotFound(err) {
 			InternalServerError(response, err)
@@ -1374,7 +1376,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 			InternalServerError(response, err)
 			return
 		}
-		popularScore := s.ServerCache.GetSortedScore(itemId)
+		popularScore := s.PopularItemsCache.GetSortedScore(itemId)
 		var sortedSets []cache.SortedSet
 		for _, category := range append([]string{""}, item.Categories...) {
 			sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}))
@@ -1443,7 +1445,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert deleted item to cache
-	if err := s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, itemId), 1)); err != nil {
+	if err := s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{itemId, float64(time.Now().Unix())}})); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1497,7 +1499,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		return
 	}
 	// insert to popular
-	popularScore := s.ServerCache.GetSortedScore(itemId)
+	popularScore := s.PopularItemsCache.GetSortedScore(itemId)
 	if popularScore > 0 {
 		if err = s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}})); err != nil {
 			InternalServerError(response, err)

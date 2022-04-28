@@ -34,7 +34,10 @@ const (
 	//  Ignored items      - ignore_items/{user_id}
 	IgnoreItems = "ignore_items"
 
-	HiddenItems = "hidden_items" // hidden items
+	// HiddenItemsV2 is sorted set of hidden items.
+	//  Global hidden items 	- hidden_items_v2
+	//  Category hidden items   - hidden_items_v2/{category}
+	HiddenItemsV2 = "hidden_items_v2"
 
 	// ItemNeighbors is sorted set of neighbors for each item.
 	//  Global item neighbors      - item_neighbors/{item_id}

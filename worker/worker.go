@@ -940,6 +940,10 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 		}
 		return true
 	}
+	// check cache expire
+	if recommendTime.Before(time.Now().Add(-w.cfg.Recommend.CacheExpire)) {
+		return true
+	}
 	// check time
 	if activeTime.Before(recommendTime) {
 		timeoutTime := recommendTime.Add(w.cfg.Recommend.Offline.RefreshRecommendPeriod)

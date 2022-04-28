@@ -55,7 +55,8 @@ func newMockServer(t *testing.T) *mockServer {
 	// configuration
 	s.GorseConfig = config.GetDefaultConfig()
 	s.GorseConfig.Server.APIKey = apiKey
-	s.ServerCache = newPopularItemsCacheForTest(&s.RestServer)
+	s.PopularItemsCache = newPopularItemsCacheForTest(&s.RestServer)
+	s.HiddenItemsCache = NewHiddenItemsCache(&s.RestServer)
 	s.WebService = new(restful.WebService)
 	s.CreateWebService()
 	// create handler
@@ -337,9 +338,9 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
-	isHidden, err := s.CacheClient.Get(cache.Key(cache.HiddenItems, "6")).Integer()
+	isHidden, err := s.HiddenItemsCache.IsHidden([]string{"6"})
 	assert.NoError(t, err)
-	assert.Equal(t, 1, isHidden)
+	assert.True(t, isHidden[0])
 	// get latest items
 	apitest.New().
 		Handler(s.handler).
@@ -431,9 +432,9 @@ func TestServer_Items(t *testing.T) {
 			Timestamp:  timestamp,
 		})).
 		End()
-	isHidden, err = s.CacheClient.Get(cache.Key(cache.HiddenItems, "2")).Integer()
+	isHidden, err = s.HiddenItemsCache.IsHidden([]string{"2"})
 	assert.NoError(t, err)
-	assert.Equal(t, 1, isHidden)
+	assert.True(t, isHidden[0])
 	apitest.New().
 		Handler(s.handler).
 		Patch("/api/item/2").
@@ -794,7 +795,7 @@ func TestServer_Sort(t *testing.T) {
 			}
 			err := s.CacheClient.SetSorted(operator.Key, scores)
 			assert.NoError(t, err)
-			err = s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, strconv.Itoa(i))+"3", 1))
+			err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{strconv.Itoa(i) + "3", float64(time.Now().Unix())}}))
 			assert.NoError(t, err)
 			apitest.New().
 				Handler(s.handler).
@@ -943,7 +944,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	// insert hidden items
 	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
-	err = s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, "0"), 1))
+	err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{"0", float64(time.Now().Unix())}}))
 	assert.NoError(t, err)
 	// insert recommendation
 	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{
@@ -1052,7 +1053,7 @@ func TestServer_GetRecommends_Replacement(t *testing.T) {
 	// insert hidden items
 	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
-	err = s.CacheClient.Set(cache.Integer(cache.Key(cache.HiddenItems, "0"), 1))
+	err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{"0", float64(time.Now().Unix())}}))
 	assert.NoError(t, err)
 	// insert recommendation
 	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{

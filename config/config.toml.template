@@ -66,6 +66,9 @@ cache_expire = "10s"
 # The cache size for recommended/popular/latest items. The default value is 10.
 cache_size = 100
 
+# Recommended cache expire time. The default value is 72h.
+cache_expire = "72h"
+
 [recommend.data_source]
 
 # The feedback types for positive events.
