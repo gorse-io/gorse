@@ -55,6 +55,7 @@ func newMockServer(t *testing.T) *mockServer {
 	// configuration
 	s.GorseConfig = config.GetDefaultConfig()
 	s.GorseConfig.Server.APIKey = apiKey
+	s.ServerCache = newPopularItemsCacheForTest(&s.RestServer)
 	s.WebService = new(restful.WebService)
 	s.CreateWebService()
 	// create handler

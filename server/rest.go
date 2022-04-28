@@ -40,6 +40,7 @@ import (
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
+	ServerCache *PopularItemsCache
 	CacheClient cache.Database
 	DataClient  data.Database
 	GorseConfig *config.Config
@@ -1238,10 +1239,9 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	timeScores := make(map[string][]cache.Scored)
 	popularScores := make(map[string][]cache.Scored)
 	var itemIds []string
-	members := lo.Map(temp, func(item Item, i int) cache.SetMember {
-		return cache.Member(cache.PopularItems, item.ItemId)
+	popularScore := lo.Map(temp, func(item Item, i int) float64 {
+		return s.ServerCache.GetSortedScore(item.ItemId)
 	})
-	popularScore, _ := s.CacheClient.GetSortedScores(members...)
 	for i, item := range temp {
 		// parse datetime
 		var timestamp time.Time
@@ -1374,12 +1374,12 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 			InternalServerError(response, err)
 			return
 		}
-		popularScores, _ := s.CacheClient.GetSortedScores(cache.Member(cache.PopularItems, itemId))
+		popularScore := s.ServerCache.GetSortedScore(itemId)
 		var sortedSets []cache.SortedSet
 		for _, category := range append([]string{""}, item.Categories...) {
 			sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}}))
-			if popularScores[0] > 0 {
-				sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScores[0]}}))
+			if popularScore > 0 {
+				sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}}))
 			}
 		}
 		if err = s.CacheClient.AddSorted(sortedSets...); err != nil {
@@ -1497,9 +1497,9 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		return
 	}
 	// insert to popular
-	popularScores, _ := s.CacheClient.GetSortedScores(cache.Member(cache.PopularItems, itemId))
-	if popularScores[0] > 0 {
-		if err = s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScores[0]}})); err != nil {
+	popularScore := s.ServerCache.GetSortedScore(itemId)
+	if popularScore > 0 {
+		if err = s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}})); err != nil {
 			InternalServerError(response, err)
 			return
 		}

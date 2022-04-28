@@ -268,7 +268,6 @@ type Database interface {
 	RemSet(key string, members ...string) error
 
 	AddSorted(sortedSets ...SortedSet) error
-	GetSortedScores(members ...SetMember) ([]float64, error)
 	GetSorted(key string, begin, end int) ([]Scored, error)
 	GetSortedByScore(key string, begin, end float64) ([]Scored, error)
 	RemSortedByScore(key string, begin, end float64) error

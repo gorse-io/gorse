@@ -70,11 +70,6 @@ func (NoDatabase) RemSet(_ string, _ ...string) error {
 	return ErrNoDatabase
 }
 
-// GetSortedScores method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSortedScores(_ ...SetMember) ([]float64, error) {
-	return nil, ErrNoDatabase
-}
-
 // GetSorted method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetSorted(_ string, _, _ int) ([]Scored, error) {
 	return nil, ErrNoDatabase

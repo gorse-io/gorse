@@ -17,7 +17,6 @@ package cache
 import (
 	"context"
 	"github.com/juju/errors"
-	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -299,39 +298,6 @@ func (m MongoDB) RemSet(name string, members ...string) error {
 	}
 	_, err := c.BulkWrite(ctx, models)
 	return errors.Trace(err)
-}
-
-func (m MongoDB) GetSortedScores(members ...SetMember) ([]float64, error) {
-	if len(members) == 0 {
-		return nil, nil
-	}
-	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sorted_sets")
-	conditions := lo.Map(members, func(member SetMember, _ int) bson.D {
-		return bson.D{
-			{"name", member.name},
-			{"member", member.member},
-		}
-	})
-	r, err := c.Find(ctx, bson.D{{"$or", conditions}})
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	resultsMap := make(map[SetMember]float64)
-	for r.Next(ctx) {
-		var doc bson.Raw
-		if err = r.Decode(&doc); err != nil {
-			return nil, err
-		}
-		member := SetMember{
-			name:   doc.Lookup("name").StringValue(),
-			member: doc.Lookup("member").StringValue(),
-		}
-		resultsMap[member] = doc.Lookup("score").Double()
-	}
-	return lo.Map(members, func(member SetMember, _ int) float64 {
-		return resultsMap[member]
-	}), nil
 }
 
 func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {

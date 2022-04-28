@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/emirpasic/gods/trees/redblacktree"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -47,7 +46,7 @@ type Server struct {
 
 // NewServer creates a server node.
 func NewServer(masterHost string, masterPort int, serverHost string, serverPort int, cacheFile string) *Server {
-	return &Server{
+	s := &Server{
 		masterHost: masterHost,
 		masterPort: masterPort,
 		cacheFile:  cacheFile,
@@ -60,6 +59,8 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 			WebService:  new(restful.WebService),
 		},
 	}
+	s.RestServer.ServerCache = NewPopularItemsCache(&s.RestServer)
+	return s
 }
 
 // Serve starts a server node.
@@ -149,98 +150,59 @@ func (s *Server) Sync() {
 	}
 }
 
-type ServerCache struct {
-	data   sync.Map
-	server *Server
+type PopularItemsCache struct {
+	mu     sync.RWMutex
+	scores map[string]float64
+	server *RestServer
+	test   bool
 }
 
-func (sc *ServerCache) sync() {
-	// load categories
-	categories, err := sc.server.CacheClient.GetSet(cache.ItemCategories)
+func NewPopularItemsCache(s *RestServer) *PopularItemsCache {
+	sc := &PopularItemsCache{
+		server: s,
+		scores: make(map[string]float64),
+	}
+	go func() {
+		for {
+			sc.sync()
+			base.Logger().Info("refresh server side cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
+			time.Sleep(s.GorseConfig.Server.CacheExpire)
+		}
+	}()
+	return sc
+}
+
+func newPopularItemsCacheForTest(s *RestServer) *PopularItemsCache {
+	sc := &PopularItemsCache{
+		server: s,
+		scores: make(map[string]float64),
+		test:   true,
+	}
+	return sc
+}
+
+func (sc *PopularItemsCache) sync() {
+	// load popular items
+	items, err := sc.server.CacheClient.GetSorted(cache.Key(cache.PopularItems), 0, -1)
 	if err != nil {
-		base.Logger().Error("failed to get categories", zap.Error(err))
+		base.Logger().Error("failed to get popular items", zap.Error(err))
 		return
 	}
-	for _, category := range append([]string{""}, categories...) {
-		// load the latest items
-		items, err := sc.server.CacheClient.GetSorted(cache.Key(cache.LatestItems, category), 0, -1)
-		if err != nil {
-			base.Logger().Error("failed to get latest items", zap.Error(err))
-			return
-		}
-		sc.data.Store(cache.Key(cache.LatestItems, category), NewSortSet(items))
-		// load popular items
-		items, err = sc.server.CacheClient.GetSorted(cache.Key(cache.PopularItems, category), 0, -1)
-		if err != nil {
-			base.Logger().Error("failed to get popular items", zap.Error(err))
-			return
-		}
-		sc.data.Store(cache.Key(cache.PopularItems, category), NewSortSet(items))
+	scores := make(map[string]float64)
+	for _, item := range items {
+		scores[item.Id] = item.Score
 	}
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.scores = scores
 }
 
-func (sc *ServerCache) GetSortedScore() {
-
-}
-
-func (sc *ServerCache) SetSorted() {
-
-}
-
-type SortedSet struct {
-	hashTable map[string]float64 // map members to scores
-	rbTree    *redblacktree.Tree // map scores to members
-	lock      sync.RWMutex
-}
-
-func NewSortSet(scores []cache.Scored) *SortedSet {
-	s := &SortedSet{
-		hashTable: make(map[string]float64),
-		rbTree: redblacktree.NewWith(func(a, b interface{}) int {
-			s1 := a.(cache.Scored)
-			s2 := b.(cache.Scored)
-			if s1.Score < s2.Score {
-				return -1
-			} else if s1.Score > s2.Score {
-				return 1
-			} else if s1.Id < s2.Id {
-				return -1
-			} else if s1.Id > s2.Id {
-				return 1
-			}
-			return 0
-		}),
+func (sc *PopularItemsCache) GetSortedScore(member string) float64 {
+	if sc.test {
+		sc.sync()
 	}
-	for _, score := range scores {
-		s.hashTable[score.Id] = score.Score
-		s.rbTree.Put(score, nil)
-	}
-	return s
-}
-
-func (s *SortedSet) GetScore(member string) (float64, bool) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	score, ok := s.hashTable[member]
-	return score, ok
-}
-
-func (s *SortedSet) AddScore(member string, score float64) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	prevScore, exist := s.hashTable[member]
-	if exist {
-		s.rbTree.Remove(cache.Scored{Id: member, Score: prevScore})
-	}
-	s.hashTable[member] = score
-	s.rbTree.Put(cache.Scored{Id: member, Score: score}, nil)
-}
-
-func (s *SortedSet) Size() int {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	if len(s.hashTable) != s.rbTree.Size() {
-		panic("length must be equal")
-	}
-	return len(s.hashTable)
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+	score, _ := sc.scores[member]
+	return score
 }
