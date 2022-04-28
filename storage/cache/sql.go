@@ -455,44 +455,6 @@ func (db *SQLDatabase) AddSorted(sortedSets ...SortedSet) error {
 	return nil
 }
 
-func (db *SQLDatabase) GetSortedScores(members ...SetMember) ([]float64, error) {
-	if len(members) == 0 {
-		return nil, nil
-	}
-	var args []interface{}
-	var builder strings.Builder
-	builder.WriteString("SELECT name, member, score FROM sorted_sets WHERE (name, member) IN (")
-	for _, member := range members {
-		if len(args) > 0 {
-			builder.WriteRune(',')
-		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
-		case MySQL:
-			builder.WriteString("(?,?)")
-		}
-		args = append(args, member.name, member.member)
-	}
-	builder.WriteString(")")
-	rs, err := db.client.Query(builder.String(), args...)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	memberMap := make(map[SetMember]float64)
-	for rs.Next() {
-		var member SetMember
-		var score float64
-		if err = rs.Scan(&member.name, &member.member, &score); err != nil {
-			return nil, errors.Trace(err)
-		}
-		memberMap[member] = score
-	}
-	return lo.Map(members, func(member SetMember, _ int) float64 {
-		return memberMap[member]
-	}), nil
-}
-
 func (db *SQLDatabase) GetSorted(key string, begin, end int) ([]Scored, error) {
 	var rs *sql.Rows
 	var err error

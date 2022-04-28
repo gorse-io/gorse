@@ -177,10 +177,6 @@ func testSort(t *testing.T, db Database) {
 		{"2", 1.2},
 		{"1", 1.1},
 	}, totalItems)
-	// Get score
-	ret, err := db.GetSortedScores(Member("sort", "4"), Member("sort", "2"), Member("sort", "200"))
-	assert.NoError(t, err, err)
-	assert.Equal(t, []float64{1.4, 1.2, 0}, ret)
 
 	// test set empty
 	err = db.SetSorted("sort", []Scored{})
@@ -206,13 +202,6 @@ func testSort(t *testing.T, db Database) {
 	scores, err = db.GetSorted("sort", 10, 5)
 	assert.NoError(t, err)
 	assert.Empty(t, scores)
-	ret, err = db.GetSortedScores()
-	assert.NoError(t, err)
-	assert.Empty(t, ret)
-	// test get non-existed score
-	ret, err = db.GetSortedScores(Member("sort", "10086"))
-	assert.NoError(t, err)
-	assert.Equal(t, []float64{0}, ret)
 }
 
 func testScan(t *testing.T, db Database) {

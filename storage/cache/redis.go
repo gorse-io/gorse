@@ -18,7 +18,6 @@ import (
 	"context"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
-	"github.com/samber/lo"
 	"strconv"
 )
 
@@ -157,31 +156,6 @@ func (r *Redis) RemSet(key string, members ...string) error {
 	}
 	ctx := context.Background()
 	return r.client.SRem(ctx, key, members).Err()
-}
-
-// GetSortedScores get scores of members from sorted sets.
-func (r *Redis) GetSortedScores(members ...SetMember) ([]float64, error) {
-	ctx := context.Background()
-	p := r.client.Pipeline()
-	results := lo.Map(members, func(member SetMember, i int) *redis.FloatCmd {
-		return p.ZScore(ctx, member.name, member.member)
-	})
-	_, err := p.Exec(ctx)
-	if err != nil && err != redis.Nil {
-		return nil, errors.Trace(err)
-	}
-	scores := make([]float64, len(members))
-	for i, result := range results {
-		score, err := result.Result()
-		if err == redis.Nil {
-			scores[i] = 0
-		} else if err != nil {
-			return nil, errors.Trace(err)
-		} else {
-			scores[i] = score
-		}
-	}
-	return scores, nil
 }
 
 // GetSorted get scores from sorted set.

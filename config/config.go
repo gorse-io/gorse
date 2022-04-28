@@ -71,6 +71,7 @@ type ServerConfig struct {
 	ClockError     time.Duration `mapstructure:"clock_error" validate:"gte=0"` // clock error in the cluster in seconds
 	AutoInsertUser bool          `mapstructure:"auto_insert_user"`             // insert new users while inserting feedback
 	AutoInsertItem bool          `mapstructure:"auto_insert_item"`             // insert new items while inserting feedback
+	CacheExpire    time.Duration `mapstructure:"cache_expire" validate:"gt=0"` // server-side cache expire time
 }
 
 // RecommendConfig is the configuration of recommendation setup.
@@ -153,6 +154,7 @@ func GetDefaultConfig() *Config {
 			ClockError:     5 * time.Second,
 			AutoInsertUser: true,
 			AutoInsertItem: true,
+			CacheExpire:    10 * time.Second,
 		},
 		Recommend: RecommendConfig{
 			CacheSize: 100,
@@ -356,6 +358,7 @@ func setDefault() {
 	viper.SetDefault("server.clock_error", defaultConfig.Server.ClockError)
 	viper.SetDefault("server.auto_insert_user", defaultConfig.Server.AutoInsertUser)
 	viper.SetDefault("server.auto_insert_item", defaultConfig.Server.AutoInsertItem)
+	viper.SetDefault("server.cache_expire", defaultConfig.Server.CacheExpire)
 	// [recommend]
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
 	// [recommend.popular]
