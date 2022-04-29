@@ -159,7 +159,7 @@ func testSort(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Empty(t, partItems)
 	// Remove score
-	err = db.RemSorted("sort", "0")
+	err = db.RemSorted(Member("sort", "0"))
 	assert.NoError(t, err)
 	totalItems, err = db.GetSorted("sort", 0, -1)
 	assert.NoError(t, err)

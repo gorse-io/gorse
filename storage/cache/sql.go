@@ -524,13 +524,28 @@ func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
 	return txn.Commit()
 }
 
-func (db *SQLDatabase) RemSorted(key, member string) error {
-	var err error
-	switch db.driver {
-	case Postgres:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN (($1, $2))", key, member)
-	case MySQL:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN ((?, ?))", key, member)
+func (db *SQLDatabase) RemSorted(members ...SetMember) error {
+	if len(members) == 0 {
+		return nil
 	}
-	return errors.Trace(err)
+	var args []interface{}
+	var builder strings.Builder
+	builder.WriteString("DELETE FROM sorted_sets WHERE (name, member) IN (")
+	for i, member := range members {
+		if i > 0 {
+			builder.WriteRune(',')
+		}
+		switch db.driver {
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		case MySQL:
+			builder.WriteString("(?,?)")
+		}
+		args = append(args, member.name, member.member)
+	}
+	builder.WriteString(")")
+	if _, err := db.client.Exec(builder.String(), args...); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }

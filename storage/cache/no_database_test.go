@@ -57,6 +57,6 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.AddSorted()
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSorted("", "")
+	err = database.RemSorted()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

@@ -213,7 +213,15 @@ func (r *Redis) SetSorted(key string, scores []Scored) error {
 }
 
 // RemSorted method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) RemSorted(key, member string) error {
+func (r *Redis) RemSorted(members ...SetMember) error {
+	if len(members) == 0 {
+		return nil
+	}
 	ctx := context.Background()
-	return r.client.ZRem(ctx, key, member).Err()
+	pipe := r.client.Pipeline()
+	for _, member := range members {
+		pipe.ZRem(ctx, member.name, member.member)
+	}
+	_, err := pipe.Exec(ctx)
+	return errors.Trace(err)
 }

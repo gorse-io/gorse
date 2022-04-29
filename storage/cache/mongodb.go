@@ -371,9 +371,16 @@ func (m MongoDB) SetSorted(name string, scores []Scored) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) RemSorted(name, member string) error {
+func (m MongoDB) RemSorted(members ...SetMember) error {
+	if len(members) == 0 {
+		return nil
+	}
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("sorted_sets")
-	_, err := c.DeleteOne(ctx, bson.M{"name": name, "member": member})
+	var models []mongo.WriteModel
+	for _, member := range members {
+		models = append(models, mongo.NewDeleteOneModel().SetFilter(bson.M{"name": member.name, "member": member.member}))
+	}
+	_, err := c.BulkWrite(ctx, models)
 	return errors.Trace(err)
 }

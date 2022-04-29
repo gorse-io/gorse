@@ -571,17 +571,6 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 	s.getSort(cache.Key(cache.UserNeighbors, userId), request, response)
 }
 
-// getSubscribe gets subscribed items of a user from database.
-//func (s *RestServer) getSubscribe(request *restful.Request, response *restful.Response) {
-//	// Authorize
-//	if !s.auth(request, response) {
-//		return
-//	}
-//	// Get user id
-//	userId := request.PathParameter("user-id")
-//	s.getList(cache.SubscribeItems, userId, request, response)
-//}
-
 // getCategorizedCollaborative gets cached categorized recommended items from database.
 func (s *RestServer) getCategorizedCollaborative(request *restful.Request, response *restful.Response) {
 	// Get user id
@@ -1517,16 +1506,11 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		InternalServerError(response, err)
 		return
 	}
-	// insert to popular
+	// refresh cache
 	popularScore := s.PopularItemsCache.GetSortedScore(itemId)
-	if popularScore > 0 {
-		if err = s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{Id: itemId, Score: popularScore}})); err != nil {
-			InternalServerError(response, err)
-			return
-		}
-	}
-	// insert item to latest
-	if err = s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{Id: itemId, Score: float64(item.Timestamp.Unix())}})); err != nil {
+	modification := NewCacheModification(s.CacheClient)
+	modification.addItemCategory(itemId, category, float64(item.Timestamp.Unix()), popularScore)
+	if err = modification.Exec(); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1555,13 +1539,10 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 		InternalServerError(response, err)
 		return
 	}
-	// remove item from popular
-	if err = s.CacheClient.RemSorted(cache.Key(cache.PopularItems, category), itemId); err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// remove item from latest
-	if err = s.CacheClient.RemSorted(cache.Key(cache.LatestItems, category), itemId); err != nil {
+	// refresh cache
+	modification := NewCacheModification(s.CacheClient)
+	modification.deleteItemCategory(itemId, category)
+	if err = modification.Exec(); err != nil {
 		InternalServerError(response, err)
 		return
 	}
