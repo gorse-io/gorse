@@ -64,7 +64,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 		},
 	}
 	s.RestServer.PopularItemsCache = NewPopularItemsCache(&s.RestServer)
-	s.RestServer.HiddenItemsCache = NewHiddenItemsCache(&s.RestServer)
+	s.RestServer.HiddenItemsManager = NewHiddenItemsManager(&s.RestServer)
 	return s
 }
 
@@ -214,7 +214,7 @@ func (sc *PopularItemsCache) GetSortedScore(member string) float64 {
 	return score
 }
 
-type HiddenItemsCache struct {
+type HiddenItemsManager struct {
 	server      *RestServer
 	mu          sync.RWMutex
 	hiddenItems *strset.Set
@@ -222,8 +222,8 @@ type HiddenItemsCache struct {
 	test        bool
 }
 
-func NewHiddenItemsCache(s *RestServer) *HiddenItemsCache {
-	hc := &HiddenItemsCache{
+func NewHiddenItemsManager(s *RestServer) *HiddenItemsManager {
+	hc := &HiddenItemsManager{
 		server:      s,
 		hiddenItems: strset.New(),
 	}
@@ -237,7 +237,7 @@ func NewHiddenItemsCache(s *RestServer) *HiddenItemsCache {
 	return hc
 }
 
-func (hc *HiddenItemsCache) sync() {
+func (hc *HiddenItemsManager) sync() {
 	ts := time.Now()
 	// load hidden items
 	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(ts.Unix()))
@@ -257,7 +257,7 @@ func (hc *HiddenItemsCache) sync() {
 	hc.updateTime = ts
 }
 
-func (hc *HiddenItemsCache) IsHidden(members []string) ([]bool, error) {
+func (hc *HiddenItemsManager) IsHidden(members []string) ([]bool, error) {
 	hc.mu.RLock()
 	hiddenItems := hc.hiddenItems
 	updateTime := hc.updateTime
@@ -271,4 +271,10 @@ func (hc *HiddenItemsCache) IsHidden(members []string) ([]bool, error) {
 	return lo.Map(members, func(t string, i int) bool {
 		return hiddenItems.Has(t) || deltaHiddenItems.Has(t)
 	}), nil
+}
+
+func (hc *HiddenItemsManager) Hide(itemId string) error {
+	return hc.server.CacheClient.AddSorted(
+		cache.Sorted(cache.HiddenItemsV2,
+			[]cache.Scored{{itemId, float64(time.Now().Unix())}}))
 }

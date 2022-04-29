@@ -49,8 +49,8 @@ type RestServer struct {
 	DisableLog  bool
 	WebService  *restful.WebService
 
-	PopularItemsCache *PopularItemsCache
-	HiddenItemsCache  *HiddenItemsCache
+	PopularItemsCache  *PopularItemsCache
+	HiddenItemsManager *HiddenItemsManager
 }
 
 // StartHttpServer starts the REST-ful API server.
@@ -702,7 +702,7 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 }
 
 func (s *RestServer) FilterOutHiddenScores(items []cache.Scored) []cache.Scored {
-	isHidden, err := s.HiddenItemsCache.IsHidden(cache.RemoveScores(items))
+	isHidden, err := s.HiddenItemsManager.IsHidden(cache.RemoveScores(items))
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return items
@@ -721,7 +721,7 @@ func (s *RestServer) filterOutHiddenFeedback(feedbacks []data.Feedback) []data.F
 	for i, item := range feedbacks {
 		names[i] = item.ItemId
 	}
-	isHidden, err := s.HiddenItemsCache.IsHidden(names)
+	isHidden, err := s.HiddenItemsManager.IsHidden(names)
 	if err != nil {
 		base.Logger().Error("failed to check hidden items", zap.Error(err))
 		return feedbacks
@@ -1236,14 +1236,16 @@ type Item struct {
 }
 
 func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
-	var count int
-	items := make([]data.Item, 0, len(temp))
-	timeScores := make(map[string][]cache.Scored)
-	popularScores := make(map[string][]cache.Scored)
-	var itemIds []string
-	popularScore := lo.Map(temp, func(item Item, i int) float64 {
-		return s.PopularItemsCache.GetSortedScore(item.ItemId)
-	})
+	var (
+		count         int
+		hiddenItems   []string
+		items         = make([]data.Item, 0, len(temp))
+		timeScores    = make(map[string][]cache.Scored)
+		popularScores = make(map[string][]cache.Scored)
+		popularScore  = lo.Map(temp, func(item Item, i int) float64 {
+			return s.PopularItemsCache.GetSortedScore(item.ItemId)
+		})
+	)
 	for i, item := range temp {
 		// parse datetime
 		var timestamp time.Time
@@ -1262,6 +1264,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 			Labels:     item.Labels,
 			Comment:    item.Comment,
 		})
+		// collect latest items and poplar items
 		for _, category := range append([]string{""}, item.Categories...) {
 			timeScores[category] = append(timeScores[category], cache.Scored{
 				Id:    item.ItemId,
@@ -1274,19 +1277,26 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 				})
 			}
 		}
-		itemIds = append(itemIds, item.ItemId)
+		// collect hidden items
+		if item.IsHidden {
+			hiddenItems = append(hiddenItems, item.ItemId)
+		}
 		count++
 	}
-	if err := s.deleteItemFromLatestPopularCache(itemIds, false); err != nil {
+	// remove cache if item already exists
+	if err := s.deleteItemFromCache(lo.Map(items, func(t data.Item, i int) string {
+		return t.ItemId
+	}), false); err != nil {
 		InternalServerError(response, err)
 		return
 	}
+	// insert items
 	err := s.DataClient.BatchInsertItems(items)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
-	// insert modify timestamp and categories
+	// insert modify timestamp
 	categories := strset.New()
 	values := make([]cache.Value, len(items))
 	for i, item := range items {
@@ -1297,6 +1307,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		InternalServerError(response, err)
 		return
 	}
+	// insert categories
 	if err = s.CacheClient.AddSet(cache.ItemCategories, categories.List()...); err != nil {
 		InternalServerError(response, err)
 		return
@@ -1309,6 +1320,9 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	for category, score := range popularScores {
 		sortedSets = append(sortedSets, cache.Sorted(cache.Key(cache.PopularItems, category), score))
 	}
+	sortedSets = append(sortedSets, cache.Sorted(cache.HiddenItemsV2, lo.Map(hiddenItems, func(t string, i int) cache.Scored {
+		return cache.Scored{Id: t, Score: float64(time.Now().Unix())}
+	})))
 	if err = s.CacheClient.AddSorted(sortedSets...); err != nil {
 		InternalServerError(response, err)
 		return
@@ -1347,7 +1361,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	}
 	// refresh category cache
 	if patch.Categories != nil {
-		if err := s.deleteItemFromLatestPopularCache([]string{itemId}, false); err != nil {
+		if err := s.deleteItemFromCache([]string{itemId}, false); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1360,7 +1374,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	if patch.IsHidden != nil {
 		var err error
 		if *patch.IsHidden {
-			err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{itemId, float64(time.Now().Unix())}}))
+			err = s.HiddenItemsManager.Hide(itemId)
 		} else {
 			err = s.CacheClient.RemSorted(cache.HiddenItemsV2, itemId)
 		}
@@ -1436,7 +1450,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 func (s *RestServer) deleteItem(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	// delete items from latest and popular
-	if err := s.deleteItemFromLatestPopularCache([]string{itemId}, true); err != nil {
+	if err := s.deleteItemFromCache([]string{itemId}, true); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1445,17 +1459,21 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert deleted item to cache
-	if err := s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{itemId, float64(time.Now().Unix())}})); err != nil {
+	if err := s.HiddenItemsManager.Hide(itemId); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
 }
 
-func (s *RestServer) deleteItemFromLatestPopularCache(itemIds []string, deleteItem bool) error {
+// deleteItemFromCache tries to delete item related data from cache:
+// 1. Remove item from the latest items.
+// 2. Remove item from popular items.
+// 3. Remove item from hidden items.
+func (s *RestServer) deleteItemFromCache(itemIds []string, deleteItem bool) error {
 	var deleteKeys []string
 	if deleteItem {
-		deleteKeys = []string{cache.LatestItems, cache.PopularItems}
+		deleteKeys = []string{cache.LatestItems, cache.PopularItems, cache.HiddenItemsV2}
 	}
 	if items, err := s.DataClient.BatchGetItems(itemIds); err != nil {
 		if errors.IsNotFound(err) {
@@ -1469,6 +1487,7 @@ func (s *RestServer) deleteItemFromLatestPopularCache(itemIds []string, deleteIt
 			for _, category := range item.Categories {
 				deleteKeys = append(deleteKeys, cache.Key(cache.LatestItems, category))
 				deleteKeys = append(deleteKeys, cache.Key(cache.PopularItems, category))
+				deleteKeys = append(deleteKeys, cache.Key(cache.HiddenItemsV2, category))
 			}
 			for _, deleteKey := range deleteKeys {
 				if err = s.CacheClient.RemSorted(deleteKey, item.ItemId); err != nil {

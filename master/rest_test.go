@@ -57,7 +57,7 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	assert.NoError(t, err)
 	// create server
 	s.GorseConfig = config.GetDefaultConfig()
-	s.RestServer.HiddenItemsCache = server.NewHiddenItemsCache(&s.RestServer)
+	s.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&s.RestServer)
 	s.RestServer.PopularItemsCache = server.NewPopularItemsCache(&s.RestServer)
 	s.WebService = new(restful.WebService)
 	s.CreateWebService()
@@ -551,7 +551,7 @@ func TestServer_SortedItems(t *testing.T) {
 			}
 			err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
-			err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{strconv.Itoa(i) + "3", float64(time.Now().Unix())}}))
+			err = s.HiddenItemsManager.Hide(strconv.Itoa(i) + "3")
 			assert.NoError(t, err)
 			items := make([]data.Item, 0)
 			for _, score := range scores {
