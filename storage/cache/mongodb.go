@@ -17,7 +17,6 @@ package cache
 import (
 	"context"
 	"github.com/juju/errors"
-	"github.com/scylladb/go-set/strset"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -204,35 +203,6 @@ func (m MongoDB) Delete(name string) error {
 	c := m.client.Database(m.dbName).Collection("values")
 	_, err := c.DeleteOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	return errors.Trace(err)
-}
-
-func (m MongoDB) Exists(names ...string) ([]int, error) {
-	if len(names) == 0 {
-		return nil, nil
-	}
-	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("values")
-	opt := options.Find()
-	opt.SetProjection(bson.M{"_id": 1})
-	r, err := c.Find(ctx, bson.M{"_id": bson.M{"$in": names}}, opt)
-	if err != nil {
-		return nil, err
-	}
-	existedNames := strset.New()
-	for r.Next(ctx) {
-		var row bson.Raw
-		if err = r.Decode(&row); err != nil {
-			return nil, err
-		}
-		existedNames.Add(row.Lookup("_id").StringValue())
-	}
-	result := make([]int, len(names))
-	for i, name := range names {
-		if existedNames.Has(name) {
-			result[i] = 1
-		}
-	}
-	return result, nil
 }
 
 func (m MongoDB) GetSet(name string) ([]string, error) {

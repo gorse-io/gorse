@@ -263,7 +263,6 @@ type Database interface {
 	Set(values ...Value) error
 	Get(name string) *ReturnValue
 	Delete(name string) error
-	Exists(names ...string) ([]int, error)
 
 	GetSet(key string) ([]string, error)
 	SetSet(key string, members ...string) error

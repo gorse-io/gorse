@@ -84,25 +84,6 @@ func (r *Redis) Get(key string) *ReturnValue {
 	return &ReturnValue{value: val}
 }
 
-// Exists check keys in Redis.
-func (r *Redis) Exists(keys ...string) ([]int, error) {
-	ctx := context.Background()
-	pipeline := r.client.Pipeline()
-	commands := make([]*redis.IntCmd, len(keys))
-	for i, key := range keys {
-		commands[i] = pipeline.Exists(ctx, key)
-	}
-	_, err := pipeline.Exec(ctx)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	existences := make([]int, len(keys))
-	for i := range existences {
-		existences[i] = int(commands[i].Val())
-	}
-	return existences, nil
-}
-
 // Delete object from Redis.
 func (r *Redis) Delete(key string) error {
 	ctx := context.Background()

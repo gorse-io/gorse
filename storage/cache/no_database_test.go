@@ -37,8 +37,6 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Delete(Key("", ""))
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.Exists(BatchKey("")...)
-	assert.ErrorIs(t, err, ErrNoDatabase)
 
 	_, err = database.GetSet("")
 	assert.ErrorIs(t, err, ErrNoDatabase)

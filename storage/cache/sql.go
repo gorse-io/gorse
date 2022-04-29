@@ -244,52 +244,6 @@ func (db *SQLDatabase) Delete(name string) error {
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) Exists(names ...string) ([]int, error) {
-	if len(names) == 0 {
-		return nil, nil
-	}
-	var builder strings.Builder
-	var args []interface{}
-	switch db.driver {
-	case Postgres:
-		builder.WriteString("SELECT name FROM values WHERE name IN (")
-	case MySQL:
-		builder.WriteString("SELECT name FROM `values` WHERE name IN (")
-	}
-	for i, name := range names {
-		if i > 0 {
-			builder.WriteRune(',')
-		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
-		case MySQL:
-			builder.WriteString("?")
-		}
-		args = append(args, name)
-	}
-	builder.WriteString(")")
-	rs, err := db.client.Query(builder.String(), args...)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	nameSet := strset.New()
-	for rs.Next() {
-		var name string
-		if err = rs.Scan(&name); err != nil {
-			return nil, errors.Trace(err)
-		}
-		nameSet.Add(name)
-	}
-	return lo.Map(names, func(name string, _ int) int {
-		if nameSet.Has(name) {
-			return 1
-		} else {
-			return 0
-		}
-	}), nil
-}
-
 func (db *SQLDatabase) GetSet(key string) ([]string, error) {
 	var rs *sql.Rows
 	var err error
