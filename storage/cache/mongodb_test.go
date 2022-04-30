@@ -16,11 +16,12 @@ package cache
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (

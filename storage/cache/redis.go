@@ -16,9 +16,12 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
-	"strconv"
+	"modernc.org/mathutil"
 )
 
 // Redis cache storage.
@@ -232,7 +235,48 @@ func (r *Redis) SetSorted(key string, scores []Scored) error {
 }
 
 // RemSorted method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) RemSorted(key, member string) error {
+func (r *Redis) RemSorted(key string, members ...string) error {
+	var _members []interface{}
+	for _, member := range members {
+		_members = append(_members, member)
+	}
 	ctx := context.Background()
-	return r.client.ZRem(ctx, key, member).Err()
+	return r.client.ZRem(ctx, key, _members...).Err()
+}
+
+// [{member:[keys]}]
+func (r *Redis) RemSortedMemberKeys(items []map[string][]string) error {
+	var data []map[string][]string
+
+	ctx := context.Background()
+	bulkCount := 500
+	totalCount := len(items)
+	loopCount := totalCount/bulkCount + 1
+
+	script := `
+	local data = cjson.decode(ARGV[1])
+	local total = 0
+	for i=1,#data do
+	    print(data[i])
+		for member,keys in pairs(data[i]) do
+			for key_idx=1,#keys,1 do
+				redis.call("ZREM",keys[key_idx],member)
+				total = total + 1
+			end
+		end
+	end
+	return total
+`
+
+	for loop := 0; loop < loopCount; loop++ {
+		data = append(data, items[loop*bulkCount:mathutil.Min((loop+1)*bulkCount, totalCount)]...)
+		if len(data) > 0 {
+			val, _ := json.Marshal(data)
+			if err := r.client.Eval(ctx, script, nil, val).Err(); err != nil {
+				return err
+			}
+		}
+
+	}
+	return nil
 }

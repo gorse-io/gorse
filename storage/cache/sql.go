@@ -17,13 +17,14 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
 	"github.com/chewxy/math32"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
-	"strings"
 )
 
 type SQLDriver int
@@ -570,13 +571,64 @@ func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
 	return txn.Commit()
 }
 
-func (db *SQLDatabase) RemSorted(key, member string) error {
+func (db *SQLDatabase) RemSorted(key string, members ...string) error {
 	var err error
+	var builder strings.Builder
+	var args []interface{}
+	sql := "DELETE FROM sorted_sets WHERE (name, member) IN ( %s )"
 	switch db.driver {
 	case Postgres:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN (($1, $2))", key, member)
+		args = append(args, key)
+		for idx := range members {
+			if idx > 0 {
+				builder.WriteString(",")
+			}
+			builder.WriteString(fmt.Sprintf("($1,$%d)", idx+2))
+			args = append(args, members[idx])
+		}
 	case MySQL:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN ((?, ?))", key, member)
+		for idx := range members {
+			if idx > 0 {
+				builder.WriteString(",")
+			}
+			builder.WriteString("(?,?)")
+			args = append(args, key)
+			args = append(args, members[idx])
+		}
+	}
+	_, err = db.client.Exec(fmt.Sprintf(sql, builder.String()), args...)
+	return errors.Trace(err)
+}
+
+func (db *SQLDatabase) RemSortedMemberKeys(items []map[string][]string) error {
+	var err error
+	var args []interface{}
+	sql := "DELETE FROM sorted_sets WHERE (name, member) IN ( %s )"
+	placegolder := make([]string, 0)
+	switch db.driver {
+	case Postgres:
+		position := 1
+		for _, item := range items {
+			for member, keys := range item {
+				for _, key := range keys {
+					placegolder = append(placegolder, fmt.Sprintf("($%d,$%d)", position, position+1))
+					args = append(args, key, member)
+					position += 2
+				}
+			}
+		}
+	case MySQL:
+		for _, item := range items {
+			for member, keys := range item {
+				for _, key := range keys {
+					placegolder = append(placegolder, "(?,?)")
+					args = append(args, key, member)
+				}
+			}
+		}
+	}
+	if len(placegolder) > 0 {
+		_, err = db.client.Exec(fmt.Sprintf(sql, strings.Join(placegolder, ",")), args...)
 	}
 	return errors.Trace(err)
 }

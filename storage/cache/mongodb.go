@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
 	"go.mongodb.org/mongo-driver/bson"
@@ -401,9 +402,27 @@ func (m MongoDB) SetSorted(name string, scores []Scored) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) RemSorted(name, member string) error {
+func (m MongoDB) RemSorted(name string, members ...string) (err error) {
 	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection("sorted_sets")
-	_, err := c.DeleteOne(ctx, bson.M{"name": name, "member": member})
+	count := len(members)
+	if len(members) == 1 {
+		_, err = c.DeleteOne(ctx, bson.M{"name": name, "member": members[0]})
+	} else if count > 1 {
+		_, err = c.DeleteMany(ctx, bson.M{"name": name, "member": bson.M{"$in": members}})
+	} else {
+		return nil
+	}
 	return errors.Trace(err)
+}
+
+func (m MongoDB) RemSortedMemberKeys(items []map[string][]string) (err error) {
+	ctx := context.Background()
+	c := m.client.Database(m.dbName).Collection("sorted_sets")
+	for _, item := range items {
+		for member, keys := range item {
+			_, err = c.DeleteMany(ctx, bson.M{"name": bson.M{"$in": keys}, "member": member})
+		}
+	}
+	return nil
 }

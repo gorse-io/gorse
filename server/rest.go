@@ -16,6 +16,11 @@ package server
 
 import (
 	"fmt"
+	"math"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -31,11 +36,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"math"
 	"modernc.org/mathutil"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 // RestServer implements a REST-ful API server.
@@ -1465,17 +1466,15 @@ func (s *RestServer) deleteItemFromLatestPopularCache(itemIds []string, deleteIt
 			return err
 		}
 	} else {
+		args := make([]map[string][]string, 0)
 		for _, item := range items {
 			for _, category := range item.Categories {
 				deleteKeys = append(deleteKeys, cache.Key(cache.LatestItems, category))
 				deleteKeys = append(deleteKeys, cache.Key(cache.PopularItems, category))
 			}
-			for _, deleteKey := range deleteKeys {
-				if err = s.CacheClient.RemSorted(deleteKey, item.ItemId); err != nil {
-					return err
-				}
-			}
+			args = append(args, map[string][]string{item.ItemId: deleteKeys})
 		}
+		return s.CacheClient.RemSortedMemberKeys(args)
 	}
 	return nil
 }
