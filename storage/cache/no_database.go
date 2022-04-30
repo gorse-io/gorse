@@ -96,6 +96,9 @@ func (NoDatabase) SetSorted(_ string, _ []Scored) error {
 }
 
 // RemSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSorted(_, _ string) error {
+func (NoDatabase) RemSorted(_ string, _ ...string) error {
 	return ErrNoDatabase
+}
+func (NoDatabase) RemSortedMemberKeys(items []map[string][]string) error {
+	return nil
 }

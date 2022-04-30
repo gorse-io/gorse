@@ -17,16 +17,17 @@ package cache
 import (
 	"context"
 	"database/sql"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/araddon/dateparse"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -275,7 +276,8 @@ type Database interface {
 	GetSortedByScore(key string, begin, end float64) ([]Scored, error)
 	RemSortedByScore(key string, begin, end float64) error
 	SetSorted(key string, scores []Scored) error
-	RemSorted(key, member string) error
+	RemSorted(key string, members ...string) error
+	RemSortedMemberKeys(items []map[string][]string) error
 }
 
 const (

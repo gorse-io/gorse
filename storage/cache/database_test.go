@@ -14,10 +14,11 @@
 package cache
 
 import (
-	"github.com/juju/errors"
 	"math"
 	"testing"
 	"time"
+
+	"github.com/juju/errors"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -178,6 +179,16 @@ func testSort(t *testing.T, db Database) {
 		{"1", 1.1},
 	}, totalItems)
 
+	// Remove many score
+	err = db.RemSorted("sort", "1", "2")
+	assert.NoError(t, err)
+	totalItems, err = db.GetSorted("sort", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+	}, totalItems)
+
 	// test set empty
 	err = db.SetSorted("sort", []Scored{})
 	assert.NoError(t, err)
@@ -202,6 +213,38 @@ func testSort(t *testing.T, db Database) {
 	scores, err = db.GetSorted("sort", 10, 5)
 	assert.NoError(t, err)
 	assert.Empty(t, scores)
+
+	// Remove Many
+	scores = []Scored{
+		{"0", 0},
+		{"1", 1.1},
+		{"2", 1.2},
+		{"3", 1.3},
+		{"4", 1.4},
+	}
+	err = db.SetSorted("test1", scores[:])
+	err = db.SetSorted("test2", scores[:])
+	remove := []map[string][]string{
+		{"0": {"test1", "test2"}},
+		{"1": {"test1", "test2"}},
+	}
+	err = db.RemSortedMemberKeys(remove)
+	assert.NoError(t, err)
+	totalItems1, err := db.GetSorted("test1", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+	}, totalItems1)
+	totalItems2, err := db.GetSorted("test2", 0, -1)
+	assert.NoError(t, err)
+	assert.Equal(t, []Scored{
+		{"4", 1.4},
+		{"3", 1.3},
+		{"2", 1.2},
+	}, totalItems2)
+
 }
 
 func testScan(t *testing.T, db Database) {
