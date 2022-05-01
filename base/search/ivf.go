@@ -80,10 +80,10 @@ func NewIVF(vectors []Vector, configs ...IVFConfig) *IVF {
 }
 
 func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []float32) {
-	cq := heap.NewTopKFilter(idx.numProbe)
+	cq := heap.NewTopKFilter[int, float32](idx.numProbe)
 	for c := range idx.clusters {
 		d := idx.clusters[c].centroid.Distance(q)
-		cq.Push(int32(c), -d)
+		cq.Push(c, -d)
 	}
 
 	pq := heap.NewPriorityQueue(true)
@@ -110,10 +110,10 @@ func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []f
 }
 
 func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (values map[string][]int32, scores map[string][]float32) {
-	cq := heap.NewTopKFilter(idx.numProbe)
+	cq := heap.NewTopKFilter[int, float32](idx.numProbe)
 	for c := range idx.clusters {
 		d := idx.clusters[c].centroid.Distance(q)
-		cq.Push(int32(c), -d)
+		cq.Push(c, -d)
 	}
 
 	// create priority queues
