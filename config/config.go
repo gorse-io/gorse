@@ -16,6 +16,7 @@ package config
 
 import (
 	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
@@ -224,7 +225,7 @@ func (config *Config) UserNeighborDigest() string {
 	}
 
 	digest := md5.Sum([]byte(builder.String()))
-	return string(digest[:])
+	return hex.EncodeToString(digest[:])
 }
 
 func (config *Config) ItemNeighborDigest() string {
@@ -244,7 +245,7 @@ func (config *Config) ItemNeighborDigest() string {
 	}
 
 	digest := md5.Sum([]byte(builder.String()))
-	return string(digest[:])
+	return hex.EncodeToString(digest[:])
 }
 
 type digestOptions struct {
@@ -324,7 +325,7 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	}
 
 	digest := md5.Sum([]byte(builder.String()))
-	return string(digest[:])
+	return hex.EncodeToString(digest[:])
 }
 
 func (config *OfflineConfig) Lock() {
