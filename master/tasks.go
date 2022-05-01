@@ -365,6 +365,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 	UpdateItemNeighborsTotal.Set(updateItemCount.Load())
 	FindItemNeighborsSecondsVec.WithLabelValues("find_item_neighbors").Set(findNeighborSeconds.Load())
 	FindItemNeighborsSecondsVec.WithLabelValues("build_index").Set(0)
+	ItemNeighborIndexRecall.Set(1)
 	return nil
 }
 
@@ -634,6 +635,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 	UpdateUserNeighborsTotal.Set(updateUserCount.Load())
 	FindUserNeighborsSecondsVec.WithLabelValues("find_item_neighbors").Set(findNeighborSeconds.Load())
 	FindUserNeighborsSecondsVec.WithLabelValues("build_index").Set(0)
+	UserNeighborIndexRecall.Set(1)
 	return nil
 }
 
