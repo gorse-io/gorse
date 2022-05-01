@@ -30,16 +30,16 @@ var (
 		Subsystem: "master",
 		Name:      "load_dataset_total_seconds",
 	})
-	FindUserNeighborsSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+	FindUserNeighborsSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "find_user_neighbors_seconds",
-	})
-	FindItemNeighborsSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+	}, []string{"step"})
+	FindItemNeighborsSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "find_item_neighbors_seconds",
-	})
+	}, []string{"step"})
 	UpdateUserNeighborsTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
@@ -66,6 +66,16 @@ var (
 		Name:      "cache_scanned_seconds",
 	})
 
+	CollaborativeFilteringFitSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "collaborative_filtering_fit_seconds",
+	})
+	CollaborativeFilteringSearchSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "collaborative_filtering_search_seconds",
+	})
 	CollaborativeFilteringNDCG10 = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
@@ -81,6 +91,21 @@ var (
 		Subsystem: "master",
 		Name:      "collaborative_filtering_recall_10",
 	})
+	CollaborativeFilteringSearchPrecision10 = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "collaborative_filtering_search_precision_10",
+	})
+	RankingFitSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "ranking_fit_seconds",
+	})
+	RankingSearchSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "ranking_search_seconds",
+	})
 	RankingPrecision = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
@@ -95,6 +120,11 @@ var (
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "ranking_model_auc",
+	})
+	RankingSearchPrecision = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "ranking_search_precision",
 	})
 	UserNeighborIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
