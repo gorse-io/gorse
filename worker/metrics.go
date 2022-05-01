@@ -29,7 +29,7 @@ var (
 		Namespace: "gorse",
 		Subsystem: "worker",
 		Name:      "offline_recommend_step_seconds",
-	}, []string{"stage"})
+	}, []string{"step"})
 	CollaborativeFilteringIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",

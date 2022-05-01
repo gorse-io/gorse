@@ -370,7 +370,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 		base.Logger().Info("complete building ranking index",
 			zap.Duration("build_time", time.Since(startTime)))
-	} else if w.rankingModel != nil {
+	} else if w.rankingModel != nil && w.rankingIndex == nil {
 		CollaborativeFilteringIndexRecall.Set(1)
 	}
 
