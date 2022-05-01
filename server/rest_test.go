@@ -766,7 +766,8 @@ func TestServer_Sort(t *testing.T) {
 		Get  string
 	}
 	operators := []ListOperator{
-		{"User Neighbors", cache.Key(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
+		// TODO: Support hide users in the future.
+		//{"User Neighbors", cache.Key(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
 		{"Item Neighbors", cache.Key(cache.ItemNeighbors, "0"), "/api/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.Key(cache.ItemNeighbors, "0", "0"), "/api/item/0/neighbors/0"},
 		{"Latest Items", cache.LatestItems, "/api/latest/"},
@@ -1400,23 +1401,22 @@ func TestServer_SessionRecommend(t *testing.T) {
 	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
 	defer s.Close(t)
 
-	// TODO: Hidde hidden items
 	// insert hidden items
-	//apitest.New().
-	//	Handler(s.handler).
-	//	Post("/api/item").
-	//	Header("X-API-Key", apiKey).
-	//	JSON(Item{ItemId: "100", IsHidden: true}).
-	//	Expect(t).
-	//	Status(http.StatusOK).
-	//	Body(`{"RowAffected": 1}`).
-	//	End()
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "100", IsHidden: true}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
 
 	// insert similar items
 	err := s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "1"), []cache.Scored{
 		{"2", 100000},
 		{"9", 1},
-		//{"100", 100000},
+		{"100", 100000},
 	})
 	assert.NoError(t, err)
 	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "2"), []cache.Scored{

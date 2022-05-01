@@ -488,7 +488,7 @@ func ParseDuration(request *restful.Request, name string) (time.Duration, error)
 	return time.ParseDuration(valueString)
 }
 
-func (s *RestServer) getSort(key, category string, request *restful.Request, response *restful.Response) {
+func (s *RestServer) getSort(key, category string, isItem bool, request *restful.Request, response *restful.Response) {
 	var n, offset int
 	var err error
 	// read arguments
@@ -506,7 +506,9 @@ func (s *RestServer) getSort(key, category string, request *restful.Request, res
 		InternalServerError(response, err)
 		return
 	}
-	items = s.FilterOutHiddenScores(items, category)
+	if isItem {
+		items = s.FilterOutHiddenScores(items, category)
+	}
 	if n > 0 && len(items) > n {
 		items = items[:n]
 	}
@@ -517,13 +519,13 @@ func (s *RestServer) getSort(key, category string, request *restful.Request, res
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
 	base.Logger().Debug("get category popular items in category", zap.String("category", category))
-	s.getSort(cache.PopularItems, category, request, response)
+	s.getSort(cache.PopularItems, category, true, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
 	base.Logger().Debug("get category latest items in category", zap.String("category", category))
-	s.getSort(cache.LatestItems, category, request, response)
+	s.getSort(cache.LatestItems, category, true, request, response)
 }
 
 // get feedback by item-id with feedback type
@@ -554,14 +556,14 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
-	s.getSort(cache.Key(cache.ItemNeighbors, itemId), category, request, response)
+	s.getSort(cache.Key(cache.ItemNeighbors, itemId), category, true, request, response)
 }
 
 // getUserNeighbors gets neighbors of a user from database.
 func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	userId := request.PathParameter("user-id")
-	s.getSort(cache.Key(cache.UserNeighbors, userId), "", request, response)
+	s.getSort(cache.Key(cache.UserNeighbors, userId), "", false, request, response)
 }
 
 // getCollaborative gets cached recommended items from database.
@@ -569,7 +571,7 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	// Get user id
 	userId := request.PathParameter("user-id")
 	category := request.PathParameter("category")
-	s.getSort(cache.Key(cache.OfflineRecommend, userId), category, request, response)
+	s.getSort(cache.Key(cache.OfflineRecommend, userId), category, true, request, response)
 }
 
 // Recommend items to users.
