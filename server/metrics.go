@@ -20,11 +20,6 @@ import (
 )
 
 var (
-	RecommendAPIRequestSecondsVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "gorse",
-		Subsystem: "server",
-		Name:      "recommend_api_request_seconds",
-	}, []string{"execution"})
 	RestAPIRequestSecondsVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "gorse",
 		Subsystem: "server",

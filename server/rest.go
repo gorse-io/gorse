@@ -76,11 +76,14 @@ func (s *RestServer) StartHttpServer() {
 }
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	start := time.Now()
 	chain.ProcessFilter(req, resp)
+	responseTime := time.Since(start)
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
 		base.Logger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
-			zap.Int("status_code", resp.StatusCode()))
+			zap.Int("status_code", resp.StatusCode()),
+			zap.Duration("response_time", responseTime))
 	}
 }
 
@@ -617,7 +620,7 @@ func (s *RestServer) Recommend(userId, category string, n int, recommenders ...R
 		zap.Int("num_from_user_based", ctx.numFromUserBased),
 		zap.Int("num_from_latest", ctx.numFromLatest),
 		zap.Int("num_from_poplar", ctx.numFromPopular),
-		zap.Duration("total_time", totalTime),
+		zap.Duration("response_time", totalTime),
 		zap.Duration("load_final_recommend_time", ctx.loadOfflineRecTime),
 		zap.Duration("load_col_recommend_time", ctx.loadColRecTime),
 		zap.Duration("load_hist_time", ctx.loadLoadHistTime),
@@ -655,7 +658,6 @@ type recommendContext struct {
 
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
-	startTime := time.Now()
 	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId),
 		math.Inf(-1), float64(time.Now().Add(s.GorseConfig.Server.ClockError).Unix()))
 	if err != nil {
@@ -665,7 +667,6 @@ func (s *RestServer) createRecommendContext(userId, category string, n int) (*re
 	for _, item := range ignoreItems {
 		excludeSet.Add(item.Id)
 	}
-	RecommendAPIRequestSecondsVec.WithLabelValues("load_feedback_cache").Observe(time.Since(startTime).Seconds())
 	return &recommendContext{
 		userId:     userId,
 		category:   category,
@@ -686,7 +687,6 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 			ctx.excludeSet.Add(feedback.ItemId)
 		}
 		ctx.loadLoadHistTime = time.Since(start)
-		RecommendAPIRequestSecondsVec.WithLabelValues("load_feedback_data").Observe(ctx.loadLoadHistTime.Seconds())
 	}
 	return nil
 }
@@ -744,7 +744,6 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 		ctx.loadOfflineRecTime = time.Since(start)
 		ctx.numFromOffline = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
-		RecommendAPIRequestSecondsVec.WithLabelValues("offline_recommend").Observe(ctx.loadOfflineRecTime.Seconds())
 	}
 	return nil
 }
@@ -766,7 +765,6 @@ func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 		ctx.loadColRecTime = time.Since(start)
 		ctx.numFromCollaborative = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
-		RecommendAPIRequestSecondsVec.WithLabelValues("collaborative_recommend").Observe(ctx.loadColRecTime.Seconds())
 	}
 	return nil
 }
@@ -816,7 +814,6 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		ctx.userBasedTime = time.Since(start)
 		ctx.numFromUserBased = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
-		RecommendAPIRequestSecondsVec.WithLabelValues("user_based_recommend").Observe(ctx.userBasedTime.Seconds())
 	}
 	return nil
 }
@@ -867,7 +864,6 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		ctx.itemBasedTime = time.Since(start)
 		ctx.numFromItemBased = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
-		RecommendAPIRequestSecondsVec.WithLabelValues("item_based_recommend").Observe(ctx.itemBasedTime.Seconds())
 	}
 	return nil
 }
@@ -893,7 +889,6 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 		ctx.loadLatestTime = time.Since(start)
 		ctx.numFromLatest = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
-		RecommendAPIRequestSecondsVec.WithLabelValues("latest_recommend").Observe(ctx.loadLatestTime.Seconds())
 	}
 	return nil
 }
@@ -919,7 +914,6 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 		ctx.loadPopularTime = time.Since(start)
 		ctx.numFromPopular = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
-		RecommendAPIRequestSecondsVec.WithLabelValues("popular_recommend").Observe(ctx.loadPopularTime.Seconds())
 	}
 	return nil
 }
@@ -994,7 +988,6 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 				return
 			}
 		}
-		RecommendAPIRequestSecondsVec.WithLabelValues("write_back").Observe(time.Since(startTime).Seconds())
 	}
 	// Send result
 	Ok(response, results)

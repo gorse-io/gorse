@@ -406,13 +406,14 @@ func (w *Worker) Recommend(users []data.User) {
 	// recommendation
 	startTime := time.Now()
 	var (
-		updateUserCount            atomic.Float64
-		collaborativeRecommendTime atomic.Float64
-		userBasedRecommendTime     atomic.Float64
-		itemBasedRecommendTime     atomic.Float64
-		latestRecommendTime        atomic.Float64
-		popularRecommendTime       atomic.Float64
+		updateUserCount               atomic.Float64
+		collaborativeRecommendSeconds atomic.Float64
+		userBasedRecommendSeconds     atomic.Float64
+		itemBasedRecommendSeconds     atomic.Float64
+		latestRecommendSeconds        atomic.Float64
+		popularRecommendSeconds       atomic.Float64
 	)
+
 	userFeedbackCache := NewFeedbackCache(w.dataClient, w.cfg.Recommend.DataSource.PositiveFeedbackTypes...)
 	err = parallel.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		defer func() {
@@ -473,7 +474,7 @@ func (w *Worker) Recommend(users []data.User) {
 					candidates[category] = append(candidates[category], items)
 				}
 				collaborativeUsed = true
-				collaborativeRecommendTime.Add(usedTime.Seconds())
+				collaborativeRecommendSeconds.Add(usedTime.Seconds())
 			} else if !w.rankingModel.IsUserPredictable(userIndex) {
 				base.Logger().Info("user is unpredictable", zap.String("user_id", userId))
 			}
@@ -519,7 +520,7 @@ func (w *Worker) Recommend(users []data.User) {
 				ids, _ := filter.PopAll()
 				candidates[category] = append(candidates[category], ids)
 			}
-			itemBasedRecommendTime.Add(time.Since(localStartTime).Seconds())
+			itemBasedRecommendSeconds.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #3: insert user-based items
@@ -573,7 +574,7 @@ func (w *Worker) Recommend(users []data.User) {
 				ids, _ := filter.PopAll()
 				candidates[category] = append(candidates[category], ids)
 			}
-			userBasedRecommendTime.Add(time.Since(localStartTime).Seconds())
+			userBasedRecommendSeconds.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #4: latest items.
@@ -593,7 +594,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				candidates[category] = append(candidates[category], recommend)
 			}
-			latestRecommendTime.Add(time.Since(localStartTime).Seconds())
+			latestRecommendSeconds.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// Recommender #5: popular items.
@@ -613,7 +614,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				candidates[category] = append(candidates[category], recommend)
 			}
-			popularRecommendTime.Add(time.Since(localStartTime).Seconds())
+			popularRecommendSeconds.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// rank items from different recommenders
@@ -696,10 +697,11 @@ func (w *Worker) Recommend(users []data.User) {
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 	UpdateUserRecommendTotal.Set(updateUserCount.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Set(itemBasedRecommendTime.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendTime.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("latest_recommend").Set(latestRecommendTime.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendTime.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("collaborative_recommend").Set(collaborativeRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Set(itemBasedRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("latest_recommend").Set(latestRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
 }
 
 func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet *strset.Set, itemCache ItemCache) (map[string][]string, time.Duration, error) {
