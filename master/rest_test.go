@@ -551,7 +551,7 @@ func TestServer_SortedItems(t *testing.T) {
 			}
 			err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
-			err = s.HiddenItemsManager.Hide(strconv.Itoa(i) + "3")
+			err = server.NewCacheModification(s.CacheClient).HideItem(strconv.Itoa(i) + "3").Exec()
 			assert.NoError(t, err)
 			items := make([]data.Item, 0)
 			for _, score := range scores {

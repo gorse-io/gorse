@@ -802,7 +802,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 				if i%2 == 0 {
 					expects[i/2] = scores[i]
 				} else {
-					err := NewCacheModification(s.CacheClient).hideItem(strconv.Itoa(i)).Exec()
+					err := NewCacheModification(s.CacheClient).HideItem(strconv.Itoa(i)).Exec()
 					require.NoError(b, err)
 				}
 			}
