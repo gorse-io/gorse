@@ -45,11 +45,6 @@ func (NoDatabase) Delete(_ string) error {
 	return ErrNoDatabase
 }
 
-// Exists method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) Exists(_ ...string) ([]int, error) {
-	return nil, ErrNoDatabase
-}
-
 // GetSet method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetSet(_ string) ([]string, error) {
 	return nil, ErrNoDatabase
@@ -96,6 +91,6 @@ func (NoDatabase) SetSorted(_ string, _ []Scored) error {
 }
 
 // RemSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSorted(_, _ string) error {
+func (NoDatabase) RemSorted(_ ...SetMember) error {
 	return ErrNoDatabase
 }

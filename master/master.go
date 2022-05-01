@@ -185,7 +185,7 @@ func (m *Master) Serve() {
 		base.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
-	m.RestServer.HiddenItemsCache = server.NewHiddenItemsCache(&m.RestServer)
+	m.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&m.RestServer)
 	m.RestServer.PopularItemsCache = server.NewPopularItemsCache(&m.RestServer)
 
 	// pre-lock privileged tasks

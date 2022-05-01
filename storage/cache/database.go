@@ -263,7 +263,6 @@ type Database interface {
 	Set(values ...Value) error
 	Get(name string) *ReturnValue
 	Delete(name string) error
-	Exists(names ...string) ([]int, error)
 
 	GetSet(key string) ([]string, error)
 	SetSet(key string, members ...string) error
@@ -275,7 +274,7 @@ type Database interface {
 	GetSortedByScore(key string, begin, end float64) ([]Scored, error)
 	RemSortedByScore(key string, begin, end float64) error
 	SetSorted(key string, scores []Scored) error
-	RemSorted(key, member string) error
+	RemSorted(members ...SetMember) error
 }
 
 const (

@@ -56,10 +56,6 @@ func testMeta(t *testing.T, db Database) {
 	assert.Equal(t, 1996, valTime.Year())
 	assert.Equal(t, time.Month(4), valTime.Month())
 	assert.Equal(t, 8, valTime.Day())
-	// test exists
-	exists, err := db.Exists(BatchKey("meta", "1", "10000")...)
-	assert.NoError(t, err)
-	assert.Equal(t, []int{1, 0}, exists)
 
 	// test set empty
 	err = db.Set()
@@ -67,10 +63,6 @@ func testMeta(t *testing.T, db Database) {
 	// test set duplicate
 	err = db.Set(String("100", "1"), String("100", "2"))
 	assert.NoError(t, err)
-	// test exists of empty args
-	exists, err = db.Exists()
-	assert.NoError(t, err)
-	assert.Empty(t, exists)
 }
 
 func testSet(t *testing.T, db Database) {
@@ -167,7 +159,7 @@ func testSort(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Empty(t, partItems)
 	// Remove score
-	err = db.RemSorted("sort", "0")
+	err = db.RemSorted(Member("sort", "0"))
 	assert.NoError(t, err)
 	totalItems, err = db.GetSorted("sort", 0, -1)
 	assert.NoError(t, err)

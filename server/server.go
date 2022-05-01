@@ -64,7 +64,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 		},
 	}
 	s.RestServer.PopularItemsCache = NewPopularItemsCache(&s.RestServer)
-	s.RestServer.HiddenItemsCache = NewHiddenItemsCache(&s.RestServer)
+	s.RestServer.HiddenItemsManager = NewHiddenItemsManager(&s.RestServer)
 	return s
 }
 
@@ -214,16 +214,17 @@ func (sc *PopularItemsCache) GetSortedScore(member string) float64 {
 	return score
 }
 
-type HiddenItemsCache struct {
-	server      *RestServer
-	mu          sync.RWMutex
-	hiddenItems *strset.Set
-	updateTime  time.Time
-	test        bool
+type HiddenItemsManager struct {
+	server                  *RestServer
+	mu                      sync.RWMutex
+	hiddenItems             *strset.Set // global hidden items
+	hiddenItemsInCategories sync.Map    // categorized hidden items
+	updateTime              time.Time
+	test                    bool
 }
 
-func NewHiddenItemsCache(s *RestServer) *HiddenItemsCache {
-	hc := &HiddenItemsCache{
+func NewHiddenItemsManager(s *RestServer) *HiddenItemsManager {
+	hc := &HiddenItemsManager{
 		server:      s,
 		hiddenItems: strset.New(),
 	}
@@ -237,8 +238,25 @@ func NewHiddenItemsCache(s *RestServer) *HiddenItemsCache {
 	return hc
 }
 
-func (hc *HiddenItemsCache) sync() {
+func newHiddenItemsManagerForTest(s *RestServer) *HiddenItemsManager {
+	hc := &HiddenItemsManager{
+		server:      s,
+		hiddenItems: strset.New(),
+		test:        true,
+	}
+	return hc
+}
+
+func (hc *HiddenItemsManager) sync() {
 	ts := time.Now()
+	// load categories
+	categories, err := hc.server.CacheClient.GetSet(cache.ItemCategories)
+	if err != nil {
+		if !errors.IsNotAssigned(err) {
+			base.Logger().Fatal("failed to load item categories", zap.Error(err))
+		}
+		return
+	}
 	// load hidden items
 	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(ts.Unix()))
 	if err != nil {
@@ -247,28 +265,161 @@ func (hc *HiddenItemsCache) sync() {
 		}
 		return
 	}
-	if len(score) > 0 {
-		fmt.Println(score)
-	}
 	hiddenItems := strset.New(cache.RemoveScores(score)...)
+	// load hidden items in categories
+	for _, category := range categories {
+		score, err = hc.server.CacheClient.GetSortedByScore(cache.Key(cache.HiddenItemsV2, category), math.Inf(-1), float64(ts.Unix()))
+		if err != nil {
+			if !errors.IsNotAssigned(err) {
+				base.Logger().Fatal("failed to load categorized hidden items", zap.Error(err))
+			}
+			return
+		}
+		hc.hiddenItemsInCategories.Store(category, strset.New(cache.RemoveScores(score)...))
+	}
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	hc.hiddenItems = hiddenItems
 	hc.updateTime = ts
 }
 
-func (hc *HiddenItemsCache) IsHidden(members []string) ([]bool, error) {
+func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]bool, error) {
+	if hc.test {
+		hc.sync()
+	}
+	// load hidden items
 	hc.mu.RLock()
 	hiddenItems := hc.hiddenItems
 	updateTime := hc.updateTime
 	hc.mu.RUnlock()
-	// load hidden items
+	// load hidden items in category
+	hiddenItemsInCategory := strset.New()
+	if category != "" {
+		if temp, exist := hc.hiddenItemsInCategories.Load(category); exist {
+			hiddenItemsInCategory = temp.(*strset.Set)
+		}
+	}
+	// load delta hidden items
 	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, float64(updateTime.Unix()), float64(time.Now().Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	deltaHiddenItems := strset.New(cache.RemoveScores(score)...)
+	// load delta hidden items in category
+	deltaHiddenItemsInCategory := strset.New()
+	if category != "" {
+		score, err = hc.server.CacheClient.GetSortedByScore(cache.Key(cache.HiddenItemsV2, category), float64(updateTime.Unix()), float64(time.Now().Unix()))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		deltaHiddenItemsInCategory = strset.New(cache.RemoveScores(score)...)
+	}
 	return lo.Map(members, func(t string, i int) bool {
-		return hiddenItems.Has(t) || deltaHiddenItems.Has(t)
+		return hiddenItems.Has(t) || deltaHiddenItems.Has(t) || hiddenItemsInCategory.Has(t) || deltaHiddenItemsInCategory.Has(t)
 	}), nil
+}
+
+type CacheModification struct {
+	client    cache.Database
+	deletion  []cache.SetMember
+	insertion []cache.SortedSet
+}
+
+func NewCacheModification(client cache.Database) *CacheModification {
+	return &CacheModification{client: client}
+}
+
+func (cm *CacheModification) deleteItemCategory(itemId, category string) *CacheModification {
+	cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.HiddenItemsV2, category), []cache.Scored{{itemId, float64(time.Now().Unix())}}))
+	return cm
+}
+
+func (cm *CacheModification) addItemCategory(itemId, category string, latest, popular float64) *CacheModification {
+	// 1. insert item to latest and popular
+	if latest > 0 {
+		cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{itemId, latest}}))
+	}
+	if popular > 0 {
+		cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
+	}
+	// 2. remove delete mark
+	cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
+	return cm
+}
+
+func (cm *CacheModification) modifyItem(itemId string, prevCategories, categories []string, latest, popular float64) *CacheModification {
+	prevCategoriesSet := strset.New(prevCategories...)
+	categoriesSet := strset.New(categories...)
+	// 2. insert item to category latest and popular
+	if latest > 0 {
+		cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.LatestItems), []cache.Scored{{itemId, latest}}))
+	}
+	if popular > 0 {
+		cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems), []cache.Scored{{itemId, popular}}))
+	}
+	for _, category := range categories {
+		// 2. insert item to category latest and popular
+		if latest > 0 {
+			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{itemId, latest}}))
+		}
+		if popular > 0 {
+			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
+		}
+		// 3. remove delete mark
+		if !prevCategoriesSet.Has(category) {
+			cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
+		}
+	}
+	// 4. insert category delete mark
+	for _, category := range prevCategories {
+		if !categoriesSet.Has(category) {
+			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.HiddenItemsV2, category), []cache.Scored{{itemId, float64(time.Now().Unix())}}))
+		}
+	}
+	return cm
+}
+
+func (cm *CacheModification) HideItem(itemId string) *CacheModification {
+	cm.insertion = append(cm.insertion, cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{itemId, float64(time.Now().Unix())}}))
+	return cm
+}
+
+func (cm *CacheModification) unHideItem(itemId string) *CacheModification {
+	cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	return cm
+}
+
+func (cm *CacheModification) addItem(itemId string, categories []string, latest, popular float64) {
+	// 1. insert item to global latest and popular
+	if latest > 0 {
+		cm.insertion = append(cm.insertion, cache.Sorted(cache.LatestItems, []cache.Scored{{itemId, latest}}))
+	}
+	if popular > 0 {
+		cm.insertion = append(cm.insertion, cache.Sorted(cache.PopularItems, []cache.Scored{{itemId, popular}}))
+	}
+	for _, category := range categories {
+		// 2. insert item to category latest and popular
+		if latest > 0 {
+			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.LatestItems, category), []cache.Scored{{itemId, latest}}))
+		}
+		if popular > 0 {
+			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
+		}
+	}
+	// 3. remove delete mark
+	cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+}
+
+func (cm *CacheModification) Exec() error {
+	if len(cm.deletion) > 0 {
+		if err := cm.client.RemSorted(cm.deletion...); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if len(cm.insertion) > 0 {
+		if err := cm.client.AddSorted(cm.insertion...); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }

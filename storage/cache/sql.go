@@ -244,52 +244,6 @@ func (db *SQLDatabase) Delete(name string) error {
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) Exists(names ...string) ([]int, error) {
-	if len(names) == 0 {
-		return nil, nil
-	}
-	var builder strings.Builder
-	var args []interface{}
-	switch db.driver {
-	case Postgres:
-		builder.WriteString("SELECT name FROM values WHERE name IN (")
-	case MySQL:
-		builder.WriteString("SELECT name FROM `values` WHERE name IN (")
-	}
-	for i, name := range names {
-		if i > 0 {
-			builder.WriteRune(',')
-		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
-		case MySQL:
-			builder.WriteString("?")
-		}
-		args = append(args, name)
-	}
-	builder.WriteString(")")
-	rs, err := db.client.Query(builder.String(), args...)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	nameSet := strset.New()
-	for rs.Next() {
-		var name string
-		if err = rs.Scan(&name); err != nil {
-			return nil, errors.Trace(err)
-		}
-		nameSet.Add(name)
-	}
-	return lo.Map(names, func(name string, _ int) int {
-		if nameSet.Has(name) {
-			return 1
-		} else {
-			return 0
-		}
-	}), nil
-}
-
 func (db *SQLDatabase) GetSet(key string) ([]string, error) {
 	var rs *sql.Rows
 	var err error
@@ -570,13 +524,28 @@ func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
 	return txn.Commit()
 }
 
-func (db *SQLDatabase) RemSorted(key, member string) error {
-	var err error
-	switch db.driver {
-	case Postgres:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN (($1, $2))", key, member)
-	case MySQL:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE (name, member) IN ((?, ?))", key, member)
+func (db *SQLDatabase) RemSorted(members ...SetMember) error {
+	if len(members) == 0 {
+		return nil
 	}
-	return errors.Trace(err)
+	var args []interface{}
+	var builder strings.Builder
+	builder.WriteString("DELETE FROM sorted_sets WHERE (name, member) IN (")
+	for i, member := range members {
+		if i > 0 {
+			builder.WriteRune(',')
+		}
+		switch db.driver {
+		case Postgres:
+			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
+		case MySQL:
+			builder.WriteString("(?,?)")
+		}
+		args = append(args, member.name, member.member)
+	}
+	builder.WriteString(")")
+	if _, err := db.client.Exec(builder.String(), args...); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }

@@ -15,19 +15,19 @@ package server
 
 import (
 	"encoding/json"
-	"google.golang.org/protobuf/proto"
-	"net/http"
-	"strconv"
-	"testing"
-	"time"
-
 	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"google.golang.org/protobuf/proto"
+	"net/http"
+	"strconv"
+	"testing"
+	"time"
 )
 
 const apiKey = "test_api_key"
@@ -56,7 +56,7 @@ func newMockServer(t *testing.T) *mockServer {
 	s.GorseConfig = config.GetDefaultConfig()
 	s.GorseConfig.Server.APIKey = apiKey
 	s.PopularItemsCache = newPopularItemsCacheForTest(&s.RestServer)
-	s.HiddenItemsCache = NewHiddenItemsCache(&s.RestServer)
+	s.HiddenItemsManager = newHiddenItemsManagerForTest(&s.RestServer)
 	s.WebService = new(restful.WebService)
 	s.CreateWebService()
 	// create handler
@@ -267,9 +267,8 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[4].ItemId, Score: float64(items[4].Timestamp.Unix())},
 			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
-			{Id: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
+			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
 	apitest.New().
@@ -297,9 +296,8 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[4].ItemId, Score: 18},
 			{Id: items[3].ItemId, Score: 16},
-			{Id: items[2].ItemId, Score: 14},
+			{Id: items[1].ItemId, Score: 12},
 		})).
 		End()
 	apitest.New().
@@ -338,7 +336,7 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
-	isHidden, err := s.HiddenItemsCache.IsHidden([]string{"6"})
+	isHidden, err := s.HiddenItemsManager.IsHidden([]string{"6"}, "")
 	assert.NoError(t, err)
 	assert.True(t, isHidden[0])
 	// get latest items
@@ -352,8 +350,6 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[4].ItemId, Score: float64(items[4].Timestamp.Unix())},
-			{Id: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
@@ -381,8 +377,6 @@ func TestServer_Items(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{
-			{Id: items[4].ItemId, Score: 18},
-			{Id: items[2].ItemId, Score: 14},
 			{Id: items[1].ItemId, Score: 12},
 		})).
 		End()
@@ -432,7 +426,7 @@ func TestServer_Items(t *testing.T) {
 			Timestamp:  timestamp,
 		})).
 		End()
-	isHidden, err = s.HiddenItemsCache.IsHidden([]string{"2"})
+	isHidden, err = s.HiddenItemsManager.IsHidden([]string{"2"}, "")
 	assert.NoError(t, err)
 	assert.True(t, isHidden[0])
 	apitest.New().
@@ -772,7 +766,8 @@ func TestServer_Sort(t *testing.T) {
 		Get  string
 	}
 	operators := []ListOperator{
-		{"User Neighbors", cache.Key(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
+		// TODO: Support hide users in the future.
+		//{"User Neighbors", cache.Key(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
 		{"Item Neighbors", cache.Key(cache.ItemNeighbors, "0"), "/api/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.Key(cache.ItemNeighbors, "0", "0"), "/api/item/0/neighbors/0"},
 		{"Latest Items", cache.LatestItems, "/api/latest/"},
@@ -795,7 +790,7 @@ func TestServer_Sort(t *testing.T) {
 			}
 			err := s.CacheClient.SetSorted(operator.Key, scores)
 			assert.NoError(t, err)
-			err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{strconv.Itoa(i) + "3", float64(time.Now().Unix())}}))
+			err = NewCacheModification(s.CacheClient).HideItem(strconv.Itoa(i) + "3").Exec()
 			assert.NoError(t, err)
 			apitest.New().
 				Handler(s.handler).
@@ -944,7 +939,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	// insert hidden items
 	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
-	err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{"0", float64(time.Now().Unix())}}))
+	err = NewCacheModification(s.CacheClient).HideItem("0").Exec()
 	assert.NoError(t, err)
 	// insert recommendation
 	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{
@@ -1053,7 +1048,7 @@ func TestServer_GetRecommends_Replacement(t *testing.T) {
 	// insert hidden items
 	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
 	assert.NoError(t, err)
-	err = s.CacheClient.AddSorted(cache.Sorted(cache.HiddenItemsV2, []cache.Scored{{"0", float64(time.Now().Unix())}}))
+	err = NewCacheModification(s.CacheClient).HideItem("0").Exec()
 	assert.NoError(t, err)
 	// insert recommendation
 	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{
@@ -1406,23 +1401,22 @@ func TestServer_SessionRecommend(t *testing.T) {
 	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
 	defer s.Close(t)
 
-	// TODO: Hidde hidden items
 	// insert hidden items
-	//apitest.New().
-	//	Handler(s.handler).
-	//	Post("/api/item").
-	//	Header("X-API-Key", apiKey).
-	//	JSON(Item{ItemId: "100", IsHidden: true}).
-	//	Expect(t).
-	//	Status(http.StatusOK).
-	//	Body(`{"RowAffected": 1}`).
-	//	End()
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "100", IsHidden: true}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(`{"RowAffected": 1}`).
+		End()
 
 	// insert similar items
 	err := s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "1"), []cache.Scored{
 		{"2", 100000},
 		{"9", 1},
-		//{"100", 100000},
+		{"100", 100000},
 	})
 	assert.NoError(t, err)
 	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "2"), []cache.Scored{
@@ -1521,5 +1515,320 @@ func TestServer_SessionRecommend(t *testing.T) {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(marshal(t, []cache.Scored{{"9", 4}, {"7", 2}})).
+		End()
+}
+
+func TestServer_Visibility(t *testing.T) {
+	s := newMockServer(t)
+	defer s.Close(t)
+
+	// insert items
+	var items []Item
+	for i := 0; i < 5; i++ {
+		items = append(items, Item{
+			ItemId:     strconv.Itoa(i),
+			Categories: []string{"a"},
+			Timestamp:  time.Date(1989, 6, i+1, 1, 1, 1, 1, time.UTC).String(),
+		})
+	}
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/items").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+
+	// insert cache
+	var scores []cache.Scored
+	for i := range items {
+		scores = append(scores, cache.Scored{Id: strconv.Itoa(i), Score: float64(time.Date(1989, 6, i+1, 1, 1, 1, 1, time.UTC).Unix())})
+	}
+	lo.Reverse(scores)
+	err := s.CacheClient.SetSorted(cache.LatestItems, scores)
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.PopularItems, scores)
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "100"), scores)
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "100"), scores)
+	assert.NoError(t, err)
+
+	// delete item
+	apitest.New().
+		Handler(s.handler).
+		Delete("/api/item/0").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// modify item
+	apitest.New().
+		Handler(s.handler).
+		Patch("/api/item/1").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// overwrite item
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "2", IsHidden: true}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+
+	// recommend
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores[:2])).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/latest").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores[:2])).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/item/100/neighbors/").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores[:2])).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/100/").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, cache.RemoveScores(scores[:2]))).
+		End()
+
+	// insert item
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "0", Timestamp: time.Date(1989, 6, 1, 1, 1, 1, 1, time.UTC).String()}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// modify item
+	apitest.New().
+		Handler(s.handler).
+		Patch("/api/item/1").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{IsHidden: proto.Bool(false)}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// overwrite item
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "2", IsHidden: false, Timestamp: time.Date(1989, 6, 3, 1, 1, 1, 1, time.UTC).String()}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+
+	// recommend
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores)).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/latest").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores)).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/item/100/neighbors/").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores)).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/100/").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, cache.RemoveScores(scores))).
+		End()
+
+	// insert cache
+	err = s.CacheClient.SetSorted(cache.Key(cache.LatestItems, "a"), scores)
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.PopularItems, "a"), scores)
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, "100", "a"), scores)
+	assert.NoError(t, err)
+	err = s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "100", "a"), scores)
+	assert.NoError(t, err)
+
+	// delete category
+	apitest.New().
+		Handler(s.handler).
+		Delete("/api/item/0/category/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// modify category
+	apitest.New().
+		Handler(s.handler).
+		Patch("/api/item/1").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Categories: []string{}}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// overwrite category
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "2", Categories: []string{}}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+
+	// recommend
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores[:2])).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/latest/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores[:2])).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/item/100/neighbors/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores[:2])).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/100/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, cache.RemoveScores(scores[:2]))).
+		End()
+
+	// delete category
+	apitest.New().
+		Handler(s.handler).
+		Put("/api/item/0/category/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// modify category
+	apitest.New().
+		Handler(s.handler).
+		Patch("/api/item/1").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Categories: []string{"a"}}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// overwrite category
+	apitest.New().
+		Handler(s.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "2", Categories: []string{"a"}}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+
+	// recommend
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/popular/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores)).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/latest/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores)).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/item/100/neighbors/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, scores)).
+		End()
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/recommend/100/a").
+		Header("X-API-Key", apiKey).
+		JSON(items).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, cache.RemoveScores(scores))).
 		End()
 }
