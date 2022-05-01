@@ -970,7 +970,7 @@ func (w *Worker) refreshCache(userId string) error {
 	recommendTime, err := w.cacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err == nil {
 		timeLimit = &recommendTime
-	} else {
+	} else if !errors.IsNotFound(err) {
 		return errors.Trace(err)
 	}
 	// reload cache
