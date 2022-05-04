@@ -378,8 +378,8 @@ func TestMaster_GetCluster(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// add nodes
-	serverNode := &Node{"alan turnin", ServerNode, "192.168.1.100", 1080}
-	workerNode := &Node{"dennis ritchie", WorkerNode, "192.168.1.101", 1081}
+	serverNode := &Node{"alan turnin", ServerNode, "192.168.1.100", 1080, "server_version"}
+	workerNode := &Node{"dennis ritchie", WorkerNode, "192.168.1.101", 1081, "worker_version"}
 	s.nodesInfo = make(map[string]*Node)
 	s.nodesInfo["alan turning"] = serverNode
 	s.nodesInfo["dennis ritchie"] = workerNode
