@@ -27,6 +27,7 @@ import (
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -408,6 +409,7 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 }
 
 type Status struct {
+	BinaryVersion           string
 	NumServers              int
 	NumWorkers              int
 	NumUsers                int
@@ -429,7 +431,7 @@ type Status struct {
 }
 
 func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
-	status := Status{}
+	status := Status{BinaryVersion: version.Version}
 	var err error
 	// read number of users
 	if status.NumUsers, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumUsers)).Integer(); err != nil {

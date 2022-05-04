@@ -17,7 +17,7 @@ require (
 	github.com/go-resty/resty/v2 v2.7.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20220408144940-c6c403c315c1
+	github.com/gorse-io/dashboard v0.0.0-20220504033926-54e0e80acf0a
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v0.0.0-20220203013757-bd733f3c86b9
@@ -39,6 +39,7 @@ require (
 	go.mongodb.org/mongo-driver v1.5.1
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.17.0
+	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17
 	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
@@ -97,7 +98,6 @@ require (
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3 // indirect
-	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17 // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20211210111614-af8b64212486 // indirect

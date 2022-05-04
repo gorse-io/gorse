@@ -30,10 +30,11 @@ import (
 
 // Node could be worker node for server node.
 type Node struct {
-	Name     string
-	Type     string
-	IP       string
-	HttpPort int64
+	Name          string
+	Type          string
+	IP            string
+	HttpPort      int64
+	BinaryVersion string
 }
 
 const (
@@ -46,6 +47,7 @@ func NewNode(ctx context.Context, nodeInfo *protocol.NodeInfo) *Node {
 	node := new(Node)
 	node.Name = nodeInfo.NodeName
 	node.HttpPort = nodeInfo.HttpPort
+	node.BinaryVersion = nodeInfo.BinaryVersion
 	// read address
 	p, _ := peer.FromContext(ctx)
 	hostAndPort := p.Addr.String()

@@ -29,6 +29,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/search"
+	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -120,9 +121,10 @@ func (w *Worker) Sync() {
 		var err error
 		if meta, err = w.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType: protocol.NodeType_WorkerNode,
-				NodeName: w.workerName,
-				HttpPort: int64(w.httpPort),
+				NodeType:      protocol.NodeType_WorkerNode,
+				NodeName:      w.workerName,
+				HttpPort:      int64(w.httpPort),
+				BinaryVersion: version.Version,
 			}); err != nil {
 			base.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
@@ -264,8 +266,12 @@ func (w *Worker) Serve() {
 	// open local store
 	state, err := LoadLocalCache(w.cacheFile)
 	if err != nil {
-		base.Logger().Error("failed to load persist state", zap.Error(err),
-			zap.String("path", state.path))
+		if errors.IsNotFound(err) {
+			base.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
+		} else {
+			base.Logger().Error("failed to load persist state", zap.Error(err),
+				zap.String("path", state.path))
+		}
 	}
 	if state.WorkerName == "" {
 		state.WorkerName = base.GetRandomName(0)

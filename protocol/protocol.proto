@@ -60,6 +60,7 @@ message NodeInfo {
   NodeType node_type = 1;
   string node_name = 2;
   int64 http_port = 3;
+  string binary_version = 4;
 }
 
 message StartTaskRequest {

@@ -16,6 +16,7 @@ package worker
 
 import (
 	"encoding/gob"
+	std_errors "errors"
 	"github.com/juju/errors"
 	"os"
 	"path/filepath"
@@ -32,17 +33,20 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	state := &LocalCache{path: path}
 	// check if file exists
 	if _, err := os.Stat(path); err != nil {
-		return state, err
+		if std_errors.Is(err, os.ErrNotExist) {
+			return state, errors.NotFoundf("cache file %s", path)
+		}
+		return state, errors.Trace(err)
 	}
 	// open file
 	f, err := os.Open(path)
 	if err != nil {
-		return state, err
+		return state, errors.Trace(err)
 	}
 	defer f.Close()
 	decoder := gob.NewDecoder(f)
 	if err = decoder.Decode(&state.WorkerName); err != nil {
-		return state, err
+		return state, errors.Trace(err)
 	}
 	return state, nil
 }
@@ -65,5 +69,5 @@ func (c *LocalCache) WriteLocalCache() error {
 	defer f.Close()
 	// write file
 	encoder := gob.NewEncoder(f)
-	return encoder.Encode(c.WorkerName)
+	return errors.Trace(encoder.Encode(c.WorkerName))
 }

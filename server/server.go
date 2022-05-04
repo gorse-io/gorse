@@ -23,6 +23,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -74,8 +75,12 @@ func (s *Server) Serve() {
 	// open local store
 	state, err := LoadLocalCache(s.cacheFile)
 	if err != nil {
-		base.Logger().Error("failed to connect local store", zap.Error(err),
-			zap.String("path", state.path))
+		if errors.IsNotFound(err) {
+			base.Logger().Info("no cache file found, create a new one", zap.String("path", s.cacheFile))
+		} else {
+			base.Logger().Error("failed to connect local store", zap.Error(err),
+				zap.String("path", state.path))
+		}
 	}
 	if state.ServerName == "" {
 		state.ServerName = base.GetRandomName(0)
@@ -112,9 +117,10 @@ func (s *Server) Sync() {
 		var err error
 		if meta, err = s.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType: protocol.NodeType_ServerNode,
-				NodeName: s.serverName,
-				HttpPort: int64(s.HttpPort),
+				NodeType:      protocol.NodeType_ServerNode,
+				NodeName:      s.serverName,
+				HttpPort:      int64(s.HttpPort),
+				BinaryVersion: version.Version,
 			}); err != nil {
 			base.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep

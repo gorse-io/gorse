@@ -16,6 +16,7 @@ package master
 
 import (
 	"encoding/binary"
+	std_errors "errors"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -45,6 +46,9 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	state := &LocalCache{path: path}
 	// check if file exists
 	if _, err := os.Stat(path); err != nil {
+		if std_errors.Is(err, os.ErrNotExist) {
+			return state, errors.NotFoundf("cache file %s", path)
+		}
 		return state, errors.Trace(err)
 	}
 	// open file
