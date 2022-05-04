@@ -266,8 +266,12 @@ func (w *Worker) Serve() {
 	// open local store
 	state, err := LoadLocalCache(w.cacheFile)
 	if err != nil {
-		base.Logger().Error("failed to load persist state", zap.Error(err),
-			zap.String("path", state.path))
+		if errors.IsNotFound(err) {
+			base.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
+		} else {
+			base.Logger().Error("failed to load persist state", zap.Error(err),
+				zap.String("path", state.path))
+		}
 	}
 	if state.WorkerName == "" {
 		state.WorkerName = base.GetRandomName(0)

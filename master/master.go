@@ -135,7 +135,11 @@ func (m *Master) Serve() {
 	var err error
 	m.localCache, err = LoadLocalCache(m.cacheFile)
 	if err != nil {
-		base.Logger().Warn("failed to load local cache", zap.Error(err))
+		if errors.IsNotFound(err) {
+			base.Logger().Info("no local cache found, create a new one", zap.String("path", m.cacheFile))
+		} else {
+			base.Logger().Error("failed to load local cache", zap.String("path", m.cacheFile), zap.Error(err))
+		}
 	}
 	if m.localCache.RankingModel != nil {
 		base.Logger().Info("load cached ranking model",

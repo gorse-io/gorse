@@ -16,7 +16,7 @@ package worker
 
 import (
 	"encoding/gob"
-	stderrors "errors"
+	std_errors "errors"
 	"github.com/juju/errors"
 	"os"
 	"path/filepath"
@@ -33,10 +33,10 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	state := &LocalCache{path: path}
 	// check if file exists
 	if _, err := os.Stat(path); err != nil {
-		if stderrors.Is(err, os.ErrNotExist) {
-			return state, nil
+		if std_errors.Is(err, os.ErrNotExist) {
+			return state, errors.NotFoundf("cache file %s", path)
 		}
-		return state, err
+		return state, errors.Trace(err)
 	}
 	// open file
 	f, err := os.Open(path)

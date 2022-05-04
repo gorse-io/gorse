@@ -75,8 +75,12 @@ func (s *Server) Serve() {
 	// open local store
 	state, err := LoadLocalCache(s.cacheFile)
 	if err != nil {
-		base.Logger().Error("failed to connect local store", zap.Error(err),
-			zap.String("path", state.path))
+		if errors.IsNotFound(err) {
+			base.Logger().Info("no cache file found, create a new one", zap.String("path", s.cacheFile))
+		} else {
+			base.Logger().Error("failed to connect local store", zap.Error(err),
+				zap.String("path", state.path))
+		}
 	}
 	if state.ServerName == "" {
 		state.ServerName = base.GetRandomName(0)
