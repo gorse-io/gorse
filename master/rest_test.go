@@ -422,6 +422,7 @@ func TestMaster_GetStats(t *testing.T) {
 			NumValidNegFeedback: 456,
 			MatchingModelScore:  ranking.Score{Precision: 0.1},
 			RankingModelScore:   click.Score{Precision: 0.2},
+			BinaryVersion:       "unknown-version",
 		})).
 		End()
 }
