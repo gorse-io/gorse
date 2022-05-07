@@ -330,7 +330,7 @@ func (w *Worker) Serve() {
 // 7. Rank items in results by click-through-rate.
 // 8. Refresh cache.
 func (w *Worker) Recommend(users []data.User) {
-	// load user index
+	startRecommendTime := time.Now()
 	base.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", w.jobs),
@@ -703,6 +703,7 @@ func (w *Worker) Recommend(users []data.User) {
 	base.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 	UpdateUserRecommendTotal.Set(updateUserCount.Load())
+	OfflineRecommendTotalSeconds.Set(time.Since(startRecommendTime).Seconds())
 	OfflineRecommendStepSecondsVec.WithLabelValues("collaborative_recommend").Set(collaborativeRecommendSeconds.Load())
 	OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Set(itemBasedRecommendSeconds.Load())
 	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendSeconds.Load())
