@@ -1237,8 +1237,14 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 			return s.PopularItemsCache.GetSortedScore(item.ItemId)
 		})
 		modification = NewCacheModification(s.CacheClient)
+
+		loadExistedItemsTime time.Duration
+		parseTimesatmpTime   time.Duration
+		insertItemsTime      time.Duration
+		insertCacheTime      time.Duration
 	)
 	// load existed items
+	start := time.Now()
 	existedItems, err := s.DataClient.BatchGetItems(lo.Map(temp, func(t Item, i int) string {
 		return t.ItemId
 	}))
@@ -1250,7 +1256,9 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	for _, item := range existedItems {
 		existedItemsSet[item.ItemId] = item
 	}
+	loadExistedItemsTime = time.Since(start)
 
+	start = time.Now()
 	for i, item := range temp {
 		// parse datetime
 		var timestamp time.Time
@@ -1283,12 +1291,18 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		}
 		count++
 	}
+	parseTimesatmpTime = time.Since(start)
+
 	// insert items
+	start = time.Now()
 	if err = s.DataClient.BatchInsertItems(items); err != nil {
 		InternalServerError(response, err)
 		return
 	}
+	insertItemsTime = time.Since(start)
+
 	// insert modify timestamp
+	start = time.Now()
 	categories := strset.New()
 	values := make([]cache.Value, len(items))
 	for i, item := range items {
@@ -1309,6 +1323,12 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		InternalServerError(response, err)
 		return
 	}
+	insertCacheTime = time.Since(start)
+	base.ResponseLogger(response).Info("batch insert items",
+		zap.Duration("load_existed_items_time", loadExistedItemsTime),
+		zap.Duration("parse_timestamp_time", parseTimesatmpTime),
+		zap.Duration("insert_items_time", insertItemsTime),
+		zap.Duration("insert_cache_time", insertCacheTime))
 	Ok(response, Success{RowAffected: count})
 }
 
@@ -1556,6 +1576,7 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 			InternalServerError(response, err)
 			return
 		}
+		base.ResponseLogger(response).Info("Insert feedback successfully", zap.Int("num_feedback", len(feedback)))
 		Ok(response, Success{RowAffected: len(feedback)})
 	}
 }
