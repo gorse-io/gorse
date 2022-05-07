@@ -52,7 +52,7 @@ func (db *MongoDB) Init() error {
 	ctx := context.Background()
 	d := db.client.Database(db.dbName)
 	// list collections
-	var hasUsers, hasItems, hasFeedback, hasMeasurements bool
+	var hasUsers, hasItems, hasFeedback bool
 	collections, err := d.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
 		return errors.Trace(err)
@@ -65,8 +65,6 @@ func (db *MongoDB) Init() error {
 			hasItems = true
 		case "feedback":
 			hasFeedback = true
-		case "measurements":
-			hasMeasurements = true
 		}
 	}
 	// create collections
@@ -82,11 +80,6 @@ func (db *MongoDB) Init() error {
 	}
 	if !hasFeedback {
 		if err = d.CreateCollection(ctx, "feedback"); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	if !hasMeasurements {
-		if err = d.CreateCollection(ctx, "measurements"); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -140,41 +133,6 @@ func (db *MongoDB) Init() error {
 // Close connection to MongoDB.
 func (db *MongoDB) Close() error {
 	return db.client.Disconnect(context.Background())
-}
-
-// InsertMeasurement insert a measurement into MongoDB.
-func (db *MongoDB) InsertMeasurement(measurement Measurement) error {
-	ctx := context.Background()
-	c := db.client.Database(db.dbName).Collection("measurements")
-	opt := options.Update()
-	opt.SetUpsert(true)
-	_, err := c.UpdateOne(ctx,
-		bson.M{"name": bson.M{"$eq": measurement.Name}, "timestamp": bson.M{"$eq": measurement.Timestamp}},
-		bson.M{"$set": measurement}, opt)
-	return errors.Trace(err)
-}
-
-// GetMeasurements get recent measurements from MongoDB.
-func (db *MongoDB) GetMeasurements(name string, n int) ([]Measurement, error) {
-	ctx := context.Background()
-	c := db.client.Database(db.dbName).Collection("measurements")
-	opt := options.Find()
-	opt.SetLimit(int64(n))
-	opt.SetSort(bson.D{{"timestamp", -1}})
-	r, err := c.Find(ctx, bson.M{"name": bson.M{"$eq": name}}, opt)
-	measurements := make([]Measurement, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close(ctx)
-	for r.Next(ctx) {
-		var measurement Measurement
-		if err = r.Decode(&measurement); err != nil {
-			return measurements, err
-		}
-		measurements = append(measurements, measurement)
-	}
-	return measurements, nil
 }
 
 // BatchInsertItems insert items into MongoDB.

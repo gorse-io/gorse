@@ -102,14 +102,6 @@ func (sorter feedbackSorter) Swap(i, j int) {
 	sorter[i], sorter[j] = sorter[j], sorter[i]
 }
 
-// Measurement stores a statistical value.
-type Measurement struct {
-	Name      string
-	Timestamp time.Time
-	Value     float32
-	Comment   string
-}
-
 type Database interface {
 	Init() error
 	Close() error
@@ -131,8 +123,6 @@ type Database interface {
 	DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error)
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error
 	GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error)
-	InsertMeasurement(measurement Measurement) error
-	GetMeasurements(name string, n int) ([]Measurement, error)
 	GetClickThroughRate(date time.Time, positiveTypes, readTypes []string) (float64, error)
 	GetUserStream(batchSize int) (chan []User, chan error)
 	GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error)

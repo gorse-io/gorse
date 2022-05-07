@@ -125,12 +125,6 @@ func TestMongoDatabase_DeleteFeedback(t *testing.T) {
 	testDeleteFeedback(t, db.Database)
 }
 
-func TestMongoDatabase_Measurements(t *testing.T) {
-	db := newTestMongoDatabase(t)
-	defer db.Close(t)
-	testMeasurements(t, db.Database)
-}
-
 func TestMongoDatabase_TimeLimit(t *testing.T) {
 	db := newTestMongoDatabase(t)
 	defer db.Close(t)

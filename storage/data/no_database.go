@@ -147,16 +147,6 @@ func (NoDatabase) GetFeedbackStream(_ int, _ *time.Time, _ ...string) (chan []Fe
 	return feedbackChan, errChan
 }
 
-// InsertMeasurement method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) InsertMeasurement(_ Measurement) error {
-	return ErrNoDatabase
-}
-
-// GetMeasurements method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetMeasurements(_ string, _ int) ([]Measurement, error) {
-	return nil, ErrNoDatabase
-}
-
 // GetClickThroughRate method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetClickThroughRate(_ time.Time, _, _ []string) (float64, error) {
 	return 0, ErrNoDatabase
