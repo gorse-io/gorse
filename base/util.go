@@ -20,6 +20,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/chewxy/math32"
+	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
 	"go.uber.org/zap"
 	"io"
@@ -37,6 +38,10 @@ func init() {
 // Logger get current logger
 func Logger() *zap.Logger {
 	return logger
+}
+
+func ResponseLogger(resp *restful.Response) *zap.Logger {
+	return logger.With(zap.String("request_id", resp.Header().Get("X-Request-ID")))
 }
 
 // SetProductionLogger set current logger in production mode.
