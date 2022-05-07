@@ -19,6 +19,7 @@ import (
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
@@ -76,12 +77,16 @@ func (s *RestServer) StartHttpServer() {
 }
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	// generate request id
+	requestId := uuid.New().String()
+	resp.AddHeader("X-Request-ID", requestId)
+
 	start := time.Now()
 	chain.ProcessFilter(req, resp)
 	responseTime := time.Since(start)
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
-		base.Logger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
+		base.ResponseLogger(resp).Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
 			zap.Int("status_code", resp.StatusCode()),
 			zap.Duration("response_time", responseTime))
 	}
@@ -97,11 +102,11 @@ func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, ch
 		chain.ProcessFilter(req, resp)
 		return
 	}
-	base.Logger().Error("unauthorized",
+	base.ResponseLogger(resp).Error("unauthorized",
 		zap.String("api_key", s.GorseConfig.Server.APIKey),
 		zap.String("X-API-Key", apikey))
 	if err := resp.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
-		base.Logger().Error("failed to write error", zap.Error(err))
+		base.ResponseLogger(resp).Error("failed to write error", zap.Error(err))
 	}
 }
 
@@ -520,7 +525,7 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 		return
 	}
 	if isItem {
-		items = s.FilterOutHiddenScores(items, category)
+		items = s.FilterOutHiddenScores(response, items, category)
 	}
 	if n > 0 && len(items) > n {
 		items = items[:n]
@@ -531,13 +536,13 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	base.Logger().Debug("get category popular items in category", zap.String("category", category))
+	base.ResponseLogger(response).Debug("get category popular items in category", zap.String("category", category))
 	s.getSort(cache.PopularItems, category, true, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	base.Logger().Debug("get category latest items in category", zap.String("category", category))
+	base.ResponseLogger(response).Debug("get category latest items in category", zap.String("category", category))
 	s.getSort(cache.LatestItems, category, true, request, response)
 }
 
@@ -591,7 +596,7 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 // 1. If there are recommendations in cache, return cached recommendations.
 // 2. If there are historical interactions of the users, return similar items.
 // 3. Otherwise, return fallback recommendation (popular/latest).
-func (s *RestServer) Recommend(userId, category string, n int, recommenders ...Recommender) ([]string, error) {
+func (s *RestServer) Recommend(response *restful.Response, userId, category string, n int, recommenders ...Recommender) ([]string, error) {
 	initStart := time.Now()
 
 	// create context
@@ -613,14 +618,14 @@ func (s *RestServer) Recommend(userId, category string, n int, recommenders ...R
 		ctx.results = ctx.results[:n]
 	}
 	totalTime := time.Since(initStart)
-	base.Logger().Info("complete recommendation",
+	base.ResponseLogger(response).Info("complete recommendation",
 		zap.Int("num_from_final", ctx.numFromOffline),
 		zap.Int("num_from_collaborative", ctx.numFromCollaborative),
 		zap.Int("num_from_item_based", ctx.numFromItemBased),
 		zap.Int("num_from_user_based", ctx.numFromUserBased),
 		zap.Int("num_from_latest", ctx.numFromLatest),
 		zap.Int("num_from_poplar", ctx.numFromPopular),
-		zap.Duration("response_time", totalTime),
+		zap.Duration("total_time", totalTime),
 		zap.Duration("load_final_recommend_time", ctx.loadOfflineRecTime),
 		zap.Duration("load_col_recommend_time", ctx.loadColRecTime),
 		zap.Duration("load_hist_time", ctx.loadLoadHistTime),
@@ -632,6 +637,7 @@ func (s *RestServer) Recommend(userId, category string, n int, recommenders ...R
 }
 
 type recommendContext struct {
+	response     *restful.Response
 	userId       string
 	category     string
 	userFeedback []data.Feedback
@@ -691,10 +697,10 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 	return nil
 }
 
-func (s *RestServer) FilterOutHiddenScores(items []cache.Scored, category string) []cache.Scored {
+func (s *RestServer) FilterOutHiddenScores(response *restful.Response, items []cache.Scored, category string) []cache.Scored {
 	isHidden, err := s.HiddenItemsManager.IsHidden(cache.RemoveScores(items), category)
 	if err != nil {
-		base.Logger().Error("failed to check hidden items", zap.Error(err))
+		base.ResponseLogger(response).Error("failed to check hidden items", zap.Error(err))
 		return items
 	}
 	results := make([]cache.Scored, 0, len(items))
@@ -706,14 +712,14 @@ func (s *RestServer) FilterOutHiddenScores(items []cache.Scored, category string
 	return results
 }
 
-func (s *RestServer) filterOutHiddenFeedback(feedbacks []data.Feedback) []data.Feedback {
+func (s *RestServer) filterOutHiddenFeedback(response *restful.Response, feedbacks []data.Feedback) []data.Feedback {
 	names := make([]string, len(feedbacks))
 	for i, item := range feedbacks {
 		names[i] = item.ItemId
 	}
 	isHidden, err := s.HiddenItemsManager.IsHidden(names, "")
 	if err != nil {
-		base.Logger().Error("failed to check hidden items", zap.Error(err))
+		base.ResponseLogger(response).Error("failed to check hidden items", zap.Error(err))
 		return feedbacks
 	}
 	var results []data.Feedback
@@ -734,7 +740,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		recommendation = s.FilterOutHiddenScores(recommendation, ctx.category)
+		recommendation = s.FilterOutHiddenScores(ctx.response, recommendation, ctx.category)
 		for _, item := range recommendation {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -755,7 +761,7 @@ func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		collaborativeRecommendation = s.FilterOutHiddenScores(collaborativeRecommendation, ctx.category)
+		collaborativeRecommendation = s.FilterOutHiddenScores(ctx.response, collaborativeRecommendation, ctx.category)
 		for _, item := range collaborativeRecommendation {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -788,7 +794,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			feedbacks = s.filterOutHiddenFeedback(feedbacks)
+			feedbacks = s.filterOutHiddenFeedback(ctx.response, feedbacks)
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !ctx.excludeSet.Has(feedback.ItemId) {
@@ -845,7 +851,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 				return errors.Trace(err)
 			}
 			// add unseen items
-			similarItems = s.FilterOutHiddenScores(similarItems, ctx.category)
+			similarItems = s.FilterOutHiddenScores(ctx.response, similarItems, ctx.category)
 			for _, item := range similarItems {
 				if !ctx.excludeSet.Has(item.Id) {
 					candidates[item.Id] += item.Score
@@ -879,7 +885,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		items = s.FilterOutHiddenScores(items, ctx.category)
+		items = s.FilterOutHiddenScores(ctx.response, items, ctx.category)
 		for _, item := range items {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -904,7 +910,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		items = s.FilterOutHiddenScores(items, ctx.category)
+		items = s.FilterOutHiddenScores(ctx.response, items, ctx.category)
 		for _, item := range items {
 			if !ctx.excludeSet.Has(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
@@ -957,7 +963,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			return
 		}
 	}
-	results, err := s.Recommend(userId, category, offset+n, recommenders...)
+	results, err := s.Recommend(response, userId, category, offset+n, recommenders...)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1044,7 +1050,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 			return
 		}
 		// add unseen items
-		similarItems = s.FilterOutHiddenScores(similarItems, "")
+		similarItems = s.FilterOutHiddenScores(response, similarItems, "")
 		for _, item := range similarItems {
 			if !excludeSet.Has(item.Id) {
 				candidates[item.Id] += item.Score
@@ -1660,18 +1666,18 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 // BadRequest returns a bad request error.
 func BadRequest(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
-	base.Logger().Error("bad request", zap.Error(err))
+	base.ResponseLogger(response).Error("bad request", zap.Error(err))
 	if err = response.WriteError(http.StatusBadRequest, err); err != nil {
-		base.Logger().Error("failed to write error", zap.Error(err))
+		base.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }
 
 // InternalServerError returns a internal server error.
 func InternalServerError(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
-	base.Logger().Error("internal server error", zap.Error(err))
+	base.ResponseLogger(response).Error("internal server error", zap.Error(err))
 	if err = response.WriteError(http.StatusInternalServerError, err); err != nil {
-		base.Logger().Error("failed to write error", zap.Error(err))
+		base.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }
 
@@ -1679,7 +1685,7 @@ func InternalServerError(response *restful.Response, err error) {
 func PageNotFound(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteError(http.StatusNotFound, err); err != nil {
-		base.Logger().Error("failed to write error", zap.Error(err))
+		base.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }
 
@@ -1687,7 +1693,7 @@ func PageNotFound(response *restful.Response, err error) {
 func Ok(response *restful.Response, content interface{}) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteAsJson(content); err != nil {
-		base.Logger().Error("failed to write json", zap.Error(err))
+		base.ResponseLogger(response).Error("failed to write json", zap.Error(err))
 	}
 }
 
@@ -1695,7 +1701,7 @@ func Ok(response *restful.Response, content interface{}) {
 func Text(response *restful.Response, content string) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if _, err := response.Write([]byte(content)); err != nil {
-		base.Logger().Error("failed to write text", zap.Error(err))
+		base.ResponseLogger(response).Error("failed to write text", zap.Error(err))
 	}
 }
 

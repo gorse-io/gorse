@@ -435,31 +435,31 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	var err error
 	// read number of users
 	if status.NumUsers, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumUsers)).Integer(); err != nil {
-		base.Logger().Warn("failed to get number of users", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get number of users", zap.Error(err))
 	}
 	// read number of items
 	if status.NumItems, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumItems)).Integer(); err != nil {
-		base.Logger().Warn("failed to get number of items", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get number of items", zap.Error(err))
 	}
 	// read number of user labels
 	if status.NumUserLabels, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumUserLabels)).Integer(); err != nil {
-		base.Logger().Warn("failed to get number of user labels", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get number of user labels", zap.Error(err))
 	}
 	// read number of item labels
 	if status.NumItemLabels, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumItemLabels)).Integer(); err != nil {
-		base.Logger().Warn("failed to get number of item labels", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get number of item labels", zap.Error(err))
 	}
 	// read number of total positive feedback
 	if status.NumTotalPosFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks)).Integer(); err != nil {
-		base.Logger().Warn("failed to get number of total positive feedbacks", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get number of total positive feedbacks", zap.Error(err))
 	}
 	// read number of valid positive feedback
 	if status.NumValidPosFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks)).Integer(); err != nil {
-		base.Logger().Warn("failed to get number of valid positive feedbacks", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get number of valid positive feedbacks", zap.Error(err))
 	}
 	// read number of valid negative feedback
 	if status.NumValidNegFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks)).Integer(); err != nil {
-		base.Logger().Warn("failed to get number of valid negative feedbacks", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get number of valid negative feedbacks", zap.Error(err))
 	}
 	// count the number of workers and servers
 	m.nodesInfoMutex.Lock()
@@ -474,27 +474,27 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	m.nodesInfoMutex.Unlock()
 	// read popular items update time
 	if status.PopularItemsUpdateTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime)).Time(); err != nil {
-		base.Logger().Warn("failed to get popular items update time", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get popular items update time", zap.Error(err))
 	}
 	// read the latest items update time
 	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
-		base.Logger().Warn("failed to get latest items update time", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
 	}
 	status.MatchingModelScore = m.rankingScore
 	status.RankingModelScore = m.clickScore
 	// read last fit matching model time
 	if status.MatchingModelFitTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {
-		base.Logger().Warn("failed to get last fit matching model time", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get last fit matching model time", zap.Error(err))
 	}
 	// read last fit ranking model time
 	if status.RankingModelFitTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime)).Time(); err != nil {
-		base.Logger().Warn("failed to get last fit ranking model time", zap.Error(err))
+		base.ResponseLogger(response).Warn("failed to get last fit ranking model time", zap.Error(err))
 	}
 	// read user neighbor index recall
 	var temp string
 	if m.GorseConfig.Recommend.UserNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
-			base.Logger().Warn("failed to get user neighbor index recall", zap.Error(err))
+			base.ResponseLogger(response).Warn("failed to get user neighbor index recall", zap.Error(err))
 		} else {
 			status.UserNeighborIndexRecall = base.ParseFloat32(temp)
 		}
@@ -502,7 +502,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	// read item neighbor index recall
 	if m.GorseConfig.Recommend.ItemNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
-			base.Logger().Warn("failed to get item neighbor index recall", zap.Error(err))
+			base.ResponseLogger(response).Warn("failed to get item neighbor index recall", zap.Error(err))
 		} else {
 			status.ItemNeighborIndexRecall = base.ParseFloat32(temp)
 		}
@@ -510,7 +510,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	// read matching index recall
 	if m.GorseConfig.Recommend.Collaborative.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
-			base.Logger().Warn("failed to get matching index recall", zap.Error(err))
+			base.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
 		} else {
 			status.MatchingIndexRecall = base.ParseFloat32(temp)
 		}
@@ -619,13 +619,13 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	var results []string
 	switch recommender {
 	case "offline":
-		results, err = m.Recommend(userId, category, n, m.RecommendOffline)
+		results, err = m.Recommend(response, userId, category, n, m.RecommendOffline)
 	case "collaborative":
-		results, err = m.Recommend(userId, category, n, m.RecommendCollaborative)
+		results, err = m.Recommend(response, userId, category, n, m.RecommendCollaborative)
 	case "user_based":
-		results, err = m.Recommend(userId, category, n, m.RecommendUserBased)
+		results, err = m.Recommend(response, userId, category, n, m.RecommendUserBased)
 	case "item_based":
-		results, err = m.Recommend(userId, category, n, m.RecommendItemBased)
+		results, err = m.Recommend(response, userId, category, n, m.RecommendItemBased)
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
 		for _, recommender := range m.GorseConfig.Recommend.Online.FallbackRecommend {
@@ -645,7 +645,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 				return
 			}
 		}
-		results, err = m.Recommend(userId, category, n, recommenders...)
+		results, err = m.Recommend(response, userId, category, n, recommenders...)
 	}
 	if err != nil {
 		server.InternalServerError(response, err)
@@ -716,7 +716,7 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		return
 	}
 	if isItem {
-		scores = m.FilterOutHiddenScores(scores, category)
+		scores = m.FilterOutHiddenScores(response, scores, category)
 	}
 	if n > 0 && len(scores) > n {
 		scores = scores[:n]
@@ -744,7 +744,7 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		}
 		server.Ok(response, details)
 	default:
-		base.Logger().Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
+		base.ResponseLogger(response).Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
 	}
 }
 
