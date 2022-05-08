@@ -898,18 +898,16 @@ func TestServer_DeleteFeedback(t *testing.T) {
 func TestServer_Measurement(t *testing.T) {
 	s := newMockServer(t)
 	defer s.Close(t)
-	measurements := []data.Measurement{
-		{"Test_NDCG", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 0, "a"},
-		{"Test_NDCG", time.Date(2001, 1, 1, 1, 1, 1, 0, time.UTC), 1, "b"},
-		{"Test_NDCG", time.Date(2002, 1, 1, 1, 1, 1, 0, time.UTC), 2, "c"},
-		{"Test_NDCG", time.Date(2003, 1, 1, 1, 1, 1, 0, time.UTC), 3, "d"},
-		{"Test_NDCG", time.Date(2004, 1, 1, 1, 1, 1, 0, time.UTC), 4, "e"},
-		{"Test_Recall", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC), 1, "f"},
+	measurements := []Measurement{
+		{"Test_NDCG", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 0},
+		{"Test_NDCG", time.Date(2001, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 1},
+		{"Test_NDCG", time.Date(2002, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 2},
+		{"Test_NDCG", time.Date(2003, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 3},
+		{"Test_NDCG", time.Date(2004, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 4},
+		{"Test_Recall", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 1},
 	}
-	for _, measurement := range measurements {
-		err := s.DataClient.InsertMeasurement(measurement)
-		assert.NoError(t, err)
-	}
+	err := s.InsertMeasurement(measurements...)
+	assert.NoError(t, err)
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/measurements/Test_NDCG").
@@ -917,7 +915,7 @@ func TestServer_Measurement(t *testing.T) {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []data.Measurement{
+		Body(marshal(t, []Measurement{
 			measurements[4],
 			measurements[3],
 			measurements[2],

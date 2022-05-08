@@ -76,7 +76,7 @@ func (m *Master) CreateWebService() {
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Writes(map[string][]data.Measurement{}))
+		Writes(map[string][]server.Measurement{}))
 	// Get a user
 	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
 		Doc("Get a user.").
@@ -530,9 +530,9 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 		server.BadRequest(response, err)
 		return
 	}
-	measurements := make(map[string][]data.Measurement, len(m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
+	measurements := make(map[string][]server.Measurement, len(m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
 	for _, feedbackType := range m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes {
-		measurements[feedbackType], err = m.DataClient.GetMeasurements(cache.Key(PositiveFeedbackRate, feedbackType), n)
+		measurements[feedbackType], err = m.RestServer.GetMeasurements(cache.Key(PositiveFeedbackRate, feedbackType), n)
 		if err != nil {
 			server.InternalServerError(response, err)
 			return

@@ -49,7 +49,7 @@ type SQLDatabase struct {
 // Optimize is used by ClickHouse only.
 func (d *SQLDatabase) Optimize() error {
 	if d.driver == ClickHouse {
-		for _, tableName := range []string{"users", "items", "feedback", "measurements"} {
+		for _, tableName := range []string{"users", "items", "feedback"} {
 			_, err := d.client.Exec("OPTIMIZE TABLE " + tableName)
 			if err != nil {
 				return errors.Trace(err)
@@ -96,15 +96,6 @@ func (d *SQLDatabase) Init() error {
 			")  ENGINE=InnoDB"); err != nil {
 			return errors.Trace(err)
 		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
-			"name varchar(256) NOT NULL," +
-			"time_stamp datetime NOT NULL," +
-			"value double NOT NULL," +
-			"comment TEXT NOT NULL," +
-			"PRIMARY KEY(name, time_stamp)" +
-			")  ENGINE=InnoDB"); err != nil {
-			return errors.Trace(err)
-		}
 		// change settings
 		_, err := d.client.Exec("SET SESSION sql_mode=\"" +
 			"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
@@ -148,15 +139,6 @@ func (d *SQLDatabase) Init() error {
 		if _, err := d.client.Exec("CREATE INDEX IF NOT EXISTS item_id_index ON feedback(item_id)"); err != nil {
 			return errors.Trace(err)
 		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
-			"name varchar(256) NOT NULL," +
-			"time_stamp timestamptz NOT NULL," +
-			"value double precision NOT NULL," +
-			"comment TEXT NOT NULL," +
-			"PRIMARY KEY(name, time_stamp)" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
 	case ClickHouse:
 		// create tables
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS items (" +
@@ -191,14 +173,6 @@ func (d *SQLDatabase) Init() error {
 			") ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)"); err != nil {
 			return errors.Trace(err)
 		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS measurements (" +
-			"name String," +
-			"time_stamp Datetime," +
-			"value Float64," +
-			"comment String" +
-			") ENGINE = ReplacingMergeTree() ORDER BY (name, time_stamp)"); err != nil {
-			return errors.Trace(err)
-		}
 	}
 	return nil
 }
@@ -206,50 +180,6 @@ func (d *SQLDatabase) Init() error {
 // Close MySQL connection.
 func (d *SQLDatabase) Close() error {
 	return d.client.Close()
-}
-
-// InsertMeasurement insert a measurement into MySQL.
-func (d *SQLDatabase) InsertMeasurement(measurement Measurement) error {
-	var err error
-	switch d.driver {
-	case MySQL:
-		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?) "+
-			"ON DUPLICATE KEY UPDATE value = VALUES(value), `comment` = VALUES(`comment`)",
-			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
-	case Postgres:
-		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, comment) VALUES ($1, $2, $3, $4)  "+
-			"ON CONFLICT (name, time_stamp) DO UPDATE SET value = EXCLUDED.value, comment = EXCLUDED.comment",
-			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
-	case ClickHouse:
-		_, err = d.client.Exec("INSERT INTO measurements(name, time_stamp, value, `comment`) VALUES (?, ?, ?, ?)",
-			measurement.Name, measurement.Timestamp, measurement.Value, measurement.Comment)
-	}
-	return errors.Trace(err)
-}
-
-// GetMeasurements returns recent measurements from MySQL.
-func (d *SQLDatabase) GetMeasurements(name string, n int) ([]Measurement, error) {
-	measurements := make([]Measurement, 0)
-	var result *sql.Rows
-	var err error
-	switch d.driver {
-	case MySQL, ClickHouse:
-		result, err = d.client.Query("SELECT name, time_stamp, value, `comment` FROM measurements WHERE name = ? ORDER BY time_stamp DESC LIMIT ?", name, n)
-	case Postgres:
-		result, err = d.client.Query("SELECT name, time_stamp, value, comment FROM measurements WHERE name = $1 ORDER BY time_stamp DESC LIMIT $2", name, n)
-	}
-	if err != nil {
-		return measurements, errors.Trace(err)
-	}
-	defer result.Close()
-	for result.Next() {
-		var measurement Measurement
-		if err = result.Scan(&measurement.Name, &measurement.Timestamp, &measurement.Value, &measurement.Comment); err != nil {
-			return measurements, errors.Trace(err)
-		}
-		measurements = append(measurements, measurement)
-	}
-	return measurements, nil
 }
 
 // BatchInsertItems inserts a batch of items into MySQL.

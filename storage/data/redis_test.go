@@ -76,12 +76,6 @@ func TestRedis_DeleteFeedback(t *testing.T) {
 	testDeleteFeedback(t, db.Database)
 }
 
-func TestRedis_Measurements(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testMeasurements(t, db.Database)
-}
-
 func TestRedis_TimeLimit(t *testing.T) {
 	db := newMockRedis(t)
 	defer db.Close(t)

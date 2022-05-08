@@ -15,6 +15,8 @@
 package server
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
@@ -482,8 +484,8 @@ func (s *RestServer) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"measurements"}).
 		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned measurements.").DataType("integer")).
-		Returns(200, "OK", []data.Measurement{}).
-		Writes([]data.Measurement{}))
+		Returns(200, "OK", []Measurement{}).
+		Writes([]Measurement{}))
 }
 
 // ParseInt parses integers from the query parameter.
@@ -1668,6 +1670,54 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	}
 }
 
+// Measurement stores a statistical value.
+type Measurement struct {
+	Name      string
+	Timestamp time.Time
+	Value     float32
+}
+
+func NewMeasurementFromScore(name string, score cache.Scored) (Measurement, error) {
+	buf, err := hex.DecodeString(score.Id)
+	if err != nil {
+		return Measurement{}, errors.Trace(err)
+	}
+	return Measurement{
+		Name:      name,
+		Timestamp: time.Unix(int64(score.Score), 0),
+		Value:     math.Float32frombits(binary.LittleEndian.Uint32(buf)),
+	}, nil
+}
+
+func (m Measurement) GetScore() cache.Scored {
+	var buf [4]byte
+	binary.LittleEndian.PutUint32(buf[:], math.Float32bits(m.Value))
+	return cache.Scored{Id: hex.EncodeToString(buf[:]), Score: float64(m.Timestamp.Unix())}
+}
+
+func (s *RestServer) GetMeasurements(name string, n int) ([]Measurement, error) {
+	scores, err := s.CacheClient.GetSorted(cache.Key(cache.Measurements, name), 0, n-1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	var measurements []Measurement
+	for _, score := range scores {
+		measurement, err := NewMeasurementFromScore(name, score)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		measurements = append(measurements, measurement)
+	}
+	return measurements, nil
+}
+
+func (s *RestServer) InsertMeasurement(measurements ...Measurement) error {
+	sortedSets := lo.Map(measurements, func(m Measurement, _ int) cache.SortedSet {
+		return cache.Sorted(cache.Key(cache.Measurements, m.Name), []cache.Scored{m.GetScore()})
+	})
+	return s.CacheClient.AddSorted(sortedSets...)
+}
+
 func (s *RestServer) getMeasurements(request *restful.Request, response *restful.Response) {
 	// Parse parameters
 	name := request.PathParameter("name")
@@ -1676,7 +1726,7 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 		BadRequest(response, err)
 		return
 	}
-	measurements, err := s.DataClient.GetMeasurements(name, n)
+	measurements, err := s.GetMeasurements(name, n)
 	if err != nil {
 		InternalServerError(response, err)
 		return

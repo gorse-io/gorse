@@ -35,11 +35,21 @@ var (
 		Subsystem: "master",
 		Name:      "find_user_neighbors_seconds",
 	}, []string{"step"})
+	FindUserNeighborsTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "find_user_neighbors_total_seconds",
+	})
 	FindItemNeighborsSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "find_item_neighbors_seconds",
 	}, []string{"step"})
+	FindItemNeighborsTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "find_item_neighbors_total_seconds",
+	})
 	UpdateUserNeighborsTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",

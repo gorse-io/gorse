@@ -30,6 +30,10 @@ import (
 )
 
 const (
+	// Measurements are sorted set of measurements.
+	// 	Measurements - measurements/{name}
+	Measurements = "measurements"
+
 	// IgnoreItems is sorted set of ignored items for each user
 	//  Ignored items      - ignore_items/{user_id}
 	IgnoreItems = "ignore_items"

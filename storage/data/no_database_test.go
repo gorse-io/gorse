@@ -73,9 +73,4 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, c = database.GetFeedbackStream(0, nil)
 	assert.ErrorIs(t, <-c, ErrNoDatabase)
-
-	err = database.InsertMeasurement(Measurement{})
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.GetMeasurements("", 0)
-	assert.ErrorIs(t, err, ErrNoDatabase)
 }

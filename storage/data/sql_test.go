@@ -129,12 +129,6 @@ func TestMySQL_DeleteFeedback(t *testing.T) {
 	testDeleteFeedback(t, db.Database)
 }
 
-func TestMySQL_Measurements(t *testing.T) {
-	db := newTestMySQLDatabase(t)
-	defer db.Close(t)
-	testMeasurements(t, db.Database)
-}
-
 func TestMySQL_TimeLimit(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
@@ -223,12 +217,6 @@ func TestPostgres_DeleteFeedback(t *testing.T) {
 	testDeleteFeedback(t, db.Database)
 }
 
-func TestPostgres_Measurements(t *testing.T) {
-	db := newTestPostgresDatabase(t)
-	defer db.Close(t)
-	testMeasurements(t, db.Database)
-}
-
 func TestPostgres_TimeLimit(t *testing.T) {
 	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
@@ -315,12 +303,6 @@ func TestClickHouse_DeleteFeedback(t *testing.T) {
 	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testDeleteFeedback(t, db.Database)
-}
-
-func TestClickHouse_Measurements(t *testing.T) {
-	db := newTestClickHouseDatabase(t)
-	defer db.Close(t)
-	testMeasurements(t, db.Database)
 }
 
 func TestClickHouse_TimeLimit(t *testing.T) {

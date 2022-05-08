@@ -21,7 +21,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -31,7 +30,6 @@ const (
 	prefixItem     = "item/"     // prefix for items
 	prefixUser     = "user/"     // prefix for users
 	prefixFeedback = "feedback/" // prefix for feedback
-	prefixMeasure  = "measure/"  // prefix for measurements
 )
 
 // Redis use Redis as data storage, but used for test only.
@@ -52,73 +50,6 @@ func (r *Redis) Init() error {
 // Close Redis connection.
 func (r *Redis) Close() error {
 	return r.client.Close()
-}
-
-// InsertMeasurement insert a measurement into Redis.
-func (r *Redis) InsertMeasurement(measurement Measurement) error {
-	var ctx = context.Background()
-	data, err := json.Marshal(measurement)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if err = r.client.Set(ctx, prefixMeasure+measurement.Name+"/"+measurement.Timestamp.String(),
-		data, 0).Err(); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-// GetMeasurements returns recent measurements from Redis.
-func (r *Redis) GetMeasurements(name string, n int) ([]Measurement, error) {
-	var ctx = context.Background()
-	measurements := make([]Measurement, 0)
-	var err error
-	var cursor uint64
-	var keys []string
-	for {
-		keys, cursor, err = r.client.Scan(ctx, cursor, prefixMeasure+name+"/*", 0).Result()
-		if err != nil {
-			return nil, err
-		}
-		for _, key := range keys {
-			data, err := r.client.Get(ctx, key).Result()
-			if err != nil {
-				return measurements, err
-			}
-			var measurement Measurement
-			err = json.Unmarshal([]byte(data), &measurement)
-			if err != nil {
-				return measurements, err
-			}
-			measurements = append(measurements, measurement)
-		}
-		if cursor == 0 {
-			break
-		}
-	}
-	// sort measurements by timestamp
-	s := &sortMeasurements{measurements: measurements}
-	sort.Sort(s)
-	if len(measurements) > n {
-		measurements = measurements[:n]
-	}
-	return measurements, nil
-}
-
-type sortMeasurements struct {
-	measurements []Measurement
-}
-
-func (s *sortMeasurements) Len() int {
-	return len(s.measurements)
-}
-
-func (s *sortMeasurements) Less(i, j int) bool {
-	return s.measurements[i].Timestamp.Unix() > s.measurements[j].Timestamp.Unix()
-}
-
-func (s *sortMeasurements) Swap(i, j int) {
-	s.measurements[i], s.measurements[j] = s.measurements[j], s.measurements[i]
 }
 
 // insertItem inserts an item into Redis.
