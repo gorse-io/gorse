@@ -28,6 +28,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
@@ -179,6 +180,7 @@ func (m *Master) runLoadDatasetTask() error {
 
 // runFindItemNeighborsTask updates neighbors of items.
 func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
+	startTaskTime := time.Now()
 	m.taskMonitor.Start(TaskFindItemNeighbors, dataset.ItemCount())
 	base.Logger().Info("start searching neighbors of items",
 		zap.Int("n_cache", m.GorseConfig.Recommend.CacheSize))
@@ -248,6 +250,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	if err != nil {
 		base.Logger().Error("failed to searching neighbors of items", zap.Error(err))
 		m.taskMonitor.Fail(TaskFindItemNeighbors, err.Error())
+		FindItemNeighborsTotalSeconds.Set(0)
 	} else {
 		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime), time.Now())); err != nil {
 			base.Logger().Error("failed to set neighbors of items update time", zap.Error(err))
@@ -255,6 +258,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		base.Logger().Info("complete searching neighbors of items",
 			zap.String("search_time", searchTime.String()))
 		m.taskMonitor.Finish(TaskFindItemNeighbors)
+		FindItemNeighborsTotalSeconds.Set(time.Since(startTaskTime).Seconds())
 	}
 }
 
@@ -462,6 +466,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 
 // runFindUserNeighborsTask updates neighbors of users.
 func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
+	startTaskTime := time.Now()
 	m.taskMonitor.Start(TaskFindUserNeighbors, dataset.UserCount())
 	base.Logger().Info("start searching neighbors of users",
 		zap.Int("n_cache", m.GorseConfig.Recommend.CacheSize))
@@ -531,14 +536,16 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	if err != nil {
 		base.Logger().Error("failed to searching neighbors of users", zap.Error(err))
 		m.taskMonitor.Fail(TaskFindUserNeighbors, err.Error())
+		FindUserNeighborsTotalSeconds.Set(0)
 	} else {
 		if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime), time.Now())); err != nil {
 			base.Logger().Error("failed to set neighbors of users update time", zap.Error(err))
 		}
 		base.Logger().Info("complete searching neighbors of users",
 			zap.String("search_time", searchTime.String()))
+		m.taskMonitor.Finish(TaskFindUserNeighbors)
+		FindUserNeighborsTotalSeconds.Set(time.Since(startTaskTime).Seconds())
 	}
-	m.taskMonitor.Finish(TaskFindUserNeighbors)
 }
 
 func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}) error {
@@ -977,7 +984,7 @@ func (m *Master) runAnalyzeTask() error {
 	for j, feedbackType := range m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes {
 		measurement := cache.Key(PositiveFeedbackRate, feedbackType)
 		// pull existed click-through rates
-		clickThroughRates, err := m.DataClient.GetMeasurements(measurement, 30)
+		clickThroughRates, err := m.RestServer.GetMeasurements(measurement, 30)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -998,7 +1005,7 @@ func (m *Master) runAnalyzeTask() error {
 					return errors.Trace(err)
 				}
 				PositiveFeedbackRateVec.WithLabelValues(feedbackType).Set(float64(len(clickThroughRates)))
-				err = m.DataClient.InsertMeasurement(data.Measurement{
+				err = m.RestServer.InsertMeasurement(server.Measurement{
 					Name:      measurement,
 					Timestamp: date,
 					Value:     float32(clickThroughRate),
