@@ -259,7 +259,7 @@ func (hc *HiddenItemsManager) sync() {
 	categories, err := hc.server.CacheClient.GetSet(cache.ItemCategories)
 	if err != nil {
 		if !errors.IsNotAssigned(err) {
-			base.Logger().Fatal("failed to load item categories", zap.Error(err))
+			base.Logger().Error("failed to load item categories", zap.Error(err))
 		}
 		return
 	}
@@ -277,7 +277,7 @@ func (hc *HiddenItemsManager) sync() {
 		score, err = hc.server.CacheClient.GetSortedByScore(cache.Key(cache.HiddenItemsV2, category), math.Inf(-1), float64(ts.Unix()))
 		if err != nil {
 			if !errors.IsNotAssigned(err) {
-				base.Logger().Fatal("failed to load categorized hidden items", zap.Error(err))
+				base.Logger().Error("failed to load categorized hidden items", zap.Error(err))
 			}
 			return
 		}
