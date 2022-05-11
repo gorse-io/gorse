@@ -30,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"math/rand"
 	"sync"
@@ -98,7 +99,7 @@ func (s *Server) Serve() {
 		zap.Int("master_port", s.masterPort))
 
 	// connect to master
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		base.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
@@ -216,8 +217,7 @@ func (sc *PopularItemsCache) GetSortedScore(member string) float64 {
 	}
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
-	score, _ := sc.scores[member]
-	return score
+	return sc.scores[member]
 }
 
 type HiddenItemsManager struct {
