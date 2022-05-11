@@ -97,10 +97,15 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		// change settings
-		_, err := d.client.Exec("SET SESSION sql_mode=\"" +
+		if _, err := d.client.Exec("SET SESSION sql_mode=\"" +
 			"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
-			"NO_ENGINE_SUBSTITUTION\"")
-		return errors.Trace(err)
+			"NO_ENGINE_SUBSTITUTION\""); err != nil {
+			return errors.Trace(err)
+		}
+		// disable lock
+		if _, err := d.client.Exec("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
+			return errors.Trace(err)
+		}
 	case Postgres:
 		// create tables
 		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS items (" +
@@ -137,6 +142,10 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		if _, err := d.client.Exec("CREATE INDEX IF NOT EXISTS item_id_index ON feedback(item_id)"); err != nil {
+			return errors.Trace(err)
+		}
+		// disable lock
+		if _, err := d.client.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
 			return errors.Trace(err)
 		}
 	case ClickHouse:

@@ -39,6 +39,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"math/rand"
 	"net/http"
@@ -286,7 +287,7 @@ func (w *Worker) Serve() {
 		zap.String("worker_name", w.workerName))
 
 	// connect to master
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		base.Logger().Fatal("failed to connect master", zap.Error(err))
 	}

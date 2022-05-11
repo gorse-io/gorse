@@ -26,6 +26,7 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"testing"
 	"time"
@@ -88,7 +89,7 @@ func TestRPC(t *testing.T) {
 	rpcServer := newMockMasterRPC(t)
 	go rpcServer.Start(t)
 	address := <-rpcServer.addr
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
 	client := protocol.NewMasterClient(conn)
 	ctx := context.Background()

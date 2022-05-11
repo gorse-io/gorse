@@ -21,6 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"testing"
 )
@@ -83,7 +84,7 @@ func TestServer_Sync(t *testing.T) {
 	master := newMockMaster(t)
 	go master.Start(t)
 	address := <-master.addr
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
 	serv := &Server{
 		testMode:     true,

@@ -32,6 +32,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"net"
 	"strconv"
@@ -693,7 +694,7 @@ func TestWorker_Sync(t *testing.T) {
 	master := newMockMaster(t)
 	go master.Start(t)
 	address := <-master.addr
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
 	serv := &Worker{
 		testMode:     true,

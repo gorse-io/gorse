@@ -658,7 +658,7 @@ func testTimeZone(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
-	switch db.(type) {
+	switch database := db.(type) {
 	case *SQLDatabase:
 		switch db.(*SQLDatabase).driver {
 		case Postgres:
@@ -676,7 +676,7 @@ func testTimeZone(t *testing.T, db Database) {
 			assert.NoError(t, err)
 			assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
 		default:
-			t.Skipf("unknown sql database: %v", db.(*SQLDatabase).driver)
+			t.Skipf("unknown sql database: %v", database.driver)
 		}
 	case *MongoDB:
 		item, err := db.GetItem("100")

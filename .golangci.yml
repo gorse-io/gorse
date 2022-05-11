@@ -5,8 +5,3 @@ linters-settings:
   govet:
     disable:
       - composites
-
-linters:
-  disable:
-    - deadcode
-    - varcheck

@@ -71,6 +71,10 @@ func (db *SQLDatabase) Init() error {
 		if _, err := db.client.Exec("CREATE INDEX IF NOT EXISTS sorted_sets_index ON sorted_sets(name, score)"); err != nil {
 			return errors.Trace(err)
 		}
+		// disable lock
+		if _, err := db.client.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
+			return errors.Trace(err)
+		}
 	case MySQL:
 		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS `values` (" +
 			"name VARCHAR(256) PRIMARY KEY, " +
@@ -94,6 +98,10 @@ func (db *SQLDatabase) Init() error {
 			"PRIMARY KEY (name, member)," +
 			"INDEX (name, score)" +
 			")"); err != nil {
+			return errors.Trace(err)
+		}
+		// disable lock
+		if _, err := db.client.Exec("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
 			return errors.Trace(err)
 		}
 	}
