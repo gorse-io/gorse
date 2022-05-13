@@ -90,9 +90,9 @@ func (d *SQLDatabase) Init() error {
 			Comment   string   `gorm:"column:comment;type:text not null"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primary_key"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primary_key:index"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primary_key:index"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primaryKey;index:user_id"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey;index:item_id"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime not null"`
 			Comment      string    `gorm:"column:comment;type:text not null"`
 		}
@@ -131,9 +131,9 @@ func (d *SQLDatabase) Init() error {
 			Comment   string   `gorm:"column:comment;type:text not null default ''"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primary_key"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primary_key:index"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primary_key:index"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primaryKey;index:user_id_index"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey;index:item_id_index"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz not null default '0001-01-01'"`
 			Comment      string    `gorm:"column:comment;type:text not null default ''"`
 		}
@@ -157,10 +157,10 @@ func (d *SQLDatabase) Init() error {
 		// create tables
 		type Items struct {
 			ItemId     string    `gorm:"column:item_id;type:String"`
-			IsHidden   bool      `gorm:"column:is_hidden;type:Boolean"`
-			Categories []string  `gorm:"column:categories;type:String"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:Boolean default 0"`
+			Categories []string  `gorm:"column:categories;type:String default '[]'"`
 			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime"`
-			Labels     []string  `gorm:"column:labels;type:String"`
+			Labels     []string  `gorm:"column:labels;type:String default '[]'"`
 			Comment    string    `gorm:"column:comment;type:String"`
 			Version    struct{}  `gorm:"column:version;type:DateTime"`
 		}
@@ -181,8 +181,8 @@ func (d *SQLDatabase) Init() error {
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
-			UserId       string    `gorm:"column:user_id;type:String;index,type:bloom_filter(0.01),granularity:1"`
-			ItemId       string    `gorm:"column:item_id;type:String;index,type:bloom_filter(0.01),granularity:1"`
+			UserId       string    `gorm:"column:user_id;type:String;index:user_index,type:bloom_filter(0.01),granularity:1"`
+			ItemId       string    `gorm:"column:item_id;type:String;index:item_index,type:bloom_filter(0.01),granularity:1"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime"`
 			Comment      string    `gorm:"column:comment;type:String"`
 			Version      struct{}  `gorm:"column:version;type:DateTime"`
