@@ -25,6 +25,11 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/json"
 	"go.uber.org/zap"
+	"gorm.io/driver/clickhouse"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +44,12 @@ const (
 	Postgres
 	ClickHouse
 )
+
+var gormConfig = &gorm.Config{
+	NamingStrategy: schema.NamingStrategy{
+		SingularTable: true,
+	},
+}
 
 // SQLDatabase use MySQL as data storage.
 type SQLDatabase struct {
@@ -64,36 +75,33 @@ func (d *SQLDatabase) Init() error {
 	switch d.driver {
 	case MySQL:
 		// create tables
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS items (" +
-			"item_id varchar(256) NOT NULL," +
-			"time_stamp datetime NOT NULL," +
-			"labels json NOT NULL," +
-			"comment TEXT NOT NULL," +
-			"is_hidden BOOL NOT NULL DEFAULT FALSE," +
-			"categories json NOT NULL," +
-			"PRIMARY KEY(item_id)" +
-			")  ENGINE=InnoDB"); err != nil {
+		type Items struct {
+			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:bool not null"`
+			Categories []string  `gorm:"column:categories;type:json not null"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime not null"`
+			Labels     []string  `gorm:"column:labels;type:json not null"`
+			Comment    string    `gorm:"column:comment;type:text not null"`
+		}
+		type Users struct {
+			UserId    string   `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels    []string `gorm:"column:labels;type:json not null"`
+			Subscribe []string `gorm:"column:subscribe;type:json not null"`
+			Comment   string   `gorm:"column:comment;type:text not null"`
+		}
+		type Feedback struct {
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primaryKey;index:user_id"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey;index:item_id"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime not null"`
+			Comment      string    `gorm:"column:comment;type:text not null"`
+		}
+		gormDB, err := gorm.Open(mysql.New(mysql.Config{Conn: d.client}), gormConfig)
+		if err != nil {
 			return errors.Trace(err)
 		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS users (" +
-			"user_id varchar(256) NOT NULL," +
-			"labels json NOT NULL," +
-			"subscribe json NOT NULL," +
-			"comment TEXT NOT NULL," +
-			"PRIMARY KEY (user_id)" +
-			")  ENGINE=InnoDB"); err != nil {
-			return errors.Trace(err)
-		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS feedback (" +
-			"feedback_type varchar(256) NOT NULL," +
-			"user_id varchar(256) NOT NULL," +
-			"item_id varchar(256) NOT NULL," +
-			"time_stamp datetime NOT NULL," +
-			"comment TEXT NOT NULL," +
-			"PRIMARY KEY(feedback_type, user_id, item_id)," +
-			"INDEX (user_id)," +
-			"INDEX (item_id)" +
-			")  ENGINE=InnoDB"); err != nil {
+		err = gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
+		if err != nil {
 			return errors.Trace(err)
 		}
 		// change settings
@@ -108,40 +116,33 @@ func (d *SQLDatabase) Init() error {
 		}
 	case Postgres:
 		// create tables
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS items (" +
-			"item_id varchar(256) NOT NULL," +
-			"time_stamp timestamptz NOT NULL DEFAULT '0001-01-01'," +
-			"labels json NOT NULL DEFAULT '[]'," +
-			"comment TEXT NOT NULL DEFAULT ''," +
-			"is_hidden BOOL NOT NULL DEFAULT FALSE," +
-			"categories json NOT NULL DEFAULT '[]'," +
-			"PRIMARY KEY(item_id)" +
-			")"); err != nil {
+		type Items struct {
+			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:bool not null default false"`
+			Categories []string  `gorm:"column:categories;type:json not null default '[]'"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz not null default '0001-01-01'"`
+			Labels     []string  `gorm:"column:labels;type:json not null default '[]'"`
+			Comment    string    `gorm:"column:comment;type:text not null default ''"`
+		}
+		type Users struct {
+			UserId    string   `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels    []string `gorm:"column:labels;type:json not null default '[]'"`
+			Subscribe []string `gorm:"column:subscribe;type:json not null default '[]'"`
+			Comment   string   `gorm:"column:comment;type:text not null default ''"`
+		}
+		type Feedback struct {
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primaryKey;index:user_id_index"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey;index:item_id_index"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz not null default '0001-01-01'"`
+			Comment      string    `gorm:"column:comment;type:text not null default ''"`
+		}
+		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: d.client}), gormConfig)
+		if err != nil {
 			return errors.Trace(err)
 		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS users (" +
-			"user_id varchar(256) NOT NULL," +
-			"labels json NOT NULL DEFAULT '[]'," +
-			"subscribe json NOT NULL DEFAULT '[]'," +
-			"comment TEXT NOT NULL DEFAULT ''," +
-			"PRIMARY KEY (user_id)" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS feedback (" +
-			"feedback_type varchar(256) NOT NULL," +
-			"user_id varchar(256) NOT NULL," +
-			"item_id varchar(256) NOT NULL," +
-			"time_stamp timestamptz NOT NULL DEFAULT '0001-01-01'," +
-			"comment TEXT NOT NULL DEFAULT ''," +
-			"PRIMARY KEY(feedback_type, user_id, item_id)" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
-		if _, err := d.client.Exec("CREATE INDEX IF NOT EXISTS user_id_index ON feedback(user_id)"); err != nil {
-			return errors.Trace(err)
-		}
-		if _, err := d.client.Exec("CREATE INDEX IF NOT EXISTS item_id_index ON feedback(item_id)"); err != nil {
+		err = gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
+		if err != nil {
 			return errors.Trace(err)
 		}
 		// disable lock
@@ -149,37 +150,45 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 	case ClickHouse:
+		gormDB, err := gorm.Open(clickhouse.New(clickhouse.Config{Conn: d.client}), gormConfig)
+		if err != nil {
+			return errors.Trace(err)
+		}
 		// create tables
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS items (" +
-			"item_id String," +
-			"time_stamp Datetime," +
-			"labels String DEFAULT '[]'," +
-			"comment String," +
-			"is_hidden Boolean DEFAULT 0," +
-			"categories String DEFAULT '[]'," +
-			"version DateTime" +
-			") ENGINE = ReplacingMergeTree(version) ORDER BY item_id"); err != nil {
+		type Items struct {
+			ItemId     string    `gorm:"column:item_id;type:String"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:Boolean default 0"`
+			Categories []string  `gorm:"column:categories;type:String default '[]'"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime"`
+			Labels     []string  `gorm:"column:labels;type:String default '[]'"`
+			Comment    string    `gorm:"column:comment;type:String"`
+			Version    struct{}  `gorm:"column:version;type:DateTime"`
+		}
+		err = gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY item_id").AutoMigrate(Items{})
+		if err != nil {
 			return errors.Trace(err)
 		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS users (" +
-			"user_id String," +
-			"labels String DEFAULT '[]'," +
-			"subscribe String DEFAULT '[]'," +
-			"comment String," +
-			"version DateTime" +
-			") ENGINE = ReplacingMergeTree(version) ORDER BY user_id"); err != nil {
+		type Users struct {
+			UserId    string   `gorm:"column:user_id;type:String"`
+			Labels    []string `gorm:"column:labels;type:String default '[]'"`
+			Subscribe []string `gorm:"column:subscribe;type:String default '[]'"`
+			Comment   string   `gorm:"column:comment;type:String"`
+			Version   struct{} `gorm:"column:version;type:DateTime"`
+		}
+		err = gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY user_id").AutoMigrate(Users{})
+		if err != nil {
 			return errors.Trace(err)
 		}
-		if _, err := d.client.Exec("CREATE TABLE IF NOT EXISTS feedback (" +
-			"feedback_type String," +
-			"user_id String," +
-			"item_id String," +
-			"time_stamp Datetime," +
-			"comment String," +
-			"version DateTime," +
-			"INDEX user_index user_id TYPE bloom_filter(0.01) GRANULARITY 1," +
-			"INDEX item_index item_id TYPE bloom_filter(0.01) GRANULARITY 1" +
-			") ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)"); err != nil {
+		type Feedback struct {
+			FeedbackType string    `gorm:"column:feedback_type;type:String"`
+			UserId       string    `gorm:"column:user_id;type:String;index:user_index,type:bloom_filter(0.01),granularity:1"`
+			ItemId       string    `gorm:"column:item_id;type:String;index:item_index,type:bloom_filter(0.01),granularity:1"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime"`
+			Comment      string    `gorm:"column:comment;type:String"`
+			Version      struct{}  `gorm:"column:version;type:DateTime"`
+		}
+		err = gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
+		if err != nil {
 			return errors.Trace(err)
 		}
 	}
