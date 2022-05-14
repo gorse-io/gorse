@@ -1671,22 +1671,34 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 
 // Measurement stores a statistical value.
 type Measurement struct {
-	Name      string    `json:"-"`
+	Name      string
+	Timestamp time.Time
+	Value     float32
+}
+
+type innerMeasurement struct {
 	Timestamp time.Time `json:"timestamp"`
 	Value     float32   `json:"value"`
 }
 
 func NewMeasurementFromScore(name string, score cache.Scored) (Measurement, error) {
-	m := Measurement{Name: name}
+	var m innerMeasurement
 	err := json.Unmarshal([]byte(score.Id), &m)
 	if err != nil {
 		base.Logger().Error("failed to decode measurement", zap.Error(err))
 	}
-	return m, nil
+	return Measurement{
+		Name:      name,
+		Timestamp: m.Timestamp,
+		Value:     m.Value,
+	}, nil
 }
 
 func (m Measurement) GetScore() cache.Scored {
-	buf, _ := json.Marshal(m)
+	buf, _ := json.Marshal(innerMeasurement{
+		Timestamp: m.Timestamp,
+		Value:     m.Value,
+	})
 	return cache.Scored{Id: string(buf), Score: float64(m.Timestamp.Unix())}
 }
 
@@ -1695,7 +1707,7 @@ func (s *RestServer) GetMeasurements(name string, n int) ([]Measurement, error) 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	var measurements []Measurement
+	measurements := make([]Measurement, 0, len(scores))
 	for _, score := range scores {
 		measurement, err := NewMeasurementFromScore(name, score)
 		if err != nil {
