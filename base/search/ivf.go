@@ -60,7 +60,7 @@ func SetIVFNumJobs(numJobs int) IVFConfig {
 }
 
 type ivfCluster struct {
-	centroid     *dictionaryCentroidVector
+	centroid     CentroidVector
 	observations []int32
 	mu           sync.Mutex
 }
@@ -163,7 +163,10 @@ func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (value
 
 func (idx *IVF) Build() {
 	if idx.k > len(idx.data) {
-		base.Logger().Fatal("the size of the observations set must at least equal k")
+		panic("the size of the observations set must greater than or equal to k")
+	} else if len(idx.data) == 0 {
+		base.Logger().Warn("no vectors for building IVF")
+		return
 	}
 
 	// initialize clusters
@@ -177,7 +180,7 @@ func (idx *IVF) Build() {
 		}
 	}
 	for c := range clusters {
-		clusters[c].centroid = newDictionaryCentroidVector(idx.data, clusters[c].observations)
+		clusters[c].centroid = idx.data[0].Centroid(idx.data, clusters[c].observations)
 	}
 
 	for {
@@ -213,55 +216,10 @@ func (idx *IVF) Build() {
 			break
 		}
 		for c := range clusters {
-			nextClusters[c].centroid = newDictionaryCentroidVector(idx.data, nextClusters[c].observations)
+			nextClusters[c].centroid = idx.data[0].Centroid(idx.data, nextClusters[c].observations)
 		}
 		clusters = nextClusters
 	}
-}
-
-type dictionaryCentroidVector struct {
-	data map[int32]float32
-	norm float32
-}
-
-func newDictionaryCentroidVector(vectors []Vector, indices []int32) *dictionaryCentroidVector {
-	data := make(map[int32]float32)
-	for _, i := range indices {
-		vector, isDictVector := vectors[i].(*DictionaryVector)
-		if !isDictVector {
-			base.Logger().Fatal("vector type mismatch")
-		}
-		for _, i := range vector.indices {
-			data[i] += math32.Sqrt(vector.values[i])
-		}
-	}
-	var norm float32
-	for _, val := range data {
-		norm += val * val
-	}
-	norm = math32.Sqrt(norm)
-	for i := range data {
-		data[i] /= norm
-	}
-	return &dictionaryCentroidVector{
-		data: data,
-		norm: norm,
-	}
-}
-
-func (v *dictionaryCentroidVector) Distance(vector Vector) float32 {
-	var sum, common float32
-	if dictVector, isDictVec := vector.(*DictionaryVector); !isDictVec {
-		base.Logger().Fatal("vector type mismatch")
-	} else {
-		for _, i := range dictVector.indices {
-			if val, exist := v.data[i]; exist {
-				sum += val * math32.Sqrt(v.data[i])
-				common++
-			}
-		}
-	}
-	return -sum * common / (common + similarityShrink)
 }
 
 type IVFBuilder struct {
