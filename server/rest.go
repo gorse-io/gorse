@@ -15,8 +15,7 @@
 package server
 
 import (
-	"encoding/binary"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
@@ -1672,27 +1671,23 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 
 // Measurement stores a statistical value.
 type Measurement struct {
-	Name      string
-	Timestamp time.Time
-	Value     float32
+	Name      string    `json:"-"`
+	Timestamp time.Time `json:"timestamp"`
+	Value     float32   `json:"value"`
 }
 
 func NewMeasurementFromScore(name string, score cache.Scored) (Measurement, error) {
-	buf, err := hex.DecodeString(score.Id)
+	m := Measurement{Name: name}
+	err := json.Unmarshal([]byte(score.Id), &m)
 	if err != nil {
-		return Measurement{}, errors.Trace(err)
+		base.Logger().Error("failed to decode measurement", zap.Error(err))
 	}
-	return Measurement{
-		Name:      name,
-		Timestamp: time.Unix(int64(score.Score), 0),
-		Value:     math.Float32frombits(binary.LittleEndian.Uint32(buf)),
-	}, nil
+	return m, nil
 }
 
 func (m Measurement) GetScore() cache.Scored {
-	var buf [4]byte
-	binary.LittleEndian.PutUint32(buf[:], math.Float32bits(m.Value))
-	return cache.Scored{Id: hex.EncodeToString(buf[:]), Score: float64(m.Timestamp.Unix())}
+	buf, _ := json.Marshal(m)
+	return cache.Scored{Id: string(buf), Score: float64(m.Timestamp.Unix())}
 }
 
 func (s *RestServer) GetMeasurements(name string, n int) ([]Measurement, error) {
