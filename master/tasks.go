@@ -279,6 +279,8 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		vector = NewDualVectors(
 			NewVectors(dataset.ItemLabels, labeledItems, labelIDF),
 			NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF))
+	default:
+		return errors.NotImplementedf("item neighbor type `%v`", m.GorseConfig.Recommend.ItemNeighbors.NeighborType)
 	}
 
 	err := parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemIndex int) error {
@@ -363,7 +365,10 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
 			return NewDualDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		})
+	default:
+		return errors.NotImplementedf("item neighbor type `%v`", m.GorseConfig.Recommend.ItemNeighbors.NeighborType)
 	}
+
 	builder := search.NewIVFBuilder(vectors, m.GorseConfig.Recommend.CacheSize, 1000,
 		search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
 	var recall float32
@@ -526,6 +531,8 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		vectors = NewDualVectors(
 			NewVectors(dataset.UserLabels, labeledUsers, labelIDF),
 			NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF))
+	default:
+		return errors.NotImplementedf("user neighbor type `%v`", m.GorseConfig.Recommend.UserNeighbors.NeighborType)
 	}
 
 	err := parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userIndex int) error {
@@ -602,6 +609,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		for i := range vectors {
 			vectors[i] = NewDualDictionaryVector(dataset.UserLabels[i], labelIDF, dataset.UserFeedback[i], itemIDF, nil, false)
 		}
+	default:
+		return errors.NotImplementedf("user neighbor type `%v`", m.GorseConfig.Recommend.UserNeighbors.NeighborType)
 	}
 
 	builder := search.NewIVFBuilder(vectors, m.GorseConfig.Recommend.CacheSize, 1000,

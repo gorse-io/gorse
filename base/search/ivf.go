@@ -163,7 +163,7 @@ func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (value
 
 func (idx *IVF) Build() {
 	if idx.k > len(idx.data) {
-		base.Logger().Fatal("the size of the observations set must at least equal k")
+		panic("the size of the observations set must greater than or equal to k")
 	} else if len(idx.data) == 0 {
 		base.Logger().Warn("no vectors for building IVF")
 		return
