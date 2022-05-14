@@ -16,9 +16,9 @@ package master
 
 import (
 	"fmt"
-	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
@@ -269,6 +269,18 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		findNeighborSeconds atomic.Float64
 	)
 
+	var vector VectorsInterface
+	switch m.GorseConfig.Recommend.ItemNeighbors.NeighborType {
+	case config.NeighborTypeSimilar:
+		vector = NewVectors(dataset.ItemLabels, labeledItems, labelIDF)
+	case config.NeighborTypeRelated:
+		vector = NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF)
+	case config.NeighborTypeAuto:
+		vector = NewDualVectors(
+			NewVectors(dataset.ItemLabels, labeledItems, labelIDF),
+			NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF))
+	}
+
 	err := parallel.Parallel(dataset.ItemCount(), m.GorseConfig.Master.NumJobs, func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
@@ -285,65 +297,19 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			nearItemsFilters[category] = heap.NewTopKFilter[int32, float32](m.GorseConfig.Recommend.CacheSize)
 		}
 
-		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
-			(m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto) {
-			labels := dataset.ItemLabels[itemIndex]
-			itemSet := bitset.New(uint(dataset.ItemCount()))
-			var adjacencyItems []int32
-			for _, label := range labels {
-				for _, adjacencyItemId := range labeledItems[label] {
-					if !itemSet.Test(uint(adjacencyItemId)) {
-						itemSet.Set(uint(adjacencyItemId))
-						adjacencyItems = append(adjacencyItems, adjacencyItemId)
-					}
-				}
-			}
-			for _, j := range adjacencyItems {
-				if j != int32(itemIndex) && !dataset.HiddenItems[j] {
-					commonSum, commonCount := commonElements(dataset.ItemLabels[itemIndex], dataset.ItemLabels[j], labelIDF)
-					if commonSum > 0 {
-						score := commonSum * commonCount /
-							math32.Sqrt(weightedSum(dataset.ItemLabels[itemIndex], labelIDF)) /
-							math32.Sqrt(weightedSum(dataset.ItemLabels[j], labelIDF)) /
-							(commonCount + similarityShrink)
-						nearItemsFilters[""].Push(j, score)
-						for _, category := range dataset.ItemCategories[j] {
-							nearItemsFilters[category].Push(j, score)
-						}
+		adjacencyItems := vector.Neighbors(itemIndex)
+		for _, j := range adjacencyItems {
+			if j != int32(itemIndex) && !dataset.HiddenItems[j] {
+				score := vector.Distance(itemIndex, int(j))
+				if score > 0 {
+					nearItemsFilters[""].Push(j, score)
+					for _, category := range dataset.ItemCategories[j] {
+						nearItemsFilters[category].Push(j, score)
 					}
 				}
 			}
 		}
 
-		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
-			(m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto && nearItemsFilters[""].Len() == 0) {
-			users := dataset.ItemFeedback[itemIndex]
-			itemSet := bitset.New(uint(dataset.ItemCount()))
-			var adjacencyItems []int32
-			for _, u := range users {
-				for _, adjacencyItemId := range dataset.UserFeedback[u] {
-					if !itemSet.Test(uint(adjacencyItemId)) {
-						itemSet.Set(uint(adjacencyItemId))
-						adjacencyItems = append(adjacencyItems, adjacencyItemId)
-					}
-				}
-			}
-			for _, j := range adjacencyItems {
-				if j != int32(itemIndex) && !dataset.HiddenItems[j] {
-					commonSum, commonCount := commonElements(dataset.ItemFeedback[itemIndex], dataset.ItemFeedback[j], userIDF)
-					if commonSum > 0 {
-						score := commonSum * commonCount /
-							math32.Sqrt(weightedSum(dataset.ItemFeedback[itemIndex], userIDF)) /
-							math32.Sqrt(weightedSum(dataset.ItemFeedback[j], userIDF)) /
-							(commonCount + similarityShrink)
-						nearItemsFilters[""].Push(j, score)
-						for _, category := range dataset.ItemCategories[j] {
-							nearItemsFilters[category].Push(j, score)
-						}
-					}
-				}
-			}
-		}
 		for category, nearItemsFilter := range nearItemsFilters {
 			elem, scores := nearItemsFilter.PopAll()
 			recommends := make([]string, len(elem))
@@ -382,34 +348,30 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 
 	// build index
 	buildStart := time.Now()
-	var similarItemNeighbors, relatedItemNeighbors search.VectorIndex
-	var itemLabelVectors, itemFeedbackVectors []search.Vector
-	if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
-		m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		itemLabelVectors = make([]search.Vector, dataset.ItemCount())
-		for i := range itemLabelVectors {
-			itemLabelVectors[i] = search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
-		}
-		builder := search.NewIVFBuilder(itemLabelVectors, m.GorseConfig.Recommend.CacheSize, 1000,
-			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		var recall float32
-		similarItemNeighbors, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighbors.IndexRecall,
-			m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch, true)
-		ItemNeighborIndexRecall.Set(float64(recall))
-		if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
-			return errors.Trace(err)
-		}
+	var index search.VectorIndex
+	var vectors []search.Vector
+	switch m.GorseConfig.Recommend.ItemNeighbors.NeighborType {
+	case config.NeighborTypeSimilar:
+		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
+			return search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
+		})
+	case config.NeighborTypeRelated:
+		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
+			return search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
+		})
+	case config.NeighborTypeAuto:
+		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
+			return NewDualDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
+		})
 	}
-	if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
-		m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		itemFeedbackVectors = make([]search.Vector, dataset.ItemCount())
-		for i := range itemFeedbackVectors {
-			itemFeedbackVectors[i] = search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
-		}
-		builder := search.NewIVFBuilder(itemFeedbackVectors, m.GorseConfig.Recommend.CacheSize, 1000,
-			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		relatedItemNeighbors, _ = builder.Build(m.GorseConfig.Recommend.ItemNeighbors.IndexRecall,
-			m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch, true)
+	builder := search.NewIVFBuilder(vectors, m.GorseConfig.Recommend.CacheSize, 1000,
+		search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
+	var recall float32
+	index, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighbors.IndexRecall,
+		m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch, true)
+	ItemNeighborIndexRecall.Set(float64(recall))
+	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
+		return errors.Trace(err)
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
 
@@ -427,12 +389,12 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		var scores map[string][]float32
 		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
 			m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-			neighbors, scores = similarItemNeighbors.MultiSearch(itemLabelVectors[itemIndex], dataset.CategorySet.List(),
+			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.List(),
 				m.GorseConfig.Recommend.CacheSize, true)
 		}
 		if m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
 			m.GorseConfig.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto && len(neighbors[""]) == 0 {
-			neighbors, scores = relatedItemNeighbors.MultiSearch(itemFeedbackVectors[itemIndex], dataset.CategorySet.List(),
+			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.List(),
 				m.GorseConfig.Recommend.CacheSize, true)
 		}
 		for category := range neighbors {
@@ -554,6 +516,18 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		findNeighborSeconds atomic.Float64
 	)
 
+	var vectors VectorsInterface
+	switch m.GorseConfig.Recommend.UserNeighbors.NeighborType {
+	case config.NeighborTypeSimilar:
+		vectors = NewVectors(dataset.UserLabels, labeledUsers, labelIDF)
+	case config.NeighborTypeRelated:
+		vectors = NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF)
+	case config.NeighborTypeAuto:
+		vectors = NewDualVectors(
+			NewVectors(dataset.UserLabels, labeledUsers, labelIDF),
+			NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF))
+	}
+
 	err := parallel.Parallel(dataset.UserCount(), m.GorseConfig.Master.NumJobs, func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
@@ -566,59 +540,16 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		startTime := time.Now()
 		nearUsers := heap.NewTopKFilter[int32, float32](m.GorseConfig.Recommend.CacheSize)
 
-		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
-			(m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto) {
-			labels := dataset.UserLabels[userIndex]
-			userSet := bitset.New(uint(dataset.UserCount()))
-			var adjacencyUsers []int32
-			for _, label := range labels {
-				for _, adjacencyUserId := range labeledUsers[label] {
-					if !userSet.Test(uint(adjacencyUserId)) {
-						userSet.Set(uint(adjacencyUserId))
-						adjacencyUsers = append(adjacencyUsers, adjacencyUserId)
-					}
-				}
-			}
-			for _, j := range adjacencyUsers {
-				if j != int32(userIndex) {
-					commonSum, commonCount := commonElements(dataset.UserLabels[userIndex], dataset.UserLabels[j], labelIDF)
-					if commonSum > 0 {
-						score := commonSum * commonCount /
-							math32.Sqrt(weightedSum(dataset.UserLabels[userIndex], labelIDF)) /
-							math32.Sqrt(weightedSum(dataset.UserLabels[j], labelIDF)) /
-							(commonCount + similarityShrink)
-						nearUsers.Push(j, score)
-					}
+		adjacencyUsers := vectors.Neighbors(userIndex)
+		for _, j := range adjacencyUsers {
+			if j != int32(userIndex) {
+				score := vectors.Distance(userIndex, int(j))
+				if score > 0 {
+					nearUsers.Push(j, score)
 				}
 			}
 		}
 
-		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
-			(m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto && nearUsers.Len() == 0) {
-			items := dataset.UserFeedback[userIndex]
-			userSet := bitset.New(uint(dataset.UserCount()))
-			var adjacencyUsers []int32
-			for _, item := range items {
-				for _, adjacencyUserId := range dataset.ItemFeedback[item] {
-					if !userSet.Test(uint(adjacencyUserId)) {
-						userSet.Set(uint(adjacencyUserId))
-						adjacencyUsers = append(adjacencyUsers, adjacencyUserId)
-					}
-				}
-			}
-			for _, j := range adjacencyUsers {
-				if j != int32(userIndex) {
-					commonSum, commonCount := commonElements(dataset.UserFeedback[userIndex], dataset.UserFeedback[j], itemIDF)
-					if commonSum > 0 {
-						score := commonSum * commonCount /
-							math32.Sqrt(weightedSum(dataset.UserFeedback[userIndex], itemIDF)) /
-							math32.Sqrt(weightedSum(dataset.UserFeedback[j], itemIDF)) /
-							(commonCount + similarityShrink)
-						nearUsers.Push(j, score)
-					}
-				}
-			}
-		}
 		elem, scores := nearUsers.PopAll()
 		recommends := make([]string, len(elem))
 		for i := range recommends {
@@ -655,36 +586,33 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 
 	// build index
 	buildStart := time.Now()
-	var similarUserNeighbors, relatedUserNeighbors search.VectorIndex
-	var userLabelVectors, userFeedbackVectors []search.Vector
-	if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
-		m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		userLabelVectors = make([]search.Vector, dataset.UserCount())
-		for i := range userLabelVectors {
-			userLabelVectors[i] = search.NewDictionaryVector(dataset.UserLabels[i], labelIDF, nil, false)
-		}
-		builder := search.NewIVFBuilder(userLabelVectors, m.GorseConfig.Recommend.CacheSize, 1000,
-			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		var recall float32
-		similarUserNeighbors, recall = builder.Build(
-			m.GorseConfig.Recommend.UserNeighbors.IndexRecall,
-			m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch, true)
-		UserNeighborIndexRecall.Set(float64(recall))
-		if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
-			return errors.Trace(err)
+	var index search.VectorIndex
+	var vectors []search.Vector
+	switch m.GorseConfig.Recommend.UserNeighbors.NeighborType {
+	case config.NeighborTypeSimilar:
+		vectors = lo.Map(dataset.UserLabels, func(indices []int32, _ int) search.Vector {
+			return search.NewDictionaryVector(indices, labelIDF, nil, false)
+		})
+	case config.NeighborTypeRelated:
+		vectors = lo.Map(dataset.UserFeedback, func(indices []int32, _ int) search.Vector {
+			return search.NewDictionaryVector(indices, itemIDF, nil, false)
+		})
+	case config.NeighborTypeAuto:
+		vectors = make([]search.Vector, dataset.UserCount())
+		for i := range vectors {
+			vectors[i] = NewDualDictionaryVector(dataset.UserLabels[i], labelIDF, dataset.UserFeedback[i], itemIDF, nil, false)
 		}
 	}
-	if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
-		m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		userFeedbackVectors = make([]search.Vector, dataset.UserCount())
-		for i := range userFeedbackVectors {
-			userFeedbackVectors[i] = search.NewDictionaryVector(dataset.UserFeedback[i], itemIDF, nil, false)
-		}
-		builder := search.NewIVFBuilder(userFeedbackVectors, m.GorseConfig.Recommend.CacheSize, 1000,
-			search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
-		relatedUserNeighbors, _ = builder.Build(
-			m.GorseConfig.Recommend.UserNeighbors.IndexRecall,
-			m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch, true)
+
+	builder := search.NewIVFBuilder(vectors, m.GorseConfig.Recommend.CacheSize, 1000,
+		search.SetIVFNumJobs(m.GorseConfig.Master.NumJobs))
+	var recall float32
+	index, recall = builder.Build(
+		m.GorseConfig.Recommend.UserNeighbors.IndexRecall,
+		m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch, true)
+	UserNeighborIndexRecall.Set(float64(recall))
+	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
+		return errors.Trace(err)
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
 
@@ -700,14 +628,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		startTime := time.Now()
 		var neighbors []int32
 		var scores []float32
-		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
-			m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-			neighbors, scores = similarUserNeighbors.Search(userLabelVectors[userIndex], m.GorseConfig.Recommend.CacheSize, true)
-		}
-		if m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
-			m.GorseConfig.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto && len(neighbors) == 0 {
-			neighbors, scores = relatedUserNeighbors.Search(userFeedbackVectors[userIndex], m.GorseConfig.Recommend.CacheSize, true)
-		}
+		neighbors, scores = index.Search(vectors[userIndex], m.GorseConfig.Recommend.CacheSize, true)
 		itemScores := make([]cache.Scored, len(neighbors))
 		for i := range scores {
 			itemScores[i].Id = dataset.UserIndex.ToName(neighbors[i])

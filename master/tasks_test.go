@@ -36,27 +36,29 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	// collect similar
 	items := []data.Item{
 		{"0", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d"}, ""},
-		{"1", false, nil, time.Now(), []string{"b", "c", "d"}, ""},
-		{"2", false, []string{"*"}, time.Now(), []string{"b", "c"}, ""},
-		{"3", false, []string{"*"}, time.Now(), []string{"c"}, ""},
-		{"4", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"5", false, nil, time.Now(), []string{}, ""},
-		{"6", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"7", false, nil, time.Now(), []string{}, ""},
+		{"1", false, []string{"*"}, time.Now(), []string{}, ""},
+		{"2", false, []string{"*"}, time.Now(), []string{"b", "c", "d"}, ""},
+		{"3", false, nil, time.Now(), []string{}, ""},
+		{"4", false, nil, time.Now(), []string{"b", "c"}, ""},
+		{"5", false, []string{"*"}, time.Now(), []string{}, ""},
+		{"6", false, []string{"*"}, time.Now(), []string{"c"}, ""},
+		{"7", false, []string{"*"}, time.Now(), []string{}, ""},
 		{"8", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
 		{"9", false, nil, time.Now(), []string{}, ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
 		for j := 0; j <= i; j++ {
-			feedbacks = append(feedbacks, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					ItemId:       strconv.Itoa(i),
-					UserId:       strconv.Itoa(j),
-					FeedbackType: "FeedbackType",
-				},
-				Timestamp: time.Now(),
-			})
+			if i%2 == 1 {
+				feedbacks = append(feedbacks, data.Feedback{
+					FeedbackKey: data.FeedbackKey{
+						ItemId:       strconv.Itoa(i),
+						UserId:       strconv.Itoa(j),
+						FeedbackType: "FeedbackType",
+					},
+					Timestamp: time.Now(),
+				})
+			}
 		}
 	}
 	var err error
@@ -88,13 +90,13 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	m.runFindItemNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9", "*"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "6", "4"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "1"}, cache.RemoveScores(similar))
 
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -103,13 +105,13 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8", "*"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "3"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "6"}, cache.RemoveScores(similar))
 
 	// similar items (auto)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -120,10 +122,10 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
@@ -142,27 +144,29 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	// collect similar
 	items := []data.Item{
 		{"0", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d"}, ""},
-		{"1", false, nil, time.Now(), []string{"b", "c", "d"}, ""},
-		{"2", false, []string{"*"}, time.Now(), []string{"b", "c"}, ""},
-		{"3", false, []string{"*"}, time.Now(), []string{"c"}, ""},
-		{"4", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"5", false, nil, time.Now(), []string{}, ""},
-		{"6", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"7", false, nil, time.Now(), []string{}, ""},
+		{"1", false, []string{"*"}, time.Now(), []string{}, ""},
+		{"2", false, []string{"*"}, time.Now(), []string{"b", "c", "d"}, ""},
+		{"3", false, nil, time.Now(), []string{}, ""},
+		{"4", false, nil, time.Now(), []string{"b", "c"}, ""},
+		{"5", false, []string{"*"}, time.Now(), []string{}, ""},
+		{"6", false, []string{"*"}, time.Now(), []string{"c"}, ""},
+		{"7", false, []string{"*"}, time.Now(), []string{}, ""},
 		{"8", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
 		{"9", false, nil, time.Now(), []string{}, ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
 		for j := 0; j <= i; j++ {
-			feedbacks = append(feedbacks, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					ItemId:       strconv.Itoa(i),
-					UserId:       strconv.Itoa(j),
-					FeedbackType: "FeedbackType",
-				},
-				Timestamp: time.Now(),
-			})
+			if i%2 == 1 {
+				feedbacks = append(feedbacks, data.Feedback{
+					FeedbackKey: data.FeedbackKey{
+						ItemId:       strconv.Itoa(i),
+						UserId:       strconv.Itoa(j),
+						FeedbackType: "FeedbackType",
+					},
+					Timestamp: time.Now(),
+				})
+			}
 		}
 	}
 	var err error
@@ -194,13 +198,13 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	m.runFindItemNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9", "*"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "6", "4"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "1"}, cache.RemoveScores(similar))
 
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -209,13 +213,13 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8", "*"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "3"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "6"}, cache.RemoveScores(similar))
 
 	// similar items (auto)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -226,10 +230,10 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	m.runFindItemNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
@@ -245,12 +249,12 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	// collect similar
 	users := []data.User{
 		{"0", []string{"a", "b", "c", "d"}, nil, ""},
-		{"1", []string{"b", "c", "d"}, nil, ""},
-		{"2", []string{"b", "c"}, nil, ""},
-		{"3", []string{"c"}, nil, ""},
-		{"4", []string{}, nil, ""},
+		{"1", []string{}, nil, ""},
+		{"2", []string{"b", "c", "d"}, nil, ""},
+		{"3", []string{}, nil, ""},
+		{"4", []string{"b", "c"}, nil, ""},
 		{"5", []string{}, nil, ""},
-		{"6", []string{}, nil, ""},
+		{"6", []string{"c"}, nil, ""},
 		{"7", []string{}, nil, ""},
 		{"8", []string{"a", "b", "c", "d", "e"}, nil, ""},
 		{"9", []string{}, nil, ""},
@@ -258,14 +262,16 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
 		for j := 0; j <= i; j++ {
-			feedbacks = append(feedbacks, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					ItemId:       strconv.Itoa(j),
-					UserId:       strconv.Itoa(i),
-					FeedbackType: "FeedbackType",
-				},
-				Timestamp: time.Now(),
-			})
+			if i%2 == 1 {
+				feedbacks = append(feedbacks, data.Feedback{
+					FeedbackKey: data.FeedbackKey{
+						ItemId:       strconv.Itoa(j),
+						UserId:       strconv.Itoa(i),
+						FeedbackType: "FeedbackType",
+					},
+					Timestamp: time.Now(),
+				})
+			}
 		}
 	}
 	var err error
@@ -281,7 +287,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	m.runFindUserNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -292,7 +298,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -305,10 +311,10 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
@@ -327,12 +333,12 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	// collect similar
 	users := []data.User{
 		{"0", []string{"a", "b", "c", "d"}, nil, ""},
-		{"1", []string{"b", "c", "d"}, nil, ""},
-		{"2", []string{"b", "c"}, nil, ""},
-		{"3", []string{"c"}, nil, ""},
-		{"4", []string{}, nil, ""},
+		{"1", []string{}, nil, ""},
+		{"2", []string{"b", "c", "d"}, nil, ""},
+		{"3", []string{}, nil, ""},
+		{"4", []string{"b", "c"}, nil, ""},
 		{"5", []string{}, nil, ""},
-		{"6", []string{}, nil, ""},
+		{"6", []string{"c"}, nil, ""},
 		{"7", []string{}, nil, ""},
 		{"8", []string{"a", "b", "c", "d", "e"}, nil, ""},
 		{"9", []string{}, nil, ""},
@@ -340,14 +346,16 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
 		for j := 0; j <= i; j++ {
-			feedbacks = append(feedbacks, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					ItemId:       strconv.Itoa(j),
-					UserId:       strconv.Itoa(i),
-					FeedbackType: "FeedbackType",
-				},
-				Timestamp: time.Now(),
-			})
+			if i%2 == 1 {
+				feedbacks = append(feedbacks, data.Feedback{
+					FeedbackKey: data.FeedbackKey{
+						ItemId:       strconv.Itoa(j),
+						UserId:       strconv.Itoa(i),
+						FeedbackType: "FeedbackType",
+					},
+					Timestamp: time.Now(),
+				})
+			}
 		}
 	}
 	var err error
@@ -363,7 +371,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	m.runFindUserNeighborsTask(dataset)
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -374,7 +382,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -387,10 +395,10 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	m.runFindUserNeighborsTask(dataset)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "1", "2"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"8", "7", "6"}, cache.RemoveScores(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }

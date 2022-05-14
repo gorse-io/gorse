@@ -15,6 +15,7 @@
 package search
 
 import (
+	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/floats"
@@ -28,6 +29,7 @@ type Vector interface {
 	Distance(vector Vector) float32
 	Terms() []string
 	IsHidden() bool
+	Centroid(vectors []Vector, indices []int32) CentroidVector
 }
 
 type DenseVector struct {
@@ -60,6 +62,10 @@ func (v *DenseVector) Terms() []string {
 
 func (v *DenseVector) IsHidden() bool {
 	return v.isHidden
+}
+
+func (v *DenseVector) Centroid(_ []Vector, _ []int32) CentroidVector {
+	panic("not implemented")
 }
 
 type DictionaryVector struct {
@@ -108,9 +114,7 @@ const similarityShrink = 100
 func (v *DictionaryVector) Distance(vector Vector) float32 {
 	var score float32
 	if dictVec, isDictVec := vector.(*DictionaryVector); !isDictVec {
-		base.Logger().Fatal("vector type mismatch",
-			zap.String("expect", reflect.TypeOf(v).String()),
-			zap.String("actual", reflect.TypeOf(vector).String()))
+		panic(fmt.Sprintf("unexpected vector type: %v", reflect.TypeOf(vector)))
 	} else {
 		dot, common := v.Dot(dictVec)
 		if dot > 0 {
@@ -126,6 +130,55 @@ func (v *DictionaryVector) Terms() []string {
 
 func (v *DictionaryVector) IsHidden() bool {
 	return v.isHidden
+}
+
+type CentroidVector interface {
+	Distance(vector Vector) float32
+}
+
+type DictionaryCentroidVector struct {
+	data map[int32]float32
+	norm float32
+}
+
+func (v DictionaryVector) Centroid(vectors []Vector, indices []int32) CentroidVector {
+	data := make(map[int32]float32)
+	for _, i := range indices {
+		vector, isDictVector := vectors[i].(*DictionaryVector)
+		if !isDictVector {
+			panic(fmt.Sprintf("unexpected vector type: %v", reflect.TypeOf(vector)))
+		}
+		for _, i := range vector.indices {
+			data[i] += math32.Sqrt(vector.values[i])
+		}
+	}
+	var norm float32
+	for _, val := range data {
+		norm += val * val
+	}
+	norm = math32.Sqrt(norm)
+	for i := range data {
+		data[i] /= norm
+	}
+	return &DictionaryCentroidVector{
+		data: data,
+		norm: norm,
+	}
+}
+
+func (v *DictionaryCentroidVector) Distance(vector Vector) float32 {
+	var sum, common float32
+	if dictVector, isDictVec := vector.(*DictionaryVector); !isDictVec {
+		panic(fmt.Sprintf("unexpected vector type: %v", reflect.TypeOf(vector)))
+	} else {
+		for _, i := range dictVector.indices {
+			if val, exist := v.data[i]; exist {
+				sum += val * math32.Sqrt(v.data[i])
+				common++
+			}
+		}
+	}
+	return -sum * common / (common + similarityShrink)
 }
 
 type VectorIndex interface {
