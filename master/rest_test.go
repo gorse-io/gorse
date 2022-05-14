@@ -432,17 +432,17 @@ func TestMaster_GetRates(t *testing.T) {
 	defer s.Close(t)
 	// write rates
 	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
-	err := s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 1.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC)})
+	err := s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 1, time.UTC)})
+	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 1, time.UTC)})
+	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 10.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC)})
+	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 1, time.UTC)})
+	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 1, time.UTC)})
+	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
 	// get rates
 	apitest.New().
@@ -453,14 +453,14 @@ func TestMaster_GetRates(t *testing.T) {
 		Status(http.StatusOK).
 		Body(marshal(t, map[string][]server.Measurement{
 			"a": {
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC).Local()},
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC).Local()},
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 1.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC).Local()},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)},
 			},
 			"b": {
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC).Local()},
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC).Local()},
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 10.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC).Local()},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)},
 			},
 		})).
 		End()
