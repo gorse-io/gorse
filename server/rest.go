@@ -1695,7 +1695,7 @@ func (s *RestServer) GetMeasurements(name string, n int) ([]Measurement, error) 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	var measurements []Measurement
+	measurements := make([]Measurement, 0, len(scores))
 	for _, score := range scores {
 		measurement, err := NewMeasurementFromScore(name, score)
 		if err != nil {
