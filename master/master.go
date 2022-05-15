@@ -151,6 +151,9 @@ func (m *Master) Serve() {
 		m.rankingModelName = m.localCache.RankingModelName
 		m.rankingModelVersion = m.localCache.RankingModelVersion
 		m.rankingScore = m.localCache.RankingModelScore
+		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
+		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
+		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
 	}
 	if m.localCache.ClickModel != nil {
 		base.Logger().Info("load cached click model",
@@ -160,6 +163,9 @@ func (m *Master) Serve() {
 		m.clickModel = m.localCache.ClickModel
 		m.clickScore = m.localCache.ClickModelScore
 		m.clickModelVersion = m.localCache.ClickModelVersion
+		RankingPrecision.Set(float64(m.clickScore.Precision))
+		RankingRecall.Set(float64(m.clickScore.Recall))
+		RankingAUC.Set(float64(m.clickScore.AUC))
 	}
 
 	// create cluster meta cache
