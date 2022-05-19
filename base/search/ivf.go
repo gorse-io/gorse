@@ -18,6 +18,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -165,7 +166,7 @@ func (idx *IVF) Build() {
 	if idx.k > len(idx.data) {
 		panic("the size of the observations set must greater than or equal to k")
 	} else if len(idx.data) == 0 {
-		base.Logger().Warn("no vectors for building IVF")
+		log.Logger().Warn("no vectors for building IVF")
 		return
 	}
 
@@ -209,7 +210,7 @@ func (idx *IVF) Build() {
 			return nil
 		})
 
-		base.Logger().Debug("spatial k means clustering",
+		log.Logger().Debug("spatial k means clustering",
 			zap.Int32("changes", errorCount.Load()))
 		if float32(errorCount.Load())/float32(len(idx.data)) < idx.errorRate {
 			idx.clusters = clusters
@@ -275,7 +276,7 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF,
 	idx.numProbe = int(math32.Ceil(float32(b.k) / math32.Sqrt(float32(len(b.data)))))
 	for i := 0; i < numEpoch; i++ {
 		score = b.evaluate(idx, prune0)
-		base.Logger().Info("try to build vector index",
+		log.Logger().Info("try to build vector index",
 			zap.String("index_type", "IVF"),
 			zap.Int("num_probe", idx.numProbe),
 			zap.Float32("recall", score),

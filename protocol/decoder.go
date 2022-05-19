@@ -15,7 +15,7 @@
 package protocol
 
 import (
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"go.uber.org/zap"
@@ -31,25 +31,25 @@ func UnmarshalClickModel(receiver Master_GetClickModelClient) (click.Factorizati
 		defer func(writer *io.PipeWriter) {
 			err := writer.Close()
 			if err != nil {
-				base.Logger().Error("fail to close pipe", zap.Error(err))
+				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
 		for {
 			// receive from stream
 			fragment, err := receiver.Recv()
 			if err == io.EOF {
-				base.Logger().Info("complete receiving click model")
+				log.Logger().Info("complete receiving click model")
 				break
 			} else if err != nil {
 				finalError = err
-				base.Logger().Error("fail to receive stream", zap.Error(err))
+				log.Logger().Error("fail to receive stream", zap.Error(err))
 				return
 			}
 			// send to pipe
 			_, err = writer.Write(fragment.Data)
 			if err != nil {
 				finalError = err
-				base.Logger().Error("fail to write pipe", zap.Error(err))
+				log.Logger().Error("fail to write pipe", zap.Error(err))
 				return
 			}
 		}
@@ -74,25 +74,25 @@ func UnmarshalRankingModel(receiver Master_GetRankingModelClient) (ranking.Matri
 		defer func(writer *io.PipeWriter) {
 			err := writer.Close()
 			if err != nil {
-				base.Logger().Error("fail to close pipe", zap.Error(err))
+				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
 		for {
 			// receive from stream
 			fragment, err := receiver.Recv()
 			if err == io.EOF {
-				base.Logger().Info("complete receiving ranking model")
+				log.Logger().Info("complete receiving ranking model")
 				break
 			} else if err != nil {
 				receiverError = err
-				base.Logger().Error("fail to receive stream", zap.Error(err))
+				log.Logger().Error("fail to receive stream", zap.Error(err))
 				return
 			}
 			// send to pipe
 			_, err = writer.Write(fragment.Data)
 			if err != nil {
 				receiverError = err
-				base.Logger().Error("fail to write pipe", zap.Error(err))
+				log.Logger().Error("fail to write pipe", zap.Error(err))
 				return
 			}
 		}

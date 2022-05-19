@@ -17,6 +17,7 @@ package model
 import (
 	"archive/zip"
 	"fmt"
+	"github.com/zhenghaoz/gorse/base/log"
 	"io"
 	"net/http"
 	"os"
@@ -24,7 +25,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/zhenghaoz/gorse/base"
 	"go.uber.org/zap"
 )
 
@@ -92,7 +92,7 @@ var (
 func init() {
 	usr, err := user.Current()
 	if err != nil {
-		base.Logger().Fatal("failed to get user directory", zap.Error(err))
+		log.Logger().Fatal("failed to get user directory", zap.Error(err))
 	}
 
 	GorseDir = usr.HomeDir + "/.gorse"
@@ -101,10 +101,10 @@ func init() {
 
 	// create all folders
 	if err = os.MkdirAll(DataSetDir, os.ModePerm); err != nil {
-		base.Logger().Fatal("failed to create directory", zap.Error(err), zap.String("path", DataSetDir))
+		log.Logger().Fatal("failed to create directory", zap.Error(err), zap.String("path", DataSetDir))
 	}
 	if err = os.MkdirAll(TempDir, os.ModePerm); err != nil {
-		base.Logger().Fatal("failed to create directory", zap.Error(err), zap.String("path", TempDir))
+		log.Logger().Fatal("failed to create directory", zap.Error(err), zap.String("path", TempDir))
 	}
 }
 
@@ -131,7 +131,7 @@ func LocateBuiltInDataset(name string, format DatasetFormat) (string, string, er
 
 // downloadFromUrl downloads file from URL.
 func downloadFromUrl(src, dst string) (string, error) {
-	base.Logger().Info("Download dataset", zap.String("source", src))
+	log.Logger().Info("Download dataset", zap.String("source", src))
 	// Extract file name
 	tokens := strings.Split(src, "/")
 	fileName := filepath.Join(dst, tokens[len(tokens)-1])
@@ -141,21 +141,21 @@ func downloadFromUrl(src, dst string) (string, error) {
 	}
 	output, err := os.Create(fileName)
 	if err != nil {
-		base.Logger().Error("failed to create file", zap.Error(err), zap.String("filename", fileName))
+		log.Logger().Error("failed to create file", zap.Error(err), zap.String("filename", fileName))
 		return fileName, err
 	}
 	defer output.Close()
 	// Download file
 	response, err := http.Get(src)
 	if err != nil {
-		base.Logger().Error("failed to download", zap.Error(err), zap.String("source", src))
+		log.Logger().Error("failed to download", zap.Error(err), zap.String("source", src))
 		return fileName, err
 	}
 	defer response.Body.Close()
 	// Save file
 	_, err = io.Copy(output, response.Body)
 	if err != nil {
-		base.Logger().Error("failed to download", zap.Error(err), zap.String("source", src))
+		log.Logger().Error("failed to download", zap.Error(err), zap.String("source", src))
 		return fileName, err
 	}
 	return fileName, nil

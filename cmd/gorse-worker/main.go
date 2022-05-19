@@ -16,7 +16,7 @@ package main
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
@@ -46,9 +46,9 @@ var workerCommand = &cobra.Command{
 		}
 		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
 		if debugMode {
-			base.SetDevelopmentLogger(outputPaths...)
+			log.SetDevelopmentLogger(outputPaths...)
 		} else {
-			base.SetProductionLogger(outputPaths...)
+			log.SetProductionLogger(outputPaths...)
 		}
 		// create worker
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
@@ -71,6 +71,6 @@ func init() {
 
 func main() {
 	if err := workerCommand.Execute(); err != nil {
-		base.Logger().Fatal("failed to execute", zap.Error(err))
+		log.Logger().Fatal("failed to execute", zap.Error(err))
 	}
 }

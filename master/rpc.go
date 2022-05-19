@@ -18,7 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -68,7 +68,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	node := NewNode(ctx, nodeInfo)
 	if node.Type != "" {
 		if err := m.ttlCache.Set(nodeInfo.NodeName, node); err != nil {
-			base.Logger().Error("failed to set ttl cache", zap.Error(err))
+			log.Logger().Error("failed to set ttl cache", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -133,12 +133,12 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 		defer func(writer *io.PipeWriter) {
 			err := writer.Close()
 			if err != nil {
-				base.Logger().Error("fail to close pipe", zap.Error(err))
+				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
 		err := ranking.MarshalModel(writer, m.rankingModel)
 		if err != nil {
-			base.Logger().Error("fail to marshal ranking model", zap.Error(err))
+			log.Logger().Error("fail to marshal ranking model", zap.Error(err))
 			encoderError = err
 			return
 		}
@@ -148,7 +148,7 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 		buf := make([]byte, batchSize)
 		n, err := reader.Read(buf)
 		if err == io.EOF {
-			base.Logger().Debug("complete sending ranking model")
+			log.Logger().Debug("complete sending ranking model")
 			break
 		} else if err != nil {
 			return err
@@ -180,12 +180,12 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 		defer func(writer *io.PipeWriter) {
 			err := writer.Close()
 			if err != nil {
-				base.Logger().Error("fail to close pipe", zap.Error(err))
+				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
 		err := click.MarshalModel(writer, m.clickModel)
 		if err != nil {
-			base.Logger().Error("fail to marshal click model", zap.Error(err))
+			log.Logger().Error("fail to marshal click model", zap.Error(err))
 			encoderError = err
 			return
 		}
@@ -195,7 +195,7 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 		buf := make([]byte, batchSize)
 		n, err := reader.Read(buf)
 		if err == io.EOF {
-			base.Logger().Debug("complete sending click model")
+			log.Logger().Debug("complete sending click model")
 			break
 		} else if err != nil {
 			return err
@@ -211,7 +211,7 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 // nodeUp handles node information inserted events.
 func (m *Master) nodeUp(key string, value interface{}) {
 	node := value.(*Node)
-	base.Logger().Info("node up",
+	log.Logger().Info("node up",
 		zap.String("node_name", key),
 		zap.String("node_ip", node.IP),
 		zap.String("node_type", node.Type))
@@ -223,7 +223,7 @@ func (m *Master) nodeUp(key string, value interface{}) {
 // nodeDown handles node information timout events.
 func (m *Master) nodeDown(key string, value interface{}) {
 	node := value.(*Node)
-	base.Logger().Info("node down",
+	log.Logger().Info("node down",
 		zap.String("node_name", key),
 		zap.String("node_ip", node.IP),
 		zap.String("node_type", node.Type))

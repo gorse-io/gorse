@@ -24,7 +24,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -833,7 +833,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 }
 
 func BenchmarkRecommendFromOfflineCache(b *testing.B) {
-	base.CloseLogger()
+	log.CloseLogger()
 	s := newBenchServer(b)
 	defer s.Close(b)
 
@@ -878,7 +878,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 }
 
 func BenchmarkRecommendFromLatest(b *testing.B) {
-	base.CloseLogger()
+	log.CloseLogger()
 	s := newBenchServer(b)
 	defer s.Close(b)
 
@@ -929,7 +929,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 }
 
 func BenchmarkRecommendFromItemBased(b *testing.B) {
-	base.CloseLogger()
+	log.CloseLogger()
 	s := newBenchServer(b)
 	defer s.Close(b)
 

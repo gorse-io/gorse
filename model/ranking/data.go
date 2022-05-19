@@ -22,6 +22,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"os"
@@ -254,13 +255,13 @@ func LoadDataFromCSV(fileName, sep string, hasHeader bool) *DataSet {
 	// Open file
 	file, err := os.Open(fileName)
 	if err != nil {
-		base.Logger().Fatal("failed to open csv file", zap.Error(err),
+		log.Logger().Fatal("failed to open csv file", zap.Error(err),
 			zap.String("csv_file", fileName))
 	}
 	defer func(file *os.File) {
 		err = file.Close()
 		if err != nil {
-			base.Logger().Error("failed to close file", zap.Error(err))
+			log.Logger().Error("failed to close file", zap.Error(err))
 		}
 	}(file)
 	// Read CSV file
@@ -291,7 +292,7 @@ func loadTest(dataset *DataSet, path string) error {
 	defer func(file *os.File) {
 		err = file.Close()
 		if err != nil {
-			base.Logger().Error("failed to close file", zap.Error(err))
+			log.Logger().Error("failed to close file", zap.Error(err))
 		}
 	}(file)
 	// Read lines
@@ -321,7 +322,7 @@ func loadTrain(path string) (*DataSet, error) {
 	defer func(file *os.File) {
 		err = file.Close()
 		if err != nil {
-			base.Logger().Error("failed to close file", zap.Error(err))
+			log.Logger().Error("failed to close file", zap.Error(err))
 		}
 	}(file)
 	// Read lines

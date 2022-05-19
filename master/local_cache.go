@@ -19,6 +19,7 @@ import (
 	std_errors "errors"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"go.uber.org/zap"
@@ -42,7 +43,7 @@ type LocalCache struct {
 // If the ranking model is invalid, RankingModel == nil.
 // If the click model is invalid, ClickModel == nil.
 func LoadLocalCache(path string) (*LocalCache, error) {
-	base.Logger().Info("load cache", zap.String("path", path))
+	log.Logger().Info("load cache", zap.String("path", path))
 	state := &LocalCache{path: path}
 	// check if file exists
 	if _, err := os.Stat(path); err != nil {
@@ -59,7 +60,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	defer func(f *os.File) {
 		err = f.Close()
 		if err != nil {
-			base.Logger().Error("fail to close file", zap.Error(err))
+			log.Logger().Error("fail to close file", zap.Error(err))
 		}
 	}(f)
 	// 1. ranking model name
@@ -118,7 +119,7 @@ func (c *LocalCache) WriteLocalCache() error {
 	defer func(f *os.File) {
 		err = f.Close()
 		if err != nil {
-			base.Logger().Error("fail to close file", zap.Error(err))
+			log.Logger().Error("fail to close file", zap.Error(err))
 		}
 	}(f)
 	// 1. ranking model name

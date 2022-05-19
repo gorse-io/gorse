@@ -20,73 +20,12 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/chewxy/math32"
-	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 	"io"
-	"os"
-	"path/filepath"
 	"strconv"
 )
-
-var logger *zap.Logger
-
-func init() {
-	SetProductionLogger()
-}
-
-// Logger get current logger
-func Logger() *zap.Logger {
-	return logger
-}
-
-func ResponseLogger(resp *restful.Response) *zap.Logger {
-	return logger.With(zap.String("request_id", resp.Header().Get("X-Request-ID")))
-}
-
-// SetProductionLogger set current logger in production mode.
-func SetProductionLogger(outputPaths ...string) {
-	for _, outputPath := range outputPaths {
-		err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
-		if err != nil {
-			panic(err)
-		}
-	}
-	cfg := zap.NewProductionConfig()
-	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
-	var err error
-	logger, err = cfg.Build()
-	if err != nil {
-		panic(err)
-	}
-}
-
-// SetDevelopmentLogger set current logger in development mode.
-func SetDevelopmentLogger(outputPaths ...string) {
-	for _, outputPath := range outputPaths {
-		err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
-		if err != nil {
-			panic(err)
-		}
-	}
-	cfg := zap.NewDevelopmentConfig()
-	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
-	var err error
-	logger, err = cfg.Build()
-	if err != nil {
-		panic(err)
-	}
-}
-
-func CloseLogger() {
-	cfg := zap.NewProductionConfig()
-	cfg.Level = zap.NewAtomicLevelAt(zap.FatalLevel)
-	var err error
-	logger, err = cfg.Build()
-	if err != nil {
-		panic(err)
-	}
-}
 
 // RangeInt generate a slice [0, ..., n-1].
 func RangeInt(n int) []int {
@@ -127,7 +66,7 @@ func NewMatrixInt(row, col int) [][]int {
 // CheckPanic catches panic.
 func CheckPanic() {
 	if r := recover(); r != nil {
-		Logger().Error("panic recovered", zap.Any("panic", r))
+		log.Logger().Error("panic recovered", zap.Any("panic", r))
 	}
 }
 

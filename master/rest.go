@@ -27,6 +27,7 @@ import (
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -209,7 +210,7 @@ func init() {
 	var err error
 	staticFileSystem, err = fs.New()
 	if err != nil {
-		base.Logger().Fatal("failed to load statik files", zap.Error(err))
+		log.Logger().Fatal("failed to load statik files", zap.Error(err))
 	}
 	staticFileServer = http.FileServer(&SinglePageAppFileSystem{staticFileSystem})
 }
@@ -261,7 +262,7 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	if request.RequestURI == "/" || os.IsNotExist(err) {
 		if !m.checkAuth(request) {
 			http.Redirect(response, request, "/login", http.StatusFound)
-			base.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
+			log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
 			return
 		}
 		noCache(staticFileServer).ServeHTTP(response, request)
@@ -273,7 +274,7 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 	switch request.Method {
 	case http.MethodGet:
-		base.Logger().Info("GET /login", zap.Int("status_code", http.StatusOK))
+		log.Logger().Info("GET /login", zap.Int("status_code", http.StatusOK))
 		staticFileServer.ServeHTTP(response, request)
 	case http.MethodPost:
 		name := request.FormValue("user_name")
@@ -294,12 +295,12 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 				}
 				http.SetCookie(response, cookie)
 				http.Redirect(response, request, "/", http.StatusFound)
-				base.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
+				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
 				return
 			}
 		} else {
 			http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
-			base.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
+			log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
 			return
 		}
 	default:
@@ -316,7 +317,7 @@ func (m *Master) logout(response http.ResponseWriter, request *http.Request) {
 	}
 	http.SetCookie(response, cookie)
 	http.Redirect(response, request, "/login", http.StatusFound)
-	base.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.RequestURI), zap.Int("status_code", http.StatusFound))
+	log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.RequestURI), zap.Int("status_code", http.StatusFound))
 }
 
 func (m *Master) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
@@ -435,31 +436,31 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	var err error
 	// read number of users
 	if status.NumUsers, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumUsers)).Integer(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get number of users", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get number of users", zap.Error(err))
 	}
 	// read number of items
 	if status.NumItems, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumItems)).Integer(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get number of items", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get number of items", zap.Error(err))
 	}
 	// read number of user labels
 	if status.NumUserLabels, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumUserLabels)).Integer(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get number of user labels", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get number of user labels", zap.Error(err))
 	}
 	// read number of item labels
 	if status.NumItemLabels, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumItemLabels)).Integer(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get number of item labels", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get number of item labels", zap.Error(err))
 	}
 	// read number of total positive feedback
 	if status.NumTotalPosFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks)).Integer(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get number of total positive feedbacks", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get number of total positive feedbacks", zap.Error(err))
 	}
 	// read number of valid positive feedback
 	if status.NumValidPosFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks)).Integer(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get number of valid positive feedbacks", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get number of valid positive feedbacks", zap.Error(err))
 	}
 	// read number of valid negative feedback
 	if status.NumValidNegFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks)).Integer(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get number of valid negative feedbacks", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get number of valid negative feedbacks", zap.Error(err))
 	}
 	// count the number of workers and servers
 	m.nodesInfoMutex.Lock()
@@ -474,27 +475,27 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	m.nodesInfoMutex.Unlock()
 	// read popular items update time
 	if status.PopularItemsUpdateTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime)).Time(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get popular items update time", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get popular items update time", zap.Error(err))
 	}
 	// read the latest items update time
 	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
 	}
 	status.MatchingModelScore = m.rankingScore
 	status.RankingModelScore = m.clickScore
 	// read last fit matching model time
 	if status.MatchingModelFitTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get last fit matching model time", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get last fit matching model time", zap.Error(err))
 	}
 	// read last fit ranking model time
 	if status.RankingModelFitTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime)).Time(); err != nil {
-		base.ResponseLogger(response).Warn("failed to get last fit ranking model time", zap.Error(err))
+		log.ResponseLogger(response).Warn("failed to get last fit ranking model time", zap.Error(err))
 	}
 	// read user neighbor index recall
 	var temp string
 	if m.GorseConfig.Recommend.UserNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
-			base.ResponseLogger(response).Warn("failed to get user neighbor index recall", zap.Error(err))
+			log.ResponseLogger(response).Warn("failed to get user neighbor index recall", zap.Error(err))
 		} else {
 			status.UserNeighborIndexRecall = base.ParseFloat32(temp)
 		}
@@ -502,7 +503,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	// read item neighbor index recall
 	if m.GorseConfig.Recommend.ItemNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
-			base.ResponseLogger(response).Warn("failed to get item neighbor index recall", zap.Error(err))
+			log.ResponseLogger(response).Warn("failed to get item neighbor index recall", zap.Error(err))
 		} else {
 			status.ItemNeighborIndexRecall = base.ParseFloat32(temp)
 		}
@@ -510,7 +511,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	// read matching index recall
 	if m.GorseConfig.Recommend.Collaborative.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
-			base.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
+			log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
 		} else {
 			status.MatchingIndexRecall = base.ParseFloat32(temp)
 		}
@@ -744,7 +745,7 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		}
 		server.Ok(response, details)
 	default:
-		base.ResponseLogger(response).Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
+		log.ResponseLogger(response).Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
 	}
 }
 
@@ -890,7 +891,7 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 	}
 	m.notifyDataImported()
 	timeUsed := time.Since(timeStart)
-	base.Logger().Info("complete import users",
+	log.Logger().Info("complete import users",
 		zap.Duration("time_used", timeUsed),
 		zap.Int("num_users", lineCount))
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
@@ -1043,7 +1044,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 	}
 	m.notifyDataImported()
 	timeUsed := time.Since(timeStart)
-	base.Logger().Info("complete import items",
+	log.Logger().Info("complete import items",
 		zap.Duration("time_used", timeUsed),
 		zap.Int("num_items", lineCount))
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
@@ -1051,7 +1052,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 
 func format(inFmt, outFmt string, s []string, lineCount int) ([]string, error) {
 	if len(s) < len(inFmt) {
-		base.Logger().Error("number of fields mismatch",
+		log.Logger().Error("number of fields mismatch",
 			zap.Int("expect", len(inFmt)),
 			zap.Int("actual", len(s)))
 		return nil, fmt.Errorf("number of fields mismatch at line %v", lineCount)
@@ -1213,7 +1214,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	}
 	m.notifyDataImported()
 	timeUsed := time.Since(timeStart)
-	base.Logger().Info("complete import feedback",
+	log.Logger().Info("complete import feedback",
 		zap.Duration("time_used", timeUsed),
 		zap.Int("num_items", lineCount))
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})

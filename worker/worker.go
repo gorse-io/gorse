@@ -27,6 +27,7 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/cmd/version"
@@ -116,7 +117,7 @@ func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, job
 // Sync this worker to the master.
 func (w *Worker) Sync() {
 	defer base.CheckPanic()
-	base.Logger().Info("start meta sync", zap.Duration("meta_timeout", w.cfg.Master.MetaTimeout))
+	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", w.cfg.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
 		var err error
@@ -127,7 +128,7 @@ func (w *Worker) Sync() {
 				HttpPort:      int64(w.httpPort),
 				BinaryVersion: version.Version,
 			}); err != nil {
-			base.Logger().Error("failed to get meta", zap.Error(err))
+			log.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
 		}
 
@@ -136,7 +137,7 @@ func (w *Worker) Sync() {
 		err = json.Unmarshal([]byte(meta.Config), &w.cfg)
 		if err != nil {
 			w.cfg.Recommend.Offline.UnLock()
-			base.Logger().Error("failed to parse master config", zap.Error(err))
+			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
 		}
 		w.cfg.Recommend.Offline.UnLock()
@@ -146,9 +147,9 @@ func (w *Worker) Sync() {
 
 		// connect to data store
 		if w.dataPath != w.cfg.Database.DataStore {
-			base.Logger().Info("connect data store", zap.String("database", w.cfg.Database.DataStore))
+			log.Logger().Info("connect data store", zap.String("database", w.cfg.Database.DataStore))
 			if w.dataClient, err = data.Open(w.cfg.Database.DataStore); err != nil {
-				base.Logger().Error("failed to connect data store", zap.Error(err))
+				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
 			w.dataPath = w.cfg.Database.DataStore
@@ -156,9 +157,9 @@ func (w *Worker) Sync() {
 
 		// connect to cache store
 		if w.cachePath != w.cfg.Database.CacheStore {
-			base.Logger().Info("connect cache store", zap.String("database", w.cfg.Database.CacheStore))
+			log.Logger().Info("connect cache store", zap.String("database", w.cfg.Database.CacheStore))
 			if w.cacheClient, err = cache.Open(w.cfg.Database.CacheStore); err != nil {
-				base.Logger().Error("failed to connect cache store", zap.Error(err))
+				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
 			w.cachePath = w.cfg.Database.CacheStore
@@ -167,7 +168,7 @@ func (w *Worker) Sync() {
 		// check ranking model version
 		w.latestRankingModelVersion = meta.RankingModelVersion
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
-			base.Logger().Info("new ranking model found",
+			log.Logger().Info("new ranking model found",
 				zap.String("old_version", base.Hex(w.currentRankingModelVersion)),
 				zap.String("new_version", base.Hex(w.latestRankingModelVersion)))
 			w.syncedChan <- true
@@ -176,7 +177,7 @@ func (w *Worker) Sync() {
 		// check click model version
 		w.latestClickModelVersion = meta.ClickModelVersion
 		if w.latestClickModelVersion != w.currentClickModelVersion {
-			base.Logger().Info("new click model found",
+			log.Logger().Info("new click model found",
 				zap.String("old_version", base.Hex(w.currentClickModelVersion)),
 				zap.String("new_version", base.Hex(w.latestClickModelVersion)))
 			w.syncedChan <- true
@@ -200,21 +201,21 @@ func (w *Worker) Pull() {
 
 		// pull ranking model
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
-			base.Logger().Info("start pull ranking model")
+			log.Logger().Info("start pull ranking model")
 			if rankingModelReceiver, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestRankingModelVersion},
 				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
-				base.Logger().Error("failed to pull ranking model", zap.Error(err))
+				log.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
 				var rankingModel ranking.MatrixFactorization
 				rankingModel, err = protocol.UnmarshalRankingModel(rankingModelReceiver)
 				if err != nil {
-					base.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
+					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
 					w.rankingModel = rankingModel
 					w.rankingIndex = nil
 					w.currentRankingModelVersion = w.latestRankingModelVersion
-					base.Logger().Info("synced ranking model",
+					log.Logger().Info("synced ranking model",
 						zap.String("version", base.Hex(w.currentRankingModelVersion)))
 					pulled = true
 				}
@@ -223,20 +224,20 @@ func (w *Worker) Pull() {
 
 		// pull click model
 		if w.latestClickModelVersion != w.currentClickModelVersion {
-			base.Logger().Info("start pull click model")
+			log.Logger().Info("start pull click model")
 			if clickModelReceiver, err := w.masterClient.GetClickModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestClickModelVersion},
 				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
-				base.Logger().Error("failed to pull click model", zap.Error(err))
+				log.Logger().Error("failed to pull click model", zap.Error(err))
 			} else {
 				var clickModel click.FactorizationMachine
 				clickModel, err = protocol.UnmarshalClickModel(clickModelReceiver)
 				if err != nil {
-					base.Logger().Error("failed to unmarshal click model", zap.Error(err))
+					log.Logger().Error("failed to unmarshal click model", zap.Error(err))
 				} else {
 					w.clickModel = clickModel
 					w.currentClickModelVersion = w.latestClickModelVersion
-					base.Logger().Info("synced click model",
+					log.Logger().Info("synced click model",
 						zap.String("version", base.Hex(w.currentClickModelVersion)))
 					pulled = true
 				}
@@ -257,7 +258,7 @@ func (w *Worker) ServeMetrics() {
 	http.Handle("/metrics", promhttp.Handler())
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
 	if err != nil {
-		base.Logger().Fatal("failed to start http server", zap.Error(err))
+		log.Logger().Fatal("failed to start http server", zap.Error(err))
 	}
 }
 
@@ -268,9 +269,9 @@ func (w *Worker) Serve() {
 	state, err := LoadLocalCache(w.cacheFile)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			base.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
+			log.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
 		} else {
-			base.Logger().Error("failed to load persist state", zap.Error(err),
+			log.Logger().Error("failed to load persist state", zap.Error(err),
 				zap.String("path", state.path))
 		}
 	}
@@ -278,18 +279,18 @@ func (w *Worker) Serve() {
 		state.WorkerName = base.GetRandomName(0)
 		err = state.WriteLocalCache()
 		if err != nil {
-			base.Logger().Fatal("failed to write meta", zap.Error(err))
+			log.Logger().Fatal("failed to write meta", zap.Error(err))
 		}
 	}
 	w.workerName = state.WorkerName
-	base.Logger().Info("start worker",
+	log.Logger().Info("start worker",
 		zap.Int("n_jobs", w.jobs),
 		zap.String("worker_name", w.workerName))
 
 	// connect to master
 	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		base.Logger().Fatal("failed to connect master", zap.Error(err))
+		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
 	w.masterClient = protocol.NewMasterClient(conn)
 
@@ -301,7 +302,7 @@ func (w *Worker) Serve() {
 		// pull users
 		workingUsers, err := w.pullUsers(w.peers, w.me)
 		if err != nil {
-			base.Logger().Error("failed to split users", zap.Error(err),
+			log.Logger().Error("failed to split users", zap.Error(err),
 				zap.String("me", w.me),
 				zap.Strings("workers", w.peers))
 			return
@@ -332,7 +333,7 @@ func (w *Worker) Serve() {
 // 8. Refresh cache.
 func (w *Worker) Recommend(users []data.User) {
 	startRecommendTime := time.Now()
-	base.Logger().Info("ranking recommendation",
+	log.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", w.jobs),
 		zap.Int("cache_size", w.cfg.Recommend.CacheSize))
@@ -343,21 +344,21 @@ func (w *Worker) Recommend(users []data.User) {
 	if w.masterClient != nil {
 		if _, err := w.masterClient.StartTask(context.Background(),
 			&protocol.StartTaskRequest{Name: taskName, Total: int64(len(users))}); err != nil {
-			base.Logger().Error("failed to report start task", zap.Error(err))
+			log.Logger().Error("failed to report start task", zap.Error(err))
 		}
 	}
 
 	// pull items from database
 	itemCache, itemCategories, err := w.pullItems()
 	if err != nil {
-		base.Logger().Error("failed to pull items", zap.Error(err))
+		log.Logger().Error("failed to pull items", zap.Error(err))
 		return
 	}
 
 	// build ranking index
 	if w.rankingModel != nil && w.rankingIndex == nil && w.cfg.Recommend.Collaborative.EnableIndex {
 		startTime := time.Now()
-		base.Logger().Info("start building ranking index")
+		log.Logger().Info("start building ranking index")
 		itemIndex := w.rankingModel.GetItemIndex()
 		vectors := make([]search.Vector, itemIndex.Len())
 		for i := int32(0); i < itemIndex.Len(); i++ {
@@ -373,9 +374,9 @@ func (w *Worker) Recommend(users []data.User) {
 		w.rankingIndex, recall = builder.Build(w.cfg.Recommend.Collaborative.IndexRecall, w.cfg.Recommend.Collaborative.IndexFitEpoch, false)
 		CollaborativeFilteringIndexRecall.Set(float64(recall))
 		if err = w.cacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), base.FormatFloat32(recall))); err != nil {
-			base.Logger().Error("failed to write meta", zap.Error(err))
+			log.Logger().Error("failed to write meta", zap.Error(err))
 		}
-		base.Logger().Info("complete building ranking index",
+		log.Logger().Info("complete building ranking index",
 			zap.Duration("build_time", time.Since(startTime)))
 	} else if w.rankingModel != nil && w.rankingIndex == nil {
 		CollaborativeFilteringIndexRecall.Set(1)
@@ -399,10 +400,10 @@ func (w *Worker) Recommend(users []data.User) {
 					if w.masterClient != nil {
 						if _, err := w.masterClient.UpdateTask(context.Background(),
 							&protocol.UpdateTaskRequest{Name: taskName, Done: int64(completedCount)}); err != nil {
-							base.Logger().Error("failed to report update task", zap.Error(err))
+							log.Logger().Error("failed to report update task", zap.Error(err))
 						}
 					}
-					base.Logger().Info("ranking recommendation",
+					log.Logger().Info("ranking recommendation",
 						zap.Int("n_complete_users", completedCount),
 						zap.Int("n_working_users", len(users)),
 						zap.Int("throughput", throughput))
@@ -438,7 +439,7 @@ func (w *Worker) Recommend(users []data.User) {
 		historyItems, feedbacks, err := loadUserHistoricalItems(w.dataClient, userId)
 		excludeSet := set.NewStringSet(historyItems...)
 		if err != nil {
-			base.Logger().Error("failed to pull user feedback",
+			log.Logger().Error("failed to pull user feedback",
 				zap.String("user_id", userId), zap.Error(err))
 			return errors.Trace(err)
 		}
@@ -448,7 +449,7 @@ func (w *Worker) Recommend(users []data.User) {
 		if w.cfg.Recommend.Offline.EnableItemBasedRecommend {
 			positiveItems, err = userFeedbackCache.GetUserFeedback(userId)
 			if err != nil {
-				base.Logger().Error("failed to pull user feedback",
+				log.Logger().Error("failed to pull user feedback",
 					zap.String("user_id", userId), zap.Error(err))
 				return errors.Trace(err)
 			}
@@ -473,7 +474,7 @@ func (w *Worker) Recommend(users []data.User) {
 					recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
 				}
 				if err != nil {
-					base.Logger().Error("failed to recommend by collaborative filtering",
+					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
 					return errors.Trace(err)
 				}
@@ -483,10 +484,10 @@ func (w *Worker) Recommend(users []data.User) {
 				collaborativeUsed = true
 				collaborativeRecommendSeconds.Add(usedTime.Seconds())
 			} else if !w.rankingModel.IsUserPredictable(userIndex) {
-				base.Logger().Info("user is unpredictable", zap.String("user_id", userId))
+				log.Logger().Info("user is unpredictable", zap.String("user_id", userId))
 			}
 		} else if w.rankingModel == nil {
-			base.Logger().Warn("no collaborative filtering model")
+			log.Logger().Warn("no collaborative filtering model")
 		}
 
 		// Recommender #2: item-based.
@@ -500,7 +501,7 @@ func (w *Worker) Recommend(users []data.User) {
 					// load similar items
 					similarItems, err := w.cacheClient.GetSorted(cache.Key(cache.ItemNeighbors, itemId, category), 0, w.cfg.Recommend.CacheSize)
 					if err != nil {
-						base.Logger().Error("failed to load similar items", zap.Error(err))
+						log.Logger().Error("failed to load similar items", zap.Error(err))
 						return errors.Trace(err)
 					}
 					// add unseen items
@@ -513,7 +514,7 @@ func (w *Worker) Recommend(users []data.User) {
 					digest, err := w.cacheClient.Get(cache.Key(cache.ItemNeighborsDigest, itemId)).String()
 					if err != nil {
 						if !errors.IsNotFound(err) {
-							base.Logger().Error("failed to load item neighbors digest", zap.Error(err))
+							log.Logger().Error("failed to load item neighbors digest", zap.Error(err))
 							return errors.Trace(err)
 						}
 					}
@@ -538,14 +539,14 @@ func (w *Worker) Recommend(users []data.User) {
 			// load similar users
 			similarUsers, err := w.cacheClient.GetSorted(cache.Key(cache.UserNeighbors, userId), 0, w.cfg.Recommend.CacheSize)
 			if err != nil {
-				base.Logger().Error("failed to load similar users", zap.Error(err))
+				log.Logger().Error("failed to load similar users", zap.Error(err))
 				return errors.Trace(err)
 			}
 			for _, user := range similarUsers {
 				// load historical feedback
 				similarUserPositiveItems, err := userFeedbackCache.GetUserFeedback(user.Id)
 				if err != nil {
-					base.Logger().Error("failed to pull user feedback",
+					log.Logger().Error("failed to pull user feedback",
 						zap.String("user_id", userId), zap.Error(err))
 					return errors.Trace(err)
 				}
@@ -559,7 +560,7 @@ func (w *Worker) Recommend(users []data.User) {
 				digest, err := w.cacheClient.Get(cache.Key(cache.UserNeighborsDigest, user.Id)).String()
 				if err != nil {
 					if !errors.IsNotFound(err) {
-						base.Logger().Error("failed to load user neighbors digest", zap.Error(err))
+						log.Logger().Error("failed to load user neighbors digest", zap.Error(err))
 						return errors.Trace(err)
 					}
 				}
@@ -590,7 +591,7 @@ func (w *Worker) Recommend(users []data.User) {
 			for _, category := range append([]string{""}, itemCategories...) {
 				latestItems, err := w.cacheClient.GetSorted(cache.Key(cache.LatestItems, category), 0, w.cfg.Recommend.CacheSize)
 				if err != nil {
-					base.Logger().Error("failed to load latest items", zap.Error(err))
+					log.Logger().Error("failed to load latest items", zap.Error(err))
 					return errors.Trace(err)
 				}
 				var recommend []string
@@ -610,7 +611,7 @@ func (w *Worker) Recommend(users []data.User) {
 			for _, category := range append([]string{""}, itemCategories...) {
 				popularItems, err := w.cacheClient.GetSorted(cache.Key(cache.PopularItems, category), 0, w.cfg.Recommend.CacheSize)
 				if err != nil {
-					base.Logger().Error("failed to load popular items", zap.Error(err))
+					log.Logger().Error("failed to load popular items", zap.Error(err))
 					return errors.Trace(err)
 				}
 				var recommend []string
@@ -634,7 +635,7 @@ func (w *Worker) Recommend(users []data.User) {
 			if w.cfg.Recommend.Offline.EnableClickThroughPrediction && w.clickModel != nil {
 				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache)
 				if err != nil {
-					base.Logger().Error("failed to rank items", zap.Error(err))
+					log.Logger().Error("failed to rank items", zap.Error(err))
 					return errors.Trace(err)
 				}
 				ctrUsed = true
@@ -642,7 +643,7 @@ func (w *Worker) Recommend(users []data.User) {
 				w.rankingModel.IsUserPredictable(w.rankingModel.GetUserIndex().ToNumber(userId)) {
 				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
 				if err != nil {
-					base.Logger().Error("failed to rank items", zap.Error(err))
+					log.Logger().Error("failed to rank items", zap.Error(err))
 					return errors.Trace(err)
 				}
 			} else {
@@ -653,7 +654,7 @@ func (w *Worker) Recommend(users []data.User) {
 		// replacement
 		if w.cfg.Recommend.Replacement.EnableReplacement {
 			if results, err = w.replacement(results, &user, feedbacks, itemCache); err != nil {
-				base.Logger().Error("failed to replace items", zap.Error(err))
+				log.Logger().Error("failed to replace items", zap.Error(err))
 				return errors.Trace(err)
 			}
 		}
@@ -662,12 +663,12 @@ func (w *Worker) Recommend(users []data.User) {
 		for category, result := range results {
 			results[category], err = w.exploreRecommend(result, excludeSet, category)
 			if err != nil {
-				base.Logger().Error("failed to explore latest and popular items", zap.Error(err))
+				log.Logger().Error("failed to explore latest and popular items", zap.Error(err))
 				return errors.Trace(err)
 			}
 
 			if err = w.cacheClient.SetSorted(cache.Key(cache.OfflineRecommend, userId, category), results[category]); err != nil {
-				base.Logger().Error("failed to cache recommendation", zap.Error(err))
+				log.Logger().Error("failed to cache recommendation", zap.Error(err))
 				return errors.Trace(err)
 			}
 		}
@@ -679,29 +680,29 @@ func (w *Worker) Recommend(users []data.User) {
 				config.WithItemNeighborDigest(strings.Join(itemNeighborDigests.List(), "-")),
 				config.WithUserNeighborDigest(strings.Join(userNeighborDigests.List(), "-")),
 			))); err != nil {
-			base.Logger().Error("failed to cache recommendation time", zap.Error(err))
+			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
 
 		// refresh cache
 		err = w.refreshCache(userId)
 		if err != nil {
-			base.Logger().Error("failed to refresh cache", zap.Error(err))
+			log.Logger().Error("failed to refresh cache", zap.Error(err))
 			return errors.Trace(err)
 		}
 		return nil
 	})
 	close(completed)
 	if err != nil {
-		base.Logger().Error("failed to continue offline recommendation", zap.Error(err))
+		log.Logger().Error("failed to continue offline recommendation", zap.Error(err))
 		return
 	}
 	if w.masterClient != nil {
 		if _, err := w.masterClient.FinishTask(context.Background(),
 			&protocol.FinishTaskRequest{Name: taskName}); err != nil {
-			base.Logger().Error("failed to report finish task", zap.Error(err))
+			log.Logger().Error("failed to report finish task", zap.Error(err))
 		}
 	}
-	base.Logger().Info("complete ranking recommendation",
+	log.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 	UpdateUserRecommendTotal.Set(updateUserCount.Load())
 	OfflineRecommendTotalSeconds.Set(time.Since(startRecommendTime).Seconds())
@@ -736,7 +737,7 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 		recommendItems, recommendScores := recItemsFilter.PopAll()
 		recommend[category] = recommendItems
 		if err := w.cacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, userId, category), cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
-			base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
+			log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 			return nil, 0, errors.Trace(err)
 		}
 	}
@@ -763,7 +764,7 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId st
 		recommend[category] = recommendItems
 		if err := w.cacheClient.SetSorted(cache.Key(cache.CollaborativeRecommend, userId, category),
 			cache.CreateScoredItems(recommendItems, recommendScores)); err != nil {
-			base.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
+			log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 			return nil, 0, errors.Trace(err)
 		}
 	}
@@ -813,7 +814,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 		if item, exist := itemCache[itemId]; exist {
 			items = append(items, item)
 		} else {
-			base.Logger().Warn("item doesn't exists in database", zap.String("item_id", itemId))
+			log.Logger().Warn("item doesn't exists in database", zap.String("item_id", itemId))
 		}
 	}
 	// rank by CTR
@@ -930,7 +931,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	for _, category := range append([]string{""}, categories...) {
 		items, err := w.cacheClient.GetSorted(cache.Key(cache.OfflineRecommend, userId, category), 0, -1)
 		if err != nil {
-			base.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
+			log.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
 			return true
 		} else if len(items) == 0 {
 			return true
@@ -940,7 +941,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	cacheDigest, err = w.cacheClient.Get(cache.Key(cache.OfflineRecommendDigest, userId)).String()
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			base.Logger().Error("failed to load offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
+			log.Logger().Error("failed to load offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
 		}
 		return true
 	}
@@ -951,7 +952,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	activeTime, err = w.cacheClient.Get(cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			base.Logger().Error("failed to read last modify user time", zap.Error(err))
+			log.Logger().Error("failed to read last modify user time", zap.Error(err))
 		}
 		return true
 	}
@@ -959,7 +960,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	recommendTime, err = w.cacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			base.Logger().Error("failed to read last update user recommend time", zap.Error(err))
+			log.Logger().Error("failed to read last update user recommend time", zap.Error(err))
 		}
 		return true
 	}
@@ -1142,7 +1143,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 				newRecommend[category] = append(newRecommend[category], cache.Scored{Id: itemId, Score: score})
 			}
 		} else {
-			base.Logger().Warn("item doesn't exists in database", zap.String("item_id", itemId))
+			log.Logger().Warn("item doesn't exists in database", zap.String("item_id", itemId))
 		}
 	}
 

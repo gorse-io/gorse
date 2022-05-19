@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"sync"
@@ -54,7 +55,7 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 	dfs = func(deep int, params model.Params) {
 		if deep == len(paramNames) {
 			progress++
-			base.Logger().Info(fmt.Sprintf("grid search %v/%v", progress, count),
+			log.Logger().Info(fmt.Sprintf("grid search %v/%v", progress, count),
 				zap.Any("params", params))
 			// Cross validate
 			estimator.Clear()
@@ -107,7 +108,7 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 			params[paramName] = value
 		}
 		// Cross validate
-		base.Logger().Info(fmt.Sprintf("random search %v/%v", i, numTrials),
+		log.Logger().Info(fmt.Sprintf("random search %v/%v", i, numTrials),
 			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
@@ -163,7 +164,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 		return errors.New("tracker is required")
 	}
 	tracker.Start(searcher.numTrials * searcher.numEpochs)
-	base.Logger().Info("click model search",
+	log.Logger().Info("click model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()),
 		zap.Int32("n_user_labels", trainSet.Index.CountUserLabels()),
@@ -181,7 +182,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, tracker model.Trac
 	searcher.bestScore = r.BestScore
 
 	searchTime := time.Since(startTime)
-	base.Logger().Info("complete ranking model search",
+	log.Logger().Info("complete ranking model search",
 		zap.Float32("auc", searcher.bestScore.AUC),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))

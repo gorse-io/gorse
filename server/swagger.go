@@ -16,6 +16,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/zhenghaoz/gorse/base/log"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zhenghaoz/gorse/base"
 	"go.uber.org/zap"
 
 	"github.com/haxii/go-swagger-ui/static"
@@ -96,7 +96,7 @@ func serveLocalFile(localFilePath string, w http.ResponseWriter, r *http.Request
 	w.Header().Set("Cache-Control", "no-cache, max-age=0, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	if _, err = w.Write(resp); err != nil {
-		base.Logger().Error("failed to write response", zap.Error(err))
+		log.Logger().Error("failed to write response", zap.Error(err))
 	}
 }
 
@@ -142,7 +142,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if source != "index.html" {
 		w.Header().Set("Content-Length", strconv.Itoa(len(staticFile)))
 		if _, err := w.Write(staticFile); err != nil {
-			base.Logger().Error("failed to write file", zap.Error(err))
+			log.Logger().Error("failed to write file", zap.Error(err))
 		}
 		return
 	}
@@ -172,6 +172,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	indexHTML = strings.ReplaceAll(indexHTML, "https://petstore.swagger.io/v2/swagger.json", targetSwagger)
 	w.Header().Set("Content-Length", strconv.Itoa(len(indexHTML)))
 	if _, err := fmt.Fprint(w, indexHTML); err != nil {
-		base.Logger().Error("failed to print HTML", zap.Error(err))
+		log.Logger().Error("failed to print HTML", zap.Error(err))
 	}
 }

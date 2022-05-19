@@ -27,8 +27,8 @@ import (
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
-	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -71,9 +71,9 @@ func (s *RestServer) StartHttpServer() {
 	// register prometheus
 	http.Handle("/metrics", promhttp.Handler())
 
-	base.Logger().Info("start http server",
+	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
-	base.Logger().Fatal("failed to start http server",
+	log.Logger().Fatal("failed to start http server",
 		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), nil)))
 }
 
@@ -87,7 +87,7 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	responseTime := time.Since(start)
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
-		base.ResponseLogger(resp).Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
+		log.ResponseLogger(resp).Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
 			zap.Int("status_code", resp.StatusCode()),
 			zap.Duration("response_time", responseTime))
 	}
@@ -103,11 +103,11 @@ func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, ch
 		chain.ProcessFilter(req, resp)
 		return
 	}
-	base.ResponseLogger(resp).Error("unauthorized",
+	log.ResponseLogger(resp).Error("unauthorized",
 		zap.String("api_key", s.GorseConfig.Server.APIKey),
 		zap.String("X-API-Key", apikey))
 	if err := resp.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
-		base.ResponseLogger(resp).Error("failed to write error", zap.Error(err))
+		log.ResponseLogger(resp).Error("failed to write error", zap.Error(err))
 	}
 }
 
@@ -537,13 +537,13 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	base.ResponseLogger(response).Debug("get category popular items in category", zap.String("category", category))
+	log.ResponseLogger(response).Debug("get category popular items in category", zap.String("category", category))
 	s.getSort(cache.PopularItems, category, true, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	base.ResponseLogger(response).Debug("get category latest items in category", zap.String("category", category))
+	log.ResponseLogger(response).Debug("get category latest items in category", zap.String("category", category))
 	s.getSort(cache.LatestItems, category, true, request, response)
 }
 
@@ -619,7 +619,7 @@ func (s *RestServer) Recommend(response *restful.Response, userId, category stri
 		ctx.results = ctx.results[:n]
 	}
 	totalTime := time.Since(initStart)
-	base.ResponseLogger(response).Info("complete recommendation",
+	log.ResponseLogger(response).Info("complete recommendation",
 		zap.Int("num_from_final", ctx.numFromOffline),
 		zap.Int("num_from_collaborative", ctx.numFromCollaborative),
 		zap.Int("num_from_item_based", ctx.numFromItemBased),
@@ -701,7 +701,7 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 func (s *RestServer) FilterOutHiddenScores(response *restful.Response, items []cache.Scored, category string) []cache.Scored {
 	isHidden, err := s.HiddenItemsManager.IsHidden(cache.RemoveScores(items), category)
 	if err != nil {
-		base.ResponseLogger(response).Error("failed to check hidden items", zap.Error(err))
+		log.ResponseLogger(response).Error("failed to check hidden items", zap.Error(err))
 		return items
 	}
 	results := make([]cache.Scored, 0, len(items))
@@ -720,7 +720,7 @@ func (s *RestServer) filterOutHiddenFeedback(response *restful.Response, feedbac
 	}
 	isHidden, err := s.HiddenItemsManager.IsHidden(names, "")
 	if err != nil {
-		base.ResponseLogger(response).Error("failed to check hidden items", zap.Error(err))
+		log.ResponseLogger(response).Error("failed to check hidden items", zap.Error(err))
 		return feedbacks
 	}
 	var results []data.Feedback
@@ -1325,7 +1325,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		return
 	}
 	insertCacheTime = time.Since(start)
-	base.ResponseLogger(response).Info("batch insert items",
+	log.ResponseLogger(response).Info("batch insert items",
 		zap.Duration("load_existed_items_time", loadExistedItemsTime),
 		zap.Duration("parse_timestamp_time", parseTimesatmpTime),
 		zap.Duration("insert_items_time", insertItemsTime),
@@ -1577,7 +1577,7 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 			InternalServerError(response, err)
 			return
 		}
-		base.ResponseLogger(response).Info("Insert feedback successfully", zap.Int("num_feedback", len(feedback)))
+		log.ResponseLogger(response).Info("Insert feedback successfully", zap.Int("num_feedback", len(feedback)))
 		Ok(response, Success{RowAffected: len(feedback)})
 	}
 }
@@ -1685,7 +1685,7 @@ func NewMeasurementFromScore(name string, score cache.Scored) (Measurement, erro
 	var m innerMeasurement
 	err := json.Unmarshal([]byte(score.Id), &m)
 	if err != nil {
-		base.Logger().Error("failed to decode measurement", zap.Error(err))
+		log.Logger().Error("failed to decode measurement", zap.Error(err))
 	}
 	return Measurement{
 		Name:      name,
@@ -1744,18 +1744,18 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 // BadRequest returns a bad request error.
 func BadRequest(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
-	base.ResponseLogger(response).Error("bad request", zap.Error(err))
+	log.ResponseLogger(response).Error("bad request", zap.Error(err))
 	if err = response.WriteError(http.StatusBadRequest, err); err != nil {
-		base.ResponseLogger(response).Error("failed to write error", zap.Error(err))
+		log.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }
 
 // InternalServerError returns a internal server error.
 func InternalServerError(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
-	base.ResponseLogger(response).Error("internal server error", zap.Error(err))
+	log.ResponseLogger(response).Error("internal server error", zap.Error(err))
 	if err = response.WriteError(http.StatusInternalServerError, err); err != nil {
-		base.ResponseLogger(response).Error("failed to write error", zap.Error(err))
+		log.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }
 
@@ -1763,7 +1763,7 @@ func InternalServerError(response *restful.Response, err error) {
 func PageNotFound(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteError(http.StatusNotFound, err); err != nil {
-		base.ResponseLogger(response).Error("failed to write error", zap.Error(err))
+		log.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }
 
@@ -1771,7 +1771,7 @@ func PageNotFound(response *restful.Response, err error) {
 func Ok(response *restful.Response, content interface{}) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteAsJson(content); err != nil {
-		base.ResponseLogger(response).Error("failed to write json", zap.Error(err))
+		log.ResponseLogger(response).Error("failed to write json", zap.Error(err))
 	}
 }
 
@@ -1779,7 +1779,7 @@ func Ok(response *restful.Response, content interface{}) {
 func Text(response *restful.Response, content string) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if _, err := response.Write([]byte(content)); err != nil {
-		base.ResponseLogger(response).Error("failed to write text", zap.Error(err))
+		log.ResponseLogger(response).Error("failed to write text", zap.Error(err))
 	}
 }
 

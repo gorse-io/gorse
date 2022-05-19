@@ -19,6 +19,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"go.uber.org/zap"
 	"math/rand"
@@ -136,7 +137,7 @@ func (h *HNSW) Build() {
 				throughput := completedCount - previousCount
 				previousCount = completedCount
 				if throughput > 0 {
-					base.Logger().Info("building index",
+					log.Logger().Info("building index",
 						zap.Int("n_indexed_vectors", completedCount),
 						zap.Int("n_vectors", len(h.vectors)),
 						zap.Int("throughput", throughput))
@@ -364,7 +365,7 @@ func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool) (idx *HNSW,
 		idx.Build()
 		buildTime := time.Since(start)
 		score = b.evaluate(idx, prune0)
-		base.Logger().Info("try to build vector index",
+		log.Logger().Info("try to build vector index",
 			zap.String("index_type", "HNSW"),
 			zap.Int("ef_construction", ef),
 			zap.Float32("recall", score),

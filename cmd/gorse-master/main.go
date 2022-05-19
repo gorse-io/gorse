@@ -16,7 +16,7 @@ package main
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/master"
@@ -41,16 +41,16 @@ var masterCommand = &cobra.Command{
 		}
 		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
 		if debugMode {
-			base.SetDevelopmentLogger(outputPaths...)
+			log.SetDevelopmentLogger(outputPaths...)
 		} else {
-			base.SetProductionLogger(outputPaths...)
+			log.SetProductionLogger(outputPaths...)
 		}
 		// Start master
 		configPath, _ := cmd.PersistentFlags().GetString("config")
-		base.Logger().Info("load config", zap.String("config", configPath))
+		log.Logger().Info("load config", zap.String("config", configPath))
 		conf, err := config.LoadConfig(configPath)
 		if err != nil {
-			base.Logger().Fatal("failed to load config", zap.Error(err))
+			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
 		l := master.NewMaster(conf, cachePath)
@@ -68,6 +68,6 @@ func init() {
 
 func main() {
 	if err := masterCommand.Execute(); err != nil {
-		base.Logger().Fatal("failed to execute", zap.Error(err))
+		log.Logger().Fatal("failed to execute", zap.Error(err))
 	}
 }
