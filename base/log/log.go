@@ -16,9 +16,12 @@ package log
 
 import (
 	"github.com/emicklei/go-restful/v3"
+	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var logger *zap.Logger
@@ -77,5 +80,28 @@ func CloseLogger() {
 	logger, err = cfg.Build()
 	if err != nil {
 		panic(err)
+	}
+}
+
+const mysqlPrefix = "mysql://"
+
+func RedactDBURL(rawURL string) string {
+	if strings.HasPrefix(rawURL, mysqlPrefix) {
+		parsed, err := mysql.ParseDSN(rawURL[len(mysqlPrefix):])
+		if err != nil {
+			return rawURL
+		}
+		parsed.User = strings.Repeat("x", len(parsed.User))
+		parsed.Passwd = strings.Repeat("x", len(parsed.Passwd))
+		return mysqlPrefix + parsed.FormatDSN()
+	} else {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			return rawURL
+		}
+		username := parsed.User.Username()
+		password, _ := parsed.User.Password()
+		parsed.User = url.UserPassword(strings.Repeat("x", len(username)), strings.Repeat("x", len(password)))
+		return parsed.String()
 	}
 }

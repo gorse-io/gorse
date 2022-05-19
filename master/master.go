@@ -180,7 +180,8 @@ func (m *Master) Serve() {
 	// connect data database
 	m.DataClient, err = data.Open(m.GorseConfig.Database.DataStore)
 	if err != nil {
-		log.Logger().Fatal("failed to connect data database", zap.Error(err))
+		log.Logger().Fatal("failed to connect data database", zap.Error(err),
+			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.DataStore)))
 	}
 	if err = m.DataClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
@@ -190,7 +191,7 @@ func (m *Master) Serve() {
 	m.CacheClient, err = cache.Open(m.GorseConfig.Database.CacheStore)
 	if err != nil {
 		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
-			zap.String("database", m.GorseConfig.Database.CacheStore))
+			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.CacheStore)))
 	}
 	if err = m.CacheClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))

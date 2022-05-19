@@ -147,7 +147,8 @@ func (w *Worker) Sync() {
 
 		// connect to data store
 		if w.dataPath != w.cfg.Database.DataStore {
-			log.Logger().Info("connect data store", zap.String("database", w.cfg.Database.DataStore))
+			log.Logger().Info("connect data store",
+				zap.String("database", log.RedactDBURL(w.cfg.Database.DataStore)))
 			if w.dataClient, err = data.Open(w.cfg.Database.DataStore); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
@@ -157,7 +158,8 @@ func (w *Worker) Sync() {
 
 		// connect to cache store
 		if w.cachePath != w.cfg.Database.CacheStore {
-			log.Logger().Info("connect cache store", zap.String("database", w.cfg.Database.CacheStore))
+			log.Logger().Info("connect cache store",
+				zap.String("database", log.RedactDBURL(w.cfg.Database.CacheStore)))
 			if w.cacheClient, err = cache.Open(w.cfg.Database.CacheStore); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep

@@ -137,7 +137,8 @@ func (s *Server) Sync() {
 
 		// connect to data store
 		if s.dataPath != s.GorseConfig.Database.DataStore {
-			log.Logger().Info("connect data store", zap.String("database", s.GorseConfig.Database.DataStore))
+			log.Logger().Info("connect data store",
+				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.DataStore)))
 			if s.DataClient, err = data.Open(s.GorseConfig.Database.DataStore); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
@@ -147,7 +148,8 @@ func (s *Server) Sync() {
 
 		// connect to cache store
 		if s.cachePath != s.GorseConfig.Database.CacheStore {
-			log.Logger().Info("connect cache store", zap.String("database", s.GorseConfig.Database.CacheStore))
+			log.Logger().Info("connect cache store",
+				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.CacheStore)))
 			if s.CacheClient, err = cache.Open(s.GorseConfig.Database.CacheStore); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
