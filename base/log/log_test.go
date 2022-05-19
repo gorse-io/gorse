@@ -22,4 +22,6 @@ import (
 func TestRedactDBURL(t *testing.T) {
 	assert.Equal(t, "mysql://xxxxx:xxxxxxxxxx@tcp(localhost:3306)/gorse?parseTime=true", RedactDBURL("mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true"))
 	assert.Equal(t, "postgres://xxx:xxxxxx@1.2.3.4:5432/mydb?sslmode=verify-full", RedactDBURL("postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full"))
+	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306) gorse?parseTime=true", RedactDBURL("mysql://gorse:gorse_pass@tcp(localhost:3306) gorse?parseTime=true"))
+	assert.Equal(t, "postgres://bob:secret@1.2.3.4:5432 mydb?sslmode=verify-full", RedactDBURL("postgres://bob:secret@1.2.3.4:5432 mydb?sslmode=verify-full"))
 }
