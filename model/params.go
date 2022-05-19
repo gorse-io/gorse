@@ -16,7 +16,7 @@ package model
 
 import (
 	"encoding/json"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 	"reflect"
 )
@@ -67,7 +67,7 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 		case bool:
 			return val
 		default:
-			base.Logger().Error("type mismatch",
+			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
 				zap.String("actual_type", reflect.TypeOf(name).Name()))
 		}
@@ -82,7 +82,7 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 		case int:
 			return val
 		default:
-			base.Logger().Error("type mismatch",
+			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
 				zap.String("actual_type", reflect.TypeOf(name).Name()))
 		}
@@ -100,7 +100,7 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 		case int:
 			return int64(val)
 		default:
-			base.Logger().Error("type mismatch",
+			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
 				zap.String("actual_type", reflect.TypeOf(name).Name()))
 		}
@@ -118,7 +118,7 @@ func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 		case int:
 			return float32(val)
 		default:
-			base.Logger().Error("type mismatch",
+			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
 				zap.String("actual_type", reflect.TypeOf(name).Name()))
 		}
@@ -148,7 +148,7 @@ func (parameters Params) Overwrite(params Params) Params {
 func (parameters Params) ToString() string {
 	b, err := json.Marshal(parameters)
 	if err != nil {
-		base.Logger().Fatal("failed to convert to string", zap.Error(err))
+		log.Logger().Fatal("failed to convert to string", zap.Error(err))
 	}
 	return string(b)
 }

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"io"
 	"strconv"
 )
@@ -402,7 +403,7 @@ func (unified *UnifiedDirectIndex) GetUsers() []string {
 
 // GetItems should be used by unit testing only.
 func (unified *UnifiedDirectIndex) GetItems() []string {
-	base.Logger().Warn("")
+	log.Logger().Warn("")
 	var names []string
 	begin, end := int32(0), unified.N/5
 	for i := begin; i < end; i++ {

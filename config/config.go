@@ -25,7 +25,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 	"reflect"
 	"strings"
@@ -429,7 +429,7 @@ func LoadConfig(path string) (*Config, error) {
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
 		if err != nil {
-			base.Logger().Fatal("failed to bind a Viper key to a ENV variable", zap.Error(err))
+			log.Logger().Fatal("failed to bind a Viper key to a ENV variable", zap.Error(err))
 		}
 	}
 

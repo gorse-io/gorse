@@ -22,8 +22,8 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mailru/go-clickhouse"
 	"github.com/scylladb/go-set/strset"
-	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/json"
+	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/mysql"
@@ -375,7 +375,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 	// ignore empty patch
 	if patch.Labels == nil && patch.Comment == nil && patch.Timestamp == nil {
-		base.Logger().Debug("empty item patch")
+		log.Logger().Debug("empty item patch")
 		return nil
 	}
 	var builder strings.Builder
@@ -767,7 +767,7 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
 	// ignore empty patch
 	if patch.Labels == nil && patch.Comment == nil {
-		base.Logger().Debug("empty user patch")
+		log.Logger().Debug("empty user patch")
 		return nil
 	}
 	var builder strings.Builder
@@ -1454,7 +1454,7 @@ func (d *SQLDatabase) GetClickThroughRate(date time.Time, positiveTypes, readTyp
 	case Postgres:
 		builder.WriteString("HAVING COUNT(positive_feedback.user_id) > 0) AS user_ctr")
 	}
-	base.Logger().Info("get click through rate from MySQL", zap.String("query", builder.String()))
+	log.Logger().Info("get click through rate from MySQL", zap.String("query", builder.String()))
 	rs, err := d.client.Query(builder.String(), args...)
 	if err != nil {
 		return 0, errors.Trace(err)

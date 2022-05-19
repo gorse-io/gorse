@@ -17,8 +17,8 @@ package search
 import (
 	"fmt"
 	"github.com/chewxy/math32"
-	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 	"modernc.org/sortutil"
 	"reflect"
@@ -49,7 +49,7 @@ func NewDenseVector(data []float32, terms []string, isHidden bool) *DenseVector 
 func (v *DenseVector) Distance(vector Vector) float32 {
 	feedbackVector, isFeedback := vector.(*DenseVector)
 	if !isFeedback {
-		base.Logger().Fatal("vector type mismatch",
+		log.Logger().Fatal("vector type mismatch",
 			zap.String("expect", reflect.TypeOf(v).String()),
 			zap.String("actual", reflect.TypeOf(vector).String()))
 	}

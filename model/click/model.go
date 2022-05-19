@@ -23,6 +23,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -264,7 +265,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Start(fm.nEpochs)
 	}
-	base.Logger().Info("fit FM",
+	log.Logger().Info("fit FM",
 		zap.Int("train_size", trainSet.Count()),
 		zap.Int("train_positive_count", trainSet.PositiveCount),
 		zap.Int("train_negative_count", trainSet.NegativeCount),
@@ -287,11 +288,11 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	case FMClassification:
 		score = EvaluateClassification(fm, testSet)
 	default:
-		base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
+		log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 	}
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
-	base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
+	log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
 	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
@@ -315,7 +316,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 					cost += (1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2
 					cost += (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
 				default:
-					base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
+					log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 				}
 				// \sum^n_{j=1}v_j,fx_j
 				floats.Zero(temp[workerId])
@@ -347,7 +348,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 			case FMClassification:
 				score = EvaluateClassification(fm, testSet)
 			default:
-				base.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
+				log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 			}
 			evalTime = time.Since(evalStart)
 			fields = append([]zap.Field{
@@ -355,10 +356,10 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			base.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
-				base.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
+				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
 				break
 			}
 			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
@@ -371,7 +372,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	fm.V = snapshots.BestWeights[0].([][]float32)
 	fm.W = snapshots.BestWeights[1].([]float32)
 	fm.B = snapshots.BestWeights[2].(float32)
-	base.Logger().Info("fit fm complete", snapshots.BestScore.ZapFields()...)
+	log.Logger().Info("fit fm complete", snapshots.BestScore.ZapFields()...)
 	if config.Tracker != nil {
 		config.Tracker.Finish()
 	}

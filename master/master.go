@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
@@ -136,13 +137,13 @@ func (m *Master) Serve() {
 	m.localCache, err = LoadLocalCache(m.cacheFile)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			base.Logger().Info("no local cache found, create a new one", zap.String("path", m.cacheFile))
+			log.Logger().Info("no local cache found, create a new one", zap.String("path", m.cacheFile))
 		} else {
-			base.Logger().Error("failed to load local cache", zap.String("path", m.cacheFile), zap.Error(err))
+			log.Logger().Error("failed to load local cache", zap.String("path", m.cacheFile), zap.Error(err))
 		}
 	}
 	if m.localCache.RankingModel != nil {
-		base.Logger().Info("load cached ranking model",
+		log.Logger().Info("load cached ranking model",
 			zap.String("model_name", m.localCache.RankingModelName),
 			zap.String("model_version", base.Hex(m.localCache.RankingModelVersion)),
 			zap.Float32("model_score", m.localCache.RankingModelScore.NDCG),
@@ -156,7 +157,7 @@ func (m *Master) Serve() {
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
 	}
 	if m.localCache.ClickModel != nil {
-		base.Logger().Info("load cached click model",
+		log.Logger().Info("load cached click model",
 			zap.String("model_version", base.Hex(m.localCache.ClickModelVersion)),
 			zap.Float32("model_score", m.localCache.ClickModelScore.Precision),
 			zap.Any("params", m.localCache.ClickModel.GetParams()))
@@ -173,26 +174,27 @@ func (m *Master) Serve() {
 	m.ttlCache.SetExpirationCallback(m.nodeDown)
 	m.ttlCache.SetNewItemCallback(m.nodeUp)
 	if err = m.ttlCache.SetTTL(m.GorseConfig.Master.MetaTimeout + 10*time.Second); err != nil {
-		base.Logger().Fatal("failed to set TTL", zap.Error(err))
+		log.Logger().Fatal("failed to set TTL", zap.Error(err))
 	}
 
 	// connect data database
 	m.DataClient, err = data.Open(m.GorseConfig.Database.DataStore)
 	if err != nil {
-		base.Logger().Fatal("failed to connect data database", zap.Error(err))
+		log.Logger().Fatal("failed to connect data database", zap.Error(err),
+			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.DataStore)))
 	}
 	if err = m.DataClient.Init(); err != nil {
-		base.Logger().Fatal("failed to init database", zap.Error(err))
+		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
 	// connect cache database
 	m.CacheClient, err = cache.Open(m.GorseConfig.Database.CacheStore)
 	if err != nil {
-		base.Logger().Fatal("failed to connect cache database", zap.Error(err),
-			zap.String("database", m.GorseConfig.Database.CacheStore))
+		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
+			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.CacheStore)))
 	}
 	if err = m.CacheClient.Init(); err != nil {
-		base.Logger().Fatal("failed to init database", zap.Error(err))
+		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
 	m.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&m.RestServer)
@@ -206,22 +208,22 @@ func (m *Master) Serve() {
 
 	go m.StartHttpServer()
 	go m.RunPrivilegedTasksLoop()
-	base.Logger().Info("start model fit", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelFitPeriod))
+	log.Logger().Info("start model fit", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelFitPeriod))
 	go m.RunRagtagTasksLoop()
-	base.Logger().Info("start model searcher", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod))
+	log.Logger().Info("start model searcher", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod))
 
 	// start rpc server
-	base.Logger().Info("start rpc server",
+	log.Logger().Info("start rpc server",
 		zap.String("host", m.GorseConfig.Master.Host),
 		zap.Int("port", m.GorseConfig.Master.Port))
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.GorseConfig.Master.Host, m.GorseConfig.Master.Port))
 	if err != nil {
-		base.Logger().Fatal("failed to listen", zap.Error(err))
+		log.Logger().Fatal("failed to listen", zap.Error(err))
 	}
 	grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
 	protocol.RegisterMasterServer(grpcServer, m)
 	if err = grpcServer.Serve(lis); err != nil {
-		base.Logger().Fatal("failed to start rpc server", zap.Error(err))
+		log.Logger().Fatal("failed to start rpc server", zap.Error(err))
 	}
 }
 
@@ -259,7 +261,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		// download dataset
 		err = m.runLoadDatasetTask()
 		if err != nil {
-			base.Logger().Error("failed to load ranking dataset", zap.Error(err))
+			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
 
@@ -267,7 +269,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback, err =
 			m.runRankingRelatedTasks(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback)
 		if err != nil {
-			base.Logger().Error("failed to fit ranking model", zap.Error(err))
+			log.Logger().Error("failed to fit ranking model", zap.Error(err))
 			continue
 		}
 
@@ -275,7 +277,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedback, err =
 			m.runFitClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
 		if err != nil {
-			base.Logger().Error("failed to fit click model", zap.Error(err))
+			log.Logger().Error("failed to fit click model", zap.Error(err))
 			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
 			continue
 		}
@@ -303,19 +305,19 @@ func (m *Master) RunRagtagTasksLoop() {
 	for {
 		// analyze click-through-rate
 		if err = m.runAnalyzeTask(); err != nil {
-			base.Logger().Error("failed to analyze", zap.Error(err))
+			log.Logger().Error("failed to analyze", zap.Error(err))
 			m.taskMonitor.Fail(TaskAnalyze, err.Error())
 		}
 		// garbage collection
 		if err = m.runCacheGarbageCollectionTask(); err != nil {
-			base.Logger().Error("failed to collect garbage", zap.Error(err))
+			log.Logger().Error("failed to collect garbage", zap.Error(err))
 			m.taskMonitor.Fail(TaskCacheGarbageCollection, err.Error())
 		}
 		// search optimal ranking model
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
 			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
 		if err != nil {
-			base.Logger().Error("failed to search ranking model", zap.Error(err))
+			log.Logger().Error("failed to search ranking model", zap.Error(err))
 			m.taskMonitor.Fail(TaskSearchRankingModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
@@ -324,7 +326,7 @@ func (m *Master) RunRagtagTasksLoop() {
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks, err =
 			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
 		if err != nil {
-			base.Logger().Error("failed to search click model", zap.Error(err))
+			log.Logger().Error("failed to search click model", zap.Error(err))
 			m.taskMonitor.Fail(TaskSearchClickModel, err.Error())
 			time.Sleep(time.Minute)
 			continue
@@ -337,14 +339,14 @@ func (m *Master) checkDataImported() bool {
 	isDataImported, err := m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			base.Logger().Error("failed to read meta", zap.Error(err))
+			log.Logger().Error("failed to read meta", zap.Error(err))
 		}
 		return false
 	}
 	if isDataImported > 0 {
 		err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 0))
 		if err != nil {
-			base.Logger().Error("failed to write meta", zap.Error(err))
+			log.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		return true
 	}
@@ -354,6 +356,6 @@ func (m *Master) checkDataImported() bool {
 func (m *Master) notifyDataImported() {
 	err := m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 1))
 	if err != nil {
-		base.Logger().Error("failed to write meta", zap.Error(err))
+		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 }

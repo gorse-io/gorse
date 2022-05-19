@@ -23,6 +23,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -361,10 +362,10 @@ func (bpr *BPR) Predict(userId, itemId string) float32 {
 	userIndex := bpr.UserIndex.ToNumber(userId)
 	itemIndex := bpr.ItemIndex.ToNumber(itemId)
 	if userIndex == base.NotId {
-		base.Logger().Warn("unknown user", zap.String("user_id", userId))
+		log.Logger().Warn("unknown user", zap.String("user_id", userId))
 	}
 	if itemIndex == base.NotId {
-		base.Logger().Warn("unknown item", zap.String("item_id", itemId))
+		log.Logger().Warn("unknown item", zap.String("item_id", itemId))
 	}
 	return bpr.InternalPredict(userIndex, itemIndex)
 }
@@ -375,7 +376,7 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int32) float32 {
 	if itemIndex != base.NotId && userIndex != base.NotId {
 		ret += floats.Dot(bpr.UserFactor[userIndex], bpr.ItemFactor[itemIndex])
 	} else {
-		base.Logger().Warn("unknown user or item")
+		log.Logger().Warn("unknown user or item")
 	}
 	return ret
 }
@@ -386,7 +387,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Start(bpr.nEpochs)
 	}
-	base.Logger().Info("fit bpr",
+	log.Logger().Info("fit bpr",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", bpr.GetParams()),
@@ -413,7 +414,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	evalStart := time.Now()
 	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
-	base.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", 0, bpr.nEpochs),
+	log.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", 0, bpr.nEpochs),
 		zap.String("eval_time", evalTime.String()),
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
@@ -473,7 +474,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			evalStart = time.Now()
 			scores = Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
-			base.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
+			log.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -491,7 +492,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Finish()
 	}
-	base.Logger().Info("fit bpr complete",
+	log.Logger().Info("fit bpr complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
@@ -655,11 +656,11 @@ func (als *ALS) Predict(userId, itemId string) float32 {
 	userIndex := als.UserIndex.ToNumber(userId)
 	itemIndex := als.ItemIndex.ToNumber(itemId)
 	if userIndex == base.NotId {
-		base.Logger().Info("unknown user", zap.String("user_id", userId))
+		log.Logger().Info("unknown user", zap.String("user_id", userId))
 		return 0
 	}
 	if itemIndex == base.NotId {
-		base.Logger().Info("unknown item", zap.String("item_id", itemId))
+		log.Logger().Info("unknown item", zap.String("item_id", itemId))
 		return 0
 	}
 	return als.InternalPredict(userIndex, itemIndex)
@@ -671,7 +672,7 @@ func (als *ALS) InternalPredict(userIndex, itemIndex int32) float32 {
 		ret = float32(mat.Dot(als.UserFactor.RowView(int(userIndex)),
 			als.ItemFactor.RowView(int(itemIndex))))
 	} else {
-		base.Logger().Warn("unknown user or item")
+		log.Logger().Warn("unknown user or item")
 	}
 	return ret
 }
@@ -682,7 +683,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Start(als.nEpochs)
 	}
-	base.Logger().Info("fit als",
+	log.Logger().Info("fit als",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", als.GetParams()),
@@ -708,7 +709,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	evalStart := time.Now()
 	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
-	base.Logger().Debug(fmt.Sprintf("fit als %v/%v", 0, als.nEpochs),
+	log.Logger().Debug(fmt.Sprintf("fit als %v/%v", 0, als.nEpochs),
 		zap.String("eval_time", evalTime.String()),
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
@@ -742,7 +743,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			return errors.Trace(err)
 		})
 		if err != nil {
-			base.Logger().Error("failed to inverse matrix", zap.Error(err))
+			log.Logger().Error("failed to inverse matrix", zap.Error(err))
 		}
 		// Recompute all item factors: y_i = (X^T C^i X + \lambda reg)^{-1} X^T C^i p(i)
 		// X^T X
@@ -766,7 +767,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			return errors.Trace(err)
 		})
 		if err != nil {
-			base.Logger().Error("failed to inverse matrix", zap.Error(err))
+			log.Logger().Error("failed to inverse matrix", zap.Error(err))
 		}
 		fitTime := time.Since(fitStart)
 		// Cross validation
@@ -774,7 +775,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			evalStart = time.Now()
 			scores = Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
-			base.Logger().Debug(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
+			log.Logger().Debug(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -796,7 +797,7 @@ func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Finish()
 	}
-	base.Logger().Info("fit als complete",
+	log.Logger().Info("fit als complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
@@ -948,11 +949,11 @@ func (ccd *CCD) Predict(userId, itemId string) float32 {
 	userIndex := ccd.UserIndex.ToNumber(userId)
 	itemIndex := ccd.ItemIndex.ToNumber(itemId)
 	if userIndex == base.NotId {
-		base.Logger().Info("unknown user:", zap.String("user_id", userId))
+		log.Logger().Info("unknown user:", zap.String("user_id", userId))
 		return 0
 	}
 	if itemIndex == base.NotId {
-		base.Logger().Info("unknown item:", zap.String("item_id", itemId))
+		log.Logger().Info("unknown item:", zap.String("item_id", itemId))
 		return 0
 	}
 	return ccd.InternalPredict(userIndex, itemIndex)
@@ -963,7 +964,7 @@ func (ccd *CCD) InternalPredict(userIndex, itemIndex int32) float32 {
 	if itemIndex != base.NotId && userIndex != base.NotId {
 		ret = floats.Dot(ccd.UserFactor[userIndex], ccd.ItemFactor[itemIndex])
 	} else {
-		base.Logger().Warn("unknown user or item")
+		log.Logger().Warn("unknown user or item")
 	}
 	return ret
 }
@@ -1017,7 +1018,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Start(ccd.nEpochs)
 	}
-	base.Logger().Info("fit ccd",
+	log.Logger().Info("fit ccd",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
 		zap.Any("params", ccd.GetParams()),
@@ -1040,7 +1041,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	evalStart := time.Now()
 	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
-	base.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", 0, ccd.nEpochs),
+	log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", 0, ccd.nEpochs),
 		zap.String("eval_time", evalTime.String()),
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
@@ -1136,7 +1137,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			evalStart = time.Now()
 			scores = Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
-			base.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
+			log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -1154,7 +1155,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	if config.Tracker != nil {
 		config.Tracker.Finish()
 	}
-	base.Logger().Info("fit ccd complete",
+	log.Logger().Info("fit ccd complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))

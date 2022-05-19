@@ -23,6 +23,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -77,9 +78,9 @@ func (s *Server) Serve() {
 	state, err := LoadLocalCache(s.cacheFile)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			base.Logger().Info("no cache file found, create a new one", zap.String("path", s.cacheFile))
+			log.Logger().Info("no cache file found, create a new one", zap.String("path", s.cacheFile))
 		} else {
-			base.Logger().Error("failed to connect local store", zap.Error(err),
+			log.Logger().Error("failed to connect local store", zap.Error(err),
 				zap.String("path", state.path))
 		}
 	}
@@ -87,11 +88,11 @@ func (s *Server) Serve() {
 		state.ServerName = base.GetRandomName(0)
 		err = state.WriteLocalCache()
 		if err != nil {
-			base.Logger().Fatal("failed to write meta", zap.Error(err))
+			log.Logger().Fatal("failed to write meta", zap.Error(err))
 		}
 	}
 	s.serverName = state.ServerName
-	base.Logger().Info("start server",
+	log.Logger().Info("start server",
 		zap.String("server_name", s.serverName),
 		zap.String("server_host", s.HttpHost),
 		zap.Int("server_port", s.HttpPort),
@@ -101,7 +102,7 @@ func (s *Server) Serve() {
 	// connect to master
 	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		base.Logger().Fatal("failed to connect master", zap.Error(err))
+		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
 	s.masterClient = protocol.NewMasterClient(conn)
 
@@ -112,7 +113,7 @@ func (s *Server) Serve() {
 // Sync this server to the master.
 func (s *Server) Sync() {
 	defer base.CheckPanic()
-	base.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.GorseConfig.Master.MetaTimeout))
+	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.GorseConfig.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
 		var err error
@@ -123,22 +124,23 @@ func (s *Server) Sync() {
 				HttpPort:      int64(s.HttpPort),
 				BinaryVersion: version.Version,
 			}); err != nil {
-			base.Logger().Error("failed to get meta", zap.Error(err))
+			log.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
 		}
 
 		// load master config
 		err = json.Unmarshal([]byte(meta.Config), &s.GorseConfig)
 		if err != nil {
-			base.Logger().Error("failed to parse master config", zap.Error(err))
+			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
 		}
 
 		// connect to data store
 		if s.dataPath != s.GorseConfig.Database.DataStore {
-			base.Logger().Info("connect data store", zap.String("database", s.GorseConfig.Database.DataStore))
+			log.Logger().Info("connect data store",
+				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.DataStore)))
 			if s.DataClient, err = data.Open(s.GorseConfig.Database.DataStore); err != nil {
-				base.Logger().Error("failed to connect data store", zap.Error(err))
+				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
 			s.dataPath = s.GorseConfig.Database.DataStore
@@ -146,9 +148,10 @@ func (s *Server) Sync() {
 
 		// connect to cache store
 		if s.cachePath != s.GorseConfig.Database.CacheStore {
-			base.Logger().Info("connect cache store", zap.String("database", s.GorseConfig.Database.CacheStore))
+			log.Logger().Info("connect cache store",
+				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.CacheStore)))
 			if s.CacheClient, err = cache.Open(s.GorseConfig.Database.CacheStore); err != nil {
-				base.Logger().Error("failed to connect cache store", zap.Error(err))
+				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
 			s.cachePath = s.GorseConfig.Database.CacheStore
@@ -177,7 +180,7 @@ func NewPopularItemsCache(s *RestServer) *PopularItemsCache {
 	go func() {
 		for {
 			sc.sync()
-			base.Logger().Debug("refresh server side popular items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
+			log.Logger().Debug("refresh server side popular items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
 			time.Sleep(s.GorseConfig.Server.CacheExpire)
 		}
 	}()
@@ -198,7 +201,7 @@ func (sc *PopularItemsCache) sync() {
 	items, err := sc.server.CacheClient.GetSorted(cache.Key(cache.PopularItems), 0, -1)
 	if err != nil {
 		if !errors.IsNotAssigned(err) {
-			base.Logger().Error("failed to get popular items", zap.Error(err))
+			log.Logger().Error("failed to get popular items", zap.Error(err))
 		}
 		return
 	}
@@ -237,7 +240,7 @@ func NewHiddenItemsManager(s *RestServer) *HiddenItemsManager {
 	go func() {
 		for {
 			hc.sync()
-			base.Logger().Debug("refresh server side hidden items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
+			log.Logger().Debug("refresh server side hidden items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
 			time.Sleep(hc.server.GorseConfig.Server.CacheExpire)
 		}
 	}()
@@ -259,7 +262,7 @@ func (hc *HiddenItemsManager) sync() {
 	categories, err := hc.server.CacheClient.GetSet(cache.ItemCategories)
 	if err != nil {
 		if !errors.IsNotAssigned(err) {
-			base.Logger().Error("failed to load item categories", zap.Error(err))
+			log.Logger().Error("failed to load item categories", zap.Error(err))
 		}
 		return
 	}
@@ -267,7 +270,7 @@ func (hc *HiddenItemsManager) sync() {
 	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(ts.Unix()))
 	if err != nil {
 		if !errors.IsNotAssigned(err) {
-			base.Logger().Error("failed to load hidden items", zap.Error(err))
+			log.Logger().Error("failed to load hidden items", zap.Error(err))
 		}
 		return
 	}
@@ -277,7 +280,7 @@ func (hc *HiddenItemsManager) sync() {
 		score, err = hc.server.CacheClient.GetSortedByScore(cache.Key(cache.HiddenItemsV2, category), math.Inf(-1), float64(ts.Unix()))
 		if err != nil {
 			if !errors.IsNotAssigned(err) {
-				base.Logger().Error("failed to load categorized hidden items", zap.Error(err))
+				log.Logger().Error("failed to load categorized hidden items", zap.Error(err))
 			}
 			return
 		}
