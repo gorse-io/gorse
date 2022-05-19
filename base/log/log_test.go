@@ -16,8 +16,49 @@ package log
 
 import (
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
+
+func TestSetDevelopmentLogger(t *testing.T) {
+	temp, err := os.MkdirTemp("", "test_gorse")
+	assert.NoError(t, err)
+	// set existed path
+	SetDevelopmentLogger(temp + "/gorse.log")
+	_, err = os.Stat(temp + "/gorse.log")
+	assert.NoError(t, err)
+	// set non-existed path
+	SetDevelopmentLogger(temp + "/gorse/gorse.log")
+	_, err = os.Stat(temp + "/gorse/gorse.log")
+	assert.NoError(t, err)
+	// permission denied
+	assert.Panics(t, func() {
+		SetDevelopmentLogger("/gorse.log")
+	})
+	assert.Panics(t, func() {
+		SetDevelopmentLogger("/gorse/gorse.log")
+	})
+}
+
+func TestSetProductionLogger(t *testing.T) {
+	temp, err := os.MkdirTemp("", "test_gorse")
+	assert.NoError(t, err)
+	// set existed path
+	SetProductionLogger(temp + "/gorse.log")
+	_, err = os.Stat(temp + "/gorse.log")
+	assert.NoError(t, err)
+	// set non-existed path
+	SetProductionLogger(temp + "/gorse/gorse.log")
+	_, err = os.Stat(temp + "/gorse/gorse.log")
+	assert.NoError(t, err)
+	// permission denied
+	assert.Panics(t, func() {
+		SetProductionLogger("/gorse.log")
+	})
+	assert.Panics(t, func() {
+		SetProductionLogger("/gorse/gorse.log")
+	})
+}
 
 func TestRedactDBURL(t *testing.T) {
 	assert.Equal(t, "mysql://xxxxx:xxxxxxxxxx@tcp(localhost:3306)/gorse?parseTime=true", RedactDBURL("mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true"))

@@ -18,8 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/log"
-	"os"
 	"testing"
 )
 
@@ -94,44 +92,4 @@ func TestFloat32(t *testing.T) {
 	assert.Equal(t, "1.23", a)
 	b := ParseFloat32("1.23")
 	assert.Equal(t, float32(1.23), b)
-}
-
-func TestSetDevelopmentLogger(t *testing.T) {
-	temp, err := os.MkdirTemp("", "test_gorse")
-	assert.NoError(t, err)
-	// set existed path
-	log.SetDevelopmentLogger(temp + "/gorse.log")
-	_, err = os.Stat(temp + "/gorse.log")
-	assert.NoError(t, err)
-	// set non-existed path
-	log.SetDevelopmentLogger(temp + "/gorse/gorse.log")
-	_, err = os.Stat(temp + "/gorse/gorse.log")
-	assert.NoError(t, err)
-	// permission denied
-	assert.Panics(t, func() {
-		log.SetDevelopmentLogger("/gorse.log")
-	})
-	assert.Panics(t, func() {
-		log.SetDevelopmentLogger("/gorse/gorse.log")
-	})
-}
-
-func TestSetProductionLogger(t *testing.T) {
-	temp, err := os.MkdirTemp("", "test_gorse")
-	assert.NoError(t, err)
-	// set existed path
-	log.SetProductionLogger(temp + "/gorse.log")
-	_, err = os.Stat(temp + "/gorse.log")
-	assert.NoError(t, err)
-	// set non-existed path
-	log.SetProductionLogger(temp + "/gorse/gorse.log")
-	_, err = os.Stat(temp + "/gorse/gorse.log")
-	assert.NoError(t, err)
-	// permission denied
-	assert.Panics(t, func() {
-		log.SetProductionLogger("/gorse.log")
-	})
-	assert.Panics(t, func() {
-		log.SetProductionLogger("/gorse/gorse.log")
-	})
 }
