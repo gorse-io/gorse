@@ -158,7 +158,7 @@ func testUsers(t *testing.T, db Database) {
 	err = db.DeleteUser("0")
 	assert.NoError(t, err)
 	_, err = db.GetUser("0")
-	assert.True(t, errors.IsNotFound(err))
+	assert.True(t, errors.IsNotFound(err), err)
 	// test override
 	err = db.BatchInsertUsers([]User{{UserId: "1", Comment: "override"}})
 	assert.NoError(t, err)

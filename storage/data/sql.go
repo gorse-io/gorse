@@ -25,12 +25,8 @@ import (
 	"github.com/zhenghaoz/gorse/base/json"
 	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
-	"gorm.io/driver/clickhouse"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -53,6 +49,7 @@ var gormConfig = &gorm.Config{
 
 // SQLDatabase use MySQL as data storage.
 type SQLDatabase struct {
+	gormDB *gorm.DB
 	client *sql.DB
 	driver SQLDriver
 }
@@ -96,11 +93,7 @@ func (d *SQLDatabase) Init() error {
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime not null"`
 			Comment      string    `gorm:"column:comment;type:text not null"`
 		}
-		gormDB, err := gorm.Open(mysql.New(mysql.Config{Conn: d.client}), gormConfig)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
+		err := d.gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -137,11 +130,7 @@ func (d *SQLDatabase) Init() error {
 			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz not null default '0001-01-01'"`
 			Comment      string    `gorm:"column:comment;type:text not null default ''"`
 		}
-		gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: d.client}), gormConfig)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
+		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -150,10 +139,6 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 	case ClickHouse:
-		gormDB, err := gorm.Open(clickhouse.New(clickhouse.Config{Conn: d.client}), gormConfig)
-		if err != nil {
-			return errors.Trace(err)
-		}
 		// create tables
 		type Items struct {
 			ItemId     string    `gorm:"column:item_id;type:String"`
@@ -164,7 +149,7 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:String"`
 			Version    struct{}  `gorm:"column:version;type:DateTime"`
 		}
-		err = gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY item_id").AutoMigrate(Items{})
+		err := d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY item_id").AutoMigrate(Items{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -175,7 +160,7 @@ func (d *SQLDatabase) Init() error {
 			Comment   string   `gorm:"column:comment;type:String"`
 			Version   struct{} `gorm:"column:version;type:DateTime"`
 		}
-		err = gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY user_id").AutoMigrate(Users{})
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY user_id").AutoMigrate(Users{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -187,7 +172,7 @@ func (d *SQLDatabase) Init() error {
 			Comment      string    `gorm:"column:comment;type:String"`
 			Version      struct{}  `gorm:"column:version;type:DateTime"`
 		}
-		err = gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -257,30 +242,7 @@ func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
 	if len(itemIds) == 0 {
 		return nil, nil
 	}
-	// compose the query
-	builder := strings.Builder{}
-	switch d.driver {
-	case MySQL, ClickHouse:
-		builder.WriteString("SELECT item_id, is_hidden, categories, time_stamp, labels, `comment` FROM items WHERE item_id IN (")
-	case Postgres:
-		builder.WriteString("SELECT item_id, is_hidden, categories, time_stamp, labels, comment FROM items WHERE item_id IN (")
-	}
-	var args []interface{}
-	for i, itemId := range itemIds {
-		switch d.driver {
-		case MySQL, ClickHouse:
-			builder.WriteString("?")
-		case Postgres:
-			builder.WriteString("$" + strconv.Itoa(i+1))
-		}
-		args = append(args, itemId)
-		if i+1 < len(itemIds) {
-			builder.WriteString(",")
-		}
-	}
-	builder.WriteString(")")
-
-	result, err := d.client.Query(builder.String(), args...)
+	result, err := d.gormDB.Table("items").Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id IN ?", itemIds).Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -305,51 +267,20 @@ func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
 
 // DeleteItem deletes a item from MySQL.
 func (d *SQLDatabase) DeleteItem(itemId string) error {
-	txn, err := d.client.Begin()
-	if err != nil {
+	if err := d.gormDB.Delete(&Item{}, itemId).Error; err != nil {
 		return errors.Trace(err)
 	}
-	switch d.driver {
-	case MySQL:
-		_, err = txn.Exec("DELETE FROM items WHERE item_id = ?", itemId)
-	case Postgres:
-		_, err = txn.Exec("DELETE FROM items WHERE item_id = $1", itemId)
-	case ClickHouse:
-		_, err = txn.Exec("ALTER TABLE items DELETE WHERE item_id = ?", itemId)
-	}
-	if err != nil {
-		if err = txn.Rollback(); err != nil {
-			return errors.Trace(err)
-		}
+	if err := d.gormDB.Delete(&Feedback{}, "item_id = ?", itemId).Error; err != nil {
 		return errors.Trace(err)
 	}
-	switch d.driver {
-	case MySQL:
-		_, err = txn.Exec("DELETE FROM feedback WHERE item_id = ?", itemId)
-	case Postgres:
-		_, err = txn.Exec("DELETE FROM feedback WHERE item_id = $1", itemId)
-	case ClickHouse:
-		_, err = txn.Exec("ALTER TABLE feedback DELETE WHERE item_id = ?", itemId)
-	}
-	if err != nil {
-		if err = txn.Rollback(); err != nil {
-			return errors.Trace(err)
-		}
-		return errors.Trace(err)
-	}
-	return txn.Commit()
+	return nil
 }
 
 // GetItem get a item from MySQL.
 func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	var result *sql.Rows
 	var err error
-	switch d.driver {
-	case MySQL, ClickHouse:
-		result, err = d.client.Query("SELECT item_id, is_hidden, categories, time_stamp, labels, `comment` FROM items WHERE item_id = ?", itemId)
-	case Postgres:
-		result, err = d.client.Query("SELECT item_id, is_hidden, categories, time_stamp, labels, comment FROM items WHERE item_id = $1", itemId)
-	}
+	result, err = d.gormDB.Table("items").Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
 	if err != nil {
 		return Item{}, errors.Trace(err)
 	}
@@ -547,22 +478,11 @@ func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan [
 		defer close(itemChan)
 		defer close(errChan)
 		// send query
-		var result *sql.Rows
-		var err error
-		switch d.driver {
-		case MySQL, ClickHouse:
-			if timeLimit == nil {
-				result, err = d.client.Query("SELECT item_id, is_hidden, categories, time_stamp, labels, `comment` FROM items")
-			} else {
-				result, err = d.client.Query("SELECT item_id, is_hidden, categories, time_stamp, labels, `comment` FROM items WHERE time_stamp >= ?", *timeLimit)
-			}
-		case Postgres:
-			if timeLimit == nil {
-				result, err = d.client.Query("SELECT item_id, is_hidden, categories, time_stamp, labels, comment FROM items")
-			} else {
-				result, err = d.client.Query("SELECT item_id, is_hidden, categories, time_stamp, labels, comment FROM items WHERE time_stamp >= $2", *timeLimit)
-			}
+		tx := d.gormDB.Table("items").Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+		if timeLimit != nil {
+			tx.Where("time_stamp >= ?", *timeLimit)
 		}
+		result, err := tx.Rows()
 		if err != nil {
 			errChan <- errors.Trace(err)
 			return
@@ -601,33 +521,11 @@ func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan [
 
 // GetItemFeedback returns feedback of a item from MySQL.
 func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	var result *sql.Rows
-	var err error
-	var builder strings.Builder
-	switch d.driver {
-	case MySQL, ClickHouse:
-		builder.WriteString("SELECT user_id, item_id, feedback_type, time_stamp FROM feedback WHERE time_stamp <= NOW() AND item_id = ?")
-	case Postgres:
-		builder.WriteString("SELECT user_id, item_id, feedback_type, time_stamp FROM feedback WHERE time_stamp <= NOW() AND item_id = $1")
-	}
-	args := []interface{}{itemId}
+	tx := d.gormDB.Table("feedback").Select("user_id, item_id, feedback_type, time_stamp").Where("time_stamp <= NOW() AND item_id = ?", itemId)
 	if len(feedbackTypes) > 0 {
-		builder.WriteString(" AND feedback_type IN (")
-		for i, feedbackType := range feedbackTypes {
-			switch d.driver {
-			case MySQL, ClickHouse:
-				builder.WriteString("?")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
-			}
-			if i+1 < len(feedbackTypes) {
-				builder.WriteString(",")
-			}
-			args = append(args, feedbackType)
-		}
-		builder.WriteString(")")
+		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
-	result, err = d.client.Query(builder.String(), args...)
+	result, err := tx.Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -694,53 +592,20 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 
 // DeleteUser deletes a user from MySQL.
 func (d *SQLDatabase) DeleteUser(userId string) error {
-	txn, err := d.client.Begin()
-	if err != nil {
+	if err := d.gormDB.Delete(&User{}, userId).Error; err != nil {
 		return errors.Trace(err)
 	}
-	switch d.driver {
-	case MySQL:
-		_, err = txn.Exec("DELETE FROM users WHERE user_id = ?", userId)
-	case Postgres:
-		_, err = txn.Exec("DELETE FROM users WHERE user_id = $1", userId)
-	case ClickHouse:
-		_, err = txn.Exec("ALTER TABLE users DELETE WHERE user_id = ?", userId)
-	}
-	if err != nil {
-		if err = txn.Rollback(); err != nil {
-			return errors.Trace(err)
-		}
+	if err := d.gormDB.Delete(&Feedback{}, "user_id = ?", userId).Error; err != nil {
 		return errors.Trace(err)
 	}
-	switch d.driver {
-	case MySQL:
-		_, err = txn.Exec("DELETE FROM feedback WHERE user_id = ?", userId)
-	case Postgres:
-		_, err = txn.Exec("DELETE FROM feedback WHERE user_id = $1", userId)
-	case ClickHouse:
-		_, err = txn.Exec("ALTER TABLE feedback DELETE WHERE user_id = ?", userId)
-	}
-	if err != nil {
-		if err = txn.Rollback(); err != nil {
-			return errors.Trace(err)
-		}
-		return errors.Trace(err)
-	}
-	return txn.Commit()
+	return nil
 }
 
 // GetUser returns a user from MySQL.
 func (d *SQLDatabase) GetUser(userId string) (User, error) {
 	var result *sql.Rows
 	var err error
-	switch d.driver {
-	case MySQL:
-		result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users WHERE user_id = ?", userId)
-	case Postgres:
-		result, err = d.client.Query("SELECT user_id, labels, subscribe, comment FROM users WHERE user_id = $1", userId)
-	case ClickHouse:
-		result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users WHERE user_id = ?", userId)
-	}
+	result, err = d.gormDB.Table("users").Select("user_id, labels, subscribe, comment").Where("user_id = ?", userId).Rows()
 	if err != nil {
 		return User{}, errors.Trace(err)
 	}
@@ -876,16 +741,7 @@ func (d *SQLDatabase) GetUserStream(batchSize int) (chan []User, chan error) {
 		defer close(userChan)
 		defer close(errChan)
 		// send query
-		var result *sql.Rows
-		var err error
-		switch d.driver {
-		case MySQL:
-			result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users")
-		case Postgres:
-			result, err = d.client.Query("SELECT user_id, labels, subscribe, comment FROM users")
-		case ClickHouse:
-			result, err = d.client.Query("SELECT user_id, labels, subscribe, `comment` FROM users")
-		}
+		result, err := d.gormDB.Table("users").Select("user_id, labels, subscribe, comment").Rows()
 		if err != nil {
 			errChan <- errors.Trace(err)
 			return
@@ -925,36 +781,14 @@ func (d *SQLDatabase) GetUserStream(batchSize int) (chan []User, chan error) {
 
 // GetUserFeedback returns feedback of a user from MySQL.
 func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
-	var result *sql.Rows
-	var err error
-	var builder strings.Builder
-	switch d.driver {
-	case MySQL, ClickHouse:
-		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE user_id = ?")
-	case Postgres:
-		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE user_id = $1")
-	}
+	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment").Where("user_id = ?", userId)
 	if !withFuture {
-		builder.WriteString(" AND time_stamp <= NOW() ")
+		tx.Where("time_stamp <= NOW()")
 	}
-	args := []interface{}{userId}
 	if len(feedbackTypes) > 0 {
-		builder.WriteString(" AND feedback_type IN (")
-		for i, feedbackType := range feedbackTypes {
-			switch d.driver {
-			case MySQL, ClickHouse:
-				builder.WriteString("?")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
-			}
-			if i+1 < len(feedbackTypes) {
-				builder.WriteString(",")
-			}
-			args = append(args, feedbackType)
-		}
-		builder.WriteString(")")
+		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
-	result, err = d.client.Query(builder.String(), args...)
+	result, err := tx.Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -1233,42 +1067,14 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 		defer close(feedbackChan)
 		defer close(errChan)
 		// send query
-		var result *sql.Rows
-		var err error
-		var builder strings.Builder
-		switch d.driver {
-		case MySQL, ClickHouse:
-			builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE time_stamp <= NOW()")
-		case Postgres:
-			builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE time_stamp <= NOW()")
-		}
-		var args []interface{}
+		tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment").Where("time_stamp <= NOW()")
 		if len(feedbackTypes) > 0 {
-			builder.WriteString(" AND feedback_type IN (")
-			for i, feedbackType := range feedbackTypes {
-				switch d.driver {
-				case MySQL, ClickHouse:
-					builder.WriteString("?")
-				case Postgres:
-					builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
-				}
-				if i+1 < len(feedbackTypes) {
-					builder.WriteString(",")
-				}
-				args = append(args, feedbackType)
-			}
-			builder.WriteString(")")
+			tx.Where("feedback_type IN ?", feedbackTypes)
 		}
 		if timeLimit != nil {
-			switch d.driver {
-			case MySQL, ClickHouse:
-				builder.WriteString(" AND time_stamp >= ?")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf(" AND time_stamp >= $%d", len(args)+1))
-			}
-			args = append(args, *timeLimit)
+			tx.Where("time_stamp >= ?", *timeLimit)
 		}
-		result, err = d.client.Query(builder.String(), args...)
+		result, err := tx.Rows()
 		if err != nil {
 			errChan <- errors.Trace(err)
 			return
@@ -1298,33 +1104,11 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 
 // GetUserItemFeedback gets a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	var result *sql.Rows
-	var err error
-	var builder strings.Builder
-	switch d.driver {
-	case MySQL, ClickHouse:
-		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, `comment` FROM feedback WHERE user_id = ? AND item_id = ?")
-	case Postgres:
-		builder.WriteString("SELECT feedback_type, user_id, item_id, time_stamp, comment FROM feedback WHERE user_id = $1 AND item_id = $2")
-	}
-	args := []interface{}{userId, itemId}
+	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment").Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {
-		builder.WriteString(" AND feedback_type IN (")
-		for i, feedbackType := range feedbackTypes {
-			switch d.driver {
-			case MySQL, ClickHouse:
-				builder.WriteString("?")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("$%d", i+3))
-			}
-			if i+1 < len(feedbackTypes) {
-				builder.WriteString(",")
-			}
-			args = append(args, feedbackType)
-		}
-		builder.WriteString(")")
+		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
-	result, err = d.client.Query(builder.String(), args...)
+	result, err := tx.Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -1342,43 +1126,18 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error) {
-	var rs sql.Result
-	var err error
-	var builder strings.Builder
-	switch d.driver {
-	case MySQL:
-		builder.WriteString("DELETE FROM feedback WHERE user_id = ? AND item_id = ?")
-	case Postgres:
-		builder.WriteString("DELETE FROM feedback WHERE user_id = $1 AND item_id = $2")
-	case ClickHouse:
-		builder.WriteString("ALTER TABLE feedback DELETE WHERE user_id = ? AND item_id = ?")
-	}
-	args := []interface{}{userId, itemId}
+	tx := d.gormDB.Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {
-		builder.WriteString(" AND feedback_type IN (")
-		for i, feedbackType := range feedbackTypes {
-			switch d.driver {
-			case MySQL, ClickHouse:
-				builder.WriteString("?")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("$%d", len(args)+1))
-			}
-			if i+1 < len(feedbackTypes) {
-				builder.WriteString(",")
-			}
-			args = append(args, feedbackType)
-		}
-		builder.WriteString(")")
+		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
-	rs, err = d.client.Exec(builder.String(), args...)
-	if err != nil {
-		return 0, errors.Trace(err)
+	tx.Delete(&FeedbackKey{})
+	if tx.Error != nil {
+		return 0, errors.Trace(tx.Error)
 	}
-	deleteCount, err := rs.RowsAffected()
-	if err != nil && d.driver != ClickHouse {
-		return 0, errors.Trace(err)
+	if tx.Error != nil && d.driver != ClickHouse {
+		return 0, errors.Trace(tx.Error)
 	}
-	return int(deleteCount), nil
+	return int(tx.RowsAffected), nil
 }
 
 // GetClickThroughRate computes the click-through-rate of a specified date.
