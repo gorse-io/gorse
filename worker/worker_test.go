@@ -736,6 +736,10 @@ type mockFactorizationMachine struct {
 	click.BaseFactorizationMachine
 }
 
+func (m mockFactorizationMachine) Bytes() int {
+	panic("implement me")
+}
+
 func (m mockFactorizationMachine) GetParamsGrid() model.ParamsGrid {
 	panic("implement me")
 }

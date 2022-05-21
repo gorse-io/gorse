@@ -24,6 +24,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 	"io"
+	"reflect"
 	"strconv"
 )
 
@@ -172,4 +173,22 @@ func ParseFloat32(val string) float32 {
 		return math32.NaN()
 	}
 	return float32(f)
+}
+
+func ArrayBytes[T any](val []T) uintptr {
+	byteCount := reflect.TypeOf(val).Size()
+	if len(val) > 0 {
+		byteCount += reflect.TypeOf(val).Elem().Size() * uintptr(len(val))
+	}
+	return byteCount
+}
+
+func MatrixBytes[T any](val [][]T) uintptr {
+	byteCount := reflect.TypeOf(val).Size()
+	if len(val) > 0 {
+		rowSize := len(val[0])
+		byteCount += reflect.TypeOf(val).Elem().Size() * uintptr(len(val))
+		byteCount += reflect.TypeOf(val).Elem().Elem().Size() * uintptr(len(val)*rowSize)
+	}
+	return byteCount
 }

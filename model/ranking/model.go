@@ -111,6 +111,8 @@ type MatrixFactorization interface {
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
 	Unmarshal(r io.Reader) error
+	// Bytes returns used memory.
+	Bytes() int
 }
 
 type BaseMatrixFactorization struct {
@@ -119,6 +121,18 @@ type BaseMatrixFactorization struct {
 	ItemIndex       base.Index
 	UserPredictable *bitset.BitSet
 	ItemPredictable *bitset.BitSet
+	// Model parameters
+	UserFactor [][]float32 // p_u
+	ItemFactor [][]float32 // q_i
+}
+
+func (baseModel *BaseMatrixFactorization) Bytes() int {
+	bytes := reflect.TypeOf(baseModel).Elem().Size()
+	bytes += base.ArrayBytes(baseModel.UserPredictable.Bytes())
+	bytes += base.ArrayBytes(baseModel.ItemPredictable.Bytes())
+	bytes += base.MatrixBytes(baseModel.UserFactor)
+	bytes += base.MatrixBytes(baseModel.ItemFactor)
+	return int(bytes) + baseModel.UserIndex.Bytes() + baseModel.ItemIndex.Bytes()
 }
 
 func (baseModel *BaseMatrixFactorization) Init(trainSet *DataSet) {
@@ -295,9 +309,6 @@ func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
 //	 InitStdDev	- The standard deviation of initial random latent factors. Default is 0.001.
 type BPR struct {
 	BaseMatrixFactorization
-	// Model parameters
-	UserFactor [][]float32 // p_u
-	ItemFactor [][]float32 // q_i
 	// Hyper parameters
 	nFactors   int
 	nEpochs    int
@@ -579,9 +590,6 @@ func (bpr *BPR) Unmarshal(r io.Reader) error {
 
 type CCD struct {
 	BaseMatrixFactorization
-	// Model parameters
-	UserFactor [][]float32
-	ItemFactor [][]float32
 	// Hyper parameters
 	nFactors   int
 	nEpochs    int

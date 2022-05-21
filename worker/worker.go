@@ -219,6 +219,7 @@ func (w *Worker) Pull() {
 					w.currentRankingModelVersion = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
 						zap.String("version", base.Hex(w.currentRankingModelVersion)))
+					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(w.rankingModel.Bytes()))
 					pulled = true
 				}
 			}
@@ -241,6 +242,7 @@ func (w *Worker) Pull() {
 					w.currentClickModelVersion = w.latestClickModelVersion
 					log.Logger().Info("synced click model",
 						zap.String("version", base.Hex(w.currentClickModelVersion)))
+					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(w.clickModel.Bytes()))
 					pulled = true
 				}
 			}
