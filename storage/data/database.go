@@ -23,6 +23,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+	"gorm.io/driver/clickhouse"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 	"sort"
 	"strings"
 	"time"
@@ -39,10 +43,14 @@ var (
 type Item struct {
 	ItemId     string
 	IsHidden   bool
-	Categories []string
+	Categories []string `gorm:"-"`
 	Timestamp  time.Time
-	Labels     []string
+	Labels     []string `gorm:"-"`
 	Comment    string
+}
+
+func (*Item) TableName() string {
+	return "items"
 }
 
 // ItemPatch is the modification on an item.
@@ -57,9 +65,13 @@ type ItemPatch struct {
 // User stores meta data about user.
 type User struct {
 	UserId    string
-	Labels    []string
-	Subscribe []string
+	Labels    []string `gorm:"-"`
+	Subscribe []string `gorm:"-"`
 	Comment   string
+}
+
+func (*User) TableName() string {
+	return "users"
 }
 
 // UserPatch is the modification on a user.
@@ -74,6 +86,10 @@ type FeedbackKey struct {
 	FeedbackType string
 	UserId       string
 	ItemId       string
+}
+
+func (*FeedbackKey) TableName() string {
+	return "feedback"
 }
 
 // Feedback stores feedback.
@@ -147,11 +163,19 @@ func Open(path string) (Database, error) {
 		if database.client, err = sql.Open("mysql", name); err != nil {
 			return nil, errors.Trace(err)
 		}
+		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), gormConfig)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 		return database, nil
 	} else if strings.HasPrefix(path, postgresPrefix) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		if database.client, err = sql.Open("postgres", path); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), gormConfig)
+		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
@@ -160,6 +184,10 @@ func Open(path string) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = ClickHouse
 		if database.client, err = sql.Open("clickhouse", uri); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), gormConfig)
+		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
