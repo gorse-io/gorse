@@ -54,6 +54,16 @@ func (dataset *Dataset) ItemCount() int {
 	return int(dataset.Index.CountItems())
 }
 
+func (dataset *Dataset) Bytes() int {
+	var bytes uintptr
+	bytes += uintptr(dataset.Index.Bytes())
+	bytes += uintptr(dataset.Users.Bytes())
+	bytes += uintptr(dataset.Items.Bytes())
+	bytes += uintptr(dataset.NormValues.Bytes())
+	bytes += uintptr(dataset.Target.Bytes())
+	return int(bytes)
+}
+
 // Count returns the number of samples.
 func (dataset *Dataset) Count() int {
 	if dataset.Users.Len() != dataset.Items.Len() {

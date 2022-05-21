@@ -167,6 +167,8 @@ func (m *Master) runLoadDatasetTask() error {
 	rankingDataset = nil
 	m.rankingModelMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_ranking_dataset").Set(time.Since(startTime).Seconds())
+	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(m.rankingTrainSet.Bytes()))
+	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_test_set").Set(float64(m.rankingTestSet.Bytes()))
 
 	// split click dataset
 	startTime = time.Now()
@@ -175,6 +177,8 @@ func (m *Master) runLoadDatasetTask() error {
 	clickDataset = nil
 	m.clickModelMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
+	MemoryInuseBytesVec.WithLabelValues("ranking_train_set").Set(float64(m.clickTrainSet.Bytes()))
+	MemoryInuseBytesVec.WithLabelValues("ranking_test_set").Set(float64(m.clickTestSet.Bytes()))
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return nil
@@ -1244,6 +1248,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if len(rankingDataset.UserLabels) == int(userIndex) {
 				rankingDataset.UserLabels = append(rankingDataset.UserLabels, nil)
 			}
+			rankingDataset.NumUserLabelUsed += len(user.Labels)
 			rankingDataset.UserLabels[userIndex] = make([]int32, len(user.Labels))
 			for i, label := range user.Labels {
 				userLabelIndex.Add(label)
@@ -1276,6 +1281,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
 				rankingDataset.CategorySet.Add(item.Categories...)
 			}
+			rankingDataset.NumItemLabelUsed += len(item.Labels)
 			rankingDataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
 			for i, label := range item.Labels {
 				itemLabelIndex.Add(label)
