@@ -306,11 +306,6 @@ func (m *Master) RunRagtagTasksLoop() {
 		err                     error
 	)
 	for {
-		// analyze click-through-rate
-		if err = m.runAnalyzeTask(); err != nil {
-			log.Logger().Error("failed to analyze", zap.Error(err))
-			m.taskMonitor.Fail(TaskAnalyze, err.Error())
-		}
 		// garbage collection
 		if err = m.runCacheGarbageCollectionTask(); err != nil {
 			log.Logger().Error("failed to collect garbage", zap.Error(err))

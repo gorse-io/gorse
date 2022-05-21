@@ -20,7 +20,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/i32set"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
@@ -30,7 +29,6 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
-	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
@@ -911,57 +909,6 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization
 			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
 	}
-}
-
-func (m *Master) runAnalyzeTask() error {
-	m.taskScheduler.Lock(TaskAnalyze)
-	defer m.taskScheduler.UnLock(TaskAnalyze)
-	log.Logger().Info("start analyzing click-through-rate")
-	m.taskMonitor.Start(TaskAnalyze, 30*len(m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
-	for j, feedbackType := range m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes {
-		measurement := cache.Key(PositiveFeedbackRate, feedbackType)
-		// pull existed click-through rates
-		clickThroughRates, err := m.RestServer.GetMeasurements(measurement, 30)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		existed := strset.New()
-		for _, clickThroughRate := range clickThroughRates {
-			existed.Add(clickThroughRate.Timestamp.String())
-		}
-		// update click-through rate
-		for i := 1; i <= 30; i++ {
-			dateTime := time.Now().AddDate(0, 0, -i)
-			date := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC)
-			if !existed.Has(date.String()) {
-				// click through clickThroughRate
-				startTime := time.Now()
-				clickThroughRate, err := m.DataClient.GetClickThroughRate(date, []string{feedbackType},
-					m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes)
-				if err != nil {
-					return errors.Trace(err)
-				}
-				PositiveFeedbackRateVec.WithLabelValues(feedbackType).Set(float64(len(clickThroughRates)))
-				err = m.RestServer.InsertMeasurement(server.Measurement{
-					Name:      measurement,
-					Timestamp: date,
-					Value:     float32(clickThroughRate),
-				})
-				if err != nil {
-					return errors.Trace(err)
-				}
-				log.Logger().Info("update click through rate",
-					zap.String("date", date.String()),
-					zap.Duration("time_used", time.Since(startTime)),
-					zap.String("positive_feedback_type", feedbackType),
-					zap.Float64("positive_feedback_rate", clickThroughRate))
-			}
-			m.taskMonitor.Update(TaskAnalyze, i+j*30)
-		}
-	}
-	log.Logger().Info("complete analyzing click-through-rate")
-	m.taskMonitor.Finish(TaskAnalyze)
-	return nil
 }
 
 // runFitClickModelTask fits click model using latest data. After model fitted, following states are changed:
