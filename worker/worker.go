@@ -44,6 +44,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -358,6 +359,8 @@ func (w *Worker) Recommend(users []data.User) {
 		log.Logger().Error("failed to pull items", zap.Error(err))
 		return
 	}
+	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(itemCache.Bytes()))
+	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
 
 	// build ranking index
 	if w.rankingModel != nil && w.rankingIndex == nil && w.cfg.Recommend.Collaborative.EnableIndex {
@@ -368,7 +371,7 @@ func (w *Worker) Recommend(users []data.User) {
 		for i := int32(0); i < itemIndex.Len(); i++ {
 			itemId := itemIndex.ToName(i)
 			if itemCache.IsAvailable(itemId) {
-				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), itemCache[itemId].Categories, false)
+				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
 			} else {
 				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), nil, true)
 			}
@@ -427,6 +430,7 @@ func (w *Worker) Recommend(users []data.User) {
 	)
 
 	userFeedbackCache := NewFeedbackCache(w.dataClient, w.cfg.Recommend.DataSource.PositiveFeedbackTypes...)
+	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
 	err = parallel.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		defer func() {
 			completed <- struct{}{}
@@ -457,6 +461,7 @@ func (w *Worker) Recommend(users []data.User) {
 					zap.String("user_id", userId), zap.Error(err))
 				return errors.Trace(err)
 			}
+			MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(userFeedbackCache.Bytes()))
 		}
 
 		// create candidates container
@@ -554,6 +559,7 @@ func (w *Worker) Recommend(users []data.User) {
 						zap.String("user_id", userId), zap.Error(err))
 					return errors.Trace(err)
 				}
+				MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(userFeedbackCache.Bytes()))
 				// add unseen items
 				for _, itemId := range similarUserPositiveItems {
 					if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
@@ -578,7 +584,7 @@ func (w *Worker) Recommend(users []data.User) {
 			}
 			for id, score := range scores {
 				filters[""].Push(id, score)
-				for _, category := range itemCache[id].Categories {
+				for _, category := range itemCache.GetCategory(id) {
 					filters[category].Push(id, score)
 				}
 			}
@@ -717,7 +723,7 @@ func (w *Worker) Recommend(users []data.User) {
 	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
 }
 
-func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet *strset.Set, itemCache ItemCache) (map[string][]string, time.Duration, error) {
+func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet *strset.Set, itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	userIndex := w.rankingModel.GetUserIndex().ToNumber(userId)
 	itemIds := w.rankingModel.GetItemIndex().GetNames()
 	localStartTime := time.Now()
@@ -730,7 +736,7 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 		if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.rankingModel.IsItemPredictable(int32(itemIndex)) {
 			prediction := w.rankingModel.InternalPredict(userIndex, int32(itemIndex))
 			recItemsFilters[""].Push(itemId, float64(prediction))
-			for _, category := range itemCache[itemId].Categories {
+			for _, category := range itemCache.GetCategory(itemId) {
 				recItemsFilters[category].Push(itemId, float64(prediction))
 			}
 		}
@@ -748,7 +754,7 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	return recommend, time.Since(localStartTime), nil
 }
 
-func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId string, itemCategories []string, excludeSet *strset.Set, itemCache ItemCache) (map[string][]string, time.Duration, error) {
+func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId string, itemCategories []string, excludeSet *strset.Set, itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	userIndex := w.rankingModel.GetUserIndex().ToNumber(userId)
 	localStartTime := time.Now()
 	values, scores := rankingIndex.MultiSearch(search.NewDenseVector(w.rankingModel.GetUserFactor(userIndex), nil, false),
@@ -800,7 +806,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache map[string]data.Item) ([]cache.Scored, error) {
+func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache) ([]cache.Scored, error) {
 	// concat candidates
 	memo := strset.New()
 	var itemIds []string
@@ -813,9 +819,9 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 		}
 	}
 	// download items
-	items := make([]data.Item, 0, len(itemIds))
+	items := make([]*data.Item, 0, len(itemIds))
 	for _, itemId := range itemIds {
-		if item, exist := itemCache[itemId]; exist {
+		if item, exist := itemCache.Get(itemId); exist {
 			items = append(items, item)
 		} else {
 			log.Logger().Warn("item doesn't exists in database", zap.String("item_id", itemId))
@@ -1030,14 +1036,14 @@ func (w *Worker) refreshCache(userId string) error {
 	return nil
 }
 
-func (w *Worker) pullItems() (ItemCache, []string, error) {
+func (w *Worker) pullItems() (*ItemCache, []string, error) {
 	// pull items from database
-	itemCache := make(ItemCache)
+	itemCache := NewItemCache()
 	itemCategories := strset.New()
 	itemChan, errChan := w.dataClient.GetItemStream(batchSize, nil)
 	for batchItems := range itemChan {
 		for _, item := range batchItems {
-			itemCache[item.ItemId] = item
+			itemCache.Set(item.ItemId, &item)
 			itemCategories.Add(item.Categories...)
 		}
 	}
@@ -1078,7 +1084,7 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 }
 
 // replacement inserts historical items back to recommendation.
-func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.User, feedbacks []data.Feedback, itemCache ItemCache) (map[string][]cache.Scored, error) {
+func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.User, feedbacks []data.Feedback, itemCache *ItemCache) (map[string][]cache.Scored, error) {
 	upperBounds := make(map[string]float64)
 	lowerBounds := make(map[string]float64)
 	newRecommend := make(map[string][]cache.Scored)
@@ -1109,7 +1115,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 	}
 
 	for _, itemId := range distinctItems.List() {
-		if item, exist := itemCache[itemId]; exist {
+		if item, exist := itemCache.Get(itemId); exist {
 			// scoring item
 			// 1. If click-through rate prediction model is available, use it.
 			// 2. If collaborative filtering model is available, use it.
@@ -1159,22 +1165,59 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 }
 
 // ItemCache is alias of map[string]data.Item.
-type ItemCache map[string]data.Item
+type ItemCache struct {
+	Data      map[string]*data.Item
+	ByteCount uintptr
+}
+
+func NewItemCache() *ItemCache {
+	return &ItemCache{Data: make(map[string]*data.Item)}
+}
+
+func (c *ItemCache) Set(itemId string, item *data.Item) {
+	if _, exist := c.Data[itemId]; !exist {
+		c.Data[itemId] = item
+		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(itemId))
+		c.ByteCount += reflect.TypeOf(item.ItemId).Size() * uintptr(len(itemId))
+		c.ByteCount += reflect.TypeOf(item.Comment).Size() * uintptr(len(itemId))
+		c.ByteCount += base.StringsBytes(item.Categories)
+		c.ByteCount += base.StringsBytes(item.Labels)
+		c.ByteCount += reflect.TypeOf(item).Elem().Size()
+	}
+}
+
+func (c *ItemCache) Get(itemId string) (*data.Item, bool) {
+	item, exist := c.Data[itemId]
+	return item, exist
+}
+
+func (c *ItemCache) GetCategory(itemId string) []string {
+	if item, exist := c.Data[itemId]; exist {
+		return item.Categories
+	} else {
+		return nil
+	}
+}
 
 // IsAvailable means the item exists in database and is not hidden.
-func (c ItemCache) IsAvailable(itemId string) bool {
-	if item, exist := c[itemId]; exist {
+func (c *ItemCache) IsAvailable(itemId string) bool {
+	if item, exist := c.Data[itemId]; exist {
 		return !item.IsHidden
 	} else {
 		return false
 	}
 }
 
+func (c *ItemCache) Bytes() int {
+	return int(c.ByteCount)
+}
+
 // FeedbackCache is the cache for user feedbacks.
 type FeedbackCache struct {
-	Types  []string
-	Cache  cmap.ConcurrentMap
-	Client data.Database
+	Types     []string
+	Cache     cmap.ConcurrentMap
+	Client    data.Database
+	ByteCount uintptr
 }
 
 // NewFeedbackCache creates a new FeedbackCache.
@@ -1198,8 +1241,18 @@ func (c *FeedbackCache) GetUserFeedback(userId string) ([]string, error) {
 		}
 		for _, feedback := range feedbacks {
 			items = append(items, feedback.ItemId)
+			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.FeedbackType))
+			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.UserId))
+			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.ItemId))
+			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.Comment))
 		}
 		c.Cache.Set(userId, items)
+		c.ByteCount += reflect.TypeOf(feedbacks).Elem().Size() * uintptr(len(feedbacks))
+		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(userId))
 		return items, nil
 	}
+}
+
+func (c *FeedbackCache) Bytes() int {
+	return int(c.ByteCount)
 }
