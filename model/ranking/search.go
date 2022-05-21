@@ -27,7 +27,7 @@ import (
 
 // ParamsSearchResult contains the return of grid search.
 type ParamsSearchResult struct {
-	BestModel  Model
+	BestModel  MatrixFactorization
 	BestScore  Score
 	BestParams model.Params
 	BestIndex  int
@@ -149,7 +149,7 @@ type ModelSearcher struct {
 	// results
 	bestMutex     sync.Mutex
 	bestModelName string
-	bestModel     Model
+	bestModel     MatrixFactorization
 	bestScore     Score
 }
 
@@ -166,7 +166,7 @@ func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
 }
 
 // GetBestModel returns the optimal personal ranking model.
-func (searcher *ModelSearcher) GetBestModel() (string, Model, Score) {
+func (searcher *ModelSearcher) GetBestModel() (string, MatrixFactorization, Score) {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	return searcher.bestModelName, searcher.bestModel, searcher.bestScore

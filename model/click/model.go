@@ -22,12 +22,14 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"io"
+	"reflect"
 	"time"
 )
 
@@ -127,6 +129,7 @@ type FactorizationMachine interface {
 	InternalPredict(x []int32, values []float32) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 	Marshal(w io.Writer) error
+	Bytes() int
 }
 
 type BaseFactorizationMachine struct {
@@ -451,6 +454,21 @@ func (fm *FM) Init(trainSet *Dataset) {
 	fm.BaseFactorizationMachine.Init(trainSet)
 }
 
+func (fm *FM) Bytes() int {
+	// The memory usage of FM consists of:
+	// 1. struct
+	// 2. float32 in fm.W
+	// 3. slice in fm.V
+	// 4. UnifiedIndex
+	bytes := reflect.TypeOf(fm).Elem().Size()
+	bytes += reflect.TypeOf(fm.W).Elem().Size() * uintptr(len(fm.W))
+	if len(fm.V) > 0 {
+		bytes += reflect.TypeOf(fm.V).Elem().Size() * uintptr(len(fm.V))
+		bytes += reflect.TypeOf(fm.V).Elem().Elem().Size() * uintptr(len(fm.V)) * uintptr(fm.nFactors)
+	}
+	return int(bytes) + fm.Index.Bytes()
+}
+
 func MarshalModel(w io.Writer, m FactorizationMachine) error {
 	return m.Marshal(w)
 }
@@ -477,7 +495,7 @@ func Clone(m FactorizationMachine) FactorizationMachine {
 // Marshal model into byte stream.
 func (fm *FM) Marshal(w io.Writer) error {
 	// write params
-	err := base.WriteGob(w, fm.Params)
+	err := encoding.WriteGob(w, fm.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -509,7 +527,7 @@ func (fm *FM) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write matrix
-	err = base.WriteMatrix(w, fm.V)
+	err = encoding.WriteMatrix(w, fm.V)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -519,7 +537,7 @@ func (fm *FM) Marshal(w io.Writer) error {
 // Unmarshal model from byte stream.
 func (fm *FM) Unmarshal(r io.Reader) error {
 	// read params
-	err := base.ReadGob(r, &fm.Params)
+	err := encoding.ReadGob(r, &fm.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -554,7 +572,7 @@ func (fm *FM) Unmarshal(r io.Reader) error {
 	}
 	// read matrix
 	fm.V = base.NewMatrix32(int(fm.Index.Len()), fm.nFactors)
-	err = base.ReadMatrix(r, fm.V)
+	err = encoding.ReadMatrix(r, fm.V)
 	if err != nil {
 		return errors.Trace(err)
 	}

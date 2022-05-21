@@ -19,12 +19,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const (
+	LabelFeedbackType = "feedback_type"
+	LabelStep         = "step"
+	LabelData         = "data"
+)
+
 var (
 	LoadDatasetStepSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "load_dataset_step_seconds",
-	}, []string{"step"})
+	}, []string{LabelStep})
 	LoadDatasetTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
@@ -34,7 +40,7 @@ var (
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "find_user_neighbors_seconds",
-	}, []string{"step"})
+	}, []string{LabelStep})
 	FindUserNeighborsTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
@@ -211,5 +217,10 @@ var (
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "positive_feedback_rate",
-	}, []string{"feedback_type"})
+	}, []string{LabelFeedbackType})
+	MemoryInuseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "memory_inuse_bytes",
+	}, []string{LabelData})
 )

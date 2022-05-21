@@ -15,4 +15,5 @@ func TestArray(t *testing.T) {
 	for i := 0; i < 123; i++ {
 		assert.Equal(t, int32(i), a.Get(i))
 	}
+	assert.Equal(t, 48+4*batchSize, a.Bytes())
 }

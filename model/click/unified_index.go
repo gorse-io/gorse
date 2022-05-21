@@ -21,12 +21,14 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"io"
+	"reflect"
 	"strconv"
 )
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.
 type UnifiedIndex interface {
 	Len() int32
+	Bytes() int
 	EncodeUser(userId string) int32
 	EncodeItem(itemId string) int32
 	EncodeUserLabel(userLabel string) int32
@@ -199,6 +201,12 @@ func (unified *UnifiedMapIndex) Len() int32 {
 		unified.CtxLabelIndex.Len()
 }
 
+func (unified *UnifiedMapIndex) Bytes() int {
+	return unified.UserIndex.Bytes() + unified.ItemIndex.Bytes() +
+		unified.UserLabelIndex.Bytes() + unified.ItemLabelIndex.Bytes() +
+		unified.CtxLabelIndex.Bytes()
+}
+
 // EncodeUser converts a user id to a integer in the encoding space.
 func (unified *UnifiedMapIndex) EncodeUser(userId string) int32 {
 	return unified.UserIndex.ToNumber(userId)
@@ -362,6 +370,10 @@ func NewUnifiedDirectIndex(n int32) UnifiedIndex {
 // Len should be used by unit testing only.
 func (unified *UnifiedDirectIndex) Len() int32 {
 	return unified.N
+}
+
+func (unified *UnifiedDirectIndex) Bytes() int {
+	return int(reflect.TypeOf(unified).Elem().Size())
 }
 
 // EncodeUser should be used by unit testing only.

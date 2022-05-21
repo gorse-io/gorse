@@ -140,54 +140,6 @@ func TestBPR_MovieLens(t *testing.T) {
 //	assertEpsilon(t, 0.53, score.NDCG, benchDelta)
 //}
 
-func TestALS_MovieLens(t *testing.T) {
-	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
-	assert.NoError(t, err)
-	m := NewALS(model.Params{
-		model.NFactors: 8,
-		model.Reg:      0.015,
-		model.NEpochs:  10,
-		model.Alpha:    0.05,
-	})
-	fitConfig, tracker := newFitConfigWithTestTracker(10)
-	score := m.Fit(trainSet, testSet, fitConfig)
-	tracker.AssertExpectations(t)
-	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
-
-	// test predict
-	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
-
-	// test encode/decode model and increment training
-	buf := bytes.NewBuffer(nil)
-	err = MarshalModel(buf, m)
-	assert.NoError(t, err)
-	tmp, err := UnmarshalModel(buf)
-	assert.NoError(t, err)
-	m = tmp.(*ALS)
-	m.nEpochs = 1
-	fitConfig, _ = newFitConfigWithTestTracker(1)
-	scoreInc := m.Fit(trainSet, testSet, fitConfig)
-	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
-
-	// test clear
-	m.Clear()
-	assert.True(t, m.Invalid())
-}
-
-//func TestALS_Pinterest(t *testing.T) {
-//	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
-//	assert.NoError(t, err)
-//	m := NewALS(model.Params{
-//		model.NFactors:   8,
-//		model.Reg:        0.01,
-//		model.NEpochs:    10,
-//		model.InitStdDev: 0.01,
-//		model.Alpha:      0.001,
-//	})
-//	score := m.Fit(trainSet, testSet, fitConfig)
-//	assertEpsilon(t, 0.52, score.NDCG, benchDelta)
-//}
-
 func TestCCD_MovieLens(t *testing.T) {
 	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
 	assert.NoError(t, err)

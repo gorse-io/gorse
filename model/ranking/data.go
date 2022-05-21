@@ -22,10 +22,12 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"os"
+	"reflect"
 	"strings"
 )
 
@@ -44,8 +46,10 @@ type DataSet struct {
 	ItemCategories [][]string
 	CategorySet    *strset.Set
 	// statistics
-	NumItemLabels int32
-	NumUserLabels int32
+	NumItemLabels    int32
+	NumUserLabels    int32
+	NumItemLabelUsed int
+	NumUserLabelUsed int
 }
 
 // NewMapIndexDataset creates a data set.
@@ -71,6 +75,27 @@ func NewDirectIndexDataset() *DataSet {
 	dataset.ItemFeedback = make([][]int32, 0)
 	dataset.Negatives = make([][]int32, 0)
 	return dataset
+}
+
+func (dataset *DataSet) Bytes() int {
+	var bytes uintptr
+	bytes += uintptr(dataset.UserIndex.Bytes())
+	bytes += uintptr(dataset.ItemIndex.Bytes())
+	bytes += uintptr(dataset.FeedbackUsers.Bytes())
+	bytes += uintptr(dataset.FeedbackItems.Bytes())
+
+	// UserFeedback + ItemFeedback + Negatives
+	bytes += reflect.TypeOf(dataset.UserFeedback).Elem().Size() * uintptr(len(dataset.UserFeedback)+len(dataset.ItemFeedback))
+	bytes += reflect.TypeOf(dataset.UserFeedback).Elem().Elem().Size() * uintptr(dataset.Count()*2)
+	bytes += encoding.MatrixBytes(dataset.Negatives)
+
+	// ItemLabels + UserLabels
+	bytes += reflect.TypeOf(dataset.ItemLabels).Elem().Size() * uintptr(len(dataset.ItemLabels)+len(dataset.UserLabels))
+	bytes += reflect.TypeOf(dataset.ItemLabels).Elem().Elem().Size() * uintptr(dataset.NumItemLabelUsed+dataset.NumUserLabelUsed)
+
+	bytes += encoding.ArrayBytes(dataset.HiddenItems)
+	bytes += encoding.ArrayBytes(dataset.ItemCategories)
+	return int(bytes)
 }
 
 func (dataset *DataSet) AddUser(userId string) {
@@ -178,6 +203,8 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet.CategorySet, testSet.CategorySet = dataset.CategorySet, dataset.CategorySet
 	trainSet.ItemLabels, testSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
 	trainSet.UserLabels, testSet.UserLabels = dataset.UserLabels, dataset.UserLabels
+	trainSet.NumItemLabelUsed, testSet.NumItemLabelUsed = dataset.NumItemLabelUsed, dataset.NumItemLabelUsed
+	trainSet.NumUserLabelUsed, testSet.NumUserLabelUsed = dataset.NumUserLabelUsed, dataset.NumUserLabelUsed
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex
 	trainSet.ItemIndex, testSet.ItemIndex = dataset.ItemIndex, dataset.ItemIndex
 	trainSet.UserFeedback, testSet.UserFeedback = createSliceOfSlice(dataset.UserCount()), createSliceOfSlice(dataset.UserCount())

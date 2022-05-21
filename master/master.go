@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/server"
@@ -63,7 +64,7 @@ type Master struct {
 	clickDataMutex sync.RWMutex
 
 	// ranking model
-	rankingModel         ranking.Model
+	rankingModel         ranking.MatrixFactorization
 	rankingModelName     string
 	rankingModelVersion  int64
 	rankingScore         ranking.Score
@@ -145,7 +146,7 @@ func (m *Master) Serve() {
 	if m.localCache.RankingModel != nil {
 		log.Logger().Info("load cached ranking model",
 			zap.String("model_name", m.localCache.RankingModelName),
-			zap.String("model_version", base.Hex(m.localCache.RankingModelVersion)),
+			zap.String("model_version", encoding.Hex(m.localCache.RankingModelVersion)),
 			zap.Float32("model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("params", m.localCache.RankingModel.GetParams()))
 		m.rankingModel = m.localCache.RankingModel
@@ -155,10 +156,11 @@ func (m *Master) Serve() {
 		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
 		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
+		MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.rankingModel.Bytes()))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",
-			zap.String("model_version", base.Hex(m.localCache.ClickModelVersion)),
+			zap.String("model_version", encoding.Hex(m.localCache.ClickModelVersion)),
 			zap.Float32("model_score", m.localCache.ClickModelScore.Precision),
 			zap.Any("params", m.localCache.ClickModel.GetParams()))
 		m.clickModel = m.localCache.ClickModel
@@ -167,6 +169,7 @@ func (m *Master) Serve() {
 		RankingPrecision.Set(float64(m.clickScore.Precision))
 		RankingRecall.Set(float64(m.clickScore.Recall))
 		RankingAUC.Set(float64(m.clickScore.AUC))
+		MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.clickModel.Bytes()))
 	}
 
 	// create cluster meta cache

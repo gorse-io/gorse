@@ -18,7 +18,7 @@ import (
 	"encoding/binary"
 	std_errors "errors"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -32,7 +32,7 @@ type LocalCache struct {
 	path                string
 	RankingModelName    string
 	RankingModelVersion int64
-	RankingModel        ranking.Model
+	RankingModel        ranking.MatrixFactorization
 	RankingModelScore   ranking.Score
 	ClickModelVersion   int64
 	ClickModelScore     click.Score
@@ -64,7 +64,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		}
 	}(f)
 	// 1. ranking model name
-	state.RankingModelName, err = base.ReadString(f)
+	state.RankingModelName, err = encoding.ReadString(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -79,7 +79,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		return state, errors.Trace(err)
 	}
 	// 4. ranking model score
-	err = base.ReadGob(f, &state.RankingModelScore)
+	err = encoding.ReadGob(f, &state.RankingModelScore)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -89,7 +89,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		return state, errors.Trace(err)
 	}
 	// 8. click model score
-	err = base.ReadGob(f, &state.ClickModelScore)
+	err = encoding.ReadGob(f, &state.ClickModelScore)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -123,7 +123,7 @@ func (c *LocalCache) WriteLocalCache() error {
 		}
 	}(f)
 	// 1. ranking model name
-	err = base.WriteString(f, c.RankingModelName)
+	err = encoding.WriteString(f, c.RankingModelName)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -138,7 +138,7 @@ func (c *LocalCache) WriteLocalCache() error {
 		return errors.Trace(err)
 	}
 	// 4. ranking model score
-	err = base.WriteGob(f, c.RankingModelScore)
+	err = encoding.WriteGob(f, c.RankingModelScore)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -148,7 +148,7 @@ func (c *LocalCache) WriteLocalCache() error {
 		return errors.Trace(err)
 	}
 	// 8. click model score
-	err = base.WriteGob(f, c.ClickModelScore)
+	err = encoding.WriteGob(f, c.ClickModelScore)
 	if err != nil {
 		return errors.Trace(err)
 	}

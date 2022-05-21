@@ -85,6 +85,12 @@ func TestUnifiedMapIndex(t *testing.T) {
 	indexCopy, err := UnmarshalIndex(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, index, indexCopy)
+	// Used bytes
+	assert.Equal(t, index.(*UnifiedMapIndex).UserIndex.Bytes()+
+		index.(*UnifiedMapIndex).ItemIndex.Bytes()+
+		index.(*UnifiedMapIndex).UserLabelIndex.Bytes()+
+		index.(*UnifiedMapIndex).ItemLabelIndex.Bytes()+
+		index.(*UnifiedMapIndex).CtxLabelIndex.Bytes(), index.Bytes())
 }
 
 func TestUnifiedDirectIndex(t *testing.T) {
@@ -117,4 +123,6 @@ func TestUnifiedDirectIndex(t *testing.T) {
 	indexCopy, err := UnmarshalIndex(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, index, indexCopy)
+	// Used bytes
+	assert.Equal(t, 4, index.Bytes())
 }

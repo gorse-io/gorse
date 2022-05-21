@@ -19,6 +19,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const (
+	LabelStep = "step"
+	LabelData = "data"
+)
+
 var (
 	UpdateUserRecommendTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
@@ -29,7 +34,7 @@ var (
 		Namespace: "gorse",
 		Subsystem: "worker",
 		Name:      "offline_recommend_step_seconds",
-	}, []string{"step"})
+	}, []string{LabelStep})
 	OfflineRecommendTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
@@ -40,4 +45,9 @@ var (
 		Subsystem: "worker",
 		Name:      "collaborative_filtering_index_recall",
 	})
+	MemoryInuseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "worker",
+		Name:      "memory_inuse_bytes",
+	}, []string{LabelData})
 )

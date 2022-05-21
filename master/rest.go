@@ -27,6 +27,7 @@ import (
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
@@ -497,7 +498,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get user neighbor index recall", zap.Error(err))
 		} else {
-			status.UserNeighborIndexRecall = base.ParseFloat32(temp)
+			status.UserNeighborIndexRecall = encoding.ParseFloat32(temp)
 		}
 	}
 	// read item neighbor index recall
@@ -505,7 +506,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get item neighbor index recall", zap.Error(err))
 		} else {
-			status.ItemNeighborIndexRecall = base.ParseFloat32(temp)
+			status.ItemNeighborIndexRecall = encoding.ParseFloat32(temp)
 		}
 	}
 	// read matching index recall
@@ -513,7 +514,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
 		} else {
-			status.MatchingIndexRecall = base.ParseFloat32(temp)
+			status.MatchingIndexRecall = encoding.ParseFloat32(temp)
 		}
 	}
 	server.Ok(response, status)
