@@ -585,38 +585,6 @@ func testTimeLimit(t *testing.T, db Database) {
 	assert.Equal(t, []Feedback{feedbacks[4], feedbacks[3]}, retFeedback)
 }
 
-func testGetClickThroughRate(t *testing.T, db Database) {
-	// get empty click-through-rate
-	rate, err := db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, []string{"read"})
-	assert.NoError(t, err)
-	assert.Zero(t, rate)
-	// insert feedback
-	// user 1: star(1,1), like(1,1), read(1,1), read(1,2), read(1,3), read(1,4) - 0.25
-	// user 2: star(2,1), star(2,3), read(2,1), read(2,2) - 0.5
-	// user 3: read(3,2), star(3,3) - 0.0
-	err = db.BatchInsertFeedback([]Feedback{
-		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "1", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "1", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "1", "4"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "1", "5"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "2", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "2", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "2", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "2", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "2", "4"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "3", "2"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "3", "3"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-	}, true, true, true)
-	assert.NoError(t, err)
-	// get click-through-rate
-	rate, err = db.GetClickThroughRate(time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC), []string{"star", "like"}, []string{"read"})
-	assert.NoError(t, err)
-	assert.Equal(t, 0.375, rate)
-}
-
 func testTimeZone(t *testing.T, db Database) {
 	loc, err := time.LoadLocation("Asia/Tokyo")
 	assert.NoError(t, err)

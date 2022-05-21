@@ -147,11 +147,6 @@ func (NoDatabase) GetFeedbackStream(_ int, _ *time.Time, _ ...string) (chan []Fe
 	return feedbackChan, errChan
 }
 
-// GetClickThroughRate method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetClickThroughRate(_ time.Time, _, _ []string) (float64, error) {
-	return 0, ErrNoDatabase
-}
-
 func (d NoDatabase) ModifyItem(_ string, _ ItemPatch) error {
 	return ErrNoDatabase
 }

@@ -139,7 +139,6 @@ type Database interface {
 	DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error)
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error
 	GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error)
-	GetClickThroughRate(date time.Time, positiveTypes, readTypes []string) (float64, error)
 	GetUserStream(batchSize int) (chan []User, chan error)
 	GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error)
 	GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
