@@ -800,9 +800,9 @@ func TestRankByClickTroughRate(t *testing.T) {
 	err := w.dataClient.BatchInsertUsers([]data.User{{UserId: "1"}})
 	assert.NoError(t, err)
 	// insert items
-	itemCache := make(map[string]data.Item)
+	itemCache := NewItemCache()
 	for i := 1; i <= 5; i++ {
-		itemCache[strconv.Itoa(i)] = data.Item{ItemId: strconv.Itoa(i)}
+		itemCache.Set(strconv.Itoa(i), &data.Item{ItemId: strconv.Itoa(i)})
 	}
 	// rank items
 	w.clickModel = new(mockFactorizationMachine)
