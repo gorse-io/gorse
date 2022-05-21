@@ -15,8 +15,6 @@
 package base
 
 import (
-	"bytes"
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -27,10 +25,6 @@ func TestNewMatrix32(t *testing.T) {
 	assert.Equal(t, 4, len(a[0]))
 	assert.Equal(t, 4, len(a[0]))
 	assert.Equal(t, 4, len(a[0]))
-}
-
-func TestHex(t *testing.T) {
-	assert.Equal(t, fmt.Sprintf("%x", 325600), Hex(325600))
 }
 
 func TestRangeInt(t *testing.T) {
@@ -52,44 +46,4 @@ func TestNewMatrixInt(t *testing.T) {
 	for _, v := range m {
 		assert.Equal(t, 3, len(v))
 	}
-}
-
-func TestWriteMatrix(t *testing.T) {
-	a := [][]float32{{1, 2}, {3, 4}}
-	buf := bytes.NewBuffer(nil)
-	err := WriteMatrix(buf, a)
-	assert.NoError(t, err)
-	b := [][]float32{{0, 0}, {0, 0}}
-	err = ReadMatrix(buf, b)
-	assert.NoError(t, err)
-	assert.Equal(t, a, b)
-}
-
-func TestWriteString(t *testing.T) {
-	a := "abc"
-	buf := bytes.NewBuffer(nil)
-	err := WriteString(buf, a)
-	assert.NoError(t, err)
-	var b string
-	b, err = ReadString(buf)
-	assert.NoError(t, err)
-	assert.Equal(t, a, b)
-}
-
-func TestWriteGob(t *testing.T) {
-	a := "abc"
-	buf := bytes.NewBuffer(nil)
-	err := WriteGob(buf, a)
-	assert.NoError(t, err)
-	var b string
-	err = ReadGob(buf, &b)
-	assert.NoError(t, err)
-	assert.Equal(t, a, b)
-}
-
-func TestFloat32(t *testing.T) {
-	a := FormatFloat32(1.23)
-	assert.Equal(t, "1.23", a)
-	b := ParseFloat32("1.23")
-	assert.Equal(t, float32(1.23), b)
 }

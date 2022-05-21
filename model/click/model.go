@@ -22,6 +22,7 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
@@ -494,7 +495,7 @@ func Clone(m FactorizationMachine) FactorizationMachine {
 // Marshal model into byte stream.
 func (fm *FM) Marshal(w io.Writer) error {
 	// write params
-	err := base.WriteGob(w, fm.Params)
+	err := encoding.WriteGob(w, fm.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -526,7 +527,7 @@ func (fm *FM) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write matrix
-	err = base.WriteMatrix(w, fm.V)
+	err = encoding.WriteMatrix(w, fm.V)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -536,7 +537,7 @@ func (fm *FM) Marshal(w io.Writer) error {
 // Unmarshal model from byte stream.
 func (fm *FM) Unmarshal(r io.Reader) error {
 	// read params
-	err := base.ReadGob(r, &fm.Params)
+	err := encoding.ReadGob(r, &fm.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -571,7 +572,7 @@ func (fm *FM) Unmarshal(r io.Reader) error {
 	}
 	// read matrix
 	fm.V = base.NewMatrix32(int(fm.Index.Len()), fm.nFactors)
-	err = base.ReadMatrix(r, fm.V)
+	err = encoding.ReadMatrix(r, fm.V)
 	if err != nil {
 		return errors.Trace(err)
 	}

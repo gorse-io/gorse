@@ -22,6 +22,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
@@ -376,7 +377,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	index, recall = builder.Build(m.GorseConfig.Recommend.ItemNeighbors.IndexRecall,
 		m.GorseConfig.Recommend.ItemNeighbors.IndexFitEpoch, true)
 	ItemNeighborIndexRecall.Set(float64(recall))
-	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
+	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 		return errors.Trace(err)
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
@@ -621,7 +622,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		m.GorseConfig.Recommend.UserNeighbors.IndexRecall,
 		m.GorseConfig.Recommend.UserNeighbors.IndexFitEpoch, true)
 	UserNeighborIndexRecall.Set(float64(recall))
-	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), base.FormatFloat32(recall))); err != nil {
+	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 		return errors.Trace(err)
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
@@ -865,7 +866,7 @@ func (m *Master) runRankingRelatedTasks(
 	return
 }
 
-func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
+func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization) {
 	startFitTime := time.Now()
 	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().
 		SetJobs(m.GorseConfig.Master.NumJobs).
@@ -883,6 +884,7 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
 	CollaborativeFilteringRecall10.Set(float64(score.Recall))
 	CollaborativeFilteringPrecision10.Set(float64(score.Precision))
+	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.rankingModel.Bytes()))
 	if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
@@ -901,7 +903,7 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.Model) {
 	} else {
 		log.Logger().Info("write model to local cache",
 			zap.String("ranking_model_name", m.localCache.RankingModelName),
-			zap.String("ranking_model_version", base.Hex(m.localCache.RankingModelVersion)),
+			zap.String("ranking_model_version", encoding.Hex(m.localCache.RankingModelVersion)),
 			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
 	}
@@ -1025,6 +1027,7 @@ func (m *Master) runFitClickModelTask(
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
+	MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.clickModel.Bytes()))
 	if err = m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
@@ -1041,7 +1044,7 @@ func (m *Master) runFitClickModelTask(
 		log.Logger().Error("failed to write local cache", zap.Error(err))
 	} else {
 		log.Logger().Info("write model to local cache",
-			zap.String("click_model_version", base.Hex(m.localCache.ClickModelVersion)),
+			zap.String("click_model_version", encoding.Hex(m.localCache.ClickModelVersion)),
 			zap.Float32("click_model_score", score.Precision),
 			zap.Any("click_model_params", m.localCache.ClickModel.GetParams()))
 	}

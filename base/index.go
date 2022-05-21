@@ -17,6 +17,7 @@ package base
 import (
 	"encoding/binary"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"io"
 	"reflect"
 	"strconv"
@@ -148,7 +149,7 @@ func (idx *MapIndex) Marshal(w io.Writer) error {
 	}
 	// write names
 	for _, s := range idx.Names {
-		err = WriteString(w, s)
+		err = encoding.WriteString(w, s)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -168,7 +169,7 @@ func (idx *MapIndex) Unmarshal(r io.Reader) error {
 	idx.Names = make([]string, 0, n)
 	idx.Numbers = make(map[string]int32, n)
 	for i := 0; i < int(n); i++ {
-		name, err := ReadString(r)
+		name, err := encoding.ReadString(r)
 		if err != nil {
 			return errors.Trace(err)
 		}

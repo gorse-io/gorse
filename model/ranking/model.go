@@ -22,6 +22,7 @@ import (
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
@@ -128,10 +129,10 @@ type BaseMatrixFactorization struct {
 
 func (baseModel *BaseMatrixFactorization) Bytes() int {
 	bytes := reflect.TypeOf(baseModel).Elem().Size()
-	bytes += base.ArrayBytes(baseModel.UserPredictable.Bytes())
-	bytes += base.ArrayBytes(baseModel.ItemPredictable.Bytes())
-	bytes += base.MatrixBytes(baseModel.UserFactor)
-	bytes += base.MatrixBytes(baseModel.ItemFactor)
+	bytes += encoding.ArrayBytes(baseModel.UserPredictable.Bytes())
+	bytes += encoding.ArrayBytes(baseModel.ItemPredictable.Bytes())
+	bytes += encoding.MatrixBytes(baseModel.UserFactor)
+	bytes += encoding.MatrixBytes(baseModel.ItemFactor)
 	return int(bytes) + baseModel.UserIndex.Bytes() + baseModel.ItemIndex.Bytes()
 }
 
@@ -181,7 +182,7 @@ func (baseModel *BaseMatrixFactorization) IsItemPredictable(itemIndex int32) boo
 // Marshal model into byte stream.
 func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 	// write params
-	err := base.WriteGob(w, baseModel.Params)
+	err := encoding.WriteGob(w, baseModel.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -208,7 +209,7 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 // Unmarshal model from byte stream.
 func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 	// read params
-	err := base.ReadGob(r, &baseModel.Params)
+	err := encoding.ReadGob(r, &baseModel.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -235,8 +236,8 @@ func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 }
 
 // Clone a model with deep copy.
-func Clone(m Model) Model {
-	var copied Model
+func Clone(m MatrixFactorization) MatrixFactorization {
+	var copied MatrixFactorization
 	if err := copier.Copy(&copied, m); err != nil {
 		panic(err)
 	} else {
@@ -262,7 +263,7 @@ func GetModelName(m Model) string {
 }
 
 func MarshalModel(w io.Writer, m Model) error {
-	if err := base.WriteString(w, GetModelName(m)); err != nil {
+	if err := encoding.WriteString(w, GetModelName(m)); err != nil {
 		return errors.Trace(err)
 	}
 	if err := m.Marshal(w); err != nil {
@@ -272,7 +273,7 @@ func MarshalModel(w io.Writer, m Model) error {
 }
 
 func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
-	name, err := base.ReadString(r)
+	name, err := encoding.ReadString(r)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -552,12 +553,12 @@ func (bpr *BPR) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write user factors
-	err = base.WriteMatrix(w, bpr.UserFactor)
+	err = encoding.WriteMatrix(w, bpr.UserFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// write item factors
-	err = base.WriteMatrix(w, bpr.ItemFactor)
+	err = encoding.WriteMatrix(w, bpr.ItemFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -575,13 +576,13 @@ func (bpr *BPR) Unmarshal(r io.Reader) error {
 	bpr.SetParams(bpr.Params)
 	// read user factors
 	bpr.UserFactor = base.NewMatrix32(int(bpr.UserIndex.Len()), bpr.nFactors)
-	err = base.ReadMatrix(r, bpr.UserFactor)
+	err = encoding.ReadMatrix(r, bpr.UserFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// read item factors
 	bpr.ItemFactor = base.NewMatrix32(int(bpr.ItemIndex.Len()), bpr.nFactors)
-	err = base.ReadMatrix(r, bpr.ItemFactor)
+	err = encoding.ReadMatrix(r, bpr.ItemFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -863,12 +864,12 @@ func (ccd *CCD) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write user factors
-	err = base.WriteMatrix(w, ccd.UserFactor)
+	err = encoding.WriteMatrix(w, ccd.UserFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// write item factors
-	err = base.WriteMatrix(w, ccd.ItemFactor)
+	err = encoding.WriteMatrix(w, ccd.ItemFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -886,13 +887,13 @@ func (ccd *CCD) Unmarshal(r io.Reader) error {
 	ccd.SetParams(ccd.Params)
 	// read user factors
 	ccd.UserFactor = base.NewMatrix32(int(ccd.UserIndex.Len()), ccd.nFactors)
-	err = base.ReadMatrix(r, ccd.UserFactor)
+	err = encoding.ReadMatrix(r, ccd.UserFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// read item factors
 	ccd.ItemFactor = base.NewMatrix32(int(ccd.ItemIndex.Len()), ccd.nFactors)
-	err = base.ReadMatrix(r, ccd.ItemFactor)
+	err = encoding.ReadMatrix(r, ccd.ItemFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}

@@ -26,6 +26,7 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
@@ -172,8 +173,8 @@ func (w *Worker) Sync() {
 		w.latestRankingModelVersion = meta.RankingModelVersion
 		if w.latestRankingModelVersion != w.currentRankingModelVersion {
 			log.Logger().Info("new ranking model found",
-				zap.String("old_version", base.Hex(w.currentRankingModelVersion)),
-				zap.String("new_version", base.Hex(w.latestRankingModelVersion)))
+				zap.String("old_version", encoding.Hex(w.currentRankingModelVersion)),
+				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
 			w.syncedChan <- true
 		}
 
@@ -181,8 +182,8 @@ func (w *Worker) Sync() {
 		w.latestClickModelVersion = meta.ClickModelVersion
 		if w.latestClickModelVersion != w.currentClickModelVersion {
 			log.Logger().Info("new click model found",
-				zap.String("old_version", base.Hex(w.currentClickModelVersion)),
-				zap.String("new_version", base.Hex(w.latestClickModelVersion)))
+				zap.String("old_version", encoding.Hex(w.currentClickModelVersion)),
+				zap.String("new_version", encoding.Hex(w.latestClickModelVersion)))
 			w.syncedChan <- true
 		}
 
@@ -219,7 +220,7 @@ func (w *Worker) Pull() {
 					w.rankingIndex = nil
 					w.currentRankingModelVersion = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
-						zap.String("version", base.Hex(w.currentRankingModelVersion)))
+						zap.String("version", encoding.Hex(w.currentRankingModelVersion)))
 					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(w.rankingModel.Bytes()))
 					pulled = true
 				}
@@ -242,7 +243,7 @@ func (w *Worker) Pull() {
 					w.clickModel = clickModel
 					w.currentClickModelVersion = w.latestClickModelVersion
 					log.Logger().Info("synced click model",
-						zap.String("version", base.Hex(w.currentClickModelVersion)))
+						zap.String("version", encoding.Hex(w.currentClickModelVersion)))
 					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(w.clickModel.Bytes()))
 					pulled = true
 				}
@@ -380,7 +381,7 @@ func (w *Worker) Recommend(users []data.User) {
 		var recall float32
 		w.rankingIndex, recall = builder.Build(w.cfg.Recommend.Collaborative.IndexRecall, w.cfg.Recommend.Collaborative.IndexFitEpoch, false)
 		CollaborativeFilteringIndexRecall.Set(float64(recall))
-		if err = w.cacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), base.FormatFloat32(recall))); err != nil {
+		if err = w.cacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 			log.Logger().Error("failed to write meta", zap.Error(err))
 		}
 		log.Logger().Info("complete building ranking index",
@@ -1180,8 +1181,8 @@ func (c *ItemCache) Set(itemId string, item *data.Item) {
 		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(itemId))
 		c.ByteCount += reflect.TypeOf(item.ItemId).Size() * uintptr(len(itemId))
 		c.ByteCount += reflect.TypeOf(item.Comment).Size() * uintptr(len(itemId))
-		c.ByteCount += base.StringsBytes(item.Categories)
-		c.ByteCount += base.StringsBytes(item.Labels)
+		c.ByteCount += encoding.StringsBytes(item.Categories)
+		c.ByteCount += encoding.StringsBytes(item.Labels)
 		c.ByteCount += reflect.TypeOf(item).Elem().Size()
 	}
 }
