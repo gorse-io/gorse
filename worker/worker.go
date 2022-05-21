@@ -1044,7 +1044,7 @@ func (w *Worker) pullItems() (*ItemCache, []string, error) {
 	itemChan, errChan := w.dataClient.GetItemStream(batchSize, nil)
 	for batchItems := range itemChan {
 		for _, item := range batchItems {
-			itemCache.Set(item.ItemId, &item)
+			itemCache.Set(item.ItemId, item)
 			itemCategories.Add(item.Categories...)
 		}
 	}
@@ -1175,15 +1175,15 @@ func NewItemCache() *ItemCache {
 	return &ItemCache{Data: make(map[string]*data.Item)}
 }
 
-func (c *ItemCache) Set(itemId string, item *data.Item) {
+func (c *ItemCache) Set(itemId string, item data.Item) {
 	if _, exist := c.Data[itemId]; !exist {
-		c.Data[itemId] = item
+		c.Data[itemId] = &item
 		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(itemId))
 		c.ByteCount += reflect.TypeOf(item.ItemId).Size() * uintptr(len(itemId))
 		c.ByteCount += reflect.TypeOf(item.Comment).Size() * uintptr(len(itemId))
 		c.ByteCount += encoding.StringsBytes(item.Categories)
 		c.ByteCount += encoding.StringsBytes(item.Labels)
-		c.ByteCount += reflect.TypeOf(item).Elem().Size()
+		c.ByteCount += reflect.TypeOf(item).Size()
 	}
 }
 

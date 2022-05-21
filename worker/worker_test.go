@@ -190,6 +190,7 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 	w := newMockWorker(t)
 	defer w.Close(t)
 	w.cfg.Recommend.Offline.EnableColRecommend = true
+	w.cfg.Recommend.Collaborative.EnableIndex = false
 	// insert feedbacks
 	now := time.Now()
 	err := w.dataClient.BatchInsertFeedback([]data.Feedback{
@@ -802,7 +803,7 @@ func TestRankByClickTroughRate(t *testing.T) {
 	// insert items
 	itemCache := NewItemCache()
 	for i := 1; i <= 5; i++ {
-		itemCache.Set(strconv.Itoa(i), &data.Item{ItemId: strconv.Itoa(i)})
+		itemCache.Set(strconv.Itoa(i), data.Item{ItemId: strconv.Itoa(i)})
 	}
 	// rank items
 	w.clickModel = new(mockFactorizationMachine)
