@@ -27,7 +27,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"gonum.org/v1/gonum/mat"
 	"io"
 	"reflect"
 	"time"
@@ -234,7 +233,6 @@ func Clone(m Model) Model {
 
 const (
 	CollaborativeBPR = "bpr"
-	CollaborativeALS = "als"
 	CollaborativeCCD = "ccd"
 )
 
@@ -244,8 +242,6 @@ func GetModelName(m Model) string {
 		return CollaborativeBPR
 	case *CCD:
 		return CollaborativeCCD
-	case *ALS:
-		return CollaborativeALS
 	default:
 		return reflect.TypeOf(m).String()
 	}
@@ -267,12 +263,6 @@ func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
 		return nil, errors.Trace(err)
 	}
 	switch name {
-	case "als":
-		var als ALS
-		if err := als.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
-		}
-		return &als, nil
 	case "bpr":
 		var bpr BPR
 		if err := bpr.Unmarshal(r); err != nil {
@@ -581,311 +571,6 @@ func (bpr *BPR) Unmarshal(r io.Reader) error {
 	// read item factors
 	bpr.ItemFactor = base.NewMatrix32(int(bpr.ItemIndex.Len()), bpr.nFactors)
 	err = base.ReadMatrix(r, bpr.ItemFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-// ALS [7] is the Weighted Regularized Matrix Factorization, which exploits
-// unique properties of implicit feedback datasets. It treats the data as
-// indication of positive and negative preference associated with vastly
-// varying confidence levels. This leads to a factor model which is especially
-// tailored for implicit feedback recommenders. Authors also proposed a
-// scalable optimization procedure, which scales linearly with the data size.
-// Hyper-parameters:
-//   NFactors   - The number of latent factors. Default is 10.
-//   NEpochs    - The number of training epochs. Default is 50.
-//   InitMean   - The mean of initial latent factors. Default is 0.
-//   InitStdDev - The standard deviation of initial latent factors. Default is 0.1.
-//   Reg        - The strength of regularization.
-type ALS struct {
-	BaseMatrixFactorization
-	// Model parameters
-	UserFactor *mat.Dense // p_u
-	ItemFactor *mat.Dense // q_i
-	// Hyper parameters
-	nFactors   int
-	nEpochs    int
-	reg        float64
-	initMean   float64
-	initStdDev float64
-	weight     float64
-}
-
-// NewALS creates a ALS model.
-func NewALS(params model.Params) *ALS {
-	als := new(ALS)
-	als.SetParams(params)
-	return als
-}
-
-// GetUserFactor returns the user latent factors.
-func (als *ALS) GetUserFactor(_ int32) []float32 {
-	panic("not implemented")
-}
-
-// GetItemFactor returns the item latent factors.
-func (als *ALS) GetItemFactor(_ int32) []float32 {
-	panic("not implemented")
-}
-
-// SetParams sets hyper-parameters for the ALS model.
-func (als *ALS) SetParams(params model.Params) {
-	als.BaseMatrixFactorization.SetParams(params)
-	als.nFactors = als.Params.GetInt(model.NFactors, 16)
-	als.nEpochs = als.Params.GetInt(model.NEpochs, 50)
-	als.initMean = float64(als.Params.GetFloat32(model.InitMean, 0))
-	als.initStdDev = float64(als.Params.GetFloat32(model.InitStdDev, 0.1))
-	als.reg = float64(als.Params.GetFloat32(model.Reg, 0.06))
-	als.weight = float64(als.Params.GetFloat32(model.Alpha, 0.001))
-}
-
-func (als *ALS) GetParamsGrid() model.ParamsGrid {
-	return model.ParamsGrid{
-		model.NFactors:   []interface{}{8, 16, 32, 64},
-		model.InitMean:   []interface{}{0},
-		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Alpha:      []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-	}
-}
-
-// Predict by the ALS model.
-func (als *ALS) Predict(userId, itemId string) float32 {
-	userIndex := als.UserIndex.ToNumber(userId)
-	itemIndex := als.ItemIndex.ToNumber(itemId)
-	if userIndex == base.NotId {
-		log.Logger().Info("unknown user", zap.String("user_id", userId))
-		return 0
-	}
-	if itemIndex == base.NotId {
-		log.Logger().Info("unknown item", zap.String("item_id", itemId))
-		return 0
-	}
-	return als.InternalPredict(userIndex, itemIndex)
-}
-
-func (als *ALS) InternalPredict(userIndex, itemIndex int32) float32 {
-	ret := float32(0.0)
-	if itemIndex != base.NotId && userIndex != base.NotId {
-		ret = float32(mat.Dot(als.UserFactor.RowView(int(userIndex)),
-			als.ItemFactor.RowView(int(itemIndex))))
-	} else {
-		log.Logger().Warn("unknown user or item")
-	}
-	return ret
-}
-
-// Fit the ALS model.
-func (als *ALS) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
-	config = config.LoadDefaultIfNil()
-	if config.Tracker != nil {
-		config.Tracker.Start(als.nEpochs)
-	}
-	log.Logger().Info("fit als",
-		zap.Int("train_set_size", trainSet.Count()),
-		zap.Int("test_set_size", valSet.Count()),
-		zap.Any("params", als.GetParams()),
-		zap.Any("config", config))
-	als.Init(trainSet)
-	// Create temporary matrix
-	temp1 := make([]*mat.Dense, config.Jobs)
-	temp2 := make([]*mat.VecDense, config.Jobs)
-	a := make([]*mat.Dense, config.Jobs)
-	for i := 0; i < config.Jobs; i++ {
-		temp1[i] = mat.NewDense(als.nFactors, als.nFactors, nil)
-		temp2[i] = mat.NewVecDense(als.nFactors, nil)
-		a[i] = mat.NewDense(als.nFactors, als.nFactors, nil)
-	}
-	c := mat.NewDense(als.nFactors, als.nFactors, nil)
-	// Create regularization matrix
-	regs := make([]float64, als.nFactors)
-	for i := range regs {
-		regs[i] = als.reg
-	}
-	regI := mat.NewDiagDense(als.nFactors, regs)
-	snapshots := SnapshotManger{}
-	evalStart := time.Now()
-	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
-	evalTime := time.Since(evalStart)
-	log.Logger().Debug(fmt.Sprintf("fit als %v/%v", 0, als.nEpochs),
-		zap.String("eval_time", evalTime.String()),
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
-	userFactorCopy := mat.NewDense(trainSet.UserCount(), als.nFactors, nil)
-	itemFactorCopy := mat.NewDense(trainSet.ItemCount(), als.nFactors, nil)
-	userFactorCopy.Copy(als.UserFactor)
-	itemFactorCopy.Copy(als.ItemFactor)
-	snapshots.AddSnapshotNoCopy(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, userFactorCopy, itemFactorCopy)
-	for ep := 1; ep <= als.nEpochs; ep++ {
-		fitStart := time.Now()
-		// Recompute all user factors: x_u = (Y^T C^userIndex Y + \lambda reg)^{-1} Y^T C^userIndex p(userIndex)
-		// Y^T Y
-		c.Mul(als.ItemFactor.T(), als.ItemFactor)
-		c.Scale(als.weight, c)
-		err := parallel.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
-			a[workerId].Copy(c)
-			b := mat.NewVecDense(als.nFactors, nil)
-			for _, itemIndex := range trainSet.UserFeedback[userIndex] {
-				// Y^T (C^u-I) Y
-				temp1[workerId].Outer(1, als.ItemFactor.RowView(int(itemIndex)), als.ItemFactor.RowView(int(itemIndex)))
-				a[workerId].Add(a[workerId], temp1[workerId])
-				// Y^T C^u p(u)
-				temp2[workerId].ScaleVec(1+als.weight, als.ItemFactor.RowView(int(itemIndex)))
-				b.AddVec(b, temp2[workerId])
-			}
-			a[workerId].Add(a[workerId], regI)
-			err := temp1[workerId].Inverse(a[workerId])
-			temp2[workerId].MulVec(temp1[workerId], b)
-			als.UserFactor.SetRow(userIndex, temp2[workerId].RawVector().Data)
-			return errors.Trace(err)
-		})
-		if err != nil {
-			log.Logger().Error("failed to inverse matrix", zap.Error(err))
-		}
-		// Recompute all item factors: y_i = (X^T C^i X + \lambda reg)^{-1} X^T C^i p(i)
-		// X^T X
-		c.Mul(als.UserFactor.T(), als.UserFactor)
-		c.Scale(als.weight, c)
-		err = parallel.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
-			a[workerId].Copy(c)
-			b := mat.NewVecDense(als.nFactors, nil)
-			for _, index := range trainSet.ItemFeedback[itemIndex] {
-				// X^T (C^i-I) X
-				temp1[workerId].Outer(1, als.UserFactor.RowView(int(index)), als.UserFactor.RowView(int(index)))
-				a[workerId].Add(a[workerId], temp1[workerId])
-				// X^T C^i p(i)
-				temp2[workerId].ScaleVec(1+als.weight, als.UserFactor.RowView(int(index)))
-				b.AddVec(b, temp2[workerId])
-			}
-			a[workerId].Add(a[workerId], regI)
-			err = temp1[workerId].Inverse(a[workerId])
-			temp2[workerId].MulVec(temp1[workerId], b)
-			als.ItemFactor.SetRow(itemIndex, temp2[workerId].RawVector().Data)
-			return errors.Trace(err)
-		})
-		if err != nil {
-			log.Logger().Error("failed to inverse matrix", zap.Error(err))
-		}
-		fitTime := time.Since(fitStart)
-		// Cross validation
-		if ep%config.Verbose == 0 || ep == als.nEpochs {
-			evalStart = time.Now()
-			scores = Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
-			evalTime = time.Since(evalStart)
-			log.Logger().Debug(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
-				zap.String("fit_time", fitTime.String()),
-				zap.String("eval_time", evalTime.String()),
-				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
-			userFactorCopy = mat.NewDense(trainSet.UserCount(), als.nFactors, nil)
-			itemFactorCopy = mat.NewDense(trainSet.ItemCount(), als.nFactors, nil)
-			userFactorCopy.Copy(als.UserFactor)
-			itemFactorCopy.Copy(als.ItemFactor)
-			snapshots.AddSnapshotNoCopy(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, userFactorCopy, itemFactorCopy)
-		}
-		if config.Tracker != nil {
-			config.Tracker.Update(ep)
-		}
-	}
-	// restore best snapshot
-	als.UserFactor = snapshots.BestWeights[0].(*mat.Dense)
-	als.ItemFactor = snapshots.BestWeights[1].(*mat.Dense)
-	if config.Tracker != nil {
-		config.Tracker.Finish()
-	}
-	log.Logger().Info("fit als complete",
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
-	return snapshots.BestScore
-}
-
-func (als *ALS) Clear() {
-	als.UserIndex = nil
-	als.ItemIndex = nil
-	als.ItemFactor = nil
-	als.UserFactor = nil
-}
-
-func (als *ALS) Invalid() bool {
-	return als == nil ||
-		als.ItemIndex == nil ||
-		als.UserIndex == nil ||
-		als.ItemFactor == nil ||
-		als.UserFactor == nil
-}
-
-func (als *ALS) Init(trainSet *DataSet) {
-	// Initialize
-	newUserFactor := mat.NewDense(trainSet.UserCount(), als.nFactors,
-		als.GetRandomGenerator().NormalVector64(trainSet.UserCount()*als.nFactors, als.initMean, als.initStdDev))
-	newItemFactor := mat.NewDense(trainSet.ItemCount(), als.nFactors,
-		als.GetRandomGenerator().NormalVector64(trainSet.ItemCount()*als.nFactors, als.initMean, als.initStdDev))
-	// Relocate parameters
-	if als.UserIndex != nil {
-		for _, userId := range trainSet.UserIndex.GetNames() {
-			oldIndex := als.UserIndex.ToNumber(userId)
-			newIndex := trainSet.UserIndex.ToNumber(userId)
-			if oldIndex != base.NotId {
-				newUserFactor.SetRow(int(newIndex), als.UserFactor.RawRowView(int(oldIndex)))
-			}
-		}
-	}
-	if als.ItemIndex != nil {
-		for _, itemId := range trainSet.ItemIndex.GetNames() {
-			oldIndex := als.ItemIndex.ToNumber(itemId)
-			newIndex := trainSet.ItemIndex.ToNumber(itemId)
-			if oldIndex != base.NotId {
-				newItemFactor.SetRow(int(newIndex), als.ItemFactor.RawRowView(int(oldIndex)))
-			}
-		}
-	}
-	// Initialize base
-	als.UserFactor = newUserFactor
-	als.ItemFactor = newItemFactor
-	als.BaseMatrixFactorization.Init(trainSet)
-}
-
-// Marshal model into byte stream.
-func (als *ALS) Marshal(w io.Writer) error {
-	// write base
-	err := als.BaseMatrixFactorization.Marshal(w)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write user factors
-	err = base.WriteGob(w, als.UserFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write item factors
-	err = base.WriteGob(w, als.ItemFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-// Unmarshal model from byte stream.
-func (als *ALS) Unmarshal(r io.Reader) error {
-	// read base
-	var err error
-	err = als.BaseMatrixFactorization.Unmarshal(r)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	als.SetParams(als.Params)
-	// read user factors
-	err = base.ReadGob(r, &als.UserFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// read item factors
-	err = base.ReadGob(r, &als.ItemFactor)
 	if err != nil {
 		return errors.Trace(err)
 	}
