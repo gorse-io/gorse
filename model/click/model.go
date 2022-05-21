@@ -28,6 +28,7 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"io"
+	"reflect"
 	"time"
 )
 
@@ -127,6 +128,7 @@ type FactorizationMachine interface {
 	InternalPredict(x []int32, values []float32) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 	Marshal(w io.Writer) error
+	Bytes() int
 }
 
 type BaseFactorizationMachine struct {
@@ -449,6 +451,21 @@ func (fm *FM) Init(trainSet *Dataset) {
 	fm.V = newV
 	fm.W = newW
 	fm.BaseFactorizationMachine.Init(trainSet)
+}
+
+func (fm *FM) Bytes() int {
+	// The memory usage of FM consists of:
+	// 1. struct
+	// 2. float32 in fm.W
+	// 3. slice in fm.V
+	// 4. UnifiedIndex
+	bytes := reflect.TypeOf(fm).Elem().Size()
+	bytes += reflect.TypeOf(fm.W).Elem().Size() * uintptr(len(fm.W))
+	if len(fm.V) > 0 {
+		bytes += reflect.TypeOf(fm.V).Elem().Size() * uintptr(len(fm.V))
+		bytes += reflect.TypeOf(fm.V).Elem().Elem().Size() * uintptr(len(fm.V)) * uintptr(fm.nFactors)
+	}
+	return int(bytes) + fm.Index.Bytes()
 }
 
 func MarshalModel(w io.Writer, m FactorizationMachine) error {
