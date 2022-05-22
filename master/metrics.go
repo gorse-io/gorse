@@ -17,6 +17,11 @@ package master
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/samber/lo"
+	"github.com/scylladb/go-set/i32set"
+	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"time"
 )
 
 const (
@@ -213,14 +218,89 @@ var (
 		Subsystem: "master",
 		Name:      "negative_feedbacks_total",
 	})
-	PositiveFeedbackRateVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "positive_feedback_rate",
-	}, []string{LabelFeedbackType})
 	MemoryInuseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "memory_inuse_bytes",
 	}, []string{LabelData})
 )
+
+type OnlineEvaluator struct {
+	ReadFeedbacks      []map[int32]*i32set.Set
+	PositiveFeedbacks  map[string][]lo.Tuple3[int32, int32, time.Time]
+	ReverseIndex       map[lo.Tuple2[int32, int32]]time.Time
+	EvaluateDays       int
+	TruncatedDateToday time.Time
+}
+
+func NewOnlineEvaluator() *OnlineEvaluator {
+	evaluator := new(OnlineEvaluator)
+	evaluator.EvaluateDays = 30
+	evaluator.TruncatedDateToday = time.Now().Truncate(time.Hour * 24)
+	evaluator.ReverseIndex = make(map[lo.Tuple2[int32, int32]]time.Time)
+	evaluator.PositiveFeedbacks = make(map[string][]lo.Tuple3[int32, int32, time.Time])
+	evaluator.ReadFeedbacks = make([]map[int32]*i32set.Set, evaluator.EvaluateDays)
+	for i := 0; i < evaluator.EvaluateDays; i++ {
+		evaluator.ReadFeedbacks[i] = make(map[int32]*i32set.Set)
+	}
+	return evaluator
+}
+
+func (evaluator *OnlineEvaluator) Read(userIndex, itemIndex int32, timestamp time.Time) {
+	// truncate timestamp to day
+	truncatedTime := timestamp.Truncate(time.Hour * 24)
+	index := int(evaluator.TruncatedDateToday.Sub(truncatedTime) / time.Hour / 24)
+
+	if index >= 0 && index < evaluator.EvaluateDays {
+		if evaluator.ReadFeedbacks[index][userIndex] == nil {
+			evaluator.ReadFeedbacks[index][userIndex] = i32set.New()
+		}
+		evaluator.ReadFeedbacks[index][userIndex].Add(itemIndex)
+		evaluator.ReverseIndex[lo.Tuple2[int32, int32]{userIndex, itemIndex}] = timestamp
+	}
+}
+
+func (evaluator *OnlineEvaluator) Positive(feedbackType string, userIndex, itemIndex int32, timestamp time.Time) {
+	evaluator.PositiveFeedbacks[feedbackType] = append(evaluator.PositiveFeedbacks[feedbackType], lo.Tuple3[int32, int32, time.Time]{userIndex, itemIndex, timestamp})
+}
+
+func (evaluator *OnlineEvaluator) Evaluate() []server.Measurement {
+	var measurements []server.Measurement
+	for feedbackType, positiveFeedbacks := range evaluator.PositiveFeedbacks {
+		positiveFeedbackSets := make([]map[int32]*i32set.Set, evaluator.EvaluateDays)
+		for i := 0; i < evaluator.EvaluateDays; i++ {
+			positiveFeedbackSets[i] = make(map[int32]*i32set.Set)
+		}
+
+		for _, f := range positiveFeedbacks {
+			if readTime, exist := evaluator.ReverseIndex[lo.Tuple2[int32, int32]{f.A, f.B}]; exist && readTime.Unix() <= f.C.Unix() {
+				// truncate timestamp to day
+				truncatedTime := readTime.Truncate(time.Hour * 24)
+				readIndex := int(evaluator.TruncatedDateToday.Sub(truncatedTime) / time.Hour / 24)
+				if positiveFeedbackSets[readIndex][f.A] == nil {
+					positiveFeedbackSets[readIndex][f.A] = i32set.New()
+				}
+				positiveFeedbackSets[readIndex][f.A].Add(f.B)
+			}
+		}
+
+		for i := 0; i < evaluator.EvaluateDays; i++ {
+			var rate float32
+			if len(evaluator.ReadFeedbacks[i]) > 0 {
+				var sum float32
+				for userIndex, readSet := range evaluator.ReadFeedbacks[i] {
+					if positiveSet, exist := positiveFeedbackSets[i][userIndex]; exist {
+						sum += float32(positiveSet.Size()) / float32(readSet.Size())
+					}
+				}
+				rate = sum / float32(len(evaluator.ReadFeedbacks[i]))
+			}
+			measurements = append(measurements, server.Measurement{
+				Name:      cache.Key(PositiveFeedbackRate, feedbackType),
+				Timestamp: evaluator.TruncatedDateToday.Add(-time.Hour * 24 * time.Duration(i)),
+				Value:     rate,
+			})
+		}
+	}
+	return measurements
+}

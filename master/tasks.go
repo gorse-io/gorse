@@ -46,7 +46,6 @@ const (
 	TaskLoadDataset            = "Load dataset"
 	TaskFindItemNeighbors      = "Find neighbors of items"
 	TaskFindUserNeighbors      = "Find neighbors of users"
-	TaskAnalyze                = "Analyze click-through rate"
 	TaskFitRankingModel        = "Fit collaborative filtering model"
 	TaskFitClickModel          = "Fit click-through rate prediction model"
 	TaskSearchRankingModel     = "Search collaborative filtering  model"
@@ -65,11 +64,13 @@ func (m *Master) runLoadDatasetTask() error {
 		zap.Strings("read_feedback_types", m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.GorseConfig.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL))
+	evaluator := NewOnlineEvaluator()
 	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(m.DataClient,
 		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes,
 		m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes,
 		m.GorseConfig.Recommend.DataSource.ItemTTL,
-		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL)
+		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL,
+		evaluator)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -130,6 +131,12 @@ func (m *Master) runLoadDatasetTask() error {
 	NegativeFeedbackTotal.Set(float64(clickDataset.NegativeCount))
 	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), clickDataset.NegativeCount)); err != nil {
 		log.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
+	}
+
+	// evaluate positive feedback rate
+	measurement := evaluator.Evaluate()
+	if err = m.RestServer.InsertMeasurement(measurement...); err != nil {
+		log.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
 
 	// collect active users and items
@@ -1160,7 +1167,7 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 }
 
 // LoadDataFromDatabase loads dataset from data store.
-func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint) (
+func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
 	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems map[string][]cache.Scored, popularItems map[string][]cache.Scored, err error) {
 	m.taskMonitor.Start(TaskLoadDataset, 5)
 
@@ -1287,6 +1294,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 				popularCount[itemIndex]++
 			}
+			evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
 		}
 	}
 	if err = <-errChan; err != nil {
@@ -1321,6 +1329,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if !positiveSet[userIndex].Has(itemIndex) {
 				negativeSet[userIndex].Add(itemIndex)
 			}
+			evaluator.Read(userIndex, itemIndex, f.Timestamp)
 		}
 	}
 	if err = <-errChan; err != nil {
