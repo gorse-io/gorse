@@ -314,10 +314,8 @@ func (m *Master) RunRagtagTasksLoop() {
 		}
 		m.taskScheduler.UnLock(TaskCacheGarbageCollection)
 		// search optimal ranking model
-		m.taskScheduler.Lock(TaskSearchRankingModel)
 		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
 			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
-		m.taskScheduler.UnLock(TaskSearchRankingModel)
 		if err != nil {
 			log.Logger().Error("failed to search ranking model", zap.Error(err))
 			m.taskMonitor.Fail(TaskSearchRankingModel, err.Error())
@@ -325,10 +323,8 @@ func (m *Master) RunRagtagTasksLoop() {
 			continue
 		}
 		// search optimal click model
-		m.taskScheduler.Lock(TaskSearchClickModel)
 		lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks, err =
 			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
-		m.taskScheduler.UnLock(TaskSearchClickModel)
 		if err != nil {
 			log.Logger().Error("failed to search click model", zap.Error(err))
 			m.taskMonitor.Fail(TaskSearchClickModel, err.Error())
