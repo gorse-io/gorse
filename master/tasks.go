@@ -20,7 +20,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/i32set"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
@@ -30,7 +29,6 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
-	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
@@ -48,7 +46,6 @@ const (
 	TaskLoadDataset            = "Load dataset"
 	TaskFindItemNeighbors      = "Find neighbors of items"
 	TaskFindUserNeighbors      = "Find neighbors of users"
-	TaskAnalyze                = "Analyze click-through rate"
 	TaskFitRankingModel        = "Fit collaborative filtering model"
 	TaskFitClickModel          = "Fit click-through rate prediction model"
 	TaskSearchRankingModel     = "Search collaborative filtering  model"
@@ -67,11 +64,13 @@ func (m *Master) runLoadDatasetTask() error {
 		zap.Strings("read_feedback_types", m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.GorseConfig.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL))
+	evaluator := NewOnlineEvaluator()
 	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(m.DataClient,
 		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes,
 		m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes,
 		m.GorseConfig.Recommend.DataSource.ItemTTL,
-		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL)
+		m.GorseConfig.Recommend.DataSource.PositiveFeedbackTTL,
+		evaluator)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -132,6 +131,12 @@ func (m *Master) runLoadDatasetTask() error {
 	NegativeFeedbackTotal.Set(float64(clickDataset.NegativeCount))
 	if err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), clickDataset.NegativeCount)); err != nil {
 		log.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
+	}
+
+	// evaluate positive feedback rate
+	measurement := evaluator.Evaluate()
+	if err = m.RestServer.InsertMeasurement(measurement...); err != nil {
+		log.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
 
 	// collect active users and items
@@ -913,57 +918,6 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization
 	}
 }
 
-func (m *Master) runAnalyzeTask() error {
-	m.taskScheduler.Lock(TaskAnalyze)
-	defer m.taskScheduler.UnLock(TaskAnalyze)
-	log.Logger().Info("start analyzing click-through-rate")
-	m.taskMonitor.Start(TaskAnalyze, 30*len(m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
-	for j, feedbackType := range m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes {
-		measurement := cache.Key(PositiveFeedbackRate, feedbackType)
-		// pull existed click-through rates
-		clickThroughRates, err := m.RestServer.GetMeasurements(measurement, 30)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		existed := strset.New()
-		for _, clickThroughRate := range clickThroughRates {
-			existed.Add(clickThroughRate.Timestamp.String())
-		}
-		// update click-through rate
-		for i := 1; i <= 30; i++ {
-			dateTime := time.Now().AddDate(0, 0, -i)
-			date := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC)
-			if !existed.Has(date.String()) {
-				// click through clickThroughRate
-				startTime := time.Now()
-				clickThroughRate, err := m.DataClient.GetClickThroughRate(date, []string{feedbackType},
-					m.GorseConfig.Recommend.DataSource.ReadFeedbackTypes)
-				if err != nil {
-					return errors.Trace(err)
-				}
-				PositiveFeedbackRateVec.WithLabelValues(feedbackType).Set(float64(len(clickThroughRates)))
-				err = m.RestServer.InsertMeasurement(server.Measurement{
-					Name:      measurement,
-					Timestamp: date,
-					Value:     float32(clickThroughRate),
-				})
-				if err != nil {
-					return errors.Trace(err)
-				}
-				log.Logger().Info("update click through rate",
-					zap.String("date", date.String()),
-					zap.Duration("time_used", time.Since(startTime)),
-					zap.String("positive_feedback_type", feedbackType),
-					zap.Float64("positive_feedback_rate", clickThroughRate))
-			}
-			m.taskMonitor.Update(TaskAnalyze, i+j*30)
-		}
-	}
-	log.Logger().Info("complete analyzing click-through-rate")
-	m.taskMonitor.Finish(TaskAnalyze)
-	return nil
-}
-
 // runFitClickModelTask fits click model using latest data. After model fitted, following states are changed:
 // 1. Click model version are increased.
 // 2. Click model score are updated.
@@ -1213,7 +1167,7 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 }
 
 // LoadDataFromDatabase loads dataset from data store.
-func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint) (
+func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
 	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems map[string][]cache.Scored, popularItems map[string][]cache.Scored, err error) {
 	m.taskMonitor.Start(TaskLoadDataset, 5)
 
@@ -1340,6 +1294,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 				popularCount[itemIndex]++
 			}
+			evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
 		}
 	}
 	if err = <-errChan; err != nil {
@@ -1374,6 +1329,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if !positiveSet[userIndex].Has(itemIndex) {
 				negativeSet[userIndex].Add(itemIndex)
 			}
+			evaluator.Read(userIndex, itemIndex, f.Timestamp)
 		}
 	}
 	if err = <-errChan; err != nil {

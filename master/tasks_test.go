@@ -82,7 +82,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	}
 
 	// load mock dataset
-	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -190,7 +190,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	}
 
 	// load mock dataset
-	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -279,7 +279,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
 
 	// similar items (common users)
@@ -363,7 +363,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
-	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
 
 	// similar items (common users)

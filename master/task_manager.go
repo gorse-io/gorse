@@ -303,7 +303,6 @@ func (t *TaskScheduler) UnLock(name string) {
 	t.Broadcast()
 }
 
-// NewRunner
 func (t *TaskScheduler) NewRunner(name string) *TaskRunner {
 	return &TaskRunner{
 		TaskScheduler: t,

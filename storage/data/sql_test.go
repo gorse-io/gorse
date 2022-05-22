@@ -135,12 +135,6 @@ func TestMySQL_TimeLimit(t *testing.T) {
 	testTimeLimit(t, db.Database)
 }
 
-func TestMySQL_GetClickThroughRate(t *testing.T) {
-	db := newTestMySQLDatabase(t)
-	defer db.Close(t)
-	testGetClickThroughRate(t, db.Database)
-}
-
 func TestMySQL_Timezone(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
@@ -223,12 +217,6 @@ func TestPostgres_TimeLimit(t *testing.T) {
 	testTimeLimit(t, db.Database)
 }
 
-func TestPostgres_GetClickThroughRate(t *testing.T) {
-	db := newTestPostgresDatabase(t)
-	defer db.Close(t)
-	testGetClickThroughRate(t, db.Database)
-}
-
 func TestPostgres_Timezone(t *testing.T) {
 	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
@@ -309,12 +297,6 @@ func TestClickHouse_TimeLimit(t *testing.T) {
 	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testTimeLimit(t, db.Database)
-}
-
-func TestClickHouse_GetClickThroughRate(t *testing.T) {
-	db := newTestClickHouseDatabase(t)
-	defer db.Close(t)
-	testGetClickThroughRate(t, db.Database)
 }
 
 func TestClickHouse_Timezone(t *testing.T) {

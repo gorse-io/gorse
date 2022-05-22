@@ -131,12 +131,6 @@ func TestMongoDatabase_TimeLimit(t *testing.T) {
 	testTimeLimit(t, db.Database)
 }
 
-func TestMongoDatabase_GetClickThroughRate(t *testing.T) {
-	db := newTestMongoDatabase(t)
-	defer db.Close(t)
-	testGetClickThroughRate(t, db.Database)
-}
-
 func TestMongoDatabase_Timezone(t *testing.T) {
 	db := newTestMongoDatabase(t)
 	defer db.Close(t)
