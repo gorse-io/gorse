@@ -26,6 +26,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
+	"moul.io/zapgorm2"
 	"strings"
 	"time"
 )
@@ -41,6 +42,7 @@ const (
 )
 
 var gormConfig = &gorm.Config{
+	Logger: zapgorm2.New(log.Logger()),
 	NamingStrategy: schema.NamingStrategy{
 		SingularTable: true,
 	},
@@ -73,24 +75,24 @@ func (d *SQLDatabase) Init() error {
 		// create tables
 		type Items struct {
 			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
-			IsHidden   bool      `gorm:"column:is_hidden;type:bool not null"`
-			Categories []string  `gorm:"column:categories;type:json not null"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime not null"`
-			Labels     []string  `gorm:"column:labels;type:json not null"`
-			Comment    string    `gorm:"column:comment;type:text not null"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
+			Categories []string  `gorm:"column:categories;type:json;not null"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null"`
+			Labels     []string  `gorm:"column:labels;type:json;not null"`
+			Comment    string    `gorm:"column:comment;type:text;not null"`
 		}
 		type Users struct {
-			UserId    string   `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    []string `gorm:"column:labels;type:json not null"`
-			Subscribe []string `gorm:"column:subscribe;type:json not null"`
-			Comment   string   `gorm:"column:comment;type:text not null"`
+			UserId    string   `gorm:"column:user_id;type:varchar(256);not null;primaryKey"`
+			Labels    []string `gorm:"column:labels;type:json;not null"`
+			Subscribe []string `gorm:"column:subscribe;type:json;not null"`
+			Comment   string   `gorm:"column:comment;type:text;not null"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primaryKey"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primaryKey;index:user_id"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey;index:item_id"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime not null"`
-			Comment      string    `gorm:"column:comment;type:text not null"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
+			Comment      string    `gorm:"column:comment;type:text;not null"`
 		}
 		err := d.gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
@@ -109,25 +111,25 @@ func (d *SQLDatabase) Init() error {
 	case Postgres:
 		// create tables
 		type Items struct {
-			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
-			IsHidden   bool      `gorm:"column:is_hidden;type:bool not null default false"`
-			Categories []string  `gorm:"column:categories;type:json not null default '[]'"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz not null default '0001-01-01'"`
-			Labels     []string  `gorm:"column:labels;type:json not null default '[]'"`
-			Comment    string    `gorm:"column:comment;type:text not null default ''"`
+			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
+			Categories []string  `gorm:"column:categories;type:json;not null;default:'[]'"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null;default:'0001-01-01'::timestamptz"`
+			Labels     []string  `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
 			UserId    string   `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    []string `gorm:"column:labels;type:json not null default '[]'"`
-			Subscribe []string `gorm:"column:subscribe;type:json not null default '[]'"`
-			Comment   string   `gorm:"column:comment;type:text not null default ''"`
+			Labels    []string `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Subscribe []string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
+			Comment   string   `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) not null;primaryKey"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256) not null;primaryKey;index:user_id_index"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey;index:item_id_index"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz not null default '0001-01-01'"`
-			Comment      string    `gorm:"column:comment;type:text not null default ''"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null;default:'0001-01-01'::timestamptz"`
+			Comment      string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {

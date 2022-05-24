@@ -141,6 +141,12 @@ func TestMySQL_Timezone(t *testing.T) {
 	testTimeZone(t, db.Database)
 }
 
+func TestMySQL_Init(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
+}
+
 func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	var testName string
@@ -223,6 +229,12 @@ func TestPostgres_Timezone(t *testing.T) {
 	testTimeZone(t, db.Database)
 }
 
+func TestPostgres_Init(t *testing.T) {
+	db := newTestPostgresDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
+}
+
 func newTestClickHouseDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	var testName string
@@ -303,4 +315,10 @@ func TestClickHouse_Timezone(t *testing.T) {
 	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	testTimeZone(t, db.Database)
+}
+
+func TestClickHouse_Init(t *testing.T) {
+	db := newTestClickHouseDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
 }
