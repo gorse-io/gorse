@@ -35,17 +35,16 @@ import (
 var (
 	ErrUserNotExist = errors.NotFoundf("user")
 	ErrItemNotExist = errors.NotFoundf("item")
-	ErrUnsupported  = errors.NotSupportedf("interface")
 	ErrNoDatabase   = errors.NotAssignedf("database")
 )
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId     string
+	ItemId     string `gorm:"primaryKey"`
 	IsHidden   bool
-	Categories []string `gorm:"-"`
+	Categories []string `gorm:"serializer:json"`
 	Timestamp  time.Time
-	Labels     []string `gorm:"-"`
+	Labels     []string `gorm:"serializer:json"`
 	Comment    string
 }
 
@@ -64,9 +63,9 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string
-	Labels    []string `gorm:"-"`
-	Subscribe []string `gorm:"-"`
+	UserId    string   `gorm:"primaryKey"`
+	Labels    []string `gorm:"serializer:json"`
+	Subscribe []string `gorm:"serializer:json"`
 	Comment   string
 }
 

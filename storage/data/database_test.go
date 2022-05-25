@@ -180,6 +180,10 @@ func testUsers(t *testing.T, db Database) {
 	// test insert empty
 	err = db.BatchInsertUsers(nil)
 	assert.NoError(t, err)
+
+	// insert duplicate users
+	err = db.BatchInsertUsers([]User{{UserId: "1"}, {UserId: "1"}})
+	assert.NoError(t, err)
 }
 
 func testFeedback(t *testing.T, db Database) {
@@ -333,6 +337,13 @@ func testFeedback(t *testing.T, db Database) {
 		{FeedbackKey: FeedbackKey{"a", "100", "200"}},
 	}, false, false, false)
 	assert.NoError(t, err)
+
+	// insert duplicate feedback
+	err = db.BatchInsertFeedback([]Feedback{
+		{FeedbackKey: FeedbackKey{"a", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"a", "0", "0"}},
+	}, true, true, true)
+	assert.NoError(t, err)
 }
 
 func testItems(t *testing.T, db Database) {
@@ -435,6 +446,10 @@ func testItems(t *testing.T, db Database) {
 	items, err = db.BatchGetItems(nil)
 	assert.NoError(t, err)
 	assert.Empty(t, items)
+
+	// test insert duplicate items
+	err = db.BatchInsertItems([]Item{{ItemId: "1"}, {ItemId: "1"}})
+	assert.NoError(t, err)
 }
 
 func testDeleteUser(t *testing.T, db Database) {
