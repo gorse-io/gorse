@@ -172,3 +172,40 @@ func TestMySQL_Scan(t *testing.T) {
 	defer db.Close(t)
 	testScan(t, db.Database)
 }
+
+func newTestSQLiteDatabase(t *testing.T) *testSQLDatabase {
+	// retrieve test name
+	database := new(testSQLDatabase)
+	var err error
+	// create database
+	database.Database, err = Open("sqlite://:memory:")
+	assert.NoError(t, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(t, err)
+	return database
+}
+
+func TestSQLite_Meta(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testMeta(t, db.Database)
+}
+
+func TestSQLite_Sort(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testSort(t, db.Database)
+}
+
+func TestSQLite_Set(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testSet(t, db.Database)
+}
+
+func TestSQLite_Scan(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testScan(t, db.Database)
+}
