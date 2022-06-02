@@ -40,10 +40,12 @@ const (
 	MySQL SQLDriver = iota
 	Postgres
 	ClickHouse
+	SQLite
 )
 
 var gormConfig = &gorm.Config{
-	Logger: zapgorm2.New(log.Logger()),
+	Logger:          zapgorm2.New(log.Logger()),
+	CreateBatchSize: 1000,
 	NamingStrategy: schema.NamingStrategy{
 		SingularTable: true,
 	},
@@ -140,6 +142,33 @@ func (d *SQLDatabase) Init() error {
 		if _, err := d.client.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
 			return errors.Trace(err)
 		}
+	case SQLite:
+		// create tables
+		type Items struct {
+			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
+			Categories []string  `gorm:"column:categories;type:json;not null;default:'[]'"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Labels     []string  `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
+		}
+		type Users struct {
+			UserId    string   `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels    []string `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Subscribe []string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
+			Comment   string   `gorm:"column:comment;type:text;not null;default:''"`
+		}
+		type Feedback struct {
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Comment      string    `gorm:"column:comment;type:text;not null;default:''"`
+		}
+		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
+		if err != nil {
+			return errors.Trace(err)
+		}
 	case ClickHouse:
 		// create tables
 		type Items struct {
@@ -200,6 +229,8 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 		builder.WriteString("INSERT INTO items(item_id, is_hidden, categories, time_stamp, labels, comment) VALUES ")
 	case ClickHouse:
 		builder.WriteString("INSERT INTO items(item_id, is_hidden, categories, time_stamp, labels, comment, version) VALUES ")
+	case SQLite:
+		builder.WriteString("INSERT OR REPLACE INTO items(item_id, is_hidden, categories, time_stamp, labels, `comment`) VALUES ")
 	}
 	memo := strset.New()
 	var args []interface{}
@@ -222,7 +253,7 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 			return errors.Trace(err)
 		}
 		switch d.driver {
-		case MySQL:
+		case MySQL, SQLite:
 			builder.WriteString("(?,?,?,?,?,?)")
 		case Postgres:
 			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5, len(args)+6))
@@ -427,7 +458,12 @@ func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan [
 
 // GetItemFeedback returns feedback of a item from MySQL.
 func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	tx := d.gormDB.Table("feedback").Select("user_id, item_id, feedback_type, time_stamp").Where("time_stamp <= NOW() AND item_id = ?", itemId)
+	tx := d.gormDB.Table("feedback").Select("user_id, item_id, feedback_type, time_stamp")
+	if d.driver == SQLite {
+		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
+	} else {
+		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
+	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
@@ -460,6 +496,8 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, comment) VALUES ")
 	case ClickHouse:
 		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, comment, version) VALUES ")
+	case SQLite:
+		builder.WriteString("INSERT OR REPLACE INTO users(user_id, labels, subscribe, `comment`) VALUES ")
 	}
 	memo := strset.New()
 	var args []interface{}
@@ -482,7 +520,7 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 			return errors.Trace(err)
 		}
 		switch d.driver {
-		case MySQL:
+		case MySQL, SQLite:
 			builder.WriteString("(?,?,?,?)")
 		case Postgres:
 			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4))
@@ -639,7 +677,11 @@ func (d *SQLDatabase) GetUserStream(batchSize int) (chan []User, chan error) {
 func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment").Where("user_id = ?", userId)
 	if !withFuture {
-		tx.Where("time_stamp <= NOW()")
+		if d.driver == SQLite {
+			tx.Where("time_stamp <= DATETIME()")
+		} else {
+			tx.Where("time_stamp <= NOW()")
+		}
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -661,8 +703,8 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 }
 
 // BatchInsertFeedback insert a batch feedback into MySQL.
-// If insertUser set, new users will be insert to user table.
-// If insertItem set, new items will be insert to item table.
+// If insertUser set, new users will be inserted to user table.
+// If insertItem set, new items will be inserted to item table.
 func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error {
 	// skip empty list
 	if len(feedback) == 0 {
@@ -686,11 +728,13 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			builder.WriteString("INSERT INTO users(user_id) VALUES ")
 		case ClickHouse:
 			builder.WriteString("INSERT INTO users(user_id, version) VALUES ")
+		case SQLite:
+			builder.WriteString("INSERT OR IGNORE INTO users(user_id, labels, subscribe) VALUES ")
 		}
 		var args []interface{}
 		for i, user := range userList {
 			switch d.driver {
-			case MySQL:
+			case MySQL, SQLite:
 				builder.WriteString("(?, '[]', '[]')")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("($%d)", i+1))
@@ -710,14 +754,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		}
 	} else {
 		for _, user := range users.List() {
-			var rs *sql.Rows
-			var err error
-			switch d.driver {
-			case MySQL, ClickHouse:
-				rs, err = d.client.Query("SELECT user_id FROM users WHERE user_id = ?", user)
-			case Postgres:
-				rs, err = d.client.Query("SELECT user_id FROM users WHERE user_id = $1", user)
-			}
+			rs, err := d.gormDB.Table("users").Select("user_id").Where("user_id = ?", user).Rows()
 			if err != nil {
 				return errors.Trace(err)
 			} else if !rs.Next() {
@@ -739,11 +776,13 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			builder.WriteString("INSERT INTO items(item_id) VALUES ")
 		case ClickHouse:
 			builder.WriteString("INSERT INTO items(item_id, version) VALUES ")
+		case SQLite:
+			builder.WriteString("INSERT OR IGNORE INTO items(item_id, labels, categories) VALUES ")
 		}
 		var args []interface{}
 		for i, item := range itemList {
 			switch d.driver {
-			case MySQL:
+			case MySQL, SQLite:
 				builder.WriteString("(?, '[]', '[]')")
 			case Postgres:
 				builder.WriteString(fmt.Sprintf("($%d)", i+1))
@@ -763,14 +802,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		}
 	} else {
 		for _, item := range items.List() {
-			var rs *sql.Rows
-			var err error
-			switch d.driver {
-			case MySQL, ClickHouse:
-				rs, err = d.client.Query("SELECT item_id FROM items WHERE item_id = ?", item)
-			case Postgres:
-				rs, err = d.client.Query("SELECT item_id FROM items WHERE item_id = $1", item)
-			}
+			rs, err := d.gormDB.Table("items").Select("item_id").Where("item_id = ?", item).Rows()
 			if err != nil {
 				return errors.Trace(err)
 			} else if !rs.Next() {
@@ -789,6 +821,12 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 			builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
 		} else {
 			builder.WriteString("INSERT IGNORE INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
+		}
+	case SQLite:
+		if overwrite {
+			builder.WriteString("INSERT OR REPLACE INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
+		} else {
+			builder.WriteString("INSERT OR IGNORE INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
 		}
 	case ClickHouse:
 		builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`, version) VALUES ")
@@ -809,7 +847,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 				builder.WriteString(",")
 			}
 			switch d.driver {
-			case MySQL:
+			case MySQL, SQLite:
 				builder.WriteString("(?,?,?,?,?)")
 			case ClickHouse:
 				if overwrite {
@@ -856,8 +894,12 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 			return "", nil, err
 		}
 	}
-	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment").
-		Where("time_stamp <= NOW() AND (feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment")
+	if d.driver == SQLite {
+		tx.Where("time_stamp <= DATETIME() AND (feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+	} else {
+		tx.Where("time_stamp <= NOW() AND (feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
@@ -897,7 +939,12 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 		defer close(feedbackChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment").Where("time_stamp <= NOW()")
+		tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment")
+		if d.driver == SQLite {
+			tx.Where("time_stamp <= DATETIME()")
+		} else {
+			tx.Where("time_stamp <= NOW()")
+		}
 		if len(feedbackTypes) > 0 {
 			tx.Where("feedback_type IN ?", feedbackTypes)
 		}

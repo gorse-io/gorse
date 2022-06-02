@@ -21,9 +21,11 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
+	"github.com/zhenghaoz/gorse/base/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"math"
+	"moul.io/zapgorm2"
 )
 
 type SQLDriver int
@@ -33,6 +35,11 @@ const (
 	Postgres
 	SQLite
 )
+
+var gormConfig = &gorm.Config{
+	Logger:          zapgorm2.New(log.Logger()),
+	CreateBatchSize: 1000,
+}
 
 type SQLValue struct {
 	Name  string `gorm:"type:varchar(256);primaryKey"`

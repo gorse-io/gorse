@@ -49,8 +49,8 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore  string `mapstructure:"data_store" validate:"required"`  // database for data store
-	CacheStore string `mapstructure:"cache_store" validate:"required"` // database for cache store
+	DataStore  string `mapstructure:"data_store" validate:"required,startsnotwith=redis://"` // database for data store
+	CacheStore string `mapstructure:"cache_store" validate:"required"`                       // database for cache store
 }
 
 // MasterConfig is the configuration for the master.
