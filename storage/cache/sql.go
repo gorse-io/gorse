@@ -16,14 +16,14 @@ package cache
 
 import (
 	"database/sql"
-	"fmt"
-	"github.com/chewxy/math32"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
-	"strings"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"math"
 )
 
 type SQLDriver int
@@ -31,9 +31,39 @@ type SQLDriver int
 const (
 	MySQL SQLDriver = iota
 	Postgres
+	SQLite
 )
 
+type SQLValue struct {
+	Name  string `gorm:"type:varchar(256);primaryKey"`
+	Value string `gorm:"type:varchar(256);not null"`
+}
+
+func (*SQLValue) TableName() string {
+	return "values"
+}
+
+type SQLSet struct {
+	Name   string `gorm:"type:varchar(256);primaryKey"`
+	Member string `gorm:"type:varchar(256);primaryKey"`
+}
+
+func (*SQLSet) TableName() string {
+	return "sets"
+}
+
+type SQLSortedSet struct {
+	Name   string  `gorm:"type:varchar(256);primaryKey;index:name"`
+	Member string  `gorm:"type:varchar(256);primaryKey"`
+	Score  float64 `gorm:"type:double precision;not null;index:name"`
+}
+
+func (*SQLSortedSet) TableName() string {
+	return "sorted_sets"
+}
+
 type SQLDatabase struct {
+	gormDB *gorm.DB
 	client *sql.DB
 	driver SQLDriver
 }
@@ -43,63 +73,16 @@ func (db *SQLDatabase) Close() error {
 }
 
 func (db *SQLDatabase) Init() error {
+	if err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}); err != nil {
+		return errors.Trace(err)
+	}
 	switch db.driver {
 	case Postgres:
-		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS values (" +
-			"name VARCHAR(256) PRIMARY KEY, " +
-			"value VARCHAR(256) NOT NULL" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
-
-		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sets (" +
-			"name VARCHAR(256) NOT NULL," +
-			"member VARCHAR(256) NOT NULL," +
-			"PRIMARY KEY (name, member)" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
-
-		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sorted_sets (" +
-			"name VARCHAR(256) NOT NULL," +
-			"member VARCHAR(256) NOT NULL," +
-			"score DOUBLE PRECISION NOT NULL," +
-			"PRIMARY KEY (name, member)" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
-		if _, err := db.client.Exec("CREATE INDEX IF NOT EXISTS sorted_sets_index ON sorted_sets(name, score)"); err != nil {
-			return errors.Trace(err)
-		}
 		// disable lock
 		if _, err := db.client.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
 			return errors.Trace(err)
 		}
 	case MySQL:
-		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS `values` (" +
-			"name VARCHAR(256) PRIMARY KEY, " +
-			"value VARCHAR(256) NOT NULL" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
-
-		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sets (" +
-			"name VARCHAR(256) NOT NULL," +
-			"member VARCHAR(256) NOT NULL," +
-			"PRIMARY KEY (name, member)" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
-
-		if _, err := db.client.Exec("CREATE TABLE IF NOT EXISTS sorted_sets (" +
-			"name VARCHAR(256) NOT NULL," +
-			"member VARCHAR(256) NOT NULL," +
-			"score DOUBLE PRECISION NOT NULL," +
-			"PRIMARY KEY (name, member)," +
-			"INDEX (name, score)" +
-			")"); err != nil {
-			return errors.Trace(err)
-		}
 		// disable lock
 		if _, err := db.client.Exec("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
 			return errors.Trace(err)
@@ -117,12 +100,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	)
 
 	// scan values
-	switch db.driver {
-	case Postgres:
-		valuerRows, err = db.client.Query("SELECT name FROM values")
-	case MySQL:
-		valuerRows, err = db.client.Query("SELECT name FROM `values`")
-	}
+	valuerRows, err = db.gormDB.Table("values").Select("name").Rows()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -138,7 +116,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	}
 
 	// scan sets
-	setRows, err = db.client.Query("SELECT name FROM sets")
+	setRows, err = db.gormDB.Table("sets").Select("name").Rows()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -158,7 +136,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	}
 
 	// scan sorted sets
-	sortedRows, err = db.client.Query("SELECT name FROM sorted_sets")
+	sortedRows, err = db.gormDB.Table("sorted_sets").Select("name").Rows()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -183,49 +161,26 @@ func (db *SQLDatabase) Set(values ...Value) error {
 	if len(values) == 0 {
 		return nil
 	}
-	var builder strings.Builder
-	var args []interface{}
-	switch db.driver {
-	case Postgres:
-		builder.WriteString("INSERT INTO values(name, value) VALUES ")
-	case MySQL:
-		builder.WriteString("INSERT INTO `values`(name, value) VALUES ")
-	}
 	valueSet := strset.New()
+	rows := make([]SQLValue, 0, len(values))
 	for _, value := range values {
 		if !valueSet.Has(value.name) {
-			if len(args) > 0 {
-				builder.WriteRune(',')
-			}
-			switch db.driver {
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
-			case MySQL:
-				builder.WriteString("(?,?)")
-			}
-			args = append(args, value.name, value.value)
+			rows = append(rows, SQLValue{
+				Name:  value.name,
+				Value: value.value,
+			})
 			valueSet.Add(value.name)
 		}
 	}
-	switch db.driver {
-	case Postgres:
-		builder.WriteString("ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value")
-	case MySQL:
-		builder.WriteString("ON DUPLICATE KEY UPDATE value = VALUES(value)")
-	}
-	_, err := db.client.Exec(builder.String(), args...)
+	err := db.gormDB.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value"}),
+	}).Create(rows).Error
 	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) Get(name string) *ReturnValue {
-	var rs *sql.Rows
-	var err error
-	switch db.driver {
-	case Postgres:
-		rs, err = db.client.Query("SELECT value FROM values WHERE name = $1", name)
-	case MySQL:
-		rs, err = db.client.Query("SELECT value FROM `values` WHERE name = ?", name)
-	}
+	rs, err := db.gormDB.Table("values").Where("name = ?", name).Select("value").Rows()
 	if err != nil {
 		return &ReturnValue{err: errors.Trace(err)}
 	}
@@ -242,25 +197,12 @@ func (db *SQLDatabase) Get(name string) *ReturnValue {
 }
 
 func (db *SQLDatabase) Delete(name string) error {
-	var err error
-	switch db.driver {
-	case Postgres:
-		_, err = db.client.Exec("DELETE FROM values WHERE name = $1", name)
-	case MySQL:
-		_, err = db.client.Exec("DELETE FROM `values` WHERE name = ?", name)
-	}
+	err := db.gormDB.Delete(&SQLValue{Name: name}).Error
 	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) GetSet(key string) ([]string, error) {
-	var rs *sql.Rows
-	var err error
-	switch db.driver {
-	case Postgres:
-		rs, err = db.client.Query("SELECT member FROM sets WHERE name = $1", key)
-	case MySQL:
-		rs, err = db.client.Query("SELECT member FROM sets WHERE name = ?", key)
-	}
+	rs, err := db.gormDB.Table("sets").Select("member").Where("name = ?", key).Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -277,164 +219,86 @@ func (db *SQLDatabase) GetSet(key string) ([]string, error) {
 }
 
 func (db *SQLDatabase) SetSet(key string, members ...string) error {
-	txn, err := db.client.Begin()
+	err := db.gormDB.Delete(&SQLSet{}, "name = ?", key).Error
 	if err != nil {
 		return errors.Trace(err)
 	}
-	switch db.driver {
-	case Postgres:
-		_, err = txn.Exec("DELETE FROM sets WHERE name = $1", key)
-	case MySQL:
-		_, err = txn.Exec("DELETE FROM sets WHERE name = ?", key)
+	if len(members) == 0 {
+		return nil
 	}
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if len(members) > 0 {
-		var args []interface{}
-		var builder strings.Builder
-		switch db.driver {
-		case Postgres:
-			builder.WriteString("INSERT INTO sets (name, member) VALUES ")
-		case MySQL:
-			builder.WriteString("INSERT IGNORE sets (name, member) VALUES ")
+	rows := lo.Map(members, func(member string, _ int) SQLSet {
+		return SQLSet{
+			Name:   key,
+			Member: member,
 		}
-		for i, member := range members {
-			if i > 0 {
-				builder.WriteRune(',')
-			}
-			switch db.driver {
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
-			case MySQL:
-				builder.WriteString("(?,?)")
-			}
-			args = append(args, key, member)
-		}
-		if db.driver == Postgres {
-			builder.WriteString("ON CONFLICT (name, member) DO NOTHING")
-		}
-		if _, err = txn.Exec(builder.String(), args...); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return txn.Commit()
+	})
+	err = db.gormDB.Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
+	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) AddSet(key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
-	var args []interface{}
-	var builder strings.Builder
-	switch db.driver {
-	case Postgres:
-		builder.WriteString("INSERT INTO sets (name, member) VALUES ")
-	case MySQL:
-		builder.WriteString("INSERT IGNORE sets (name, member) VALUES ")
-	}
-	for i, member := range members {
-		if i > 0 {
-			builder.WriteRune(',')
+	rows := lo.Map(members, func(member string, _ int) SQLSet {
+		return SQLSet{
+			Name:   key,
+			Member: member,
 		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
-		case MySQL:
-			builder.WriteString("(?,?)")
-		}
-		args = append(args, key, member)
-	}
-	if db.driver == Postgres {
-		builder.WriteString("ON CONFLICT (name, member) DO NOTHING")
-	}
-	if _, err := db.client.Exec(builder.String(), args...); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
+	})
+	err := db.gormDB.Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
+	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) RemSet(key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
-	var args []interface{}
-	var builder strings.Builder
-	builder.WriteString("DELETE FROM sets WHERE (name, member) IN (")
-	for i, member := range members {
-		if i > 0 {
-			builder.WriteRune(',')
+	rows := lo.Map(members, func(member string, _ int) SQLSet {
+		return SQLSet{
+			Name:   key,
+			Member: member,
 		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
-		case MySQL:
-			builder.WriteString("(?,?)")
-		}
-		args = append(args, key, member)
-	}
-	builder.WriteString(")")
-	if _, err := db.client.Exec(builder.String(), args...); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
+	})
+	err := db.gormDB.Delete(rows).Error
+	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) AddSorted(sortedSets ...SortedSet) error {
-	var args []interface{}
-	var builder strings.Builder
-	builder.WriteString("INSERT INTO sorted_sets (name, member, score) VALUES ")
+	rows := make([]SQLSortedSet, 0, len(sortedSets))
 	memberSets := make(map[lo.Tuple2[string, string]]struct{})
 	for _, sortedSet := range sortedSets {
 		for _, member := range sortedSet.scores {
 			if _, exist := memberSets[lo.Tuple2[string, string]{sortedSet.name, member.Id}]; !exist {
-				if len(args) > 0 {
-					builder.WriteRune(',')
-				}
-				switch db.driver {
-				case Postgres:
-					builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
-				case MySQL:
-					builder.WriteString("(?,?,?)")
-				}
-				args = append(args, sortedSet.name, member.Id, member.Score)
+				rows = append(rows, SQLSortedSet{
+					Name:   sortedSet.name,
+					Member: member.Id,
+					Score:  member.Score,
+				})
 				memberSets[lo.Tuple2[string, string]{sortedSet.name, member.Id}] = struct{}{}
 			}
 		}
 	}
-	switch db.driver {
-	case Postgres:
-		builder.WriteString("ON CONFLICT (name, member) DO UPDATE SET score = EXCLUDED.score")
-	case MySQL:
-		builder.WriteString("ON DUPLICATE KEY UPDATE score = VALUES(score)")
-	}
-	if len(args) == 0 {
+	if len(rows) == 0 {
 		return nil
 	}
-	if _, err := db.client.Exec(builder.String(), args...); err != nil {
+	if err := db.gormDB.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}, {Name: "member"}},
+		DoUpdates: clause.AssignmentColumns([]string{"score"}),
+	}).Create(rows).Error; err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
 func (db *SQLDatabase) GetSorted(key string, begin, end int) ([]Scored, error) {
-	var rs *sql.Rows
-	var err error
+	tx := db.gormDB.Table("sorted_sets").Select("member, score").Where("name = ?", key).Order("score DESC")
 	if end < begin {
-		switch db.driver {
-		case Postgres:
-			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 ORDER BY score DESC OFFSET $2", key, begin)
-		case MySQL:
-			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = ? ORDER BY score DESC LIMIT ?, ?", key, begin, math32.MaxInt64)
-		}
+		tx.Offset(begin).Limit(math.MaxInt64)
 	} else {
-		switch db.driver {
-		case Postgres:
-			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 ORDER BY score DESC OFFSET $2 LIMIT $3", key, begin, end-begin+1)
-		case MySQL:
-			rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = ? ORDER BY score DESC LIMIT ?, ?", key, begin, end-begin+1)
-		}
+		tx.Offset(begin).Limit(end - begin + 1)
 	}
+	rs, err := tx.Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -451,14 +315,10 @@ func (db *SQLDatabase) GetSorted(key string, begin, end int) ([]Scored, error) {
 }
 
 func (db *SQLDatabase) GetSortedByScore(key string, begin, end float64) ([]Scored, error) {
-	var rs *sql.Rows
-	var err error
-	switch db.driver {
-	case Postgres:
-		rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = $1 AND $2 <= score AND score <= $3 ORDER BY score", key, begin, end)
-	case MySQL:
-		rs, err = db.client.Query("SELECT member, score FROM sorted_sets WHERE name = ? AND ? <= score AND score <= ? ORDER BY score", key, begin, end)
-	}
+	rs, err := db.gormDB.Table("sorted_sets").
+		Select("member, score").
+		Where("name = ? AND score >= ? AND score <= ?", key, begin, end).
+		Order("score").Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -475,85 +335,49 @@ func (db *SQLDatabase) GetSortedByScore(key string, begin, end float64) ([]Score
 }
 
 func (db *SQLDatabase) RemSortedByScore(key string, begin, end float64) error {
-	var err error
-	switch db.driver {
-	case Postgres:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE name = $1 AND $2 <= score AND score <= $3", key, begin, end)
-	case MySQL:
-		_, err = db.client.Exec("DELETE FROM sorted_sets WHERE name = ? AND ? <= score AND score <= ?", key, begin, end)
-	}
+	err := db.gormDB.Delete(&SortedSet{}, "name = ? AND ? <= score AND score <= ?", key, begin, end).Error
 	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
-	txn, err := db.client.Begin()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	switch db.driver {
-	case Postgres:
-		_, err = txn.Exec("DELETE FROM sorted_sets WHERE name = $1", key)
-	case MySQL:
-		_, err = txn.Exec("DELETE FROM sorted_sets WHERE name = ?", key)
-	}
+	err := db.gormDB.Delete(&SortedSet{}, "name = ?", key).Error
 	if err != nil {
 		return errors.Trace(err)
 	}
 	if len(scores) > 0 {
-		var args []interface{}
-		var builder strings.Builder
-		builder.WriteString("INSERT INTO sorted_sets (name, member, score) VALUES ")
 		memberSets := make(map[lo.Tuple2[string, string]]struct{})
+		rows := make([]SQLSortedSet, 0, len(scores))
 		for _, member := range scores {
 			if _, exist := memberSets[lo.Tuple2[string, string]{key, member.Id}]; !exist {
-				if len(args) > 0 {
-					builder.WriteRune(',')
-				}
-				switch db.driver {
-				case Postgres:
-					builder.WriteString(fmt.Sprintf("($%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3))
-				case MySQL:
-					builder.WriteString("(?,?,?)")
-				}
-				args = append(args, key, member.Id, member.Score)
+				rows = append(rows, SQLSortedSet{
+					Name:   key,
+					Member: member.Id,
+					Score:  member.Score,
+				})
 				memberSets[lo.Tuple2[string, string]{key, member.Id}] = struct{}{}
 			}
 		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString("ON CONFLICT (name, member) DO UPDATE SET score = EXCLUDED.score")
-		case MySQL:
-			builder.WriteString("ON DUPLICATE KEY UPDATE score = VALUES(score)")
-		}
-		if _, err = txn.Exec(builder.String(), args...); err != nil {
+		err = db.gormDB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "name"}, {Name: "member"}},
+			DoUpdates: clause.AssignmentColumns([]string{"score"}),
+		}).Create(&rows).Error
+		if err != nil {
 			return errors.Trace(err)
 		}
 	}
-	return txn.Commit()
+	return nil
 }
 
 func (db *SQLDatabase) RemSorted(members ...SetMember) error {
 	if len(members) == 0 {
 		return nil
 	}
-	var args []interface{}
-	var builder strings.Builder
-	builder.WriteString("DELETE FROM sorted_sets WHERE (name, member) IN (")
-	for i, member := range members {
-		if i > 0 {
-			builder.WriteRune(',')
+	rows := lo.Map(members, func(member SetMember, _ int) SQLSortedSet {
+		return SQLSortedSet{
+			Name:   member.name,
+			Member: member.member,
 		}
-		switch db.driver {
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d)", len(args)+1, len(args)+2))
-		case MySQL:
-			builder.WriteString("(?,?)")
-		}
-		args = append(args, member.name, member.member)
-	}
-	builder.WriteString(")")
-	if _, err := db.client.Exec(builder.String(), args...); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
+	})
+	err := db.gormDB.Delete(rows).Error
+	return errors.Trace(err)
 }

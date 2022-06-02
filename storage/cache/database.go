@@ -23,6 +23,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"sort"
 	"strconv"
 	"strings"
@@ -286,6 +290,7 @@ const (
 	mongoPrefix    = "mongodb://"
 	redisPrefix    = "redis://"
 	postgresPrefix = "postgres://"
+	sqlitePrefix   = "sqlite://"
 )
 
 // Open a connection to a database.
@@ -318,12 +323,32 @@ func Open(path string) (Database, error) {
 		if database.client, err = sql.Open("postgres", path); err != nil {
 			return nil, errors.Trace(err)
 		}
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 		return database, nil
 	} else if strings.HasPrefix(path, mySQLPrefix) {
 		name := path[len(mySQLPrefix):]
 		database := new(SQLDatabase)
 		database.driver = MySQL
 		if database.client, err = sql.Open("mysql", name); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, sqlitePrefix) {
+		name := path[len(sqlitePrefix):]
+		database := new(SQLDatabase)
+		database.driver = SQLite
+		if database.client, err = sql.Open("sqlite", name); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client})
+		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
