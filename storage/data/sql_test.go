@@ -353,6 +353,36 @@ func TestSQLite_Item(t *testing.T) {
 	testItems(t, db.Database)
 }
 
+func TestSQLite_DeleteUser(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testDeleteUser(t, db.Database)
+}
+
+func TestSQLite_DeleteItem(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testDeleteItem(t, db.Database)
+}
+
+func TestSQLite_DeleteFeedback(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testDeleteFeedback(t, db.Database)
+}
+
+func TestSQLite_TimeLimit(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testTimeLimit(t, db.Database)
+}
+
+func TestSQLite_Timezone(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testTimeZone(t, db.Database)
+}
+
 func TestSQLite_Init(t *testing.T) {
 	db := newTestSQLiteDatabase(t)
 	defer db.Close(t)

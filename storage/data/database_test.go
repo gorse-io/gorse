@@ -658,6 +658,13 @@ func testTimeZone(t *testing.T, db Database) {
 			item, err = db.GetItem("200")
 			assert.NoError(t, err)
 			assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+		case SQLite:
+			item, err := db.GetItem("100")
+			assert.NoError(t, err)
+			assert.Equal(t, now.In(time.UTC), item.Timestamp)
+			item, err = db.GetItem("200")
+			assert.NoError(t, err)
+			assert.Equal(t, now.In(time.UTC), item.Timestamp)
 		default:
 			t.Skipf("unknown sql database: %v", database.driver)
 		}

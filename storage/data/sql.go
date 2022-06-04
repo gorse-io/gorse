@@ -260,7 +260,7 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 		case ClickHouse:
 			builder.WriteString("(?,?,?,?,?,?,NOW())")
 		}
-		if d.driver == ClickHouse {
+		if d.driver == ClickHouse || d.driver == SQLite {
 			args = append(args, item.ItemId, item.IsHidden, string(categories), item.Timestamp.In(time.UTC), string(labels), item.Comment)
 		} else {
 			args = append(args, item.ItemId, item.IsHidden, string(categories), item.Timestamp, string(labels), item.Comment)
@@ -365,7 +365,7 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 		attributes["labels"] = string(text)
 	}
 	if patch.Timestamp != nil {
-		if d.driver == ClickHouse {
+		if d.driver == ClickHouse || d.driver == SQLite {
 			attributes["time_stamp"] = patch.Timestamp.In(time.UTC)
 		} else {
 			attributes["time_stamp"] = patch.Timestamp
@@ -859,7 +859,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)",
 					len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5))
 			}
-			if d.driver == ClickHouse {
+			if d.driver == ClickHouse || d.driver == SQLite {
 				args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp.In(time.UTC), f.Comment)
 			} else {
 				args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
