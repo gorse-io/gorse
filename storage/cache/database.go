@@ -323,7 +323,7 @@ func Open(path string) (Database, error) {
 		if database.client, err = sql.Open("postgres", path); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}))
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), gormConfig)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -335,7 +335,7 @@ func Open(path string) (Database, error) {
 		if database.client, err = sql.Open("mysql", name); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}))
+		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), gormConfig)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -347,7 +347,7 @@ func Open(path string) (Database, error) {
 		if database.client, err = sql.Open("sqlite", name); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client})
+		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

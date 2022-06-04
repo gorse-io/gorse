@@ -322,3 +322,69 @@ func TestClickHouse_Init(t *testing.T) {
 	defer db.Close(t)
 	assert.NoError(t, db.Init())
 }
+
+func newTestSQLiteDatabase(t *testing.T) *testSQLDatabase {
+	database := new(testSQLDatabase)
+	var err error
+	// create database
+	database.Database, err = Open("sqlite://:memory:")
+	assert.NoError(t, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(t, err)
+	return database
+}
+
+func TestSQLite_Users(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testUsers(t, db.Database)
+}
+
+func TestSQLite_Feedback(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testFeedback(t, db.Database)
+}
+
+func TestSQLite_Item(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testItems(t, db.Database)
+}
+
+func TestSQLite_DeleteUser(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testDeleteUser(t, db.Database)
+}
+
+func TestSQLite_DeleteItem(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testDeleteItem(t, db.Database)
+}
+
+func TestSQLite_DeleteFeedback(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testDeleteFeedback(t, db.Database)
+}
+
+func TestSQLite_TimeLimit(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testTimeLimit(t, db.Database)
+}
+
+func TestSQLite_Timezone(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testTimeZone(t, db.Database)
+}
+
+func TestSQLite_Init(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
+}

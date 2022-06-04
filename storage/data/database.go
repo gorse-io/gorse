@@ -26,6 +26,7 @@ import (
 	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"sort"
 	"strings"
@@ -146,9 +147,10 @@ type Database interface {
 const (
 	mySQLPrefix      = "mysql://"
 	mongoPrefix      = "mongodb://"
-	redisPrefix      = "redis://"
 	postgresPrefix   = "postgres://"
 	clickhousePrefix = "clickhouse://"
+	sqlitePrefix     = "sqlite://"
+	redisPrefix      = "redis://"
 )
 
 // Open a connection to a database.
@@ -200,6 +202,18 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		} else {
 			database.dbName = cs.Database
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, sqlitePrefix) {
+		name := path[len(sqlitePrefix):]
+		database := new(SQLDatabase)
+		database.driver = SQLite
+		if database.client, err = sql.Open("sqlite", name); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)
+		if err != nil {
+			return nil, errors.Trace(err)
 		}
 		return database, nil
 	} else if strings.HasPrefix(path, redisPrefix) {
