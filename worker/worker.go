@@ -93,6 +93,9 @@ type Worker struct {
 	ticker     *time.Ticker
 	syncedChan chan bool // meta synced events
 	pulledChan chan bool // model pulled events
+
+	// all-in-one mode
+	isAllInOne bool
 }
 
 // NewWorker creates a new worker node.
@@ -114,6 +117,10 @@ func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, job
 		syncedChan: make(chan bool, 1024),
 		pulledChan: make(chan bool, 1024),
 	}
+}
+
+func (w *Worker) SetAllInOne() {
+	w.isAllInOne = true
 }
 
 // Sync this worker to the master.
@@ -302,7 +309,9 @@ func (w *Worker) Serve() {
 
 	go w.Sync()
 	go w.Pull()
-	go w.ServeMetrics()
+	if !w.isAllInOne {
+		go w.ServeMetrics()
+	}
 
 	loop := func() {
 		// pull users

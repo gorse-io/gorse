@@ -53,28 +53,32 @@ type RestServer struct {
 
 	PopularItemsCache  *PopularItemsCache
 	HiddenItemsManager *HiddenItemsManager
+
+	isAllInOne bool
 }
 
 // StartHttpServer starts the REST-ful API server.
-func (s *RestServer) StartHttpServer() {
+func (s *RestServer) StartHttpServer(container *restful.Container) {
 	// register restful APIs
 	s.CreateWebService()
-	restful.DefaultContainer.Add(s.WebService)
+	container.Add(s.WebService)
 	// register swagger UI
 	specConfig := restfulspec.Config{
 		WebServices: restful.RegisteredWebServices(),
 		APIPath:     "/apidocs.json",
 	}
-	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(specConfig))
+	container.Add(restfulspec.NewOpenAPIService(specConfig))
 	swaggerFile = specConfig.APIPath
-	http.HandleFunc(apiDocsPath, handler)
+	container.Handle(apiDocsPath, http.HandlerFunc(handler))
 	// register prometheus
-	http.Handle("/metrics", promhttp.Handler())
+	if !s.isAllInOne {
+		container.Handle("/metrics", promhttp.Handler())
+	}
 
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
 	log.Logger().Fatal("failed to start http server",
-		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), nil)))
+		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), container)))
 }
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {

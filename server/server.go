@@ -107,7 +107,8 @@ func (s *Server) Serve() {
 	s.masterClient = protocol.NewMasterClient(conn)
 
 	go s.Sync()
-	s.StartHttpServer()
+	container := restful.NewContainer()
+	s.StartHttpServer(container)
 }
 
 // Sync this server to the master.

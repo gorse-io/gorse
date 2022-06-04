@@ -189,14 +189,15 @@ func (fs *SinglePageAppFileSystem) Open(name string) (http.File, error) {
 
 func (m *Master) StartHttpServer() {
 	m.CreateWebService()
-	http.HandleFunc("/", m.dashboard)
-	http.HandleFunc("/login", m.login)
-	http.HandleFunc("/logout", m.logout)
-	http.HandleFunc("/api/bulk/users", m.importExportUsers)
-	http.HandleFunc("/api/bulk/items", m.importExportItems)
-	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
+	container := restful.NewContainer()
+	container.Handle("/", http.HandlerFunc(m.dashboard))
+	container.Handle("/login", http.HandlerFunc(m.login))
+	container.Handle("/logout", http.HandlerFunc(m.logout))
+	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
+	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
+	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
 	//http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
-	m.RestServer.StartHttpServer()
+	m.RestServer.StartHttpServer(container)
 }
 
 var (
