@@ -1,3 +1,17 @@
+// Copyright 2022 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -21,6 +35,7 @@ var oneCommand = &cobra.Command{
 			fmt.Println(version.BuildInfo())
 			return
 		}
+
 		// setup logger
 		var outputPaths []string
 		if cmd.PersistentFlags().Changed("log-path") {
@@ -33,6 +48,7 @@ var oneCommand = &cobra.Command{
 		} else {
 			log.SetProductionLogger(outputPaths...)
 		}
+
 		// load config
 		configPath, _ := cmd.PersistentFlags().GetString("config")
 		log.Logger().Info("load config", zap.String("config", configPath))
@@ -40,7 +56,7 @@ var oneCommand = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}
-		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
+
 		// Start worker
 		go func() {
 			workerCachePath, _ := cmd.PersistentFlags().GetString("worker-cache-path")
@@ -60,7 +76,8 @@ var oneCommand = &cobra.Command{
 			s.Serve()
 		}()
 		// Start master
-		l := master.NewMaster(conf, cachePath)
+		masterCachePath, _ := cmd.PersistentFlags().GetString("master-cache-path")
+		l := master.NewMaster(conf, masterCachePath)
 		l.Serve()
 	},
 }
