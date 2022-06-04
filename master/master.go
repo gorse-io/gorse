@@ -119,7 +119,7 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 			cfg.Master.NumJobs,
 		),
 		RestServer: server.RestServer{
-			GorseConfig: cfg,
+			Settings:    config.NewSettings(cfg),
 			HttpHost:    cfg.Master.HttpHost,
 			HttpPort:    cfg.Master.HttpPort,
 			IsDashboard: true,
@@ -176,25 +176,25 @@ func (m *Master) Serve() {
 	m.ttlCache = ttlcache.NewCache()
 	m.ttlCache.SetExpirationCallback(m.nodeDown)
 	m.ttlCache.SetNewItemCallback(m.nodeUp)
-	if err = m.ttlCache.SetTTL(m.GorseConfig.Master.MetaTimeout + 10*time.Second); err != nil {
+	if err = m.ttlCache.SetTTL(m.Config.Master.MetaTimeout + 10*time.Second); err != nil {
 		log.Logger().Fatal("failed to set TTL", zap.Error(err))
 	}
 
 	// connect data database
-	m.DataClient, err = data.Open(m.GorseConfig.Database.DataStore)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore)
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
-			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.DataStore)))
+			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
 	}
 	if err = m.DataClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
 	// connect cache database
-	m.CacheClient, err = cache.Open(m.GorseConfig.Database.CacheStore)
+	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore)
 	if err != nil {
 		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
-			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.CacheStore)))
+			zap.String("database", log.RedactDBURL(m.Config.Database.CacheStore)))
 	}
 	if err = m.CacheClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
@@ -211,15 +211,15 @@ func (m *Master) Serve() {
 
 	go m.StartHttpServer()
 	go m.RunPrivilegedTasksLoop()
-	log.Logger().Info("start model fit", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelFitPeriod))
+	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
 	go m.RunRagtagTasksLoop()
-	log.Logger().Info("start model searcher", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod))
+	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
 
 	// start rpc server
 	log.Logger().Info("start rpc server",
-		zap.String("host", m.GorseConfig.Master.Host),
-		zap.Int("port", m.GorseConfig.Master.Port))
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.GorseConfig.Master.Host, m.GorseConfig.Master.Port))
+		zap.String("host", m.Config.Master.Host),
+		zap.Int("port", m.Config.Master.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
 	if err != nil {
 		log.Logger().Fatal("failed to listen", zap.Error(err))
 	}
@@ -331,7 +331,7 @@ func (m *Master) RunRagtagTasksLoop() {
 			time.Sleep(time.Minute)
 			continue
 		}
-		time.Sleep(m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod)
+		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
 	}
 }
 

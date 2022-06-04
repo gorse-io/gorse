@@ -16,6 +16,7 @@ package master
 import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"testing"
@@ -42,6 +43,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	s.cacheStoreServer, err = miniredis.Run()
 	assert.NoError(t, err)
 	// open database
+	s.Settings = config.NewSettings()
 	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
 	assert.NoError(t, err)
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())

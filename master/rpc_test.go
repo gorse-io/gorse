@@ -57,7 +57,7 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 			clickModelVersion:   456,
 			clickModel:          fm,
 			RestServer: server.RestServer{
-				GorseConfig: config.GetDefaultConfig(),
+				Settings: config.NewSettings(),
 			},
 		},
 		addr: make(chan string),
@@ -142,7 +142,7 @@ func TestRPC(t *testing.T) {
 	var cfg config.Config
 	err = json.Unmarshal([]byte(metaResp.Config), &cfg)
 	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.GorseConfig, &cfg)
+	assert.Equal(t, rpcServer.Config, &cfg)
 
 	time.Sleep(time.Second * 2)
 	metaResp, err = client.GetMeta(ctx,

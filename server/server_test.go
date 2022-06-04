@@ -90,7 +90,7 @@ func TestServer_Sync(t *testing.T) {
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
 		RestServer: RestServer{
-			GorseConfig: config.GetDefaultConfig(),
+			Settings: config.NewSettings(),
 		},
 	}
 	serv.Sync()

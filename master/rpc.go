@@ -73,7 +73,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		}
 	}
 	// marshall config
-	s, err := json.Marshal(m.GorseConfig)
+	s, err := json.Marshal(m.Config)
 	if err != nil {
 		return nil, err
 	}

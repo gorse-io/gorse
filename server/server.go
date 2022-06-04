@@ -58,17 +58,20 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 		masterPort: masterPort,
 		cacheFile:  cacheFile,
 		RestServer: RestServer{
-			DataClient:  &data.NoDatabase{},
-			CacheClient: &cache.NoDatabase{},
-			GorseConfig: config.GetDefaultConfig(),
-			HttpHost:    serverHost,
-			HttpPort:    serverPort,
-			WebService:  new(restful.WebService),
+			Settings:   config.NewSettings(nil),
+			HttpHost:   serverHost,
+			HttpPort:   serverPort,
+			WebService: new(restful.WebService),
 		},
 	}
 	s.RestServer.PopularItemsCache = NewPopularItemsCache(&s.RestServer)
 	s.RestServer.HiddenItemsManager = NewHiddenItemsManager(&s.RestServer)
 	return s
+}
+
+func (s *Server) SetOneMode(settings *config.Settings) {
+	s.oneMode = true
+	s.Settings = settings
 }
 
 // Serve starts a server node.
@@ -106,7 +109,9 @@ func (s *Server) Serve() {
 	}
 	s.masterClient = protocol.NewMasterClient(conn)
 
-	go s.Sync()
+	if !s.oneMode {
+		go s.Sync()
+	}
 	container := restful.NewContainer()
 	s.StartHttpServer(container)
 }
@@ -114,7 +119,7 @@ func (s *Server) Serve() {
 // Sync this server to the master.
 func (s *Server) Sync() {
 	defer base.CheckPanic()
-	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.GorseConfig.Master.MetaTimeout))
+	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.Config.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
 		var err error
@@ -130,39 +135,39 @@ func (s *Server) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &s.GorseConfig)
+		err = json.Unmarshal([]byte(meta.Config), &s.Config)
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
 		}
 
 		// connect to data store
-		if s.dataPath != s.GorseConfig.Database.DataStore {
+		if s.dataPath != s.Config.Database.DataStore {
 			log.Logger().Info("connect data store",
-				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.DataStore)))
-			if s.DataClient, err = data.Open(s.GorseConfig.Database.DataStore); err != nil {
+				zap.String("database", log.RedactDBURL(s.Config.Database.DataStore)))
+			if s.DataClient, err = data.Open(s.Config.Database.DataStore); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
-			s.dataPath = s.GorseConfig.Database.DataStore
+			s.dataPath = s.Config.Database.DataStore
 		}
 
 		// connect to cache store
-		if s.cachePath != s.GorseConfig.Database.CacheStore {
+		if s.cachePath != s.Config.Database.CacheStore {
 			log.Logger().Info("connect cache store",
-				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.CacheStore)))
-			if s.CacheClient, err = cache.Open(s.GorseConfig.Database.CacheStore); err != nil {
+				zap.String("database", log.RedactDBURL(s.Config.Database.CacheStore)))
+			if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
-			s.cachePath = s.GorseConfig.Database.CacheStore
+			s.cachePath = s.Config.Database.CacheStore
 		}
 
 	sleep:
 		if s.testMode {
 			return
 		}
-		time.Sleep(s.GorseConfig.Master.MetaTimeout)
+		time.Sleep(s.Config.Master.MetaTimeout)
 	}
 }
 
@@ -181,8 +186,8 @@ func NewPopularItemsCache(s *RestServer) *PopularItemsCache {
 	go func() {
 		for {
 			sc.sync()
-			log.Logger().Debug("refresh server side popular items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
-			time.Sleep(s.GorseConfig.Server.CacheExpire)
+			log.Logger().Debug("refresh server side popular items cache", zap.String("cache_expire", s.Config.Server.CacheExpire.String()))
+			time.Sleep(s.Config.Server.CacheExpire)
 		}
 	}()
 	return sc
@@ -241,8 +246,8 @@ func NewHiddenItemsManager(s *RestServer) *HiddenItemsManager {
 	go func() {
 		for {
 			hc.sync()
-			log.Logger().Debug("refresh server side hidden items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
-			time.Sleep(hc.server.GorseConfig.Server.CacheExpire)
+			log.Logger().Debug("refresh server side hidden items cache", zap.String("cache_expire", s.Config.Server.CacheExpire.String()))
+			time.Sleep(hc.server.Config.Server.CacheExpire)
 		}
 	}()
 	return hc

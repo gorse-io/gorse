@@ -57,13 +57,16 @@ var oneCommand = &cobra.Command{
 			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}
 
+		// create master
+		masterCachePath, _ := cmd.PersistentFlags().GetString("master-cache-path")
+		l := master.NewMaster(conf, masterCachePath)
 		// Start worker
 		go func() {
 			workerCachePath, _ := cmd.PersistentFlags().GetString("worker-cache-path")
 			workerJobs, _ := cmd.PersistentFlags().GetInt("worker-jobs")
 			w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
 				0, workerJobs, workerCachePath)
-			w.SetAllInOne()
+			w.SetOneMode(l.Settings)
 			w.Serve()
 		}()
 		// Start server
@@ -72,12 +75,10 @@ var oneCommand = &cobra.Command{
 			serverPort, _ := cmd.PersistentFlags().GetInt("server-port")
 			s := server.NewServer(conf.Master.Host, conf.Master.Port, conf.Master.Host,
 				serverPort, serverCachePath)
-			//s.SetAllInOne()
+			s.SetOneMode(l.Settings)
 			s.Serve()
 		}()
 		// Start master
-		masterCachePath, _ := cmd.PersistentFlags().GetString("master-cache-path")
-		l := master.NewMaster(conf, masterCachePath)
 		l.Serve()
 	},
 }
