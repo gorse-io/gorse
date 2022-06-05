@@ -32,6 +32,7 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/samber/lo v1.11.0
 	github.com/scylladb/go-set v1.0.2
+	github.com/sijms/go-ora/v2 v2.4.24
 	github.com/spf13/cobra v0.0.7
 	github.com/spf13/viper v1.10.1
 	github.com/steinfletcher/apitest v1.5.11
@@ -64,12 +65,16 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/dzwvip/oracle v1.2.1
+	github.com/emirpasic/gods v1.12.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
+	github.com/go-logfmt/logfmt v0.5.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.3 // indirect
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
 	github.com/go-openapi/spec v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.6 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
+	github.com/godror/godror v0.20.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/hashicorp/go-version v1.4.0 // indirect

@@ -26,6 +26,7 @@ import (
 var (
 	mySqlDSN    string
 	postgresDSN string
+	oracleDSN   string
 )
 
 func init() {
@@ -38,6 +39,7 @@ func init() {
 	}
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
+	oracleDSN = env("ORACLE_URI", "")
 }
 
 type testSQLDatabase struct {
@@ -115,6 +117,12 @@ func TestPostgres_Scan(t *testing.T) {
 	testScan(t, db.Database)
 }
 
+func TestPostgres_Init(t *testing.T) {
+	db := newTestPostgresDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
+}
+
 func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	var testName string
@@ -173,6 +181,76 @@ func TestMySQL_Scan(t *testing.T) {
 	testScan(t, db.Database)
 }
 
+func TestMySQL_Init(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
+}
+
+func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
+	// retrieve test name
+	var testName string
+	pc, _, _, ok := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		splits := strings.Split(details.Name(), ".")
+		testName = splits[len(splits)-1]
+	} else {
+		t.Fatalf("failed to retrieve test name")
+	}
+
+	database := new(testSQLDatabase)
+	var err error
+	// create database
+	database.Database, err = Open(oracleDSN)
+	assert.NoError(t, err)
+	dbName := "gorse_" + testName
+	databaseComm := database.GetComm(t)
+	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
+	assert.NoError(t, err)
+	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	assert.NoError(t, err)
+	err = database.Database.Close()
+	assert.NoError(t, err)
+	// connect database
+	database.Database, err = Open(mySqlDSN + dbName)
+	assert.NoError(t, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(t, err)
+	return database
+}
+
+func TestOracle_Meta(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testMeta(t, db.Database)
+}
+
+func TestOracle_Sort(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testSort(t, db.Database)
+}
+
+func TestOracle_Set(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testSet(t, db.Database)
+}
+
+func TestOracle_Scan(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testScan(t, db.Database)
+}
+
+func TestOracle_Init(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
+}
+
 func newTestSQLiteDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	database := new(testSQLDatabase)
@@ -208,4 +286,10 @@ func TestSQLite_Scan(t *testing.T) {
 	db := newTestSQLiteDatabase(t)
 	defer db.Close(t)
 	testScan(t, db.Database)
+}
+
+func TestSQLite_Init(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
 }
