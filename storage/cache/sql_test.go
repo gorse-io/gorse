@@ -16,7 +16,9 @@ package cache
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -39,19 +41,11 @@ func init() {
 	}
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
-	oracleDSN = env("ORACLE_URI", "")
+	oracleDSN = env("ORACLE_URI", "oracle://system:password@127.0.0.1:1521/XEPDB1")
 }
 
 type testSQLDatabase struct {
 	Database
-}
-
-func (db *testSQLDatabase) GetComm(t *testing.T) *sql.DB {
-	var sqlDatabase *SQLDatabase
-	var ok bool
-	sqlDatabase, ok = db.Database.(*SQLDatabase)
-	assert.True(t, ok)
-	return sqlDatabase.client
 }
 
 func (db *testSQLDatabase) Close(t *testing.T) {
@@ -74,10 +68,9 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(postgresDSN + "?sslmode=disable&TimeZone=UTC")
+	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable&TimeZone=UTC")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
@@ -139,9 +132,9 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	var err error
 	// create database
 	database.Database, err = Open(mySqlDSN + "?timeout=30s&parseTime=true")
+	databaseComm, err := sql.Open("mysql", mySqlDSN[len(mySQLPrefix):]+"?timeout=30s&parseTime=true")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
@@ -202,18 +195,21 @@ func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(oracleDSN)
+	databaseComm, err := sql.Open("oracle", oracleDSN)
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	databaseComm := database.GetComm(t)
-	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
+	_, err = databaseComm.Exec(fmt.Sprintf("DROP USER %s", dbName))
 	assert.NoError(t, err)
-	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	_, err = databaseComm.Exec(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s", dbName, dbName))
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	_, err = databaseComm.Exec(fmt.Sprintf("GRANT CONNECT, RESOURCE, DBA TO %s", dbName))
+	assert.NoError(t, err)
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(mySqlDSN + dbName)
+	parsed, err := url.Parse(oracleDSN)
+	assert.NoError(t, err)
+	database.Database, err = Open(fmt.Sprintf("oracle://%s:%s@%s/XEPDB1", dbName, dbName, parsed.Host))
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
