@@ -455,20 +455,20 @@ func testItems(t *testing.T, db Database) {
 func testDeleteUser(t *testing.T, db Database) {
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "0", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "0", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "0", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "a", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "a", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "a", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "a", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "a", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := db.BatchInsertFeedback(feedback, true, true, true)
 	assert.NoError(t, err)
 	// Delete user
-	err = db.DeleteUser("0")
+	err = db.DeleteUser("a")
 	assert.NoError(t, err)
-	_, err = db.GetUser("0")
+	_, err = db.GetUser("a")
 	assert.NotNil(t, err, "failed to delete user")
-	ret, err := db.GetUserFeedback("0", false, positiveFeedbackType)
+	ret, err := db.GetUserFeedback("a", false, positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
 	_, ret, err = db.GetFeedback("", 100, nil, positiveFeedbackType)
@@ -479,20 +479,20 @@ func testDeleteUser(t *testing.T, db Database) {
 func testDeleteItem(t *testing.T, db Database) {
 	// Insert ret
 	feedbacks := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "1", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "2", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "3", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "1", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "2", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "3", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "4", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := db.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
 	// Delete item
-	err = db.DeleteItem("0")
+	err = db.DeleteItem("b")
 	assert.NoError(t, err)
-	_, err = db.GetItem("0")
+	_, err = db.GetItem("b")
 	assert.Error(t, err, "failed to delete item")
-	ret, err := db.GetItemFeedback("0", positiveFeedbackType)
+	ret, err := db.GetItemFeedback("b", positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
 	_, ret, err = db.GetFeedback("", 100, nil, positiveFeedbackType)
