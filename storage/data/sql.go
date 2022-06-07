@@ -307,7 +307,7 @@ func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
 
 // DeleteItem deletes a item from MySQL.
 func (d *SQLDatabase) DeleteItem(itemId string) error {
-	if err := d.gormDB.Delete(&Item{}, itemId).Error; err != nil {
+	if err := d.gormDB.Delete(&Item{ItemId: itemId}).Error; err != nil {
 		return errors.Trace(err)
 	}
 	if err := d.gormDB.Delete(&Feedback{}, "item_id = ?", itemId).Error; err != nil {
@@ -543,7 +543,7 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 
 // DeleteUser deletes a user from MySQL.
 func (d *SQLDatabase) DeleteUser(userId string) error {
-	if err := d.gormDB.Delete(&User{}, userId).Error; err != nil {
+	if err := d.gormDB.Delete(&User{UserId: userId}).Error; err != nil {
 		return errors.Trace(err)
 	}
 	if err := d.gormDB.Delete(&Feedback{}, "user_id = ?", userId).Error; err != nil {
