@@ -1141,45 +1141,44 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	lineCount := 0
 	timeStart := time.Now()
 	feedbacks := make([]data.Feedback, 0)
-	for scanner.Scan() {
-		line := scanner.Text()
+	err = base.ReadLines(scanner, sep, func(lineNumber int, splits []string) bool {
 		if hasHeader {
 			hasHeader = false
-			continue
+			return true
 		}
-		splits := strings.Split(line, sep)
 		// reorder fields
-		splits, err = format(fmtString, "fuit", splits, lineCount)
+		splits, err = format(fmtString, "fuit", splits, lineNumber)
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
-			return
+			return false
 		}
 		feedback := data.Feedback{}
 		// 1. feedback type
 		feedback.FeedbackType = splits[0]
 		if err = base.ValidateId(splits[0]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid feedback type `%v` at line %d (%s)", splits[0], lineCount, err.Error()))
-			return
+				fmt.Errorf("invalid feedback type `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+			return false
 		}
 		// 2. user id
 		if err = base.ValidateId(splits[1]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[1], lineCount, err.Error()))
-			return
+				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
+			return false
 		}
 		feedback.UserId = splits[1]
 		// 3. item id
 		if err = base.ValidateId(splits[2]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[2], lineCount, err.Error()))
-			return
+				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[2], lineNumber, err.Error()))
+			return false
 		}
 		feedback.ItemId = splits[2]
 		feedback.Timestamp, err = dateparse.ParseAny(splits[3])
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineCount))
+				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineNumber))
+			return false
 		}
 		feedbacks = append(feedbacks, feedback)
 		// batch insert
@@ -1187,13 +1186,14 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 			err = m.InsertFeedbackToCache(feedbacks)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
-				return
+				return false
 			}
 			feedbacks = nil
 		}
 		lineCount++
-	}
-	if err = scanner.Err(); err != nil {
+		return true
+	})
+	if err != nil {
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
