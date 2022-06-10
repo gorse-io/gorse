@@ -60,6 +60,7 @@ var oneCommand = &cobra.Command{
 		// create master
 		masterCachePath, _ := cmd.PersistentFlags().GetString("master-cache-path")
 		l := master.NewMaster(conf, masterCachePath)
+		l.OneMode = true
 		// Start worker
 		go func() {
 			workerCachePath, _ := cmd.PersistentFlags().GetString("worker-cache-path")
