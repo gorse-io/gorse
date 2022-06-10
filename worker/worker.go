@@ -74,16 +74,9 @@ type Worker struct {
 	// master connection
 	masterClient protocol.MasterClient
 
-	// ranking model
-	latestRankingModelVersion  int64
-	currentRankingModelVersion int64
-	rankingModel               ranking.MatrixFactorization
-	rankingIndex               *search.HNSW
-
-	// click model
-	latestClickModelVersion  int64
-	currentClickModelVersion int64
-	clickModel               click.FactorizationMachine
+	latestRankingModelVersion int64
+	latestClickModelVersion   int64
+	rankingIndex              *search.HNSW
 
 	// peers
 	peers []string
@@ -98,7 +91,7 @@ type Worker struct {
 // NewWorker creates a new worker node.
 func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string) *Worker {
 	return &Worker{
-		Settings: config.NewSettings(nil),
+		Settings: config.NewSettings(),
 		// config
 		cacheFile:  cacheFile,
 		masterHost: masterHost,
@@ -173,18 +166,18 @@ func (w *Worker) Sync() {
 
 		// check ranking model version
 		w.latestRankingModelVersion = meta.RankingModelVersion
-		if w.latestRankingModelVersion != w.currentRankingModelVersion {
+		if w.latestRankingModelVersion != w.RankingModelVersion {
 			log.Logger().Info("new ranking model found",
-				zap.String("old_version", encoding.Hex(w.currentRankingModelVersion)),
+				zap.String("old_version", encoding.Hex(w.RankingModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
 			w.syncedChan <- true
 		}
 
 		// check click model version
 		w.latestClickModelVersion = meta.ClickModelVersion
-		if w.latestClickModelVersion != w.currentClickModelVersion {
+		if w.latestClickModelVersion != w.ClickModelVersion {
 			log.Logger().Info("new click model found",
-				zap.String("old_version", encoding.Hex(w.currentClickModelVersion)),
+				zap.String("old_version", encoding.Hex(w.ClickModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestClickModelVersion)))
 			w.syncedChan <- true
 		}
@@ -206,7 +199,7 @@ func (w *Worker) Pull() {
 		pulled := false
 
 		// pull ranking model
-		if w.latestRankingModelVersion != w.currentRankingModelVersion {
+		if w.latestRankingModelVersion != w.RankingModelVersion {
 			log.Logger().Info("start pull ranking model")
 			if rankingModelReceiver, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestRankingModelVersion},
@@ -218,19 +211,19 @@ func (w *Worker) Pull() {
 				if err != nil {
 					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
-					w.rankingModel = rankingModel
+					w.RankingModel = rankingModel
 					w.rankingIndex = nil
-					w.currentRankingModelVersion = w.latestRankingModelVersion
+					w.RankingModelVersion = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
-						zap.String("version", encoding.Hex(w.currentRankingModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(w.rankingModel.Bytes()))
+						zap.String("version", encoding.Hex(w.RankingModelVersion)))
+					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(w.RankingModel.Bytes()))
 					pulled = true
 				}
 			}
 		}
 
 		// pull click model
-		if w.latestClickModelVersion != w.currentClickModelVersion {
+		if w.latestClickModelVersion != w.ClickModelVersion {
 			log.Logger().Info("start pull click model")
 			if clickModelReceiver, err := w.masterClient.GetClickModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestClickModelVersion},
@@ -242,11 +235,11 @@ func (w *Worker) Pull() {
 				if err != nil {
 					log.Logger().Error("failed to unmarshal click model", zap.Error(err))
 				} else {
-					w.clickModel = clickModel
-					w.currentClickModelVersion = w.latestClickModelVersion
+					w.ClickModel = clickModel
+					w.ClickModelVersion = w.latestClickModelVersion
 					log.Logger().Info("synced click model",
-						zap.String("version", encoding.Hex(w.currentClickModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(w.clickModel.Bytes()))
+						zap.String("version", encoding.Hex(w.ClickModelVersion)))
+					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(w.ClickModel.Bytes()))
 					pulled = true
 				}
 			}
@@ -302,7 +295,10 @@ func (w *Worker) Serve() {
 	}
 	w.masterClient = protocol.NewMasterClient(conn)
 
-	if !w.oneMode {
+	if w.oneMode {
+		w.peers = []string{w.workerName}
+		w.me = w.workerName
+	} else {
 		go w.Sync()
 		go w.Pull()
 		go w.ServeMetrics()
@@ -368,17 +364,17 @@ func (w *Worker) Recommend(users []data.User) {
 	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
 
 	// build ranking index
-	if w.rankingModel != nil && w.rankingIndex == nil && w.Config.Recommend.Collaborative.EnableIndex {
+	if w.RankingModel != nil && w.rankingIndex == nil && w.Config.Recommend.Collaborative.EnableIndex {
 		startTime := time.Now()
 		log.Logger().Info("start building ranking index")
-		itemIndex := w.rankingModel.GetItemIndex()
+		itemIndex := w.RankingModel.GetItemIndex()
 		vectors := make([]search.Vector, itemIndex.Len())
 		for i := int32(0); i < itemIndex.Len(); i++ {
 			itemId := itemIndex.ToName(i)
 			if itemCache.IsAvailable(itemId) {
-				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
+				vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
 			} else {
-				vectors[i] = search.NewDenseVector(w.rankingModel.GetItemFactor(i), nil, true)
+				vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
 			}
 		}
 		builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, 1000, w.jobs)
@@ -390,7 +386,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 		log.Logger().Info("complete building ranking index",
 			zap.Duration("build_time", time.Since(startTime)))
-	} else if w.rankingModel != nil && w.rankingIndex == nil {
+	} else if w.RankingModel != nil && w.rankingIndex == nil {
 		CollaborativeFilteringIndexRecall.Set(1)
 	}
 
@@ -478,8 +474,8 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #1: collaborative filtering.
 		collaborativeUsed := false
-		if w.Config.Recommend.Offline.EnableColRecommend && w.rankingModel != nil {
-			if userIndex := w.rankingModel.GetUserIndex().ToNumber(userId); w.rankingModel.IsUserPredictable(userIndex) {
+		if w.Config.Recommend.Offline.EnableColRecommend && w.RankingModel != nil {
+			if userIndex := w.RankingModel.GetUserIndex().ToNumber(userId); w.RankingModel.IsUserPredictable(userIndex) {
 				var recommend map[string][]string
 				var usedTime time.Duration
 				if w.Config.Recommend.Collaborative.EnableIndex {
@@ -497,10 +493,10 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				collaborativeUsed = true
 				collaborativeRecommendSeconds.Add(usedTime.Seconds())
-			} else if !w.rankingModel.IsUserPredictable(userIndex) {
+			} else if !w.RankingModel.IsUserPredictable(userIndex) {
 				log.Logger().Debug("user is unpredictable", zap.String("user_id", userId))
 			}
-		} else if w.rankingModel == nil {
+		} else if w.RankingModel == nil {
 			log.Logger().Warn("no collaborative filtering model")
 		}
 
@@ -647,15 +643,15 @@ func (w *Worker) Recommend(users []data.User) {
 		ctrUsed := false
 		results := make(map[string][]cache.Scored)
 		for category, catCandidates := range candidates {
-			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.clickModel != nil {
+			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
 				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache)
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))
 					return errors.Trace(err)
 				}
 				ctrUsed = true
-			} else if w.rankingModel != nil &&
-				w.rankingModel.IsUserPredictable(w.rankingModel.GetUserIndex().ToNumber(userId)) {
+			} else if w.RankingModel != nil &&
+				w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(userId)) {
 				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))
@@ -729,8 +725,8 @@ func (w *Worker) Recommend(users []data.User) {
 }
 
 func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet *strset.Set, itemCache *ItemCache) (map[string][]string, time.Duration, error) {
-	userIndex := w.rankingModel.GetUserIndex().ToNumber(userId)
-	itemIds := w.rankingModel.GetItemIndex().GetNames()
+	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
+	itemIds := w.RankingModel.GetItemIndex().GetNames()
 	localStartTime := time.Now()
 	recItemsFilters := make(map[string]*heap.TopKFilter[string, float64])
 	recItemsFilters[""] = heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
@@ -738,8 +734,8 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 		recItemsFilters[category] = heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
 	}
 	for itemIndex, itemId := range itemIds {
-		if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.rankingModel.IsItemPredictable(int32(itemIndex)) {
-			prediction := w.rankingModel.InternalPredict(userIndex, int32(itemIndex))
+		if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.RankingModel.IsItemPredictable(int32(itemIndex)) {
+			prediction := w.RankingModel.InternalPredict(userIndex, int32(itemIndex))
 			recItemsFilters[""].Push(itemId, float64(prediction))
 			for _, category := range itemCache.GetCategory(itemId) {
 				recItemsFilters[category].Push(itemId, float64(prediction))
@@ -760,9 +756,9 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 }
 
 func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId string, itemCategories []string, excludeSet *strset.Set, itemCache *ItemCache) (map[string][]string, time.Duration, error) {
-	userIndex := w.rankingModel.GetUserIndex().ToNumber(userId)
+	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
 	localStartTime := time.Now()
-	values, scores := rankingIndex.MultiSearch(search.NewDenseVector(w.rankingModel.GetUserFactor(userIndex), nil, false),
+	values, scores := rankingIndex.MultiSearch(search.NewDenseVector(w.RankingModel.GetUserFactor(userIndex), nil, false),
 		itemCategories, w.Config.Recommend.CacheSize+excludeSet.Size(), false)
 	// save result
 	recommend := make(map[string][]string)
@@ -770,7 +766,7 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId st
 		recommendItems := make([]string, 0, len(catValues))
 		recommendScores := make([]float64, 0, len(catValues))
 		for i := range catValues {
-			itemId := w.rankingModel.GetItemIndex().ToName(catValues[i])
+			itemId := w.RankingModel.GetItemIndex().ToName(catValues[i])
 			if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
 				recommendItems = append(recommendItems, itemId)
 				recommendScores = append(recommendScores, float64(scores[category][i]))
@@ -803,7 +799,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 	for _, itemId := range itemIds {
 		topItems = append(topItems, cache.Scored{
 			Id:    itemId,
-			Score: float64(w.rankingModel.Predict(userId, itemId)),
+			Score: float64(w.RankingModel.Predict(userId, itemId)),
 		})
 	}
 	cache.SortScores(topItems)
@@ -837,7 +833,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	for _, item := range items {
 		topItems = append(topItems, cache.Scored{
 			Id:    item.ItemId,
-			Score: float64(w.clickModel.Predict(user.UserId, item.ItemId, user.Labels, item.Labels)),
+			Score: float64(w.ClickModel.Predict(user.UserId, item.ItemId, user.Labels, item.Labels)),
 		})
 	}
 	cache.SortScores(topItems)
@@ -1126,10 +1122,10 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 			// 2. If collaborative filtering model is available, use it.
 			// 3. Otherwise, give a random score.
 			var score float64
-			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.clickModel != nil {
-				score = float64(w.clickModel.Predict(user.UserId, itemId, user.Labels, item.Labels))
-			} else if w.rankingModel != nil && w.rankingModel.IsUserPredictable(w.rankingModel.GetUserIndex().ToNumber(user.UserId)) {
-				score = float64(w.rankingModel.Predict(user.UserId, itemId))
+			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
+				score = float64(w.ClickModel.Predict(user.UserId, itemId, user.Labels, item.Labels))
+			} else if w.RankingModel != nil && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(user.UserId)) {
+				score = float64(w.RankingModel.Predict(user.UserId, itemId))
 			} else {
 				upper := upperBounds[""]
 				lower := lowerBounds[""]

@@ -833,21 +833,21 @@ func (m *Master) runRankingRelatedTasks(
 	bestRankingName, bestRankingModel, bestRankingScore := m.rankingModelSearcher.GetBestModel()
 	m.rankingModelMutex.Lock()
 	if bestRankingModel != nil && !bestRankingModel.Invalid() &&
-		(bestRankingName != m.rankingModelName || bestRankingModel.GetParams().ToString() != m.rankingModel.GetParams().ToString()) &&
+		(bestRankingName != m.rankingModelName || bestRankingModel.GetParams().ToString() != m.RankingModel.GetParams().ToString()) &&
 		(bestRankingScore.NDCG > m.rankingScore.NDCG) {
 		// 1. best ranking model must have been found.
 		// 2. best ranking model must be different from current model
 		// 3. best ranking model must perform better than current model
-		m.rankingModel = bestRankingModel
+		m.RankingModel = bestRankingModel
 		m.rankingModelName = bestRankingName
 		m.rankingScore = bestRankingScore
 		modelChanged = true
 		log.Logger().Info("find better ranking model",
 			zap.Any("score", bestRankingScore),
 			zap.String("name", bestRankingName),
-			zap.Any("params", m.rankingModel.GetParams()))
+			zap.Any("params", m.RankingModel.GetParams()))
 	}
-	rankingModel := m.rankingModel
+	rankingModel := m.RankingModel
 	m.rankingModelMutex.Unlock()
 
 	// collect neighbors of items
@@ -884,16 +884,16 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization
 
 	// update ranking model
 	m.rankingModelMutex.Lock()
-	m.rankingModel = rankingModel
-	m.rankingModelVersion++
+	m.RankingModel = rankingModel
+	m.RankingModelVersion++
 	m.rankingScore = score
 	m.rankingModelMutex.Unlock()
 	log.Logger().Info("fit ranking model complete",
-		zap.String("version", fmt.Sprintf("%x", m.rankingModelVersion)))
+		zap.String("version", fmt.Sprintf("%x", m.RankingModelVersion)))
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
 	CollaborativeFilteringRecall10.Set(float64(score.Recall))
 	CollaborativeFilteringPrecision10.Set(float64(score.Precision))
-	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.rankingModel.Bytes()))
+	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
 	if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
@@ -901,7 +901,7 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization
 	// caching model
 	m.rankingModelMutex.RLock()
 	m.localCache.RankingModelName = m.rankingModelName
-	m.localCache.RankingModelVersion = m.rankingModelVersion
+	m.localCache.RankingModelVersion = m.RankingModelVersion
 	m.localCache.RankingModel = rankingModel
 	m.localCache.RankingModelScore = score
 	m.rankingModelMutex.RUnlock()
@@ -947,20 +947,20 @@ func (m *Master) runFitClickModelTask(
 	bestClickModel, bestClickScore := m.clickModelSearcher.GetBestModel()
 	m.clickModelMutex.Lock()
 	if bestClickModel != nil && !bestClickModel.Invalid() &&
-		bestClickModel.GetParams().ToString() != m.clickModel.GetParams().ToString() &&
+		bestClickModel.GetParams().ToString() != m.ClickModel.GetParams().ToString() &&
 		bestClickScore.Precision > m.clickScore.Precision {
 		// 1. best click model must have been found.
 		// 2. best click model must be different from current model
 		// 3. best click model must perform better than current model
-		m.clickModel = bestClickModel
+		m.ClickModel = bestClickModel
 		m.clickScore = bestClickScore
 		shouldFit = true
 		log.Logger().Info("find better click model",
 			zap.Float32("Precision", bestClickScore.Precision),
 			zap.Float32("Recall", bestClickScore.Recall),
-			zap.Any("params", m.clickModel.GetParams()))
+			zap.Any("params", m.ClickModel.GetParams()))
 	}
-	clickModel := m.clickModel
+	clickModel := m.ClickModel
 	m.clickModelMutex.Unlock()
 
 	// training model
@@ -976,16 +976,16 @@ func (m *Master) runFitClickModelTask(
 
 	// update match model
 	m.clickModelMutex.Lock()
-	m.clickModel = clickModel
+	m.ClickModel = clickModel
 	m.clickScore = score
-	m.clickModelVersion++
+	m.ClickModelVersion++
 	m.clickModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
-		zap.String("version", fmt.Sprintf("%x", m.clickModelVersion)))
+		zap.String("version", fmt.Sprintf("%x", m.ClickModelVersion)))
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
-	MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.clickModel.Bytes()))
+	MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
 	if err = m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
@@ -993,8 +993,8 @@ func (m *Master) runFitClickModelTask(
 	// caching model
 	m.clickModelMutex.RLock()
 	m.localCache.ClickModelScore = m.clickScore
-	m.localCache.ClickModelVersion = m.clickModelVersion
-	m.localCache.ClickModel = m.clickModel
+	m.localCache.ClickModelVersion = m.ClickModelVersion
+	m.localCache.ClickModel = m.ClickModel
 	m.clickModelMutex.RUnlock()
 	if m.localCache.RankingModel == nil || m.localCache.RankingModel.Invalid() {
 		log.Logger().Info("wait ranking model")

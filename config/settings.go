@@ -15,22 +15,29 @@
 package config
 
 import (
+	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 type Settings struct {
-	Config      *Config
+	Config *Config
+
+	// database clients
 	CacheClient cache.Database
 	DataClient  data.Database
+
+	// recommendation models
+	RankingModel        ranking.MatrixFactorization
+	RankingModelVersion int64
+	ClickModel          click.FactorizationMachine
+	ClickModelVersion   int64
 }
 
-func NewSettings(cfg *Config) *Settings {
-	if cfg == nil {
-		cfg = GetDefaultConfig()
-	}
+func NewSettings() *Settings {
 	return &Settings{
-		Config:      cfg,
+		Config:      GetDefaultConfig(),
 		CacheClient: cache.NoDatabase{},
 		DataClient:  data.NoDatabase{},
 	}

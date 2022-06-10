@@ -64,17 +64,13 @@ type Master struct {
 	clickDataMutex sync.RWMutex
 
 	// ranking model
-	rankingModel         ranking.MatrixFactorization
 	rankingModelName     string
-	rankingModelVersion  int64
 	rankingScore         ranking.Score
 	rankingModelMutex    sync.RWMutex
 	rankingModelSearcher *ranking.ModelSearcher
 
 	// click model
-	clickModel         click.FactorizationMachine
 	clickScore         click.Score
-	clickModelVersion  int64
 	clickModelMutex    sync.RWMutex
 	clickModelSearcher *click.ModelSearcher
 
@@ -101,25 +97,29 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		cacheFile:     cacheFile,
 		taskMonitor:   taskMonitor,
 		taskScheduler: NewTaskScheduler(),
-		// init versions
-		rankingModelVersion: rand.Int63(),
-		clickModelVersion:   rand.Int63(),
 		// default ranking model
 		rankingModelName: "bpr",
-		rankingModel:     ranking.NewBPR(nil),
 		rankingModelSearcher: ranking.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Master.NumJobs),
 		// default click model
-		clickModel: click.NewFM(click.FMClassification, nil),
 		clickModelSearcher: click.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Master.NumJobs,
 		),
 		RestServer: server.RestServer{
-			Settings:    config.NewSettings(cfg),
+			Settings: &config.Settings{
+				Config:       cfg,
+				CacheClient:  cache.NoDatabase{},
+				DataClient:   data.NoDatabase{},
+				RankingModel: ranking.NewBPR(nil),
+				ClickModel:   click.NewFM(click.FMClassification, nil),
+				// init versions
+				RankingModelVersion: rand.Int63(),
+				ClickModelVersion:   rand.Int63(),
+			},
 			HttpHost:    cfg.Master.HttpHost,
 			HttpPort:    cfg.Master.HttpPort,
 			IsDashboard: true,
@@ -149,27 +149,27 @@ func (m *Master) Serve() {
 			zap.String("model_version", encoding.Hex(m.localCache.RankingModelVersion)),
 			zap.Float32("model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("params", m.localCache.RankingModel.GetParams()))
-		m.rankingModel = m.localCache.RankingModel
+		m.RankingModel = m.localCache.RankingModel
 		m.rankingModelName = m.localCache.RankingModelName
-		m.rankingModelVersion = m.localCache.RankingModelVersion
+		m.RankingModelVersion = m.localCache.RankingModelVersion
 		m.rankingScore = m.localCache.RankingModelScore
 		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
 		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
-		MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.rankingModel.Bytes()))
+		MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",
 			zap.String("model_version", encoding.Hex(m.localCache.ClickModelVersion)),
 			zap.Float32("model_score", m.localCache.ClickModelScore.Precision),
 			zap.Any("params", m.localCache.ClickModel.GetParams()))
-		m.clickModel = m.localCache.ClickModel
+		m.ClickModel = m.localCache.ClickModel
 		m.clickScore = m.localCache.ClickModelScore
-		m.clickModelVersion = m.localCache.ClickModelVersion
+		m.ClickModelVersion = m.localCache.ClickModelVersion
 		RankingPrecision.Set(float64(m.clickScore.Precision))
 		RankingRecall.Set(float64(m.clickScore.Recall))
 		RankingAUC.Set(float64(m.clickScore.AUC))
-		MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.clickModel.Bytes()))
+		MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
 	}
 
 	// create cluster meta cache
@@ -209,25 +209,31 @@ func (m *Master) Serve() {
 		m.taskScheduler.PreLock(taskName)
 	}
 
-	go m.StartHttpServer()
 	go m.RunPrivilegedTasksLoop()
 	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
 	go m.RunRagtagTasksLoop()
 	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
 
 	// start rpc server
-	log.Logger().Info("start rpc server",
-		zap.String("host", m.Config.Master.Host),
-		zap.Int("port", m.Config.Master.Port))
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
-	if err != nil {
-		log.Logger().Fatal("failed to listen", zap.Error(err))
+	if !m.RestServer.OneMode {
+		go func() {
+			log.Logger().Info("start rpc server",
+				zap.String("host", m.Config.Master.Host),
+				zap.Int("port", m.Config.Master.Port))
+			lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
+			if err != nil {
+				log.Logger().Fatal("failed to listen", zap.Error(err))
+			}
+			grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
+			protocol.RegisterMasterServer(grpcServer, m)
+			if err = grpcServer.Serve(lis); err != nil {
+				log.Logger().Fatal("failed to start rpc server", zap.Error(err))
+			}
+		}()
 	}
-	grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
-	protocol.RegisterMasterServer(grpcServer, m)
-	if err = grpcServer.Serve(lis); err != nil {
-		log.Logger().Fatal("failed to start rpc server", zap.Error(err))
-	}
+
+	// start http server
+	m.StartHttpServer()
 }
 
 func (m *Master) RunPrivilegedTasksLoop() {

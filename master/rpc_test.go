@@ -25,6 +25,8 @@ import (
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"net"
@@ -49,15 +51,19 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	bpr.Fit(trainSet, testSet, nil)
 	return &mockMasterRPC{
 		Master: Master{
-			taskMonitor:         NewTaskMonitor(),
-			nodesInfo:           make(map[string]*Node),
-			rankingModelName:    "bpr",
-			rankingModelVersion: 123,
-			rankingModel:        bpr,
-			clickModelVersion:   456,
-			clickModel:          fm,
+			taskMonitor:      NewTaskMonitor(),
+			nodesInfo:        make(map[string]*Node),
+			rankingModelName: "bpr",
 			RestServer: server.RestServer{
-				Settings: config.NewSettings(),
+				Settings: &config.Settings{
+					Config:              config.GetDefaultConfig(),
+					CacheClient:         cache.NoDatabase{},
+					DataClient:          data.NoDatabase{},
+					RankingModel:        bpr,
+					ClickModel:          fm,
+					RankingModelVersion: 123,
+					ClickModelVersion:   456,
+				},
 			},
 		},
 		addr: make(chan string),
@@ -117,15 +123,15 @@ func TestRPC(t *testing.T) {
 	assert.NoError(t, err)
 	clickModel, err := protocol.UnmarshalClickModel(clickModelReceiver)
 	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.clickModel, clickModel)
+	assert.Equal(t, rpcServer.ClickModel, clickModel)
 
 	// test get ranking model
 	rankingModelReceiver, err := client.GetRankingModel(ctx, &protocol.VersionInfo{Version: 123})
 	assert.NoError(t, err)
 	rankingModel, err := protocol.UnmarshalRankingModel(rankingModelReceiver)
 	assert.NoError(t, err)
-	rpcServer.rankingModel.SetParams(rpcServer.rankingModel.GetParams())
-	assert.Equal(t, rpcServer.rankingModel, rankingModel)
+	rpcServer.RankingModel.SetParams(rpcServer.RankingModel.GetParams())
+	assert.Equal(t, rpcServer.RankingModel, rankingModel)
 
 	// test get meta
 	_, err = client.GetMeta(ctx,

@@ -218,7 +218,7 @@ func TestRecommendMatrixFactorizationBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create mock model
-	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(1, 12)
 	w.Recommend([]data.User{{UserId: "0"}})
 
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
@@ -277,7 +277,7 @@ func TestRecommendMatrixFactorizationHNSW(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create mock model
-	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 12)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(1, 12)
 	w.Recommend([]data.User{{UserId: "0"}})
 
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
@@ -381,7 +381,7 @@ func TestRecommend_ItemBased(t *testing.T) {
 	// insert categorized items
 	err = w.DataClient.BatchInsertItems([]data.Item{{ItemId: "26", Categories: []string{"*"}}, {ItemId: "28", Categories: []string{"*"}}})
 	assert.NoError(t, err)
-	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
@@ -431,7 +431,7 @@ func TestRecommend_UserBased(t *testing.T) {
 		{ItemId: "48", Categories: []string{"*"}},
 	})
 	assert.NoError(t, err)
-	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
@@ -464,7 +464,7 @@ func TestRecommend_Popular(t *testing.T) {
 	// insert hidden items
 	err = w.DataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
-	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
@@ -497,7 +497,7 @@ func TestRecommend_Latest(t *testing.T) {
 	// insert hidden items
 	err = w.DataClient.BatchInsertItems([]data.Item{{ItemId: "11", IsHidden: true}})
 	assert.NoError(t, err)
-	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, -1)
 	assert.NoError(t, err)
@@ -542,7 +542,7 @@ func TestRecommend_ColdStart(t *testing.T) {
 	assert.Equal(t, []string{"20", "19", "18"}, cache.RemoveScores(recommends))
 
 	// user not predictable
-	w.rankingModel = m
+	w.RankingModel = m
 	w.Recommend([]data.User{{UserId: "100"}})
 	recommends, err = w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "100"), 0, -1)
 	assert.NoError(t, err)
@@ -725,11 +725,11 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Equal(t, "redis://"+master.cacheStore.Addr(), serv.cachePath)
 	assert.Equal(t, int64(1), serv.latestClickModelVersion)
 	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
-	assert.Zero(t, serv.currentClickModelVersion)
-	assert.Zero(t, serv.currentRankingModelVersion)
+	assert.Zero(t, serv.ClickModelVersion)
+	assert.Zero(t, serv.RankingModelVersion)
 	serv.Pull()
-	assert.Equal(t, int64(1), serv.currentClickModelVersion)
-	assert.Equal(t, int64(2), serv.currentRankingModelVersion)
+	assert.Equal(t, int64(1), serv.ClickModelVersion)
+	assert.Equal(t, int64(2), serv.RankingModelVersion)
 	master.Stop()
 	done <- struct{}{}
 }
@@ -787,7 +787,7 @@ func TestRankByCollaborativeFiltering(t *testing.T) {
 		itemCache[strconv.Itoa(i)] = data.Item{ItemId: strconv.Itoa(i)}
 	}
 	// rank items
-	w.rankingModel = newMockMatrixFactorizationForRecommend(10, 10)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(10, 10)
 	result, err := w.rankByCollaborativeFiltering("1", [][]string{{"1", "2", "3", "4", "5"}})
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"5", "4", "3", "2", "1"}, cache.RemoveScores(result))
@@ -807,7 +807,7 @@ func TestRankByClickTroughRate(t *testing.T) {
 		itemCache.Set(strconv.Itoa(i), data.Item{ItemId: strconv.Itoa(i)})
 	}
 	// rank items
-	w.clickModel = new(mockFactorizationMachine)
+	w.ClickModel = new(mockFactorizationMachine)
 	result, err := w.rankByClickTroughRate(&data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"5", "4", "3", "2", "1"}, cache.RemoveScores(result))
@@ -838,7 +838,7 @@ func TestReplacement_ClickThroughRate(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	assert.NoError(t, err)
-	w.clickModel = new(mockFactorizationMachine)
+	w.ClickModel = new(mockFactorizationMachine)
 	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)
@@ -886,7 +886,7 @@ func TestReplacement_CollaborativeFiltering(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	assert.NoError(t, err)
-	w.rankingModel = newMockMatrixFactorizationForRecommend(1, 10)
+	w.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	w.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := w.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, "0"), 0, 2)
 	assert.NoError(t, err)

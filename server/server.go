@@ -58,7 +58,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 		masterPort: masterPort,
 		cacheFile:  cacheFile,
 		RestServer: RestServer{
-			Settings:   config.NewSettings(nil),
+			Settings:   config.NewSettings(),
 			HttpHost:   serverHost,
 			HttpPort:   serverPort,
 			WebService: new(restful.WebService),
@@ -70,7 +70,7 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 }
 
 func (s *Server) SetOneMode(settings *config.Settings) {
-	s.oneMode = true
+	s.OneMode = true
 	s.Settings = settings
 }
 
@@ -109,7 +109,7 @@ func (s *Server) Serve() {
 	}
 	s.masterClient = protocol.NewMasterClient(conn)
 
-	if !s.oneMode {
+	if !s.OneMode {
 		go s.Sync()
 	}
 	container := restful.NewContainer()
