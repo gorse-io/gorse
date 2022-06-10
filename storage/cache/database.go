@@ -20,6 +20,7 @@ import (
 	"github.com/araddon/dateparse"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
@@ -285,18 +286,10 @@ type Database interface {
 	RemSorted(members ...SetMember) error
 }
 
-const (
-	mySQLPrefix    = "mysql://"
-	mongoPrefix    = "mongodb://"
-	redisPrefix    = "redis://"
-	postgresPrefix = "postgres://"
-	sqlitePrefix   = "sqlite://"
-)
-
 // Open a connection to a database.
 func Open(path string) (Database, error) {
 	var err error
-	if strings.HasPrefix(path, redisPrefix) {
+	if strings.HasPrefix(path, storage.RedisPrefix) {
 		opt, err := redis.ParseURL(path)
 		if err != nil {
 			return nil, err
@@ -304,7 +297,7 @@ func Open(path string) (Database, error) {
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
 		return database, nil
-	} else if strings.HasPrefix(path, mongoPrefix) || strings.HasPrefix(path, "mongodb+srv://") {
+	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
 		// connect to database
 		database := new(MongoDB)
 		if database.client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(path)); err != nil {
@@ -317,7 +310,7 @@ func Open(path string) (Database, error) {
 			database.dbName = cs.Database
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, postgresPrefix) {
+	} else if strings.HasPrefix(path, storage.PostgresPrefix) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		if database.client, err = sql.Open("postgres", path); err != nil {
@@ -328,8 +321,8 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, mySQLPrefix) {
-		name := path[len(mySQLPrefix):]
+	} else if strings.HasPrefix(path, storage.MySQLPrefix) {
+		name := path[len(storage.MySQLPrefix):]
 		database := new(SQLDatabase)
 		database.driver = MySQL
 		if database.client, err = sql.Open("mysql", name); err != nil {
@@ -340,8 +333,8 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, sqlitePrefix) {
-		name := path[len(sqlitePrefix):]
+	} else if strings.HasPrefix(path, storage.SQLitePrefix) {
+		name := path[len(storage.SQLitePrefix):]
 		database := new(SQLDatabase)
 		database.driver = SQLite
 		if database.client, err = sql.Open("sqlite", name); err != nil {

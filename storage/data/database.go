@@ -20,6 +20,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
@@ -144,20 +145,11 @@ type Database interface {
 	GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
 }
 
-const (
-	mySQLPrefix      = "mysql://"
-	mongoPrefix      = "mongodb://"
-	postgresPrefix   = "postgres://"
-	clickhousePrefix = "clickhouse://"
-	sqlitePrefix     = "sqlite://"
-	redisPrefix      = "redis://"
-)
-
 // Open a connection to a database.
 func Open(path string) (Database, error) {
 	var err error
-	if strings.HasPrefix(path, mySQLPrefix) {
-		name := path[len(mySQLPrefix):]
+	if strings.HasPrefix(path, storage.MySQLPrefix) {
+		name := path[len(storage.MySQLPrefix):]
 		database := new(SQLDatabase)
 		database.driver = MySQL
 		if database.client, err = sql.Open("mysql", name); err != nil {
@@ -168,7 +160,7 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, postgresPrefix) {
+	} else if strings.HasPrefix(path, storage.PostgresPrefix) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		if database.client, err = sql.Open("postgres", path); err != nil {
@@ -179,8 +171,8 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, clickhousePrefix) {
-		uri := "http://" + path[len(clickhousePrefix):]
+	} else if strings.HasPrefix(path, storage.ClickhousePrefix) {
+		uri := "http://" + path[len(storage.ClickhousePrefix):]
 		database := new(SQLDatabase)
 		database.driver = ClickHouse
 		if database.client, err = sql.Open("clickhouse", uri); err != nil {
@@ -191,7 +183,7 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, mongoPrefix) || strings.HasPrefix(path, "mongodb+srv://") {
+	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
 		// connect to database
 		database := new(MongoDB)
 		if database.client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(path)); err != nil {
@@ -204,8 +196,8 @@ func Open(path string) (Database, error) {
 			database.dbName = cs.Database
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, sqlitePrefix) {
-		name := path[len(sqlitePrefix):]
+	} else if strings.HasPrefix(path, storage.SQLitePrefix) {
+		name := path[len(storage.SQLitePrefix):]
 		database := new(SQLDatabase)
 		database.driver = SQLite
 		if database.client, err = sql.Open("sqlite", name); err != nil {
@@ -216,8 +208,8 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, redisPrefix) {
-		addr := path[len(redisPrefix):]
+	} else if strings.HasPrefix(path, storage.RedisPrefix) {
+		addr := path[len(storage.RedisPrefix):]
 		database := new(Redis)
 		database.client = redis.NewClient(&redis.Options{Addr: addr})
 		log.Logger().Warn("redis is used for testing only")

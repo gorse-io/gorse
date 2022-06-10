@@ -52,7 +52,7 @@ var oneCommand = &cobra.Command{
 		// load config
 		configPath, _ := cmd.PersistentFlags().GetString("config")
 		log.Logger().Info("load config", zap.String("config", configPath))
-		conf, err := config.LoadConfig(configPath)
+		conf, err := config.LoadConfig(configPath, true)
 		if err != nil {
 			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}

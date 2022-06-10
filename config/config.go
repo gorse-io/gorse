@@ -26,6 +26,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/storage"
 	"go.uber.org/zap"
 	"reflect"
 	"strings"
@@ -49,8 +50,8 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore  string `mapstructure:"data_store" validate:"required,startsnotwith=redis://"` // database for data store
-	CacheStore string `mapstructure:"cache_store" validate:"required"`                       // database for cache store
+	DataStore  string `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
+	CacheStore string `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
 }
 
 // MasterConfig is the configuration for the master.
@@ -409,7 +410,7 @@ type configBinding struct {
 }
 
 // LoadConfig loads configuration from toml file.
-func LoadConfig(path string) (*Config, error) {
+func LoadConfig(path string, oneModel bool) (*Config, error) {
 	// set default config
 	setDefault()
 
@@ -448,6 +449,46 @@ func LoadConfig(path string) (*Config, error) {
 
 	// validate config file
 	validate := validator.New()
+	if err := validate.RegisterValidation("data_store", func(fl validator.FieldLevel) bool {
+		prefixes := []string{
+			storage.MongoPrefix,
+			storage.MongoSrvPrefix,
+			storage.MySQLPrefix,
+			storage.PostgresPrefix,
+			storage.ClickhousePrefix,
+		}
+		if oneModel {
+			prefixes = append(prefixes, storage.SQLitePrefix)
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(fl.Field().String(), prefix) {
+				return true
+			}
+		}
+		return false
+	}); err != nil {
+		return nil, errors.Trace(err)
+	}
+	if err := validate.RegisterValidation("cache_store", func(fl validator.FieldLevel) bool {
+		prefixes := []string{
+			storage.RedisPrefix,
+			storage.MongoPrefix,
+			storage.MongoSrvPrefix,
+			storage.MySQLPrefix,
+			storage.PostgresPrefix,
+		}
+		if oneModel {
+			prefixes = append(prefixes, storage.SQLitePrefix)
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(fl.Field().String(), prefix) {
+				return true
+			}
+		}
+		return false
+	}); err != nil {
+		return nil, errors.Trace(err)
+	}
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		return strings.SplitN(fld.Tag.Get("mapstructure"), ",", 2)[0]
 	})
@@ -456,6 +497,22 @@ func LoadConfig(path string) (*Config, error) {
 		// translate errors
 		trans := ut.New(en.New()).GetFallback()
 		if err := en_translations.RegisterDefaultTranslations(validate, trans); err != nil {
+			return nil, errors.Trace(err)
+		}
+		if err := validate.RegisterTranslation("data_store", trans, func(ut ut.Translator) error {
+			return ut.Add("data_store", "unsupported data storage backend", true) // see universal-translator for details
+		}, func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("data_store", fe.Field())
+			return t
+		}); err != nil {
+			return nil, errors.Trace(err)
+		}
+		if err := validate.RegisterTranslation("cache_store", trans, func(ut ut.Translator) error {
+			return ut.Add("cache_store", "unsupported cache storage backend", true) // see universal-translator for details
+		}, func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("cache_store", fe.Field())
+			return t
+		}); err != nil {
 			return nil, errors.Trace(err)
 		}
 		errs := err.(validator.ValidationErrors)

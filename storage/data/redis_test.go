@@ -16,6 +16,7 @@ package data
 import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/storage"
 	"testing"
 )
 
@@ -29,7 +30,7 @@ func newMockRedis(t *testing.T) *mockRedis {
 	db := new(mockRedis)
 	db.server, err = miniredis.Run()
 	assert.NoError(t, err)
-	db.Database, err = Open(redisPrefix + db.server.Addr())
+	db.Database, err = Open(storage.RedisPrefix + db.server.Addr())
 	assert.NoError(t, err)
 	return db
 }
