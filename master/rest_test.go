@@ -51,12 +51,13 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	s.cacheStoreServer, err = miniredis.Run()
 	assert.NoError(t, err)
 	// open database
+	s.Settings = config.NewSettings()
 	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
 	assert.NoError(t, err)
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.NoError(t, err)
 	// create server
-	s.GorseConfig = config.GetDefaultConfig()
+	s.Config = config.GetDefaultConfig()
 	s.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&s.RestServer)
 	s.RestServer.PopularItemsCache = server.NewPopularItemsCache(&s.RestServer)
 	s.WebService = new(restful.WebService)
@@ -431,7 +432,7 @@ func TestMaster_GetRates(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// write rates
-	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
 	err := s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
 	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
@@ -679,7 +680,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		})).
 		End()
 
-	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
+	s.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/recommend/0/_").

@@ -42,9 +42,9 @@ import (
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
-	CacheClient cache.Database
-	DataClient  data.Database
-	GorseConfig *config.Config
+	OneMode bool
+	*config.Settings
+
 	HttpHost    string
 	HttpPort    int
 	IsDashboard bool
@@ -56,25 +56,27 @@ type RestServer struct {
 }
 
 // StartHttpServer starts the REST-ful API server.
-func (s *RestServer) StartHttpServer() {
+func (s *RestServer) StartHttpServer(container *restful.Container) {
 	// register restful APIs
 	s.CreateWebService()
-	restful.DefaultContainer.Add(s.WebService)
+	container.Add(s.WebService)
 	// register swagger UI
 	specConfig := restfulspec.Config{
 		WebServices: restful.RegisteredWebServices(),
 		APIPath:     "/apidocs.json",
 	}
-	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(specConfig))
+	container.Add(restfulspec.NewOpenAPIService(specConfig))
 	swaggerFile = specConfig.APIPath
-	http.HandleFunc(apiDocsPath, handler)
+	container.Handle(apiDocsPath, http.HandlerFunc(handler))
 	// register prometheus
-	http.Handle("/metrics", promhttp.Handler())
+	if !s.OneMode {
+		container.Handle("/metrics", promhttp.Handler())
+	}
 
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
 	log.Logger().Fatal("failed to start http server",
-		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), nil)))
+		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), container)))
 }
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
@@ -94,17 +96,17 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 }
 
 func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-	if s.IsDashboard || s.GorseConfig.Server.APIKey == "" {
+	if s.IsDashboard || s.Config.Server.APIKey == "" {
 		chain.ProcessFilter(req, resp)
 		return
 	}
 	apikey := req.HeaderParameter("X-API-Key")
-	if apikey == s.GorseConfig.Server.APIKey {
+	if apikey == s.Config.Server.APIKey {
 		chain.ProcessFilter(req, resp)
 		return
 	}
 	log.ResponseLogger(resp).Error("unauthorized",
-		zap.String("api_key", s.GorseConfig.Server.APIKey),
+		zap.String("api_key", s.Config.Server.APIKey),
 		zap.String("X-API-Key", apikey))
 	if err := resp.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
 		log.ResponseLogger(resp).Error("failed to write error", zap.Error(err))
@@ -515,12 +517,12 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 		BadRequest(response, err)
 		return
 	}
-	if n, err = ParseInt(request, "n", s.GorseConfig.Server.DefaultN); err != nil {
+	if n, err = ParseInt(request, "n", s.Config.Server.DefaultN); err != nil {
 		BadRequest(response, err)
 		return
 	}
 	// Get the popular list
-	items, err := s.CacheClient.GetSorted(cache.Key(key, category), offset, s.GorseConfig.Recommend.CacheSize)
+	items, err := s.CacheClient.GetSorted(cache.Key(key, category), offset, s.Config.Recommend.CacheSize)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -666,7 +668,7 @@ type recommendContext struct {
 func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
 	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId),
-		math.Inf(-1), float64(time.Now().Add(s.GorseConfig.Server.ClockError).Unix()))
+		math.Inf(-1), float64(time.Now().Add(s.Config.Server.ClockError).Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -737,7 +739,7 @@ type Recommender func(ctx *recommendContext) error
 func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		recommendation, err := s.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
+		recommendation, err := s.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, ctx.userId, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -758,7 +760,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, ctx.userId, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, ctx.userId, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -785,13 +787,13 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		start := time.Now()
 		candidates := make(map[string]float64)
 		// load similar users
-		similarUsers, err := s.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, ctx.userId), 0, s.GorseConfig.Recommend.CacheSize)
+		similarUsers, err := s.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, ctx.userId), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, false, s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes...)
+			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, false, s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -834,12 +836,12 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		start := time.Now()
 		// truncate user feedback
 		data.SortFeedbacks(ctx.userFeedback)
-		userFeedback := make([]data.Feedback, 0, s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased)
+		userFeedback := make([]data.Feedback, 0, s.Config.Recommend.Online.NumFeedbackFallbackItemBased)
 		for _, feedback := range ctx.userFeedback {
-			if s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased <= len(userFeedback) {
+			if s.Config.Recommend.Online.NumFeedbackFallbackItemBased <= len(userFeedback) {
 				break
 			}
-			if funk.ContainsString(s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+			if funk.ContainsString(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
 				userFeedback = append(userFeedback, feedback)
 			}
 		}
@@ -847,7 +849,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		candidates := make(map[string]float64)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
+			similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.Config.Recommend.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -882,7 +884,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -907,7 +909,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, s.GorseConfig.Recommend.CacheSize)
+		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -928,7 +930,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
 	// parse arguments
 	userId := request.PathParameter("user-id")
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -947,7 +949,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	}
 	// online recommendation
 	recommenders := []Recommender{s.RecommendOffline}
-	for _, recommender := range s.GorseConfig.Recommend.Online.FallbackRecommend {
+	for _, recommender := range s.Config.Recommend.Online.FallbackRecommend {
 		switch recommender {
 		case "collaborative":
 			recommenders = append(recommenders, s.RecommendCollaborative)
@@ -1007,7 +1009,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		BadRequest(response, err)
 		return
 	}
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -1036,7 +1038,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	var userFeedback []data.Feedback
 	for _, feedback := range dataFeedback {
 		excludeSet.Add(feedback.ItemId)
-		if funk.ContainsString(s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+		if funk.ContainsString(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
 			userFeedback = append(userFeedback, feedback)
 		}
 	}
@@ -1045,7 +1047,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	usedFeedbackCount := 0
 	for _, feedback := range userFeedback {
 		// load similar items
-		similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, category), 0, s.GorseConfig.Recommend.CacheSize)
+		similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			BadRequest(response, err)
 			return
@@ -1060,7 +1062,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		// finish recommendation if the number of used feedbacks is enough
 		if len(similarItems) > 0 {
 			usedFeedbackCount++
-			if usedFeedbackCount >= s.GorseConfig.Recommend.Online.NumFeedbackFallbackItemBased {
+			if usedFeedbackCount >= s.Config.Recommend.Online.NumFeedbackFallbackItemBased {
 				break
 			}
 		}
@@ -1172,7 +1174,7 @@ type UserIterator struct {
 
 func (s *RestServer) getUsers(request *restful.Request, response *restful.Response) {
 	cursor := request.QueryParameter("cursor")
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -1407,7 +1409,7 @@ type ItemIterator struct {
 
 func (s *RestServer) getItems(request *restful.Request, response *restful.Response) {
 	cursor := request.QueryParameter("cursor")
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -1555,8 +1557,8 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 		}
 		// insert feedback to data store
 		err = s.DataClient.BatchInsertFeedback(feedback,
-			s.GorseConfig.Server.AutoInsertUser,
-			s.GorseConfig.Server.AutoInsertItem, overwrite)
+			s.Config.Server.AutoInsertUser,
+			s.Config.Server.AutoInsertItem, overwrite)
 		if err != nil {
 			InternalServerError(response, err)
 			return
@@ -1591,7 +1593,7 @@ type FeedbackIterator struct {
 func (s *RestServer) getFeedback(request *restful.Request, response *restful.Response) {
 	// Parse parameters
 	cursor := request.QueryParameter("cursor")
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -1608,7 +1610,7 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	cursor := request.QueryParameter("cursor")
-	n, err := ParseInt(request, "n", s.GorseConfig.Server.DefaultN)
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
@@ -1785,7 +1787,7 @@ func Text(response *restful.Response, content string) {
 
 // InsertFeedbackToCache inserts feedback to cache.
 func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
-	if !s.GorseConfig.Recommend.Replacement.EnableReplacement {
+	if !s.Config.Recommend.Replacement.EnableReplacement {
 		sortedSets := make([]cache.SortedSet, len(feedback))
 		for i, v := range feedback {
 			sortedSets[i] = cache.Sorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float64(v.Timestamp.Unix())}})
