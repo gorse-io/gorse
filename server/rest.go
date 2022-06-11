@@ -62,7 +62,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	container.Add(s.WebService)
 	// register swagger UI
 	specConfig := restfulspec.Config{
-		WebServices: restful.RegisteredWebServices(),
+		WebServices: []*restful.WebService{s.WebService},
 		APIPath:     "/apidocs.json",
 	}
 	container.Add(restfulspec.NewOpenAPIService(specConfig))
