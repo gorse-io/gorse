@@ -129,8 +129,8 @@ type environmentVariable struct {
 
 func TestBindEnv(t *testing.T) {
 	variables := []environmentVariable{
-		{"GORSE_CACHE_STORE", "<cache_store>"},
-		{"GORSE_DATA_STORE", "<data_store>"},
+		{"GORSE_CACHE_STORE", "redis://<cache_store>"},
+		{"GORSE_DATA_STORE", "mysql://<data_store>"},
 		{"GORSE_MASTER_PORT", "123"},
 		{"GORSE_MASTER_HOST", "<master_host>"},
 		{"GORSE_MASTER_HTTP_PORT", "456"},
@@ -145,10 +145,10 @@ func TestBindEnv(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	config, err := LoadConfig("config.toml.template")
+	config, err := LoadConfig("config.toml.template", false)
 	assert.NoError(t, err)
-	assert.Equal(t, "<cache_store>", config.Database.CacheStore)
-	assert.Equal(t, "<data_store>", config.Database.DataStore)
+	assert.Equal(t, "redis://<cache_store>", config.Database.CacheStore)
+	assert.Equal(t, "mysql://<data_store>", config.Database.DataStore)
 	assert.Equal(t, 123, config.Master.Port)
 	assert.Equal(t, "<master_host>", config.Master.Host)
 	assert.Equal(t, 456, config.Master.HttpPort)

@@ -215,22 +215,20 @@ func (m *Master) Serve() {
 	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
 
 	// start rpc server
-	if !m.RestServer.OneMode {
-		go func() {
-			log.Logger().Info("start rpc server",
-				zap.String("host", m.Config.Master.Host),
-				zap.Int("port", m.Config.Master.Port))
-			lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
-			if err != nil {
-				log.Logger().Fatal("failed to listen", zap.Error(err))
-			}
-			grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
-			protocol.RegisterMasterServer(grpcServer, m)
-			if err = grpcServer.Serve(lis); err != nil {
-				log.Logger().Fatal("failed to start rpc server", zap.Error(err))
-			}
-		}()
-	}
+	go func() {
+		log.Logger().Info("start rpc server",
+			zap.String("host", m.Config.Master.Host),
+			zap.Int("port", m.Config.Master.Port))
+		lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
+		if err != nil {
+			log.Logger().Fatal("failed to listen", zap.Error(err))
+		}
+		grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
+		protocol.RegisterMasterServer(grpcServer, m)
+		if err = grpcServer.Serve(lis); err != nil {
+			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
+		}
+	}()
 
 	// start http server
 	m.StartHttpServer()

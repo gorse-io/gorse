@@ -1239,7 +1239,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		popularScore = lo.Map(temp, func(item Item, i int) float64 {
 			return s.PopularItemsCache.GetSortedScore(item.ItemId)
 		})
-		modification = NewCacheModification(s.CacheClient)
+		modification = NewCacheModification(s.CacheClient, s.HiddenItemsManager)
 
 		loadExistedItemsTime time.Duration
 		parseTimesatmpTime   time.Duration
@@ -1363,7 +1363,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// insert hidden items to cache
-	modification := NewCacheModification(s.CacheClient)
+	modification := NewCacheModification(s.CacheClient, s.HiddenItemsManager)
 	if patch.IsHidden != nil {
 		if *patch.IsHidden {
 			modification.HideItem(itemId)
@@ -1446,7 +1446,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// refresh cache
-	if err := NewCacheModification(s.CacheClient).HideItem(itemId).Exec(); err != nil {
+	if err := NewCacheModification(s.CacheClient, s.HiddenItemsManager).HideItem(itemId).Exec(); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1473,7 +1473,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 	}
 	// refresh cache
 	popularScore := s.PopularItemsCache.GetSortedScore(itemId)
-	modification := NewCacheModification(s.CacheClient)
+	modification := NewCacheModification(s.CacheClient, s.HiddenItemsManager)
 	modification.addItemCategory(itemId, category, float64(item.Timestamp.Unix()), popularScore)
 	if err = modification.Exec(); err != nil {
 		InternalServerError(response, err)
@@ -1505,7 +1505,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 		return
 	}
 	// refresh cache
-	if err = NewCacheModification(s.CacheClient).deleteItemCategory(itemId, category).Exec(); err != nil {
+	if err = NewCacheModification(s.CacheClient, s.HiddenItemsManager).deleteItemCategory(itemId, category).Exec(); err != nil {
 		InternalServerError(response, err)
 		return
 	}
