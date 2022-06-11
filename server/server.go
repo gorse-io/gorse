@@ -334,14 +334,36 @@ func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]boo
 	}), nil
 }
 
-type CacheModification struct {
-	client    cache.Database
-	deletion  []cache.SetMember
-	insertion []cache.SortedSet
+func (hc *HiddenItemsManager) IsHiddenInCache(member string, category string) bool {
+	if hc.test {
+		hc.sync()
+	}
+	// load hidden items
+	hc.mu.RLock()
+	hiddenItems := hc.hiddenItems
+	hc.mu.RUnlock()
+	// load hidden items in category
+	hiddenItemsInCategory := strset.New()
+	if category != "" {
+		if temp, exist := hc.hiddenItemsInCategories.Load(category); exist {
+			hiddenItemsInCategory = temp.(*strset.Set)
+		}
+	}
+	return hiddenItems.Has(member) || hiddenItemsInCategory.Has(member)
 }
 
-func NewCacheModification(client cache.Database) *CacheModification {
-	return &CacheModification{client: client}
+type CacheModification struct {
+	client             cache.Database
+	deletion           []cache.SetMember
+	insertion          []cache.SortedSet
+	hiddenItemsManager *HiddenItemsManager
+}
+
+func NewCacheModification(client cache.Database, hiddenItemsManager *HiddenItemsManager) *CacheModification {
+	return &CacheModification{
+		client:             client,
+		hiddenItemsManager: hiddenItemsManager,
+	}
 }
 
 func (cm *CacheModification) deleteItemCategory(itemId, category string) *CacheModification {
@@ -358,7 +380,9 @@ func (cm *CacheModification) addItemCategory(itemId, category string, latest, po
 		cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
 	}
 	// 2. remove delete mark
-	cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
+	if cm.hiddenItemsManager.IsHiddenInCache(itemId, category) {
+		cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
+	}
 	return cm
 }
 
@@ -381,7 +405,7 @@ func (cm *CacheModification) modifyItem(itemId string, prevCategories, categorie
 			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
 		}
 		// 3. remove delete mark
-		if !prevCategoriesSet.Has(category) {
+		if !prevCategoriesSet.Has(category) && cm.hiddenItemsManager.IsHiddenInCache(itemId, category) {
 			cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
 		}
 	}
@@ -400,7 +424,9 @@ func (cm *CacheModification) HideItem(itemId string) *CacheModification {
 }
 
 func (cm *CacheModification) unHideItem(itemId string) *CacheModification {
-	cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	if cm.hiddenItemsManager.IsHiddenInCache(itemId, "") {
+		cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	}
 	return cm
 }
 
@@ -422,7 +448,9 @@ func (cm *CacheModification) addItem(itemId string, categories []string, latest,
 		}
 	}
 	// 3. remove delete mark
-	cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	if cm.hiddenItemsManager.IsHiddenInCache(itemId, "") {
+		cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	}
 }
 
 func (cm *CacheModification) Exec() error {
