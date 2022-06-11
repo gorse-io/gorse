@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: [gorse-master, gorse-server, gorse-worker]
+        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - name: Pull source
         uses: actions/checkout@v1
