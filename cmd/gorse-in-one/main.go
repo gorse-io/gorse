@@ -50,11 +50,25 @@ var oneCommand = &cobra.Command{
 		}
 
 		// load config
-		configPath, _ := cmd.PersistentFlags().GetString("config")
-		log.Logger().Info("load config", zap.String("config", configPath))
-		conf, err := config.LoadConfig(configPath, true)
-		if err != nil {
-			log.Logger().Fatal("failed to load config", zap.Error(err))
+		var conf *config.Config
+		var err error
+		playgroundMode, _ := cmd.PersistentFlags().GetBool("playground")
+		if playgroundMode {
+			conf = config.GetDefaultConfig()
+			conf.Database.DataStore = "sqlite://data.db"
+			conf.Database.CacheStore = "sqlite://cache.db"
+			conf.Recommend.DataSource.PositiveFeedbackTypes = []string{"star", "like"}
+			conf.Recommend.DataSource.ReadFeedbackTypes = []string{"read"}
+			if err := conf.Validate(true); err != nil {
+				log.Logger().Fatal("invalid config", zap.Error(err))
+			}
+		} else {
+			configPath, _ := cmd.PersistentFlags().GetString("config")
+			log.Logger().Info("load config", zap.String("config", configPath))
+			conf, err = config.LoadConfig(configPath, true)
+			if err != nil {
+				log.Logger().Fatal("failed to load config", zap.Error(err))
+			}
 		}
 
 		// create master
@@ -87,6 +101,7 @@ func init() {
 	oneCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	oneCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	oneCommand.PersistentFlags().String("log-path", "", "path of log file")
+	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
 	// master node commands
 	oneCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	oneCommand.PersistentFlags().String("master-cache-path", "master_cache.data", "path of cache file for the master node")

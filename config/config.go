@@ -448,6 +448,13 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 	}
 
 	// validate config file
+	if err := conf.Validate(oneModel); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &conf, nil
+}
+
+func (config *Config) Validate(oneModel bool) error {
 	validate := validator.New()
 	if err := validate.RegisterValidation("data_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
@@ -467,7 +474,7 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		}
 		return false
 	}); err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 	if err := validate.RegisterValidation("cache_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
@@ -487,17 +494,17 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		}
 		return false
 	}); err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		return strings.SplitN(fld.Tag.Get("mapstructure"), ",", 2)[0]
 	})
-	err := validate.Struct(&conf)
+	err := validate.Struct(config)
 	if err != nil {
 		// translate errors
 		trans := ut.New(en.New()).GetFallback()
 		if err := en_translations.RegisterDefaultTranslations(validate, trans); err != nil {
-			return nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
 		if err := validate.RegisterTranslation("data_store", trans, func(ut ut.Translator) error {
 			return ut.Add("data_store", "unsupported data storage backend", true) // see universal-translator for details
@@ -505,7 +512,7 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 			t, _ := ut.T("data_store", fe.Field())
 			return t
 		}); err != nil {
-			return nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
 		if err := validate.RegisterTranslation("cache_store", trans, func(ut ut.Translator) error {
 			return ut.Add("cache_store", "unsupported cache storage backend", true) // see universal-translator for details
@@ -513,12 +520,12 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 			t, _ := ut.T("cache_store", fe.Field())
 			return t
 		}); err != nil {
-			return nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
 		errs := err.(validator.ValidationErrors)
 		for _, e := range errs {
-			return nil, errors.New(e.Translate(trans))
+			return errors.New(e.Translate(trans))
 		}
 	}
-	return &conf, nil
+	return nil
 }
