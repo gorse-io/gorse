@@ -155,6 +155,10 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		// enable write ahead log
+		if _, err = d.client.Exec("PRAGMA journal_mode=WAL"); err != nil {
+			return errors.Trace(err)
+		}
 	case ClickHouse:
 		// create tables
 		type Items struct {

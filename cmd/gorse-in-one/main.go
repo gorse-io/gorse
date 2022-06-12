@@ -15,16 +15,34 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"database/sql"
+	_ "embed"
 	"fmt"
+	"github.com/benhoyt/goawk/interp"
+	"github.com/benhoyt/goawk/parser"
+	"github.com/juju/errors"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/master"
 	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
+	"io"
+	"net/http"
+	"os"
+	"strings"
 )
+
+//go:embed mysql2sqlite
+var mysql2SQLite string
+
+const playgroundDataFile = "https://cdn.gorse.io/example/github.sql"
 
 var oneCommand = &cobra.Command{
 	Use:   "gorse-in-one",
@@ -54,6 +72,9 @@ var oneCommand = &cobra.Command{
 		var err error
 		playgroundMode, _ := cmd.PersistentFlags().GetBool("playground")
 		if playgroundMode {
+			if err = initializeDatabase("data.db"); err != nil {
+				log.Logger().Fatal("failed to initialize database", zap.Error(err))
+			}
 			conf = config.GetDefaultConfig()
 			conf.Database.DataStore = "sqlite://data.db"
 			conf.Database.CacheStore = "sqlite://cache.db"
@@ -117,4 +138,98 @@ func main() {
 	if err := oneCommand.Execute(); err != nil {
 		log.Logger().Fatal("failed to execute", zap.Error(err))
 	}
+}
+
+func initializeDatabase(path string) error {
+	// skip initialization if file exists
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+
+	// init database
+	log.Logger().Info("load dataset for playground",
+		zap.String("source", playgroundDataFile),
+		zap.String("data_store", storage.SQLitePrefix+path))
+	databaseClient, err := data.Open(storage.SQLitePrefix + path)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err = databaseClient.Init(); err != nil {
+		return errors.Trace(err)
+	}
+
+	// open database
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer db.Close()
+
+	// download mysqldump file
+	resp, err := http.Get(playgroundDataFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// create converter
+	converter, err := NewMySQLToSQLiteConverter(mysql2SQLite)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// load mysqldump file
+	reader := bufio.NewReader(resp.Body)
+	var builder strings.Builder
+	for {
+		line, isPrefix, err := reader.ReadLine()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return errors.Trace(err)
+		}
+		builder.Write(line)
+		if !isPrefix {
+			text := builder.String()
+			if strings.HasPrefix(text, "INSERT INTO ") {
+				// convert to SQLite sql
+				sqliteSQL, err := converter.Convert(text)
+				if err != nil {
+					return errors.Trace(err)
+				}
+				if _, err = db.Exec(sqliteSQL); err != nil {
+					return errors.Trace(err)
+				}
+			}
+			builder.Reset()
+		}
+	}
+	return nil
+}
+
+type MySQLToSQLiteConverter struct {
+	interpreter *interp.Interpreter
+}
+
+func NewMySQLToSQLiteConverter(source string) (*MySQLToSQLiteConverter, error) {
+	converter := &MySQLToSQLiteConverter{}
+	program, err := parser.ParseProgram([]byte(source), nil)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	converter.interpreter, err = interp.New(program)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return converter, nil
+}
+
+func (converter *MySQLToSQLiteConverter) Convert(sql string) (string, error) {
+	input := strings.NewReader(sql)
+	output := bytes.NewBuffer(nil)
+	if _, err := converter.interpreter.Execute(&interp.Config{
+		Stdin: input, Output: output, Args: []string{"-"},
+	}); err != nil {
+		return "", errors.Trace(err)
+	}
+	return output.String(), nil
 }
