@@ -46,10 +46,10 @@ require (
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/clickhouse v0.3.2
-	gorm.io/driver/mysql v1.3.3
-	gorm.io/driver/postgres v1.3.5
-	gorm.io/driver/sqlite v1.3.2
-	gorm.io/gorm v1.23.5
+	gorm.io/driver/mysql v1.3.4
+	gorm.io/driver/postgres v1.3.7
+	gorm.io/driver/sqlite v1.3.4
+	gorm.io/gorm v1.23.6
 	modernc.org/mathutil v1.4.1
 	modernc.org/sortutil v1.1.0
 	moul.io/zapgorm2 v1.1.3
@@ -116,7 +116,7 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88 // indirect
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/mod v0.6.0-dev.0.20211013180041-c96bc1413d57 // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
@@ -140,5 +140,5 @@ require (
 
 replace (
 	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0
-	gorm.io/driver/sqlite v1.3.2 => github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d
+	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220612031856-d20c723836a2
 )
