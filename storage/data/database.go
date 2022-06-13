@@ -214,7 +214,7 @@ func Open(path string) (Database, error) {
 		name := path[len(storage.SQLitePrefix):]
 		database := new(SQLDatabase)
 		database.driver = SQLite
-		if database.client, err = sql.Open("sqlite", name); err != nil {
+		if database.client, err = sql.Open("sqlite3", name); err != nil {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)

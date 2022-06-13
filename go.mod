@@ -27,6 +27,7 @@ require (
 	github.com/lafikl/consistent v0.0.0-20210222184039-5e8acd7e59f2
 	github.com/lib/pq v1.10.2
 	github.com/mailru/go-clickhouse v1.8.0
+	github.com/mattn/go-sqlite3 v1.14.13
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.10.0
@@ -48,7 +49,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/clickhouse v0.3.2
 	gorm.io/driver/mysql v1.3.4
-	gorm.io/driver/postgres v1.3.7
+	gorm.io/driver/postgres v1.3.5
 	gorm.io/driver/sqlite v1.3.4
 	gorm.io/gorm v1.23.6
 	modernc.org/mathutil v1.4.1

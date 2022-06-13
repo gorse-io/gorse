@@ -21,6 +21,7 @@ import (
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	_ "github.com/mailru/go-clickhouse"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base/json"
@@ -153,10 +154,6 @@ func (d *SQLDatabase) Init() error {
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
-			return errors.Trace(err)
-		}
-		// enable write ahead log
-		if _, err = d.client.Exec("PRAGMA journal_mode=WAL"); err != nil {
 			return errors.Trace(err)
 		}
 	case ClickHouse:
