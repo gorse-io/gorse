@@ -31,6 +31,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/search"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -346,10 +347,9 @@ func (w *Worker) Recommend(users []data.User) {
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
-	taskName := fmt.Sprintf("Generate offline recommendation [%s]", w.workerName)
+	recommendTask := task.NewTask(fmt.Sprintf("Generate offline recommendation [%s]", w.workerName), len(users))
 	if w.masterClient != nil {
-		if _, err := w.masterClient.StartTask(context.Background(),
-			&protocol.StartTaskRequest{Name: taskName, Total: int64(len(users))}); err != nil {
+		if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
 			log.Logger().Error("failed to report start task", zap.Error(err))
 		}
 	}
@@ -406,8 +406,8 @@ func (w *Worker) Recommend(users []data.User) {
 				previousCount = completedCount
 				if throughput > 0 {
 					if w.masterClient != nil {
-						if _, err := w.masterClient.UpdateTask(context.Background(),
-							&protocol.UpdateTaskRequest{Name: taskName, Done: int64(completedCount)}); err != nil {
+						recommendTask.Update(completedCount)
+						if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
 							log.Logger().Error("failed to report update task", zap.Error(err))
 						}
 					}
@@ -708,8 +708,8 @@ func (w *Worker) Recommend(users []data.User) {
 		return
 	}
 	if w.masterClient != nil {
-		if _, err := w.masterClient.FinishTask(context.Background(),
-			&protocol.FinishTaskRequest{Name: taskName}); err != nil {
+		recommendTask.Finish()
+		if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
 			log.Logger().Error("failed to report finish task", zap.Error(err))
 		}
 	}
