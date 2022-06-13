@@ -16,6 +16,7 @@ package master
 import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -35,7 +36,7 @@ func (m *mockMaster) Close() {
 
 func newMockMaster(t *testing.T) *mockMaster {
 	s := new(mockMaster)
-	s.taskMonitor = NewTaskMonitor()
+	s.taskMonitor = task.NewTaskMonitor()
 	// create mock database
 	var err error
 	s.dataStoreServer, err = miniredis.Run()

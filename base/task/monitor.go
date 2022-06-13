@@ -12,31 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package master
+package task
 
 import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/protocol"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
-type TaskStatus string
+type Status string
 
 const (
-	TaskStatusPending   TaskStatus = "Pending"
-	TaskStatusComplete  TaskStatus = "Complete"
-	TaskStatusRunning   TaskStatus = "Running"
-	TaskStatusSuspended TaskStatus = "Suspended"
-	TaskStatusFailed    TaskStatus = "Failed"
+	StatusPending   Status = "Pending"
+	StatusComplete  Status = "Complete"
+	StatusRunning   Status = "Running"
+	StatusSuspended Status = "Suspended"
+	StatusFailed    Status = "Failed"
 )
 
 // Task progress information.
 type Task struct {
 	Name       string
-	Status     TaskStatus
+	Status     Status
 	Done       int
 	Total      int
 	StartTime  time.Time
@@ -44,95 +45,126 @@ type Task struct {
 	Error      string
 }
 
-// TaskMonitor monitors the progress of all tasks.
-type TaskMonitor struct {
+func NewTask(name string, total int) *Task {
+	return &Task{
+		Name:       name,
+		Status:     StatusRunning,
+		Done:       0,
+		Total:      total,
+		StartTime:  time.Now(),
+		FinishTime: time.Time{},
+	}
+}
+
+func NewTaskFromPB(in *protocol.PushTaskInfoRequest) *Task {
+	return &Task{
+		Name:       in.GetName(),
+		Status:     Status(in.GetStatus()),
+		Done:       int(in.GetDone()),
+		Total:      int(in.GetTotal()),
+		StartTime:  time.UnixMilli(in.GetStartTime()),
+		FinishTime: time.UnixMilli(in.GetFinishTime()),
+	}
+}
+
+func (t *Task) Update(done int) {
+	t.Done = done
+	t.Status = StatusRunning
+}
+
+func (t *Task) Finish() {
+	t.Status = StatusComplete
+	t.Done = t.Total
+	t.FinishTime = time.Now()
+}
+
+func (t *Task) ToPB() *protocol.PushTaskInfoRequest {
+	return &protocol.PushTaskInfoRequest{
+		Name:       t.Name,
+		Status:     string(t.Status),
+		Done:       int64(t.Done),
+		Total:      int64(t.Total),
+		StartTime:  t.StartTime.UnixMilli(),
+		FinishTime: t.FinishTime.UnixMilli(),
+	}
+}
+
+// Monitor monitors the progress of all tasks.
+type Monitor struct {
 	TaskLock sync.Mutex
 	Tasks    map[string]*Task
 }
 
-// NewTaskMonitor creates a TaskMonitor and add pending tasks.
-func NewTaskMonitor() *TaskMonitor {
-	return &TaskMonitor{
+// NewTaskMonitor creates a Monitor and add pending tasks.
+func NewTaskMonitor() *Monitor {
+	return &Monitor{
 		Tasks: make(map[string]*Task),
 	}
 }
 
 // Pending a task.
-func (tm *TaskMonitor) Pending(name string) {
+func (tm *Monitor) Pending(name string) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
 	tm.Tasks[name] = &Task{
 		Name:   name,
-		Status: TaskStatusPending,
+		Status: StatusPending,
 	}
 }
 
 // Start a task.
-func (tm *TaskMonitor) Start(name string, total int) {
+func (tm *Monitor) Start(name string, total int) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
-	task, exist := tm.Tasks[name]
-	if !exist {
-		task = &Task{}
-		tm.Tasks[name] = task
-	}
-	task.Name = name
-	task.Status = TaskStatusRunning
-	task.Done = 0
-	task.Total = total
-	task.StartTime = time.Now()
-	task.FinishTime = time.Time{}
+	tm.Tasks[name] = NewTask(name, total)
 }
 
 // Finish a task.
-func (tm *TaskMonitor) Finish(name string) {
+func (tm *Monitor) Finish(name string) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
 	task, exist := tm.Tasks[name]
 	if exist {
-		task.Status = TaskStatusComplete
-		task.Done = task.Total
-		task.FinishTime = time.Now()
+		task.Finish()
 	}
 }
 
 // Update the progress of a task.
-func (tm *TaskMonitor) Update(name string, done int) {
+func (tm *Monitor) Update(name string, done int) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
 	task, exist := tm.Tasks[name]
 	if exist {
-		task.Done = done
-		task.Status = TaskStatusRunning
+		task.Update(done)
 	}
 }
 
 // Suspend a task.
-func (tm *TaskMonitor) Suspend(name string, flag bool) {
+func (tm *Monitor) Suspend(name string, flag bool) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
 	task, exist := tm.Tasks[name]
 	if exist {
 		if flag {
-			task.Status = TaskStatusSuspended
+			task.Status = StatusSuspended
 		} else {
-			task.Status = TaskStatusRunning
+			task.Status = StatusRunning
 		}
 	}
 }
 
-func (tm *TaskMonitor) Fail(name, err string) {
+func (tm *Monitor) Fail(name, err string) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
 	task, exist := tm.Tasks[name]
 	if exist {
 		task.Error = err
-		task.Status = TaskStatusFailed
+		task.Status = StatusFailed
 	}
 }
 
 // List all tasks and remove tasks from disconnected workers.
-func (tm *TaskMonitor) List(workers ...string) []Task {
+func (tm *Monitor) List(workers ...string) []Task {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
 	workerSet := strset.New(workers...)
@@ -154,7 +186,7 @@ func (tm *TaskMonitor) List(workers ...string) []Task {
 }
 
 // Get the progress of a task.
-func (tm *TaskMonitor) Get(name string) int {
+func (tm *Monitor) Get(name string) int {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
 	task, exist := tm.Tasks[name]
@@ -179,64 +211,64 @@ func (t Tasks) Swap(i, j int) {
 
 // Less is used to sort []Task.
 func (t Tasks) Less(i, j int) bool {
-	if t[i].Status != TaskStatusPending && t[j].Status == TaskStatusPending {
+	if t[i].Status != StatusPending && t[j].Status == StatusPending {
 		return true
-	} else if t[i].Status == TaskStatusPending && t[j].Status != TaskStatusPending {
+	} else if t[i].Status == StatusPending && t[j].Status != StatusPending {
 		return false
-	} else if t[i].Status == TaskStatusPending && t[j].Status == TaskStatusPending {
+	} else if t[i].Status == StatusPending && t[j].Status == StatusPending {
 		return t[i].Name < t[j].Name
 	} else {
 		return t[i].StartTime.Before(t[j].StartTime)
 	}
 }
 
-// TaskTracker tracks the progress of a task.
-type TaskTracker struct {
+// Tracker tracks the progress of a task.
+type Tracker struct {
 	name    string
-	monitor *TaskMonitor
+	monitor *Monitor
 }
 
-func (tt *TaskTracker) Fail(err string) {
+func (tt *Tracker) Fail(err string) {
 	tt.monitor.Fail(tt.name, err)
 }
 
-// NewTaskTracker creates a TaskTracker from TaskMonitor.
-func (tm *TaskMonitor) NewTaskTracker(name string) *TaskTracker {
-	return &TaskTracker{
+// NewTaskTracker creates a Tracker from Monitor.
+func (tm *Monitor) NewTaskTracker(name string) *Tracker {
+	return &Tracker{
 		name:    name,
 		monitor: tm,
 	}
 }
 
 // Start the task.
-func (tt *TaskTracker) Start(total int) {
+func (tt *Tracker) Start(total int) {
 	tt.monitor.Start(tt.name, total)
 }
 
 // Update the progress of this task.
-func (tt *TaskTracker) Update(done int) {
+func (tt *Tracker) Update(done int) {
 	tt.monitor.Update(tt.name, done)
 }
 
-func (tt *TaskTracker) Suspend(flag bool) {
+func (tt *Tracker) Suspend(flag bool) {
 	tt.monitor.Suspend(tt.name, flag)
 }
 
 // Finish the task.
-func (tt *TaskTracker) Finish() {
+func (tt *Tracker) Finish() {
 	tt.monitor.Finish(tt.name)
 }
 
 // SubTracker creates a sub tracker
-func (tt *TaskTracker) SubTracker() model.Tracker {
+func (tt *Tracker) SubTracker() model.Tracker {
 	return &SubTaskTracker{
-		TaskTracker: tt,
+		Tracker: tt,
 	}
 }
 
 // SubTaskTracker tracks part of progress of a task.
 type SubTaskTracker struct {
-	*TaskTracker
+	*Tracker
 	Offset int
 	Total  int
 }
@@ -269,70 +301,6 @@ func (tt *SubTaskTracker) Finish() {
 // SubTracker creates a sub tracker of a sub tracker.
 func (tt *SubTaskTracker) SubTracker() model.Tracker {
 	return &SubTaskTracker{
-		TaskTracker: tt.TaskTracker,
+		Tracker: tt.Tracker,
 	}
-}
-
-// TaskScheduler schedules that pre-locked tasks are executed first.
-type TaskScheduler struct {
-	*sync.Cond
-	Privileged *strset.Set
-	Running    bool
-}
-
-// NewTaskScheduler creates a TaskScheduler.
-func NewTaskScheduler() *TaskScheduler {
-	return &TaskScheduler{
-		Cond:       sync.NewCond(&sync.Mutex{}),
-		Privileged: strset.New(),
-	}
-}
-
-// PreLock a task, the task has the privilege to run first than un-pre-clocked tasks.
-func (t *TaskScheduler) PreLock(name string) {
-	t.L.Lock()
-	defer t.L.Unlock()
-	t.Privileged.Add(name)
-}
-
-// Lock gets the permission to run task.
-func (t *TaskScheduler) Lock(name string) {
-	t.L.Lock()
-	defer t.L.Unlock()
-	for t.Running || (!t.Privileged.IsEmpty() && !t.Privileged.Has(name)) {
-		t.Wait()
-	}
-	t.Running = true
-}
-
-// UnLock returns the permission to run task.
-func (t *TaskScheduler) UnLock(name string) {
-	t.L.Lock()
-	defer t.L.Unlock()
-	t.Running = false
-	t.Privileged.Remove(name)
-	t.Broadcast()
-}
-
-func (t *TaskScheduler) NewRunner(name string) *TaskRunner {
-	return &TaskRunner{
-		TaskScheduler: t,
-		Name:          name,
-	}
-}
-
-// TaskRunner is a TaskScheduler bounded with a task.
-type TaskRunner struct {
-	*TaskScheduler
-	Name string
-}
-
-// Lock gets the permission to run task.
-func (locker *TaskRunner) Lock() {
-	locker.TaskScheduler.Lock(locker.Name)
-}
-
-// UnLock returns the permission to run task.
-func (locker *TaskRunner) UnLock() {
-	locker.TaskScheduler.UnLock(locker.Name)
 }
