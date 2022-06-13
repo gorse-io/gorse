@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -51,7 +52,7 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	bpr.Fit(trainSet, testSet, nil)
 	return &mockMasterRPC{
 		Master: Master{
-			taskMonitor:      NewTaskMonitor(),
+			taskMonitor:      task.NewTaskMonitor(),
 			nodesInfo:        make(map[string]*Node),
 			rankingModelName: "bpr",
 			RestServer: server.RestServer{
@@ -100,23 +101,26 @@ func TestRPC(t *testing.T) {
 	client := protocol.NewMasterClient(conn)
 	ctx := context.Background()
 
-	_, err = client.StartTask(ctx, &protocol.StartTaskRequest{Name: "a", Total: 12})
+	testTask := task.NewTask("a", 12)
+	_, err = client.PushTaskInfo(ctx, testTask.ToPB())
 	assert.NoError(t, err)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
 	assert.Equal(t, 0, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, TaskStatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
+	assert.Equal(t, task.StatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
 
-	_, err = client.UpdateTask(ctx, &protocol.UpdateTaskRequest{Name: "a", Done: 10})
+	testTask.Update(10)
+	_, err = client.PushTaskInfo(ctx, testTask.ToPB())
 	assert.NoError(t, err)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
 	assert.Equal(t, 10, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, TaskStatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
+	assert.Equal(t, task.StatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
 
-	_, err = client.FinishTask(ctx, &protocol.FinishTaskRequest{Name: "a"})
+	testTask.Finish()
+	_, err = client.PushTaskInfo(ctx, testTask.ToPB())
 	assert.NoError(t, err)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, TaskStatusComplete, rpcServer.taskMonitor.Tasks["a"].Status)
+	assert.Equal(t, task.StatusComplete, rpcServer.taskMonitor.Tasks["a"].Status)
 
 	// test get click model
 	clickModelReceiver, err := client.GetClickModel(ctx, &protocol.VersionInfo{Version: 456})

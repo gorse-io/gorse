@@ -20,6 +20,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
@@ -44,8 +45,8 @@ type Master struct {
 	protocol.UnimplementedMasterServer
 	server.RestServer
 
-	taskMonitor   *TaskMonitor
-	taskScheduler *TaskScheduler
+	taskMonitor   *task.Monitor
+	taskScheduler *task.Scheduler
 	cacheFile     string
 
 	// cluster meta cache
@@ -85,7 +86,7 @@ type Master struct {
 func NewMaster(cfg *config.Config, cacheFile string) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
-	taskMonitor := NewTaskMonitor()
+	taskMonitor := task.NewTaskMonitor()
 	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,
 		TaskFitRankingModel, TaskFitClickModel, TaskSearchRankingModel, TaskSearchClickModel,
 		TaskCacheGarbageCollection} {
@@ -96,7 +97,7 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		// create task monitor
 		cacheFile:     cacheFile,
 		taskMonitor:   taskMonitor,
-		taskScheduler: NewTaskScheduler(),
+		taskScheduler: task.NewTaskScheduler(),
 		// default ranking model
 		rankingModelName: "bpr",
 		rankingModelSearcher: ranking.NewModelSearcher(

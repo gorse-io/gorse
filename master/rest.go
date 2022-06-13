@@ -29,6 +29,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -73,7 +74,7 @@ func (m *Master) CreateWebService() {
 		Doc("Get tasks.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Writes([]Task{}))
+		Writes([]task.Task{}))
 	ws.Route(ws.GET("/dashboard/rates").To(m.getRates).
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -522,7 +523,17 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 }
 
 func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
-	tasks := m.taskMonitor.List()
+	// List workers
+	workers := make([]string, 0)
+	m.nodesInfoMutex.RLock()
+	for _, info := range m.nodesInfo {
+		if info.Type == WorkerNode {
+			workers = append(workers, info.Name)
+		}
+	}
+	m.nodesInfoMutex.RUnlock()
+	// List tasks
+	tasks := m.taskMonitor.List(workers...)
 	server.Ok(response, tasks)
 }
 

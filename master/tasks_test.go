@@ -17,6 +17,7 @@ package master
 import (
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -92,7 +93,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9", "*"), 0, 100)
 	assert.NoError(t, err)
@@ -107,7 +108,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8", "*"), 0, 100)
 	assert.NoError(t, err)
@@ -127,7 +128,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
 
 func TestMaster_FindItemNeighborsIVF(t *testing.T) {
@@ -200,7 +201,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9", "*"), 0, 100)
 	assert.NoError(t, err)
@@ -215,7 +216,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8", "*"), 0, 100)
 	assert.NoError(t, err)
@@ -235,7 +236,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 11, m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
 
 func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
@@ -289,7 +290,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
@@ -300,7 +301,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
@@ -316,7 +317,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
 
 func TestMaster_FindUserNeighborsIVF(t *testing.T) {
@@ -373,7 +374,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
@@ -384,7 +385,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
@@ -400,7 +401,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, 10, m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	assert.Equal(t, TaskStatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
 
 func TestMaster_LoadDataFromDatabase(t *testing.T) {

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -232,23 +233,11 @@ func (m *Master) nodeDown(key string, value interface{}) {
 	delete(m.nodesInfo, key)
 }
 
-func (m *Master) StartTask(
+func (m *Master) PushTaskInfo(
 	_ context.Context,
-	in *protocol.StartTaskRequest) (*protocol.StartTaskResponse, error) {
-	m.taskMonitor.Start(in.Name, int(in.Total))
-	return &protocol.StartTaskResponse{}, nil
-}
-
-func (m *Master) UpdateTask(
-	_ context.Context,
-	in *protocol.UpdateTaskRequest) (*protocol.UpdateTaskResponse, error) {
-	m.taskMonitor.Update(in.Name, int(in.Done))
-	return &protocol.UpdateTaskResponse{}, nil
-}
-
-func (m *Master) FinishTask(
-	_ context.Context,
-	in *protocol.FinishTaskRequest) (*protocol.FinishTaskResponse, error) {
-	m.taskMonitor.Finish(in.Name)
-	return &protocol.FinishTaskResponse{}, nil
+	in *protocol.PushTaskInfoRequest) (*protocol.PushTaskInfoResponse, error) {
+	m.taskMonitor.TaskLock.Lock()
+	defer m.taskMonitor.TaskLock.Unlock()
+	m.taskMonitor.Tasks[in.GetName()] = task.NewTaskFromPB(in)
+	return &protocol.PushTaskInfoResponse{}, nil
 }

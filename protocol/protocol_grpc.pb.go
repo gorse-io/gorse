@@ -28,9 +28,7 @@ type MasterClient interface {
 	GetRankingModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetRankingModelClient, error)
 	GetClickModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (Master_GetClickModelClient, error)
 	// task management
-	StartTask(ctx context.Context, in *StartTaskRequest, opts ...grpc.CallOption) (*StartTaskResponse, error)
-	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*UpdateTaskResponse, error)
-	FinishTask(ctx context.Context, in *FinishTaskRequest, opts ...grpc.CallOption) (*FinishTaskResponse, error)
+	PushTaskInfo(ctx context.Context, in *PushTaskInfoRequest, opts ...grpc.CallOption) (*PushTaskInfoResponse, error)
 }
 
 type masterClient struct {
@@ -114,27 +112,9 @@ func (x *masterGetClickModelClient) Recv() (*Fragment, error) {
 	return m, nil
 }
 
-func (c *masterClient) StartTask(ctx context.Context, in *StartTaskRequest, opts ...grpc.CallOption) (*StartTaskResponse, error) {
-	out := new(StartTaskResponse)
-	err := c.cc.Invoke(ctx, "/protocol.Master/StartTask", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*UpdateTaskResponse, error) {
-	out := new(UpdateTaskResponse)
-	err := c.cc.Invoke(ctx, "/protocol.Master/UpdateTask", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *masterClient) FinishTask(ctx context.Context, in *FinishTaskRequest, opts ...grpc.CallOption) (*FinishTaskResponse, error) {
-	out := new(FinishTaskResponse)
-	err := c.cc.Invoke(ctx, "/protocol.Master/FinishTask", in, out, opts...)
+func (c *masterClient) PushTaskInfo(ctx context.Context, in *PushTaskInfoRequest, opts ...grpc.CallOption) (*PushTaskInfoResponse, error) {
+	out := new(PushTaskInfoResponse)
+	err := c.cc.Invoke(ctx, "/protocol.Master/PushTaskInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +131,7 @@ type MasterServer interface {
 	GetRankingModel(*VersionInfo, Master_GetRankingModelServer) error
 	GetClickModel(*VersionInfo, Master_GetClickModelServer) error
 	// task management
-	StartTask(context.Context, *StartTaskRequest) (*StartTaskResponse, error)
-	UpdateTask(context.Context, *UpdateTaskRequest) (*UpdateTaskResponse, error)
-	FinishTask(context.Context, *FinishTaskRequest) (*FinishTaskResponse, error)
+	PushTaskInfo(context.Context, *PushTaskInfoRequest) (*PushTaskInfoResponse, error)
 	mustEmbedUnimplementedMasterServer()
 }
 
@@ -170,14 +148,8 @@ func (UnimplementedMasterServer) GetRankingModel(*VersionInfo, Master_GetRanking
 func (UnimplementedMasterServer) GetClickModel(*VersionInfo, Master_GetClickModelServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetClickModel not implemented")
 }
-func (UnimplementedMasterServer) StartTask(context.Context, *StartTaskRequest) (*StartTaskResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartTask not implemented")
-}
-func (UnimplementedMasterServer) UpdateTask(context.Context, *UpdateTaskRequest) (*UpdateTaskResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateTask not implemented")
-}
-func (UnimplementedMasterServer) FinishTask(context.Context, *FinishTaskRequest) (*FinishTaskResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FinishTask not implemented")
+func (UnimplementedMasterServer) PushTaskInfo(context.Context, *PushTaskInfoRequest) (*PushTaskInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushTaskInfo not implemented")
 }
 func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
 
@@ -252,56 +224,20 @@ func (x *masterGetClickModelServer) Send(m *Fragment) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Master_StartTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StartTaskRequest)
+func _Master_PushTaskInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushTaskInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MasterServer).StartTask(ctx, in)
+		return srv.(MasterServer).PushTaskInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/protocol.Master/StartTask",
+		FullMethod: "/protocol.Master/PushTaskInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).StartTask(ctx, req.(*StartTaskRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_UpdateTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateTaskRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).UpdateTask(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/UpdateTask",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).UpdateTask(ctx, req.(*UpdateTaskRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Master_FinishTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FinishTaskRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MasterServer).FinishTask(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/protocol.Master/FinishTask",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MasterServer).FinishTask(ctx, req.(*FinishTaskRequest))
+		return srv.(MasterServer).PushTaskInfo(ctx, req.(*PushTaskInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -318,16 +254,8 @@ var Master_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Master_GetMeta_Handler,
 		},
 		{
-			MethodName: "StartTask",
-			Handler:    _Master_StartTask_Handler,
-		},
-		{
-			MethodName: "UpdateTask",
-			Handler:    _Master_UpdateTask_Handler,
-		},
-		{
-			MethodName: "FinishTask",
-			Handler:    _Master_FinishTask_Handler,
+			MethodName: "PushTaskInfo",
+			Handler:    _Master_PushTaskInfo_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
