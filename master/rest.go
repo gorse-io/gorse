@@ -522,7 +522,17 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 }
 
 func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
-	tasks := m.taskMonitor.List()
+	// List workers
+	workers := make([]string, 0)
+	m.nodesInfoMutex.RLock()
+	for _, info := range m.nodesInfo {
+		if info.Type == WorkerNode {
+			workers = append(workers, info.Name)
+		}
+	}
+	m.nodesInfoMutex.RUnlock()
+	// List tasks
+	tasks := m.taskMonitor.List(workers...)
 	server.Ok(response, tasks)
 }
 

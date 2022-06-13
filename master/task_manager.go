@@ -18,6 +18,7 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/model"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -130,12 +131,22 @@ func (tm *TaskMonitor) Fail(name, err string) {
 	}
 }
 
-// List all tasks.
-func (tm *TaskMonitor) List() []Task {
+// List all tasks and remove tasks from disconnected workers.
+func (tm *TaskMonitor) List(workers ...string) []Task {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
+	workerSet := strset.New(workers...)
 	var task []Task
-	for _, t := range tm.Tasks {
+	for name, t := range tm.Tasks {
+		// remove tasks from disconnected workers
+		if strings.Contains(name, "[") && strings.Contains(name, "]") {
+			begin := strings.Index(name, "[") + 1
+			end := strings.Index(name, "]")
+			if !workerSet.Has(name[begin:end]) {
+				delete(tm.Tasks, name)
+				continue
+			}
+		}
 		task = append(task, *t)
 	}
 	sort.Sort(Tasks(task))
