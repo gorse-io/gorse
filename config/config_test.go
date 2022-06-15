@@ -40,7 +40,7 @@ func TestUnmarshal(t *testing.T) {
 
 	// [database]
 	assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
-	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true", config.Database.DataStore)
+	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse", config.Database.DataStore)
 	// [master]
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "0.0.0.0", config.Master.Host)

@@ -101,16 +101,6 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// change settings
-		if _, err := d.client.Exec("SET SESSION sql_mode=\"" +
-			"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
-			"NO_ENGINE_SUBSTITUTION\""); err != nil {
-			return errors.Trace(err)
-		}
-		// disable lock
-		if _, err := d.client.Exec("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
-			return errors.Trace(err)
-		}
 	case Postgres:
 		// create tables
 		type Items struct {
@@ -136,10 +126,6 @@ func (d *SQLDatabase) Init() error {
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
-			return errors.Trace(err)
-		}
-		// disable lock
-		if _, err := d.client.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
 			return errors.Trace(err)
 		}
 	case SQLite:

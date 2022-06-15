@@ -323,6 +323,18 @@ func Open(path string) (Database, error) {
 		return database, nil
 	} else if strings.HasPrefix(path, storage.MySQLPrefix) {
 		name := path[len(storage.MySQLPrefix):]
+		// probe isolation variable name
+		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		// append parameters
+		if name, err = storage.AppendMySQLParams(name, map[string]string{
+			isolationVarName: "'READ-UNCOMMITTED'",
+		}); err != nil {
+			return nil, errors.Trace(err)
+		}
+		// connect to database
 		database := new(SQLDatabase)
 		database.driver = MySQL
 		if database.client, err = sql.Open("mysql", name); err != nil {
