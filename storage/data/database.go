@@ -30,6 +30,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"moul.io/zapgorm2"
 	"sort"
 	"strings"
 	"time"
@@ -225,6 +227,13 @@ func Open(path string) (Database, error) {
 		database.driver = SQLite
 		if database.client, err = sql.Open("sqlite", name); err != nil {
 			return nil, errors.Trace(err)
+		}
+		gormConfig.Logger = &zapgorm2.Logger{
+			ZapLogger:                 log.Logger(),
+			LogLevel:                  logger.Warn,
+			SlowThreshold:             time.Second,
+			SkipCallerLookup:          false,
+			IgnoreRecordNotFoundError: false,
 		}
 		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)
 		if err != nil {
