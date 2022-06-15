@@ -147,7 +147,7 @@ jobs:
 
     services:
       mariadb:
-        image: mariadb:10.2
+        image: mariadb:10.3
         ports:
           - 3306
         env:
