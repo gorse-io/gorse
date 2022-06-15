@@ -72,7 +72,7 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(postgresDSN + "?sslmode=disable&TimeZone=UTC")
+	database.Database, err = Open(postgresDSN + "?sslmode=disable")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	databaseComm := database.GetComm(t)
@@ -83,7 +83,7 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	err = database.Database.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC")
+	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
