@@ -150,11 +150,16 @@ func Open(path string) (Database, error) {
 	var err error
 	if strings.HasPrefix(path, storage.MySQLPrefix) {
 		name := path[len(storage.MySQLPrefix):]
+		// probe isolation variable name
+		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 		// append parameters
 		if name, err = storage.AppendMySQLParams(name, map[string]string{
-			"sql_mode":              "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
-			"transaction_isolation": "'READ-UNCOMMITTED'",
-			"parseTime":             "true",
+			"sql_mode":       "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+			isolationVarName: "'READ-UNCOMMITTED'",
+			"parseTime":      "true",
 		}); err != nil {
 			return nil, errors.Trace(err)
 		}

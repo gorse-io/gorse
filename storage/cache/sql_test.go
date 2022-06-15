@@ -16,7 +16,9 @@ package cache
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/storage"
 	"os"
 	"runtime"
 	"strings"
@@ -186,8 +188,10 @@ func TestMySQL_Init(t *testing.T) {
 	err := db.Init()
 	assert.NoError(t, err)
 
+	name, err := storage.ProbeMySQLIsolationVariableName(mySqlDSN[len(storage.MySQLPrefix):])
+	assert.NoError(t, err)
 	connection := db.Database.(*SQLDatabase).client
-	assertQuery(t, connection, "SELECT @@transaction_isolation", "READ-UNCOMMITTED")
+	assertQuery(t, connection, fmt.Sprintf("SELECT @@%s", name), "READ-UNCOMMITTED")
 }
 
 func newTestSQLiteDatabase(t *testing.T) *testSQLDatabase {

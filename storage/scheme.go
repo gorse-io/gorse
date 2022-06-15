@@ -15,6 +15,7 @@
 package storage
 
 import (
+	"database/sql"
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 )
@@ -43,4 +44,24 @@ func AppendMySQLParams(dsn string, params map[string]string) (string, error) {
 		}
 	}
 	return cfg.FormatDSN(), nil
+}
+
+func ProbeMySQLIsolationVariableName(dsn string) (string, error) {
+	connection, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer connection.Close()
+	rows, err := connection.Query("SHOW VARIABLES LIKE '%isolation%'")
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer rows.Close()
+	var name, value string
+	if rows.Next() {
+		if err = rows.Scan(&name, &value); err != nil {
+			return "", errors.Trace(err)
+		}
+	}
+	return name, nil
 }

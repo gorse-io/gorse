@@ -16,7 +16,9 @@ package data
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/storage"
 	"os"
 	"runtime"
 	"strings"
@@ -146,8 +148,10 @@ func TestMySQL_Init(t *testing.T) {
 	defer db.Close(t)
 	assert.NoError(t, db.Init())
 
+	name, err := storage.ProbeMySQLIsolationVariableName(mySqlDSN[len(storage.MySQLPrefix):])
+	assert.NoError(t, err)
 	connection := db.Database.(*SQLDatabase).client
-	assertQuery(t, connection, "SELECT @@transaction_isolation", "READ-UNCOMMITTED")
+	assertQuery(t, connection, fmt.Sprintf("SELECT @@%s", name), "READ-UNCOMMITTED")
 	assertQuery(t, connection, "SELECT @@sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
 }
 
