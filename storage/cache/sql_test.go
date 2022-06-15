@@ -115,6 +115,13 @@ func TestPostgres_Scan(t *testing.T) {
 	testScan(t, db.Database)
 }
 
+func TestPostgres_Init(t *testing.T) {
+	db := newTestPostgresDatabase(t)
+	defer db.Close(t)
+	err := db.Init()
+	assert.NoError(t, err)
+}
+
 func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	var testName string
@@ -130,7 +137,7 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(mySqlDSN + "?timeout=30s&parseTime=true")
+	database.Database, err = Open(mySqlDSN)
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	databaseComm := database.GetComm(t)
@@ -141,7 +148,7 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	err = database.Database.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(mySqlDSN + dbName + "?timeout=30s&parseTime=true")
+	database.Database, err = Open(mySqlDSN + dbName)
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -171,6 +178,16 @@ func TestMySQL_Scan(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testScan(t, db.Database)
+}
+
+func TestMySQL_Init(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	err := db.Init()
+	assert.NoError(t, err)
+
+	connection := db.Database.(*SQLDatabase).client
+	assertQuery(t, connection, "SELECT @@transaction_isolation", "READ-UNCOMMITTED")
 }
 
 func newTestSQLiteDatabase(t *testing.T) *testSQLDatabase {
@@ -208,4 +225,14 @@ func TestSQLite_Scan(t *testing.T) {
 	db := newTestSQLiteDatabase(t)
 	defer db.Close(t)
 	testScan(t, db.Database)
+}
+
+func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) {
+	rows, err := connection.Query(sql)
+	assert.NoError(t, err)
+	assert.True(t, rows.Next())
+	var result string
+	err = rows.Scan(&result)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
 }

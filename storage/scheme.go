@@ -14,6 +14,11 @@
 
 package storage
 
+import (
+	"github.com/go-sql-driver/mysql"
+	"github.com/juju/errors"
+)
+
 const (
 	MySQLPrefix      = "mysql://"
 	MongoPrefix      = "mongodb://"
@@ -23,3 +28,19 @@ const (
 	SQLitePrefix     = "sqlite://"
 	RedisPrefix      = "redis://"
 )
+
+func AppendMySQLParams(dsn string, params map[string]string) (string, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	if cfg.Params == nil {
+		cfg.Params = make(map[string]string)
+	}
+	for key, value := range params {
+		if _, exist := cfg.Params[key]; !exist {
+			cfg.Params[key] = value
+		}
+	}
+	return cfg.FormatDSN(), nil
+}

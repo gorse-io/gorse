@@ -80,22 +80,8 @@ func (db *SQLDatabase) Close() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	if err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}); err != nil {
-		return errors.Trace(err)
-	}
-	switch db.driver {
-	case Postgres:
-		// disable lock
-		if _, err := db.client.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
-			return errors.Trace(err)
-		}
-	case MySQL:
-		// disable lock
-		if _, err := db.client.Exec("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{})
+	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) Scan(work func(string) error) error {
