@@ -148,6 +148,7 @@ func TestMySQL_Init(t *testing.T) {
 
 	connection := db.Database.(*SQLDatabase).client
 	assertQuery(t, connection, "SELECT @@transaction_isolation", "READ-UNCOMMITTED")
+	assertQuery(t, connection, "SELECT @@sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
 }
 
 func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {

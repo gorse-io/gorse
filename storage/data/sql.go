@@ -101,12 +101,6 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// change settings
-		if _, err := d.client.Exec("SET SESSION sql_mode=\"" +
-			"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
-			"NO_ENGINE_SUBSTITUTION\""); err != nil {
-			return errors.Trace(err)
-		}
 	case Postgres:
 		// create tables
 		type Items struct {
