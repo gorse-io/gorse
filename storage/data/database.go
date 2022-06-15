@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -211,10 +212,18 @@ func Open(path string) (Database, error) {
 		}
 		return database, nil
 	} else if strings.HasPrefix(path, storage.SQLitePrefix) {
+		// append parameters
+		if path, err = storage.AppendURLParams(path, []lo.Tuple2[string, string]{
+			{"_pragma", "busy_timeout(10000)"},
+			{"_pragma", "journal_mode(wal)"},
+		}); err != nil {
+			return nil, errors.Trace(err)
+		}
+		// connect to database
 		name := path[len(storage.SQLitePrefix):]
 		database := new(SQLDatabase)
 		database.driver = SQLite
-		if database.client, err = sql.Open("sqlite3", name); err != nil {
+		if database.client, err = sql.Open("sqlite", name); err != nil {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)

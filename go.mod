@@ -27,7 +27,6 @@ require (
 	github.com/lafikl/consistent v0.0.0-20210222184039-5e8acd7e59f2
 	github.com/lib/pq v1.10.2
 	github.com/mailru/go-clickhouse v1.8.0
-	github.com/mattn/go-sqlite3 v1.14.13
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.10.0
@@ -54,6 +53,7 @@ require (
 	gorm.io/gorm v1.23.6
 	modernc.org/mathutil v1.4.1
 	modernc.org/sortutil v1.1.0
+	modernc.org/sqlite v1.17.3
 	moul.io/zapgorm2 v1.1.3
 )
 
@@ -95,6 +95,7 @@ require (
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-sqlite3 v1.14.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -135,7 +136,6 @@ require (
 	modernc.org/libc v1.16.7 // indirect
 	modernc.org/memory v1.1.1 // indirect
 	modernc.org/opt v0.1.1 // indirect
-	modernc.org/sqlite v1.17.3 // indirect
 	modernc.org/strutil v1.1.1 // indirect
 	modernc.org/token v1.0.0 // indirect
 )
