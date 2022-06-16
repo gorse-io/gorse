@@ -23,6 +23,7 @@ import (
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
 	"github.com/juju/errors"
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
@@ -157,14 +158,14 @@ func initializeDatabase(path string) error {
 	}
 
 	// init database
-	log.Logger().Info("load dataset for playground",
-		zap.String("source", playgroundDataFile),
-		zap.String("data_store", storage.SQLitePrefix+path))
 	databaseClient, err := data.Open(storage.SQLitePrefix + path)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	if err = databaseClient.Init(); err != nil {
+		return errors.Trace(err)
+	}
+	if err = databaseClient.Close(); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -188,10 +189,15 @@ func initializeDatabase(path string) error {
 	}
 
 	// load mysqldump file
+	bar := progressbar.DefaultBytes(
+		resp.ContentLength,
+		"Downloading playground dataset",
+	)
 	reader := bufio.NewReader(resp.Body)
 	var builder strings.Builder
 	for {
 		line, isPrefix, err := reader.ReadLine()
+		_ = bar.Add(len(line))
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -199,6 +205,7 @@ func initializeDatabase(path string) error {
 		}
 		builder.Write(line)
 		if !isPrefix {
+			_ = bar.Add(1)
 			text := builder.String()
 			if strings.HasPrefix(text, "INSERT INTO ") {
 				// convert to SQLite sql
