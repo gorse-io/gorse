@@ -69,11 +69,6 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 	return s
 }
 
-func (s *Server) SetOneMode(settings *config.Settings) {
-	s.OneMode = true
-	s.Settings = settings
-}
-
 // Serve starts a server node.
 func (s *Server) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -109,9 +104,7 @@ func (s *Server) Serve() {
 	}
 	s.masterClient = protocol.NewMasterClient(conn)
 
-	if !s.OneMode {
-		go s.Sync()
-	}
+	go s.Sync()
 	container := restful.NewContainer()
 	s.StartHttpServer(container)
 }

@@ -29,7 +29,6 @@ import (
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/master"
-	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"github.com/zhenghaoz/gorse/worker"
@@ -115,15 +114,6 @@ var oneCommand = &cobra.Command{
 			w.SetOneMode(l.Settings)
 			w.Serve()
 		}()
-		// Start server
-		go func() {
-			serverCachePath, _ := cmd.PersistentFlags().GetString("server-cache-path")
-			serverPort, _ := cmd.PersistentFlags().GetInt("server-port")
-			s := server.NewServer(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-				serverPort, serverCachePath)
-			s.SetOneMode(l.Settings)
-			s.Serve()
-		}()
 		// Start master
 		l.Serve()
 	},
@@ -140,9 +130,6 @@ func init() {
 	// worker node commands
 	oneCommand.PersistentFlags().Int("worker-jobs", 1, "number of working jobs for the worker node")
 	oneCommand.PersistentFlags().String("worker-cache-path", "worker_cache.data", "path of cache file for the worker node")
-	// server node commands
-	oneCommand.PersistentFlags().Int("server-port", 8087, "port of RESTful APIs and Prometheus metrics for the server node")
-	oneCommand.PersistentFlags().String("server-cache-path", "server_cache.data", "path of cache file for the server node")
 }
 
 func main() {

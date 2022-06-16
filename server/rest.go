@@ -43,7 +43,6 @@ import (
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
-	OneMode bool
 	*config.Settings
 
 	HttpHost   string
@@ -69,9 +68,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	swaggerFile = specConfig.APIPath
 	container.Handle(apiDocsPath, http.HandlerFunc(handler))
 	// register prometheus
-	if !s.OneMode {
-		container.Handle("/metrics", promhttp.Handler())
-	}
+	container.Handle("/metrics", promhttp.Handler())
 
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
