@@ -51,7 +51,7 @@ func (m *Master) CreateWebService() {
 	ws := m.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
-	ws.Filter(m.AuthFilter)
+	ws.Filter(m.LoginFilter)
 
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
@@ -263,7 +263,7 @@ func noCache(h http.Handler) http.Handler {
 func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) {
 	_, err := staticFileSystem.Open(request.RequestURI)
 	if request.RequestURI == "/" || os.IsNotExist(err) {
-		if !m.checkAuth(request) {
+		if !m.checkLogin(request) {
 			http.Redirect(response, request, "/login", http.StatusFound)
 			log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
 			return
@@ -323,19 +323,14 @@ func (m *Master) logout(response http.ResponseWriter, request *http.Request) {
 	log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.RequestURI), zap.Int("status_code", http.StatusFound))
 }
 
-func (m *Master) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-	if m.checkAuth(req.Request) {
-		chain.ProcessFilter(req, resp)
-	} else {
-		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
-		if err != nil {
-			server.InternalServerError(resp, err)
-			return
-		}
+func (m *Master) LoginFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	if m.checkLogin(req.Request) {
+		req.Request.Header.Set("X-API-Key", m.Config.Server.APIKey)
 	}
+	chain.ProcessFilter(req, resp)
 }
 
-func (m *Master) checkAuth(request *http.Request) bool {
+func (m *Master) checkLogin(request *http.Request) bool {
 	if m.Config.Master.DashboardUserName == "" || m.Config.Master.DashboardPassword == "" {
 		return true
 	}
@@ -790,7 +785,7 @@ func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Re
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAuth(request) {
+	if !m.checkLogin(request) {
 		resp := restful.NewResponse(response)
 		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
 		if err != nil {
@@ -911,7 +906,7 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 }
 
 func (m *Master) importExportItems(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAuth(request) {
+	if !m.checkLogin(request) {
 		resp := restful.NewResponse(response)
 		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
 		if err != nil {
@@ -1093,7 +1088,7 @@ func formValue(request *http.Request, fieldName, defaultValue string) string {
 }
 
 func (m *Master) importExportFeedback(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAuth(request) {
+	if !m.checkLogin(request) {
 		resp := restful.NewResponse(response)
 		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
 		if err != nil {
