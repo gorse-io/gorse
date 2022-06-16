@@ -72,9 +72,7 @@ var oneCommand = &cobra.Command{
 		var err error
 		playgroundMode, _ := cmd.PersistentFlags().GetBool("playground")
 		if playgroundMode {
-			if err = initializeDatabase("data.db"); err != nil {
-				log.Logger().Fatal("failed to initialize database", zap.Error(err))
-			}
+			// load config for playground
 			conf = config.GetDefaultConfig()
 			conf.Database.DataStore = "sqlite://data.db"
 			conf.Database.CacheStore = "sqlite://cache.db"
@@ -82,6 +80,18 @@ var oneCommand = &cobra.Command{
 			conf.Recommend.DataSource.ReadFeedbackTypes = []string{"read"}
 			if err := conf.Validate(true); err != nil {
 				log.Logger().Fatal("invalid config", zap.Error(err))
+			}
+
+			// print prologue
+			fmt.Printf("Welcome to Gorse %s Playground\n", version.Version)
+			fmt.Println()
+			fmt.Printf("    Dashboard:     http://%s:%d/overview\n", conf.Master.HttpHost, conf.Master.HttpPort)
+			fmt.Printf("    RESTful APIs:  http://%s:%d/apidocs\n", conf.Master.HttpHost, conf.Master.HttpPort)
+			fmt.Printf("    Documentation: https://docs.gorse.io/\n")
+			fmt.Println()
+
+			if err = initializeDatabase("data.db"); err != nil {
+				log.Logger().Fatal("failed to initialize database", zap.Error(err))
 			}
 		} else {
 			configPath, _ := cmd.PersistentFlags().GetString("config")
