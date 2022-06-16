@@ -347,7 +347,11 @@ func (w *Worker) Recommend(users []data.User) {
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
-	recommendTask := task.NewTask(fmt.Sprintf("Generate offline recommendation [%s]", w.workerName), len(users))
+	recommendTaskName := "Generate offline recommendation"
+	if !w.oneMode {
+		recommendTaskName += fmt.Sprintf(" [%s]", w.workerName)
+	}
+	recommendTask := task.NewTask(recommendTaskName, len(users))
 	if w.masterClient != nil {
 		if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
 			log.Logger().Error("failed to report start task", zap.Error(err))

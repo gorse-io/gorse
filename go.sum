@@ -244,8 +244,8 @@ github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c/go.mod h1:E7qHFY
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0 h1:j87cgitZMpflxv4PFYXFY3S3qf3YfvWatvnEHPok/BY=
 github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0/go.mod h1:V2TzR8ORGn4aktUMKkDJo9XX1STN3paUOsIBnFXJvWQ=
-github.com/gorse-io/dashboard v0.0.0-20220504033926-54e0e80acf0a h1:ezb+DwZv15acWhUBiYp7WC9gY5W6eBWYgq1YfqtAyTk=
-github.com/gorse-io/dashboard v0.0.0-20220504033926-54e0e80acf0a/go.mod h1:TLQBh+sD73+HSL6uEZJFRLv1SgUnqef02AYzo61ZdiE=
+github.com/gorse-io/dashboard v0.0.0-20220613132847-f5b24a31269e h1:SJx67zb4yP0UOkxncvy8sMTrrBuzMsY+WGgsCcjjK1E=
+github.com/gorse-io/dashboard v0.0.0-20220613132847-f5b24a31269e/go.mod h1:TLQBh+sD73+HSL6uEZJFRLv1SgUnqef02AYzo61ZdiE=
 github.com/gorse-io/sqlite v1.3.3-0.20220612031856-d20c723836a2 h1:oY3oSYNkBWljDzULb3qpKOYYMzsAlxXH3IeA5Jb8Fw0=
 github.com/gorse-io/sqlite v1.3.3-0.20220612031856-d20c723836a2/go.mod h1:XosYrot929USEr0tje1wy8UJb7pS5xhTXqZiGHDIB2c=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=

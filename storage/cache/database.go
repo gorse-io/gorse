@@ -367,7 +367,7 @@ func Open(path string) (Database, error) {
 		gormConfig.Logger = &zapgorm2.Logger{
 			ZapLogger:                 log.Logger(),
 			LogLevel:                  logger.Warn,
-			SlowThreshold:             time.Second,
+			SlowThreshold:             10 * time.Second,
 			SkipCallerLookup:          false,
 			IgnoreRecordNotFoundError: false,
 		}

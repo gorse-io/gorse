@@ -19,7 +19,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20220504033926-54e0e80acf0a
+	github.com/gorse-io/dashboard v0.0.0-20220613132847-f5b24a31269e
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v0.0.0-20220203013757-bd733f3c86b9
