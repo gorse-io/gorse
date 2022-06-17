@@ -37,7 +37,7 @@ services:
       - 8123:8123
 
   oracle:
-    image: dockerproxy.com/gvenzl/oracle-xe
+    image: gvenzl/oracle-xe
     ports:
       - 1521:1521
     environment:

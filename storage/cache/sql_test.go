@@ -41,7 +41,7 @@ func init() {
 	}
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
-	oracleDSN = env("ORACLE_URI", "oracle://system:password@127.0.0.1:1521/XEPDB1")
+	oracleDSN = env("ORACLE_URI", "oracle://system:password@127.0.0.1:1521/XE")
 }
 
 type testSQLDatabase struct {
@@ -75,7 +75,7 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC")
@@ -198,18 +198,18 @@ func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
 	databaseComm, err := sql.Open("oracle", oracleDSN)
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	_, err = databaseComm.Exec(fmt.Sprintf("DROP USER %s", dbName))
+	_, err = databaseComm.Exec(fmt.Sprintf("DROP USER %s CASCADE", dbName))
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s", dbName, dbName))
 	assert.NoError(t, err)
-	_, err = databaseComm.Exec(fmt.Sprintf("GRANT CONNECT, RESOURCE, DBA TO %s", dbName))
+	_, err = databaseComm.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES TO %s", dbName))
 	assert.NoError(t, err)
 	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	parsed, err := url.Parse(oracleDSN)
 	assert.NoError(t, err)
-	database.Database, err = Open(fmt.Sprintf("oracle://%s:%s@%s/XEPDB1", dbName, dbName, parsed.Host))
+	database.Database, err = Open(fmt.Sprintf("oracle://%s:%s@%s/%s", dbName, dbName, parsed.Host, parsed.Path))
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()

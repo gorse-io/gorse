@@ -75,7 +75,7 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	database.Database, err = Open(mySqlDSN + dbName + "?timeout=30s&parseTime=true")
