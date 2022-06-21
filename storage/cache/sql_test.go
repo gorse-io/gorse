@@ -203,7 +203,7 @@ func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
 	// create database
 	databaseComm, err := sql.Open("oracle", oracleDSN)
 	assert.NoError(t, err)
-	dbName := "gorse_" + testName
+	dbName := strings.ToUpper("gorse_" + testName)
 	rows, err := databaseComm.Query("select * from dba_users where username=:1", dbName)
 	assert.NoError(t, err)
 	if rows.Next() {
