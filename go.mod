@@ -9,7 +9,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.0.8
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
-	github.com/emicklei/go-restful/v3 v3.5.2
+	github.com/emicklei/go-restful/v3 v3.8.0
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.10.1

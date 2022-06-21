@@ -29,6 +29,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -73,7 +74,7 @@ func (m *Master) CreateWebService() {
 		Doc("Get tasks.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Writes([]Task{}))
+		Writes([]task.Task{}))
 	ws.Route(ws.GET("/dashboard/rates").To(m.getRates).
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -189,14 +190,15 @@ func (fs *SinglePageAppFileSystem) Open(name string) (http.File, error) {
 
 func (m *Master) StartHttpServer() {
 	m.CreateWebService()
-	http.HandleFunc("/", m.dashboard)
-	http.HandleFunc("/login", m.login)
-	http.HandleFunc("/logout", m.logout)
-	http.HandleFunc("/api/bulk/users", m.importExportUsers)
-	http.HandleFunc("/api/bulk/items", m.importExportItems)
-	http.HandleFunc("/api/bulk/feedback", m.importExportFeedback)
+	container := restful.NewContainer()
+	container.Handle("/", http.HandlerFunc(m.dashboard))
+	container.Handle("/login", http.HandlerFunc(m.login))
+	container.Handle("/logout", http.HandlerFunc(m.logout))
+	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
+	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
+	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
 	//http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
-	m.RestServer.StartHttpServer()
+	m.RestServer.StartHttpServer(container)
 }
 
 var (
@@ -280,7 +282,7 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 	case http.MethodPost:
 		name := request.FormValue("user_name")
 		pass := request.FormValue("password")
-		if name == m.GorseConfig.Master.DashboardUserName && pass == m.GorseConfig.Master.DashboardPassword {
+		if name == m.Config.Master.DashboardUserName && pass == m.Config.Master.DashboardPassword {
 			value := map[string]string{
 				"user_name": name,
 				"password":  pass,
@@ -334,7 +336,7 @@ func (m *Master) AuthFilter(req *restful.Request, resp *restful.Response, chain 
 }
 
 func (m *Master) checkAuth(request *http.Request) bool {
-	if m.GorseConfig.Master.DashboardUserName == "" || m.GorseConfig.Master.DashboardPassword == "" {
+	if m.Config.Master.DashboardUserName == "" || m.Config.Master.DashboardPassword == "" {
 		return true
 	}
 	if cookie, err := request.Cookie("session"); err == nil {
@@ -342,7 +344,7 @@ func (m *Master) checkAuth(request *http.Request) bool {
 		if err = cookieHandler.Decode("session", cookie.Value, &cookieValue); err == nil {
 			userName := cookieValue["user_name"]
 			password := cookieValue["password"]
-			if userName == m.GorseConfig.Master.DashboardUserName && password == m.GorseConfig.Master.DashboardPassword {
+			if userName == m.Config.Master.DashboardUserName && password == m.Config.Master.DashboardPassword {
 				return true
 			}
 		}
@@ -402,7 +404,7 @@ func formatConfig(configMap map[string]interface{}) map[string]interface{} {
 
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	var configMap map[string]interface{}
-	err := mapstructure.Decode(m.GorseConfig, &configMap)
+	err := mapstructure.Decode(m.Config, &configMap)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -494,7 +496,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	}
 	// read user neighbor index recall
 	var temp string
-	if m.GorseConfig.Recommend.UserNeighbors.EnableIndex {
+	if m.Config.Recommend.UserNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get user neighbor index recall", zap.Error(err))
 		} else {
@@ -502,7 +504,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		}
 	}
 	// read item neighbor index recall
-	if m.GorseConfig.Recommend.ItemNeighbors.EnableIndex {
+	if m.Config.Recommend.ItemNeighbors.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get item neighbor index recall", zap.Error(err))
 		} else {
@@ -510,7 +512,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 		}
 	}
 	// read matching index recall
-	if m.GorseConfig.Recommend.Collaborative.EnableIndex {
+	if m.Config.Recommend.Collaborative.EnableIndex {
 		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
 		} else {
@@ -521,7 +523,17 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 }
 
 func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
-	tasks := m.taskMonitor.List()
+	// List workers
+	workers := make([]string, 0)
+	m.nodesInfoMutex.RLock()
+	for _, info := range m.nodesInfo {
+		if info.Type == WorkerNode {
+			workers = append(workers, info.Name)
+		}
+	}
+	m.nodesInfoMutex.RUnlock()
+	// List tasks
+	tasks := m.taskMonitor.List(workers...)
 	server.Ok(response, tasks)
 }
 
@@ -532,8 +544,8 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 		server.BadRequest(response, err)
 		return
 	}
-	measurements := make(map[string][]server.Measurement, len(m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes))
-	for _, feedbackType := range m.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes {
+	measurements := make(map[string][]server.Measurement, len(m.Config.Recommend.DataSource.PositiveFeedbackTypes))
+	for _, feedbackType := range m.Config.Recommend.DataSource.PositiveFeedbackTypes {
 		measurements[feedbackType], err = m.RestServer.GetMeasurements(cache.Key(PositiveFeedbackRate, feedbackType), n)
 		if err != nil {
 			server.InternalServerError(response, err)
@@ -582,7 +594,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 func (m *Master) getUsers(request *restful.Request, response *restful.Response) {
 	// Authorize
 	cursor := request.QueryParameter("cursor")
-	n, err := server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN)
+	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
 		return
@@ -613,7 +625,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
 	category := request.PathParameter("category")
-	n, err := server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN)
+	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
 		return
@@ -630,7 +642,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		results, err = m.Recommend(response, userId, category, n, m.RecommendItemBased)
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
-		for _, recommender := range m.GorseConfig.Recommend.Online.FallbackRecommend {
+		for _, recommender := range m.Config.Recommend.Online.FallbackRecommend {
 			switch recommender {
 			case "collaborative":
 				recommenders = append(recommenders, m.RecommendCollaborative)
@@ -707,12 +719,12 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		server.BadRequest(response, err)
 		return
 	}
-	if n, err = server.ParseInt(request, "n", m.GorseConfig.Server.DefaultN); err != nil {
+	if n, err = server.ParseInt(request, "n", m.Config.Server.DefaultN); err != nil {
 		server.BadRequest(response, err)
 		return
 	}
 	// Get the popular list
-	scores, err := m.CacheClient.GetSorted(cache.Key(key, category), offset, m.GorseConfig.Recommend.CacheSize)
+	scores, err := m.CacheClient.GetSorted(cache.Key(key, category), offset, m.Config.Recommend.CacheSize)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1141,45 +1153,44 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	lineCount := 0
 	timeStart := time.Now()
 	feedbacks := make([]data.Feedback, 0)
-	for scanner.Scan() {
-		line := scanner.Text()
+	err = base.ReadLines(scanner, sep, func(lineNumber int, splits []string) bool {
 		if hasHeader {
 			hasHeader = false
-			continue
+			return true
 		}
-		splits := strings.Split(line, sep)
 		// reorder fields
-		splits, err = format(fmtString, "fuit", splits, lineCount)
+		splits, err = format(fmtString, "fuit", splits, lineNumber)
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
-			return
+			return false
 		}
 		feedback := data.Feedback{}
 		// 1. feedback type
 		feedback.FeedbackType = splits[0]
 		if err = base.ValidateId(splits[0]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid feedback type `%v` at line %d (%s)", splits[0], lineCount, err.Error()))
-			return
+				fmt.Errorf("invalid feedback type `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
+			return false
 		}
 		// 2. user id
 		if err = base.ValidateId(splits[1]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[1], lineCount, err.Error()))
-			return
+				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
+			return false
 		}
 		feedback.UserId = splits[1]
 		// 3. item id
 		if err = base.ValidateId(splits[2]); err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[2], lineCount, err.Error()))
-			return
+				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[2], lineNumber, err.Error()))
+			return false
 		}
 		feedback.ItemId = splits[2]
 		feedback.Timestamp, err = dateparse.ParseAny(splits[3])
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineCount))
+				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineNumber))
+			return false
 		}
 		feedbacks = append(feedbacks, feedback)
 		// batch insert
@@ -1187,20 +1198,21 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 			err = m.InsertFeedbackToCache(feedbacks)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
-				return
+				return false
 			}
 			feedbacks = nil
 		}
 		lineCount++
-	}
-	if err = scanner.Err(); err != nil {
+		return true
+	})
+	if err != nil {
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
 	// insert to data store
 	err = m.DataClient.BatchInsertFeedback(feedbacks,
-		m.GorseConfig.Server.AutoInsertUser,
-		m.GorseConfig.Server.AutoInsertItem, true)
+		m.Config.Server.AutoInsertUser,
+		m.Config.Server.AutoInsertItem, true)
 	if err != nil {
 		server.InternalServerError(restful.NewResponse(response), err)
 		return
@@ -1224,8 +1236,8 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 //func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
 //// load dataset
 //dataSet, err := click.LoadDataFromDatabase(m.DataClient,
-//	m.GorseConfig.Database.PositiveFeedbackTypes,
-//	m.GorseConfig.Database.ReadFeedbackType)
+//	m.Config.Database.PositiveFeedbackTypes,
+//	m.Config.Database.ReadFeedbackType)
 //if err != nil {
 //	server.InternalServerError(restful.NewResponse(response), err)
 //}

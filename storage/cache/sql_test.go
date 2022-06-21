@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/storage"
 	"net/url"
 	"os"
 	"runtime"
@@ -78,7 +79,7 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC")
+	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -131,18 +132,17 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(mySqlDSN + "?timeout=30s&parseTime=true")
-	databaseComm, err := sql.Open("mysql", mySqlDSN[len(mySQLPrefix):]+"?timeout=30s&parseTime=true")
+	databaseComm, err := sql.Open("mysql", mySqlDSN[len(storage.MySQLPrefix):])
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(mySqlDSN + dbName + "?timeout=30s&parseTime=true")
+	database.Database, err = Open(mySqlDSN + dbName)
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -177,7 +177,13 @@ func TestMySQL_Scan(t *testing.T) {
 func TestMySQL_Init(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
-	assert.NoError(t, db.Init())
+	err := db.Init()
+	assert.NoError(t, err)
+
+	name, err := storage.ProbeMySQLIsolationVariableName(mySqlDSN[len(storage.MySQLPrefix):])
+	assert.NoError(t, err)
+	connection := db.Database.(*SQLDatabase).client
+	assertQuery(t, connection, fmt.Sprintf("SELECT @@%s", name), "READ-UNCOMMITTED")
 }
 
 func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
@@ -282,6 +288,16 @@ func TestSQLite_Scan(t *testing.T) {
 	db := newTestSQLiteDatabase(t)
 	defer db.Close(t)
 	testScan(t, db.Database)
+}
+
+func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) {
+	rows, err := connection.Query(sql)
+	assert.NoError(t, err)
+	assert.True(t, rows.Next())
+	var result string
+	err = rows.Scan(&result)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
 }
 
 func TestSQLite_Init(t *testing.T) {

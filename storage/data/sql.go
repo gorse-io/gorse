@@ -101,16 +101,6 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// change settings
-		if _, err := d.client.Exec("SET SESSION sql_mode=\"" +
-			"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO," +
-			"NO_ENGINE_SUBSTITUTION\""); err != nil {
-			return errors.Trace(err)
-		}
-		// disable lock
-		if _, err := d.client.Exec("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
-			return errors.Trace(err)
-		}
 	case Postgres:
 		// create tables
 		type Items struct {
@@ -136,10 +126,6 @@ func (d *SQLDatabase) Init() error {
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
-			return errors.Trace(err)
-		}
-		// disable lock
-		if _, err := d.client.Exec("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"); err != nil {
 			return errors.Trace(err)
 		}
 	case SQLite:
@@ -307,7 +293,7 @@ func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
 
 // DeleteItem deletes a item from MySQL.
 func (d *SQLDatabase) DeleteItem(itemId string) error {
-	if err := d.gormDB.Delete(&Item{}, itemId).Error; err != nil {
+	if err := d.gormDB.Delete(&Item{ItemId: itemId}).Error; err != nil {
 		return errors.Trace(err)
 	}
 	if err := d.gormDB.Delete(&Feedback{}, "item_id = ?", itemId).Error; err != nil {
@@ -543,7 +529,7 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 
 // DeleteUser deletes a user from MySQL.
 func (d *SQLDatabase) DeleteUser(userId string) error {
-	if err := d.gormDB.Delete(&User{}, userId).Error; err != nil {
+	if err := d.gormDB.Delete(&User{UserId: userId}).Error; err != nil {
 		return errors.Trace(err)
 	}
 	if err := d.gormDB.Delete(&Feedback{}, "user_id = ?", userId).Error; err != nil {

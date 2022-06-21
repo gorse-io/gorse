@@ -58,17 +58,20 @@ func NewServer(masterHost string, masterPort int, serverHost string, serverPort 
 		masterPort: masterPort,
 		cacheFile:  cacheFile,
 		RestServer: RestServer{
-			DataClient:  &data.NoDatabase{},
-			CacheClient: &cache.NoDatabase{},
-			GorseConfig: config.GetDefaultConfig(),
-			HttpHost:    serverHost,
-			HttpPort:    serverPort,
-			WebService:  new(restful.WebService),
+			Settings:   config.NewSettings(),
+			HttpHost:   serverHost,
+			HttpPort:   serverPort,
+			WebService: new(restful.WebService),
 		},
 	}
 	s.RestServer.PopularItemsCache = NewPopularItemsCache(&s.RestServer)
 	s.RestServer.HiddenItemsManager = NewHiddenItemsManager(&s.RestServer)
 	return s
+}
+
+func (s *Server) SetOneMode(settings *config.Settings) {
+	s.OneMode = true
+	s.Settings = settings
 }
 
 // Serve starts a server node.
@@ -106,14 +109,17 @@ func (s *Server) Serve() {
 	}
 	s.masterClient = protocol.NewMasterClient(conn)
 
-	go s.Sync()
-	s.StartHttpServer()
+	if !s.OneMode {
+		go s.Sync()
+	}
+	container := restful.NewContainer()
+	s.StartHttpServer(container)
 }
 
 // Sync this server to the master.
 func (s *Server) Sync() {
 	defer base.CheckPanic()
-	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.GorseConfig.Master.MetaTimeout))
+	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.Config.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
 		var err error
@@ -129,39 +135,39 @@ func (s *Server) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &s.GorseConfig)
+		err = json.Unmarshal([]byte(meta.Config), &s.Config)
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
 		}
 
 		// connect to data store
-		if s.dataPath != s.GorseConfig.Database.DataStore {
+		if s.dataPath != s.Config.Database.DataStore {
 			log.Logger().Info("connect data store",
-				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.DataStore)))
-			if s.DataClient, err = data.Open(s.GorseConfig.Database.DataStore); err != nil {
+				zap.String("database", log.RedactDBURL(s.Config.Database.DataStore)))
+			if s.DataClient, err = data.Open(s.Config.Database.DataStore); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
-			s.dataPath = s.GorseConfig.Database.DataStore
+			s.dataPath = s.Config.Database.DataStore
 		}
 
 		// connect to cache store
-		if s.cachePath != s.GorseConfig.Database.CacheStore {
+		if s.cachePath != s.Config.Database.CacheStore {
 			log.Logger().Info("connect cache store",
-				zap.String("database", log.RedactDBURL(s.GorseConfig.Database.CacheStore)))
-			if s.CacheClient, err = cache.Open(s.GorseConfig.Database.CacheStore); err != nil {
+				zap.String("database", log.RedactDBURL(s.Config.Database.CacheStore)))
+			if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
-			s.cachePath = s.GorseConfig.Database.CacheStore
+			s.cachePath = s.Config.Database.CacheStore
 		}
 
 	sleep:
 		if s.testMode {
 			return
 		}
-		time.Sleep(s.GorseConfig.Master.MetaTimeout)
+		time.Sleep(s.Config.Master.MetaTimeout)
 	}
 }
 
@@ -180,8 +186,8 @@ func NewPopularItemsCache(s *RestServer) *PopularItemsCache {
 	go func() {
 		for {
 			sc.sync()
-			log.Logger().Debug("refresh server side popular items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
-			time.Sleep(s.GorseConfig.Server.CacheExpire)
+			log.Logger().Debug("refresh server side popular items cache", zap.String("cache_expire", s.Config.Server.CacheExpire.String()))
+			time.Sleep(s.Config.Server.CacheExpire)
 		}
 	}()
 	return sc
@@ -240,8 +246,8 @@ func NewHiddenItemsManager(s *RestServer) *HiddenItemsManager {
 	go func() {
 		for {
 			hc.sync()
-			log.Logger().Debug("refresh server side hidden items cache", zap.String("cache_expire", s.GorseConfig.Server.CacheExpire.String()))
-			time.Sleep(hc.server.GorseConfig.Server.CacheExpire)
+			log.Logger().Debug("refresh server side hidden items cache", zap.String("cache_expire", s.Config.Server.CacheExpire.String()))
+			time.Sleep(hc.server.Config.Server.CacheExpire)
 		}
 	}()
 	return hc
@@ -328,14 +334,36 @@ func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]boo
 	}), nil
 }
 
-type CacheModification struct {
-	client    cache.Database
-	deletion  []cache.SetMember
-	insertion []cache.SortedSet
+func (hc *HiddenItemsManager) IsHiddenInCache(member string, category string) bool {
+	if hc.test {
+		hc.sync()
+	}
+	// load hidden items
+	hc.mu.RLock()
+	hiddenItems := hc.hiddenItems
+	hc.mu.RUnlock()
+	// load hidden items in category
+	hiddenItemsInCategory := strset.New()
+	if category != "" {
+		if temp, exist := hc.hiddenItemsInCategories.Load(category); exist {
+			hiddenItemsInCategory = temp.(*strset.Set)
+		}
+	}
+	return hiddenItems.Has(member) || hiddenItemsInCategory.Has(member)
 }
 
-func NewCacheModification(client cache.Database) *CacheModification {
-	return &CacheModification{client: client}
+type CacheModification struct {
+	client             cache.Database
+	deletion           []cache.SetMember
+	insertion          []cache.SortedSet
+	hiddenItemsManager *HiddenItemsManager
+}
+
+func NewCacheModification(client cache.Database, hiddenItemsManager *HiddenItemsManager) *CacheModification {
+	return &CacheModification{
+		client:             client,
+		hiddenItemsManager: hiddenItemsManager,
+	}
 }
 
 func (cm *CacheModification) deleteItemCategory(itemId, category string) *CacheModification {
@@ -352,7 +380,9 @@ func (cm *CacheModification) addItemCategory(itemId, category string, latest, po
 		cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
 	}
 	// 2. remove delete mark
-	cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
+	if cm.hiddenItemsManager.IsHiddenInCache(itemId, category) {
+		cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
+	}
 	return cm
 }
 
@@ -375,7 +405,7 @@ func (cm *CacheModification) modifyItem(itemId string, prevCategories, categorie
 			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
 		}
 		// 3. remove delete mark
-		if !prevCategoriesSet.Has(category) {
+		if !prevCategoriesSet.Has(category) && cm.hiddenItemsManager.IsHiddenInCache(itemId, category) {
 			cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
 		}
 	}
@@ -394,7 +424,9 @@ func (cm *CacheModification) HideItem(itemId string) *CacheModification {
 }
 
 func (cm *CacheModification) unHideItem(itemId string) *CacheModification {
-	cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	if cm.hiddenItemsManager.IsHiddenInCache(itemId, "") {
+		cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	}
 	return cm
 }
 
@@ -416,7 +448,9 @@ func (cm *CacheModification) addItem(itemId string, categories []string, latest,
 		}
 	}
 	// 3. remove delete mark
-	cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	if cm.hiddenItemsManager.IsHiddenInCache(itemId, "") {
+		cm.deletion = append(cm.deletion, cache.Member(cache.HiddenItemsV2, itemId))
+	}
 }
 
 func (cm *CacheModification) Exec() error {

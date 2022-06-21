@@ -19,12 +19,15 @@ import (
 	"encoding/json"
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"net"
@@ -49,15 +52,19 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	bpr.Fit(trainSet, testSet, nil)
 	return &mockMasterRPC{
 		Master: Master{
-			taskMonitor:         NewTaskMonitor(),
-			nodesInfo:           make(map[string]*Node),
-			rankingModelName:    "bpr",
-			rankingModelVersion: 123,
-			rankingModel:        bpr,
-			clickModelVersion:   456,
-			clickModel:          fm,
+			taskMonitor:      task.NewTaskMonitor(),
+			nodesInfo:        make(map[string]*Node),
+			rankingModelName: "bpr",
 			RestServer: server.RestServer{
-				GorseConfig: config.GetDefaultConfig(),
+				Settings: &config.Settings{
+					Config:              config.GetDefaultConfig(),
+					CacheClient:         cache.NoDatabase{},
+					DataClient:          data.NoDatabase{},
+					RankingModel:        bpr,
+					ClickModel:          fm,
+					RankingModelVersion: 123,
+					ClickModelVersion:   456,
+				},
 			},
 		},
 		addr: make(chan string),
@@ -94,38 +101,41 @@ func TestRPC(t *testing.T) {
 	client := protocol.NewMasterClient(conn)
 	ctx := context.Background()
 
-	_, err = client.StartTask(ctx, &protocol.StartTaskRequest{Name: "a", Total: 12})
+	testTask := task.NewTask("a", 12)
+	_, err = client.PushTaskInfo(ctx, testTask.ToPB())
 	assert.NoError(t, err)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
 	assert.Equal(t, 0, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, TaskStatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
+	assert.Equal(t, task.StatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
 
-	_, err = client.UpdateTask(ctx, &protocol.UpdateTaskRequest{Name: "a", Done: 10})
+	testTask.Update(10)
+	_, err = client.PushTaskInfo(ctx, testTask.ToPB())
 	assert.NoError(t, err)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
 	assert.Equal(t, 10, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, TaskStatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
+	assert.Equal(t, task.StatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
 
-	_, err = client.FinishTask(ctx, &protocol.FinishTaskRequest{Name: "a"})
+	testTask.Finish()
+	_, err = client.PushTaskInfo(ctx, testTask.ToPB())
 	assert.NoError(t, err)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
 	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, TaskStatusComplete, rpcServer.taskMonitor.Tasks["a"].Status)
+	assert.Equal(t, task.StatusComplete, rpcServer.taskMonitor.Tasks["a"].Status)
 
 	// test get click model
 	clickModelReceiver, err := client.GetClickModel(ctx, &protocol.VersionInfo{Version: 456})
 	assert.NoError(t, err)
 	clickModel, err := protocol.UnmarshalClickModel(clickModelReceiver)
 	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.clickModel, clickModel)
+	assert.Equal(t, rpcServer.ClickModel, clickModel)
 
 	// test get ranking model
 	rankingModelReceiver, err := client.GetRankingModel(ctx, &protocol.VersionInfo{Version: 123})
 	assert.NoError(t, err)
 	rankingModel, err := protocol.UnmarshalRankingModel(rankingModelReceiver)
 	assert.NoError(t, err)
-	rpcServer.rankingModel.SetParams(rpcServer.rankingModel.GetParams())
-	assert.Equal(t, rpcServer.rankingModel, rankingModel)
+	rpcServer.RankingModel.SetParams(rpcServer.RankingModel.GetParams())
+	assert.Equal(t, rpcServer.RankingModel, rankingModel)
 
 	// test get meta
 	_, err = client.GetMeta(ctx,
@@ -142,7 +152,7 @@ func TestRPC(t *testing.T) {
 	var cfg config.Config
 	err = json.Unmarshal([]byte(metaResp.Config), &cfg)
 	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.GorseConfig, &cfg)
+	assert.Equal(t, rpcServer.Config, &cfg)
 
 	time.Sleep(time.Second * 2)
 	metaResp, err = client.GetMeta(ctx,

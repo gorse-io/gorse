@@ -273,7 +273,7 @@ func (evaluator *OnlineEvaluator) Evaluate() []server.Measurement {
 		}
 
 		for _, f := range positiveFeedbacks {
-			if readTime, exist := evaluator.ReverseIndex[lo.Tuple2[int32, int32]{f.A, f.B}]; exist && readTime.Unix() <= f.C.Unix() {
+			if readTime, exist := evaluator.ReverseIndex[lo.Tuple2[int32, int32]{f.A, f.B}]; exist /* && readTime.Unix() <= f.C.Unix() */ {
 				// truncate timestamp to day
 				truncatedTime := readTime.Truncate(time.Hour * 24)
 				readIndex := int(evaluator.TruncatedDateToday.Sub(truncatedTime) / time.Hour / 24)

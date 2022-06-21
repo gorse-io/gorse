@@ -16,7 +16,9 @@ package data
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/storage"
 	"os"
 	"runtime"
 	"strings"
@@ -68,7 +70,8 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	databaseComm, err := sql.Open("mysql", mySqlDSN[len(mySQLPrefix):]+"?timeout=30s&parseTime=true")
+	databaseComm, err := sql.Open("mysql", mySqlDSN[len(storage.MySQLPrefix):]+"?timeout=30s&parseTime=true")
+	database.Database, err = Open(mySqlDSN)
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
@@ -78,7 +81,7 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(mySqlDSN + dbName + "?timeout=30s&parseTime=true")
+	database.Database, err = Open(mySqlDSN + dbName)
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -138,6 +141,12 @@ func TestMySQL_Init(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	assert.NoError(t, db.Init())
+
+	name, err := storage.ProbeMySQLIsolationVariableName(mySqlDSN[len(storage.MySQLPrefix):])
+	assert.NoError(t, err)
+	connection := db.Database.(*SQLDatabase).client
+	assertQuery(t, connection, fmt.Sprintf("SELECT @@%s", name), "READ-UNCOMMITTED")
+	assertQuery(t, connection, "SELECT @@sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
 }
 
 func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
@@ -156,6 +165,7 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	var err error
 	// create database
 	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable&TimeZone=UTC")
+	database.Database, err = Open(postgresDSN + "?sslmode=disable")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
@@ -165,7 +175,7 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	err = database.Database.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC")
+	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -242,14 +252,14 @@ func newTestClickHouseDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	databaseComm, err := sql.Open("clickhouse", "http://"+clickhouseDSN[len(clickhousePrefix):])
+	databaseComm, err := sql.Open("clickhouse", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	database.Database, err = Open(clickhouseDSN + dbName + "?mutations_sync=2")
@@ -378,4 +388,14 @@ func TestSQLite_Init(t *testing.T) {
 	db := newTestSQLiteDatabase(t)
 	defer db.Close(t)
 	assert.NoError(t, db.Init())
+}
+
+func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) {
+	rows, err := connection.Query(sql)
+	assert.NoError(t, err)
+	assert.True(t, rows.Next())
+	var result string
+	err = rows.Scan(&result)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
 }

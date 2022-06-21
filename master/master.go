@@ -20,6 +20,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
@@ -44,8 +45,8 @@ type Master struct {
 	protocol.UnimplementedMasterServer
 	server.RestServer
 
-	taskMonitor   *TaskMonitor
-	taskScheduler *TaskScheduler
+	taskMonitor   *task.Monitor
+	taskScheduler *task.Scheduler
 	cacheFile     string
 
 	// cluster meta cache
@@ -64,17 +65,13 @@ type Master struct {
 	clickDataMutex sync.RWMutex
 
 	// ranking model
-	rankingModel         ranking.MatrixFactorization
 	rankingModelName     string
-	rankingModelVersion  int64
 	rankingScore         ranking.Score
 	rankingModelMutex    sync.RWMutex
 	rankingModelSearcher *ranking.ModelSearcher
 
 	// click model
-	clickModel         click.FactorizationMachine
 	clickScore         click.Score
-	clickModelVersion  int64
 	clickModelMutex    sync.RWMutex
 	clickModelSearcher *click.ModelSearcher
 
@@ -89,7 +86,7 @@ type Master struct {
 func NewMaster(cfg *config.Config, cacheFile string) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
-	taskMonitor := NewTaskMonitor()
+	taskMonitor := task.NewTaskMonitor()
 	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,
 		TaskFitRankingModel, TaskFitClickModel, TaskSearchRankingModel, TaskSearchClickModel,
 		TaskCacheGarbageCollection} {
@@ -100,26 +97,30 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		// create task monitor
 		cacheFile:     cacheFile,
 		taskMonitor:   taskMonitor,
-		taskScheduler: NewTaskScheduler(),
-		// init versions
-		rankingModelVersion: rand.Int63(),
-		clickModelVersion:   rand.Int63(),
+		taskScheduler: task.NewTaskScheduler(),
 		// default ranking model
 		rankingModelName: "bpr",
-		rankingModel:     ranking.NewBPR(nil),
 		rankingModelSearcher: ranking.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Master.NumJobs),
 		// default click model
-		clickModel: click.NewFM(click.FMClassification, nil),
 		clickModelSearcher: click.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Master.NumJobs,
 		),
 		RestServer: server.RestServer{
-			GorseConfig: cfg,
+			Settings: &config.Settings{
+				Config:       cfg,
+				CacheClient:  cache.NoDatabase{},
+				DataClient:   data.NoDatabase{},
+				RankingModel: ranking.NewBPR(nil),
+				ClickModel:   click.NewFM(click.FMClassification, nil),
+				// init versions
+				RankingModelVersion: rand.Int63(),
+				ClickModelVersion:   rand.Int63(),
+			},
 			HttpHost:    cfg.Master.HttpHost,
 			HttpPort:    cfg.Master.HttpPort,
 			IsDashboard: true,
@@ -149,52 +150,52 @@ func (m *Master) Serve() {
 			zap.String("model_version", encoding.Hex(m.localCache.RankingModelVersion)),
 			zap.Float32("model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("params", m.localCache.RankingModel.GetParams()))
-		m.rankingModel = m.localCache.RankingModel
+		m.RankingModel = m.localCache.RankingModel
 		m.rankingModelName = m.localCache.RankingModelName
-		m.rankingModelVersion = m.localCache.RankingModelVersion
+		m.RankingModelVersion = m.localCache.RankingModelVersion
 		m.rankingScore = m.localCache.RankingModelScore
 		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
 		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
-		MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.rankingModel.Bytes()))
+		MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",
 			zap.String("model_version", encoding.Hex(m.localCache.ClickModelVersion)),
 			zap.Float32("model_score", m.localCache.ClickModelScore.Precision),
 			zap.Any("params", m.localCache.ClickModel.GetParams()))
-		m.clickModel = m.localCache.ClickModel
+		m.ClickModel = m.localCache.ClickModel
 		m.clickScore = m.localCache.ClickModelScore
-		m.clickModelVersion = m.localCache.ClickModelVersion
+		m.ClickModelVersion = m.localCache.ClickModelVersion
 		RankingPrecision.Set(float64(m.clickScore.Precision))
 		RankingRecall.Set(float64(m.clickScore.Recall))
 		RankingAUC.Set(float64(m.clickScore.AUC))
-		MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.clickModel.Bytes()))
+		MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
 	}
 
 	// create cluster meta cache
 	m.ttlCache = ttlcache.NewCache()
 	m.ttlCache.SetExpirationCallback(m.nodeDown)
 	m.ttlCache.SetNewItemCallback(m.nodeUp)
-	if err = m.ttlCache.SetTTL(m.GorseConfig.Master.MetaTimeout + 10*time.Second); err != nil {
+	if err = m.ttlCache.SetTTL(m.Config.Master.MetaTimeout + 10*time.Second); err != nil {
 		log.Logger().Fatal("failed to set TTL", zap.Error(err))
 	}
 
 	// connect data database
-	m.DataClient, err = data.Open(m.GorseConfig.Database.DataStore)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore)
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
-			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.DataStore)))
+			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
 	}
 	if err = m.DataClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
 	// connect cache database
-	m.CacheClient, err = cache.Open(m.GorseConfig.Database.CacheStore)
+	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore)
 	if err != nil {
 		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
-			zap.String("database", log.RedactDBURL(m.GorseConfig.Database.CacheStore)))
+			zap.String("database", log.RedactDBURL(m.Config.Database.CacheStore)))
 	}
 	if err = m.CacheClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
@@ -209,25 +210,29 @@ func (m *Master) Serve() {
 		m.taskScheduler.PreLock(taskName)
 	}
 
-	go m.StartHttpServer()
 	go m.RunPrivilegedTasksLoop()
-	log.Logger().Info("start model fit", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelFitPeriod))
+	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
 	go m.RunRagtagTasksLoop()
-	log.Logger().Info("start model searcher", zap.Duration("period", m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod))
+	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
 
 	// start rpc server
-	log.Logger().Info("start rpc server",
-		zap.String("host", m.GorseConfig.Master.Host),
-		zap.Int("port", m.GorseConfig.Master.Port))
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.GorseConfig.Master.Host, m.GorseConfig.Master.Port))
-	if err != nil {
-		log.Logger().Fatal("failed to listen", zap.Error(err))
-	}
-	grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
-	protocol.RegisterMasterServer(grpcServer, m)
-	if err = grpcServer.Serve(lis); err != nil {
-		log.Logger().Fatal("failed to start rpc server", zap.Error(err))
-	}
+	go func() {
+		log.Logger().Info("start rpc server",
+			zap.String("host", m.Config.Master.Host),
+			zap.Int("port", m.Config.Master.Port))
+		lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
+		if err != nil {
+			log.Logger().Fatal("failed to listen", zap.Error(err))
+		}
+		grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
+		protocol.RegisterMasterServer(grpcServer, m)
+		if err = grpcServer.Serve(lis); err != nil {
+			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
+		}
+	}()
+
+	// start http server
+	m.StartHttpServer()
 }
 
 func (m *Master) RunPrivilegedTasksLoop() {
@@ -331,7 +336,7 @@ func (m *Master) RunRagtagTasksLoop() {
 			time.Sleep(time.Minute)
 			continue
 		}
-		time.Sleep(m.GorseConfig.Recommend.Collaborative.ModelSearchPeriod)
+		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
 	}
 }
 

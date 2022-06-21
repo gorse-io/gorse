@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -73,22 +74,22 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		}
 	}
 	// marshall config
-	s, err := json.Marshal(m.GorseConfig)
+	s, err := json.Marshal(m.Config)
 	if err != nil {
 		return nil, err
 	}
 	// save ranking model version
 	m.rankingModelMutex.RLock()
 	var rankingModelVersion int64
-	if m.rankingModel != nil && !m.rankingModel.Invalid() {
-		rankingModelVersion = m.rankingModelVersion
+	if m.RankingModel != nil && !m.RankingModel.Invalid() {
+		rankingModelVersion = m.RankingModelVersion
 	}
 	m.rankingModelMutex.RUnlock()
 	// save click model version
 	m.clickModelMutex.RLock()
 	var clickModelVersion int64
-	if m.clickModel != nil && !m.clickModel.Invalid() {
-		clickModelVersion = m.clickModelVersion
+	if m.ClickModel != nil && !m.ClickModel.Invalid() {
+		clickModelVersion = m.ClickModelVersion
 	}
 	m.clickModelMutex.RUnlock()
 	// collect nodes
@@ -119,11 +120,11 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 	m.rankingModelMutex.RLock()
 	defer m.rankingModelMutex.RUnlock()
 	// skip empty model
-	if m.rankingModel == nil || m.rankingModel.Invalid() {
+	if m.RankingModel == nil || m.RankingModel.Invalid() {
 		return errors.New("no valid model found")
 	}
 	// check model version
-	if m.rankingModelVersion != version.Version {
+	if m.RankingModelVersion != version.Version {
 		return errors.New("model version mismatch")
 	}
 	// encode model
@@ -136,7 +137,7 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
-		err := ranking.MarshalModel(writer, m.rankingModel)
+		err := ranking.MarshalModel(writer, m.RankingModel)
 		if err != nil {
 			log.Logger().Error("fail to marshal ranking model", zap.Error(err))
 			encoderError = err
@@ -166,11 +167,11 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 	m.clickModelMutex.RLock()
 	defer m.clickModelMutex.RUnlock()
 	// skip empty model
-	if m.clickModel == nil || m.clickModel.Invalid() {
+	if m.ClickModel == nil || m.ClickModel.Invalid() {
 		return errors.New("no valid model found")
 	}
 	// check empty model
-	if m.clickModelVersion != version.Version {
+	if m.ClickModelVersion != version.Version {
 		return errors.New("model version mismatch")
 	}
 	// encode model
@@ -183,7 +184,7 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
-		err := click.MarshalModel(writer, m.clickModel)
+		err := click.MarshalModel(writer, m.ClickModel)
 		if err != nil {
 			log.Logger().Error("fail to marshal click model", zap.Error(err))
 			encoderError = err
@@ -232,23 +233,11 @@ func (m *Master) nodeDown(key string, value interface{}) {
 	delete(m.nodesInfo, key)
 }
 
-func (m *Master) StartTask(
+func (m *Master) PushTaskInfo(
 	_ context.Context,
-	in *protocol.StartTaskRequest) (*protocol.StartTaskResponse, error) {
-	m.taskMonitor.Start(in.Name, int(in.Total))
-	return &protocol.StartTaskResponse{}, nil
-}
-
-func (m *Master) UpdateTask(
-	_ context.Context,
-	in *protocol.UpdateTaskRequest) (*protocol.UpdateTaskResponse, error) {
-	m.taskMonitor.Update(in.Name, int(in.Done))
-	return &protocol.UpdateTaskResponse{}, nil
-}
-
-func (m *Master) FinishTask(
-	_ context.Context,
-	in *protocol.FinishTaskRequest) (*protocol.FinishTaskResponse, error) {
-	m.taskMonitor.Finish(in.Name)
-	return &protocol.FinishTaskResponse{}, nil
+	in *protocol.PushTaskInfoRequest) (*protocol.PushTaskInfoResponse, error) {
+	m.taskMonitor.TaskLock.Lock()
+	defer m.taskMonitor.TaskLock.Unlock()
+	m.taskMonitor.Tasks[in.GetName()] = task.NewTaskFromPB(in)
+	return &protocol.PushTaskInfoResponse{}, nil
 }

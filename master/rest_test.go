@@ -51,12 +51,13 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	s.cacheStoreServer, err = miniredis.Run()
 	assert.NoError(t, err)
 	// open database
+	s.Settings = config.NewSettings()
 	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
 	assert.NoError(t, err)
 	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
 	assert.NoError(t, err)
 	// create server
-	s.GorseConfig = config.GetDefaultConfig()
+	s.Config = config.GetDefaultConfig()
 	s.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&s.RestServer)
 	s.RestServer.PopularItemsCache = server.NewPopularItemsCache(&s.RestServer)
 	s.WebService = new(restful.WebService)
@@ -181,7 +182,7 @@ func TestMaster_ImportUsers(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = file.Write([]byte("a::b\t1\n" +
 		"b::c\t2\n" +
-		"c::d\t3\n"))
+		"\"c::d\"\t\"3\"\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -213,7 +214,7 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	_, err = file.Write([]byte("user_id,labels\r\n" +
 		"1,a|用例\r\n" +
 		"2,b|乱码\r\n" +
-		"3,c|测试\r\n"))
+		"\"3\",\"c|测试\"\r\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -252,7 +253,7 @@ func TestMaster_ImportItems(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = file.Write([]byte("1\ta::b\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\tx\t0\n" +
 		"2\tb::c\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\tx::y\t0\n" +
-		"3\tc::d\t\"\"\"three\"\"\"\t2022-01-01 01:01:01.000000001 +0000 UTC\t\t1\n"))
+		"\"3\"\t\"c::d\"\t\"\"\"three\"\"\"\t\"2022-01-01 01:01:01.000000001 +0000 UTC\"\t\t\"1\"\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -284,7 +285,7 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	_, err = file.Write([]byte("item_id,is_hidden,categories,time_stamp,labels,description\r\n" +
 		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\r\n" +
 		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\r\n" +
-		"3,true,,2022-01-01 01:01:01.000000001 +0000 UTC,,three\r\n"))
+		"\"3\",\"true\",,\"2022-01-01 01:01:01.000000001 +0000 UTC\",,\"three\"\r\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -321,7 +322,7 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = file.Write([]byte("0\t2\tclick\t0001-01-01 00:00:00 +0000 UTC\n" +
 		"2\t6\tread\t0001-01-01 00:00:00 +0000 UTC\n" +
-		"1\t4\tshare\t0001-01-01 00:00:00 +0000 UTC\n"))
+		"\"1\"\t\"4\"\t\"share\"\t\"0001-01-01 00:00:00 +0000 UTC\"\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -353,7 +354,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n" +
 		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n" +
 		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n" +
-		"share,1,4,0001-01-01 00:00:00 +0000 UTC\r\n"))
+		"\"share\",\"1\",\"4\",\"0001-01-01 00:00:00 +0000 UTC\"\r\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -431,7 +432,7 @@ func TestMaster_GetRates(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// write rates
-	s.GorseConfig.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
 	err := s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
 	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
@@ -552,7 +553,7 @@ func TestServer_SortedItems(t *testing.T) {
 			}
 			err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
-			err = server.NewCacheModification(s.CacheClient).HideItem(strconv.Itoa(i) + "3").Exec()
+			err = server.NewCacheModification(s.CacheClient, s.HiddenItemsManager).HideItem(strconv.Itoa(i) + "3").Exec()
 			assert.NoError(t, err)
 			items := make([]data.Item, 0)
 			for _, score := range scores {
@@ -679,7 +680,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		})).
 		End()
 
-	s.GorseConfig.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
+	s.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/recommend/0/_").
