@@ -204,7 +204,14 @@ func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
 	databaseComm, err := sql.Open("oracle", oracleDSN)
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	_, err = databaseComm.Exec(fmt.Sprintf("DROP USER %s CASCADE", dbName))
+	rows, err := databaseComm.Query("select * from dba_users where username=:1", dbName)
+	assert.NoError(t, err)
+	if rows.Next() {
+		// drop user if exists
+		_, err = databaseComm.Exec(fmt.Sprintf("DROP USER %s CASCADE", dbName))
+		assert.NoError(t, err)
+	}
+	err = rows.Close()
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s", dbName, dbName))
 	assert.NoError(t, err)
