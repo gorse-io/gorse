@@ -29,6 +29,7 @@ var (
 	mySqlDSN      string
 	postgresDSN   string
 	clickhouseDSN string
+	oracleDSN     string
 )
 
 func init() {
@@ -42,18 +43,11 @@ func init() {
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
 	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
+	oracleDSN = env("ORACLE_URI", "")
 }
 
 type testSQLDatabase struct {
 	Database
-}
-
-func (db *testSQLDatabase) GetComm(t *testing.T) *sql.DB {
-	var sqlDatabase *SQLDatabase
-	var ok bool
-	sqlDatabase, ok = db.Database.(*SQLDatabase)
-	assert.True(t, ok)
-	return sqlDatabase.client
 }
 
 func (db *testSQLDatabase) Close(t *testing.T) {
@@ -76,15 +70,14 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(mySqlDSN)
+	databaseComm, err := sql.Open("mysql", mySqlDSN[len(storage.MySQLPrefix):])
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	database.Database, err = Open(mySqlDSN + dbName)
@@ -170,15 +163,14 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(postgresDSN + "?sslmode=disable")
+	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable")
@@ -258,15 +250,14 @@ func newTestClickHouseDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(clickhouseDSN)
+	databaseComm, err := sql.Open("clickhouse", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
-	databaseComm := database.GetComm(t)
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	database.Database, err = Open(clickhouseDSN + dbName + "?mutations_sync=2")

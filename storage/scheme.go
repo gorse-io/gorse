@@ -28,6 +28,7 @@ const (
 	ClickhousePrefix = "clickhouse://"
 	SQLitePrefix     = "sqlite://"
 	RedisPrefix      = "redis://"
+	OraclePrefix     = "oracle://"
 )
 
 func AppendMySQLParams(dsn string, params map[string]string) (string, error) {

@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/araddon/dateparse"
+	"github.com/dzwvip/oracle"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/storage"
@@ -353,6 +354,17 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, storage.OraclePrefix) {
+		database := new(SQLDatabase)
+		database.driver = Oracle
+		if database.client, err = sql.Open("oracle", path); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(oracle.New(oracle.Config{Conn: database.client}), gormConfig)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

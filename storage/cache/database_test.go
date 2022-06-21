@@ -15,11 +15,10 @@ package cache
 
 import (
 	"github.com/juju/errors"
+	"github.com/stretchr/testify/assert"
 	"math"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func testMeta(t *testing.T, db Database) {

@@ -35,3 +35,10 @@ services:
     image: yandex/clickhouse-server:21.10
     ports:
       - 8123:8123
+
+  oracle:
+    image: gvenzl/oracle-xe:18
+    ports:
+      - 1521:1521
+    environment:
+      ORACLE_PASSWORD: password
