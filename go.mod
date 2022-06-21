@@ -30,14 +30,14 @@ require (
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.10.0
 	github.com/rakyll/statik v0.1.7
-	github.com/samber/lo v1.11.0
+	github.com/samber/lo v1.21.0
 	github.com/scylladb/go-set v1.0.2
 	github.com/sijms/go-ora/v2 v2.4.24
 	github.com/spf13/cobra v0.0.7
 	github.com/spf13/viper v1.10.1
 	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.0
-	github.com/thoas/go-funk v0.9.1
+	github.com/thoas/go-funk v0.9.2
 	go.mongodb.org/mongo-driver v1.5.1
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.21.0
@@ -66,15 +66,12 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dzwvip/oracle v1.2.1
-	github.com/emirpasic/gods v1.12.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/go-logfmt/logfmt v0.5.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.3 // indirect
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
 	github.com/go-openapi/spec v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.6 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
-	github.com/godror/godror v0.20.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/hashicorp/go-version v1.4.0 // indirect
@@ -144,6 +141,7 @@ require (
 )
 
 replace (
+	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220621125628-7688e49ca04b
 	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0
 	gorm.io/driver/sqlite v1.3.2 => github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d
 )

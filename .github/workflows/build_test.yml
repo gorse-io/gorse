@@ -58,6 +58,18 @@ jobs:
         ports:
           - 6379
 
+      oracle:
+        image: gvenzl/oracle-xe:18
+        ports:
+          - 1521
+        env:
+          ORACLE_PASSWORD: password
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
     - name: Set up dataset
       run: |
@@ -109,6 +121,8 @@ jobs:
         CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
         # Redis
         REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
+        # Oracle
+        ORACLE_URI: oracle://system:password@127.0.0.1:${{ job.services.oracle.ports[6379] }}/XE
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
