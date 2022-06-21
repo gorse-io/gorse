@@ -122,7 +122,7 @@ jobs:
         # Redis
         REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
         # Oracle
-        ORACLE_URI: oracle://system:password@127.0.0.1:${{ job.services.oracle.ports[6379] }}/XE
+        ORACLE_URI: oracle://system:password@127.0.0.1:${{ job.services.oracle.ports[1521] }}/XE
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)

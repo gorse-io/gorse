@@ -70,8 +70,7 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	databaseComm, err := sql.Open("mysql", mySqlDSN[len(storage.MySQLPrefix):]+"?timeout=30s&parseTime=true")
-	database.Database, err = Open(mySqlDSN)
+	databaseComm, err := sql.Open("mysql", mySqlDSN[len(storage.MySQLPrefix):])
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
@@ -164,15 +163,14 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable&TimeZone=UTC")
-	database.Database, err = Open(postgresDSN + "?sslmode=disable")
+	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
 	assert.NoError(t, err)
 	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
 	assert.NoError(t, err)
-	err = database.Database.Close()
+	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
 	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable")
