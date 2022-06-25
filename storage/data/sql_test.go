@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/storage"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -43,7 +44,7 @@ func init() {
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
 	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
-	oracleDSN = env("ORACLE_URI", "")
+	oracleDSN = env("ORACLE_URI", "oracle://system:password@127.0.0.1:1521/XE")
 }
 
 type testSQLDatabase struct {
@@ -318,6 +319,104 @@ func TestClickHouse_Timezone(t *testing.T) {
 
 func TestClickHouse_Init(t *testing.T) {
 	db := newTestClickHouseDatabase(t)
+	defer db.Close(t)
+	assert.NoError(t, db.Init())
+}
+
+func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
+	// retrieve test name
+	var testName string
+	pc, _, _, ok := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+	if ok && details != nil {
+		splits := strings.Split(details.Name(), ".")
+		testName = splits[len(splits)-1]
+	} else {
+		t.Fatalf("failed to retrieve test name")
+	}
+
+	database := new(testSQLDatabase)
+	var err error
+	// create database
+	databaseComm, err := sql.Open("oracle", oracleDSN)
+	assert.NoError(t, err)
+	dbName := strings.ToUpper(testName)
+	rows, err := databaseComm.Query("select * from dba_users where username=:1", dbName)
+	assert.NoError(t, err)
+	if rows.Next() {
+		// drop user if exists
+		_, err = databaseComm.Exec(fmt.Sprintf("DROP USER %s CASCADE", dbName))
+		assert.NoError(t, err)
+	}
+	err = rows.Close()
+	assert.NoError(t, err)
+	_, err = databaseComm.Exec(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s", dbName, dbName))
+	assert.NoError(t, err)
+	_, err = databaseComm.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES TO %s", dbName))
+	assert.NoError(t, err)
+	err = databaseComm.Close()
+	assert.NoError(t, err)
+	// connect database
+	parsed, err := url.Parse(oracleDSN)
+	assert.NoError(t, err)
+	database.Database, err = Open(fmt.Sprintf("oracle://%s:%s@%s/%s", dbName, dbName, parsed.Host, parsed.Path))
+	assert.NoError(t, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(t, err)
+	return database
+}
+
+func TestOracle_Users(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testUsers(t, db.Database)
+}
+
+func TestOracle_Feedback(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testFeedback(t, db.Database)
+}
+
+func TestOracle_Item(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testItems(t, db.Database)
+}
+
+func TestOracle_DeleteUser(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testDeleteUser(t, db.Database)
+}
+
+func TestOracle_DeleteItem(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testDeleteItem(t, db.Database)
+}
+
+func TestOracle_DeleteFeedback(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testDeleteFeedback(t, db.Database)
+}
+
+func TestOracle_TimeLimit(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testTimeLimit(t, db.Database)
+}
+
+func TestOracle_Timezone(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testTimeZone(t, db.Database)
+}
+
+func TestOracle_Init(t *testing.T) {
+	db := newTestOracleDatabase(t)
 	defer db.Close(t)
 	assert.NoError(t, db.Init())
 }

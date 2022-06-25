@@ -240,12 +240,12 @@ github.com/gorilla/securecookie v1.1.1 h1:miw7JPhV+b/lAHSXz4qd/nN9jRiAFV5FwjeKyC
 github.com/gorilla/securecookie v1.1.1/go.mod h1:ra0sb63/xPlUeL+yeDciTfxMRAA+MP+HVt/4epWDjd4=
 github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
-github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0 h1:j87cgitZMpflxv4PFYXFY3S3qf3YfvWatvnEHPok/BY=
-github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0/go.mod h1:V2TzR8ORGn4aktUMKkDJo9XX1STN3paUOsIBnFXJvWQ=
+github.com/gorse-io/clickhouse v0.3.3-0.20220623134139-641f1ee54169 h1:3J4LJUwd9oVUJUxGvPXhazqG130/LFmEj9O968mqjfk=
+github.com/gorse-io/clickhouse v0.3.3-0.20220623134139-641f1ee54169/go.mod h1:iILWzbul8U+gsf4kqbheF2QzBmdvVp63mloGGK8emDI=
 github.com/gorse-io/dashboard v0.0.0-20220504033926-54e0e80acf0a h1:ezb+DwZv15acWhUBiYp7WC9gY5W6eBWYgq1YfqtAyTk=
 github.com/gorse-io/dashboard v0.0.0-20220504033926-54e0e80acf0a/go.mod h1:TLQBh+sD73+HSL6uEZJFRLv1SgUnqef02AYzo61ZdiE=
-github.com/gorse-io/oracle v1.2.2-0.20220621125628-7688e49ca04b h1:cftL957V9b24MoafNMpEV8dHneqTfIDfyFOVT3I8Sdg=
-github.com/gorse-io/oracle v1.2.2-0.20220621125628-7688e49ca04b/go.mod h1:Sjtk+MzBxCY6rb2X7Eg3NFiRMGFPug46WocXPg6s1VQ=
+github.com/gorse-io/oracle v1.2.2-0.20220625045651-88a1ca5bd68c h1:jkskgywYQZu1vQFp+9LstESr+rWpm3Aw4iBSeZl3Pmc=
+github.com/gorse-io/oracle v1.2.2-0.20220625045651-88a1ca5bd68c/go.mod h1:Sjtk+MzBxCY6rb2X7Eg3NFiRMGFPug46WocXPg6s1VQ=
 github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d h1:yO5P2BMJhRY2y7WYW+3Z+3MeYfUJaN5OSVAqjen2kc4=
 github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d/go.mod h1:XosYrot929USEr0tje1wy8UJb7pS5xhTXqZiGHDIB2c=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
@@ -267,8 +267,8 @@ github.com/hashicorp/go-syslog v1.0.0/go.mod h1:qPfqrKkXGihmCqbJM2mZgkZGvKG1dFdv
 github.com/hashicorp/go-uuid v1.0.0/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
 github.com/hashicorp/go-uuid v1.0.1/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
 github.com/hashicorp/go-version v1.2.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
-github.com/hashicorp/go-version v1.4.0 h1:aAQzgqIrRKRa7w75CKpbBxYsmUoPjzVm1W59ca1L0J4=
-github.com/hashicorp/go-version v1.4.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
+github.com/hashicorp/go-version v1.5.0 h1:O293SZ2Eg+AAYijkVK3jR786Am1bhDEh2GHT0tIVE5E=
+github.com/hashicorp/go-version v1.5.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
 github.com/hashicorp/go.net v0.0.1/go.mod h1:hjKkEWcCURg++eb33jQU7oqQcI9XDCnUzHA0oac0k90=
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=

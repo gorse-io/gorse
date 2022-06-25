@@ -74,7 +74,7 @@ require (
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
-	github.com/hashicorp/go-version v1.4.0 // indirect
+	github.com/hashicorp/go-version v1.5.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -141,7 +141,7 @@ require (
 )
 
 replace (
-	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220621125628-7688e49ca04b
-	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0
+	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220625045651-88a1ca5bd68c
+	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220623134139-641f1ee54169
 	gorm.io/driver/sqlite v1.3.2 => github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d
 )

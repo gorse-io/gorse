@@ -16,19 +16,19 @@ package data
 
 import (
 	"database/sql"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	_ "github.com/mailru/go-clickhouse"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
+	_ "github.com/sijms/go-ora/v2"
 	"github.com/zhenghaoz/gorse/base/json"
 	"github.com/zhenghaoz/gorse/base/log"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 	"moul.io/zapgorm2"
-	"strings"
 	"time"
 )
 
@@ -41,6 +41,7 @@ const (
 	Postgres
 	ClickHouse
 	SQLite
+	Oracle
 )
 
 var gormConfig = &gorm.Config{
@@ -49,6 +50,94 @@ var gormConfig = &gorm.Config{
 	NamingStrategy: schema.NamingStrategy{
 		SingularTable: true,
 	},
+}
+
+type SQLItem struct {
+	ItemId     string    `gorm:"column:item_id"`
+	IsHidden   bool      `gorm:"column:is_hidden"`
+	Categories string    `gorm:"column:categories"`
+	Timestamp  time.Time `gorm:"column:time_stamp"`
+	Labels     string    `gorm:"column:labels"`
+	Comment    string    `gorm:"column:comment"`
+}
+
+func NewSQLItem(item Item) (sqlItem SQLItem) {
+	var buf []byte
+	sqlItem.ItemId = item.ItemId
+	sqlItem.IsHidden = item.IsHidden
+	buf, _ = json.Marshal(item.Categories)
+	sqlItem.Categories = string(buf)
+	sqlItem.Timestamp = item.Timestamp
+	buf, _ = json.Marshal(item.Labels)
+	sqlItem.Labels = string(buf)
+	sqlItem.Comment = item.Comment
+	return
+}
+
+func (*SQLItem) TableName() string {
+	return "items"
+}
+
+type SQLUser struct {
+	UserId    string `gorm:"column:user_id"`
+	Labels    string `gorm:"column:labels"`
+	Subscribe string `gorm:"column:subscribe"`
+	Comment   string `gorm:"column:comment"`
+}
+
+func NewSQLUser(user User) (sqlUser SQLUser) {
+	var buf []byte
+	sqlUser.UserId = user.UserId
+	buf, _ = json.Marshal(user.Labels)
+	sqlUser.Labels = string(buf)
+	buf, _ = json.Marshal(user.Subscribe)
+	sqlUser.Subscribe = string(buf)
+	sqlUser.Comment = user.Comment
+	return
+}
+
+func (*SQLUser) TableName() string {
+	return "users"
+}
+
+type ClickHouseItem struct {
+	SQLItem `gorm:"embedded"`
+	Version time.Time `gorm:"column:version"`
+}
+
+func NewClickHouseItem(item Item) (clickHouseItem ClickHouseItem) {
+	clickHouseItem.SQLItem = NewSQLItem(item)
+	clickHouseItem.Timestamp = item.Timestamp.In(time.UTC)
+	clickHouseItem.Version = time.Now().In(time.UTC)
+	return
+}
+
+func (*ClickHouseItem) TableName() string {
+	return "items"
+}
+
+type ClickhouseUser struct {
+	SQLUser `gorm:"embedded"`
+	Version time.Time `gorm:"column:version"`
+}
+
+func NewClickhouseUser(user User) (clickhouseUser ClickhouseUser) {
+	clickhouseUser.SQLUser = NewSQLUser(user)
+	clickhouseUser.Version = time.Now().In(time.UTC)
+	return
+}
+
+func (*ClickhouseUser) TableName() string {
+	return "users"
+}
+
+type ClickHouseFeedback struct {
+	Feedback `gorm:"embedded"`
+	Version  time.Time `gorm:"column:version"`
+}
+
+func (*ClickHouseFeedback) TableName() string {
+	return "feedback"
 }
 
 // SQLDatabase use MySQL as data storage.
@@ -155,6 +244,33 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+	case Oracle:
+		// create tables
+		type Items struct {
+			ItemId     string    `gorm:"column:ITEM_ID;type:varchar2(256);not null;primaryKey"`
+			IsHidden   bool      `gorm:"column:IS_HIDDEN;type:bool;not null"`
+			Categories []string  `gorm:"column:CATEGORIES;type:varchar2(4000);not null"`
+			Timestamp  time.Time `gorm:"column:TIME_STAMP;type:TIMESTAMP;not null"`
+			Labels     []string  `gorm:"column:LABELS;type:varchar2(4000);not null"`
+			Comment    string    `gorm:"column:\"COMMENT\";type:varchar2(4000)"`
+		}
+		type Users struct {
+			UserId    string   `gorm:"column:USER_ID;type:varchar2(256);not null;primaryKey"`
+			Labels    []string `gorm:"column:LABELS;type:varchar2(4000);not null"`
+			Subscribe []string `gorm:"column:SUBSCRIBE;type:varchar2(4000);not null"`
+			Comment   string   `gorm:"column:\"COMMENT\";type:varchar2(4000)"`
+		}
+		type Feedback struct {
+			FeedbackType string    `gorm:"column:FEEDBACK_TYPE;type:varchar2(256);not null;primaryKey"`
+			UserId       string    `gorm:"column:USER_ID;type:varchar2(256);not null;primaryKey;index:user_id_index"`
+			ItemId       string    `gorm:"column:ITEM_ID;type:varchar2(256);not null;primaryKey;index:item_id_index"`
+			Timestamp    time.Time `gorm:"column:TIME_STAMP;type:TIMESTAMP;not null"`
+			Comment      string    `gorm:"column:\"COMMENT\";type:varchar2(4000)"`
+		}
+		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
+		if err != nil {
+			return errors.Trace(err)
+		}
 	case ClickHouse:
 		// create tables
 		type Items struct {
@@ -207,61 +323,36 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 	if len(items) == 0 {
 		return nil
 	}
-	builder := strings.Builder{}
-	switch d.driver {
-	case MySQL:
-		builder.WriteString("INSERT INTO items(item_id, is_hidden, categories, time_stamp, labels, `comment`) VALUES ")
-	case Postgres:
-		builder.WriteString("INSERT INTO items(item_id, is_hidden, categories, time_stamp, labels, comment) VALUES ")
-	case ClickHouse:
-		builder.WriteString("INSERT INTO items(item_id, is_hidden, categories, time_stamp, labels, comment, version) VALUES ")
-	case SQLite:
-		builder.WriteString("INSERT OR REPLACE INTO items(item_id, is_hidden, categories, time_stamp, labels, `comment`) VALUES ")
+	if d.driver == ClickHouse {
+		rows := make([]ClickHouseItem, 0, len(items))
+		memo := strset.New()
+		for _, item := range items {
+			if !memo.Has(item.ItemId) {
+				memo.Add(item.ItemId)
+				rows = append(rows, NewClickHouseItem(item))
+			}
+		}
+		err := d.gormDB.Create(rows).Error
+		return errors.Trace(err)
+	} else {
+		rows := make([]SQLItem, 0, len(items))
+		memo := strset.New()
+		for _, item := range items {
+			if !memo.Has(item.ItemId) {
+				memo.Add(item.ItemId)
+				row := NewSQLItem(item)
+				if d.driver == SQLite || d.driver == Oracle {
+					row.Timestamp = row.Timestamp.In(time.UTC)
+				}
+				rows = append(rows, row)
+			}
+		}
+		err := d.gormDB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "item_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
+		}).Create(rows).Error
+		return errors.Trace(err)
 	}
-	memo := strset.New()
-	var args []interface{}
-	for _, item := range items {
-		// remove duplicate items
-		if memo.Has(item.ItemId) {
-			continue
-		} else {
-			memo.Add(item.ItemId)
-		}
-		if len(args) > 0 {
-			builder.WriteString(",")
-		}
-		labels, err := json.Marshal(item.Labels)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		categories, err := json.Marshal(item.Categories)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		switch d.driver {
-		case MySQL, SQLite:
-			builder.WriteString("(?,?,?,?,?,?)")
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5, len(args)+6))
-		case ClickHouse:
-			builder.WriteString("(?,?,?,?,?,?,NOW())")
-		}
-		if d.driver == ClickHouse || d.driver == SQLite {
-			args = append(args, item.ItemId, item.IsHidden, string(categories), item.Timestamp.In(time.UTC), string(labels), item.Comment)
-		} else {
-			args = append(args, item.ItemId, item.IsHidden, string(categories), item.Timestamp, string(labels), item.Comment)
-		}
-	}
-	switch d.driver {
-	case MySQL:
-		builder.WriteString(" ON DUPLICATE KEY " +
-			"UPDATE is_hidden = VALUES(is_hidden), categories = VALUES(categories), time_stamp = VALUES(time_stamp), labels = VALUES(labels), `comment` = VALUES(`comment`)")
-	case Postgres:
-		builder.WriteString(" ON CONFLICT (item_id) " +
-			"DO UPDATE SET is_hidden = EXCLUDED.is_hidden, categories = EXCLUDED.categories, time_stamp = EXCLUDED.time_stamp, labels = EXCLUDED.labels, comment = EXCLUDED.comment")
-	}
-	_, err := d.client.Exec(builder.String(), args...)
-	return errors.Trace(err)
 }
 
 func (d *SQLDatabase) BatchGetItems(itemIds []string) ([]Item, error) {
@@ -314,7 +405,8 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 	if result.Next() {
 		var item Item
 		var labels, categories string
-		if err := result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &item.Comment); err != nil {
+		var comment sql.NullString
+		if err := result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &comment); err != nil {
 			return Item{}, errors.Trace(err)
 		}
 		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
@@ -323,6 +415,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 		if err := json.Unmarshal([]byte(categories), &item.Categories); err != nil {
 			return Item{}, err
 		}
+		item.Comment = comment.String
 		return item, nil
 	}
 	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
@@ -337,7 +430,11 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 	}
 	attributes := make(map[string]any)
 	if patch.IsHidden != nil {
-		attributes["is_hidden"] = *patch.IsHidden
+		if *patch.IsHidden {
+			attributes["is_hidden"] = 1
+		} else {
+			attributes["is_hidden"] = 0
+		}
 	}
 	if patch.Categories != nil {
 		text, _ := json.Marshal(patch.Categories)
@@ -351,9 +448,10 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 		attributes["labels"] = string(text)
 	}
 	if patch.Timestamp != nil {
-		if d.driver == ClickHouse || d.driver == SQLite {
+		switch d.driver {
+		case ClickHouse, SQLite, Oracle:
 			attributes["time_stamp"] = patch.Timestamp.In(time.UTC)
-		} else {
+		default:
 			attributes["time_stamp"] = patch.Timestamp
 		}
 	}
@@ -363,7 +461,10 @@ func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 
 // GetItems returns items from MySQL.
 func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
-	tx := d.gormDB.Table("items").Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id >= ?", cursor)
+	tx := d.gormDB.Table("items").Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+	if cursor != "" {
+		tx.Where("item_id >= ?", cursor)
+	}
 	if timeLimit != nil {
 		tx.Where("time_stamp >= ?", *timeLimit)
 	}
@@ -376,7 +477,8 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 	for result.Next() {
 		var item Item
 		var labels, categories string
-		if err = result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &item.Comment); err != nil {
+		var comment sql.NullString
+		if err = result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &comment); err != nil {
 			return "", nil, errors.Trace(err)
 		}
 		if err = json.Unmarshal([]byte(labels), &item.Labels); err != nil {
@@ -385,6 +487,7 @@ func (d *SQLDatabase) GetItems(cursor string, n int, timeLimit *time.Time) (stri
 		if err = json.Unmarshal([]byte(categories), &item.Categories); err != nil {
 			return "", nil, errors.Trace(err)
 		}
+		item.Comment = comment.String
 		items = append(items, item)
 	}
 	if len(items) == n+1 {
@@ -445,9 +548,12 @@ func (d *SQLDatabase) GetItemStream(batchSize int, timeLimit *time.Time) (chan [
 // GetItemFeedback returns feedback of a item from MySQL.
 func (d *SQLDatabase) GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.Table("feedback").Select("user_id, item_id, feedback_type, time_stamp")
-	if d.driver == SQLite {
+	switch d.driver {
+	case SQLite:
 		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
-	} else {
+	case Oracle:
+		tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP) AND item_id = ?", itemId)
+	default:
 		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
 	}
 	if len(feedbackTypes) > 0 {
@@ -474,57 +580,32 @@ func (d *SQLDatabase) BatchInsertUsers(users []User) error {
 	if len(users) == 0 {
 		return nil
 	}
-	builder := strings.Builder{}
-	switch d.driver {
-	case MySQL:
-		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, `comment`) VALUES ")
-	case Postgres:
-		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, comment) VALUES ")
-	case ClickHouse:
-		builder.WriteString("INSERT INTO users(user_id, labels, subscribe, comment, version) VALUES ")
-	case SQLite:
-		builder.WriteString("INSERT OR REPLACE INTO users(user_id, labels, subscribe, `comment`) VALUES ")
+	if d.driver == ClickHouse {
+		rows := make([]ClickhouseUser, 0, len(users))
+		memo := strset.New()
+		for _, user := range users {
+			if !memo.Has(user.UserId) {
+				memo.Add(user.UserId)
+				rows = append(rows, NewClickhouseUser(user))
+			}
+		}
+		err := d.gormDB.Create(rows).Error
+		return errors.Trace(err)
+	} else {
+		rows := make([]SQLUser, 0, len(users))
+		memo := strset.New()
+		for _, user := range users {
+			if !memo.Has(user.UserId) {
+				memo.Add(user.UserId)
+				rows = append(rows, NewSQLUser(user))
+			}
+		}
+		err := d.gormDB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"labels", "subscribe", "comment"}),
+		}).Create(rows).Error
+		return errors.Trace(err)
 	}
-	memo := strset.New()
-	var args []interface{}
-	for _, user := range users {
-		// remove duplicate users
-		if memo.Has(user.UserId) {
-			continue
-		} else {
-			memo.Add(user.UserId)
-		}
-		if len(args) > 0 {
-			builder.WriteString(",")
-		}
-		labels, err := json.Marshal(user.Labels)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		subscribe, err := json.Marshal(user.Subscribe)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		switch d.driver {
-		case MySQL, SQLite:
-			builder.WriteString("(?,?,?,?)")
-		case Postgres:
-			builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d)", len(args)+1, len(args)+2, len(args)+3, len(args)+4))
-		case ClickHouse:
-			builder.WriteString("(?,?,?,?,NOW())")
-		}
-		args = append(args, user.UserId, string(labels), string(subscribe), user.Comment)
-	}
-	switch d.driver {
-	case MySQL:
-		builder.WriteString(" ON DUPLICATE KEY " +
-			"UPDATE labels = VALUES(labels), subscribe = VALUES(subscribe), `comment` = VALUES(`comment`)")
-	case Postgres:
-		builder.WriteString(" ON CONFLICT (user_id) " +
-			"DO UPDATE SET labels = EXCLUDED.labels, subscribe = EXCLUDED.subscribe, comment = EXCLUDED.comment")
-	}
-	_, err := d.client.Exec(builder.String(), args...)
-	return errors.Trace(err)
 }
 
 // DeleteUser deletes a user from MySQL.
@@ -586,7 +667,11 @@ func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
 
 // GetUsers returns users from MySQL.
 func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
-	result, err := d.gormDB.Table("users").Select("user_id, labels, subscribe, comment").Where("user_id >= ?", cursor).Order("user_id").Limit(n + 1).Rows()
+	tx := d.gormDB.Table("users").Select("user_id, labels, subscribe, comment")
+	if cursor != "" {
+		tx.Where("user_id >= ?", cursor)
+	}
+	result, err := tx.Order("user_id").Limit(n + 1).Rows()
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
@@ -594,9 +679,9 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 	defer result.Close()
 	for result.Next() {
 		var user User
-		var labels string
-		var subscribe string
-		if err = result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
+		var labels, subscribe string
+		var comment sql.NullString
+		if err = result.Scan(&user.UserId, &labels, &subscribe, &comment); err != nil {
 			return "", nil, errors.Trace(err)
 		}
 		if err = json.Unmarshal([]byte(labels), &user.Labels); err != nil {
@@ -605,6 +690,7 @@ func (d *SQLDatabase) GetUsers(cursor string, n int) (string, []User, error) {
 		if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
 			return "", nil, errors.Trace(err)
 		}
+		user.Comment = comment.String
 		users = append(users, user)
 	}
 	if len(users) == n+1 {
@@ -663,9 +749,12 @@ func (d *SQLDatabase) GetUserStream(batchSize int) (chan []User, chan error) {
 func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment").Where("user_id = ?", userId)
 	if !withFuture {
-		if d.driver == SQLite {
+		switch d.driver {
+		case SQLite:
 			tx.Where("time_stamp <= DATETIME()")
-		} else {
+		case Oracle:
+			tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP)")
+		default:
 			tx.Where("time_stamp <= NOW()")
 		}
 	}
@@ -680,9 +769,11 @@ func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTy
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
-		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
+		var comment sql.NullString
+		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
 			return nil, errors.Trace(err)
 		}
+		feedback.Comment = comment.String
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil
@@ -706,37 +797,33 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 	// insert users
 	if insertUser {
 		userList := users.List()
-		builder := strings.Builder{}
-		switch d.driver {
-		case MySQL:
-			builder.WriteString("INSERT IGNORE users(user_id, labels, subscribe) VALUES ")
-		case Postgres:
-			builder.WriteString("INSERT INTO users(user_id) VALUES ")
-		case ClickHouse:
-			builder.WriteString("INSERT INTO users(user_id, version) VALUES ")
-		case SQLite:
-			builder.WriteString("INSERT OR IGNORE INTO users(user_id, labels, subscribe) VALUES ")
-		}
-		var args []interface{}
-		for i, user := range userList {
-			switch d.driver {
-			case MySQL, SQLite:
-				builder.WriteString("(?, '[]', '[]')")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d)", i+1))
-			case ClickHouse:
-				builder.WriteString("(?,'0000-00-00 00:00:00')")
+		if d.driver == ClickHouse {
+			err := d.gormDB.Create(lo.Map(userList, func(userId string, _ int) ClickhouseUser {
+				return ClickhouseUser{
+					SQLUser: SQLUser{
+						UserId:    userId,
+						Labels:    "[]",
+						Subscribe: "[]",
+					},
+				}
+			})).Error
+			if err != nil {
+				return errors.Trace(err)
 			}
-			if i+1 < len(userList) {
-				builder.WriteString(",")
+		} else {
+			err := d.gormDB.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "user_id"}},
+				DoNothing: true,
+			}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
+				return SQLUser{
+					UserId:    userId,
+					Labels:    "[]",
+					Subscribe: "[]",
+				}
+			})).Error
+			if err != nil {
+				return errors.Trace(err)
 			}
-			args = append(args, user)
-		}
-		if d.driver == Postgres {
-			builder.WriteString(" ON CONFLICT (user_id) DO NOTHING")
-		}
-		if _, err := d.client.Exec(builder.String(), args...); err != nil {
-			return errors.Trace(err)
 		}
 	} else {
 		for _, user := range users.List() {
@@ -754,37 +841,33 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 	// insert items
 	if insertItem {
 		itemList := items.List()
-		builder := strings.Builder{}
-		switch d.driver {
-		case MySQL:
-			builder.WriteString("INSERT IGNORE items(item_id, labels, categories) VALUES ")
-		case Postgres:
-			builder.WriteString("INSERT INTO items(item_id) VALUES ")
-		case ClickHouse:
-			builder.WriteString("INSERT INTO items(item_id, version) VALUES ")
-		case SQLite:
-			builder.WriteString("INSERT OR IGNORE INTO items(item_id, labels, categories) VALUES ")
-		}
-		var args []interface{}
-		for i, item := range itemList {
-			switch d.driver {
-			case MySQL, SQLite:
-				builder.WriteString("(?, '[]', '[]')")
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d)", i+1))
-			case ClickHouse:
-				builder.WriteString("(?,'0000-00-00 00:00:00')")
+		if d.driver == ClickHouse {
+			err := d.gormDB.Create(lo.Map(itemList, func(itemId string, _ int) ClickHouseItem {
+				return ClickHouseItem{
+					SQLItem: SQLItem{
+						ItemId:     itemId,
+						Labels:     "[]",
+						Categories: "[]",
+					},
+				}
+			})).Error
+			if err != nil {
+				return errors.Trace(err)
 			}
-			if i+1 < len(itemList) {
-				builder.WriteString(",")
+		} else {
+			err := d.gormDB.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "item_id"}},
+				DoNothing: true,
+			}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
+				return SQLItem{
+					ItemId:     itemId,
+					Labels:     "[]",
+					Categories: "[]",
+				}
+			})).Error
+			if err != nil {
+				return errors.Trace(err)
 			}
-			args = append(args, item)
-		}
-		if d.driver == Postgres {
-			builder.WriteString(" ON CONFLICT (item_id) DO NOTHING")
-		}
-		if _, err := d.client.Exec(builder.String(), args...); err != nil {
-			return errors.Trace(err)
 		}
 	} else {
 		for _, item := range items.List() {
@@ -800,91 +883,76 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 		}
 	}
 	// insert feedback
-	builder := strings.Builder{}
-	switch d.driver {
-	case MySQL:
-		if overwrite {
-			builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
-		} else {
-			builder.WriteString("INSERT IGNORE INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
-		}
-	case SQLite:
-		if overwrite {
-			builder.WriteString("INSERT OR REPLACE INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
-		} else {
-			builder.WriteString("INSERT OR IGNORE INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`) VALUES ")
-		}
-	case ClickHouse:
-		builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, `comment`, version) VALUES ")
-	case Postgres:
-		builder.WriteString("INSERT INTO feedback(feedback_type, user_id, item_id, time_stamp, comment) VALUES ")
-	}
-	var args []interface{}
-	memo := make(map[lo.Tuple3[string, string, string]]struct{})
-	for _, f := range feedback {
-		if users.Has(f.UserId) && items.Has(f.ItemId) {
-			// remove duplicate feedback
-			if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; exist {
-				continue
-			} else {
-				memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
-			}
-			if len(args) > 0 {
-				builder.WriteString(",")
-			}
-			switch d.driver {
-			case MySQL, SQLite:
-				builder.WriteString("(?,?,?,?,?)")
-			case ClickHouse:
-				if overwrite {
-					builder.WriteString("(?,?,?,?,?,NOW())")
-				} else {
-					builder.WriteString("(?,?,?,?,?,0)")
+	if d.driver == ClickHouse {
+		rows := make([]ClickHouseFeedback, 0, len(feedback))
+		memo := make(map[lo.Tuple3[string, string, string]]struct{})
+		for _, f := range feedback {
+			if users.Has(f.UserId) && items.Has(f.ItemId) {
+				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
+					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
+					f.Timestamp = f.Timestamp.In(time.UTC)
+					rows = append(rows, ClickHouseFeedback{
+						Feedback: f,
+						Version:  lo.If(overwrite, time.Now().In(time.UTC)).Else(time.Time{}),
+					})
 				}
-			case Postgres:
-				builder.WriteString(fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)",
-					len(args)+1, len(args)+2, len(args)+3, len(args)+4, len(args)+5))
-			}
-			if d.driver == ClickHouse || d.driver == SQLite {
-				args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp.In(time.UTC), f.Comment)
-			} else {
-				args = append(args, f.FeedbackType, f.UserId, f.ItemId, f.Timestamp, f.Comment)
 			}
 		}
-	}
-	if len(args) == 0 {
-		return nil
-	}
-	if overwrite {
-		switch d.driver {
-		case MySQL:
-			builder.WriteString(" ON DUPLICATE KEY UPDATE time_stamp = VALUES(time_stamp), `comment` = VALUES(`comment`)")
-		case Postgres:
-			builder.WriteString(" ON CONFLICT (feedback_type, user_id, item_id) DO UPDATE SET time_stamp = EXCLUDED.time_stamp, comment = EXCLUDED.comment")
+		if len(rows) == 0 {
+			return nil
 		}
-	} else if d.driver == Postgres {
-		builder.WriteString(" ON CONFLICT (feedback_type, user_id, item_id) DO NOTHING")
-	}
-	_, err := d.client.Exec(builder.String(), args...)
-	if err != nil {
+		err := d.gormDB.Create(rows).Error
+		return errors.Trace(err)
+	} else {
+		rows := make([]Feedback, 0, len(feedback))
+		memo := make(map[lo.Tuple3[string, string, string]]struct{})
+		for _, f := range feedback {
+			if users.Has(f.UserId) && items.Has(f.ItemId) {
+				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
+					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
+					if d.driver == SQLite || d.driver == Oracle {
+						f.Timestamp = f.Timestamp.In(time.UTC)
+					}
+					rows = append(rows, f)
+				}
+			}
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		err := d.gormDB.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
+			DoNothing: !overwrite,
+			DoUpdates: lo.If(overwrite, clause.AssignmentColumns([]string{"time_stamp", "comment"})).Else(nil),
+		}).Create(rows).Error
 		return errors.Trace(err)
 	}
-	return nil
 }
 
 // GetFeedback returns feedback from MySQL.
 func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
-	var cursorKey FeedbackKey
+	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment")
 	if cursor != "" {
+		var cursorKey FeedbackKey
 		if err := json.Unmarshal([]byte(cursor), &cursorKey); err != nil {
 			return "", nil, err
 		}
+		if d.driver == Oracle {
+			tx.Where("feedback_type > ? OR feedback_type = ? AND user_id > ? OR feedback_type = ? AND user_id = ? AND item_id >= ?",
+				cursorKey.FeedbackType,
+				cursorKey.FeedbackType, cursorKey.UserId,
+				cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+		} else {
+			tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+		}
 	}
-	tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment")
-	if d.driver == SQLite {
-		tx.Where("time_stamp <= DATETIME() AND (feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
-	} else {
-		tx.Where("time_stamp <= NOW() AND (feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+	switch d.driver {
+	case SQLite:
+		tx.Where("time_stamp <= DATETIME()")
+	case Oracle:
+		tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP)")
+	default:
+		tx.Where("time_stamp <= NOW()")
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -901,9 +969,11 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
-		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
+		var comment sql.NullString
+		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
 			return "", nil, errors.Trace(err)
 		}
+		feedback.Comment = comment.String
 		feedbacks = append(feedbacks, feedback)
 	}
 	if len(feedbacks) == n+1 {
@@ -926,9 +996,12 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 		defer close(errChan)
 		// send query
 		tx := d.gormDB.Table("feedback").Select("feedback_type, user_id, item_id, time_stamp, comment")
-		if d.driver == SQLite {
+		switch d.driver {
+		case SQLite:
 			tx.Where("time_stamp <= DATETIME()")
-		} else {
+		case Oracle:
+			tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP)")
+		default:
 			tx.Where("time_stamp <= NOW()")
 		}
 		if len(feedbackTypes) > 0 {
@@ -947,10 +1020,12 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 		defer result.Close()
 		for result.Next() {
 			var feedback Feedback
-			if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
+			var comment sql.NullString
+			if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}
+			feedback.Comment = comment.String
 			feedbacks = append(feedbacks, feedback)
 			if len(feedbacks) == batchSize {
 				feedbackChan <- feedbacks
@@ -979,9 +1054,11 @@ func (d *SQLDatabase) GetUserItemFeedback(userId, itemId string, feedbackTypes .
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
-		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &feedback.Comment); err != nil {
+		var comment sql.NullString
+		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
 			return nil, errors.Trace(err)
 		}
+		feedback.Comment = comment.String
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil
