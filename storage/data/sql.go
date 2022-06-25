@@ -332,7 +332,7 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 				rows = append(rows, NewClickHouseItem(item))
 			}
 		}
-		err := d.gormDB.Debug().Create(rows).Error
+		err := d.gormDB.Create(rows).Error
 		return errors.Trace(err)
 	} else {
 		rows := make([]SQLItem, 0, len(items))
@@ -341,7 +341,7 @@ func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 			if !memo.Has(item.ItemId) {
 				memo.Add(item.ItemId)
 				row := NewSQLItem(item)
-				if d.driver == Oracle {
+				if d.driver == SQLite || d.driver == Oracle {
 					row.Timestamp = row.Timestamp.In(time.UTC)
 				}
 				rows = append(rows, row)
