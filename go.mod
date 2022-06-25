@@ -141,7 +141,7 @@ require (
 )
 
 replace (
-	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220621125628-7688e49ca04b
+	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220625045651-88a1ca5bd68c
 	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220623134139-641f1ee54169
 	gorm.io/driver/sqlite v1.3.2 => github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d
 )
