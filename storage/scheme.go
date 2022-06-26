@@ -18,6 +18,8 @@ import (
 	"database/sql"
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
+	"net/url"
 )
 
 const (
@@ -30,6 +32,19 @@ const (
 	RedisPrefix      = "redis://"
 	OraclePrefix     = "oracle://"
 )
+
+func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	q := parsed.Query()
+	for _, tuple := range params {
+		q.Add(tuple.A, tuple.B)
+	}
+	parsed.RawQuery = q.Encode()
+	return parsed.String(), nil
+}
 
 func AppendMySQLParams(dsn string, params map[string]string) (string, error) {
 	cfg, err := mysql.ParseDSN(dsn)

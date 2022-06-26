@@ -6,6 +6,7 @@ require (
 	github.com/ReneKroon/ttlcache/v2 v2.7.0
 	github.com/alicebob/miniredis/v2 v2.16.1
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
+	github.com/benhoyt/goawk v1.19.0
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.0.8
 	github.com/emicklei/go-restful-openapi/v2 v2.3.0
@@ -18,7 +19,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20220504033926-54e0e80acf0a
+	github.com/gorse-io/dashboard v0.0.0-20220613132847-f5b24a31269e
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v0.0.0-20220203013757-bd733f3c86b9
@@ -31,6 +32,7 @@ require (
 	github.com/prometheus/client_golang v1.10.0
 	github.com/rakyll/statik v0.1.7
 	github.com/samber/lo v1.21.0
+	github.com/schollz/progressbar/v3 v3.8.6
 	github.com/scylladb/go-set v1.0.2
 	github.com/sijms/go-ora/v2 v2.4.24
 	github.com/spf13/cobra v0.0.7
@@ -47,12 +49,13 @@ require (
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/clickhouse v0.3.2
-	gorm.io/driver/mysql v1.3.3
+	gorm.io/driver/mysql v1.3.4
 	gorm.io/driver/postgres v1.3.5
-	gorm.io/driver/sqlite v1.3.2
-	gorm.io/gorm v1.23.5
+	gorm.io/driver/sqlite v1.3.4
+	gorm.io/gorm v1.23.6
 	modernc.org/mathutil v1.4.1
 	modernc.org/sortutil v1.1.0
+	modernc.org/sqlite v1.17.3
 	moul.io/zapgorm2 v1.1.3
 )
 
@@ -95,8 +98,11 @@ require (
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-runewidth v0.0.13 // indirect
+	github.com/mattn/go-sqlite3 v1.14.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
@@ -106,6 +112,7 @@ require (
 	github.com/prometheus/common v0.18.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -118,11 +125,12 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/crypto v0.0.0-20220511200225-c6db032c6c88 // indirect
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/mod v0.6.0-dev.0.20211013180041-c96bc1413d57 // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20211210111614-af8b64212486 // indirect
+	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c // indirect
+	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.8-0.20211029000441-d6a9af8af023 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
@@ -135,7 +143,6 @@ require (
 	modernc.org/libc v1.16.7 // indirect
 	modernc.org/memory v1.1.1 // indirect
 	modernc.org/opt v0.1.1 // indirect
-	modernc.org/sqlite v1.17.3 // indirect
 	modernc.org/strutil v1.1.1 // indirect
 	modernc.org/token v1.0.0 // indirect
 )
@@ -143,5 +150,5 @@ require (
 replace (
 	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220625045651-88a1ca5bd68c
 	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220623134139-641f1ee54169
-	gorm.io/driver/sqlite v1.3.2 => github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d
+	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220612031856-d20c723836a2
 )

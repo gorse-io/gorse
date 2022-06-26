@@ -28,6 +28,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
+	_ "modernc.org/sqlite"
 	"moul.io/zapgorm2"
 	"time"
 )

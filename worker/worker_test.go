@@ -124,7 +124,7 @@ func (m *mockMatrixFactorizationForRecommend) GetItemFactor(itemId int32) []floa
 }
 
 func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
-	panic("implement me")
+	return false
 }
 
 func (m *mockMatrixFactorizationForRecommend) Fit(_, _ *ranking.DataSet, _ *ranking.FitConfig) ranking.Score {

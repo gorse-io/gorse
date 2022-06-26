@@ -347,7 +347,11 @@ func (w *Worker) Recommend(users []data.User) {
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
-	recommendTask := task.NewTask(fmt.Sprintf("Generate offline recommendation [%s]", w.workerName), len(users))
+	recommendTaskName := "Generate offline recommendation"
+	if !w.oneMode {
+		recommendTaskName += fmt.Sprintf(" [%s]", w.workerName)
+	}
+	recommendTask := task.NewTask(recommendTaskName, len(users))
 	if w.masterClient != nil {
 		if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
 			log.Logger().Error("failed to report start task", zap.Error(err))
@@ -364,30 +368,32 @@ func (w *Worker) Recommend(users []data.User) {
 	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
 
 	// build ranking index
-	if w.RankingModel != nil && w.rankingIndex == nil && w.Config.Recommend.Collaborative.EnableIndex {
-		startTime := time.Now()
-		log.Logger().Info("start building ranking index")
-		itemIndex := w.RankingModel.GetItemIndex()
-		vectors := make([]search.Vector, itemIndex.Len())
-		for i := int32(0); i < itemIndex.Len(); i++ {
-			itemId := itemIndex.ToName(i)
-			if itemCache.IsAvailable(itemId) {
-				vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
-			} else {
-				vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
+	if w.RankingModel != nil && !w.RankingModel.Invalid() && w.rankingIndex == nil {
+		if w.Config.Recommend.Collaborative.EnableIndex {
+			startTime := time.Now()
+			log.Logger().Info("start building ranking index")
+			itemIndex := w.RankingModel.GetItemIndex()
+			vectors := make([]search.Vector, itemIndex.Len())
+			for i := int32(0); i < itemIndex.Len(); i++ {
+				itemId := itemIndex.ToName(i)
+				if itemCache.IsAvailable(itemId) {
+					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
+				} else {
+					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
+				}
 			}
+			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, 1000, w.jobs)
+			var recall float32
+			w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall, w.Config.Recommend.Collaborative.IndexFitEpoch, false)
+			CollaborativeFilteringIndexRecall.Set(float64(recall))
+			if err = w.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
+				log.Logger().Error("failed to write meta", zap.Error(err))
+			}
+			log.Logger().Info("complete building ranking index",
+				zap.Duration("build_time", time.Since(startTime)))
+		} else {
+			CollaborativeFilteringIndexRecall.Set(1)
 		}
-		builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, 1000, w.jobs)
-		var recall float32
-		w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall, w.Config.Recommend.Collaborative.IndexFitEpoch, false)
-		CollaborativeFilteringIndexRecall.Set(float64(recall))
-		if err = w.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
-			log.Logger().Error("failed to write meta", zap.Error(err))
-		}
-		log.Logger().Info("complete building ranking index",
-			zap.Duration("build_time", time.Since(startTime)))
-	} else if w.RankingModel != nil && w.rankingIndex == nil {
-		CollaborativeFilteringIndexRecall.Set(1)
 	}
 
 	go func() {
@@ -474,7 +480,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #1: collaborative filtering.
 		collaborativeUsed := false
-		if w.Config.Recommend.Offline.EnableColRecommend && w.RankingModel != nil {
+		if w.Config.Recommend.Offline.EnableColRecommend && w.RankingModel != nil && !w.RankingModel.Invalid() {
 			if userIndex := w.RankingModel.GetUserIndex().ToNumber(userId); w.RankingModel.IsUserPredictable(userIndex) {
 				var recommend map[string][]string
 				var usedTime time.Duration
@@ -496,7 +502,7 @@ func (w *Worker) Recommend(users []data.User) {
 			} else if !w.RankingModel.IsUserPredictable(userIndex) {
 				log.Logger().Debug("user is unpredictable", zap.String("user_id", userId))
 			}
-		} else if w.RankingModel == nil {
+		} else if w.RankingModel == nil || w.RankingModel.Invalid() {
 			log.Logger().Warn("no collaborative filtering model")
 		}
 
@@ -650,7 +656,7 @@ func (w *Worker) Recommend(users []data.User) {
 					return errors.Trace(err)
 				}
 				ctrUsed = true
-			} else if w.RankingModel != nil &&
+			} else if w.RankingModel != nil && !w.RankingModel.Invalid() &&
 				w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(userId)) {
 				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
 				if err != nil {
@@ -1124,7 +1130,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
 				score = float64(w.ClickModel.Predict(user.UserId, itemId, user.Labels, item.Labels))
-			} else if w.RankingModel != nil && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(user.UserId)) {
+			} else if w.RankingModel != nil && !w.RankingModel.Invalid() && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(user.UserId)) {
 				score = float64(w.RankingModel.Predict(user.UserId, itemId))
 			} else {
 				upper := upperBounds[""]

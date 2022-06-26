@@ -26,6 +26,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"math"
+	_ "modernc.org/sqlite"
 	"moul.io/zapgorm2"
 )
 

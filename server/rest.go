@@ -37,19 +37,18 @@ import (
 	"modernc.org/mathutil"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
-	OneMode bool
 	*config.Settings
 
-	HttpHost    string
-	HttpPort    int
-	IsDashboard bool
-	DisableLog  bool
-	WebService  *restful.WebService
+	HttpHost   string
+	HttpPort   int
+	DisableLog bool
+	WebService *restful.WebService
 
 	PopularItemsCache  *PopularItemsCache
 	HiddenItemsManager *HiddenItemsManager
@@ -69,9 +68,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	swaggerFile = specConfig.APIPath
 	container.Handle(apiDocsPath, http.HandlerFunc(handler))
 	// register prometheus
-	if !s.OneMode {
-		container.Handle("/metrics", promhttp.Handler())
-	}
+	container.Handle("/metrics", promhttp.Handler())
 
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
@@ -96,7 +93,7 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 }
 
 func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-	if s.IsDashboard || s.Config.Server.APIKey == "" {
+	if s.Config.Server.APIKey == "" {
 		chain.ProcessFilter(req, resp)
 		return
 	}
@@ -116,9 +113,12 @@ func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, ch
 func (s *RestServer) MetricsFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	startTime := time.Now()
 	chain.ProcessFilter(req, resp)
-	if !s.IsDashboard && req.SelectedRoute() != nil && resp.StatusCode() == http.StatusOK {
-		RestAPIRequestSecondsVec.WithLabelValues(fmt.Sprintf("%s %s", req.Request.Method, req.SelectedRoutePath())).
-			Observe(time.Since(startTime).Seconds())
+	if req.SelectedRoute() != nil && resp.StatusCode() == http.StatusOK {
+		routePath := req.SelectedRoutePath()
+		if !strings.HasPrefix(routePath, "/api/dashboard") {
+			RestAPIRequestSecondsVec.WithLabelValues(fmt.Sprintf("%s %s", req.Request.Method, routePath)).
+				Observe(time.Since(startTime).Seconds())
+		}
 	}
 }
 
