@@ -31,8 +31,8 @@ require (
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.10.0
 	github.com/rakyll/statik v0.1.7
-	github.com/schollz/progressbar/v3 v3.8.6
 	github.com/samber/lo v1.21.0
+	github.com/schollz/progressbar/v3 v3.8.6
 	github.com/scylladb/go-set v1.0.2
 	github.com/sijms/go-ora/v2 v2.4.24
 	github.com/spf13/cobra v0.0.7
@@ -148,9 +148,7 @@ require (
 )
 
 replace (
-	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220524142000-fcf212533ab0
-	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220612031856-d20c723836a2
 	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220625045651-88a1ca5bd68c
 	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220623134139-641f1ee54169
-	gorm.io/driver/sqlite v1.3.2 => github.com/gorse-io/sqlite v1.3.3-0.20220601115102-02adebec080d
+	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220612031856-d20c723836a2
 )
