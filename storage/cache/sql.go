@@ -21,6 +21,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
+	_ "github.com/sijms/go-ora/v2"
 	"github.com/zhenghaoz/gorse/base/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -35,6 +36,7 @@ const (
 	MySQL SQLDriver = iota
 	Postgres
 	SQLite
+	Oracle
 )
 
 var gormConfig = &gorm.Config{

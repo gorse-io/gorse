@@ -651,7 +651,7 @@ func testTimeZone(t *testing.T, db Database) {
 			item, err = db.GetItem("200")
 			assert.NoError(t, err)
 			assert.Equal(t, now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
-		case ClickHouse:
+		case ClickHouse, Oracle:
 			item, err := db.GetItem("100")
 			assert.NoError(t, err)
 			assert.Equal(t, now.Truncate(time.Second).In(time.UTC), item.Timestamp)
@@ -661,10 +661,10 @@ func testTimeZone(t *testing.T, db Database) {
 		case SQLite:
 			item, err := db.GetItem("100")
 			assert.NoError(t, err)
-			assert.Equal(t, now.In(time.UTC), item.Timestamp)
+			assert.Equal(t, now.In(time.UTC), item.Timestamp.In(time.UTC))
 			item, err = db.GetItem("200")
 			assert.NoError(t, err)
-			assert.Equal(t, now.In(time.UTC), item.Timestamp)
+			assert.Equal(t, now.In(time.UTC), item.Timestamp.In(time.UTC))
 		default:
 			t.Skipf("unknown sql database: %v", database.driver)
 		}

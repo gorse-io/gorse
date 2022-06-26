@@ -30,6 +30,7 @@ const (
 	ClickhousePrefix = "clickhouse://"
 	SQLitePrefix     = "sqlite://"
 	RedisPrefix      = "redis://"
+	OraclePrefix     = "oracle://"
 )
 
 func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {

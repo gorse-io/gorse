@@ -17,6 +17,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"github.com/dzwvip/oracle"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -87,9 +88,9 @@ type UserPatch struct {
 
 // FeedbackKey identifies feedback.
 type FeedbackKey struct {
-	FeedbackType string
-	UserId       string
-	ItemId       string
+	FeedbackType string `gorm:"column:feedback_type"`
+	UserId       string `gorm:"column:user_id"`
+	ItemId       string `gorm:"column:item_id"`
 }
 
 func (*FeedbackKey) TableName() string {
@@ -98,9 +99,9 @@ func (*FeedbackKey) TableName() string {
 
 // Feedback stores feedback.
 type Feedback struct {
-	FeedbackKey
-	Timestamp time.Time
-	Comment   string
+	FeedbackKey `gorm:"embedded"`
+	Timestamp   time.Time `gorm:"column:time_stamp"`
+	Comment     string    `gorm:"column:comment"`
 }
 
 // SortFeedbacks sorts feedback from latest to oldest.
@@ -245,6 +246,17 @@ func Open(path string) (Database, error) {
 		database := new(Redis)
 		database.client = redis.NewClient(&redis.Options{Addr: addr})
 		log.Logger().Warn("redis is used for testing only")
+		return database, nil
+	} else if strings.HasPrefix(path, storage.OraclePrefix) {
+		database := new(SQLDatabase)
+		database.driver = Oracle
+		if database.client, err = sql.Open("oracle", path); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(oracle.New(oracle.Config{Conn: database.client}), gormConfig)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
