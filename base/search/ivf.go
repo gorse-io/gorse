@@ -20,8 +20,10 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/task"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"math"
 	"math/rand"
 	"modernc.org/mathutil"
 	"runtime"
@@ -29,15 +31,24 @@ import (
 	"time"
 )
 
+const (
+	DefaultTestSize = 1000
+	DefaultMaxIter  = 100
+)
+
 var _ VectorIndex = &IVF{}
 
 type IVF struct {
-	clusters  []ivfCluster
-	data      []Vector
+	clusters []ivfCluster
+	data     []Vector
+
 	k         int
 	errorRate float32
+	maxIter   int
 	numProbe  int
 	numJobs   int
+
+	task *task.SubTask
 }
 
 type IVFConfig func(ivf *IVF)
@@ -60,6 +71,12 @@ func SetIVFNumJobs(numJobs int) IVFConfig {
 	}
 }
 
+func SetMaxIteration(maxIter int) IVFConfig {
+	return func(ivf *IVF) {
+		ivf.maxIter = maxIter
+	}
+}
+
 type ivfCluster struct {
 	centroid     CentroidVector
 	observations []int32
@@ -71,6 +88,7 @@ func NewIVF(vectors []Vector, configs ...IVFConfig) *IVF {
 		data:      vectors,
 		k:         int(math32.Sqrt(float32(len(vectors)))),
 		errorRate: 0.05,
+		maxIter:   DefaultMaxIter,
 		numProbe:  1,
 		numJobs:   runtime.NumCPU(),
 	}
@@ -184,7 +202,7 @@ func (idx *IVF) Build() {
 		clusters[c].centroid = idx.data[0].Centroid(idx.data, clusters[c].observations)
 	}
 
-	for {
+	for it := 0; it < idx.maxIter; it++ {
 		errorCount := atomic.NewInt32(0)
 
 		// reassign clusters
@@ -232,11 +250,11 @@ type IVFBuilder struct {
 	configs    []IVFConfig
 }
 
-func NewIVFBuilder(data []Vector, k, testSize int, configs ...IVFConfig) *IVFBuilder {
+func NewIVFBuilder(data []Vector, k int, configs ...IVFConfig) *IVFBuilder {
 	b := &IVFBuilder{
 		bruteForce: NewBruteforce(data),
 		data:       data,
-		testSize:   testSize,
+		testSize:   DefaultTestSize,
 		k:          k,
 		rng:        base.NewRandomGenerator(0),
 		configs:    configs,
@@ -268,10 +286,13 @@ func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 	return result / count
 }
 
-func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF, score float32) {
+func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool, t *task.Task) (idx *IVF, score float32) {
 	idx = NewIVF(b.data, b.configs...)
+	idx.task = t.SubTask(DefaultMaxIter * len(b.data) * b.k)
 	start := time.Now()
 	idx.Build()
+	idx.task.Finish()
+
 	buildTime := time.Since(start)
 	idx.numProbe = int(math32.Ceil(float32(b.k) / math32.Sqrt(float32(len(b.data)))))
 	for i := 0; i < numEpoch; i++ {
@@ -308,4 +329,13 @@ func (b *IVFBuilder) evaluateTermSearch(idx *IVF, prune0 bool, term string) floa
 		return nil
 	})
 	return result / count
+}
+
+func EstimateIVFBuilderComplexity(num, numEpoch int) int {
+	k := int(math.Sqrt(float64(num)))
+	// clustering complexity
+	complexity := DefaultMaxIter * num * k
+	// search complexity
+	complexity += num * DefaultTestSize * numEpoch
+	return complexity
 }

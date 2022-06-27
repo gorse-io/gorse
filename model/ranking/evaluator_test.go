@@ -69,6 +69,10 @@ type mockMatrixFactorizationForEval struct {
 	negative []*i32set.Set
 }
 
+func (m *mockMatrixFactorizationForEval) Complexity() int {
+	panic("implement me")
+}
+
 func (m *mockMatrixFactorizationForEval) Bytes() int {
 	panic("implement me")
 }

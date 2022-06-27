@@ -329,6 +329,14 @@ func (w *Worker) Serve() {
 	}
 }
 
+func (w *Worker) estimateRecommendComplexity(numUsers, numItems int) int {
+	complexity := numUsers * numItems
+	if w.Config.Recommend.Collaborative.EnableIndex {
+		complexity += search.EstimateHNSWBuilderComplexity(numItems, 1000, w.Config.Recommend.Collaborative.IndexFitEpoch)
+	}
+	return complexity
+}
+
 // Recommend items to users. The workflow of recommendation is:
 // 1. Skip inactive users.
 // 2. Load historical items.
@@ -351,9 +359,9 @@ func (w *Worker) Recommend(users []data.User) {
 	if !w.oneMode {
 		recommendTaskName += fmt.Sprintf(" [%s]", w.workerName)
 	}
-	recommendTask := task.NewTask(recommendTaskName, len(users))
+	recommendTask := task.NewTask(recommendTaskName, w.estimateRecommendComplexity(len(users), 0))
 	if w.masterClient != nil {
-		if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
+		if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
 			log.Logger().Error("failed to report start task", zap.Error(err))
 		}
 	}
@@ -366,35 +374,6 @@ func (w *Worker) Recommend(users []data.User) {
 	}
 	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(itemCache.Bytes()))
 	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
-
-	// build ranking index
-	if w.RankingModel != nil && !w.RankingModel.Invalid() && w.rankingIndex == nil {
-		if w.Config.Recommend.Collaborative.EnableIndex {
-			startTime := time.Now()
-			log.Logger().Info("start building ranking index")
-			itemIndex := w.RankingModel.GetItemIndex()
-			vectors := make([]search.Vector, itemIndex.Len())
-			for i := int32(0); i < itemIndex.Len(); i++ {
-				itemId := itemIndex.ToName(i)
-				if itemCache.IsAvailable(itemId) {
-					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
-				} else {
-					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
-				}
-			}
-			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, 1000, w.jobs)
-			var recall float32
-			w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall, w.Config.Recommend.Collaborative.IndexFitEpoch, false)
-			CollaborativeFilteringIndexRecall.Set(float64(recall))
-			if err = w.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
-				log.Logger().Error("failed to write meta", zap.Error(err))
-			}
-			log.Logger().Info("complete building ranking index",
-				zap.Duration("build_time", time.Since(startTime)))
-		} else {
-			CollaborativeFilteringIndexRecall.Set(1)
-		}
-	}
 
 	go func() {
 		defer base.CheckPanic()
@@ -412,19 +391,49 @@ func (w *Worker) Recommend(users []data.User) {
 				previousCount = completedCount
 				if throughput > 0 {
 					if w.masterClient != nil {
-						recommendTask.Update(completedCount)
-						if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
-							log.Logger().Error("failed to report update task", zap.Error(err))
-						}
+						recommendTask.Add(throughput)
 					}
 					log.Logger().Info("ranking recommendation",
 						zap.Int("n_complete_users", completedCount),
 						zap.Int("n_working_users", len(users)),
 						zap.Int("throughput", throughput))
 				}
+				if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
+					log.Logger().Error("failed to report update task", zap.Error(err))
+				}
 			}
 		}
 	}()
+
+	// build ranking index
+	if w.RankingModel != nil && !w.RankingModel.Invalid() && w.rankingIndex == nil {
+		if w.Config.Recommend.Collaborative.EnableIndex {
+			startTime := time.Now()
+			log.Logger().Info("start building ranking index")
+			itemIndex := w.RankingModel.GetItemIndex()
+			vectors := make([]search.Vector, itemIndex.Len())
+			for i := int32(0); i < itemIndex.Len(); i++ {
+				itemId := itemIndex.ToName(i)
+				if itemCache.IsAvailable(itemId) {
+					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
+				} else {
+					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
+				}
+			}
+			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, 1000, w.jobs, recommendTask)
+			var recall float32
+			w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall, w.Config.Recommend.Collaborative.IndexFitEpoch, false)
+			CollaborativeFilteringIndexRecall.Set(float64(recall))
+			if err = w.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
+				log.Logger().Error("failed to write meta", zap.Error(err))
+			}
+			log.Logger().Info("complete building ranking index",
+				zap.Duration("build_time", time.Since(startTime)))
+		} else {
+			CollaborativeFilteringIndexRecall.Set(1)
+		}
+	}
+
 	// recommendation
 	startTime := time.Now()
 	var (
@@ -715,7 +724,7 @@ func (w *Worker) Recommend(users []data.User) {
 	}
 	if w.masterClient != nil {
 		recommendTask.Finish()
-		if _, err := w.masterClient.PushTaskInfo(context.Background(), recommendTask.ToPB()); err != nil {
+		if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
 			log.Logger().Error("failed to report finish task", zap.Error(err))
 		}
 	}

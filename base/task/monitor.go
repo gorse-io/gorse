@@ -16,8 +16,6 @@ package task
 
 import (
 	"github.com/scylladb/go-set/strset"
-	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/protocol"
 	"sort"
 	"strings"
 	"sync"
@@ -56,20 +54,15 @@ func NewTask(name string, total int) *Task {
 	}
 }
 
-func NewTaskFromPB(in *protocol.PushTaskInfoRequest) *Task {
-	return &Task{
-		Name:       in.GetName(),
-		Status:     Status(in.GetStatus()),
-		Done:       int(in.GetDone()),
-		Total:      int(in.GetTotal()),
-		StartTime:  time.UnixMilli(in.GetStartTime()),
-		FinishTime: time.UnixMilli(in.GetFinishTime()),
-	}
-}
-
 func (t *Task) Update(done int) {
 	t.Done = done
 	t.Status = StatusRunning
+}
+
+func (t *Task) Add(done int) {
+	if t != nil {
+		t.Done += done
+	}
 }
 
 func (t *Task) Finish() {
@@ -78,14 +71,40 @@ func (t *Task) Finish() {
 	t.FinishTime = time.Now()
 }
 
-func (t *Task) ToPB() *protocol.PushTaskInfoRequest {
-	return &protocol.PushTaskInfoRequest{
-		Name:       t.Name,
-		Status:     string(t.Status),
-		Done:       int64(t.Done),
-		Total:      int64(t.Total),
-		StartTime:  t.StartTime.UnixMilli(),
-		FinishTime: t.FinishTime.UnixMilli(),
+func (t *Task) Suspend(flag bool) {
+	if flag {
+		t.Status = StatusSuspended
+	} else {
+		t.Status = StatusRunning
+	}
+}
+
+func (t *Task) SubTask(done int) *SubTask {
+	if t == nil {
+		return nil
+	}
+	return &SubTask{
+		Parent: t,
+		Start:  t.Done,
+		End:    t.Done + done,
+	}
+}
+
+type SubTask struct {
+	Start  int
+	End    int
+	Parent *Task
+}
+
+func (t *SubTask) Add(done int) {
+	if t != nil {
+		t.Parent.Add(done)
+	}
+}
+
+func (t *SubTask) Finish() {
+	if t != nil {
+		t.Parent.Update(t.End)
 	}
 }
 
@@ -102,6 +121,12 @@ func NewTaskMonitor() *Monitor {
 	}
 }
 
+func (tm *Monitor) GetTask(name string) *Task {
+	tm.TaskLock.Lock()
+	defer tm.TaskLock.Unlock()
+	return tm.Tasks[name]
+}
+
 // Pending a task.
 func (tm *Monitor) Pending(name string) {
 	tm.TaskLock.Lock()
@@ -113,10 +138,12 @@ func (tm *Monitor) Pending(name string) {
 }
 
 // Start a task.
-func (tm *Monitor) Start(name string, total int) {
+func (tm *Monitor) Start(name string, total int) *Task {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
-	tm.Tasks[name] = NewTask(name, total)
+	t := NewTask(name, total)
+	tm.Tasks[name] = t
+	return t
 }
 
 // Finish a task.
@@ -136,6 +163,16 @@ func (tm *Monitor) Update(name string, done int) {
 	task, exist := tm.Tasks[name]
 	if exist {
 		task.Update(done)
+	}
+}
+
+// Add the progress of a task.
+func (tm *Monitor) Add(name string, done int) {
+	tm.TaskLock.Lock()
+	defer tm.TaskLock.Unlock()
+	task, exist := tm.Tasks[name]
+	if exist {
+		task.Update(task.Done + done)
 	}
 }
 
@@ -219,88 +256,5 @@ func (t Tasks) Less(i, j int) bool {
 		return t[i].Name < t[j].Name
 	} else {
 		return t[i].StartTime.Before(t[j].StartTime)
-	}
-}
-
-// Tracker tracks the progress of a task.
-type Tracker struct {
-	name    string
-	monitor *Monitor
-}
-
-func (tt *Tracker) Fail(err string) {
-	tt.monitor.Fail(tt.name, err)
-}
-
-// NewTaskTracker creates a Tracker from Monitor.
-func (tm *Monitor) NewTaskTracker(name string) *Tracker {
-	return &Tracker{
-		name:    name,
-		monitor: tm,
-	}
-}
-
-// Start the task.
-func (tt *Tracker) Start(total int) {
-	tt.monitor.Start(tt.name, total)
-}
-
-// Update the progress of this task.
-func (tt *Tracker) Update(done int) {
-	tt.monitor.Update(tt.name, done)
-}
-
-func (tt *Tracker) Suspend(flag bool) {
-	tt.monitor.Suspend(tt.name, flag)
-}
-
-// Finish the task.
-func (tt *Tracker) Finish() {
-	tt.monitor.Finish(tt.name)
-}
-
-// SubTracker creates a sub tracker
-func (tt *Tracker) SubTracker() model.Tracker {
-	return &SubTaskTracker{
-		Tracker: tt,
-	}
-}
-
-// SubTaskTracker tracks part of progress of a task.
-type SubTaskTracker struct {
-	*Tracker
-	Offset int
-	Total  int
-}
-
-// Fail reports the error message.
-func (tt *SubTaskTracker) Fail(err string) {
-	tt.monitor.Fail(tt.name, err)
-}
-
-// Start a task.
-func (tt *SubTaskTracker) Start(total int) {
-	tt.Offset = tt.monitor.Get(tt.name)
-	tt.Total = total
-}
-
-// Update the progress of current task.
-func (tt *SubTaskTracker) Update(done int) {
-	tt.monitor.Update(tt.name, tt.Offset+done)
-}
-
-func (tt *SubTaskTracker) Suspend(flag bool) {
-	tt.monitor.Suspend(tt.name, flag)
-}
-
-// Finish a task.
-func (tt *SubTaskTracker) Finish() {
-	tt.monitor.Update(tt.name, tt.Offset+tt.Total)
-}
-
-// SubTracker creates a sub tracker of a sub tracker.
-func (tt *SubTaskTracker) SubTracker() model.Tracker {
-	return &SubTaskTracker{
-		Tracker: tt.Tracker,
 	}
 }

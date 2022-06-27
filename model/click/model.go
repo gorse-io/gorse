@@ -26,6 +26,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"io"
@@ -91,7 +92,7 @@ func (score Score) BetterThan(s Score) bool {
 type FitConfig struct {
 	Jobs    int
 	Verbose int
-	Tracker model.Tracker
+	Task    *task.Task
 }
 
 func NewFitConfig() *FitConfig {
@@ -111,8 +112,8 @@ func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
 	return config
 }
 
-func (config *FitConfig) SetTracker(tracker model.Tracker) *FitConfig {
-	config.Tracker = tracker
+func (config *FitConfig) SetTask(t *task.Task) *FitConfig {
+	config.Task = t
 	return config
 }
 
@@ -130,6 +131,7 @@ type FactorizationMachine interface {
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 	Marshal(w io.Writer) error
 	Bytes() int
+	Complexity() int
 }
 
 type BaseFactorizationMachine struct {
@@ -263,11 +265,9 @@ func (fm *FM) InternalPredict(features []int32, values []float32) float32 {
 	return pred
 }
 
+// Fit trains the model. Its task complexity is O(fm.nEpochs).
 func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	if config.Tracker != nil {
-		config.Tracker.Start(fm.nEpochs)
-	}
 	log.Logger().Info("fit FM",
 		zap.Int("train_size", trainSet.Count()),
 		zap.Int("train_positive_count", trainSet.PositiveCount),
@@ -367,18 +367,13 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 			}
 			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 		}
-		if config.Tracker != nil {
-			config.Tracker.Update(epoch)
-		}
+		config.Task.Add(1)
 	}
 	// restore best snapshot
 	fm.V = snapshots.BestWeights[0].([][]float32)
 	fm.W = snapshots.BestWeights[1].([]float32)
 	fm.B = snapshots.BestWeights[2].(float32)
 	log.Logger().Info("fit fm complete", snapshots.BestScore.ZapFields()...)
-	if config.Tracker != nil {
-		config.Tracker.Finish()
-	}
 	return snapshots.BestScore
 }
 
@@ -467,6 +462,10 @@ func (fm *FM) Bytes() int {
 		bytes += reflect.TypeOf(fm.V).Elem().Elem().Size() * uintptr(len(fm.V)) * uintptr(fm.nFactors)
 	}
 	return int(bytes) + fm.Index.Bytes()
+}
+
+func (fm *FM) Complexity() int {
+	return fm.nEpochs
 }
 
 func MarshalModel(w io.Writer, m FactorizationMachine) error {
