@@ -87,9 +87,10 @@ type Worker struct {
 	me    string
 
 	// events
-	ticker     *time.Ticker
-	syncedChan chan bool // meta synced events
-	pulledChan chan bool // model pulled events
+	tickDuration time.Duration
+	ticker       *time.Ticker
+	syncedChan   chan bool // meta synced events
+	pulledChan   chan bool // model pulled events
 }
 
 // NewWorker creates a new worker node.
@@ -104,9 +105,10 @@ func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, job
 		httpPort:   httpPort,
 		jobs:       jobs,
 		// events
-		ticker:     time.NewTicker(time.Minute),
-		syncedChan: make(chan bool, 1024),
-		pulledChan: make(chan bool, 1024),
+		tickDuration: time.Minute,
+		ticker:       time.NewTicker(time.Minute),
+		syncedChan:   make(chan bool, 1024),
+		pulledChan:   make(chan bool, 1024),
 	}
 }
 
@@ -144,7 +146,10 @@ func (w *Worker) Sync() {
 		w.Config.Recommend.Offline.UnLock()
 
 		// reset ticker
-		w.ticker.Reset(w.Config.Recommend.Offline.CheckRecommendPeriod)
+		if w.tickDuration != w.Config.Recommend.Offline.CheckRecommendPeriod {
+			w.tickDuration = w.Config.Recommend.Offline.CheckRecommendPeriod
+			w.ticker.Reset(w.Config.Recommend.Offline.CheckRecommendPeriod)
+		}
 
 		// connect to data store
 		if w.dataPath != w.Config.Database.DataStore {
@@ -324,8 +329,10 @@ func (w *Worker) Serve() {
 
 	for {
 		select {
-		case <-w.ticker.C:
-			loop()
+		case tick := <-w.ticker.C:
+			if time.Now().Sub(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
+				loop()
+			}
 		case <-w.pulledChan:
 			loop()
 		}
