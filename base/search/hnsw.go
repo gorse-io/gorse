@@ -121,7 +121,7 @@ func (h *HNSW) knnSearch(q Vector, k, ef int) *heap.PriorityQueue {
 	return h.selectNeighbors(q, w, k)
 }
 
-// Build a vector index on data. Its complexity is O(len(h.vectors) * math.Log(len(h.vectors))).
+// Build a vector index on data.
 func (h *HNSW) Build() {
 	completed := make(chan struct{}, h.numJobs)
 	go func() {
@@ -308,10 +308,9 @@ type HNSWBuilder struct {
 	k          int
 	rng        base.RandomGenerator
 	numJobs    int
-	task       *task.Task
 }
 
-func NewHNSWBuilder(data []Vector, k, numJobs int, t *task.Task) *HNSWBuilder {
+func NewHNSWBuilder(data []Vector, k, numJobs int) *HNSWBuilder {
 	b := &HNSWBuilder{
 		bruteForce: NewBruteforce(data),
 		data:       data,
@@ -319,7 +318,6 @@ func NewHNSWBuilder(data []Vector, k, numJobs int, t *task.Task) *HNSWBuilder {
 		k:          k,
 		rng:        base.NewRandomGenerator(0),
 		numJobs:    numJobs,
-		task:       t,
 	}
 	b.bruteForce.Build()
 	return b
@@ -364,6 +362,7 @@ func (b *HNSWBuilder) evaluate(idx *HNSW, prune0 bool) float32 {
 
 func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool, t *task.Task) (idx *HNSW, score float32) {
 	buildTask := t.SubTask(EstimateHNSWBuilderComplexity(len(b.data), trials))
+	defer buildTask.Finish()
 	ef := 1 << int(math32.Ceil(math32.Log2(float32(b.k))))
 	for i := 0; i < trials; i++ {
 		start := time.Now()
@@ -374,14 +373,13 @@ func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool, t *task.Tas
 		idx.Build()
 		buildTime := time.Since(start)
 		score = b.evaluate(idx, prune0)
-		b.task.Add(b.testSize * len(b.data))
+		idx.task.Add(b.testSize * len(b.data))
 		log.Logger().Info("try to build vector index",
 			zap.String("index_type", "HNSW"),
 			zap.Int("ef_construction", ef),
 			zap.Float32("recall", score),
 			zap.String("build_time", buildTime.String()))
 		if score > recall {
-			b.task.Add(mathutil.Min(b.testSize, len(b.data)) * (trials - i - 1))
 			return
 		} else {
 			ef <<= 1

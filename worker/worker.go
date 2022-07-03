@@ -423,7 +423,7 @@ func (w *Worker) Recommend(users []data.User) {
 					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
 				}
 			}
-			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, w.jobs, recommendTask)
+			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, w.jobs)
 			var recall float32
 			w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall,
 				w.Config.Recommend.Collaborative.IndexFitEpoch, false, recommendTask)
