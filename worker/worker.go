@@ -51,7 +51,10 @@ import (
 	"time"
 )
 
-const batchSize = 10000
+const (
+	batchSize                 = 10000
+	recommendComplexityFactor = 100
+)
 
 // Worker manages states of a worker node.
 type Worker struct {
@@ -330,9 +333,9 @@ func (w *Worker) Serve() {
 }
 
 func (w *Worker) estimateRecommendComplexity(numUsers, numItems int) int {
-	complexity := numUsers * numItems
+	complexity := numUsers * numItems * recommendComplexityFactor
 	if w.Config.Recommend.Collaborative.EnableIndex {
-		complexity += search.EstimateHNSWBuilderComplexity(numItems, 1000, w.Config.Recommend.Collaborative.IndexFitEpoch)
+		complexity += search.EstimateHNSWBuilderComplexity(numItems, w.Config.Recommend.Collaborative.IndexFitEpoch)
 	}
 	return complexity
 }
@@ -353,19 +356,6 @@ func (w *Worker) Recommend(users []data.User) {
 		zap.Int("n_jobs", w.jobs),
 		zap.Int("cache_size", w.Config.Recommend.CacheSize))
 
-	// progress tracker
-	completed := make(chan struct{}, 1000)
-	recommendTaskName := "Generate offline recommendation"
-	if !w.oneMode {
-		recommendTaskName += fmt.Sprintf(" [%s]", w.workerName)
-	}
-	recommendTask := task.NewTask(recommendTaskName, w.estimateRecommendComplexity(len(users), 0))
-	if w.masterClient != nil {
-		if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
-			log.Logger().Error("failed to report start task", zap.Error(err))
-		}
-	}
-
 	// pull items from database
 	itemCache, itemCategories, err := w.pullItems()
 	if err != nil {
@@ -374,6 +364,19 @@ func (w *Worker) Recommend(users []data.User) {
 	}
 	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(itemCache.Bytes()))
 	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
+
+	// progress tracker
+	completed := make(chan struct{}, 1000)
+	recommendTaskName := "Generate offline recommendation"
+	if !w.oneMode {
+		recommendTaskName += fmt.Sprintf(" [%s]", w.workerName)
+	}
+	recommendTask := task.NewTask(recommendTaskName, w.estimateRecommendComplexity(len(users), itemCache.Len()))
+	if w.masterClient != nil {
+		if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
+			log.Logger().Error("failed to report start task", zap.Error(err))
+		}
+	}
 
 	go func() {
 		defer base.CheckPanic()
@@ -391,7 +394,7 @@ func (w *Worker) Recommend(users []data.User) {
 				previousCount = completedCount
 				if throughput > 0 {
 					if w.masterClient != nil {
-						recommendTask.Add(throughput)
+						recommendTask.Add(throughput * itemCache.Len() * recommendComplexityFactor)
 					}
 					log.Logger().Info("ranking recommendation",
 						zap.Int("n_complete_users", completedCount),
@@ -420,9 +423,10 @@ func (w *Worker) Recommend(users []data.User) {
 					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
 				}
 			}
-			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, 1000, w.jobs, recommendTask)
+			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, w.jobs, recommendTask)
 			var recall float32
-			w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall, w.Config.Recommend.Collaborative.IndexFitEpoch, false)
+			w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall,
+				w.Config.Recommend.Collaborative.IndexFitEpoch, false, recommendTask)
 			CollaborativeFilteringIndexRecall.Set(float64(recall))
 			if err = w.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 				log.Logger().Error("failed to write meta", zap.Error(err))
@@ -1188,6 +1192,10 @@ type ItemCache struct {
 
 func NewItemCache() *ItemCache {
 	return &ItemCache{Data: make(map[string]*data.Item)}
+}
+
+func (c *ItemCache) Len() int {
+	return len(c.Data)
 }
 
 func (c *ItemCache) Set(itemId string, item data.Item) {
