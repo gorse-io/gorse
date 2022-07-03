@@ -238,6 +238,8 @@ func (idx *IVF) Build() {
 			nextClusters[c].centroid = idx.data[0].Centroid(idx.data, nextClusters[c].observations)
 		}
 		clusters = nextClusters
+
+		idx.task.Add(len(idx.data) * idx.k)
 	}
 }
 
@@ -293,10 +295,13 @@ func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool, t *task.Ta
 	idx.Build()
 	idx.task.Finish()
 
+	probeTask := t.SubTask(len(b.data) * DefaultTestSize * numEpoch)
+	defer probeTask.Finish()
 	buildTime := time.Since(start)
 	idx.numProbe = int(math32.Ceil(float32(b.k) / math32.Sqrt(float32(len(b.data)))))
 	for i := 0; i < numEpoch; i++ {
 		score = b.evaluate(idx, prune0)
+		probeTask.Add(len(b.data) * DefaultTestSize)
 		log.Logger().Info("try to build vector index",
 			zap.String("index_type", "IVF"),
 			zap.Int("num_probe", idx.numProbe),

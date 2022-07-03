@@ -403,7 +403,9 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize, search.SetIVFNumJobs(m.Config.Master.NumJobs))
 	var recall float32
 	index, recall = builder.Build(m.Config.Recommend.ItemNeighbors.IndexRecall,
-		m.Config.Recommend.ItemNeighbors.IndexFitEpoch, true)
+		m.Config.Recommend.ItemNeighbors.IndexFitEpoch,
+		true,
+		m.taskMonitor.GetTask(TaskFindItemNeighbors))
 	ItemNeighborIndexRecall.Set(float64(recall))
 	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 		return errors.Trace(err)
@@ -651,7 +653,9 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	var recall float32
 	index, recall = builder.Build(
 		m.Config.Recommend.UserNeighbors.IndexRecall,
-		m.Config.Recommend.UserNeighbors.IndexFitEpoch, true)
+		m.Config.Recommend.UserNeighbors.IndexFitEpoch,
+		true,
+		m.taskMonitor.GetTask(TaskFindItemNeighbors))
 	UserNeighborIndexRecall.Set(float64(recall))
 	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 		return errors.Trace(err)
