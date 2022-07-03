@@ -40,8 +40,9 @@ const (
 )
 
 var gormConfig = &gorm.Config{
-	Logger:          zapgorm2.New(log.Logger()),
-	CreateBatchSize: 1000,
+	Logger:                 zapgorm2.New(log.Logger()),
+	CreateBatchSize:        1000,
+	SkipDefaultTransaction: true,
 }
 
 type SQLValue struct {
