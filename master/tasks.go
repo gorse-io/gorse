@@ -463,8 +463,20 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	return nil
 }
 
-func (m *Master) estimateFindUserNeighborsComplexity(dataset *ranking.DataSet) {
-	panic("not implemented")
+func (m *Master) estimateFindUserNeighborsComplexity(dataset *ranking.DataSet) int {
+	complexity := dataset.UserCount() * dataset.UserCount()
+	if m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
+		m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
+		complexity += len(dataset.UserFeedback) + len(dataset.ItemFeedback)
+	}
+	if m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
+		m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
+		complexity += len(dataset.UserLabels) + int(dataset.NumUserLabels)
+	}
+	if m.Config.Recommend.UserNeighbors.EnableIndex {
+		complexity += search.EstimateIVFBuilderComplexity(dataset.UserCount(), m.Config.Recommend.UserNeighbors.IndexFitEpoch)
+	}
+	return complexity
 }
 
 // runFindUserNeighborsTask updates neighbors of users.
@@ -489,7 +501,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 				throughput := completedCount - previousCount
 				previousCount = completedCount
 				if throughput > 0 {
-					m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
+					m.taskMonitor.Add(TaskFindUserNeighbors, throughput*dataset.UserCount())
 					log.Logger().Debug("searching neighbors of users",
 						zap.Int("n_complete_users", completedCount),
 						zap.Int("n_users", dataset.UserCount()),
@@ -505,10 +517,12 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		for _, feedbacks := range dataset.UserFeedback {
 			sort.Sort(sortutil.Int32Slice(feedbacks))
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserFeedback))
 		// inverse document frequency of items
 		for i := range dataset.ItemFeedback {
 			itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.ItemFeedback))
 	}
 	labeledUsers := make([][]int32, dataset.NumUserLabels)
 	labelIDF := make([]float32, dataset.NumUserLabels)
@@ -520,10 +534,12 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 				labeledUsers[label] = append(labeledUsers[label], int32(i))
 			}
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserLabels))
 		// inverse document frequency of labels
 		for i := range labeledUsers {
 			labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(labeledUsers))
 	}
 
 	start := time.Now()
@@ -655,7 +671,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		m.Config.Recommend.UserNeighbors.IndexRecall,
 		m.Config.Recommend.UserNeighbors.IndexFitEpoch,
 		true,
-		m.taskMonitor.GetTask(TaskFindItemNeighbors))
+		m.taskMonitor.GetTask(TaskFindUserNeighbors))
 	UserNeighborIndexRecall.Set(float64(recall))
 	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 		return errors.Trace(err)
