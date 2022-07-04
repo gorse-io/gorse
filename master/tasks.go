@@ -482,7 +482,7 @@ func (m *Master) estimateFindUserNeighborsComplexity(dataset *ranking.DataSet) i
 // runFindUserNeighborsTask updates neighbors of users.
 func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	startTaskTime := time.Now()
-	m.taskMonitor.Start(TaskFindUserNeighbors, dataset.UserCount())
+	m.taskMonitor.Start(TaskFindUserNeighbors, m.estimateFindUserNeighborsComplexity(dataset))
 	log.Logger().Info("start searching neighbors of users",
 		zap.Int("n_cache", m.Config.Recommend.CacheSize))
 	// create progress tracker

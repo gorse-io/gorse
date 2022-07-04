@@ -239,7 +239,7 @@ func (idx *IVF) Build() {
 		}
 		clusters = nextClusters
 
-		idx.task.Add(len(idx.data) * idx.k)
+		idx.task.Add(len(idx.data) * int(math.Sqrt(float64(len(idx.data)))))
 	}
 }
 
@@ -290,7 +290,7 @@ func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 
 func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool, t *task.Task) (idx *IVF, score float32) {
 	idx = NewIVF(b.data, b.configs...)
-	idx.task = t.SubTask(DefaultMaxIter * len(b.data) * b.k)
+	idx.task = t.SubTask(DefaultMaxIter * len(b.data) * int(math.Sqrt(float64(len(b.data)))))
 	start := time.Now()
 	idx.Build()
 	idx.task.Finish()
@@ -337,9 +337,8 @@ func (b *IVFBuilder) evaluateTermSearch(idx *IVF, prune0 bool, term string) floa
 }
 
 func EstimateIVFBuilderComplexity(num, numEpoch int) int {
-	k := int(math.Sqrt(float64(num)))
 	// clustering complexity
-	complexity := DefaultMaxIter * num * k
+	complexity := DefaultMaxIter * num * int(math.Sqrt(float64(num)))
 	// search complexity
 	complexity += num * DefaultTestSize * numEpoch
 	return complexity
