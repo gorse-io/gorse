@@ -16,6 +16,7 @@ package ranking
 import (
 	"bytes"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"math"
@@ -53,10 +54,11 @@ func TestBPR_MovieLens(t *testing.T) {
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 	assert.Equal(t, trainSet.UserIndex, m.GetUserIndex())
 	assert.Equal(t, testSet.ItemIndex, m.GetItemIndex())
-	assert.Equal(t, 30, fitConfig.Task.Done)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
+	assert.Equal(t, m.InternalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
 	assert.True(t, m.IsUserPredictable(1))
 	assert.True(t, m.IsItemPredictable(1))
 	assert.False(t, m.IsUserPredictable(math.MaxInt32))
@@ -77,7 +79,7 @@ func TestBPR_MovieLens(t *testing.T) {
 	fitConfig = newFitConfig(1)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
-	assert.Equal(t, 1, fitConfig.Task.Done)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()
@@ -111,10 +113,11 @@ func TestCCD_MovieLens(t *testing.T) {
 	fitConfig := newFitConfig(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
-	assert.Equal(t, 30, fitConfig.Task.Done)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
+	assert.Equal(t, m.InternalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
 
 	// test encode/decode model and increment training
 	buf := bytes.NewBuffer(nil)
@@ -127,7 +130,7 @@ func TestCCD_MovieLens(t *testing.T) {
 	fitConfig = newFitConfig(1)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
-	assert.Equal(t, 1, fitConfig.Task.Done)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()

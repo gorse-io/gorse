@@ -52,7 +52,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
 	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
-	assert.Equal(t, 20, fitConfig.Task.Done)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 }
 
 //func TestFM_Classification_MovieLens(t *testing.T) {
@@ -90,7 +90,7 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
 	assert.InDelta(t, 0.839194, score.RMSE, regressionDelta)
-	assert.Equal(t, 20, fitConfig.Task.Done)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test prediction
 	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.5, 0.5, 0.5, 0.5}),
@@ -107,7 +107,7 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	fitConfig = newFitConfigWithTestTracker(1)
 	scoreInc := m.Fit(train, test, fitConfig)
 	assert.InDelta(t, 0.839194, scoreInc.RMSE, regressionDelta)
-	assert.Equal(t, 1, fitConfig.Task.Done)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()

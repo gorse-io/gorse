@@ -92,7 +92,7 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
-	if paramGrid.NumCombinations() < numTrials {
+	if paramGrid.NumCombinations() <= numTrials {
 		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig, runner)
 	}
 	rng := base.NewRandomGenerator(seed)

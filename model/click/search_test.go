@@ -142,12 +142,31 @@ func TestRandomSearchCV(t *testing.T) {
 	}, r.BestParams)
 }
 
-func TestModelSearcher(t *testing.T) {
-
+func TestModelSearcher_RandomSearch(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
 	searcher := NewModelSearcher(2, 63, 1)
+	searcher.model = &mockFactorizationMachineForSearch{model.BaseModel{Params: model.Params{model.NEpochs: 2}}}
+	tk := task.NewTask("test", searcher.Complexity())
+	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)
+	assert.NoError(t, err)
+	m, score := searcher.GetBestModel()
+	assert.Equal(t, float32(12), score.AUC)
+	assert.Equal(t, model.Params{
+		model.NEpochs:    2,
+		model.NFactors:   4,
+		model.InitMean:   4,
+		model.InitStdDev: 4,
+	}, m.GetParams())
+	assert.Equal(t, searcher.Complexity(), tk.Done)
+}
+
+func TestModelSearcher_GridSearch(t *testing.T) {
+	runner := new(mockRunner)
+	runner.On("Lock")
+	runner.On("UnLock")
+	searcher := NewModelSearcher(2, 64, 1)
 	searcher.model = &mockFactorizationMachineForSearch{model.BaseModel{Params: model.Params{model.NEpochs: 2}}}
 	tk := task.NewTask("test", searcher.Complexity())
 	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)

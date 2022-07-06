@@ -61,21 +61,33 @@ func (t *Task) Update(done int) {
 
 func (t *Task) Add(done int) {
 	if t != nil {
+		t.Status = StatusRunning
 		t.Done += done
 	}
 }
 
 func (t *Task) Finish() {
-	t.Status = StatusComplete
-	t.Done = t.Total
-	t.FinishTime = time.Now()
+	if t != nil {
+		t.Status = StatusComplete
+		t.Done = t.Total
+		t.FinishTime = time.Now()
+	}
 }
 
 func (t *Task) Suspend(flag bool) {
-	if flag {
-		t.Status = StatusSuspended
-	} else {
-		t.Status = StatusRunning
+	if t != nil {
+		if flag {
+			t.Status = StatusSuspended
+		} else {
+			t.Status = StatusRunning
+		}
+	}
+}
+
+func (t *Task) Fail(err string) {
+	if t != nil {
+		t.Error = err
+		t.Status = StatusFailed
 	}
 }
 
@@ -160,44 +172,27 @@ func (tm *Monitor) Finish(name string) {
 func (tm *Monitor) Update(name string, done int) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
-	task, exist := tm.Tasks[name]
-	if exist {
-		task.Update(done)
-	}
+	tm.Tasks[name].Update(done)
 }
 
 // Add the progress of a task.
 func (tm *Monitor) Add(name string, done int) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
-	task, exist := tm.Tasks[name]
-	if exist {
-		task.Update(task.Done + done)
-	}
+	tm.Tasks[name].Add(done)
 }
 
 // Suspend a task.
 func (tm *Monitor) Suspend(name string, flag bool) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
-	task, exist := tm.Tasks[name]
-	if exist {
-		if flag {
-			task.Status = StatusSuspended
-		} else {
-			task.Status = StatusRunning
-		}
-	}
+	tm.Tasks[name].Suspend(flag)
 }
 
 func (tm *Monitor) Fail(name, err string) {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
-	task, exist := tm.Tasks[name]
-	if exist {
-		task.Error = err
-		task.Status = StatusFailed
-	}
+	tm.Tasks[name].Fail(err)
 }
 
 // List all tasks and remove tasks from disconnected workers.
