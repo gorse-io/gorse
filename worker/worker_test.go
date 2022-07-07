@@ -100,6 +100,10 @@ type mockMatrixFactorizationForRecommend struct {
 	ranking.BaseMatrixFactorization
 }
 
+func (m *mockMatrixFactorizationForRecommend) Complexity() int {
+	panic("implement me")
+}
+
 func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixFactorizationForRecommend {
 	m := new(mockMatrixFactorizationForRecommend)
 	m.UserIndex = base.NewMapIndex()
@@ -736,6 +740,10 @@ func TestWorker_Sync(t *testing.T) {
 
 type mockFactorizationMachine struct {
 	click.BaseFactorizationMachine
+}
+
+func (m mockFactorizationMachine) Complexity() int {
+	panic("implement me")
 }
 
 func (m mockFactorizationMachine) Bytes() int {

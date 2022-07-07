@@ -26,6 +26,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"io"
@@ -44,7 +45,7 @@ type FitConfig struct {
 	Verbose    int
 	Candidates int
 	TopK       int
-	Tracker    model.Tracker
+	Task       *task.Task
 }
 
 func NewFitConfig() *FitConfig {
@@ -66,8 +67,8 @@ func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
 	return config
 }
 
-func (config *FitConfig) SetTracker(tracker model.Tracker) *FitConfig {
-	config.Tracker = tracker
+func (config *FitConfig) SetTask(t *task.Task) *FitConfig {
+	config.Task = t
 	return config
 }
 
@@ -114,6 +115,8 @@ type MatrixFactorization interface {
 	Unmarshal(r io.Reader) error
 	// Bytes returns used memory.
 	Bytes() int
+	// Complexity returns the complexity of the model.
+	Complexity() int
 }
 
 type BaseMatrixFactorization struct {
@@ -336,6 +339,10 @@ func (bpr *BPR) GetItemFactor(itemIndex int32) []float32 {
 	return bpr.ItemFactor[itemIndex]
 }
 
+func (bpr *BPR) Complexity() int {
+	return bpr.nEpochs
+}
+
 // SetParams sets hyper-parameters of the BPR model.
 func (bpr *BPR) SetParams(params model.Params) {
 	bpr.BaseMatrixFactorization.SetParams(params)
@@ -383,12 +390,9 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int32) float32 {
 	return ret
 }
 
-// Fit the BPR model.
+// Fit the BPR model. Its task complexity is O(bpr.nEpochs).
 func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	if config.Tracker != nil {
-		config.Tracker.Start(bpr.nEpochs)
-	}
 	log.Logger().Info("fit bpr",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -484,16 +488,11 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
-		if config.Tracker != nil {
-			config.Tracker.Update(epoch)
-		}
+		config.Task.Add(1)
 	}
 	// restore best snapshot
 	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
 	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
-	if config.Tracker != nil {
-		config.Tracker.Finish()
-	}
 	log.Logger().Info("fit bpr complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
@@ -617,6 +616,10 @@ func (ccd *CCD) GetItemFactor(itemIndex int32) []float32 {
 	return ccd.ItemFactor[itemIndex]
 }
 
+func (ccd *CCD) Complexity() int {
+	return ccd.nEpochs
+}
+
 // SetParams sets hyper-parameters for the ALS model.
 func (ccd *CCD) SetParams(params model.Params) {
 	ccd.BaseMatrixFactorization.SetParams(params)
@@ -707,11 +710,9 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 	ccd.BaseMatrixFactorization.Init(trainSet)
 }
 
+// Fit the CCD model. Its task complexity is O(ccd.nEpochs).
 func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	if config.Tracker != nil {
-		config.Tracker.Start(ccd.nEpochs)
-	}
 	log.Logger().Info("fit ccd",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
@@ -839,16 +840,11 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
-		if config.Tracker != nil {
-			config.Tracker.Update(ep)
-		}
+		config.Task.Add(1)
 	}
 	// restore best snapshot
 	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
 	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
-	if config.Tracker != nil {
-		config.Tracker.Finish()
-	}
 	log.Logger().Info("fit ccd complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),

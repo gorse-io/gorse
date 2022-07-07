@@ -21,6 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/task"
 	"go.uber.org/zap"
 	"math/rand"
 	"modernc.org/mathutil"
@@ -47,6 +48,7 @@ type HNSW struct {
 	maxConnection0 int
 	efConstruction int
 	numJobs        int
+	task           *task.SubTask
 }
 
 // HNSWConfig is the configuration function for HNSW.
@@ -136,6 +138,7 @@ func (h *HNSW) Build() {
 			case <-ticker.C:
 				throughput := completedCount - previousCount
 				previousCount = completedCount
+				h.task.Add(throughput * len(h.vectors))
 				if throughput > 0 {
 					log.Logger().Info("building index",
 						zap.Int("n_indexed_vectors", completedCount),
@@ -307,11 +310,11 @@ type HNSWBuilder struct {
 	numJobs    int
 }
 
-func NewHNSWBuilder(data []Vector, k, testSize, numJobs int) *HNSWBuilder {
+func NewHNSWBuilder(data []Vector, k, numJobs int) *HNSWBuilder {
 	b := &HNSWBuilder{
 		bruteForce: NewBruteforce(data),
 		data:       data,
-		testSize:   testSize,
+		testSize:   DefaultTestSize,
 		k:          k,
 		rng:        base.NewRandomGenerator(0),
 		numJobs:    numJobs,
@@ -357,14 +360,20 @@ func (b *HNSWBuilder) evaluate(idx *HNSW, prune0 bool) float32 {
 	return result / count
 }
 
-func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool) (idx *HNSW, score float32) {
+func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool, t *task.Task) (idx *HNSW, score float32) {
+	buildTask := t.SubTask(EstimateHNSWBuilderComplexity(len(b.data), trials))
+	defer buildTask.Finish()
 	ef := 1 << int(math32.Ceil(math32.Log2(float32(b.k))))
 	for i := 0; i < trials; i++ {
 		start := time.Now()
-		idx = NewHNSW(b.data, SetEFConstruction(ef), SetHNSWNumJobs(b.numJobs))
+		idx = NewHNSW(b.data,
+			SetEFConstruction(ef),
+			SetHNSWNumJobs(b.numJobs))
+		idx.task = buildTask
 		idx.Build()
 		buildTime := time.Since(start)
 		score = b.evaluate(idx, prune0)
+		idx.task.Add(b.testSize * len(b.data))
 		log.Logger().Info("try to build vector index",
 			zap.String("index_type", "HNSW"),
 			zap.Int("ef_construction", ef),
@@ -439,4 +448,13 @@ func (h *HNSW) efSearch(q Vector, ef int) *heap.PriorityQueue {
 	}
 	w = h.searchLayer(q, enterPoints, ef, 0)
 	return w
+}
+
+func EstimateHNSWBuilderComplexity(dataSize, trials int) int {
+	// build index
+	complexity := dataSize * dataSize
+	// evaluate
+	complexity += DefaultTestSize * dataSize
+	// with trials
+	return complexity * trials
 }

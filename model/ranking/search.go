@@ -16,9 +16,9 @@ package ranking
 
 import (
 	"fmt"
-	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"sync"
@@ -70,9 +70,9 @@ func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *Dat
 			// Cross validate
 			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Overwrite(params))
-			fitConfig.Tracker.Suspend(true)
+			fitConfig.Task.Suspend(true)
 			runner.Lock()
-			fitConfig.Tracker.Suspend(false)
+			fitConfig.Task.Suspend(false)
 			score := estimator.Fit(trainSet, testSet, fitConfig)
 			runner.UnLock()
 			// Create GridSearch result
@@ -122,9 +122,9 @@ func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *D
 			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
-		fitConfig.Tracker.Suspend(true)
+		fitConfig.Task.Suspend(true)
 		runner.Lock()
-		fitConfig.Tracker.Suspend(false)
+		fitConfig.Task.Suspend(false)
 		score := estimator.Fit(trainSet, testSet, fitConfig)
 		runner.UnLock()
 		results.Scores = append(results.Scores, score)
@@ -172,20 +172,20 @@ func (searcher *ModelSearcher) GetBestModel() (string, MatrixFactorization, Scor
 	return searcher.bestModelName, searcher.bestModel, searcher.bestScore
 }
 
-func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Tracker, runner model.Runner) error {
-	if tracker == nil {
-		return errors.New("tracker is required")
-	}
+func (searcher *ModelSearcher) Complexity() int {
+	return len(searcher.models) * searcher.numEpochs * searcher.numTrials
+}
+
+func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task, runner model.Runner) error {
 	log.Logger().Info("ranking model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
 	startTime := time.Now()
-	tracker.Start(len(searcher.models) * searcher.numEpochs * searcher.numTrials)
 	for _, m := range searcher.models {
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0,
 			NewFitConfig().
 				SetJobs(searcher.numJobs).
-				SetTracker(tracker.SubTracker()), runner)
+				SetTask(t), runner)
 		searcher.bestMutex.Lock()
 		if searcher.bestModel == nil || r.BestScore.NDCG > searcher.bestScore.NDCG {
 			searcher.bestModel = r.BestModel
@@ -201,6 +201,5 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, tracker model.Trac
 		zap.String("model", GetModelName(searcher.bestModel)),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
-	tracker.Finish()
 	return nil
 }

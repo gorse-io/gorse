@@ -16,6 +16,7 @@ package search
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"math/big"
@@ -47,11 +48,13 @@ func TestHNSW_InnerProduct(t *testing.T) {
 	}
 
 	// build vector index
-	builder := NewHNSWBuilder(vectors, 10, 1000, runtime.NumCPU())
-	idx, recall := builder.Build(0.9, 5, false)
+	builder := NewHNSWBuilder(vectors, 10, runtime.NumCPU())
+	tk := task.NewTask("test", EstimateHNSWBuilderComplexity(len(vectors), 5))
+	idx, recall := builder.Build(0.9, 5, false, tk)
 	assert.Greater(t, recall, float32(0.9))
 	recall = builder.evaluateTermSearch(idx, true, "prime")
 	assert.Greater(t, recall, float32(0.85))
+	assert.Equal(t, EstimateHNSWBuilderComplexity(len(vectors), 5), tk.Done)
 }
 
 func TestIVF_Cosine(t *testing.T) {
@@ -72,9 +75,11 @@ func TestIVF_Cosine(t *testing.T) {
 	}
 
 	// build vector index
-	builder := NewIVFBuilder(vectors, 10, 1000)
-	idx, recall := builder.Build(0.9, 5, true)
+	builder := NewIVFBuilder(vectors, 10)
+	tk := task.NewTask("test", EstimateIVFBuilderComplexity(len(vectors), 5))
+	idx, recall := builder.Build(0.9, 5, true, tk)
 	assert.Greater(t, recall, float32(0.9))
 	recall = builder.evaluateTermSearch(idx, true, "prime")
 	assert.Greater(t, recall, float32(0.8))
+	assert.Equal(t, EstimateIVFBuilderComplexity(len(vectors), 5), tk.Done)
 }

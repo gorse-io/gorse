@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -238,6 +237,6 @@ func (m *Master) PushTaskInfo(
 	in *protocol.PushTaskInfoRequest) (*protocol.PushTaskInfoResponse, error) {
 	m.taskMonitor.TaskLock.Lock()
 	defer m.taskMonitor.TaskLock.Unlock()
-	m.taskMonitor.Tasks[in.GetName()] = task.NewTaskFromPB(in)
+	m.taskMonitor.Tasks[in.GetName()] = protocol.DecodeTask(in)
 	return &protocol.PushTaskInfoResponse{}, nil
 }

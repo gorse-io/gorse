@@ -15,13 +15,13 @@ package ranking
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/model"
 	"math"
 	"runtime"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/model"
 )
 
 const (
@@ -29,51 +29,10 @@ const (
 	incrDelta  = 0.05
 )
 
-type mockTracker struct {
-	mock.Mock
-	notTracking bool
-}
-
-func (t *mockTracker) Fail(_ string) {}
-
-func (t *mockTracker) Start(total int) {
-	if !t.notTracking {
-		t.Called(total)
-	}
-}
-
-func (t *mockTracker) Update(done int) {
-	if !t.notTracking {
-		t.Called(done)
-	}
-}
-
-func (t *mockTracker) Finish() {
-	if !t.notTracking {
-		t.Called()
-	}
-}
-
-func (t *mockTracker) Suspend(flag bool) {
-	if !t.notTracking {
-		t.Called(flag)
-	}
-}
-
-func (t *mockTracker) SubTracker() model.Tracker {
-	if !t.notTracking {
-		t.Called()
-	}
-	return &mockTracker{notTracking: true}
-}
-
-func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
-	tracker := new(mockTracker)
-	tracker.On("Start", numEpoch)
-	tracker.On("Update", mock.Anything)
-	tracker.On("Finish")
-	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU()).SetTracker(tracker)
-	return cfg, tracker
+func newFitConfig(numEpoch int) *FitConfig {
+	t := task.NewTask("test", numEpoch)
+	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU()).SetTask(t)
+	return cfg
 }
 
 // He, Xiangnan, et al. "Neural collaborative filtering." Proceedings
@@ -90,15 +49,16 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitMean:   0,
 		model.InitStdDev: 0.001,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker(30)
+	fitConfig := newFitConfig(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
-	tracker.AssertExpectations(t)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 	assert.Equal(t, trainSet.UserIndex, m.GetUserIndex())
 	assert.Equal(t, testSet.ItemIndex, m.GetItemIndex())
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
+	assert.Equal(t, m.InternalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
 	assert.True(t, m.IsUserPredictable(1))
 	assert.True(t, m.IsItemPredictable(1))
 	assert.False(t, m.IsUserPredictable(math.MaxInt32))
@@ -116,9 +76,10 @@ func TestBPR_MovieLens(t *testing.T) {
 	assert.False(t, tmp.IsItemPredictable(math.MaxInt32))
 	m = tmp.(*BPR)
 	m.nEpochs = 1
-	fitConfig, _ = newFitConfigWithTestTracker(1)
+	fitConfig = newFitConfig(1)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()
@@ -149,13 +110,14 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.NEpochs:  30,
 		model.Alpha:    0.05,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker(30)
+	fitConfig := newFitConfig(30)
 	score := m.Fit(trainSet, testSet, fitConfig)
-	tracker.AssertExpectations(t)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
+	assert.Equal(t, m.InternalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
 
 	// test encode/decode model and increment training
 	buf := bytes.NewBuffer(nil)
@@ -165,9 +127,10 @@ func TestCCD_MovieLens(t *testing.T) {
 	assert.NoError(t, err)
 	m = tmp.(*CCD)
 	m.nEpochs = 1
-	fitConfig, _ = newFitConfigWithTestTracker(1)
+	fitConfig = newFitConfig(1)
 	scoreInc := m.Fit(trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()

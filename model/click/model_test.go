@@ -15,11 +15,10 @@ package click
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/mock"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
+	"testing"
 )
 
 const (
@@ -27,54 +26,13 @@ const (
 	classificationDelta = 0.01
 )
 
-type mockTracker struct {
-	mock.Mock
-	notTracking bool
-}
-
-func (t *mockTracker) Fail(_ string) {}
-
-func (t *mockTracker) Start(total int) {
-	if !t.notTracking {
-		t.Called(total)
-	}
-}
-
-func (t *mockTracker) Update(_ int) {
-	if !t.notTracking {
-		t.Called()
-	}
-}
-
-func (t *mockTracker) Finish() {
-	if !t.notTracking {
-		t.Called()
-	}
-}
-
-func (t *mockTracker) Suspend(_ bool) {
-	if !t.notTracking {
-		t.Called()
-	}
-}
-
-func (t *mockTracker) SubTracker() model.Tracker {
-	if !t.notTracking {
-		t.Called()
-	}
-	return &mockTracker{notTracking: true}
-}
-
-func newFitConfigWithTestTracker(numEpoch int) (*FitConfig, *mockTracker) {
-	tracker := new(mockTracker)
-	tracker.On("Start", numEpoch)
-	tracker.On("Update", mock.Anything)
-	tracker.On("Finish")
+func newFitConfigWithTestTracker(numEpoch int) *FitConfig {
+	t := task.NewTask("test", numEpoch)
 	cfg := NewFitConfig().
 		SetVerbose(1).
 		SetJobs(1).
-		SetTracker(tracker)
-	return cfg, tracker
+		SetTask(t)
+	return cfg
 }
 
 func TestFM_Classification_Frappe(t *testing.T) {
@@ -91,10 +49,10 @@ func TestFM_Classification_Frappe(t *testing.T) {
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker(20)
+	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	tracker.AssertExpectations(t)
 	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 }
 
 //func TestFM_Classification_MovieLens(t *testing.T) {
@@ -129,10 +87,10 @@ func TestFM_Regression_Criteo(t *testing.T) {
 		model.Lr:         0.001,
 		model.Reg:        0.0001,
 	})
-	fitConfig, tracker := newFitConfigWithTestTracker(20)
+	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	tracker.AssertExpectations(t)
 	assert.InDelta(t, 0.839194, score.RMSE, regressionDelta)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test prediction
 	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.5, 0.5, 0.5, 0.5}),
@@ -146,9 +104,10 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	assert.NoError(t, err)
 	m = tmp.(*FM)
 	m.nEpochs = 1
-	fitConfig, _ = newFitConfigWithTestTracker(1)
+	fitConfig = newFitConfigWithTestTracker(1)
 	scoreInc := m.Fit(train, test, fitConfig)
 	assert.InDelta(t, 0.839194, scoreInc.RMSE, regressionDelta)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()

@@ -189,10 +189,26 @@ func (m *Master) runLoadDatasetTask() error {
 	return nil
 }
 
+func (m *Master) estimateFindItemNeighborsComplexity(dataset *ranking.DataSet) int {
+	complexity := dataset.ItemCount() * dataset.ItemCount()
+	if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
+		m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
+		complexity += len(dataset.UserFeedback) + len(dataset.ItemFeedback)
+	}
+	if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
+		m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
+		complexity += len(dataset.ItemLabels) + int(dataset.NumItemLabels)
+	}
+	if m.Config.Recommend.ItemNeighbors.EnableIndex {
+		complexity += search.EstimateIVFBuilderComplexity(dataset.ItemCount(), m.Config.Recommend.ItemNeighbors.IndexFitEpoch)
+	}
+	return complexity
+}
+
 // runFindItemNeighborsTask updates neighbors of items.
 func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 	startTaskTime := time.Now()
-	m.taskMonitor.Start(TaskFindItemNeighbors, dataset.ItemCount())
+	m.taskMonitor.Start(TaskFindItemNeighbors, m.estimateFindItemNeighborsComplexity(dataset))
 	log.Logger().Info("start searching neighbors of items",
 		zap.Int("n_cache", m.Config.Recommend.CacheSize))
 	// create progress tracker
@@ -211,7 +227,7 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				throughput := completedCount - previousCount
 				previousCount = completedCount
 				if throughput > 0 {
-					m.taskMonitor.Update(TaskFindItemNeighbors, completedCount)
+					m.taskMonitor.Add(TaskFindItemNeighbors, throughput*dataset.ItemCount())
 					log.Logger().Debug("searching neighbors of items",
 						zap.Int("n_complete_items", completedCount),
 						zap.Int("n_items", dataset.ItemCount()),
@@ -227,10 +243,12 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 		for _, feedbacks := range dataset.ItemFeedback {
 			sort.Sort(sortutil.Int32Slice(feedbacks))
 		}
+		m.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemFeedback))
 		// inverse document frequency of users
 		for i := range dataset.UserFeedback {
 			userIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(dataset.UserFeedback[i])))
 		}
+		m.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.UserFeedback))
 	}
 	labeledItems := make([][]int32, dataset.NumItemLabels)
 	labelIDF := make([]float32, dataset.NumItemLabels)
@@ -242,10 +260,12 @@ func (m *Master) runFindItemNeighborsTask(dataset *ranking.DataSet) {
 				labeledItems[label] = append(labeledItems[label], int32(i))
 			}
 		}
+		m.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemLabels))
 		// inverse document frequency of labels
 		for i := range labeledItems {
 			labelIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
 		}
+		m.taskMonitor.Add(TaskFindItemNeighbors, len(labeledItems))
 	}
 
 	start := time.Now()
@@ -380,11 +400,12 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
 	}
 
-	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize, 1000,
-		search.SetIVFNumJobs(m.Config.Master.NumJobs))
+	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize, search.SetIVFNumJobs(m.Config.Master.NumJobs))
 	var recall float32
 	index, recall = builder.Build(m.Config.Recommend.ItemNeighbors.IndexRecall,
-		m.Config.Recommend.ItemNeighbors.IndexFitEpoch, true)
+		m.Config.Recommend.ItemNeighbors.IndexFitEpoch,
+		true,
+		m.taskMonitor.GetTask(TaskFindItemNeighbors))
 	ItemNeighborIndexRecall.Set(float64(recall))
 	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 		return errors.Trace(err)
@@ -442,10 +463,26 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	return nil
 }
 
+func (m *Master) estimateFindUserNeighborsComplexity(dataset *ranking.DataSet) int {
+	complexity := dataset.UserCount() * dataset.UserCount()
+	if m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
+		m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
+		complexity += len(dataset.UserFeedback) + len(dataset.ItemFeedback)
+	}
+	if m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
+		m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
+		complexity += len(dataset.UserLabels) + int(dataset.NumUserLabels)
+	}
+	if m.Config.Recommend.UserNeighbors.EnableIndex {
+		complexity += search.EstimateIVFBuilderComplexity(dataset.UserCount(), m.Config.Recommend.UserNeighbors.IndexFitEpoch)
+	}
+	return complexity
+}
+
 // runFindUserNeighborsTask updates neighbors of users.
 func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 	startTaskTime := time.Now()
-	m.taskMonitor.Start(TaskFindUserNeighbors, dataset.UserCount())
+	m.taskMonitor.Start(TaskFindUserNeighbors, m.estimateFindUserNeighborsComplexity(dataset))
 	log.Logger().Info("start searching neighbors of users",
 		zap.Int("n_cache", m.Config.Recommend.CacheSize))
 	// create progress tracker
@@ -464,7 +501,7 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 				throughput := completedCount - previousCount
 				previousCount = completedCount
 				if throughput > 0 {
-					m.taskMonitor.Update(TaskFindUserNeighbors, completedCount)
+					m.taskMonitor.Add(TaskFindUserNeighbors, throughput*dataset.UserCount())
 					log.Logger().Debug("searching neighbors of users",
 						zap.Int("n_complete_users", completedCount),
 						zap.Int("n_users", dataset.UserCount()),
@@ -480,10 +517,12 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 		for _, feedbacks := range dataset.UserFeedback {
 			sort.Sort(sortutil.Int32Slice(feedbacks))
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserFeedback))
 		// inverse document frequency of items
 		for i := range dataset.ItemFeedback {
 			itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.ItemFeedback))
 	}
 	labeledUsers := make([][]int32, dataset.NumUserLabels)
 	labelIDF := make([]float32, dataset.NumUserLabels)
@@ -495,10 +534,12 @@ func (m *Master) runFindUserNeighborsTask(dataset *ranking.DataSet) {
 				labeledUsers[label] = append(labeledUsers[label], int32(i))
 			}
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserLabels))
 		// inverse document frequency of labels
 		for i := range labeledUsers {
 			labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
 		}
+		m.taskMonitor.Add(TaskFindUserNeighbors, len(labeledUsers))
 	}
 
 	start := time.Now()
@@ -624,12 +665,13 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
 	}
 
-	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize, 1000,
-		search.SetIVFNumJobs(m.Config.Master.NumJobs))
+	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize, search.SetIVFNumJobs(m.Config.Master.NumJobs))
 	var recall float32
 	index, recall = builder.Build(
 		m.Config.Recommend.UserNeighbors.IndexRecall,
-		m.Config.Recommend.UserNeighbors.IndexFitEpoch, true)
+		m.Config.Recommend.UserNeighbors.IndexFitEpoch,
+		true,
+		m.taskMonitor.GetTask(TaskFindUserNeighbors))
 	UserNeighborIndexRecall.Set(float64(recall))
 	if err := m.CacheClient.Set(cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 		return errors.Trace(err)
@@ -879,7 +921,7 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization
 	startFitTime := time.Now()
 	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().
 		SetJobs(m.Config.Master.NumJobs).
-		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitRankingModel)))
+		SetTask(m.taskMonitor.Start(TaskFitRankingModel, rankingModel.Complexity())))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update ranking model
@@ -916,6 +958,8 @@ func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization
 			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
 			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
 	}
+
+	m.taskMonitor.Finish(TaskFitRankingModel)
 }
 
 // runFitClickModelTask fits click model using latest data. After model fitted, following states are changed:
@@ -971,7 +1015,7 @@ func (m *Master) runFitClickModelTask(
 	startFitTime := time.Now()
 	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().
 		SetJobs(m.Config.Master.NumJobs).
-		SetTracker(m.taskMonitor.NewTaskTracker(TaskFitClickModel)))
+		SetTask(m.taskMonitor.Start(TaskFitClickModel, clickModel.Complexity())))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update match model
@@ -1006,6 +1050,8 @@ func (m *Master) runFitClickModelTask(
 			zap.Float32("click_model_score", score.Precision),
 			zap.Any("click_model_params", m.localCache.ClickModel.GetParams()))
 	}
+
+	m.taskMonitor.Finish(TaskFitClickModel)
 	return
 }
 
@@ -1035,7 +1081,8 @@ func (m *Master) runSearchRankingModelTask(
 
 	startTime := time.Now()
 	err = m.rankingModelSearcher.Fit(m.rankingTrainSet, m.rankingTestSet,
-		m.taskMonitor.NewTaskTracker(TaskSearchRankingModel), m.taskScheduler.NewRunner(TaskSearchRankingModel))
+		m.taskMonitor.Start(TaskSearchRankingModel, m.rankingModelSearcher.Complexity()),
+		m.taskScheduler.NewRunner(TaskSearchRankingModel))
 	if err != nil {
 		log.Logger().Error("failed to search collaborative filtering model", zap.Error(err))
 		return
@@ -1043,6 +1090,8 @@ func (m *Master) runSearchRankingModelTask(
 	CollaborativeFilteringSearchSeconds.Set(time.Since(startTime).Seconds())
 	_, _, bestScore := m.rankingModelSearcher.GetBestModel()
 	CollaborativeFilteringSearchPrecision10.Set(float64(bestScore.Precision))
+
+	m.taskMonitor.Finish(TaskSearchRankingModel)
 	return
 }
 
@@ -1072,7 +1121,8 @@ func (m *Master) runSearchClickModelTask(
 
 	startTime := time.Now()
 	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet,
-		m.taskMonitor.NewTaskTracker(TaskSearchClickModel), m.taskScheduler.NewRunner(TaskSearchClickModel))
+		m.taskMonitor.Start(TaskSearchClickModel, m.clickModelSearcher.Complexity()),
+		m.taskScheduler.NewRunner(TaskSearchClickModel))
 	if err != nil {
 		log.Logger().Error("failed to search ranking model", zap.Error(err))
 		return
@@ -1080,6 +1130,8 @@ func (m *Master) runSearchClickModelTask(
 	RankingSearchSeconds.Set(time.Since(startTime).Seconds())
 	_, bestScore := m.clickModelSearcher.GetBestModel()
 	RankingSearchPrecision.Set(float64(bestScore.Precision))
+
+	m.taskMonitor.Finish(TaskSearchClickModel)
 	return
 }
 
