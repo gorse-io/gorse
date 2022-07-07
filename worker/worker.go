@@ -523,7 +523,7 @@ func (w *Worker) Recommend(users []data.User) {
 				log.Logger().Debug("user is unpredictable", zap.String("user_id", userId))
 			}
 		} else if w.RankingModel == nil || w.RankingModel.Invalid() {
-			log.Logger().Warn("no collaborative filtering model")
+			log.Logger().Debug("no collaborative filtering model")
 		}
 
 		// Recommender #2: item-based.
@@ -669,7 +669,7 @@ func (w *Worker) Recommend(users []data.User) {
 		ctrUsed := false
 		results := make(map[string][]cache.Scored)
 		for category, catCandidates := range candidates {
-			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
+			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil && !w.ClickModel.Invalid() {
 				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache)
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))

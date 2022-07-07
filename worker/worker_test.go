@@ -759,7 +759,7 @@ func (m mockFactorizationMachine) Clear() {
 }
 
 func (m mockFactorizationMachine) Invalid() bool {
-	panic("implement me")
+	return false
 }
 
 func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []string) float32 {
