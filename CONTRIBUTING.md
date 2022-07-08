@@ -6,7 +6,8 @@ Reading and following these guidelines will help us make the contribution proces
 
 * [Getting Started](#getting-started)
   * [Setup Develop Environment](#setup-develop-environment)
-  * [Run Nodes](#run-nodes)
+  * [Option 1: Run an All-in-one Node](#option-1-run-an-all-in-one-node)
+  * [Option 2: Run Nodes](#option-2-run-nodes)
   * [Run Unit Tests](#run-unit-tests)
 * [Your First Contribution](#your-first-contribution)
   * [Contribution Workflow](#contribution-workflow)
@@ -38,7 +39,13 @@ wget https://cdn.gorse.io/example/github.sql
 mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
 ```
 
-### Run Nodes
+### Option 1: Run an All-in-one Node
+
+```bash
+go run cmd/gorse-in-one/main.go --config config/config.toml.template
+```
+
+### Option 2: Run Nodes
 
 - Start the master node with the configuration file.
 
@@ -68,13 +75,14 @@ go test -v ./...
 
 The default database URLs are directed to these databases in `misc/database_test/docker-compose.yml`. Test databases could be overrode by setting following environment variables:
 
-| Environment Value | Default Value |
-|---|---|
-| `MYSQL_URI` | `mysql://root:password@tcp(127.0.0.1:3306)/` |
-| `POSTGRES_URI` | `postgres://gorse:gorse_pass@127.0.0.1/` |
-| `MONGO_URI` | `mongodb://root:password@127.0.0.1:27017/` |
-| `CLICKHOUSE_URI` | `clickhouse://127.0.0.1:8123/` |
-| `REDIS_URI` | `redis://127.0.0.1:6379/` |
+| Environment Value | Default Value                                |
+|-------------------|----------------------------------------------|
+| `MYSQL_URI`       | `mysql://root:password@tcp(127.0.0.1:3306)/` |
+| `POSTGRES_URI`    | `postgres://gorse:gorse_pass@127.0.0.1/`     |
+| `MONGO_URI`       | `mongodb://root:password@127.0.0.1:27017/`   |
+| `CLICKHOUSE_URI`  | `clickhouse://127.0.0.1:8123/`               |
+| `ORACLE_URI`      | `oracle://system:password@127.0.0.1:1521/XE` |
+| `REDIS_URI`       | `redis://127.0.0.1:6379/`                    |
 
 For example, use TiDB as a test database by:
 

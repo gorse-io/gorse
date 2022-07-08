@@ -22,6 +22,8 @@ RUN /usr/bin/gorse-worker --version
 ############################
 FROM scratch
 
+COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
 COPY --from=0 /usr/bin/gorse-worker /usr/bin/gorse-worker
 
 ENV USER root

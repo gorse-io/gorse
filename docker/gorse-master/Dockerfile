@@ -22,6 +22,8 @@ RUN /usr/bin/gorse-master --version
 ############################
 FROM scratch
 
+COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
 COPY --from=0 /usr/bin/gorse-master /usr/bin/gorse-master
 
 ENV USER root

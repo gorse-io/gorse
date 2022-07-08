@@ -22,8 +22,10 @@ RUN /usr/bin/gorse-server --version
 ############################
 FROM scratch
 
-ENV USER root
+COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=0 /usr/bin/gorse-server /usr/bin/gorse-server
+
+ENV USER root
 
 ENTRYPOINT ["/usr/bin/gorse-server"]

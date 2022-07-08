@@ -23,8 +23,29 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be a 
 
 ## Quick Start
 
-- [Read official documents](https://docs.gorse.io/)
-- [Visit official demo](https://gitrec.gorse.io/)
+The playground mode has been prepared for beginners. Just set up a recommender system for GitHub repositories by following commands. 
+
+- Linux (amd64):
+
+```bash
+wget https://github.com/gorse-io/gorse/releases/latest/download/gorse_linux_amd64.zip
+unzip gorse_linux_amd64.zip
+./gorse-in-one_linux_amd64 --playground
+```
+
+> For other operating systems and architectures, please visit [GitHub Release](https://github.com/gorse-io/gorse/releases) for download links.
+
+- Docker:
+
+```bash
+docker run zhenghaoz/gorse-in-one --playground
+```
+
+The playground mode will download data from [GitRec](https://gitrec.gorse.io/) and import it into Gorse. For more information：
+
+- Read [official documents](https://docs.gorse.io/)
+- Visit [official demo](https://gitrec.gorse.io/)
+- Discuss on [Discord](https://discord.gg/x6gAtNNkAE) or [GitHub Discussion](https://github.com/gorse-io/gorse/discussions)
 
 ## Architecture
 
