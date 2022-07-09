@@ -38,7 +38,7 @@ unzip gorse_linux_amd64.zip
 - Docker:
 
 ```bash
-docker run zhenghaoz/gorse-in-one --playground
+docker run -p 8088:8088 zhenghaoz/gorse-in-one --playground
 ```
 
 The playground mode will download data from [GitRec](https://gitrec.gorse.io/) and import it into Gorse. For more information：
