@@ -276,26 +276,28 @@ func (w *Worker) ServeMetrics() {
 func (w *Worker) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
-	state, err := LoadLocalCache(w.cacheFile)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
-		} else {
-			log.Logger().Error("failed to load persist state", zap.Error(err),
-				zap.String("path", state.path))
-		}
-	}
-	if state.WorkerName == "" {
-		state.WorkerName = base.GetRandomName(0)
-		err = state.WriteLocalCache()
+	if !w.oneMode {
+		state, err := LoadLocalCache(w.cacheFile)
 		if err != nil {
-			log.Logger().Fatal("failed to write meta", zap.Error(err))
+			if errors.IsNotFound(err) {
+				log.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
+			} else {
+				log.Logger().Error("failed to load persist state", zap.Error(err),
+					zap.String("path", state.path))
+			}
 		}
+		if state.WorkerName == "" {
+			state.WorkerName = base.GetRandomName(0)
+			err = state.WriteLocalCache()
+			if err != nil {
+				log.Logger().Fatal("failed to write meta", zap.Error(err))
+			}
+		}
+		w.workerName = state.WorkerName
+		log.Logger().Info("start worker",
+			zap.Int("n_jobs", w.jobs),
+			zap.String("worker_name", w.workerName))
 	}
-	w.workerName = state.WorkerName
-	log.Logger().Info("start worker",
-		zap.Int("n_jobs", w.jobs),
-		zap.String("worker_name", w.workerName))
 
 	// connect to master
 	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))

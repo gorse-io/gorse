@@ -82,17 +82,17 @@ var oneCommand = &cobra.Command{
 				log.Logger().Fatal("invalid config", zap.Error(err))
 			}
 
-			// print prologue
 			fmt.Printf("Welcome to Gorse %s Playground\n", version.Version)
+
+			if err = initializeDatabase("data.db"); err != nil {
+				log.Logger().Fatal("failed to initialize database", zap.Error(err))
+			}
+
 			fmt.Println()
 			fmt.Printf("    Dashboard:     http://%s:%d/overview\n", conf.Master.HttpHost, conf.Master.HttpPort)
 			fmt.Printf("    RESTful APIs:  http://%s:%d/apidocs\n", conf.Master.HttpHost, conf.Master.HttpPort)
 			fmt.Printf("    Documentation: https://docs.gorse.io/\n")
 			fmt.Println()
-
-			if err = initializeDatabase("data.db"); err != nil {
-				log.Logger().Fatal("failed to initialize database", zap.Error(err))
-			}
 		} else {
 			configPath, _ := cmd.PersistentFlags().GetString("config")
 			log.Logger().Info("load config", zap.String("config", configPath))
@@ -103,14 +103,13 @@ var oneCommand = &cobra.Command{
 		}
 
 		// create master
-		masterCachePath, _ := cmd.PersistentFlags().GetString("master-cache-path")
-		l := master.NewMaster(conf, masterCachePath)
+		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
+		l := master.NewMaster(conf, cachePath)
 		// Start worker
 		go func() {
-			workerCachePath, _ := cmd.PersistentFlags().GetString("worker-cache-path")
 			workerJobs, _ := cmd.PersistentFlags().GetInt("worker-jobs")
 			w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-				0, workerJobs, workerCachePath)
+				0, workerJobs, "")
 			w.SetOneMode(l.Settings)
 			w.Serve()
 		}()
@@ -124,12 +123,10 @@ func init() {
 	oneCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	oneCommand.PersistentFlags().String("log-path", "", "path of log file")
 	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
-	// master node commands
 	oneCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
-	oneCommand.PersistentFlags().String("master-cache-path", "master_cache.data", "path of cache file for the master node")
+	oneCommand.PersistentFlags().String("cache-path", "one_cache.data", "path of cache file")
 	// worker node commands
 	oneCommand.PersistentFlags().Int("worker-jobs", 1, "number of working jobs for the worker node")
-	oneCommand.PersistentFlags().String("worker-cache-path", "worker_cache.data", "path of cache file for the worker node")
 }
 
 func main() {
