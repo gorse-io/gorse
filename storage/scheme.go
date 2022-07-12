@@ -27,9 +27,11 @@ const (
 	MongoPrefix      = "mongodb://"
 	MongoSrvPrefix   = "mongodb+srv://"
 	PostgresPrefix   = "postgres://"
+	PostgreSQLPrefix = "postgresql://"
 	ClickhousePrefix = "clickhouse://"
 	SQLitePrefix     = "sqlite://"
 	RedisPrefix      = "redis://"
+	RedissPrefix     = "rediss://"
 	OraclePrefix     = "oracle://"
 )
 

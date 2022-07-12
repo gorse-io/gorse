@@ -178,7 +178,7 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, storage.PostgresPrefix) {
+	} else if strings.HasPrefix(path, storage.PostgresPrefix) || strings.HasPrefix(path, storage.PostgreSQLPrefix) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		if database.client, err = sql.Open("postgres", path); err != nil {
