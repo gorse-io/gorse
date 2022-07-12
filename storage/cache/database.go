@@ -294,7 +294,7 @@ type Database interface {
 // Open a connection to a database.
 func Open(path string) (Database, error) {
 	var err error
-	if strings.HasPrefix(path, storage.RedisPrefix) {
+	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) {
 		opt, err := redis.ParseURL(path)
 		if err != nil {
 			return nil, err
@@ -315,7 +315,7 @@ func Open(path string) (Database, error) {
 			database.dbName = cs.Database
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, storage.PostgresPrefix) {
+	} else if strings.HasPrefix(path, storage.PostgresPrefix) || strings.HasPrefix(path, storage.PostgreSQLPrefix) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		if database.client, err = sql.Open("postgres", path); err != nil {
