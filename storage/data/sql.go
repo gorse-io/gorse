@@ -197,22 +197,22 @@ func (d *SQLDatabase) Init() error {
 		type Items struct {
 			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
-			Categories []string  `gorm:"column:categories;type:json;not null;default:'[]'"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null;default:'0001-01-01'::timestamptz"`
-			Labels     []string  `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Categories string    `gorm:"column:categories;type:json;not null;default:'[]'"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
+			Labels     string    `gorm:"column:labels;type:json;not null;default:'[]'"`
 			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
-			UserId    string   `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    []string `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Subscribe []string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
-			Comment   string   `gorm:"column:comment;type:text;not null;default:''"`
+			UserId    string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels    string `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
+			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null;default:'0001-01-01'::timestamptz"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
 			Comment      string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
@@ -222,25 +222,25 @@ func (d *SQLDatabase) Init() error {
 	case SQLite:
 		// create tables
 		type Items struct {
-			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
-			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
-			Categories []string  `gorm:"column:categories;type:json;not null;default:'[]'"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
-			Labels     []string  `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
+			ItemId     string `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
+			IsHidden   bool   `gorm:"column:is_hidden;type:bool;not null;default:false"`
+			Categories string `gorm:"column:categories;type:json;not null;default:'[]'"`
+			Timestamp  string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Labels     string `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Comment    string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
-			UserId    string   `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    []string `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Subscribe []string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
-			Comment   string   `gorm:"column:comment;type:text;not null;default:''"`
+			UserId    string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels    string `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
+			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
-			Comment      string    `gorm:"column:comment;type:text;not null;default:''"`
+			FeedbackType string `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			UserId       string `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
+			ItemId       string `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			Timestamp    string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Comment      string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
@@ -277,10 +277,10 @@ func (d *SQLDatabase) Init() error {
 		// create tables
 		type Items struct {
 			ItemId     string    `gorm:"column:item_id;type:String"`
-			IsHidden   bool      `gorm:"column:is_hidden;type:Boolean default 0"`
-			Categories []string  `gorm:"column:categories;type:String default '[]'"`
+			IsHidden   int       `gorm:"column:is_hidden;type:Boolean;default:0"`
+			Categories string    `gorm:"column:categories;type:String;default:'[]'"`
 			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime"`
-			Labels     []string  `gorm:"column:labels;type:String default '[]'"`
+			Labels     string    `gorm:"column:labels;type:String;default:'[]'"`
 			Comment    string    `gorm:"column:comment;type:String"`
 			Version    struct{}  `gorm:"column:version;type:DateTime"`
 		}
@@ -290,8 +290,8 @@ func (d *SQLDatabase) Init() error {
 		}
 		type Users struct {
 			UserId    string   `gorm:"column:user_id;type:String"`
-			Labels    []string `gorm:"column:labels;type:String default '[]'"`
-			Subscribe []string `gorm:"column:subscribe;type:String default '[]'"`
+			Labels    string   `gorm:"column:labels;type:String;default:'[]'"`
+			Subscribe string   `gorm:"column:subscribe;type:String;default:'[]'"`
 			Comment   string   `gorm:"column:comment;type:String"`
 			Version   struct{} `gorm:"column:version;type:DateTime"`
 		}

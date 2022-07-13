@@ -354,6 +354,7 @@ func Open(path string) (Database, error) {
 		// append parameters
 		if path, err = storage.AppendURLParams(path, []lo.Tuple2[string, string]{
 			{"_pragma", "busy_timeout(10000)"},
+			{"_pragma", "journal_mode(wal)"},
 		}); err != nil {
 			return nil, errors.Trace(err)
 		}
