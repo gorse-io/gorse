@@ -149,6 +149,6 @@ require (
 
 replace (
 	github.com/dzwvip/oracle v1.2.1 => github.com/gorse-io/oracle v1.2.2-0.20220625045651-88a1ca5bd68c
-	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220623134139-641f1ee54169
-	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220612031856-d20c723836a2
+	gorm.io/driver/clickhouse v0.3.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb
+	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
 )
