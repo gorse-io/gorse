@@ -19,7 +19,12 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/base/log"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
+	"moul.io/zapgorm2"
 	"net/url"
+	"strings"
 )
 
 const (
@@ -82,4 +87,57 @@ func ProbeMySQLIsolationVariableName(dsn string) (string, error) {
 		}
 	}
 	return name, nil
+}
+
+type TablePrefix string
+
+func (tp TablePrefix) ValuesTable() string {
+	return string(tp) + "values"
+}
+
+func (tp TablePrefix) SetsTable() string {
+	return string(tp) + "sets"
+}
+
+func (tp TablePrefix) SortedSetsTable() string {
+	return string(tp) + "sorted_sets"
+}
+
+func (tp TablePrefix) UsersTable() string {
+	return string(tp) + "users"
+}
+
+func (tp TablePrefix) ItemsTable() string {
+	return string(tp) + "items"
+}
+
+func (tp TablePrefix) FeedbackTable() string {
+	return string(tp) + "feedback"
+}
+
+func (tp TablePrefix) Key(key string) string {
+	return string(tp) + key
+}
+
+func NewGORMConfig(tablePrefix string) *gorm.Config {
+	return &gorm.Config{
+		Logger:                 zapgorm2.New(log.Logger()),
+		CreateBatchSize:        1000,
+		SkipDefaultTransaction: true,
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   tablePrefix,
+			SingularTable: true,
+			NameReplacer: strings.NewReplacer(
+				"SQLValue", "Values",
+				"SQLSet", "Sets",
+				"SQLSortedSet", "SortedSets",
+				"SQLUser", "Users",
+				"SQLItem", "Items",
+				"SQLFeedback", "Feedback",
+				"ClickhouseUser", "Users",
+				"ClickHouseItem", "Items",
+				"ClickHouseFeedback", "Feedback",
+			),
+		},
+	}
 }

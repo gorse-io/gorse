@@ -21,6 +21,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
+	"github.com/zhenghaoz/gorse/storage"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ const (
 // Redis use Redis as data storage, but used for test only.
 type Redis struct {
 	client *redis.Client
+	prefix storage.TablePrefix
 }
 
 // Optimize is used by ClickHouse only.

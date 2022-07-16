@@ -22,12 +22,11 @@ import (
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	_ "github.com/sijms/go-ora/v2"
-	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"math"
 	_ "modernc.org/sqlite"
-	"moul.io/zapgorm2"
 )
 
 type SQLDriver int
@@ -39,28 +38,14 @@ const (
 	Oracle
 )
 
-var gormConfig = &gorm.Config{
-	Logger:                 zapgorm2.New(log.Logger()),
-	CreateBatchSize:        1000,
-	SkipDefaultTransaction: true,
-}
-
 type SQLValue struct {
 	Name  string `gorm:"type:varchar(256);primaryKey"`
 	Value string `gorm:"type:varchar(256);not null"`
 }
 
-func (*SQLValue) TableName() string {
-	return "values"
-}
-
 type SQLSet struct {
 	Name   string `gorm:"type:varchar(256);primaryKey"`
 	Member string `gorm:"type:varchar(256);primaryKey"`
-}
-
-func (*SQLSet) TableName() string {
-	return "sets"
 }
 
 type SQLSortedSet struct {
@@ -69,11 +54,8 @@ type SQLSortedSet struct {
 	Score  float64 `gorm:"type:double precision;not null;index:name"`
 }
 
-func (*SQLSortedSet) TableName() string {
-	return "sorted_sets"
-}
-
 type SQLDatabase struct {
+	storage.TablePrefix
 	gormDB *gorm.DB
 	client *sql.DB
 	driver SQLDriver
@@ -97,7 +79,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	)
 
 	// scan values
-	valuerRows, err = db.gormDB.Table("values").Select("name").Rows()
+	valuerRows, err = db.gormDB.Table(db.ValuesTable()).Select("name").Rows()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -113,7 +95,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	}
 
 	// scan sets
-	setRows, err = db.gormDB.Table("sets").Select("name").Rows()
+	setRows, err = db.gormDB.Table(db.SetsTable()).Select("name").Rows()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -133,7 +115,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	}
 
 	// scan sorted sets
-	sortedRows, err = db.gormDB.Table("sorted_sets").Select("name").Rows()
+	sortedRows, err = db.gormDB.Table(db.SortedSetsTable()).Select("name").Rows()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -177,7 +159,7 @@ func (db *SQLDatabase) Set(values ...Value) error {
 }
 
 func (db *SQLDatabase) Get(name string) *ReturnValue {
-	rs, err := db.gormDB.Table("values").Where("name = ?", name).Select("value").Rows()
+	rs, err := db.gormDB.Table(db.ValuesTable()).Where("name = ?", name).Select("value").Rows()
 	if err != nil {
 		return &ReturnValue{err: errors.Trace(err)}
 	}
@@ -199,7 +181,7 @@ func (db *SQLDatabase) Delete(name string) error {
 }
 
 func (db *SQLDatabase) GetSet(key string) ([]string, error) {
-	rs, err := db.gormDB.Table("sets").Select("member").Where("name = ?", key).Rows()
+	rs, err := db.gormDB.Table(db.SetsTable()).Select("member").Where("name = ?", key).Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -289,7 +271,7 @@ func (db *SQLDatabase) AddSorted(sortedSets ...SortedSet) error {
 }
 
 func (db *SQLDatabase) GetSorted(key string, begin, end int) ([]Scored, error) {
-	tx := db.gormDB.Table("sorted_sets").Select("member, score").Where("name = ?", key).Order("score DESC")
+	tx := db.gormDB.Table(db.SortedSetsTable()).Select("member, score").Where("name = ?", key).Order("score DESC")
 	if end < begin {
 		tx.Offset(begin).Limit(math.MaxInt64)
 	} else {
@@ -312,7 +294,7 @@ func (db *SQLDatabase) GetSorted(key string, begin, end int) ([]Scored, error) {
 }
 
 func (db *SQLDatabase) GetSortedByScore(key string, begin, end float64) ([]Scored, error) {
-	rs, err := db.gormDB.Table("sorted_sets").
+	rs, err := db.gormDB.Table(db.SortedSetsTable()).
 		Select("member, score").
 		Where("name = ? AND score >= ? AND score <= ?", key, begin, end).
 		Order("score").Rows()
@@ -332,12 +314,12 @@ func (db *SQLDatabase) GetSortedByScore(key string, begin, end float64) ([]Score
 }
 
 func (db *SQLDatabase) RemSortedByScore(key string, begin, end float64) error {
-	err := db.gormDB.Delete(&SortedSet{}, "name = ? AND ? <= score AND score <= ?", key, begin, end).Error
+	err := db.gormDB.Delete(&SQLSortedSet{}, "name = ? AND ? <= score AND score <= ?", key, begin, end).Error
 	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) SetSorted(key string, scores []Scored) error {
-	err := db.gormDB.Delete(&SortedSet{}, "name = ?", key).Error
+	err := db.gormDB.Delete(&SQLSortedSet{}, "name = ?", key).Error
 	if err != nil {
 		return errors.Trace(err)
 	}

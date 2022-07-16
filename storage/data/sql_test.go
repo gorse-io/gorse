@@ -81,7 +81,7 @@ func newTestMySQLDatabase(t *testing.T) *testSQLDatabase {
 	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(mySqlDSN + dbName)
+	database.Database, err = Open(mySqlDSN+dbName, "gorse_")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -174,7 +174,7 @@ func newTestPostgresDatabase(t *testing.T) *testSQLDatabase {
 	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(postgresDSN + strings.ToLower(dbName) + "?sslmode=disable")
+	database.Database, err = Open(postgresDSN+strings.ToLower(dbName)+"?sslmode=disable", "gorse_")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -261,7 +261,7 @@ func newTestClickHouseDatabase(t *testing.T) *testSQLDatabase {
 	err = databaseComm.Close()
 	assert.NoError(t, err)
 	// connect database
-	database.Database, err = Open(clickhouseDSN + dbName + "?mutations_sync=2")
+	database.Database, err = Open(clickhouseDSN+dbName+"?mutations_sync=2", "gorse_")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -359,7 +359,7 @@ func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
 	// connect database
 	parsed, err := url.Parse(oracleDSN)
 	assert.NoError(t, err)
-	database.Database, err = Open(fmt.Sprintf("oracle://%s:%s@%s/%s", dbName, dbName, parsed.Host, parsed.Path))
+	database.Database, err = Open(fmt.Sprintf("oracle://%s:%s@%s/%s", dbName, dbName, parsed.Host, parsed.Path), "gorse_")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()
@@ -425,7 +425,7 @@ func newTestSQLiteDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	database.Database, err = Open("sqlite://:memory:")
+	database.Database, err = Open("sqlite://:memory:", "gorse_")
 	assert.NoError(t, err)
 	// create schema
 	err = database.Init()

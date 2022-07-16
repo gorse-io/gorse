@@ -54,10 +54,6 @@ type Item struct {
 	Comment    string
 }
 
-func (*Item) TableName() string {
-	return "items"
-}
-
 // ItemPatch is the modification on an item.
 type ItemPatch struct {
 	IsHidden   *bool
@@ -75,10 +71,6 @@ type User struct {
 	Comment   string
 }
 
-func (*User) TableName() string {
-	return "users"
-}
-
 // UserPatch is the modification on a user.
 type UserPatch struct {
 	Labels    []string
@@ -91,10 +83,6 @@ type FeedbackKey struct {
 	FeedbackType string `gorm:"column:feedback_type"`
 	UserId       string `gorm:"column:user_id"`
 	ItemId       string `gorm:"column:item_id"`
-}
-
-func (*FeedbackKey) TableName() string {
-	return "feedback"
 }
 
 // Feedback stores feedback.
@@ -150,7 +138,7 @@ type Database interface {
 }
 
 // Open a connection to a database.
-func Open(path string) (Database, error) {
+func Open(path, tablePrefix string) (Database, error) {
 	var err error
 	if strings.HasPrefix(path, storage.MySQLPrefix) {
 		name := path[len(storage.MySQLPrefix):]
@@ -170,10 +158,11 @@ func Open(path string) (Database, error) {
 		// connect to database
 		database := new(SQLDatabase)
 		database.driver = MySQL
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = sql.Open("mysql", name); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), gormConfig)
+		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -181,10 +170,11 @@ func Open(path string) (Database, error) {
 	} else if strings.HasPrefix(path, storage.PostgresPrefix) || strings.HasPrefix(path, storage.PostgreSQLPrefix) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = sql.Open("postgres", path); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), gormConfig)
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -193,10 +183,11 @@ func Open(path string) (Database, error) {
 		uri := "http://" + path[len(storage.ClickhousePrefix):]
 		database := new(SQLDatabase)
 		database.driver = ClickHouse
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = sql.Open("clickhouse", uri); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), gormConfig)
+		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -212,6 +203,7 @@ func Open(path string) (Database, error) {
 			return nil, errors.Trace(err)
 		} else {
 			database.dbName = cs.Database
+			database.TablePrefix = storage.TablePrefix(tablePrefix)
 		}
 		return database, nil
 	} else if strings.HasPrefix(path, storage.SQLitePrefix) {
@@ -226,9 +218,11 @@ func Open(path string) (Database, error) {
 		name := path[len(storage.SQLitePrefix):]
 		database := new(SQLDatabase)
 		database.driver = SQLite
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = sql.Open("sqlite", name); err != nil {
 			return nil, errors.Trace(err)
 		}
+		gormConfig := storage.NewGORMConfig(tablePrefix)
 		gormConfig.Logger = &zapgorm2.Logger{
 			ZapLogger:                 log.Logger(),
 			LogLevel:                  logger.Warn,
@@ -245,15 +239,19 @@ func Open(path string) (Database, error) {
 		addr := path[len(storage.RedisPrefix):]
 		database := new(Redis)
 		database.client = redis.NewClient(&redis.Options{Addr: addr})
+		if tablePrefix != "" {
+			panic("table prefix is not supported for redis")
+		}
 		log.Logger().Warn("redis is used for testing only")
 		return database, nil
 	} else if strings.HasPrefix(path, storage.OraclePrefix) {
 		database := new(SQLDatabase)
 		database.driver = Oracle
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = sql.Open("oracle", path); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(oracle.New(oracle.Config{Conn: database.client}), gormConfig)
+		database.gormDB, err = gorm.Open(oracle.New(oracle.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

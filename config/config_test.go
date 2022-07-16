@@ -31,6 +31,7 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "dashboard_user_name = \"\"", "dashboard_user_name = \"admin\"", -1)
 	text = strings.Replace(text, "dashboard_password = \"\"", "dashboard_password = \"password\"", -1)
 	text = strings.Replace(text, "api_key = \"\"", "api_key = \"19260817\"", -1)
+	text = strings.Replace(text, "table_prefix = \"\"", "table_prefix = \"gorse_\"", -1)
 	viper.SetConfigType("toml")
 	err = viper.ReadConfig(strings.NewReader(text))
 	assert.NoError(t, err)
@@ -41,6 +42,7 @@ func TestUnmarshal(t *testing.T) {
 	// [database]
 	assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
 	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse", config.Database.DataStore)
+	assert.Equal(t, "gorse_", config.Database.TablePrefix)
 	// [master]
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "0.0.0.0", config.Master.Host)
@@ -132,6 +134,7 @@ func TestBindEnv(t *testing.T) {
 	variables := []environmentVariable{
 		{"GORSE_CACHE_STORE", "redis://<cache_store>"},
 		{"GORSE_DATA_STORE", "mysql://<data_store>"},
+		{"GORSE_TABLE_PREFIX", "gorse_"},
 		{"GORSE_MASTER_PORT", "123"},
 		{"GORSE_MASTER_HOST", "<master_host>"},
 		{"GORSE_MASTER_HTTP_PORT", "456"},
@@ -150,6 +153,7 @@ func TestBindEnv(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "redis://<cache_store>", config.Database.CacheStore)
 	assert.Equal(t, "mysql://<data_store>", config.Database.DataStore)
+	assert.Equal(t, "gorse_", config.Database.TablePrefix)
 	assert.Equal(t, 123, config.Master.Port)
 	assert.Equal(t, "<master_host>", config.Master.Host)
 	assert.Equal(t, 456, config.Master.HttpPort)

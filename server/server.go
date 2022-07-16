@@ -138,7 +138,7 @@ func (s *Server) Sync() {
 		if s.dataPath != s.Config.Database.DataStore {
 			log.Logger().Info("connect data store",
 				zap.String("database", log.RedactDBURL(s.Config.Database.DataStore)))
-			if s.DataClient, err = data.Open(s.Config.Database.DataStore); err != nil {
+			if s.DataClient, err = data.Open(s.Config.Database.DataStore, s.Config.Database.TablePrefix); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
@@ -149,7 +149,7 @@ func (s *Server) Sync() {
 		if s.cachePath != s.Config.Database.CacheStore {
 			log.Logger().Info("connect cache store",
 				zap.String("database", log.RedactDBURL(s.Config.Database.CacheStore)))
-			if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore); err != nil {
+			if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore, s.Config.Database.TablePrefix); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}

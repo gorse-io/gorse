@@ -50,8 +50,9 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore  string `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
-	CacheStore string `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	DataStore   string `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
+	CacheStore  string `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	TablePrefix string `mapstructure:"table_prefix"`
 }
 
 // MasterConfig is the configuration for the master.
@@ -419,6 +420,7 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 	bindings := []configBinding{
 		{"database.cache_store", "GORSE_CACHE_STORE"},
 		{"database.data_store", "GORSE_DATA_STORE"},
+		{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 		{"master.port", "GORSE_MASTER_PORT"},
 		{"master.host", "GORSE_MASTER_HOST"},
 		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},

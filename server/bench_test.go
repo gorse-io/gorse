@@ -95,11 +95,11 @@ func newBenchServer(b *testing.B) *benchServer {
 
 	// open database
 	var err error
-	s.DataClient, err = data.Open(dataStoreURL)
+	s.DataClient, err = data.Open(dataStoreURL, "")
 	require.NoError(b, err)
 	err = s.DataClient.Init()
 	require.NoError(b, err)
-	s.CacheClient, err = cache.Open(cacheStoreURL)
+	s.CacheClient, err = cache.Open(cacheStoreURL, "")
 	require.NoError(b, err)
 	err = s.CacheClient.Init()
 	require.NoError(b, err)

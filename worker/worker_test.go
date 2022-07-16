@@ -171,9 +171,9 @@ func newMockWorker(t *testing.T) *mockWorker {
 	assert.NoError(t, err)
 	// open database
 	w.Settings = config.NewSettings()
-	w.DataClient, err = data.Open("redis://" + w.dataStoreServer.Addr())
+	w.DataClient, err = data.Open("redis://"+w.dataStoreServer.Addr(), "")
 	assert.NoError(t, err)
-	w.CacheClient, err = cache.Open("redis://" + w.cacheStoreServer.Addr())
+	w.CacheClient, err = cache.Open("redis://"+w.cacheStoreServer.Addr(), "")
 	assert.NoError(t, err)
 	// configuration
 	w.Config = config.GetDefaultConfig()

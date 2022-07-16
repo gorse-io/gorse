@@ -142,7 +142,7 @@ func initializeDatabase(path string) error {
 	}
 
 	// init database
-	databaseClient, err := data.Open(storage.SQLitePrefix + path)
+	databaseClient, err := data.Open(storage.SQLitePrefix+path, "")
 	if err != nil {
 		return errors.Trace(err)
 	}

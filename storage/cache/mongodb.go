@@ -17,12 +17,14 @@ package cache
 import (
 	"context"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type MongoDB struct {
+	storage.TablePrefix
 	client *mongo.Client
 	dbName string
 }
@@ -38,32 +40,32 @@ func (m MongoDB) Init() error {
 	}
 	for _, collectionName := range collections {
 		switch collectionName {
-		case "values":
+		case m.ValuesTable():
 			hasValues = true
-		case "sets":
+		case m.SetsTable():
 			hasSets = true
-		case "sorted_sets":
+		case m.SortedSetsTable():
 			hasSortedSets = true
 		}
 	}
 	// create collections
 	if !hasValues {
-		if err = d.CreateCollection(ctx, "values"); err != nil {
+		if err = d.CreateCollection(ctx, m.ValuesTable()); err != nil {
 			return errors.Trace(err)
 		}
 	}
 	if !hasSets {
-		if err = d.CreateCollection(ctx, "sets"); err != nil {
+		if err = d.CreateCollection(ctx, m.SetsTable()); err != nil {
 			return errors.Trace(err)
 		}
 	}
 	if !hasSortedSets {
-		if err = d.CreateCollection(ctx, "sorted_sets"); err != nil {
+		if err = d.CreateCollection(ctx, m.SortedSetsTable()); err != nil {
 			return errors.Trace(err)
 		}
 	}
 	// create index
-	_, err = d.Collection("sets").Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err = d.Collection(m.SetsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{"name", 1},
 			{"member", 1},
@@ -73,7 +75,7 @@ func (m MongoDB) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = d.Collection("sorted_sets").Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err = d.Collection(m.SortedSetsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{"name", 1},
 			{"member", 1},
@@ -83,7 +85,7 @@ func (m MongoDB) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = d.Collection("sorted_sets").Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err = d.Collection(m.SortedSetsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
 			{"name", 1},
 			{"score", 1},
@@ -103,7 +105,7 @@ func (m MongoDB) Scan(work func(string) error) error {
 	ctx := context.Background()
 
 	// scan values
-	valuesCollection := m.client.Database(m.dbName).Collection("values")
+	valuesCollection := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	valuesIterator, err := valuesCollection.Find(ctx, bson.M{})
 	if err != nil {
 		return errors.Trace(err)
@@ -120,7 +122,7 @@ func (m MongoDB) Scan(work func(string) error) error {
 	}
 
 	// scan sets
-	setCollection := m.client.Database(m.dbName).Collection("sets")
+	setCollection := m.client.Database(m.dbName).Collection(m.SetsTable())
 	setIterator, err := setCollection.Find(ctx, bson.M{})
 	if err != nil {
 		return errors.Trace(err)
@@ -142,7 +144,7 @@ func (m MongoDB) Scan(work func(string) error) error {
 	}
 
 	// scan sorted sets
-	sortedSetCollection := m.client.Database(m.dbName).Collection("sorted_sets")
+	sortedSetCollection := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	sortedSetIterator, err := sortedSetCollection.Find(ctx, bson.M{})
 	if err != nil {
 		return errors.Trace(err)
@@ -170,7 +172,7 @@ func (m MongoDB) Set(values ...Value) error {
 		return nil
 	}
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("values")
+	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	var models []mongo.WriteModel
 	for _, value := range values {
 		models = append(models, mongo.NewUpdateOneModel().
@@ -184,7 +186,7 @@ func (m MongoDB) Set(values ...Value) error {
 
 func (m MongoDB) Get(name string) *ReturnValue {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("values")
+	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	r := c.FindOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	if err := r.Err(); err == mongo.ErrNoDocuments {
 		return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, name)}
@@ -200,14 +202,14 @@ func (m MongoDB) Get(name string) *ReturnValue {
 
 func (m MongoDB) Delete(name string) error {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("values")
+	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	_, err := c.DeleteOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	return errors.Trace(err)
 }
 
 func (m MongoDB) GetSet(name string) ([]string, error) {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sets")
+	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	r, err := c.Find(ctx, bson.M{"name": name})
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -225,7 +227,7 @@ func (m MongoDB) GetSet(name string) ([]string, error) {
 
 func (m MongoDB) SetSet(name string, members ...string) error {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sets")
+	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	var models []mongo.WriteModel
 	models = append(models, mongo.NewDeleteManyModel().SetFilter(bson.M{"name": bson.M{"$eq": name}}))
 	for _, member := range members {
@@ -243,7 +245,7 @@ func (m MongoDB) AddSet(name string, members ...string) error {
 		return nil
 	}
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sets")
+	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	var models []mongo.WriteModel
 	for _, member := range members {
 		models = append(models, mongo.NewUpdateOneModel().
@@ -260,7 +262,7 @@ func (m MongoDB) RemSet(name string, members ...string) error {
 		return nil
 	}
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sets")
+	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	var models []mongo.WriteModel
 	for _, member := range members {
 		models = append(models, mongo.NewDeleteOneModel().
@@ -272,7 +274,7 @@ func (m MongoDB) RemSet(name string, members ...string) error {
 
 func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sorted_sets")
+	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	opt := options.Find()
 	opt.SetSort(bson.M{"score": -1})
 	if end >= 0 {
@@ -301,7 +303,7 @@ func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {
 
 func (m MongoDB) GetSortedByScore(name string, begin, end float64) ([]Scored, error) {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sorted_sets")
+	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	opt := options.Find()
 	opt.SetSort(bson.M{"score": 1})
 	r, err := c.Find(ctx, bson.D{
@@ -328,7 +330,7 @@ func (m MongoDB) GetSortedByScore(name string, begin, end float64) ([]Scored, er
 
 func (m MongoDB) RemSortedByScore(name string, begin, end float64) error {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sorted_sets")
+	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	_, err := c.DeleteMany(ctx, bson.D{
 		{"name", name},
 		{"score", bson.M{"$gte": begin}},
@@ -339,7 +341,7 @@ func (m MongoDB) RemSortedByScore(name string, begin, end float64) error {
 
 func (m MongoDB) AddSorted(sortedSets ...SortedSet) error {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sorted_sets")
+	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	var models []mongo.WriteModel
 	for _, sorted := range sortedSets {
 		for _, score := range sorted.scores {
@@ -358,7 +360,7 @@ func (m MongoDB) AddSorted(sortedSets ...SortedSet) error {
 
 func (m MongoDB) SetSorted(name string, scores []Scored) error {
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sorted_sets")
+	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	var models []mongo.WriteModel
 	models = append(models, mongo.NewDeleteManyModel().SetFilter(bson.M{"name": bson.M{"$eq": name}}))
 	for _, score := range scores {
@@ -376,7 +378,7 @@ func (m MongoDB) RemSorted(members ...SetMember) error {
 		return nil
 	}
 	ctx := context.Background()
-	c := m.client.Database(m.dbName).Collection("sorted_sets")
+	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	var models []mongo.WriteModel
 	for _, member := range members {
 		models = append(models, mongo.NewDeleteOneModel().SetFilter(bson.M{"name": member.name, "member": member.member}))

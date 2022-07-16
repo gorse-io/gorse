@@ -70,7 +70,7 @@ func newTestMongoDatabase(t *testing.T) *testMongoDatabase {
 	database := new(testMongoDatabase)
 	var err error
 	// create database
-	database.Database, err = Open(mongoUri)
+	database.Database, err = Open(mongoUri, "gorse_")
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	databaseComm := database.GetMongoDB(t)
@@ -82,7 +82,7 @@ func newTestMongoDatabase(t *testing.T) *testMongoDatabase {
 	err = database.Database.Close()
 	assert.NoError(t, err)
 	// create schema
-	database.Database, err = Open(mongoUri + dbName + "?authSource=admin&connect=direct")
+	database.Database, err = Open(mongoUri+dbName+"?authSource=admin&connect=direct", "gorse_")
 	assert.NoError(t, err)
 	err = database.Init()
 	assert.NoError(t, err)
