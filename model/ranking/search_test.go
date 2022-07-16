@@ -96,7 +96,7 @@ func (m *mockMatrixFactorizationForSearch) Clear() {
 	// do nothing
 }
 
-func (m *mockMatrixFactorizationForSearch) GetParamsGrid() model.ParamsGrid {
+func (m *mockMatrixFactorizationForSearch) GetParamsGrid(_ bool) model.ParamsGrid {
 	return model.ParamsGrid{
 		model.NFactors:   []interface{}{1, 2, 3, 4},
 		model.InitMean:   []interface{}{4, 3, 2, 1},
@@ -131,7 +131,7 @@ func TestGridSearchCV(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0, fitConfig, runner)
+	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(false), 0, fitConfig, runner)
 	runner.AssertCalled(t, "Lock")
 	runner.AssertCalled(t, "UnLock")
 	assert.Equal(t, float32(12), r.BestScore.NDCG)
@@ -148,7 +148,7 @@ func TestRandomSearchCV(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 63, 0, fitConfig, runner)
+	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(false), 63, 0, fitConfig, runner)
 	runner.AssertCalled(t, "Lock")
 	runner.AssertCalled(t, "UnLock")
 	assert.Equal(t, float32(12), r.BestScore.NDCG)
@@ -163,7 +163,7 @@ func TestModelSearcher(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	searcher := NewModelSearcher(2, 63, 1)
+	searcher := NewModelSearcher(2, 63, 1, false)
 	searcher.models = []MatrixFactorization{newMockMatrixFactorizationForSearch(2)}
 	tk := task.NewTask("test", searcher.Complexity())
 	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)

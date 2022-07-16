@@ -133,9 +133,10 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 type ModelSearcher struct {
 	model FactorizationMachine
 	// arguments
-	numEpochs int
-	numTrials int
-	numJobs   int
+	numEpochs  int
+	numTrials  int
+	numJobs    int
+	searchSize bool
 	// results
 	bestMutex sync.Mutex
 	bestModel FactorizationMachine
@@ -143,12 +144,13 @@ type ModelSearcher struct {
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
-func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
+func NewModelSearcher(nEpoch, nTrials, nJobs int, searchSize bool) *ModelSearcher {
 	return &ModelSearcher{
-		model:     NewFM(FMClassification, model.Params{model.NEpochs: nEpoch}),
-		numTrials: nTrials,
-		numEpochs: nEpoch,
-		numJobs:   nJobs,
+		model:      NewFM(FMClassification, model.Params{model.NEpochs: nEpoch}),
+		numTrials:  nTrials,
+		numEpochs:  nEpoch,
+		numJobs:    nJobs,
+		searchSize: searchSize,
 	}
 }
 
@@ -172,7 +174,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, t *task.Task, runn
 	startTime := time.Now()
 
 	// Random search
-	grid := searcher.model.GetParamsGrid()
+	grid := searcher.model.GetParamsGrid(searcher.searchSize)
 	r := RandomSearchCV(searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().
 		SetJobs(searcher.numJobs).
 		SetTask(t), runner)

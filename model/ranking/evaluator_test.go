@@ -135,7 +135,7 @@ func (m *mockMatrixFactorizationForEval) Clear() {
 	// do nothing
 }
 
-func (m *mockMatrixFactorizationForEval) GetParamsGrid() model.ParamsGrid {
+func (m *mockMatrixFactorizationForEval) GetParamsGrid(_ bool) model.ParamsGrid {
 	panic("don't call me")
 }
 

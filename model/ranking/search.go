@@ -143,9 +143,10 @@ func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *D
 type ModelSearcher struct {
 	models []MatrixFactorization
 	// arguments
-	numEpochs int
-	numTrials int
-	numJobs   int
+	numEpochs  int
+	numTrials  int
+	numJobs    int
+	searchSize bool
 	// results
 	bestMutex     sync.Mutex
 	bestModelName string
@@ -154,11 +155,12 @@ type ModelSearcher struct {
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
-func NewModelSearcher(nEpoch, nTrials, nJobs int) *ModelSearcher {
+func NewModelSearcher(nEpoch, nTrials, nJobs int, searchSize bool) *ModelSearcher {
 	searcher := &ModelSearcher{
-		numTrials: nTrials,
-		numEpochs: nEpoch,
-		numJobs:   nJobs,
+		numTrials:  nTrials,
+		numEpochs:  nEpoch,
+		numJobs:    nJobs,
+		searchSize: searchSize,
 	}
 	searcher.models = append(searcher.models, NewBPR(model.Params{model.NEpochs: searcher.numEpochs}))
 	searcher.models = append(searcher.models, NewCCD(model.Params{model.NEpochs: searcher.numEpochs}))
@@ -182,7 +184,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task, runn
 		zap.Int("n_items", trainSet.ItemCount()))
 	startTime := time.Now()
 	for _, m := range searcher.models {
-		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(), searcher.numTrials, 0,
+		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(searcher.searchSize), searcher.numTrials, 0,
 			NewFitConfig().
 				SetJobs(searcher.numJobs).
 				SetTask(t), runner)

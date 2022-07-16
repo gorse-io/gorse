@@ -85,6 +85,7 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, 360*time.Minute, config.Recommend.Collaborative.ModelSearchPeriod)
 	assert.Equal(t, 100, config.Recommend.Collaborative.ModelSearchEpoch)
 	assert.Equal(t, 10, config.Recommend.Collaborative.ModelSearchTrials)
+	assert.False(t, config.Recommend.Collaborative.EnableModelSizeSearch)
 	// [recommend.replacement]
 	assert.False(t, config.Recommend.Replacement.EnableReplacement)
 	assert.Equal(t, 0.8, config.Recommend.Replacement.PositiveReplacementDecay)

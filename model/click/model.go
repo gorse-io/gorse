@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
@@ -168,9 +169,9 @@ type FM struct {
 	initStdDev float32
 }
 
-func (fm *FM) GetParamsGrid() model.ParamsGrid {
+func (fm *FM) GetParamsGrid(withSize bool) model.ParamsGrid {
 	return model.ParamsGrid{
-		model.NFactors:   []interface{}{8, 16, 32, 64},
+		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
 		model.Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.InitMean:   []interface{}{0},
