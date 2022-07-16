@@ -170,7 +170,7 @@ type FM struct {
 
 func (fm *FM) GetParamsGrid() model.ParamsGrid {
 	return model.ParamsGrid{
-		model.NFactors:   []interface{}{8, 16, 32, 64, 128},
+		model.NFactors:   []interface{}{8, 16, 32, 64},
 		model.Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.InitMean:   []interface{}{0},
@@ -188,7 +188,7 @@ func NewFM(task FMTask, params model.Params) *FM {
 func (fm *FM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachine.SetParams(params)
 	// Setup hyper-parameters
-	fm.nFactors = fm.Params.GetInt(model.NFactors, 128)
+	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
 	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.01)
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
