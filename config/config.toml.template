@@ -227,3 +227,14 @@ fallback_recommend = ["item_based", "latest"]
 
 # The number of feedback used in fallback item-based similar recommendation. The default values is 10.
 num_feedback_fallback_item_based = 10
+
+[tracing]
+
+# Enable tracing for REST APIs. The default value is false.
+enable_tracing = false
+
+# The type of tracing exporters. The default value is "jaeger".
+exporter_type = "jaeger"
+
+# The endpoint of tracing collector.
+collector_endpoint = "http://localhost:14268/api/traces"

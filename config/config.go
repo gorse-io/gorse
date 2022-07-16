@@ -32,6 +32,11 @@ import (
 	"github.com/spf13/viper"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/sdk/resource"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -47,6 +52,7 @@ type Config struct {
 	Master    MasterConfig    `mapstructure:"master"`
 	Server    ServerConfig    `mapstructure:"server"`
 	Recommend RecommendConfig `mapstructure:"recommend"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -146,6 +152,12 @@ type OfflineConfig struct {
 type OnlineConfig struct {
 	FallbackRecommend            []string `mapstructure:"fallback_recommend"`
 	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based" validate:"gt=0"`
+}
+
+type TracingConfig struct {
+	EnableTracing     bool   `mapstructure:"enable_tracing"`
+	ExporterType      string `mapstructure:"exporter_type" validate:"oneof=jaeger"`
+	CollectorEndpoint string `mapstructure:"collector_endpoint"`
 }
 
 func GetDefaultConfig() *Config {
@@ -357,6 +369,39 @@ func (config *OfflineConfig) GetExploreRecommend(key string) (value float64, exi
 	defer config.exploreRecommendLock.RUnlock()
 	value, exist = config.ExploreRecommend[key]
 	return
+}
+
+func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
+	if !config.EnableTracing {
+		return trace.NewNoopTracerProvider(), nil
+	}
+	switch config.ExporterType {
+	case "jaeger":
+		exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.CollectorEndpoint)))
+		if err != nil {
+			return nil, err
+		}
+		return tracesdk.NewTracerProvider(
+			tracesdk.WithBatcher(exp),
+			tracesdk.WithResource(resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceNameKey.String("gorse"),
+			)),
+		), nil
+	}
+	return nil, errors.NotSupportedf("exporter type %s", config.ExporterType)
+}
+
+func (config *TracingConfig) Equal(other *TracingConfig) bool {
+	if config == nil && other == nil {
+		return true
+	}
+	if config == nil || other == nil {
+		return false
+	}
+	return config.EnableTracing == other.EnableTracing &&
+		config.ExporterType == other.ExporterType &&
+		config.CollectorEndpoint == other.CollectorEndpoint
 }
 
 func setDefault() {

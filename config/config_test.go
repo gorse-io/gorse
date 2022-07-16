@@ -119,6 +119,10 @@ func TestUnmarshal(t *testing.T) {
 	// [recommend.online]
 	assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.Online.FallbackRecommend)
 	assert.Equal(t, 10, config.Recommend.Online.NumFeedbackFallbackItemBased)
+	// [tracing]
+	assert.False(t, config.Tracing.EnableTracing)
+	assert.Equal(t, "jaeger", config.Tracing.ExporterType)
+	assert.Equal(t, "http://localhost:14268/api/traces", config.Tracing.CollectorEndpoint)
 }
 
 func TestSetDefault(t *testing.T) {
