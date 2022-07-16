@@ -79,7 +79,7 @@ func (m *mockFactorizationMachineForSearch) Clear() {
 	// do nothing
 }
 
-func (m *mockFactorizationMachineForSearch) GetParamsGrid() model.ParamsGrid {
+func (m *mockFactorizationMachineForSearch) GetParamsGrid(_ bool) model.ParamsGrid {
 	return model.ParamsGrid{
 		model.NFactors:   []interface{}{1, 2, 3, 4},
 		model.InitMean:   []interface{}{4, 3, 2, 1},
@@ -114,7 +114,7 @@ func TestGridSearchCV(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(), 0, fitConfig, runner)
+	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(false), 0, fitConfig, runner)
 	assert.Equal(t, float32(12), r.BestScore.AUC)
 	runner.AssertCalled(t, "Lock")
 	runner.AssertCalled(t, "UnLock")
@@ -131,7 +131,7 @@ func TestRandomSearchCV(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(), 63, 0, fitConfig, runner)
+	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(false), 63, 0, fitConfig, runner)
 	runner.AssertCalled(t, "Lock")
 	runner.AssertCalled(t, "UnLock")
 	assert.Equal(t, float32(12), r.BestScore.AUC)
@@ -146,7 +146,7 @@ func TestModelSearcher_RandomSearch(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	searcher := NewModelSearcher(2, 63, 1)
+	searcher := NewModelSearcher(2, 63, 1, false)
 	searcher.model = &mockFactorizationMachineForSearch{model.BaseModel{Params: model.Params{model.NEpochs: 2}}}
 	tk := task.NewTask("test", searcher.Complexity())
 	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)
@@ -166,7 +166,7 @@ func TestModelSearcher_GridSearch(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	searcher := NewModelSearcher(2, 64, 1)
+	searcher := NewModelSearcher(2, 64, 1, false)
 	searcher.model = &mockFactorizationMachineForSearch{model.BaseModel{Params: model.Params{model.NEpochs: 2}}}
 	tk := task.NewTask("test", searcher.Complexity())
 	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)

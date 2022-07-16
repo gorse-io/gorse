@@ -151,7 +151,7 @@ func (m *mockMatrixFactorizationForRecommend) Clear() {
 	// do nothing
 }
 
-func (m *mockMatrixFactorizationForRecommend) GetParamsGrid() model.ParamsGrid {
+func (m *mockMatrixFactorizationForRecommend) GetParamsGrid(_ bool) model.ParamsGrid {
 	panic("don't call me")
 }
 
@@ -750,7 +750,7 @@ func (m mockFactorizationMachine) Bytes() int {
 	panic("implement me")
 }
 
-func (m mockFactorizationMachine) GetParamsGrid() model.ParamsGrid {
+func (m mockFactorizationMachine) GetParamsGrid(_ bool) model.ParamsGrid {
 	panic("implement me")
 }
 

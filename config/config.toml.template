@@ -149,6 +149,9 @@ model_search_epoch = 100
 # The number of trials for model searching. The default value is 10.
 model_search_trials = 10
 
+# Enable searching models of different sizes, which consume more memory. The default value is false.
+enable_model_size_search = false
+
 [recommend.replacement]
 
 # Replace historical items back to recommendations. The default value is false.

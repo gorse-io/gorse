@@ -109,13 +109,14 @@ type NeighborsConfig struct {
 }
 
 type CollaborativeConfig struct {
-	ModelFitPeriod    time.Duration `mapstructure:"model_fit_period" validate:"gt=0"`
-	ModelSearchPeriod time.Duration `mapstructure:"model_search_period" validate:"gt=0"`
-	ModelSearchEpoch  int           `mapstructure:"model_search_epoch" validate:"gt=0"`
-	ModelSearchTrials int           `mapstructure:"model_search_trials" validate:"gt=0"`
-	EnableIndex       bool          `mapstructure:"enable_index"`
-	IndexRecall       float32       `mapstructure:"index_recall" validate:"gt=0"`
-	IndexFitEpoch     int           `mapstructure:"index_fit_epoch" validate:"gt=0"`
+	ModelFitPeriod        time.Duration `mapstructure:"model_fit_period" validate:"gt=0"`
+	ModelSearchPeriod     time.Duration `mapstructure:"model_search_period" validate:"gt=0"`
+	ModelSearchEpoch      int           `mapstructure:"model_search_epoch" validate:"gt=0"`
+	ModelSearchTrials     int           `mapstructure:"model_search_trials" validate:"gt=0"`
+	EnableModelSizeSearch bool          `mapstructure:"enable_model_size_search"`
+	EnableIndex           bool          `mapstructure:"enable_index"`
+	IndexRecall           float32       `mapstructure:"index_recall" validate:"gt=0"`
+	IndexFitEpoch         int           `mapstructure:"index_fit_epoch" validate:"gt=0"`
 }
 
 type ReplacementConfig struct {

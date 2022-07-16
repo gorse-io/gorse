@@ -23,7 +23,7 @@ import (
 type Model interface {
 	SetParams(params Params)
 	GetParams() Params
-	GetParamsGrid() ParamsGrid
+	GetParamsGrid(withSize bool) ParamsGrid
 	Clear()
 	Invalid() bool
 }

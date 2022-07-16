@@ -19,6 +19,7 @@ import (
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
@@ -355,9 +356,9 @@ func (bpr *BPR) SetParams(params model.Params) {
 	bpr.initStdDev = bpr.Params.GetFloat32(model.InitStdDev, 0.001)
 }
 
-func (bpr *BPR) GetParamsGrid() model.ParamsGrid {
+func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
 	return model.ParamsGrid{
-		model.NFactors:   []interface{}{8, 16, 32, 64},
+		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
 		model.Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.InitMean:   []interface{}{0},
@@ -631,9 +632,9 @@ func (ccd *CCD) SetParams(params model.Params) {
 	ccd.weight = ccd.Params.GetFloat32(model.Alpha, 0.001)
 }
 
-func (ccd *CCD) GetParamsGrid() model.ParamsGrid {
+func (ccd *CCD) GetParamsGrid(withSize bool) model.ParamsGrid {
 	return model.ParamsGrid{
-		model.NFactors:   []interface{}{8, 16, 32, 64},
+		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
 		model.InitMean:   []interface{}{0},
 		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
