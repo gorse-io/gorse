@@ -47,7 +47,7 @@ func newMockRedis(t *testing.T) *testRedis {
 	db := new(testRedis)
 	assert.NoError(t, err)
 	database.Inc()
-	db.Database, err = Open(redisDSN + strconv.Itoa(int(database.Load())))
+	db.Database, err = Open(redisDSN+strconv.Itoa(int(database.Load())), "gorse_")
 	assert.NoError(t, err)
 	return db
 }

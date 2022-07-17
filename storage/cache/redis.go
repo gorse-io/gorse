@@ -18,11 +18,13 @@ import (
 	"context"
 	"github.com/go-redis/redis/v8"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/storage"
 	"strconv"
 )
 
 // Redis cache storage.
 type Redis struct {
+	storage.TablePrefix
 	client *redis.Client
 }
 
@@ -44,12 +46,12 @@ func (r *Redis) Scan(work func(string) error) error {
 		err    error
 	)
 	for {
-		result, cursor, err = r.client.Scan(ctx, cursor, "", 0).Result()
+		result, cursor, err = r.client.Scan(ctx, cursor, string(r.TablePrefix)+"*", 0).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
 		for _, key := range result {
-			if err = work(key); err != nil {
+			if err = work(key[len(r.TablePrefix):]); err != nil {
 				return errors.Trace(err)
 			}
 		}
@@ -63,7 +65,7 @@ func (r *Redis) Set(values ...Value) error {
 	var ctx = context.Background()
 	p := r.client.Pipeline()
 	for _, v := range values {
-		if err := p.Set(ctx, v.name, v.value, 0).Err(); err != nil {
+		if err := p.Set(ctx, r.Key(v.name), v.value, 0).Err(); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -74,7 +76,7 @@ func (r *Redis) Set(values ...Value) error {
 // Get returns a value from Redis.
 func (r *Redis) Get(key string) *ReturnValue {
 	var ctx = context.Background()
-	val, err := r.client.Get(ctx, key).Result()
+	val, err := r.client.Get(ctx, r.Key(key)).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, key)}
@@ -87,13 +89,13 @@ func (r *Redis) Get(key string) *ReturnValue {
 // Delete object from Redis.
 func (r *Redis) Delete(key string) error {
 	ctx := context.Background()
-	return r.client.Del(ctx, key).Err()
+	return r.client.Del(ctx, r.Key(key)).Err()
 }
 
 // GetSet returns members of a set from Redis.
 func (r *Redis) GetSet(key string) ([]string, error) {
 	ctx := context.Background()
-	return r.client.SMembers(ctx, key).Result()
+	return r.client.SMembers(ctx, r.Key(key)).Result()
 }
 
 // SetSet overrides a set with members in Redis.
@@ -109,8 +111,8 @@ func (r *Redis) SetSet(key string, members ...string) error {
 	// push set
 	ctx := context.Background()
 	pipeline := r.client.Pipeline()
-	pipeline.Del(ctx, key)
-	pipeline.SAdd(ctx, key, values...)
+	pipeline.Del(ctx, r.Key(key))
+	pipeline.SAdd(ctx, r.Key(key), values...)
 	_, err := pipeline.Exec(ctx)
 	return err
 }
@@ -127,7 +129,7 @@ func (r *Redis) AddSet(key string, members ...string) error {
 	}
 	// push set
 	ctx := context.Background()
-	return r.client.SAdd(ctx, key, values...).Err()
+	return r.client.SAdd(ctx, r.Key(key), values...).Err()
 }
 
 // RemSet removes members from a set in Redis.
@@ -136,13 +138,13 @@ func (r *Redis) RemSet(key string, members ...string) error {
 		return nil
 	}
 	ctx := context.Background()
-	return r.client.SRem(ctx, key, members).Err()
+	return r.client.SRem(ctx, r.Key(key), members).Err()
 }
 
 // GetSorted get scores from sorted set.
 func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	ctx := context.Background()
-	members, err := r.client.ZRevRangeWithScores(ctx, key, int64(begin), int64(end)).Result()
+	members, err := r.client.ZRevRangeWithScores(ctx, r.Key(key), int64(begin), int64(end)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +157,7 @@ func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 
 func (r *Redis) GetSortedByScore(key string, begin, end float64) ([]Scored, error) {
 	ctx := context.Background()
-	members, err := r.client.ZRangeByScoreWithScores(ctx, key, &redis.ZRangeBy{
+	members, err := r.client.ZRangeByScoreWithScores(ctx, r.Key(key), &redis.ZRangeBy{
 		Min:    strconv.FormatFloat(begin, 'g', -1, 64),
 		Max:    strconv.FormatFloat(end, 'g', -1, 64),
 		Offset: 0,
@@ -173,7 +175,7 @@ func (r *Redis) GetSortedByScore(key string, begin, end float64) ([]Scored, erro
 
 func (r *Redis) RemSortedByScore(key string, begin, end float64) error {
 	ctx := context.Background()
-	return r.client.ZRemRangeByScore(ctx, key,
+	return r.client.ZRemRangeByScore(ctx, r.Key(key),
 		strconv.FormatFloat(begin, 'g', -1, 64),
 		strconv.FormatFloat(end, 'g', -1, 64)).
 		Err()
@@ -189,7 +191,7 @@ func (r *Redis) AddSorted(sortedSets ...SortedSet) error {
 			for _, score := range sorted.scores {
 				members = append(members, &redis.Z{Member: score.Id, Score: score.Score})
 			}
-			p.ZAdd(ctx, sorted.name, members...)
+			p.ZAdd(ctx, r.Key(sorted.name), members...)
 		}
 	}
 	_, err := p.Exec(ctx)
@@ -204,9 +206,9 @@ func (r *Redis) SetSorted(key string, scores []Scored) error {
 	}
 	ctx := context.Background()
 	pipeline := r.client.Pipeline()
-	pipeline.Del(ctx, key)
+	pipeline.Del(ctx, r.Key(key))
 	if len(scores) > 0 {
-		pipeline.ZAdd(ctx, key, members...)
+		pipeline.ZAdd(ctx, r.Key(key), members...)
 	}
 	_, err := pipeline.Exec(ctx)
 	return err
@@ -220,7 +222,7 @@ func (r *Redis) RemSorted(members ...SetMember) error {
 	ctx := context.Background()
 	pipe := r.client.Pipeline()
 	for _, member := range members {
-		pipe.ZRem(ctx, member.name, member.member)
+		pipe.ZRem(ctx, r.Key(member.name), member.member)
 	}
 	_, err := pipe.Exec(ctx)
 	return errors.Trace(err)

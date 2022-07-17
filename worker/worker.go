@@ -72,8 +72,10 @@ type Worker struct {
 	cacheFile  string
 
 	// database connection path
-	cachePath string
-	dataPath  string
+	cachePath   string
+	cachePrefix string
+	dataPath    string
+	dataPrefix  string
 
 	// master connection
 	masterClient protocol.MasterClient
@@ -152,25 +154,27 @@ func (w *Worker) Sync() {
 		}
 
 		// connect to data store
-		if w.dataPath != w.Config.Database.DataStore {
+		if w.dataPath != w.Config.Database.DataStore || w.dataPrefix != w.Config.Database.TablePrefix {
 			log.Logger().Info("connect data store",
 				zap.String("database", log.RedactDBURL(w.Config.Database.DataStore)))
-			if w.DataClient, err = data.Open(w.Config.Database.DataStore); err != nil {
+			if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.TablePrefix); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
 			w.dataPath = w.Config.Database.DataStore
+			w.dataPrefix = w.Config.Database.TablePrefix
 		}
 
 		// connect to cache store
-		if w.cachePath != w.Config.Database.CacheStore {
+		if w.cachePath != w.Config.Database.CacheStore || w.cachePrefix != w.Config.Database.TablePrefix {
 			log.Logger().Info("connect cache store",
 				zap.String("database", log.RedactDBURL(w.Config.Database.CacheStore)))
-			if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore); err != nil {
+			if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.TablePrefix); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
 			w.cachePath = w.Config.Database.CacheStore
+			w.cachePrefix = w.Config.Database.TablePrefix
 		}
 
 		// check ranking model version

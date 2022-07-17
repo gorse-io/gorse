@@ -49,9 +49,9 @@ func newMockServer(t *testing.T) *mockServer {
 	assert.NoError(t, err)
 	// open database
 	s.Settings = config.NewSettings()
-	s.DataClient, err = data.Open("redis://" + s.dataStoreServer.Addr())
+	s.DataClient, err = data.Open("redis://"+s.dataStoreServer.Addr(), "")
 	assert.NoError(t, err)
-	s.CacheClient, err = cache.Open("redis://" + s.cacheStoreServer.Addr())
+	s.CacheClient, err = cache.Open("redis://"+s.cacheStoreServer.Addr(), "")
 	assert.NoError(t, err)
 	// configuration
 	s.Config = config.GetDefaultConfig()

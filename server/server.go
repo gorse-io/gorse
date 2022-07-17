@@ -42,7 +42,9 @@ import (
 type Server struct {
 	RestServer
 	cachePath    string
+	cachePrefix  string
 	dataPath     string
+	dataPrefix   string
 	masterClient protocol.MasterClient
 	serverName   string
 	masterHost   string
@@ -135,25 +137,27 @@ func (s *Server) Sync() {
 		}
 
 		// connect to data store
-		if s.dataPath != s.Config.Database.DataStore {
+		if s.dataPath != s.Config.Database.DataStore || s.dataPrefix != s.Config.Database.TablePrefix {
 			log.Logger().Info("connect data store",
 				zap.String("database", log.RedactDBURL(s.Config.Database.DataStore)))
-			if s.DataClient, err = data.Open(s.Config.Database.DataStore); err != nil {
+			if s.DataClient, err = data.Open(s.Config.Database.DataStore, s.Config.Database.TablePrefix); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
 			s.dataPath = s.Config.Database.DataStore
+			s.dataPrefix = s.Config.Database.TablePrefix
 		}
 
 		// connect to cache store
-		if s.cachePath != s.Config.Database.CacheStore {
+		if s.cachePath != s.Config.Database.CacheStore || s.cachePrefix != s.Config.Database.TablePrefix {
 			log.Logger().Info("connect cache store",
 				zap.String("database", log.RedactDBURL(s.Config.Database.CacheStore)))
-			if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore); err != nil {
+			if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore, s.Config.Database.TablePrefix); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
 			s.cachePath = s.Config.Database.CacheStore
+			s.cachePrefix = s.Config.Database.TablePrefix
 		}
 
 	sleep:
