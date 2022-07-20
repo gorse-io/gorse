@@ -140,7 +140,7 @@ func (m *Master) Serve() {
 	var err error
 	m.localCache, err = LoadLocalCache(m.cacheFile)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if errors.Is(err, errors.NotFound) {
 			log.Logger().Info("no local cache found, create a new one", zap.String("path", m.cacheFile))
 		} else {
 			log.Logger().Error("failed to load local cache", zap.String("path", m.cacheFile), zap.Error(err))
@@ -345,7 +345,7 @@ func (m *Master) RunRagtagTasksLoop() {
 func (m *Master) checkDataImported() bool {
 	isDataImported, err := m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read meta", zap.Error(err))
 		}
 		return false

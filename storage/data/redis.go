@@ -468,7 +468,7 @@ func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
 func (r *Redis) insertFeedback(feedback Feedback, insertUser, insertItem, overwrite bool) error {
 	// locate user
 	_, err := r.GetUser(feedback.UserId)
-	if errors.IsNotFound(err) {
+	if errors.Is(err, errors.NotFound) {
 		if !insertUser {
 			return nil
 		}
@@ -477,7 +477,7 @@ func (r *Redis) insertFeedback(feedback Feedback, insertUser, insertItem, overwr
 	}
 	// locate item
 	_, err = r.GetItem(feedback.ItemId)
-	if errors.IsNotFound(err) {
+	if errors.Is(err, errors.NotFound) {
 		if !insertItem {
 			return nil
 		}

@@ -158,7 +158,7 @@ func testUsers(t *testing.T, db Database) {
 	err = db.DeleteUser("0")
 	assert.NoError(t, err)
 	_, err = db.GetUser("0")
-	assert.True(t, errors.IsNotFound(err), err)
+	assert.True(t, errors.Is(err, errors.NotFound), err)
 	// test override
 	err = db.BatchInsertUsers([]User{{UserId: "1", Comment: "override"}})
 	assert.NoError(t, err)
@@ -411,7 +411,7 @@ func testItems(t *testing.T, db Database) {
 	err = db.DeleteItem("0")
 	assert.NoError(t, err)
 	_, err = db.GetItem("0")
-	assert.True(t, errors.IsNotFound(err))
+	assert.True(t, errors.Is(err, errors.NotFound), err)
 
 	// test override
 	err = db.BatchInsertItems([]Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})

@@ -528,7 +528,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 		for _, userId := range userList {
 			_, err := db.GetUser(userId)
 			if err != nil {
-				if errors.IsNotFound(err) {
+				if errors.Is(err, errors.NotFound) {
 					users.Remove(userId)
 					continue
 				}
@@ -555,7 +555,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 		for _, itemId := range itemList {
 			_, err := db.GetItem(itemId)
 			if err != nil {
-				if errors.IsNotFound(err) {
+				if errors.Is(err, errors.NotFound) {
 					items.Remove(itemId)
 					continue
 				}
