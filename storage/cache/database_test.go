@@ -37,7 +37,7 @@ func testMeta(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	// Get meta not existed
 	value, err = db.Get(Key("meta", "1")).String()
-	assert.True(t, errors.IsNotFound(err), err)
+	assert.True(t, errors.Is(err, errors.NotFound), err)
 	assert.Equal(t, "", value)
 	// Set meta int
 	err = db.Set(Integer(Key("meta", "1"), 2))

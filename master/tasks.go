@@ -761,7 +761,7 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 	// read digest
 	cacheDigest, err = m.CacheClient.Get(cache.Key(cache.UserNeighborsDigest, userId)).String()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
 		}
 		return true
@@ -772,7 +772,7 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 	// read modified time
 	modifiedTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last modify user time", zap.Error(err))
 		}
 		return true
@@ -780,7 +780,7 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 	// read update time
 	updateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserNeighborsTime, userId)).Time()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
 		}
 		return true
@@ -816,7 +816,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 	// read digest
 	cacheDigest, err = m.CacheClient.Get(cache.Key(cache.ItemNeighborsDigest, itemId)).String()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read item neighbors digest", zap.Error(err))
 		}
 		return true
@@ -827,7 +827,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 	// read modified time
 	modifiedTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyItemTime, itemId)).Time()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last modify item time", zap.Error(err))
 		}
 		return true
@@ -835,7 +835,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 	// read update time
 	updateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateItemNeighborsTime, itemId)).Time()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
 		}
 		return true
@@ -1161,7 +1161,7 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 			}
 			// check user in database
 			_, err := m.DataClient.GetUser(userId)
-			if !errors.IsNotFound(err) {
+			if !errors.Is(err, errors.NotFound) {
 				if err != nil {
 					log.Logger().Error("failed to load user", zap.String("user_id", userId), zap.Error(err))
 				}
@@ -1187,7 +1187,7 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 			}
 			// check item in database
 			_, err := m.DataClient.GetItem(itemId)
-			if !errors.IsNotFound(err) {
+			if !errors.Is(err, errors.NotFound) {
 				if err != nil {
 					log.Logger().Error("failed to load item", zap.String("item_id", itemId), zap.Error(err))
 				}

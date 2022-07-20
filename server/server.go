@@ -77,7 +77,7 @@ func (s *Server) Serve() {
 	// open local store
 	state, err := LoadLocalCache(s.cacheFile)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if errors.Is(err, errors.NotFound) {
 			log.Logger().Info("no cache file found, create a new one", zap.String("path", s.cacheFile))
 		} else {
 			log.Logger().Error("failed to connect local store", zap.Error(err),
@@ -203,7 +203,7 @@ func (sc *PopularItemsCache) sync() {
 	// load popular items
 	items, err := sc.server.CacheClient.GetSorted(cache.Key(cache.PopularItems), 0, -1)
 	if err != nil {
-		if !errors.IsNotAssigned(err) {
+		if !errors.Is(err, errors.NotAssigned) {
 			log.Logger().Error("failed to get popular items", zap.Error(err))
 		}
 		return
@@ -264,7 +264,7 @@ func (hc *HiddenItemsManager) sync() {
 	// load categories
 	categories, err := hc.server.CacheClient.GetSet(cache.ItemCategories)
 	if err != nil {
-		if !errors.IsNotAssigned(err) {
+		if !errors.Is(err, errors.NotAssigned) {
 			log.Logger().Error("failed to load item categories", zap.Error(err))
 		}
 		return
@@ -272,7 +272,7 @@ func (hc *HiddenItemsManager) sync() {
 	// load hidden items
 	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(ts.Unix()))
 	if err != nil {
-		if !errors.IsNotAssigned(err) {
+		if !errors.Is(err, errors.NotAssigned) {
 			log.Logger().Error("failed to load hidden items", zap.Error(err))
 		}
 		return
@@ -282,7 +282,7 @@ func (hc *HiddenItemsManager) sync() {
 	for _, category := range categories {
 		score, err = hc.server.CacheClient.GetSortedByScore(cache.Key(cache.HiddenItemsV2, category), math.Inf(-1), float64(ts.Unix()))
 		if err != nil {
-			if !errors.IsNotAssigned(err) {
+			if !errors.Is(err, errors.NotAssigned) {
 				log.Logger().Error("failed to load categorized hidden items", zap.Error(err))
 			}
 			return

@@ -283,7 +283,7 @@ func (w *Worker) Serve() {
 	if !w.oneMode {
 		state, err := LoadLocalCache(w.cacheFile)
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if errors.Is(err, errors.NotFound) {
 				log.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
 			} else {
 				log.Logger().Error("failed to load persist state", zap.Error(err),
@@ -555,7 +555,7 @@ func (w *Worker) Recommend(users []data.User) {
 					// load item neighbors digest
 					digest, err := w.CacheClient.Get(cache.Key(cache.ItemNeighborsDigest, itemId)).String()
 					if err != nil {
-						if !errors.IsNotFound(err) {
+						if !errors.Is(err, errors.NotFound) {
 							log.Logger().Error("failed to load item neighbors digest", zap.Error(err))
 							return errors.Trace(err)
 						}
@@ -602,7 +602,7 @@ func (w *Worker) Recommend(users []data.User) {
 				// load user neighbors digest
 				digest, err := w.CacheClient.Get(cache.Key(cache.UserNeighborsDigest, user.Id)).String()
 				if err != nil {
-					if !errors.IsNotFound(err) {
+					if !errors.Is(err, errors.NotFound) {
 						log.Logger().Error("failed to load user neighbors digest", zap.Error(err))
 						return errors.Trace(err)
 					}
@@ -983,7 +983,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	// read digest
 	cacheDigest, err = w.CacheClient.Get(cache.Key(cache.OfflineRecommendDigest, userId)).String()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to load offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
 		}
 		return true
@@ -994,7 +994,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	// read active time
 	activeTime, err = w.CacheClient.Get(cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last modify user time", zap.Error(err))
 		}
 		return true
@@ -1002,7 +1002,7 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	// read recommend time
 	recommendTime, err = w.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update user recommend time", zap.Error(err))
 		}
 		return true
@@ -1037,7 +1037,7 @@ func (w *Worker) refreshCache(userId string) error {
 	recommendTime, err := w.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err == nil {
 		timeLimit = &recommendTime
-	} else if !errors.IsNotFound(err) {
+	} else if !errors.Is(err, errors.NotFound) {
 		return errors.Trace(err)
 	}
 	// reload cache

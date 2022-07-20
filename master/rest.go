@@ -567,7 +567,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 	// get user
 	user, err := m.DataClient.GetUser(userId)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if errors.Is(err, errors.NotFound) {
 			server.PageNotFound(response, err)
 		} else {
 			server.InternalServerError(response, err)
@@ -575,11 +575,11 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 		return
 	}
 	detail := User{User: user}
-	if detail.LastActiveTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.IsNotFound(err) {
+	if detail.LastActiveTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
-	if detail.LastUpdateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.IsNotFound(err) {
+	if detail.LastUpdateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
@@ -603,11 +603,11 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 	details := make([]User, len(users))
 	for i, user := range users {
 		details[i].User = user
-		if details[i].LastActiveTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.IsNotFound(err) {
+		if details[i].LastActiveTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
-		if details[i].LastUpdateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.IsNotFound(err) {
+		if details[i].LastUpdateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
@@ -696,7 +696,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		details[i].Timestamp = feedback[i].Timestamp
 		details[i].Comment = feedback[i].Comment
 		details[i].Item, err = m.DataClient.GetItem(feedback[i].ItemId)
-		if errors.IsNotFound(err) {
+		if errors.Is(err, errors.NotFound) {
 			details[i].Item = data.Item{ItemId: feedback[i].ItemId, Comment: "** This item doesn't exist in Gorse **"}
 		} else if err != nil {
 			server.InternalServerError(response, err)
