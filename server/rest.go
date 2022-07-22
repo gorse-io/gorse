@@ -1722,7 +1722,13 @@ func (s *RestServer) GetMeasurements(name string, n int) ([]Measurement, error) 
 
 func (s *RestServer) InsertMeasurement(measurements ...Measurement) error {
 	sortedSets := lo.Map(measurements, func(m Measurement, _ int) cache.SortedSet {
-		return cache.Sorted(cache.Key(cache.Measurements, m.Name), []cache.Scored{m.GetScore()})
+		name := cache.Key(cache.Measurements, m.Name)
+		score := m.GetScore()
+		err := s.CacheClient.RemSortedByScore(name, score.Score, score.Score)
+		if err != nil {
+			log.Logger().Warn("failed to remove stale measurement", zap.Error(err))
+		}
+		return cache.Sorted(name, []cache.Scored{score})
 	})
 	return s.CacheClient.AddSorted(sortedSets...)
 }
