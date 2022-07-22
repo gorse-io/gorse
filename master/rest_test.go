@@ -431,9 +431,13 @@ func TestMaster_GetStats(t *testing.T) {
 func TestMaster_GetRates(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+
 	// write rates
 	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
-	err := s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
+	// This first measurement should be overwritten.
+	err := s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
+	assert.NoError(t, err)
+	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
 	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
@@ -445,6 +449,7 @@ func TestMaster_GetRates(t *testing.T) {
 	assert.NoError(t, err)
 	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
+
 	// get rates
 	apitest.New().
 		Handler(s.handler).
