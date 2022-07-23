@@ -15,6 +15,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
@@ -44,6 +45,7 @@ import (
 type Master struct {
 	protocol.UnimplementedMasterServer
 	server.RestServer
+	grpcServer *grpc.Server
 
 	taskMonitor   *task.Monitor
 	taskScheduler *task.Scheduler
@@ -226,15 +228,25 @@ func (m *Master) Serve() {
 		if err != nil {
 			log.Logger().Fatal("failed to listen", zap.Error(err))
 		}
-		grpcServer := grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
-		protocol.RegisterMasterServer(grpcServer, m)
-		if err = grpcServer.Serve(lis); err != nil {
+		m.grpcServer = grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
+		protocol.RegisterMasterServer(m.grpcServer, m)
+		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
 		}
 	}()
 
 	// start http server
 	m.StartHttpServer()
+}
+
+func (m *Master) Shutdown() {
+	// stop http server
+	err := m.HttpServer.Shutdown(context.TODO())
+	if err != nil {
+		log.Logger().Error("failed to shutdown http server", zap.Error(err))
+	}
+	// stop grpc server
+	m.grpcServer.GracefulStop()
 }
 
 func (m *Master) RunPrivilegedTasksLoop() {

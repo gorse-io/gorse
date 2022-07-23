@@ -36,6 +36,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 )
 
@@ -104,17 +105,28 @@ var oneCommand = &cobra.Command{
 
 		// create master
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		l := master.NewMaster(conf, cachePath)
+		m := master.NewMaster(conf, cachePath)
 		// Start worker
 		go func() {
 			workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
 			w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
 				0, workerJobs, "")
-			w.SetOneMode(l.Settings)
+			w.SetOneMode(m.Settings)
 			w.Serve()
 		}()
+		// Stop master
+		done := make(chan struct{})
+		go func() {
+			sigint := make(chan os.Signal, 1)
+			signal.Notify(sigint, os.Interrupt)
+			<-sigint
+			m.Shutdown()
+			close(done)
+		}()
 		// Start master
-		l.Serve()
+		m.Serve()
+		<-done
+		log.Logger().Info("stop gorse-in-one successfully")
 	},
 }
 
@@ -125,7 +137,6 @@ func init() {
 	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
 	oneCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	oneCommand.PersistentFlags().String("cache-path", "one_cache.data", "path of cache file")
-	// worker node commands
 	oneCommand.PersistentFlags().Int("recommend-jobs", 1, "number of working jobs for recommendation tasks")
 }
 

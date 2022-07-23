@@ -49,6 +49,7 @@ type RestServer struct {
 	HttpPort   int
 	DisableLog bool
 	WebService *restful.WebService
+	HttpServer *http.Server
 
 	PopularItemsCache  *PopularItemsCache
 	HiddenItemsManager *HiddenItemsManager
@@ -72,8 +73,13 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
-	log.Logger().Fatal("failed to start http server",
-		zap.Error(http.ListenAndServe(fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort), container)))
+	s.HttpServer = &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort),
+		Handler: container,
+	}
+	if err := s.HttpServer.ListenAndServe(); err != http.ErrServerClosed {
+		log.Logger().Fatal("failed to start http server", zap.Error(err))
+	}
 }
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {

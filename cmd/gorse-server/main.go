@@ -21,6 +21,8 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
 )
 
 var serverCommand = &cobra.Command{
@@ -33,6 +35,7 @@ var serverCommand = &cobra.Command{
 			fmt.Println(version.BuildInfo())
 			return
 		}
+
 		// setup logger
 		var outputPaths []string
 		if cmd.PersistentFlags().Changed("log-path") {
@@ -45,14 +48,29 @@ var serverCommand = &cobra.Command{
 		} else {
 			log.SetProductionLogger(outputPaths...)
 		}
-		// start server
+
+		// create server
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
 		masterHost, _ := cmd.PersistentFlags().GetString("master-host")
 		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
 		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
 		s := server.NewServer(masterHost, masterPort, httpHost, httpPort, cachePath)
+
+		// stop server
+		done := make(chan struct{})
+		go func() {
+			sigint := make(chan os.Signal, 1)
+			signal.Notify(sigint, os.Interrupt)
+			<-sigint
+			s.Shutdown()
+			close(done)
+		}()
+
+		// start server
 		s.Serve()
+		<-done
+		log.Logger().Info("stop gorse server successfully")
 	},
 }
 

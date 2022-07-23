@@ -111,6 +111,13 @@ func (s *Server) Serve() {
 	s.StartHttpServer(container)
 }
 
+func (s *Server) Shutdown() {
+	err := s.HttpServer.Shutdown(context.TODO())
+	if err != nil {
+		log.Logger().Fatal("failed to shutdown http server", zap.Error(err))
+	}
+}
+
 // Sync this server to the master.
 func (s *Server) Sync() {
 	defer base.CheckPanic()
