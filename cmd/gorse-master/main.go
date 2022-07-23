@@ -22,6 +22,8 @@ import (
 	"github.com/zhenghaoz/gorse/master"
 	"go.uber.org/zap"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
 )
 
 var masterCommand = &cobra.Command{
@@ -45,7 +47,7 @@ var masterCommand = &cobra.Command{
 		} else {
 			log.SetProductionLogger(outputPaths...)
 		}
-		// Start master
+		// Create master
 		configPath, _ := cmd.PersistentFlags().GetString("config")
 		log.Logger().Info("load config", zap.String("config", configPath))
 		conf, err := config.LoadConfig(configPath, false)
@@ -53,8 +55,20 @@ var masterCommand = &cobra.Command{
 			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		l := master.NewMaster(conf, cachePath)
-		l.Serve()
+		m := master.NewMaster(conf, cachePath)
+		// Stop master
+		done := make(chan struct{})
+		go func() {
+			sigint := make(chan os.Signal, 1)
+			signal.Notify(sigint, os.Interrupt)
+			<-sigint
+			m.Shutdown()
+			close(done)
+		}()
+		// Start master
+		m.Serve()
+		<-done
+		log.Logger().Info("stop gorse master successfully")
 	},
 }
 
