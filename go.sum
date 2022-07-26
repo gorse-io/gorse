@@ -357,8 +357,8 @@ github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/mailru/go-clickhouse v1.8.0 h1:wqTHVsfR4g+BSwKso7X90RdOsVXaSwqJ96GmgBPSgVA=
-github.com/mailru/go-clickhouse v1.8.0/go.mod h1:crHi+yrqslIClnYPm8IOxYVX6GmYVYymJ601I4jDqvo=
+github.com/mailru/go-clickhouse/v2 v2.0.0 h1:O+ZGJDwp/E5W19ooeouEqaOlg+qxA+4Zsfjt63QcnVU=
+github.com/mailru/go-clickhouse/v2 v2.0.0/go.mod h1:TwxN829KnFZ7jAka9l9EoCV+U0CBFq83SFev4oLbnNU=
 github.com/mattn/go-colorable v0.1.1/go.mod h1:FuOcm+DKB9mbwrcAfNl7/TZVBZ6rcnceauSikq3lYCQ=
 github.com/mattn/go-colorable v0.1.6/go.mod h1:u6P/XSegPjTcexA+o6vUJrdnUu04hMope9wVRipJSqc=
 github.com/mattn/go-isatty v0.0.5/go.mod h1:Iq45c/XA43vh69/j3iqttzPXn0bhXyGjM0Hdxcsrc5s=

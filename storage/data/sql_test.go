@@ -251,7 +251,7 @@ func newTestClickHouseDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
 	// create database
-	databaseComm, err := sql.Open("clickhouse", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
+	databaseComm, err := sql.Open("chhttp", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
 	assert.NoError(t, err)
 	dbName := "gorse_" + testName
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)

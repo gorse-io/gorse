@@ -19,7 +19,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
-	_ "github.com/mailru/go-clickhouse"
+	_ "github.com/mailru/go-clickhouse/v2"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	_ "github.com/sijms/go-ora/v2"

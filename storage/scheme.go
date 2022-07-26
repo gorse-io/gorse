@@ -34,6 +34,8 @@ const (
 	PostgresPrefix   = "postgres://"
 	PostgreSQLPrefix = "postgresql://"
 	ClickhousePrefix = "clickhouse://"
+	CHHTTPPrefix     = "chhttp://"
+	CHHTTPSPrefix    = "chhttps://"
 	SQLitePrefix     = "sqlite://"
 	RedisPrefix      = "redis://"
 	RedissPrefix     = "rediss://"
