@@ -193,3 +193,27 @@ func (s *JobsScheduler) allocateJobsForAll() {
 		}
 	}
 }
+
+type JobsAllocator struct {
+	numJobs int
+}
+
+func NewConstantJobsAllocator(num int) *JobsAllocator {
+	return &JobsAllocator{
+		numJobs: num,
+	}
+}
+
+func (allocator *JobsAllocator) MaxJobs() int {
+	if allocator == nil || allocator.numJobs <= 1 {
+		return 1
+	}
+	return allocator.numJobs
+}
+
+func (allocator *JobsAllocator) AvailableJobs() int {
+	if allocator == nil || allocator.numJobs <= 1 {
+		return 1
+	}
+	return allocator.numJobs
+}

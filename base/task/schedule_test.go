@@ -107,3 +107,17 @@ func TestJobsScheduler(t *testing.T) {
 	assert.Equal(t, 0, s.allocateJobsForTask("b", false, nil))
 	assert.Equal(t, 0, s.allocateJobsForTask("a", false, nil))
 }
+
+func TestConstantJobsAllocator(t *testing.T) {
+	allocator := NewConstantJobsAllocator(314)
+	assert.Equal(t, 314, allocator.MaxJobs())
+	assert.Equal(t, 314, allocator.AvailableJobs())
+
+	allocator = NewConstantJobsAllocator(-1)
+	assert.Equal(t, 1, allocator.MaxJobs())
+	assert.Equal(t, 1, allocator.AvailableJobs())
+
+	allocator = nil
+	assert.Equal(t, 1, allocator.MaxJobs())
+	assert.Equal(t, 1, allocator.AvailableJobs())
+}
