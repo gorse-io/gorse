@@ -33,6 +33,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"moul.io/zapgorm2"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -179,12 +180,22 @@ func Open(path, tablePrefix string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, storage.ClickhousePrefix) {
-		uri := "http://" + path[len(storage.ClickhousePrefix):]
+	} else if strings.HasPrefix(path, storage.ClickhousePrefix) || strings.HasPrefix(path, storage.CHHTTPPrefix) || strings.HasPrefix(path, storage.CHHTTPSPrefix) {
+		// replace schema
+		parsed, err := url.Parse(path)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if strings.HasPrefix(path, storage.CHHTTPSPrefix) {
+			parsed.Scheme = "https"
+		} else {
+			parsed.Scheme = "http"
+		}
+		uri := parsed.String()
 		database := new(SQLDatabase)
 		database.driver = ClickHouse
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = sql.Open("clickhouse", uri); err != nil {
+		if database.client, err = sql.Open("chhttp", uri); err != nil {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
