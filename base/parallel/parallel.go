@@ -16,8 +16,15 @@ package parallel
 
 import (
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base/task"
+	"go.uber.org/atomic"
 	"modernc.org/mathutil"
 	"sync"
+)
+
+const (
+	chanSize    = 1024
+	allocPeriod = 128
 )
 
 /* Parallel Schedulers */
@@ -33,19 +40,13 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 			}
 		}
 	} else {
-		const chanSize = 64
-		const chanEOF = -1
 		c := make(chan int, chanSize)
 		// producer
 		go func() {
-			// send jobs
 			for i := 0; i < nJobs; i++ {
 				c <- i
 			}
-			// send EOF
-			for i := 0; i < nWorkers; i++ {
-				c <- chanEOF
-			}
+			close(c)
 		}()
 		// consumer
 		var wg sync.WaitGroup
@@ -57,8 +58,8 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 				defer wg.Done()
 				for {
 					// read job
-					jobId := <-c
-					if jobId == chanEOF {
+					jobId, ok := <-c
+					if !ok {
 						return
 					}
 					// run job
@@ -80,6 +81,55 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 	return nil
 }
 
+func DynamicParallel(nJobs int, jobsAlloc *task.JobsAllocator, worker func(workerId, jobId int) error) error {
+	c := make(chan int, chanSize)
+	// producer
+	go func() {
+		for i := 0; i < nJobs; i++ {
+			c <- i
+		}
+		close(c)
+	}()
+	// consumer
+	for {
+		exit := atomic.NewBool(true)
+		numJobs := jobsAlloc.AvailableJobs()
+		var wg sync.WaitGroup
+		wg.Add(numJobs)
+		errs := make([]error, nJobs)
+		for j := 0; j < numJobs; j++ {
+			// start workers
+			go func(workerId int) {
+				defer wg.Done()
+				for i := 0; i < allocPeriod; i++ {
+					// read job
+					jobId, ok := <-c
+					if !ok {
+						return
+					}
+					exit.Store(false)
+					// run job
+					if err := worker(workerId, jobId); err != nil {
+						errs[jobId] = err
+						return
+					}
+				}
+			}(j)
+		}
+		wg.Wait()
+		// check errors
+		for _, err := range errs {
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+		// exit if finished
+		if exit.Load() {
+			return nil
+		}
+	}
+}
+
 type batchJob struct {
 	beginId int
 	endId   int
@@ -90,19 +140,13 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	if nWorkers == 1 {
 		return worker(0, 0, nJobs)
 	}
-	const chanSize = 64
-	const chanEOF = -1
 	c := make(chan batchJob, chanSize)
 	// producer
 	go func() {
-		// send jobs
 		for i := 0; i < nJobs; i += batchSize {
 			c <- batchJob{beginId: i, endId: mathutil.Min(i+batchSize, nJobs)}
 		}
-		// send EOF
-		for i := 0; i < nWorkers; i++ {
-			c <- batchJob{beginId: chanEOF, endId: chanEOF}
-		}
+		close(c)
 	}()
 	// consumer
 	var wg sync.WaitGroup
@@ -114,8 +158,8 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 			defer wg.Done()
 			for {
 				// read job
-				job := <-c
-				if job.beginId == chanEOF {
+				job, ok := <-c
+				if !ok {
 					return
 				}
 				// run job

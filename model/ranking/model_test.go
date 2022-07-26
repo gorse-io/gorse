@@ -31,7 +31,7 @@ const (
 
 func newFitConfig(numEpoch int) *FitConfig {
 	t := task.NewTask("test", numEpoch)
-	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU()).SetTask(t)
+	cfg := NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU())).SetTask(t)
 	return cfg
 }
 

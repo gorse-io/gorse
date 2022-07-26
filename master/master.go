@@ -105,14 +105,14 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		rankingModelSearcher: ranking.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Master.NumJobs,
+			task.NewConstantJobsAllocator(cfg.Master.NumJobs),
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		// default click model
 		clickModelSearcher: click.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Master.NumJobs,
+			task.NewConstantJobsAllocator(cfg.Master.NumJobs),
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		RestServer: server.RestServer{

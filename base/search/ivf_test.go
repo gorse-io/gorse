@@ -16,6 +16,7 @@ package search
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
 	"testing"
 )
 
@@ -28,8 +29,8 @@ func TestIVFConfig(t *testing.T) {
 	SetClusterErrorRate(0.123)(ivf)
 	assert.Equal(t, float32(0.123), ivf.errorRate)
 
-	SetIVFNumJobs(234)(ivf)
-	assert.Equal(t, 234, ivf.numJobs)
+	SetIVFJobsAllocator(task.NewConstantJobsAllocator(234))(ivf)
+	assert.Equal(t, 234, ivf.jobsAlloc.AvailableJobs())
 
 	SetMaxIteration(345)(ivf)
 	assert.Equal(t, 345, ivf.maxIter)

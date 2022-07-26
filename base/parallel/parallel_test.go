@@ -18,6 +18,7 @@ import (
 	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/task"
 	"testing"
 	"time"
 )
@@ -46,6 +47,22 @@ func TestParallel(t *testing.T) {
 	workersSet = set.NewIntSet(workerIds...)
 	assert.Equal(t, a, b)
 	assert.Equal(t, 1, workersSet.Size())
+}
+
+func TestDynamicParallel(t *testing.T) {
+	a := base.RangeInt(10000)
+	b := make([]int, len(a))
+	workerIds := make([]int, len(a))
+	_ = DynamicParallel(len(a), task.NewConstantJobsAllocator(3), func(workerId, jobId int) error {
+		b[jobId] = a[jobId]
+		workerIds[jobId] = workerId
+		time.Sleep(time.Microsecond)
+		return nil
+	})
+	workersSet := set.NewIntSet(workerIds...)
+	assert.Equal(t, a, b)
+	assert.GreaterOrEqual(t, 4, workersSet.Size())
+	assert.Less(t, 1, workersSet.Size())
 }
 
 func TestBatchParallel(t *testing.T) {

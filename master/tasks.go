@@ -26,6 +26,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/search"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -314,7 +315,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
 	}
 
-	err := parallel.Parallel(dataset.ItemCount(), m.Config.Master.NumJobs, func(workerId, itemIndex int) error {
+	err := parallel.DynamicParallel(dataset.ItemCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -400,7 +401,8 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
 	}
 
-	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize, search.SetIVFNumJobs(m.Config.Master.NumJobs))
+	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize,
+		search.SetIVFJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)))
 	var recall float32
 	index, recall = builder.Build(m.Config.Recommend.ItemNeighbors.IndexRecall,
 		m.Config.Recommend.ItemNeighbors.IndexFitEpoch,
@@ -412,7 +414,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
 
-	err := parallel.Parallel(dataset.ItemCount(), m.Config.Master.NumJobs, func(workerId, itemIndex int) error {
+	err := parallel.DynamicParallel(dataset.ItemCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -587,7 +589,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
 	}
 
-	err := parallel.Parallel(dataset.UserCount(), m.Config.Master.NumJobs, func(workerId, userIndex int) error {
+	err := parallel.DynamicParallel(dataset.UserCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -665,7 +667,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
 	}
 
-	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize, search.SetIVFNumJobs(m.Config.Master.NumJobs))
+	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize,
+		search.SetIVFJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)))
 	var recall float32
 	index, recall = builder.Build(
 		m.Config.Recommend.UserNeighbors.IndexRecall,
@@ -678,7 +681,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
 
-	err := parallel.Parallel(dataset.UserCount(), m.Config.Master.NumJobs, func(workerId, userIndex int) error {
+	err := parallel.DynamicParallel(dataset.UserCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -920,7 +923,7 @@ func (m *Master) runRankingRelatedTasks(
 func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization) {
 	startFitTime := time.Now()
 	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().
-		SetJobs(m.Config.Master.NumJobs).
+		SetJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)).
 		SetTask(m.taskMonitor.Start(TaskFitRankingModel, rankingModel.Complexity())))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 
@@ -1014,7 +1017,7 @@ func (m *Master) runFitClickModelTask(
 	}
 	startFitTime := time.Now()
 	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().
-		SetJobs(m.Config.Master.NumJobs).
+		SetJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)).
 		SetTask(m.taskMonitor.Start(TaskFitClickModel, clickModel.Complexity())))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 

@@ -36,7 +36,7 @@ func TestHNSW_InnerProduct(t *testing.T) {
 		model.InitMean:   0,
 		model.InitStdDev: 0.001,
 	})
-	fitConfig := ranking.NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
+	fitConfig := ranking.NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
 	m.Fit(trainSet, testSet, fitConfig)
 	var vectors []Vector
 	for i, itemFactor := range m.ItemFactor {

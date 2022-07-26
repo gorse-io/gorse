@@ -26,7 +26,6 @@ import (
 	"math"
 	"math/rand"
 	"modernc.org/mathutil"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -46,7 +45,7 @@ type IVF struct {
 	errorRate float32
 	maxIter   int
 	numProbe  int
-	numJobs   int
+	jobsAlloc *task.JobsAllocator
 
 	task *task.SubTask
 }
@@ -65,9 +64,9 @@ func SetClusterErrorRate(errorRate float32) IVFConfig {
 	}
 }
 
-func SetIVFNumJobs(numJobs int) IVFConfig {
+func SetIVFJobsAllocator(jobsAlloc *task.JobsAllocator) IVFConfig {
 	return func(ivf *IVF) {
-		ivf.numJobs = numJobs
+		ivf.jobsAlloc = jobsAlloc
 	}
 }
 
@@ -90,7 +89,6 @@ func NewIVF(vectors []Vector, configs ...IVFConfig) *IVF {
 		errorRate: 0.05,
 		maxIter:   DefaultMaxIter,
 		numProbe:  1,
-		numJobs:   runtime.NumCPU(),
 	}
 	for _, config := range configs {
 		config(idx)
@@ -207,7 +205,7 @@ func (idx *IVF) Build() {
 
 		// reassign clusters
 		nextClusters := make([]ivfCluster, idx.k)
-		_ = parallel.Parallel(len(idx.data), idx.numJobs, func(_, i int) error {
+		_ = parallel.Parallel(len(idx.data), idx.jobsAlloc.AvailableJobs(), func(_, i int) error {
 			if !idx.data[i].IsHidden() {
 				nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
 				for c := range clusters {
@@ -270,7 +268,7 @@ func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = parallel.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+	_ = parallel.Parallel(len(samples), idx.jobsAlloc.AvailableJobs(), func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.Search(b.data[sample], b.k, prune0)
 		if len(expected) > 0 {
@@ -321,7 +319,7 @@ func (b *IVFBuilder) evaluateTermSearch(idx *IVF, prune0 bool, term string) floa
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = parallel.Parallel(len(samples), idx.numJobs, func(_, i int) error {
+	_ = parallel.Parallel(len(samples), idx.jobsAlloc.AvailableJobs(), func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
 		if len(expected) > 0 {

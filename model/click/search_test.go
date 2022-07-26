@@ -102,7 +102,6 @@ func (r *mockRunner) UnLock() {
 func newFitConfigForSearch() *FitConfig {
 	t := task.NewTask("test", 0)
 	return &FitConfig{
-		Jobs:    1,
 		Verbose: 1,
 		Task:    t,
 	}
@@ -146,7 +145,7 @@ func TestModelSearcher_RandomSearch(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	searcher := NewModelSearcher(2, 63, 1, false)
+	searcher := NewModelSearcher(2, 63, task.NewConstantJobsAllocator(1), false)
 	searcher.model = &mockFactorizationMachineForSearch{model.BaseModel{Params: model.Params{model.NEpochs: 2}}}
 	tk := task.NewTask("test", searcher.Complexity())
 	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)
@@ -166,7 +165,7 @@ func TestModelSearcher_GridSearch(t *testing.T) {
 	runner := new(mockRunner)
 	runner.On("Lock")
 	runner.On("UnLock")
-	searcher := NewModelSearcher(2, 64, 1, false)
+	searcher := NewModelSearcher(2, 64, task.NewConstantJobsAllocator(1), false)
 	searcher.model = &mockFactorizationMachineForSearch{model.BaseModel{Params: model.Params{model.NEpochs: 2}}}
 	tk := task.NewTask("test", searcher.Complexity())
 	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)

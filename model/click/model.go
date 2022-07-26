@@ -91,14 +91,13 @@ func (score Score) BetterThan(s Score) bool {
 }
 
 type FitConfig struct {
-	Jobs    int
+	*task.JobsAllocator
 	Verbose int
 	Task    *task.Task
 }
 
 func NewFitConfig() *FitConfig {
 	return &FitConfig{
-		Jobs:    1,
 		Verbose: 10,
 	}
 }
@@ -108,8 +107,8 @@ func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
 	return config
 }
 
-func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
-	config.Jobs = nJobs
+func (config *FitConfig) SetJobsAllocator(allocator *task.JobsAllocator) *FitConfig {
+	config.JobsAllocator = allocator
 	return config
 }
 
@@ -280,8 +279,9 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		zap.Any("params", fm.GetParams()),
 		zap.Any("config", config))
 	fm.Init(trainSet)
-	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
-	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
+	maxJobs := config.MaxJobs()
+	temp := base.NewMatrix32(maxJobs, fm.nFactors)
+	vGrad := base.NewMatrix32(maxJobs, fm.nFactors)
 
 	snapshots := SnapshotManger{}
 	evalStart := time.Now()
@@ -306,7 +306,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		}
 		fitStart := time.Now()
 		cost := float32(0)
-		_ = parallel.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
+		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(), 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
 				prediction := fm.internalPredictImpl(features, values)

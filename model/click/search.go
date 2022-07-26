@@ -135,7 +135,7 @@ type ModelSearcher struct {
 	// arguments
 	numEpochs  int
 	numTrials  int
-	numJobs    int
+	jobsAlloc  *task.JobsAllocator
 	searchSize bool
 	// results
 	bestMutex sync.Mutex
@@ -144,12 +144,12 @@ type ModelSearcher struct {
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
-func NewModelSearcher(nEpoch, nTrials, nJobs int, searchSize bool) *ModelSearcher {
+func NewModelSearcher(nEpoch, nTrials int, jobsAlloc *task.JobsAllocator, searchSize bool) *ModelSearcher {
 	return &ModelSearcher{
 		model:      NewFM(FMClassification, model.Params{model.NEpochs: nEpoch}),
 		numTrials:  nTrials,
 		numEpochs:  nEpoch,
-		numJobs:    nJobs,
+		jobsAlloc:  jobsAlloc,
 		searchSize: searchSize,
 	}
 }
@@ -176,7 +176,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, t *task.Task, runn
 	// Random search
 	grid := searcher.model.GetParamsGrid(searcher.searchSize)
 	r := RandomSearchCV(searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().
-		SetJobs(searcher.numJobs).
+		SetJobsAllocator(searcher.jobsAlloc).
 		SetTask(t), runner)
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
