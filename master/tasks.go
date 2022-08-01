@@ -1244,6 +1244,8 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	latestItemsFilters[""] = heap.NewTopKFilter[string, float64](m.Config.Recommend.CacheSize)
 
 	// STEP 1: pull users
+	userLabelCount := make(map[string]int)
+	userLabelFirst := make(map[string]int32)
 	userLabelIndex := base.NewMapIndex()
 	start := time.Now()
 	userChan, errChan := database.GetUserStream(batchSize)
@@ -1255,10 +1257,23 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				rankingDataset.UserLabels = append(rankingDataset.UserLabels, nil)
 			}
 			rankingDataset.NumUserLabelUsed += len(user.Labels)
-			rankingDataset.UserLabels[userIndex] = make([]int32, len(user.Labels))
-			for i, label := range user.Labels {
-				userLabelIndex.Add(label)
-				rankingDataset.UserLabels[userIndex][i] = userLabelIndex.ToNumber(label)
+			rankingDataset.UserLabels[userIndex] = make([]int32, 0, len(user.Labels))
+			for _, label := range user.Labels {
+				userLabelCount[label]++
+				// Memorize the first occurrence.
+				if userLabelCount[label] == 1 {
+					userLabelFirst[label] = userIndex
+				}
+				// Add the label to the index in second occurrence.
+				if userLabelCount[label] == 2 {
+					userLabelIndex.Add(label)
+					firstUserIndex := userLabelFirst[label]
+					rankingDataset.UserLabels[firstUserIndex] = append(rankingDataset.UserLabels[firstUserIndex], userLabelIndex.ToNumber(label))
+				}
+				// Add the label to the user.
+				if userLabelCount[label] > 1 {
+					rankingDataset.UserLabels[userIndex] = append(rankingDataset.UserLabels[userIndex], userLabelIndex.ToNumber(label))
+				}
 			}
 		}
 	}
@@ -1274,6 +1289,8 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
 
 	// STEP 2: pull items
+	itemLabelCount := make(map[string]int)
+	itemLabelFirst := make(map[string]int32)
 	itemLabelIndex := base.NewMapIndex()
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(batchSize, itemTimeLimit)
@@ -1288,10 +1305,23 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				rankingDataset.CategorySet.Add(item.Categories...)
 			}
 			rankingDataset.NumItemLabelUsed += len(item.Labels)
-			rankingDataset.ItemLabels[itemIndex] = make([]int32, len(item.Labels))
-			for i, label := range item.Labels {
-				itemLabelIndex.Add(label)
-				rankingDataset.ItemLabels[itemIndex][i] = itemLabelIndex.ToNumber(label)
+			rankingDataset.ItemLabels[itemIndex] = make([]int32, 0, len(item.Labels))
+			for _, label := range item.Labels {
+				itemLabelCount[label]++
+				// Memorize the first occurrence.
+				if itemLabelCount[label] == 1 {
+					itemLabelFirst[label] = itemIndex
+				}
+				// Add the label to the index in second occurrence.
+				if itemLabelCount[label] == 2 {
+					itemLabelIndex.Add(label)
+					firstItemIndex := itemLabelFirst[label]
+					rankingDataset.ItemLabels[firstItemIndex] = append(rankingDataset.ItemLabels[firstItemIndex], itemLabelIndex.ToNumber(label))
+				}
+				// Add the label to the item.
+				if itemLabelCount[label] > 1 {
+					rankingDataset.ItemLabels[itemIndex] = append(rankingDataset.ItemLabels[itemIndex], itemLabelIndex.ToNumber(label))
+				}
 			}
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
