@@ -420,7 +420,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		items = append(items, data.Item{
 			ItemId:     strconv.Itoa(i),
 			Timestamp:  time.Date(2000+i, 1, 1, 1, 1, 0, 0, time.UTC),
-			Labels:     []string{strconv.Itoa(i % 3)},
+			Labels:     []string{strconv.Itoa(i % 3), strconv.Itoa(i*10 + 10)},
 			Categories: []string{strconv.Itoa(i % 3)},
 		})
 	}
@@ -438,7 +438,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	for i := 0; i <= 10; i++ {
 		users = append(users, data.User{
 			UserId: strconv.Itoa(i),
-			Labels: []string{strconv.Itoa(i % 5)},
+			Labels: []string{strconv.Itoa(i % 5), strconv.Itoa(i*10 + 10)},
 		})
 	}
 	err = m.DataClient.BatchInsertUsers(users)
