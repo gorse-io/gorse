@@ -17,7 +17,6 @@ package config
 import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -25,7 +24,7 @@ import (
 )
 
 func TestUnmarshal(t *testing.T) {
-	data, err := ioutil.ReadFile("config.toml.template")
+	data, err := os.ReadFile("config.toml.template")
 	assert.NoError(t, err)
 	text := string(data)
 	text = strings.Replace(text, "dashboard_user_name = \"\"", "dashboard_user_name = \"admin\"", -1)
