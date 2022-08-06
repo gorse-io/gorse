@@ -1,6 +1,8 @@
 name: release
 
-on: release
+on:
+  release:
+    types: [published]
 
 jobs:
   build-binaries:
