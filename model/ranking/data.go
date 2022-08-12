@@ -267,49 +267,6 @@ func (dataset *DataSet) GetIndex(i int) (int32, int32) {
 	return dataset.FeedbackUsers.Get(i), dataset.FeedbackItems.Get(i)
 }
 
-// LoadDataFromCSV loads Data from a CSV file. The CSV file should be:
-//   [optional header]
-//   <userId 1> <sep> <itemId 1> <sep> <rating 1> <sep> <extras>
-//   <userId 2> <sep> <itemId 2> <sep> <rating 2> <sep> <extras>
-//   <userId 3> <sep> <itemId 3> <sep> <rating 3> <sep> <extras>
-//   ...
-// For example, the `u.Data` from MovieLens 100K is:
-//  196\t242\t3\t881250949
-//  186\t302\t3\t891717742
-//  22\t377\t1\t878887116
-func LoadDataFromCSV(fileName, sep string, hasHeader bool) *DataSet {
-	dataset := NewMapIndexDataset()
-	// Open file
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Logger().Fatal("failed to open csv file", zap.Error(err),
-			zap.String("csv_file", fileName))
-	}
-	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			log.Logger().Error("failed to close file", zap.Error(err))
-		}
-	}(file)
-	// Read CSV file
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Ignore header
-		if hasHeader {
-			hasHeader = false
-			continue
-		}
-		fields := strings.Split(line, sep)
-		// Ignore empty line
-		if len(fields) < 2 {
-			continue
-		}
-		dataset.AddFeedback(fields[0], fields[1], true)
-	}
-	return dataset
-}
-
 func loadTest(dataset *DataSet, path string) error {
 	// Open
 	file, err := os.Open(path)
