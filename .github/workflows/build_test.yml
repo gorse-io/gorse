@@ -134,7 +134,6 @@ jobs:
     - uses: actions/checkout@v1
 
     - name: Build the stack
-      working-directory: ./docker
       run: docker-compose up -d
 
     - name: Check the deployed service URL

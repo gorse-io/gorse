@@ -65,7 +65,7 @@ services:
       --log-path /var/log/gorse/master.log 
       --cache-path /var/lib/gorse/master_cache.data
     volumes:
-      - ./config.toml:/etc/gorse/config.toml
+      - ./config/config.toml.template:/etc/gorse/config.toml
       - gorse_log:/var/log/gorse
       - master_data:/var/lib/gorse
     depends_on:
