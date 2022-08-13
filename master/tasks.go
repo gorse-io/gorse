@@ -16,6 +16,11 @@ package master
 
 import (
 	"fmt"
+	"math"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -34,11 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"math"
 	"modernc.org/sortutil"
-	"sort"
-	"strings"
-	"time"
 )
 
 const (
@@ -56,6 +57,12 @@ const (
 	batchSize        = 10000
 	similarityShrink = 100
 )
+
+type Task interface {
+	name() string
+	priority() int
+	run() error
+}
 
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask() error {
@@ -173,8 +180,8 @@ func (m *Master) runLoadDatasetTask() error {
 	rankingDataset = nil
 	m.rankingModelMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_ranking_dataset").Set(time.Since(startTime).Seconds())
-	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(m.rankingTrainSet.Bytes()))
-	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_test_set").Set(float64(m.rankingTestSet.Bytes()))
+	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(m.rankingTrainSet.Bytes()))
+	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_test_set").Set(float64(m.rankingTestSet.Bytes()))
 
 	// split click dataset
 	startTime = time.Now()
@@ -183,8 +190,8 @@ func (m *Master) runLoadDatasetTask() error {
 	clickDataset = nil
 	m.clickModelMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
-	MemoryInuseBytesVec.WithLabelValues("ranking_train_set").Set(float64(m.clickTrainSet.Bytes()))
-	MemoryInuseBytesVec.WithLabelValues("ranking_test_set").Set(float64(m.clickTestSet.Bytes()))
+	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(m.clickTrainSet.Bytes()))
+	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(m.clickTestSet.Bytes()))
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return nil
@@ -892,7 +899,6 @@ func (m *Master) runRankingRelatedTasks(
 			zap.String("name", bestRankingName),
 			zap.Any("params", m.RankingModel.GetParams()))
 	}
-	rankingModel := m.RankingModel
 	m.rankingModelMutex.Unlock()
 
 	// collect neighbors of items
@@ -916,254 +922,349 @@ func (m *Master) runRankingRelatedTasks(
 		log.Logger().Info("nothing changed")
 		return
 	}
-	m.runFitRankingModelTask(rankingModel)
+	task := NewFitRankingModelTask(m)
+	task.run()
 	return
 }
 
-func (m *Master) runFitRankingModelTask(rankingModel ranking.MatrixFactorization) {
+type FitRankingModelTask struct {
+	*Master
+}
+
+func NewFitRankingModelTask(m *Master) *FitRankingModelTask {
+	return &FitRankingModelTask{Master: m}
+}
+
+func (t *FitRankingModelTask) name() string {
+	return TaskFitRankingModel
+}
+
+func (t *FitRankingModelTask) priority() int {
+	return -t.rankingTrainSet.Count()
+}
+
+func (t *FitRankingModelTask) run() error {
 	startFitTime := time.Now()
-	score := rankingModel.Fit(m.rankingTrainSet, m.rankingTestSet, ranking.NewFitConfig().
-		SetJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)).
-		SetTask(m.taskMonitor.Start(TaskFitRankingModel, rankingModel.Complexity())))
+	rankingModel := t.RankingModel
+	score := rankingModel.Fit(t.rankingTrainSet, t.rankingTestSet, ranking.NewFitConfig().
+		SetJobsAllocator(task.NewConstantJobsAllocator(t.Config.Master.NumJobs)).
+		SetTask(t.taskMonitor.Start(TaskFitRankingModel, rankingModel.Complexity())))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update ranking model
-	m.rankingModelMutex.Lock()
-	m.RankingModel = rankingModel
-	m.RankingModelVersion++
-	m.rankingScore = score
-	m.rankingModelMutex.Unlock()
+	t.rankingModelMutex.Lock()
+	t.RankingModel = rankingModel
+	t.RankingModelVersion++
+	t.rankingScore = score
+	t.rankingModelMutex.Unlock()
 	log.Logger().Info("fit ranking model complete",
-		zap.String("version", fmt.Sprintf("%x", m.RankingModelVersion)))
+		zap.String("version", fmt.Sprintf("%x", t.RankingModelVersion)))
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
 	CollaborativeFilteringRecall10.Set(float64(score.Recall))
 	CollaborativeFilteringPrecision10.Set(float64(score.Precision))
-	MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
-	if err := m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
+	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(t.RankingModel.Bytes()))
+	if err := t.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
 	// caching model
-	m.rankingModelMutex.RLock()
-	m.localCache.RankingModelName = m.rankingModelName
-	m.localCache.RankingModelVersion = m.RankingModelVersion
-	m.localCache.RankingModel = rankingModel
-	m.localCache.RankingModelScore = score
-	m.rankingModelMutex.RUnlock()
-	if m.localCache.ClickModel == nil || m.localCache.ClickModel.Invalid() {
+	t.rankingModelMutex.RLock()
+	t.localCache.RankingModelName = t.rankingModelName
+	t.localCache.RankingModelVersion = t.RankingModelVersion
+	t.localCache.RankingModel = rankingModel
+	t.localCache.RankingModelScore = score
+	t.rankingModelMutex.RUnlock()
+	if t.localCache.ClickModel == nil || t.localCache.ClickModel.Invalid() {
 		log.Logger().Info("wait click model")
-	} else if err := m.localCache.WriteLocalCache(); err != nil {
+	} else if err := t.localCache.WriteLocalCache(); err != nil {
 		log.Logger().Error("failed to write local cache", zap.Error(err))
 	} else {
 		log.Logger().Info("write model to local cache",
-			zap.String("ranking_model_name", m.localCache.RankingModelName),
-			zap.String("ranking_model_version", encoding.Hex(m.localCache.RankingModelVersion)),
-			zap.Float32("ranking_model_score", m.localCache.RankingModelScore.NDCG),
-			zap.Any("ranking_model_params", m.localCache.RankingModel.GetParams()))
+			zap.String("ranking_model_name", t.localCache.RankingModelName),
+			zap.String("ranking_model_version", encoding.Hex(t.localCache.RankingModelVersion)),
+			zap.Float32("ranking_model_score", t.localCache.RankingModelScore.NDCG),
+			zap.Any("ranking_model_params", t.localCache.RankingModel.GetParams()))
 	}
 
-	m.taskMonitor.Finish(TaskFitRankingModel)
+	t.taskMonitor.Finish(TaskFitRankingModel)
+	return nil
 }
 
-// runFitClickModelTask fits click model using latest data. After model fitted, following states are changed:
+// FitClickModelTask fits click model using latest data. After model fitted, following states are changed:
 // 1. Click model version are increased.
 // 2. Click model score are updated.
 // 3. Click model, version and score are persisted to local cache.
-func (m *Master) runFitClickModelTask(
-	lastNumUsers, lastNumItems, lastNumFeedback int,
-) (numUsers, numItems, numFeedback int, err error) {
-	log.Logger().Info("prepare to fit click model", zap.Int("n_jobs", m.Config.Master.NumJobs))
-	m.clickDataMutex.RLock()
-	defer m.clickDataMutex.RUnlock()
-	numUsers = m.clickTrainSet.UserCount()
-	numItems = m.clickTrainSet.ItemCount()
-	numFeedback = m.clickTrainSet.Count()
+type FitClickModelTask struct {
+	*Master
+	lastNumUsers    int
+	lastNumItems    int
+	lastNumFeedback int
+}
+
+func NewFitClickModelTask(m *Master) *FitClickModelTask {
+	return &FitClickModelTask{Master: m}
+}
+
+func (t *FitClickModelTask) name() string {
+	return TaskFitClickModel
+}
+
+func (t *FitClickModelTask) priority() int {
+	return -t.clickTrainSet.Count()
+}
+
+func (t *FitClickModelTask) run() error {
+	log.Logger().Info("prepare to fit click model", zap.Int("n_jobs", t.Config.Master.NumJobs))
+	t.clickDataMutex.RLock()
+	defer t.clickDataMutex.RUnlock()
+	numUsers := t.clickTrainSet.UserCount()
+	numItems := t.clickTrainSet.ItemCount()
+	numFeedback := t.clickTrainSet.Count()
 	var shouldFit bool
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
-		m.taskMonitor.Fail(TaskFitClickModel, "No feedback found.")
-		return
-	} else if numUsers != lastNumUsers ||
-		numItems != lastNumItems ||
-		numFeedback != lastNumFeedback {
+			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
+		t.taskMonitor.Fail(TaskFitClickModel, "No feedback found.")
+		return nil
+	} else if numUsers != t.lastNumUsers ||
+		numItems != t.lastNumItems ||
+		numFeedback != t.lastNumFeedback {
 		shouldFit = true
 	}
 
-	bestClickModel, bestClickScore := m.clickModelSearcher.GetBestModel()
-	m.clickModelMutex.Lock()
+	bestClickModel, bestClickScore := t.clickModelSearcher.GetBestModel()
+	t.clickModelMutex.Lock()
 	if bestClickModel != nil && !bestClickModel.Invalid() &&
-		bestClickModel.GetParams().ToString() != m.ClickModel.GetParams().ToString() &&
-		bestClickScore.Precision > m.clickScore.Precision {
+		bestClickModel.GetParams().ToString() != t.ClickModel.GetParams().ToString() &&
+		bestClickScore.Precision > t.clickScore.Precision {
 		// 1. best click model must have been found.
 		// 2. best click model must be different from current model
 		// 3. best click model must perform better than current model
-		m.ClickModel = bestClickModel
-		m.clickScore = bestClickScore
+		t.ClickModel = bestClickModel
+		t.clickScore = bestClickScore
 		shouldFit = true
 		log.Logger().Info("find better click model",
 			zap.Float32("Precision", bestClickScore.Precision),
 			zap.Float32("Recall", bestClickScore.Recall),
-			zap.Any("params", m.ClickModel.GetParams()))
+			zap.Any("params", t.ClickModel.GetParams()))
 	}
-	clickModel := m.ClickModel
-	m.clickModelMutex.Unlock()
+	clickModel := t.ClickModel
+	t.clickModelMutex.Unlock()
 
 	// training model
 	if !shouldFit {
 		log.Logger().Info("nothing changed")
-		return
+		return nil
 	}
 	startFitTime := time.Now()
-	score := clickModel.Fit(m.clickTrainSet, m.clickTestSet, click.NewFitConfig().
-		SetJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)).
-		SetTask(m.taskMonitor.Start(TaskFitClickModel, clickModel.Complexity())))
+	score := clickModel.Fit(t.clickTrainSet, t.clickTestSet, click.NewFitConfig().
+		SetJobsAllocator(task.NewConstantJobsAllocator(t.Config.Master.NumJobs)).
+		SetTask(t.taskMonitor.Start(TaskFitClickModel, clickModel.Complexity())))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update match model
-	m.clickModelMutex.Lock()
-	m.ClickModel = clickModel
-	m.clickScore = score
-	m.ClickModelVersion++
-	m.clickModelMutex.Unlock()
+	t.clickModelMutex.Lock()
+	t.ClickModel = clickModel
+	t.clickScore = score
+	t.ClickModelVersion++
+	t.clickModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
-		zap.String("version", fmt.Sprintf("%x", m.ClickModelVersion)))
+		zap.String("version", fmt.Sprintf("%x", t.ClickModelVersion)))
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
-	MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
-	if err = m.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now())); err != nil {
+	MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(t.ClickModel.Bytes()))
+	if err := t.CacheClient.Set(cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
 	// caching model
-	m.clickModelMutex.RLock()
-	m.localCache.ClickModelScore = m.clickScore
-	m.localCache.ClickModelVersion = m.ClickModelVersion
-	m.localCache.ClickModel = m.ClickModel
-	m.clickModelMutex.RUnlock()
-	if m.localCache.RankingModel == nil || m.localCache.RankingModel.Invalid() {
+	t.clickModelMutex.RLock()
+	t.localCache.ClickModelScore = t.clickScore
+	t.localCache.ClickModelVersion = t.ClickModelVersion
+	t.localCache.ClickModel = t.ClickModel
+	t.clickModelMutex.RUnlock()
+	if t.localCache.RankingModel == nil || t.localCache.RankingModel.Invalid() {
 		log.Logger().Info("wait ranking model")
-	} else if err = m.localCache.WriteLocalCache(); err != nil {
+	} else if err := t.localCache.WriteLocalCache(); err != nil {
 		log.Logger().Error("failed to write local cache", zap.Error(err))
 	} else {
 		log.Logger().Info("write model to local cache",
-			zap.String("click_model_version", encoding.Hex(m.localCache.ClickModelVersion)),
+			zap.String("click_model_version", encoding.Hex(t.localCache.ClickModelVersion)),
 			zap.Float32("click_model_score", score.Precision),
-			zap.Any("click_model_params", m.localCache.ClickModel.GetParams()))
+			zap.Any("click_model_params", t.localCache.ClickModel.GetParams()))
 	}
 
-	m.taskMonitor.Finish(TaskFitClickModel)
-	return
+	t.taskMonitor.Finish(TaskFitClickModel)
+	t.lastNumItems = numItems
+	t.lastNumUsers = numUsers
+	t.lastNumFeedback = numFeedback
+	return nil
 }
 
-// runSearchRankingModelTask searches best hyper-parameters for ranking models.
+// SearchRankingModelTask searches best hyper-parameters for ranking models.
 // It requires read lock on the ranking dataset.
-func (m *Master) runSearchRankingModelTask(
-	lastNumUsers, lastNumItems, lastNumFeedback int,
-) (numUsers, numItems, numFeedback int, err error) {
+type SearchRankingModelTask struct {
+	*Master
+	lastNumUsers    int
+	lastNumItems    int
+	lastNumFeedback int
+}
+
+func NewSearchRankingModelTask(m *Master) *SearchRankingModelTask {
+	return &SearchRankingModelTask{Master: m}
+}
+
+func (t *SearchRankingModelTask) name() string {
+	return TaskSearchRankingModel
+}
+
+func (t *SearchRankingModelTask) priority() int {
+	return -t.rankingTrainSet.Count()
+}
+
+func (t *SearchRankingModelTask) run() error {
 	log.Logger().Info("start searching ranking model")
-	m.rankingDataMutex.RLock()
-	defer m.rankingDataMutex.RUnlock()
-	numUsers = m.rankingTrainSet.UserCount()
-	numItems = m.rankingTrainSet.ItemCount()
-	numFeedback = m.rankingTrainSet.Count()
+	t.rankingDataMutex.RLock()
+	defer t.rankingDataMutex.RUnlock()
+	numUsers := t.rankingTrainSet.UserCount()
+	numItems := t.rankingTrainSet.ItemCount()
+	numFeedback := t.rankingTrainSet.Count()
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
-		m.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
-		return
-	} else if numUsers == lastNumUsers &&
-		numItems == lastNumItems &&
-		numFeedback == lastNumFeedback {
+			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
+		t.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
+		return nil
+	} else if numUsers == t.lastNumUsers &&
+		numItems == t.lastNumItems &&
+		numFeedback == t.lastNumFeedback {
 		log.Logger().Info("ranking dataset not changed")
-		return
+		return nil
 	}
 
 	startTime := time.Now()
-	err = m.rankingModelSearcher.Fit(m.rankingTrainSet, m.rankingTestSet,
-		m.taskMonitor.Start(TaskSearchRankingModel, m.rankingModelSearcher.Complexity()),
-		m.taskScheduler.NewRunner(TaskSearchRankingModel))
+	err := t.rankingModelSearcher.Fit(t.rankingTrainSet, t.rankingTestSet,
+		t.taskMonitor.Start(TaskSearchRankingModel, t.rankingModelSearcher.Complexity()),
+		t.taskScheduler.NewRunner(TaskSearchRankingModel))
 	if err != nil {
 		log.Logger().Error("failed to search collaborative filtering model", zap.Error(err))
-		return
+		return nil
 	}
 	CollaborativeFilteringSearchSeconds.Set(time.Since(startTime).Seconds())
-	_, _, bestScore := m.rankingModelSearcher.GetBestModel()
+	_, _, bestScore := t.rankingModelSearcher.GetBestModel()
 	CollaborativeFilteringSearchPrecision10.Set(float64(bestScore.Precision))
 
-	m.taskMonitor.Finish(TaskSearchRankingModel)
-	return
+	t.taskMonitor.Finish(TaskSearchRankingModel)
+	t.lastNumItems = numItems
+	t.lastNumUsers = numUsers
+	t.lastNumFeedback = numFeedback
+	return nil
 }
 
-// runSearchClickModelTask searches best hyper-parameters for factorization machines.
+// SearchClickModelTask searches best hyper-parameters for factorization machines.
 // It requires read lock on the click dataset.
-func (m *Master) runSearchClickModelTask(
-	lastNumUsers, lastNumItems, lastNumFeedback int,
-) (numUsers, numItems, numFeedback int, err error) {
+type SearchClickModelTask struct {
+	*Master
+	lastNumUsers    int
+	lastNumItems    int
+	lastNumFeedback int
+}
+
+func NewSearchClickModelTask(m *Master) *SearchClickModelTask {
+	return &SearchClickModelTask{Master: m}
+}
+
+func (t *SearchClickModelTask) name() string {
+	return TaskSearchClickModel
+}
+
+func (t *SearchClickModelTask) priority() int {
+	return -t.clickTrainSet.Count()
+}
+
+func (t *SearchClickModelTask) run() error {
 	log.Logger().Info("start searching click model")
-	m.clickDataMutex.RLock()
-	defer m.clickDataMutex.RUnlock()
-	numUsers = m.clickTrainSet.UserCount()
-	numItems = m.clickTrainSet.ItemCount()
-	numFeedback = m.clickTrainSet.Count()
+	t.clickDataMutex.RLock()
+	defer t.clickDataMutex.RUnlock()
+	numUsers := t.clickTrainSet.UserCount()
+	numItems := t.clickTrainSet.ItemCount()
+	numFeedback := t.clickTrainSet.Count()
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty click dataset",
-			zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
-		m.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
-		return
-	} else if numUsers == lastNumUsers &&
-		numItems == lastNumItems &&
-		numFeedback == lastNumFeedback {
+			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
+		t.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
+		return nil
+	} else if numUsers == t.lastNumUsers &&
+		numItems == t.lastNumItems &&
+		numFeedback == t.lastNumFeedback {
 		log.Logger().Info("click dataset not changed")
-		return
+		return nil
 	}
 
 	startTime := time.Now()
-	err = m.clickModelSearcher.Fit(m.clickTrainSet, m.clickTestSet,
-		m.taskMonitor.Start(TaskSearchClickModel, m.clickModelSearcher.Complexity()),
-		m.taskScheduler.NewRunner(TaskSearchClickModel))
+	err := t.clickModelSearcher.Fit(t.clickTrainSet, t.clickTestSet,
+		t.taskMonitor.Start(TaskSearchClickModel, t.clickModelSearcher.Complexity()),
+		t.taskScheduler.NewRunner(TaskSearchClickModel))
 	if err != nil {
 		log.Logger().Error("failed to search ranking model", zap.Error(err))
-		return
+		return nil
 	}
 	RankingSearchSeconds.Set(time.Since(startTime).Seconds())
-	_, bestScore := m.clickModelSearcher.GetBestModel()
+	_, bestScore := t.clickModelSearcher.GetBestModel()
 	RankingSearchPrecision.Set(float64(bestScore.Precision))
 
-	m.taskMonitor.Finish(TaskSearchClickModel)
-	return
+	t.taskMonitor.Finish(TaskSearchClickModel)
+	t.lastNumItems = numItems
+	t.lastNumUsers = numUsers
+	t.lastNumFeedback = numFeedback
+	return nil
 }
 
-func (m *Master) runCacheGarbageCollectionTask() error {
-	if m.rankingTrainSet == nil {
+type CacheGarbageCollectionTask struct {
+	*Master
+}
+
+func NewCacheGarbageCollectionTask(m *Master) *CacheGarbageCollectionTask {
+	return &CacheGarbageCollectionTask{m}
+}
+
+func (t *CacheGarbageCollectionTask) name() string {
+	return TaskCacheGarbageCollection
+}
+
+func (t *CacheGarbageCollectionTask) priority() int {
+	return -t.rankingTrainSet.UserCount() - t.rankingTrainSet.ItemCount()
+}
+
+func (t *CacheGarbageCollectionTask) run() error {
+	if t.rankingTrainSet == nil {
 		return nil
 	}
 	log.Logger().Info("start cache garbage collection")
-	m.taskMonitor.Start(TaskCacheGarbageCollection, m.rankingTrainSet.UserCount()*9+m.rankingTrainSet.ItemCount()*4)
+	t.taskMonitor.Start(TaskCacheGarbageCollection, t.rankingTrainSet.UserCount()*9+t.rankingTrainSet.ItemCount()*4)
 	var scanCount, reclaimCount int
 	start := time.Now()
-	err := m.CacheClient.Scan(func(s string) error {
+	err := t.CacheClient.Scan(func(s string) error {
 		splits := strings.Split(s, "/")
 		if len(splits) <= 1 {
 			return nil
 		}
 		scanCount++
-		m.taskMonitor.Update(TaskCacheGarbageCollection, scanCount)
+		t.taskMonitor.Update(TaskCacheGarbageCollection, scanCount)
 		switch splits[0] {
 		case cache.UserNeighbors, cache.UserNeighborsDigest, cache.IgnoreItems,
 			cache.OfflineRecommend, cache.OfflineRecommendDigest, cache.CollaborativeRecommend,
 			cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
 			userId := splits[1]
 			// check user in dataset
-			if m.rankingTrainSet != nil && m.rankingTrainSet.UserIndex.ToNumber(userId) != base.NotId {
+			if t.rankingTrainSet != nil && t.rankingTrainSet.UserIndex.ToNumber(userId) != base.NotId {
 				return nil
 			}
 			// check user in database
-			_, err := m.DataClient.GetUser(userId)
+			_, err := t.DataClient.GetUser(userId)
 			if !errors.Is(err, errors.NotFound) {
 				if err != nil {
 					log.Logger().Error("failed to load user", zap.String("user_id", userId), zap.Error(err))
@@ -1173,10 +1274,10 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 			// delete user cache
 			switch splits[0] {
 			case cache.UserNeighbors, cache.IgnoreItems, cache.CollaborativeRecommend, cache.OfflineRecommend:
-				err = m.CacheClient.SetSorted(s, nil)
+				err = t.CacheClient.SetSorted(s, nil)
 			case cache.UserNeighborsDigest, cache.OfflineRecommendDigest,
 				cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
-				err = m.CacheClient.Delete(s)
+				err = t.CacheClient.Delete(s)
 			}
 			if err != nil {
 				return errors.Trace(err)
@@ -1185,11 +1286,11 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 		case cache.ItemNeighbors, cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
 			itemId := splits[1]
 			// check item in dataset
-			if m.rankingTrainSet != nil && m.rankingTrainSet.ItemIndex.ToNumber(itemId) != base.NotId {
+			if t.rankingTrainSet != nil && t.rankingTrainSet.ItemIndex.ToNumber(itemId) != base.NotId {
 				return nil
 			}
 			// check item in database
-			_, err := m.DataClient.GetItem(itemId)
+			_, err := t.DataClient.GetItem(itemId)
 			if !errors.Is(err, errors.NotFound) {
 				if err != nil {
 					log.Logger().Error("failed to load item", zap.String("item_id", itemId), zap.Error(err))
@@ -1199,9 +1300,9 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 			// delete item cache
 			switch splits[0] {
 			case cache.ItemNeighbors:
-				err = m.CacheClient.SetSorted(s, nil)
+				err = t.CacheClient.SetSorted(s, nil)
 			case cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
-				err = m.CacheClient.Delete(s)
+				err = t.CacheClient.Delete(s)
 			}
 			if err != nil {
 				return errors.Trace(err)
@@ -1211,10 +1312,10 @@ func (m *Master) runCacheGarbageCollectionTask() error {
 		return nil
 	})
 	// remove stale hidden items
-	if err := m.CacheClient.RemSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(time.Now().Add(-m.Config.Recommend.CacheExpire).Unix())); err != nil {
+	if err := t.CacheClient.RemSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(time.Now().Add(-t.Config.Recommend.CacheExpire).Unix())); err != nil {
 		return errors.Trace(err)
 	}
-	m.taskMonitor.Finish(TaskCacheGarbageCollection)
+	t.taskMonitor.Finish(TaskCacheGarbageCollection)
 	CacheScannedTotal.Set(float64(scanCount))
 	CacheReclaimedTotal.Set(float64(reclaimCount))
 	CacheScannedSeconds.Set(time.Since(start).Seconds())

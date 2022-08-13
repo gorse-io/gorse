@@ -17,15 +17,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/emicklei/go-restful/v3"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/encoding"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/server"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"math"
 	"math/rand"
 	"net"
@@ -33,12 +24,21 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/emicklei/go-restful/v3"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
+	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 // Master is the master node.
@@ -49,6 +49,7 @@ type Master struct {
 
 	taskMonitor   *task.Monitor
 	taskScheduler *task.Scheduler
+	jobsScheduler *task.JobsScheduler
 	cacheFile     string
 
 	// cluster meta cache
@@ -100,6 +101,7 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		cacheFile:     cacheFile,
 		taskMonitor:   taskMonitor,
 		taskScheduler: task.NewTaskScheduler(),
+		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
 		// default ranking model
 		rankingModelName: "bpr",
 		rankingModelSearcher: ranking.NewModelSearcher(
@@ -161,7 +163,7 @@ func (m *Master) Serve() {
 		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
 		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
-		MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
+		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",
@@ -174,7 +176,7 @@ func (m *Master) Serve() {
 		RankingPrecision.Set(float64(m.clickScore.Precision))
 		RankingRecall.Set(float64(m.clickScore.Recall))
 		RankingAUC.Set(float64(m.clickScore.AUC))
-		MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
+		MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
 	}
 
 	// create cluster meta cache
@@ -255,10 +257,10 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		lastNumRankingUsers    int
 		lastNumRankingItems    int
 		lastNumRankingFeedback int
-		lastNumClickUsers      int
-		lastNumClickItems      int
-		lastNumClickFeedback   int
 		err                    error
+		tasks                  = []Task{
+			NewFitClickModelTask(m),
+		}
 	)
 	go func() {
 		m.importedChan <- true
@@ -296,8 +298,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		}
 
 		// fit click model
-		lastNumClickUsers, lastNumClickItems, lastNumClickFeedback, err =
-			m.runFitClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
+		err = tasks[0].run()
 		if err != nil {
 			log.Logger().Error("failed to fit click model", zap.Error(err))
 			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
@@ -316,39 +317,19 @@ func (m *Master) RunPrivilegedTasksLoop() {
 func (m *Master) RunRagtagTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		lastNumRankingUsers     int
-		lastNumRankingItems     int
-		lastNumRankingFeedbacks int
-		lastNumClickUsers       int
-		lastNumClickItems       int
-		lastNumClickFeedbacks   int
-		err                     error
+		err   error
+		tasks = []Task{
+			NewCacheGarbageCollectionTask(m),
+			NewSearchRankingModelTask(m),
+			NewSearchClickModelTask(m),
+		}
 	)
 	for {
-		// garbage collection
-		m.taskScheduler.Lock(TaskCacheGarbageCollection)
-		if err = m.runCacheGarbageCollectionTask(); err != nil {
-			log.Logger().Error("failed to collect garbage", zap.Error(err))
-			m.taskMonitor.Fail(TaskCacheGarbageCollection, err.Error())
-		}
-		m.taskScheduler.UnLock(TaskCacheGarbageCollection)
-		// search optimal ranking model
-		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
-			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
-		if err != nil {
-			log.Logger().Error("failed to search ranking model", zap.Error(err))
-			m.taskMonitor.Fail(TaskSearchRankingModel, err.Error())
-			time.Sleep(time.Minute)
-			continue
-		}
-		// search optimal click model
-		lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks, err =
-			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
-		if err != nil {
-			log.Logger().Error("failed to search click model", zap.Error(err))
-			m.taskMonitor.Fail(TaskSearchClickModel, err.Error())
-			time.Sleep(time.Minute)
-			continue
+		for _, t := range tasks {
+			if err = t.run(); err != nil {
+				log.Logger().Error("failed to run task", zap.String("task", t.name()), zap.Error(err))
+				m.taskMonitor.Fail(t.name(), err.Error())
+			}
 		}
 		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
 	}

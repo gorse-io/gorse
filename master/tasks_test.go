@@ -15,15 +15,16 @@
 package master
 
 import (
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"strconv"
-	"testing"
-	"time"
 )
 
 func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
@@ -673,7 +674,8 @@ func TestRunCacheGarbageCollectionTask(t *testing.T) {
 
 	// remove cache
 	assert.NotNil(t, m.rankingTrainSet)
-	err = m.runCacheGarbageCollectionTask()
+	gcTask := NewCacheGarbageCollectionTask(&m.Master)
+	err = gcTask.run()
 	assert.NoError(t, err)
 
 	var s string
