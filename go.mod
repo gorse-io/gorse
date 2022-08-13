@@ -40,7 +40,7 @@ require (
 	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.5
 	github.com/thoas/go-funk v0.9.2
-	go.mongodb.org/mongo-driver v1.10.0
+	go.mongodb.org/mongo-driver v1.10.1
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.21.0
 	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75

@@ -15,8 +15,13 @@
 package task
 
 import (
-	"github.com/scylladb/go-set/strset"
+	"runtime"
+	"sort"
 	"sync"
+
+	"github.com/samber/lo"
+	"github.com/scylladb/go-set/strset"
+	"modernc.org/mathutil"
 )
 
 // Scheduler schedules that pre-locked tasks are executed first.
@@ -84,7 +89,9 @@ func (locker *Runner) UnLock() {
 }
 
 type JobsAllocator struct {
-	numJobs int
+	numJobs   int    // the max number of jobs
+	taskName  string // its task name in scheduler
+	scheduler *JobsScheduler
 }
 
 func NewConstantJobsAllocator(num int) *JobsAllocator {
@@ -94,15 +101,137 @@ func NewConstantJobsAllocator(num int) *JobsAllocator {
 }
 
 func (allocator *JobsAllocator) MaxJobs() int {
-	if allocator == nil || allocator.numJobs <= 1 {
+	if allocator == nil || allocator.numJobs < 1 {
+		// Return 1 for invalid allocator
 		return 1
 	}
 	return allocator.numJobs
 }
 
 func (allocator *JobsAllocator) AvailableJobs() int {
-	if allocator == nil || allocator.numJobs <= 1 {
+	if allocator == nil || allocator.numJobs < 1 {
+		// Return 1 for invalid allocator
 		return 1
+	} else if allocator.scheduler != nil {
+		// Use jobs scheduler
+		return allocator.scheduler.allocateJobsForTask(allocator.taskName, true)
 	}
 	return allocator.numJobs
+}
+
+// taskInfo represents a task in JobsScheduler.
+type taskInfo struct {
+	name       string // name of the task
+	priority   int    // high priority tasks are allocated first
+	privileged bool   // privileged tasks are allocated first
+	jobs       int    // number of jobs allocated to the task
+}
+
+// JobsScheduler allocates jobs to multiple tasks.
+type JobsScheduler struct {
+	*sync.Cond
+	numJobs  int // number of jobs
+	freeJobs int // number of free jobs
+	tasks    map[string]*taskInfo
+}
+
+// NewJobsScheduler creates a JobsScheduler with num jobs.
+func NewJobsScheduler(num int) *JobsScheduler {
+	if num <= 0 {
+		// Use all cores if num is less than 1.
+		num = runtime.NumCPU()
+	}
+	return &JobsScheduler{
+		Cond:     sync.NewCond(&sync.Mutex{}),
+		numJobs:  num,
+		freeJobs: num,
+		tasks:    make(map[string]*taskInfo),
+	}
+}
+
+// Register a task in the JobsScheduler. Registered tasks will be ignored.
+func (s *JobsScheduler) Register(taskName string, priority int, privileged bool) {
+	s.L.Lock()
+	defer s.L.Unlock()
+	if _, exits := s.tasks[taskName]; !exits {
+		s.tasks[taskName] = &taskInfo{name: taskName, priority: priority, privileged: privileged}
+	}
+}
+
+// Unregister a task from the JobsScheduler.
+func (s *JobsScheduler) Unregister(taskName string) {
+	s.L.Lock()
+	defer s.L.Unlock()
+	if task, exits := s.tasks[taskName]; exits {
+		// Return allocated jobs.
+		s.freeJobs += task.jobs
+		delete(s.tasks, taskName)
+	}
+}
+
+func (s *JobsScheduler) GetJobsAllocator(taskName string) *JobsAllocator {
+	return &JobsAllocator{
+		numJobs:   s.numJobs,
+		taskName:  taskName,
+		scheduler: s,
+	}
+}
+
+func (s *JobsScheduler) allocateJobsForTask(taskName string, block bool) int {
+	// Find current task and return the jobs temporarily.
+	s.L.Lock()
+	currentTask, exist := s.tasks[taskName]
+	if !exist {
+		panic("task not found")
+	}
+	s.freeJobs += currentTask.jobs
+	currentTask.jobs = 0
+	s.L.Unlock()
+
+	s.L.Lock()
+	defer s.L.Unlock()
+	for {
+		s.allocateJobsForAll()
+		if currentTask.jobs == 0 && block {
+			s.Wait()
+		} else {
+			return currentTask.jobs
+		}
+	}
+}
+
+func (s *JobsScheduler) allocateJobsForAll() {
+	// Separate privileged tasks and normal tasks
+	privileged := make([]*taskInfo, 0)
+	normal := make([]*taskInfo, 0)
+	for _, task := range s.tasks {
+		if task.privileged {
+			privileged = append(privileged, task)
+		} else {
+			normal = append(normal, task)
+		}
+	}
+
+	var tasks []*taskInfo
+	if len(privileged) > 0 {
+		tasks = privileged
+	} else {
+		tasks = normal
+	}
+
+	// allocate jobs
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].priority > tasks[j].priority
+	})
+	for i, task := range tasks {
+		if s.freeJobs == 0 {
+			return
+		}
+		targetJobs := s.numJobs/len(tasks) + lo.If(i < s.numJobs%len(tasks), 1).Else(0)
+		targetJobs = mathutil.Min(targetJobs, s.freeJobs)
+		if task.jobs < targetJobs {
+			s.freeJobs -= targetJobs - task.jobs
+			task.jobs = targetJobs
+		}
+	}
 }
