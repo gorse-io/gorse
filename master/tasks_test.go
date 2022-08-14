@@ -91,7 +91,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	// similar items (common users)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindItemNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -107,7 +107,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindItemNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -125,7 +125,7 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindItemNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -203,7 +203,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	// similar items (common users)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindItemNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -219,7 +219,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindItemNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -237,7 +237,7 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindItemNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -296,7 +296,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	// similar items (common users)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -308,7 +308,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindUserNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -322,7 +322,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindUserNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -384,7 +384,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	// similar items (common users)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -396,7 +396,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindUserNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -410,7 +410,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindUserNeighborsTask(&m.Master)
-	neighborTask.run()
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -691,7 +691,7 @@ func TestRunCacheGarbageCollectionTask(t *testing.T) {
 	// remove cache
 	assert.NotNil(t, m.rankingTrainSet)
 	gcTask := NewCacheGarbageCollectionTask(&m.Master)
-	err = gcTask.run()
+	err = gcTask.run(nil)
 	assert.NoError(t, err)
 
 	var s string

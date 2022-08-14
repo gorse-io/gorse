@@ -4,13 +4,13 @@ go 1.18
 
 require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
-	github.com/alicebob/miniredis/v2 v2.16.1
+	github.com/alicebob/miniredis/v2 v2.23.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.10.1
 	github.com/emicklei/go-restful-openapi/v2 v2.9.0
-	github.com/emicklei/go-restful/v3 v3.8.0
+	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.0
@@ -29,24 +29,23 @@ require (
 	github.com/mailru/go-clickhouse/v2 v2.0.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/orcaman/concurrent-map v1.0.0
-	github.com/prometheus/client_golang v1.12.2
+	github.com/prometheus/client_golang v1.13.0
 	github.com/rakyll/statik v0.1.7
-	github.com/samber/lo v1.25.0
-	github.com/schollz/progressbar/v3 v3.8.7
+	github.com/samber/lo v1.27.0
+	github.com/schollz/progressbar/v3 v3.9.0
 	github.com/scylladb/go-set v1.0.2
 	github.com/sijms/go-ora/v2 v2.4.27
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
-	github.com/steinfletcher/apitest v1.5.11
-	github.com/stretchr/testify v1.7.5
+	github.com/steinfletcher/apitest v1.5.12
+	github.com/stretchr/testify v1.8.0
 	github.com/thoas/go-funk v0.9.2
 	go.mongodb.org/mongo-driver v1.10.1
-	go.uber.org/atomic v1.9.0
-	go.uber.org/zap v1.21.0
-	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75
-	gonum.org/v1/gonum v0.0.0-20190409070159-6e46824336d2
+	go.uber.org/atomic v1.10.0
+	go.uber.org/zap v1.22.0
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 	google.golang.org/grpc v1.48.0
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/clickhouse v0.4.2
 	gorm.io/driver/mysql v1.3.4
@@ -107,28 +106,27 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
-	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
-	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/rivo/uniseg v0.3.4 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/spf13/afero v1.9.2 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/objx v0.4.0 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.1 // indirect
 	github.com/xdg-go/stringprep v1.0.3 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
-	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
+	github.com/yuin/gopher-lua v0.0.0-20220504180219-658193537a64 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
+	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/net v0.0.0-20220708220712-1185a9018129 // indirect
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f // indirect
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
-	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467 // indirect
+	golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab // indirect
+	golang.org/x/term v0.0.0-20220722155259-a9ba230a4035 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.11 // indirect
 	google.golang.org/genproto v0.0.0-20220719170305-83ca9fad585f // indirect

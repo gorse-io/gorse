@@ -20,6 +20,8 @@ import (
 	"sync"
 
 	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/base/log"
+	"go.uber.org/zap"
 	"modernc.org/mathutil"
 )
 
@@ -67,6 +69,7 @@ type taskInfo struct {
 	priority   int    // high priority tasks are allocated first
 	privileged bool   // privileged tasks are allocated first
 	jobs       int    // number of jobs allocated to the task
+	previous   int    // previous number of jobs allocated to the task
 }
 
 // JobsScheduler allocates jobs to multiple tasks.
@@ -111,7 +114,7 @@ func (s *JobsScheduler) Unregister(taskName string) {
 		// Return allocated jobs.
 		s.freeJobs += task.jobs
 		delete(s.tasks, taskName)
-		s.Signal()
+		s.Broadcast()
 	}
 }
 
@@ -176,8 +179,15 @@ func (s *JobsScheduler) allocateJobsForAll() {
 		targetJobs := s.numJobs/len(tasks) + lo.If(i < s.numJobs%len(tasks), 1).Else(0)
 		targetJobs = mathutil.Min(targetJobs, s.freeJobs)
 		if task.jobs < targetJobs {
+			if task.previous != targetJobs {
+				log.Logger().Debug("reallocate jobs for task",
+					zap.String("task", task.name),
+					zap.Int("previous_jobs", task.previous),
+					zap.Int("target_jobs", targetJobs))
+			}
 			s.freeJobs -= targetJobs - task.jobs
 			task.jobs = targetJobs
+			task.previous = task.jobs
 		}
 	}
 }

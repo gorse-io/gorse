@@ -61,7 +61,7 @@ const (
 type Task interface {
 	name() string
 	priority() int
-	run() error
+	run(j *task.JobsAllocator) error
 }
 
 // runLoadDatasetTask loads dataset.
@@ -232,7 +232,7 @@ func (t *FindItemNeighborsTask) priority() int {
 	return -t.rankingTrainSet.ItemCount() * t.rankingTrainSet.ItemCount()
 }
 
-func (t *FindItemNeighborsTask) run() error {
+func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
 	dataset := t.rankingTrainSet
@@ -255,7 +255,7 @@ func (t *FindItemNeighborsTask) run() error {
 	completed := make(chan struct{}, 1000)
 	go func() {
 		completedCount, previousCount := 0, 0
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(time.Second * 10)
 		for {
 			select {
 			case _, ok := <-completed:
@@ -271,7 +271,7 @@ func (t *FindItemNeighborsTask) run() error {
 					log.Logger().Debug("searching neighbors of items",
 						zap.Int("n_complete_items", completedCount),
 						zap.Int("n_items", dataset.ItemCount()),
-						zap.Int("throughput", throughput))
+						zap.Int("throughput", throughput/10))
 				}
 			}
 		}
@@ -311,9 +311,9 @@ func (t *FindItemNeighborsTask) run() error {
 	start := time.Now()
 	var err error
 	if t.Config.Recommend.ItemNeighbors.EnableIndex {
-		err = t.findItemNeighborsIVF(dataset, labelIDF, userIDF, completed)
+		err = t.findItemNeighborsIVF(dataset, labelIDF, userIDF, completed, j)
 	} else {
-		err = t.findItemNeighborsBruteForce(dataset, labeledItems, labelIDF, userIDF, completed)
+		err = t.findItemNeighborsBruteForce(dataset, labeledItems, labelIDF, userIDF, completed, j)
 	}
 	searchTime := time.Since(start)
 
@@ -338,7 +338,7 @@ func (t *FindItemNeighborsTask) run() error {
 }
 
 func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledItems [][]int32,
-	labelIDF, userIDF []float32, completed chan struct{}) error {
+	labelIDF, userIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateItemCount     atomic.Float64
 		findNeighborSeconds atomic.Float64
@@ -358,7 +358,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
 	}
 
-	err := parallel.DynamicParallel(dataset.ItemCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, itemIndex int) error {
+	err := parallel.DynamicParallel(dataset.ItemCount(), j, func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -416,7 +416,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 	return nil
 }
 
-func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userIDF []float32, completed chan struct{}) error {
+func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateItemCount     atomic.Float64
 		findNeighborSeconds atomic.Float64
@@ -445,7 +445,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	}
 
 	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize,
-		search.SetIVFJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)))
+		search.SetIVFJobsAllocator(j))
 	var recall float32
 	index, recall = builder.Build(m.Config.Recommend.ItemNeighbors.IndexRecall,
 		m.Config.Recommend.ItemNeighbors.IndexFitEpoch,
@@ -457,7 +457,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
 
-	err := parallel.DynamicParallel(dataset.ItemCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, itemIndex int) error {
+	err := parallel.DynamicParallel(dataset.ItemCount(), j, func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -536,14 +536,14 @@ func NewFindUserNeighborsTask(m *Master) *FindUserNeighborsTask {
 }
 
 func (t *FindUserNeighborsTask) name() string {
-	return TaskFindItemNeighbors
+	return TaskFindUserNeighbors
 }
 
 func (t *FindUserNeighborsTask) priority() int {
 	return -t.rankingTrainSet.UserCount() * t.rankingTrainSet.UserCount()
 }
 
-func (t *FindUserNeighborsTask) run() error {
+func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
 	dataset := t.rankingTrainSet
@@ -622,9 +622,9 @@ func (t *FindUserNeighborsTask) run() error {
 	start := time.Now()
 	var err error
 	if t.Config.Recommend.UserNeighbors.EnableIndex {
-		err = t.findUserNeighborsIVF(dataset, labelIDF, itemIDF, completed)
+		err = t.findUserNeighborsIVF(dataset, labelIDF, itemIDF, completed, j)
 	} else {
-		err = t.findUserNeighborsBruteForce(dataset, labeledUsers, labelIDF, itemIDF, completed)
+		err = t.findUserNeighborsBruteForce(dataset, labeledUsers, labelIDF, itemIDF, completed, j)
 	}
 	searchTime := time.Since(start)
 
@@ -648,7 +648,7 @@ func (t *FindUserNeighborsTask) run() error {
 	return nil
 }
 
-func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}) error {
+func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateUserCount     atomic.Float64
 		findNeighborSeconds atomic.Float64
@@ -668,7 +668,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
 	}
 
-	err := parallel.DynamicParallel(dataset.UserCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, userIndex int) error {
+	err := parallel.DynamicParallel(dataset.UserCount(), j, func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -717,7 +717,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 	return nil
 }
 
-func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}) error {
+func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateUserCount     atomic.Float64
 		buildIndexSeconds   atomic.Float64
@@ -747,7 +747,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	}
 
 	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize,
-		search.SetIVFJobsAllocator(task.NewConstantJobsAllocator(m.Config.Master.NumJobs)))
+		search.SetIVFJobsAllocator(j))
 	var recall float32
 	index, recall = builder.Build(
 		m.Config.Recommend.UserNeighbors.IndexRecall,
@@ -760,7 +760,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	}
 	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
 
-	err := parallel.DynamicParallel(dataset.UserCount(), task.NewConstantJobsAllocator(m.Config.Master.NumJobs), func(workerId, userIndex int) error {
+	err := parallel.DynamicParallel(dataset.UserCount(), j, func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -930,34 +930,6 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 	return updateTime.Unix() <= modifiedTime.Unix()
 }
 
-// fitRankingModel fits ranking model using passed dataset. After model fitted, following states are changed:
-// 1. Ranking model version are increased.
-// 2. Ranking model score are updated.
-// 3. Ranking model, version and score are persisted to local cache.
-func (m *Master) runRankingRelatedTasks(
-	lastNumUsers, lastNumItems, lastNumFeedback int,
-) (numUsers, numItems, numFeedback int, err error) {
-	var (
-		tasks = []Task{
-			NewFindUserNeighborsTask(m),
-			NewFindItemNeighborsTask(m),
-			NewFitRankingModelTask(m),
-		}
-	)
-	numUsers = m.rankingTrainSet.UserCount()
-	numItems = m.rankingTrainSet.ItemCount()
-	numFeedback = m.rankingTrainSet.Count()
-	if numUsers == 0 && numItems == 0 && numFeedback == 0 {
-		log.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
-		return
-	}
-	for _, t := range tasks {
-		t.run()
-	}
-	return
-}
-
 type FitRankingModelTask struct {
 	*Master
 	lastNumFeedback int
@@ -975,7 +947,7 @@ func (t *FitRankingModelTask) priority() int {
 	return -t.rankingTrainSet.Count()
 }
 
-func (t *FitRankingModelTask) run() error {
+func (t *FitRankingModelTask) run(j *task.JobsAllocator) error {
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
 	dataset := t.rankingTrainSet
@@ -1012,7 +984,7 @@ func (t *FitRankingModelTask) run() error {
 
 	startFitTime := time.Now()
 	score := rankingModel.Fit(t.rankingTrainSet, t.rankingTestSet, ranking.NewFitConfig().
-		SetJobsAllocator(task.NewConstantJobsAllocator(t.Config.Master.NumJobs)).
+		SetJobsAllocator(j).
 		SetTask(t.taskMonitor.Start(TaskFitRankingModel, rankingModel.Complexity())))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 
@@ -1079,7 +1051,7 @@ func (t *FitClickModelTask) priority() int {
 	return -t.clickTrainSet.Count()
 }
 
-func (t *FitClickModelTask) run() error {
+func (t *FitClickModelTask) run(j *task.JobsAllocator) error {
 	log.Logger().Info("prepare to fit click model", zap.Int("n_jobs", t.Config.Master.NumJobs))
 	t.clickDataMutex.RLock()
 	defer t.clickDataMutex.RUnlock()
@@ -1125,7 +1097,7 @@ func (t *FitClickModelTask) run() error {
 	}
 	startFitTime := time.Now()
 	score := clickModel.Fit(t.clickTrainSet, t.clickTestSet, click.NewFitConfig().
-		SetJobsAllocator(task.NewConstantJobsAllocator(t.Config.Master.NumJobs)).
+		SetJobsAllocator(j).
 		SetTask(t.taskMonitor.Start(TaskFitClickModel, clickModel.Complexity())))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
@@ -1190,7 +1162,7 @@ func (t *SearchRankingModelTask) priority() int {
 	return -t.rankingTrainSet.Count()
 }
 
-func (t *SearchRankingModelTask) run() error {
+func (t *SearchRankingModelTask) run(j *task.JobsAllocator) error {
 	log.Logger().Info("start searching ranking model")
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
@@ -1216,7 +1188,7 @@ func (t *SearchRankingModelTask) run() error {
 
 	startTime := time.Now()
 	err := t.rankingModelSearcher.Fit(t.rankingTrainSet, t.rankingTestSet,
-		t.taskMonitor.Start(TaskSearchRankingModel, t.rankingModelSearcher.Complexity()))
+		t.taskMonitor.Start(TaskSearchRankingModel, t.rankingModelSearcher.Complexity()), j)
 	if err != nil {
 		log.Logger().Error("failed to search collaborative filtering model", zap.Error(err))
 		return nil
@@ -1253,7 +1225,7 @@ func (t *SearchClickModelTask) priority() int {
 	return -t.clickTrainSet.Count()
 }
 
-func (t *SearchClickModelTask) run() error {
+func (t *SearchClickModelTask) run(j *task.JobsAllocator) error {
 	log.Logger().Info("start searching click model")
 	t.clickDataMutex.RLock()
 	defer t.clickDataMutex.RUnlock()
@@ -1279,7 +1251,7 @@ func (t *SearchClickModelTask) run() error {
 
 	startTime := time.Now()
 	err := t.clickModelSearcher.Fit(t.clickTrainSet, t.clickTestSet,
-		t.taskMonitor.Start(TaskSearchClickModel, t.clickModelSearcher.Complexity()))
+		t.taskMonitor.Start(TaskSearchClickModel, t.clickModelSearcher.Complexity()), j)
 	if err != nil {
 		log.Logger().Error("failed to search ranking model", zap.Error(err))
 		return nil
@@ -1311,7 +1283,7 @@ func (t *CacheGarbageCollectionTask) priority() int {
 	return -t.rankingTrainSet.UserCount() - t.rankingTrainSet.ItemCount()
 }
 
-func (t *CacheGarbageCollectionTask) run() error {
+func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 	if t.rankingTrainSet == nil {
 		log.Logger().Debug("dataset has not been loaded")
 		return nil

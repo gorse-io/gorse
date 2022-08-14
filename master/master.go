@@ -105,14 +105,12 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		rankingModelSearcher: ranking.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
-			task.NewConstantJobsAllocator(cfg.Master.NumJobs),
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		// default click model
 		clickModelSearcher: click.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
-			task.NewConstantJobsAllocator(cfg.Master.NumJobs),
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		RestServer: server.RestServer{
@@ -246,12 +244,12 @@ func (m *Master) Shutdown() {
 func (m *Master) RunPrivilegedTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		lastNumRankingUsers    int
-		lastNumRankingItems    int
-		lastNumRankingFeedback int
-		err                    error
-		tasks                  = []Task{
+		err   error
+		tasks = []Task{
 			NewFitClickModelTask(m),
+			NewFitRankingModelTask(m),
+			NewFindUserNeighborsTask(m),
+			NewFindItemNeighborsTask(m),
 		}
 	)
 	go func() {
@@ -275,21 +273,28 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-
-		// fit ranking model
-		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback, err =
-			m.runRankingRelatedTasks(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback)
-		if err != nil {
-			log.Logger().Error("failed to fit ranking model", zap.Error(err))
+		if m.rankingTrainSet.UserCount() == 0 && m.rankingTrainSet.ItemCount() == 0 && m.rankingTrainSet.Count() == 0 {
+			log.Logger().Warn("empty ranking dataset",
+				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
 		}
 
-		// fit click model
-		err = tasks[0].run()
-		if err != nil {
-			log.Logger().Error("failed to fit click model", zap.Error(err))
-			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
-			continue
+		var registeredTask []Task
+		for _, t := range tasks {
+			if m.jobsScheduler.Register(t.name(), t.priority(), true) {
+				registeredTask = append(registeredTask, t)
+			}
+		}
+		for _, t := range registeredTask {
+			go func(task Task) {
+				j := m.jobsScheduler.GetJobsAllocator(task.name())
+				defer m.jobsScheduler.Unregister(task.name())
+				j.Allocate()
+				if err := task.run(j); err != nil {
+					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
+					return
+				}
+			}(t)
 		}
 	}
 }
@@ -307,11 +312,25 @@ func (m *Master) RunRagtagTasksLoop() {
 		}
 	)
 	for {
+		if m.rankingTrainSet == nil || m.clickTrainSet == nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		var registeredTask []Task
 		for _, t := range tasks {
-			if err = t.run(); err != nil {
-				log.Logger().Error("failed to run task", zap.String("task", t.name()), zap.Error(err))
-				m.taskMonitor.Fail(t.name(), err.Error())
+			if m.jobsScheduler.Register(t.name(), t.priority(), false) {
+				registeredTask = append(registeredTask, t)
 			}
+		}
+		for _, t := range registeredTask {
+			go func(task Task) {
+				defer m.jobsScheduler.Unregister(task.name())
+				j := m.jobsScheduler.GetJobsAllocator(task.name())
+				if err = task.run(j); err != nil {
+					log.Logger().Error("failed to run task", zap.String("task", t.name()), zap.Error(err))
+					m.taskMonitor.Fail(t.name(), err.Error())
+				}
+			}(t)
 		}
 		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
 	}

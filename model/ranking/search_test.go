@@ -136,10 +136,10 @@ func TestRandomSearchCV(t *testing.T) {
 }
 
 func TestModelSearcher(t *testing.T) {
-	searcher := NewModelSearcher(2, 63, task.NewConstantJobsAllocator(1), false)
+	searcher := NewModelSearcher(2, 63, false)
 	searcher.models = []MatrixFactorization{newMockMatrixFactorizationForSearch(2)}
 	tk := task.NewTask("test", searcher.Complexity())
-	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk)
+	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, task.NewConstantJobsAllocator(1))
 	assert.NoError(t, err)
 	_, m, score := searcher.GetBestModel()
 	assert.Equal(t, float32(12), score.NDCG)

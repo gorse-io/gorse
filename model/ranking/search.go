@@ -138,7 +138,6 @@ type ModelSearcher struct {
 	// arguments
 	numEpochs  int
 	numTrials  int
-	jobsAlloc  *task.JobsAllocator
 	searchSize bool
 	// results
 	bestMutex     sync.Mutex
@@ -148,11 +147,10 @@ type ModelSearcher struct {
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
-func NewModelSearcher(nEpoch, nTrials int, jobsAlloc *task.JobsAllocator, searchSize bool) *ModelSearcher {
+func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 	searcher := &ModelSearcher{
 		numTrials:  nTrials,
 		numEpochs:  nEpoch,
-		jobsAlloc:  jobsAlloc,
 		searchSize: searchSize,
 	}
 	searcher.models = append(searcher.models, NewBPR(model.Params{model.NEpochs: searcher.numEpochs}))
@@ -171,7 +169,7 @@ func (searcher *ModelSearcher) Complexity() int {
 	return len(searcher.models) * searcher.numEpochs * searcher.numTrials
 }
 
-func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task, j *task.JobsAllocator) error {
 	log.Logger().Info("ranking model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
@@ -179,7 +177,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task) erro
 	for _, m := range searcher.models {
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(searcher.searchSize), searcher.numTrials, 0,
 			NewFitConfig().
-				SetJobsAllocator(searcher.jobsAlloc).
+				SetJobsAllocator(j).
 				SetTask(t))
 		searcher.bestMutex.Lock()
 		if searcher.bestModel == nil || r.BestScore.NDCG > searcher.bestScore.NDCG {

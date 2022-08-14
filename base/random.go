@@ -15,9 +15,10 @@
 package base
 
 import (
+	"math/rand"
+
 	"github.com/scylladb/go-set/i32set"
 	"github.com/scylladb/go-set/iset"
-	"math/rand"
 )
 
 // RandomGenerator is the random generator for gorse.
@@ -72,15 +73,6 @@ func (rng RandomGenerator) NormalVector64(size int, mean, stdDev float64) []floa
 	ret := make([]float64, size)
 	for i := 0; i < len(ret); i++ {
 		ret[i] = rng.NormFloat64()*stdDev + mean
-	}
-	return ret
-}
-
-// NormalMatrix64 makes a matrix filled with normal random floats.
-func (rng RandomGenerator) NormalMatrix64(row, col int, mean, stdDev float64) [][]float64 {
-	ret := make([][]float64, row)
-	for i := range ret {
-		ret[i] = rng.NormalVector64(col, mean, stdDev)
 	}
 	return ret
 }
