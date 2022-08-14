@@ -1194,11 +1194,15 @@ func (t *SearchRankingModelTask) run() error {
 	log.Logger().Info("start searching ranking model")
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
+	if t.rankingTrainSet == nil {
+		log.Logger().Debug("dataset has not been loaded")
+		return nil
+	}
 	numUsers := t.rankingTrainSet.UserCount()
 	numItems := t.rankingTrainSet.ItemCount()
 	numFeedback := t.rankingTrainSet.Count()
 
-	if t.rankingTrainSet == nil || numUsers == 0 || numItems == 0 || numFeedback == 0 {
+	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty ranking dataset",
 			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
 		t.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
@@ -1212,8 +1216,7 @@ func (t *SearchRankingModelTask) run() error {
 
 	startTime := time.Now()
 	err := t.rankingModelSearcher.Fit(t.rankingTrainSet, t.rankingTestSet,
-		t.taskMonitor.Start(TaskSearchRankingModel, t.rankingModelSearcher.Complexity()),
-		t.taskScheduler.NewRunner(TaskSearchRankingModel))
+		t.taskMonitor.Start(TaskSearchRankingModel, t.rankingModelSearcher.Complexity()))
 	if err != nil {
 		log.Logger().Error("failed to search collaborative filtering model", zap.Error(err))
 		return nil
@@ -1254,11 +1257,15 @@ func (t *SearchClickModelTask) run() error {
 	log.Logger().Info("start searching click model")
 	t.clickDataMutex.RLock()
 	defer t.clickDataMutex.RUnlock()
+	if t.clickTrainSet == nil {
+		log.Logger().Debug("dataset has not been loaded")
+		return nil
+	}
 	numUsers := t.clickTrainSet.UserCount()
 	numItems := t.clickTrainSet.ItemCount()
 	numFeedback := t.clickTrainSet.Count()
 
-	if t.clickTrainSet == nil || numUsers == 0 || numItems == 0 || numFeedback == 0 {
+	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty click dataset",
 			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
 		t.taskMonitor.Fail(TaskSearchClickModel, "No feedback found.")
@@ -1272,8 +1279,7 @@ func (t *SearchClickModelTask) run() error {
 
 	startTime := time.Now()
 	err := t.clickModelSearcher.Fit(t.clickTrainSet, t.clickTestSet,
-		t.taskMonitor.Start(TaskSearchClickModel, t.clickModelSearcher.Complexity()),
-		t.taskScheduler.NewRunner(TaskSearchClickModel))
+		t.taskMonitor.Start(TaskSearchClickModel, t.clickModelSearcher.Complexity()))
 	if err != nil {
 		log.Logger().Error("failed to search ranking model", zap.Error(err))
 		return nil
@@ -1307,6 +1313,7 @@ func (t *CacheGarbageCollectionTask) priority() int {
 
 func (t *CacheGarbageCollectionTask) run() error {
 	if t.rankingTrainSet == nil {
+		log.Logger().Debug("dataset has not been loaded")
 		return nil
 	}
 

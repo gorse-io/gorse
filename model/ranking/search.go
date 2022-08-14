@@ -16,13 +16,14 @@ package ranking
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"sync"
-	"time"
 )
 
 // ParamsSearchResult contains the return of grid search.
@@ -47,7 +48,7 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
-	_ int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
+	_ int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
 	count := 1
@@ -70,11 +71,7 @@ func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *Dat
 			// Cross validate
 			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Overwrite(params))
-			fitConfig.Task.Suspend(true)
-			runner.Lock()
-			fitConfig.Task.Suspend(false)
 			score := estimator.Fit(trainSet, testSet, fitConfig)
-			runner.UnLock()
 			// Create GridSearch result
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
@@ -100,10 +97,10 @@ func GridSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *Dat
 
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
-	numTrials int, seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
+	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() < numTrials {
-		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig, runner)
+		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig)
 	}
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
@@ -122,11 +119,7 @@ func RandomSearchCV(estimator MatrixFactorization, trainSet *DataSet, testSet *D
 			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
-		fitConfig.Task.Suspend(true)
-		runner.Lock()
-		fitConfig.Task.Suspend(false)
 		score := estimator.Fit(trainSet, testSet, fitConfig)
-		runner.UnLock()
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
 		if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
@@ -178,7 +171,7 @@ func (searcher *ModelSearcher) Complexity() int {
 	return len(searcher.models) * searcher.numEpochs * searcher.numTrials
 }
 
-func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task, runner model.Runner) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task) error {
 	log.Logger().Info("ranking model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()))
@@ -187,7 +180,7 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *DataSet, t *task.Task, runn
 		r := RandomSearchCV(m, trainSet, valSet, m.GetParamsGrid(searcher.searchSize), searcher.numTrials, 0,
 			NewFitConfig().
 				SetJobsAllocator(searcher.jobsAlloc).
-				SetTask(t), runner)
+				SetTask(t))
 		searcher.bestMutex.Lock()
 		if searcher.bestModel == nil || r.BestScore.NDCG > searcher.bestScore.NDCG {
 			searcher.bestModel = r.BestModel

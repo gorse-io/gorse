@@ -20,73 +20,8 @@ import (
 	"sync"
 
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/strset"
 	"modernc.org/mathutil"
 )
-
-// Scheduler schedules that pre-locked tasks are executed first.
-type Scheduler struct {
-	*sync.Cond
-	Privileged *strset.Set
-	Running    bool
-}
-
-// NewTaskScheduler creates a Scheduler.
-func NewTaskScheduler() *Scheduler {
-	return &Scheduler{
-		Cond:       sync.NewCond(&sync.Mutex{}),
-		Privileged: strset.New(),
-	}
-}
-
-// PreLock a task, the task has the privilege to run first than un-pre-clocked tasks.
-func (t *Scheduler) PreLock(name string) {
-	t.L.Lock()
-	defer t.L.Unlock()
-	t.Privileged.Add(name)
-}
-
-// Lock gets the permission to run task.
-func (t *Scheduler) Lock(name string) {
-	t.L.Lock()
-	defer t.L.Unlock()
-	for t.Running || (!t.Privileged.IsEmpty() && !t.Privileged.Has(name)) {
-		t.Wait()
-	}
-	t.Running = true
-}
-
-// UnLock returns the permission to run task.
-func (t *Scheduler) UnLock(name string) {
-	t.L.Lock()
-	defer t.L.Unlock()
-	t.Running = false
-	t.Privileged.Remove(name)
-	t.Broadcast()
-}
-
-func (t *Scheduler) NewRunner(name string) *Runner {
-	return &Runner{
-		Scheduler: t,
-		Name:      name,
-	}
-}
-
-// Runner is a Scheduler bounded with a task.
-type Runner struct {
-	*Scheduler
-	Name string
-}
-
-// Lock gets the permission to run task.
-func (locker *Runner) Lock() {
-	locker.Scheduler.Lock(locker.Name)
-}
-
-// UnLock returns the permission to run task.
-func (locker *Runner) UnLock() {
-	locker.Scheduler.UnLock(locker.Name)
-}
 
 type JobsAllocator struct {
 	numJobs   int    // the max number of jobs
@@ -156,12 +91,15 @@ func NewJobsScheduler(num int) *JobsScheduler {
 	}
 }
 
-// Register a task in the JobsScheduler. Registered tasks will be ignored.
-func (s *JobsScheduler) Register(taskName string, priority int, privileged bool) {
+// Register a task in the JobsScheduler. Registered tasks will be ignored and return false.
+func (s *JobsScheduler) Register(taskName string, priority int, privileged bool) bool {
 	s.L.Lock()
 	defer s.L.Unlock()
 	if _, exits := s.tasks[taskName]; !exits {
 		s.tasks[taskName] = &taskInfo{name: taskName, priority: priority, privileged: privileged}
+		return true
+	} else {
+		return false
 	}
 }
 
@@ -173,6 +111,7 @@ func (s *JobsScheduler) Unregister(taskName string) {
 		// Return allocated jobs.
 		s.freeJobs += task.jobs
 		delete(s.tasks, taskName)
+		s.Signal()
 	}
 }
 

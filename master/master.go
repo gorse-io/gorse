@@ -48,7 +48,6 @@ type Master struct {
 	grpcServer *grpc.Server
 
 	taskMonitor   *task.Monitor
-	taskScheduler *task.Scheduler
 	jobsScheduler *task.JobsScheduler
 	cacheFile     string
 
@@ -100,7 +99,6 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		// create task monitor
 		cacheFile:     cacheFile,
 		taskMonitor:   taskMonitor,
-		taskScheduler: task.NewTaskScheduler(),
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
 		// default ranking model
 		rankingModelName: "bpr",
@@ -210,12 +208,6 @@ func (m *Master) Serve() {
 	m.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&m.RestServer)
 	m.RestServer.PopularItemsCache = server.NewPopularItemsCache(&m.RestServer)
 
-	// pre-lock privileged tasks
-	tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
-	for _, taskName := range tasksNames {
-		m.taskScheduler.PreLock(taskName)
-	}
-
 	go m.RunPrivilegedTasksLoop()
 	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
 	go m.RunRagtagTasksLoop()
@@ -276,11 +268,6 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		case <-m.fitTicker.C:
 		case <-m.importedChan:
 		}
-		// pre-lock privileged tasks
-		tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
-		for _, taskName := range tasksNames {
-			m.taskScheduler.PreLock(taskName)
-		}
 
 		// download dataset
 		err = m.runLoadDatasetTask()
@@ -303,11 +290,6 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to fit click model", zap.Error(err))
 			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
 			continue
-		}
-
-		// release locks
-		for _, taskName := range tasksNames {
-			m.taskScheduler.UnLock(taskName)
 		}
 	}
 }
