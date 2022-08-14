@@ -119,6 +119,13 @@ func (allocator *JobsAllocator) AvailableJobs() int {
 	return allocator.numJobs
 }
 
+// Allocate jobs. This method is used to request allocation of jobs or yield jobs.
+func (allocator *JobsAllocator) Allocate() {
+	if allocator.scheduler != nil {
+		allocator.scheduler.allocateJobsForTask(allocator.taskName, true)
+	}
+}
+
 // taskInfo represents a task in JobsScheduler.
 type taskInfo struct {
 	name       string // name of the task
