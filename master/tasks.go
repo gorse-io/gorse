@@ -971,7 +971,12 @@ func (t *FitRankingModelTask) run(j *task.JobsAllocator) error {
 			zap.String("name", bestRankingName),
 			zap.Any("params", t.RankingModel.GetParams()))
 	}
-	rankingModel := ranking.Clone(t.RankingModel)
+	var rankingModel ranking.MatrixFactorization
+	if !t.RankingModel.Invalid() {
+		rankingModel = ranking.Clone(t.RankingModel)
+	} else {
+		rankingModel = t.RankingModel
+	}
 	t.rankingModelMutex.Unlock()
 
 	if numFeedback == 0 {
@@ -1087,7 +1092,12 @@ func (t *FitClickModelTask) run(j *task.JobsAllocator) error {
 			zap.Float32("Recall", bestClickScore.Recall),
 			zap.Any("params", t.ClickModel.GetParams()))
 	}
-	clickModel := click.Clone(t.ClickModel)
+	var clickModel click.FactorizationMachine
+	if !t.ClickModel.Invalid() {
+		clickModel = click.Clone(t.ClickModel)
+	} else {
+		clickModel = t.ClickModel
+	}
 	t.clickModelMutex.Unlock()
 
 	// training model

@@ -17,6 +17,10 @@ package click
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
+	"reflect"
+	"time"
+
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -30,9 +34,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"io"
-	"reflect"
-	"time"
 )
 
 type Score struct {
@@ -306,7 +307,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		}
 		fitStart := time.Now()
 		cost := float32(0)
-		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(), 128, func(workerId, beginJobId, endJobId int) error {
+		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(config.Task), 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
 				prediction := fm.internalPredictImpl(features, values)

@@ -81,7 +81,8 @@ type Master struct {
 
 	// events
 	fitTicker    *time.Ticker
-	importedChan chan bool // feedback inserted events
+	importedChan chan struct{} // feedback inserted events
+	loadDataChan chan struct{} // dataset loaded events
 }
 
 // NewMaster creates a master node.
@@ -129,7 +130,8 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 			WebService: new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.ModelFitPeriod),
-		importedChan: make(chan bool),
+		importedChan: make(chan struct{}),
+		loadDataChan: make(chan struct{}),
 	}
 }
 
@@ -251,12 +253,13 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			NewFindUserNeighborsTask(m),
 			NewFindItemNeighborsTask(m),
 		}
+		firstLoop = true
 	)
 	go func() {
-		m.importedChan <- true
+		m.importedChan <- struct{}{}
 		for {
 			if m.checkDataImported() {
-				m.importedChan <- true
+				m.importedChan <- struct{}{}
 			}
 			time.Sleep(time.Second)
 		}
@@ -279,6 +282,11 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			continue
 		}
 
+		if firstLoop {
+			m.loadDataChan <- struct{}{}
+			firstLoop = false
+		}
+
 		var registeredTask []Task
 		for _, t := range tasks {
 			if m.jobsScheduler.Register(t.name(), t.priority(), true) {
@@ -289,7 +297,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			go func(task Task) {
 				j := m.jobsScheduler.GetJobsAllocator(task.name())
 				defer m.jobsScheduler.Unregister(task.name())
-				j.Allocate()
+				j.Init()
 				if err := task.run(j); err != nil {
 					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
 					return
@@ -303,6 +311,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 // rankingModelSearcher, clickSearchedModel and clickSearchedScore.
 func (m *Master) RunRagtagTasksLoop() {
 	defer base.CheckPanic()
+	<-m.loadDataChan
 	var (
 		err   error
 		tasks = []Task{
@@ -326,9 +335,10 @@ func (m *Master) RunRagtagTasksLoop() {
 			go func(task Task) {
 				defer m.jobsScheduler.Unregister(task.name())
 				j := m.jobsScheduler.GetJobsAllocator(task.name())
+				j.Init()
 				if err = task.run(j); err != nil {
-					log.Logger().Error("failed to run task", zap.String("task", t.name()), zap.Error(err))
-					m.taskMonitor.Fail(t.name(), err.Error())
+					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
+					m.taskMonitor.Fail(task.name(), err.Error())
 				}
 			}(t)
 		}

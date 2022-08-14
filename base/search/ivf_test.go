@@ -15,9 +15,10 @@
 package search
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/task"
-	"testing"
 )
 
 func TestIVFConfig(t *testing.T) {
@@ -30,7 +31,7 @@ func TestIVFConfig(t *testing.T) {
 	assert.Equal(t, float32(0.123), ivf.errorRate)
 
 	SetIVFJobsAllocator(task.NewConstantJobsAllocator(234))(ivf)
-	assert.Equal(t, 234, ivf.jobsAlloc.AvailableJobs())
+	assert.Equal(t, 234, ivf.jobsAlloc.AvailableJobs(nil))
 
 	SetMaxIteration(345)(ivf)
 	assert.Equal(t, 345, ivf.maxIter)

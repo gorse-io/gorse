@@ -15,11 +15,12 @@
 package parallel
 
 import (
+	"sync"
+
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/task"
 	"go.uber.org/atomic"
 	"modernc.org/mathutil"
-	"sync"
 )
 
 const (
@@ -93,7 +94,7 @@ func DynamicParallel(nJobs int, jobsAlloc *task.JobsAllocator, worker func(worke
 	// consumer
 	for {
 		exit := atomic.NewBool(true)
-		numJobs := jobsAlloc.AvailableJobs()
+		numJobs := jobsAlloc.AvailableJobs(nil)
 		var wg sync.WaitGroup
 		wg.Add(numJobs)
 		errs := make([]error, nJobs)
