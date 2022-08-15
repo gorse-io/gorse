@@ -622,7 +622,7 @@ func (d *SQLDatabase) GetUser(userId string) (User, error) {
 // ModifyUser modify a user in MySQL.
 func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
 	// ignore empty patch
-	if patch.Labels == nil && patch.Comment == nil {
+	if patch.Labels == nil && patch.Subscribe == nil && patch.Comment == nil {
 		log.Logger().Debug("empty user patch")
 		return nil
 	}
@@ -633,6 +633,10 @@ func (d *SQLDatabase) ModifyUser(userId string, patch UserPatch) error {
 	if patch.Labels != nil {
 		text, _ := json.Marshal(patch.Labels)
 		attributes["labels"] = string(text)
+	}
+	if patch.Subscribe != nil {
+		text, _ := json.Marshal(patch.Subscribe)
+		attributes["subscribe"] = string(text)
 	}
 	err := d.gormDB.Model(&SQLUser{UserId: userId}).Updates(attributes).Error
 	return errors.Trace(err)
