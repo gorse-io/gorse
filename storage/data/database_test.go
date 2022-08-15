@@ -169,13 +169,15 @@ func testUsers(t *testing.T, db Database) {
 	assert.Equal(t, "override", user.Comment)
 	// test modify
 	err = db.ModifyUser("1", UserPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}})
-	assert.NoError(t, err)
-	err = db.Optimize()
-	assert.NoError(t, err)
-	user, err = db.GetUser("1")
-	assert.NoError(t, err)
-	assert.Equal(t, "modify", user.Comment)
-	assert.Equal(t, []string{"a", "b", "c"}, user.Labels)
+ 	err = db.ModifyUser("1", UserPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}, Subscribe: []string{"d", "e", "f"}})
+ 	assert.NoError(t, err)
+ 	err = db.Optimize()
+ 	assert.NoError(t, err)
+ 	user, err = db.GetUser("1")
+ 	assert.NoError(t, err)
+ 	assert.Equal(t, "modify", user.Comment)
+ 	assert.Equal(t, []string{"a", "b", "c"}, user.Labels)
+ 	assert.Equal(t, []string{"d", "e", "f"}, user.Subscribe)
 
 	// test insert empty
 	err = db.BatchInsertUsers(nil)
