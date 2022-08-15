@@ -86,10 +86,10 @@ func copyValue(dst, src reflect.Value) error {
 		dstPointer := reflect.New(dst.Type())
 		srcPointer := reflect.New(src.Type())
 		srcPointer.Elem().Set(src)
-		srcMarshaller, hasSrcMarshaler := srcPointer.Interface().(encoding.BinaryMarshaler)
+		srcMarshaller, hasSrcMarshaller := srcPointer.Interface().(encoding.BinaryMarshaler)
 		dstUnmarshaler, hasDstUnmarshaler := dstPointer.Interface().(encoding.BinaryUnmarshaler)
 
-		if hasDstUnmarshaler && hasSrcMarshaler {
+		if hasDstUnmarshaler && hasSrcMarshaller {
 			dstByte, err := srcMarshaller.MarshalBinary()
 			if err != nil {
 				return err
@@ -114,6 +114,11 @@ func copyValue(dst, src reflect.Value) error {
 			}
 		}
 	case reflect.Ptr:
+		if src.IsNil() {
+			// If source is nil, set dst to nil.
+			dst.Set(reflect.Zero(dst.Type()))
+			return nil
+		}
 		if dst.IsNil() {
 			dst.Set(reflect.New(src.Elem().Type()))
 		}
@@ -124,6 +129,11 @@ func copyValue(dst, src reflect.Value) error {
 			return err
 		}
 	case reflect.Interface:
+		if src.IsNil() {
+			// If source is nil, set dst to nil.
+			dst.Set(reflect.Zero(dst.Type()))
+			return nil
+		}
 		if !dst.IsNil() {
 			switch dst.Elem().Kind() {
 			case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint,

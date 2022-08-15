@@ -170,3 +170,22 @@ func TestPrivate(t *testing.T) {
 	*a.text = "world"
 	assert.Equal(t, "hello", *b.text)
 }
+
+type NilInterface interface{}
+
+type NilStruct struct {
+	Interface NilInterface
+	Pointer   *Foo
+}
+
+func TestNil(t *testing.T) {
+	var d = NilStruct{
+		Interface: 100,
+		Pointer:   &Foo{A: 100},
+	}
+	var e NilStruct
+	err := Copy(&d, e)
+	assert.NoError(t, err)
+	assert.Nil(t, d.Interface)
+	assert.Nil(t, d.Pointer)
+}
