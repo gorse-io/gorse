@@ -30,7 +30,7 @@ func newFitConfigWithTestTracker(numEpoch int) *FitConfig {
 	t := task.NewTask("test", numEpoch)
 	cfg := NewFitConfig().
 		SetVerbose(1).
-		SetJobs(1).
+		SetJobsAllocator(task.NewConstantJobsAllocator(1)).
 		SetTask(t)
 	return cfg
 }

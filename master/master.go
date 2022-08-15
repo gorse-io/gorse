@@ -17,15 +17,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/emicklei/go-restful/v3"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/encoding"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/server"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"math"
 	"math/rand"
 	"net"
@@ -33,12 +24,21 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/emicklei/go-restful/v3"
+	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
+	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 // Master is the master node.
@@ -48,7 +48,7 @@ type Master struct {
 	grpcServer *grpc.Server
 
 	taskMonitor   *task.Monitor
-	taskScheduler *task.Scheduler
+	jobsScheduler *task.JobsScheduler
 	cacheFile     string
 
 	// cluster meta cache
@@ -81,7 +81,8 @@ type Master struct {
 
 	// events
 	fitTicker    *time.Ticker
-	importedChan chan bool // feedback inserted events
+	importedChan chan struct{} // feedback inserted events
+	loadDataChan chan struct{} // dataset loaded events
 }
 
 // NewMaster creates a master node.
@@ -99,20 +100,18 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		// create task monitor
 		cacheFile:     cacheFile,
 		taskMonitor:   taskMonitor,
-		taskScheduler: task.NewTaskScheduler(),
+		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
 		// default ranking model
 		rankingModelName: "bpr",
 		rankingModelSearcher: ranking.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Master.NumJobs,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		// default click model
 		clickModelSearcher: click.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Master.NumJobs,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		RestServer: server.RestServer{
@@ -131,7 +130,8 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 			WebService: new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.ModelFitPeriod),
-		importedChan: make(chan bool),
+		importedChan: make(chan struct{}),
+		loadDataChan: make(chan struct{}),
 	}
 }
 
@@ -161,7 +161,7 @@ func (m *Master) Serve() {
 		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
 		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
-		MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
+		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",
@@ -174,7 +174,7 @@ func (m *Master) Serve() {
 		RankingPrecision.Set(float64(m.clickScore.Precision))
 		RankingRecall.Set(float64(m.clickScore.Recall))
 		RankingAUC.Set(float64(m.clickScore.AUC))
-		MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
+		MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
 	}
 
 	// create cluster meta cache
@@ -207,12 +207,6 @@ func (m *Master) Serve() {
 
 	m.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&m.RestServer)
 	m.RestServer.PopularItemsCache = server.NewPopularItemsCache(&m.RestServer)
-
-	// pre-lock privileged tasks
-	tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
-	for _, taskName := range tasksNames {
-		m.taskScheduler.PreLock(taskName)
-	}
 
 	go m.RunPrivilegedTasksLoop()
 	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
@@ -252,19 +246,20 @@ func (m *Master) Shutdown() {
 func (m *Master) RunPrivilegedTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		lastNumRankingUsers    int
-		lastNumRankingItems    int
-		lastNumRankingFeedback int
-		lastNumClickUsers      int
-		lastNumClickItems      int
-		lastNumClickFeedback   int
-		err                    error
+		err   error
+		tasks = []Task{
+			NewFitClickModelTask(m),
+			NewFitRankingModelTask(m),
+			NewFindUserNeighborsTask(m),
+			NewFindItemNeighborsTask(m),
+		}
+		firstLoop = true
 	)
 	go func() {
-		m.importedChan <- true
+		m.importedChan <- struct{}{}
 		for {
 			if m.checkDataImported() {
-				m.importedChan <- true
+				m.importedChan <- struct{}{}
 			}
 			time.Sleep(time.Second)
 		}
@@ -274,11 +269,6 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		case <-m.fitTicker.C:
 		case <-m.importedChan:
 		}
-		// pre-lock privileged tasks
-		tasksNames := []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors, TaskFitRankingModel, TaskFitClickModel}
-		for _, taskName := range tasksNames {
-			m.taskScheduler.PreLock(taskName)
-		}
 
 		// download dataset
 		err = m.runLoadDatasetTask()
@@ -286,27 +276,33 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-
-		// fit ranking model
-		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback, err =
-			m.runRankingRelatedTasks(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedback)
-		if err != nil {
-			log.Logger().Error("failed to fit ranking model", zap.Error(err))
+		if m.rankingTrainSet.UserCount() == 0 && m.rankingTrainSet.ItemCount() == 0 && m.rankingTrainSet.Count() == 0 {
+			log.Logger().Warn("empty ranking dataset",
+				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
 		}
 
-		// fit click model
-		lastNumClickUsers, lastNumClickItems, lastNumClickFeedback, err =
-			m.runFitClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedback)
-		if err != nil {
-			log.Logger().Error("failed to fit click model", zap.Error(err))
-			m.taskMonitor.Fail(TaskFitClickModel, err.Error())
-			continue
+		if firstLoop {
+			m.loadDataChan <- struct{}{}
+			firstLoop = false
 		}
 
-		// release locks
-		for _, taskName := range tasksNames {
-			m.taskScheduler.UnLock(taskName)
+		var registeredTask []Task
+		for _, t := range tasks {
+			if m.jobsScheduler.Register(t.name(), t.priority(), true) {
+				registeredTask = append(registeredTask, t)
+			}
+		}
+		for _, t := range registeredTask {
+			go func(task Task) {
+				j := m.jobsScheduler.GetJobsAllocator(task.name())
+				defer m.jobsScheduler.Unregister(task.name())
+				j.Init()
+				if err := task.run(j); err != nil {
+					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
+					return
+				}
+			}(t)
 		}
 	}
 }
@@ -315,40 +311,36 @@ func (m *Master) RunPrivilegedTasksLoop() {
 // rankingModelSearcher, clickSearchedModel and clickSearchedScore.
 func (m *Master) RunRagtagTasksLoop() {
 	defer base.CheckPanic()
+	<-m.loadDataChan
 	var (
-		lastNumRankingUsers     int
-		lastNumRankingItems     int
-		lastNumRankingFeedbacks int
-		lastNumClickUsers       int
-		lastNumClickItems       int
-		lastNumClickFeedbacks   int
-		err                     error
+		err   error
+		tasks = []Task{
+			NewCacheGarbageCollectionTask(m),
+			NewSearchRankingModelTask(m),
+			NewSearchClickModelTask(m),
+		}
 	)
 	for {
-		// garbage collection
-		m.taskScheduler.Lock(TaskCacheGarbageCollection)
-		if err = m.runCacheGarbageCollectionTask(); err != nil {
-			log.Logger().Error("failed to collect garbage", zap.Error(err))
-			m.taskMonitor.Fail(TaskCacheGarbageCollection, err.Error())
-		}
-		m.taskScheduler.UnLock(TaskCacheGarbageCollection)
-		// search optimal ranking model
-		lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks, err =
-			m.runSearchRankingModelTask(lastNumRankingUsers, lastNumRankingItems, lastNumRankingFeedbacks)
-		if err != nil {
-			log.Logger().Error("failed to search ranking model", zap.Error(err))
-			m.taskMonitor.Fail(TaskSearchRankingModel, err.Error())
-			time.Sleep(time.Minute)
+		if m.rankingTrainSet == nil || m.clickTrainSet == nil {
+			time.Sleep(time.Second)
 			continue
 		}
-		// search optimal click model
-		lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks, err =
-			m.runSearchClickModelTask(lastNumClickUsers, lastNumClickItems, lastNumClickFeedbacks)
-		if err != nil {
-			log.Logger().Error("failed to search click model", zap.Error(err))
-			m.taskMonitor.Fail(TaskSearchClickModel, err.Error())
-			time.Sleep(time.Minute)
-			continue
+		var registeredTask []Task
+		for _, t := range tasks {
+			if m.jobsScheduler.Register(t.name(), t.priority(), false) {
+				registeredTask = append(registeredTask, t)
+			}
+		}
+		for _, t := range registeredTask {
+			go func(task Task) {
+				defer m.jobsScheduler.Unregister(task.name())
+				j := m.jobsScheduler.GetJobsAllocator(task.name())
+				j.Init()
+				if err = task.run(j); err != nil {
+					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
+					m.taskMonitor.Fail(task.name(), err.Error())
+				}
+			}(t)
 		}
 		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
 	}

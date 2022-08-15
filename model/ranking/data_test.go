@@ -36,16 +36,6 @@ func TestNewMapIndexDataset(t *testing.T) {
 	assert.Equal(t, 6, dataSet.ItemCount())
 }
 
-func TestLoadDataFromCSV(t *testing.T) {
-	dataset := LoadDataFromCSV("../../misc/csv_test/feedback.csv", ",", true)
-	assert.Equal(t, 5, dataset.Count())
-	for i := 0; i < dataset.Count(); i++ {
-		userIndex, itemIndex := dataset.GetIndex(i)
-		assert.Equal(t, int32(i), userIndex)
-		assert.Equal(t, int32(i), itemIndex)
-	}
-}
-
 func TestDataSet_Split(t *testing.T) {
 	numUsers, numItems := 3, 5
 	// create dataset

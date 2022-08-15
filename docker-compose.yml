@@ -20,7 +20,9 @@ services:
       - mysql_data:/var/lib/mysql
 
   worker:
-    image: zhenghaoz/gorse-worker:nightly
+    build:
+      context: .
+      dockerfile: cmd/gorse-worker/Dockerfile
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -36,7 +38,9 @@ services:
       - master
 
   server:
-    image: zhenghaoz/gorse-server:nightly
+    build:
+      context: .
+      dockerfile: cmd/gorse-server/Dockerfile
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -52,7 +56,9 @@ services:
       - master
 
   master:
-    image: zhenghaoz/gorse-master:nightly
+    build:
+      context: .
+      dockerfile: cmd/gorse-master/Dockerfile
     restart: unless-stopped
     ports:
       - 8086:8086
@@ -65,7 +71,7 @@ services:
       --log-path /var/log/gorse/master.log 
       --cache-path /var/lib/gorse/master_cache.data
     volumes:
-      - ./config.toml:/etc/gorse/config.toml
+      - ./config/config.toml.template:/etc/gorse/config.toml
       - gorse_log:/var/log/gorse
       - master_data:/var/lib/gorse
     depends_on:

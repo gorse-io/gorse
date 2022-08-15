@@ -15,15 +15,16 @@
 package master
 
 import (
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"strconv"
-	"testing"
-	"time"
 )
 
 func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
@@ -85,10 +86,12 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	// load mock dataset
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
+	m.rankingTrainSet = dataset
 
 	// similar items (common users)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
-	m.runFindItemNeighborsTask(dataset)
+	neighborTask := NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -103,7 +106,8 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
-	m.runFindItemNeighborsTask(dataset)
+	neighborTask = NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -120,7 +124,8 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
-	m.runFindItemNeighborsTask(dataset)
+	neighborTask = NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -193,10 +198,12 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	// load mock dataset
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
+	m.rankingTrainSet = dataset
 
 	// similar items (common users)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
-	m.runFindItemNeighborsTask(dataset)
+	neighborTask := NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -211,7 +218,8 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
-	m.runFindItemNeighborsTask(dataset)
+	neighborTask = NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -228,7 +236,8 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
-	m.runFindItemNeighborsTask(dataset)
+	neighborTask = NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -282,10 +291,12 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, err)
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
+	m.rankingTrainSet = dataset
 
 	// similar items (common users)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
-	m.runFindUserNeighborsTask(dataset)
+	neighborTask := NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -296,7 +307,8 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
-	m.runFindUserNeighborsTask(dataset)
+	neighborTask = NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -309,7 +321,8 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
-	m.runFindUserNeighborsTask(dataset)
+	neighborTask = NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -366,10 +379,12 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, err)
 	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
 	assert.NoError(t, err)
+	m.rankingTrainSet = dataset
 
 	// similar items (common users)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
-	m.runFindUserNeighborsTask(dataset)
+	neighborTask := NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "9"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
@@ -380,7 +395,8 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
-	m.runFindUserNeighborsTask(dataset)
+	neighborTask = NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -393,7 +409,8 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	err = m.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	assert.NoError(t, err)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
-	m.runFindUserNeighborsTask(dataset)
+	neighborTask = NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "8"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"0", "2", "4"}, cache.RemoveScores(similar))
@@ -673,7 +690,8 @@ func TestRunCacheGarbageCollectionTask(t *testing.T) {
 
 	// remove cache
 	assert.NotNil(t, m.rankingTrainSet)
-	err = m.runCacheGarbageCollectionTask()
+	gcTask := NewCacheGarbageCollectionTask(&m.Master)
+	err = gcTask.run(nil)
 	assert.NoError(t, err)
 
 	var s string

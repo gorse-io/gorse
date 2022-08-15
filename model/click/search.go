@@ -16,13 +16,14 @@ package click
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"sync"
-	"time"
 )
 
 // ParamsSearchResult contains the return of grid search.
@@ -37,7 +38,7 @@ type ParamsSearchResult struct {
 
 // GridSearchCV finds the best parameters for a model.
 func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
-	_ int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
+	_ int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
 	count := 1
@@ -60,11 +61,7 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 			// Cross validate
 			estimator.Clear()
 			estimator.SetParams(estimator.GetParams().Overwrite(params))
-			fitConfig.Task.Suspend(true)
-			runner.Lock()
-			fitConfig.Task.Suspend(false)
 			score := estimator.Fit(trainSet, testSet, fitConfig)
-			runner.UnLock()
 			// Create GridSearch result
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
@@ -90,10 +87,10 @@ func GridSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Da
 
 // RandomSearchCV searches hyper-parameters by random.
 func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
-	numTrials int, seed int64, fitConfig *FitConfig, runner model.Runner) ParamsSearchResult {
+	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() <= numTrials {
-		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig, runner)
+		return GridSearchCV(estimator, trainSet, testSet, paramGrid, seed, fitConfig)
 	}
 	rng := base.NewRandomGenerator(seed)
 	results := ParamsSearchResult{
@@ -112,11 +109,7 @@ func RandomSearchCV(estimator FactorizationMachine, trainSet *Dataset, testSet *
 			zap.Any("params", params))
 		estimator.Clear()
 		estimator.SetParams(estimator.GetParams().Overwrite(params))
-		fitConfig.Task.Suspend(true)
-		runner.Lock()
-		fitConfig.Task.Suspend(false)
 		score := estimator.Fit(trainSet, testSet, fitConfig)
-		runner.UnLock()
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
 		if len(results.Scores) == 0 || score.BetterThan(results.BestScore) {
@@ -135,7 +128,6 @@ type ModelSearcher struct {
 	// arguments
 	numEpochs  int
 	numTrials  int
-	numJobs    int
 	searchSize bool
 	// results
 	bestMutex sync.Mutex
@@ -144,12 +136,11 @@ type ModelSearcher struct {
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
-func NewModelSearcher(nEpoch, nTrials, nJobs int, searchSize bool) *ModelSearcher {
+func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 	return &ModelSearcher{
 		model:      NewFM(FMClassification, model.Params{model.NEpochs: nEpoch}),
 		numTrials:  nTrials,
 		numEpochs:  nEpoch,
-		numJobs:    nJobs,
 		searchSize: searchSize,
 	}
 }
@@ -165,7 +156,7 @@ func (searcher *ModelSearcher) Complexity() int {
 	return searcher.numTrials * searcher.numEpochs
 }
 
-func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, t *task.Task, runner model.Runner) error {
+func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, t *task.Task, j *task.JobsAllocator) error {
 	log.Logger().Info("click model search",
 		zap.Int("n_users", trainSet.UserCount()),
 		zap.Int("n_items", trainSet.ItemCount()),
@@ -176,8 +167,8 @@ func (searcher *ModelSearcher) Fit(trainSet, valSet *Dataset, t *task.Task, runn
 	// Random search
 	grid := searcher.model.GetParamsGrid(searcher.searchSize)
 	r := RandomSearchCV(searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().
-		SetJobs(searcher.numJobs).
-		SetTask(t), runner)
+		SetJobsAllocator(j).
+		SetTask(t))
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	searcher.bestModel = r.BestModel

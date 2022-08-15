@@ -14,13 +14,12 @@
 package base
 
 import (
+	"testing"
+
 	"github.com/chewxy/math32"
 	"github.com/scylladb/go-set"
 	"github.com/stretchr/testify/assert"
 	"github.com/thoas/go-funk"
-	"gonum.org/v1/gonum/stat"
-	"math"
-	"testing"
 )
 
 const randomEpsilon = 0.1
@@ -37,13 +36,6 @@ func TestRandomGenerator_MakeUniformMatrix(t *testing.T) {
 	vec := rng.UniformMatrix(1, 1000, 1, 2)[0]
 	assert.False(t, funk.MinFloat32(vec) < 1)
 	assert.False(t, funk.MaxFloat32(vec) > 2)
-}
-
-func TestRandomGenerator_MakeNormalMatrix64(t *testing.T) {
-	rng := NewRandomGenerator(0)
-	vec := rng.NormalMatrix64(1, 1000, 1, 2)[0]
-	assert.False(t, math.Abs(stat.Mean(vec, nil)-1) > randomEpsilon)
-	assert.False(t, math.Abs(stat.StdDev(vec, nil)-2) > randomEpsilon)
 }
 
 func TestRandomGenerator_Sample(t *testing.T) {
@@ -80,8 +72,10 @@ func stdDev(x []float32) float32 {
 }
 
 // meanVariance computes the sample mean and unbiased variance, where the mean and variance are
-//  \sum_i w_i * x_i / (sum_i w_i)
-//  \sum_i w_i (x_i - mean)^2 / (sum_i w_i - 1)
+//
+//	\sum_i w_i * x_i / (sum_i w_i)
+//	\sum_i w_i (x_i - mean)^2 / (sum_i w_i - 1)
+//
 // respectively.
 // If weights is nil then all of the weights are 1. If weights is not nil, then
 // len(x) must equal len(weights).

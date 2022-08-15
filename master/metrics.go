@@ -15,13 +15,14 @@
 package master
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
-	"time"
 )
 
 const (
@@ -218,7 +219,7 @@ var (
 		Subsystem: "master",
 		Name:      "negative_feedbacks_total",
 	})
-	MemoryInuseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	MemoryInUseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "memory_inuse_bytes",

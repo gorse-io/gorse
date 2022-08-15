@@ -15,7 +15,6 @@ package ranking
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
@@ -104,22 +103,9 @@ func (m *mockMatrixFactorizationForSearch) GetParamsGrid(_ bool) model.ParamsGri
 	}
 }
 
-type mockRunner struct {
-	mock.Mock
-}
-
-func (r *mockRunner) Lock() {
-	r.Called()
-}
-
-func (r *mockRunner) UnLock() {
-	r.Called()
-}
-
 func newFitConfigForSearch() *FitConfig {
 	t := task.NewTask("test", 100)
 	return &FitConfig{
-		Jobs:    1,
 		Verbose: 1,
 		Task:    t,
 	}
@@ -128,12 +114,7 @@ func newFitConfigForSearch() *FitConfig {
 func TestGridSearchCV(t *testing.T) {
 	m := &mockMatrixFactorizationForSearch{}
 	fitConfig := newFitConfigForSearch()
-	runner := new(mockRunner)
-	runner.On("Lock")
-	runner.On("UnLock")
-	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(false), 0, fitConfig, runner)
-	runner.AssertCalled(t, "Lock")
-	runner.AssertCalled(t, "UnLock")
+	r := GridSearchCV(m, nil, nil, m.GetParamsGrid(false), 0, fitConfig)
 	assert.Equal(t, float32(12), r.BestScore.NDCG)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
@@ -145,12 +126,7 @@ func TestGridSearchCV(t *testing.T) {
 func TestRandomSearchCV(t *testing.T) {
 	m := &mockMatrixFactorizationForSearch{}
 	fitConfig := newFitConfigForSearch()
-	runner := new(mockRunner)
-	runner.On("Lock")
-	runner.On("UnLock")
-	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(false), 63, 0, fitConfig, runner)
-	runner.AssertCalled(t, "Lock")
-	runner.AssertCalled(t, "UnLock")
+	r := RandomSearchCV(m, nil, nil, m.GetParamsGrid(false), 63, 0, fitConfig)
 	assert.Equal(t, float32(12), r.BestScore.NDCG)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
@@ -160,13 +136,10 @@ func TestRandomSearchCV(t *testing.T) {
 }
 
 func TestModelSearcher(t *testing.T) {
-	runner := new(mockRunner)
-	runner.On("Lock")
-	runner.On("UnLock")
-	searcher := NewModelSearcher(2, 63, 1, false)
+	searcher := NewModelSearcher(2, 63, false)
 	searcher.models = []MatrixFactorization{newMockMatrixFactorizationForSearch(2)}
 	tk := task.NewTask("test", searcher.Complexity())
-	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, runner)
+	err := searcher.Fit(NewMapIndexDataset(), NewMapIndexDataset(), tk, task.NewConstantJobsAllocator(1))
 	assert.NoError(t, err)
 	_, m, score := searcher.GetBestModel()
 	assert.Equal(t, float32(12), score.NDCG)

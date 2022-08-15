@@ -16,6 +16,10 @@ package ranking
 
 import (
 	"fmt"
+	"io"
+	"reflect"
+	"time"
+
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
@@ -30,9 +34,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"io"
-	"reflect"
-	"time"
 )
 
 type Score struct {
@@ -42,7 +43,7 @@ type Score struct {
 }
 
 type FitConfig struct {
-	Jobs       int
+	*task.JobsAllocator
 	Verbose    int
 	Candidates int
 	TopK       int
@@ -51,7 +52,6 @@ type FitConfig struct {
 
 func NewFitConfig() *FitConfig {
 	return &FitConfig{
-		Jobs:       1,
 		Verbose:    10,
 		Candidates: 100,
 		TopK:       10,
@@ -63,8 +63,8 @@ func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
 	return config
 }
 
-func (config *FitConfig) SetJobs(nJobs int) *FitConfig {
-	config.Jobs = nJobs
+func (config *FitConfig) SetJobsAllocator(allocator *task.JobsAllocator) *FitConfig {
+	config.JobsAllocator = allocator
 	return config
 }
 
@@ -302,11 +302,12 @@ func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
 // model with implicit feedback. The pairwise ranking between item i and j for user u is estimated
 // by:
 //
-//   p(i >_u j) = \sigma( p_u^T (q_i - q_j) )
+//	p(i >_u j) = \sigma( p_u^T (q_i - q_j) )
 //
 // Hyper-parameters:
+//
 //	 Reg 		- The regularization parameter of the cost function that is
-// 				  optimized. Default is 0.01.
+//				  optimized. Default is 0.01.
 //	 Lr 		- The learning rate of SGD. Default is 0.05.
 //	 nFactors	- The number of latent factors. Default is 10.
 //	 NEpochs	- The number of iteration of the SGD procedure. Default is 100.
@@ -401,12 +402,13 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		zap.Any("config", config))
 	bpr.Init(trainSet)
 	// Create buffers
-	temp := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	userFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	positiveItemFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	negativeItemFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	rng := make([]base.RandomGenerator, config.Jobs)
-	for i := 0; i < config.Jobs; i++ {
+	maxJobs := config.MaxJobs()
+	temp := base.NewMatrix32(maxJobs, bpr.nFactors)
+	userFactor := base.NewMatrix32(maxJobs, bpr.nFactors)
+	positiveItemFactor := base.NewMatrix32(maxJobs, bpr.nFactors)
+	negativeItemFactor := base.NewMatrix32(maxJobs, bpr.nFactors)
+	rng := make([]base.RandomGenerator, maxJobs)
+	for i := 0; i < maxJobs; i++ {
 		rng[i] = base.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
 	}
 	// Convert array to hashmap
@@ -419,7 +421,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	}
 	snapshots := SnapshotManger{}
 	evalStart := time.Now()
-	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
 	log.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", 0, bpr.nEpochs),
 		zap.String("eval_time", evalTime.String()),
@@ -431,8 +433,9 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
-		cost := make([]float32, config.Jobs)
-		_ = parallel.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
+		numJobs := config.AvailableJobs(config.Task)
+		cost := make([]float32, numJobs)
+		_ = parallel.Parallel(trainSet.Count(), numJobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex int32
 			var ratingCount int
@@ -479,7 +482,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Cross validation
 		if epoch%config.Verbose == 0 || epoch == bpr.nEpochs {
 			evalStart = time.Now()
-			scores = Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+			scores = Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
 			log.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
 				zap.String("fit_time", fitTime.String()),
@@ -721,12 +724,13 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		zap.Any("config", config))
 	ccd.Init(trainSet)
 	// Create temporary matrix
+	maxJobs := config.MaxJobs()
 	s := base.NewMatrix32(ccd.nFactors, ccd.nFactors)
-	userPredictions := make([][]float32, config.Jobs)
-	itemPredictions := make([][]float32, config.Jobs)
-	userRes := make([][]float32, config.Jobs)
-	itemRes := make([][]float32, config.Jobs)
-	for i := 0; i < config.Jobs; i++ {
+	userPredictions := make([][]float32, maxJobs)
+	itemPredictions := make([][]float32, maxJobs)
+	userRes := make([][]float32, maxJobs)
+	itemRes := make([][]float32, maxJobs)
+	for i := 0; i < maxJobs; i++ {
 		userPredictions[i] = make([]float32, trainSet.ItemCount())
 		itemPredictions[i] = make([]float32, trainSet.UserCount())
 		userRes[i] = make([]float32, trainSet.ItemCount())
@@ -735,7 +739,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	// evaluate initial model
 	snapshots := SnapshotManger{}
 	evalStart := time.Now()
-	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
 	log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", 0, ccd.nEpochs),
 		zap.String("eval_time", evalTime.String()),
@@ -757,7 +761,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 		}
-		_ = parallel.Parallel(trainSet.UserCount(), config.Jobs, func(workerId, userIndex int) error {
+		_ = parallel.Parallel(trainSet.UserCount(), config.AvailableJobs(config.Task), func(workerId, userIndex int) error {
 			userFeedback := trainSet.UserFeedback[userIndex]
 			for _, i := range userFeedback {
 				userPredictions[workerId][i] = ccd.InternalPredict(int32(userIndex), i)
@@ -798,7 +802,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 		}
-		_ = parallel.Parallel(trainSet.ItemCount(), config.Jobs, func(workerId, itemIndex int) error {
+		_ = parallel.Parallel(trainSet.ItemCount(), config.AvailableJobs(config.Task), func(workerId, itemIndex int) error {
 			itemFeedback := trainSet.ItemFeedback[itemIndex]
 			for _, u := range itemFeedback {
 				itemPredictions[workerId][u] = ccd.InternalPredict(u, int32(itemIndex))
@@ -831,7 +835,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Cross validation
 		if ep%config.Verbose == 0 || ep == ccd.nEpochs {
 			evalStart = time.Now()
-			scores = Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+			scores = Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
 			log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
 				zap.String("fit_time", fitTime.String()),

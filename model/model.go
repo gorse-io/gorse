@@ -51,8 +51,3 @@ func (model *BaseModel) GetParams() Params {
 func (model *BaseModel) GetRandomGenerator() base.RandomGenerator {
 	return model.rng
 }
-
-type Runner interface {
-	Lock()
-	UnLock()
-}
