@@ -3,10 +3,11 @@
 ############################
 FROM golang:1.19
 
-COPY . gorse
+COPY go.mod go.sum gorse/
 
-RUN cd gorse && \
-    go get -v -t -d ./...
+RUN cd gorse && go mod download
+
+COPY . gorse
 
 RUN cd gorse/cmd/gorse-server && \
     CGO_ENABLED=0 go build -ldflags=" \

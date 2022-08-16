@@ -88,23 +88,16 @@ jobs:
         unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
 
-    - name: Set up Go 1.19.x
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.19.x
-      id: go
-
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
-    - name: Get dependencies
-      run: |
-        go get -v -t -d ./...
-        if [ -f Gopkg.toml ]; then
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            dep ensure
-        fi
-        
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+
     - name: Build
       run: go build -v ./...
 
@@ -133,8 +126,19 @@ jobs:
     steps:
     - uses: actions/checkout@v1
 
+    # Pull the latest image to build, and avoid caching pull-only images.
+    # (docker pull is faster than caching in most cases.)
+    - run: docker-compose pull
+
+    # In this step, this action saves a list of existing images,
+    # the cache is created without them in the post run.
+    # It also restores the cache if it exists.
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      # Ignore the failure of a step and avoid terminating the job.
+      continue-on-error: true
+
     - name: Build the stack
-      run: docker-compose up -d
+      run: docker-compose up -d --build
 
     - name: Check the deployed service URL
       uses: jtalk/url-health-check-action@v2
@@ -167,15 +171,12 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
 
     steps:
-      - name: Set up Go 1.19.x
-        uses: actions/setup-go@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
         with:
-          go-version: 1.19.x
-        id: go
-
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
       - name: Test MariaDB
         run: go test ./storage/data -run ^TestMySQL_
         env:
@@ -185,10 +186,12 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
         with:
-          go-version: 1.19.x
-      - uses: actions/checkout@v2
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
