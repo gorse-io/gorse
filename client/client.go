@@ -49,12 +49,15 @@ func (c *GorseClient) InsertFeedback(feedbacks []Feedback) (*RowAffected, error)
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
-	io.Copy(buf, resp.Body)
+	_, err = io.Copy(buf, resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, ErrorMessage(buf.String())
 	}
@@ -75,10 +78,10 @@ func (c *GorseClient) ListFeedbacks(feedbackType, userId string) (interface{}, e
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -105,10 +108,10 @@ func (c *GorseClient) GetRecommend(userId string, category string, n int) ([]str
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -140,10 +143,10 @@ func (c *GorseClient) SessionRecommend(feedbacks []Feedback, n int) ([]Score, er
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -171,10 +174,10 @@ func (c *GorseClient) GetNeighbors(itemId string, n int) ([]Score, error) {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -205,12 +208,15 @@ func (c *GorseClient) InsertUser(user User) (*RowAffected, error) {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
-	io.Copy(buf, resp.Body)
+	_, err = io.Copy(buf, resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, ErrorMessage(buf.String())
 	}
@@ -231,10 +237,10 @@ func (c *GorseClient) GetUser(userId string) (*User, error) {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -261,10 +267,10 @@ func (c *GorseClient) DeleteUser(userId string) (*RowAffected, error) {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -295,12 +301,15 @@ func (c *GorseClient) InsertItem(item Item) (*RowAffected, error) {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
-	io.Copy(buf, resp.Body)
+	_, err = io.Copy(buf, resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, ErrorMessage(buf.String())
 	}
@@ -321,10 +330,10 @@ func (c *GorseClient) GetItem(itemId string) (*Item, error) {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -351,10 +360,10 @@ func (c *GorseClient) DeleteItem(itemId string) (*RowAffected, error) {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
