@@ -679,6 +679,9 @@ func (r *Redis) ModifyUser(userId string, patch UserPatch) error {
 	if patch.Labels != nil {
 		user.Labels = patch.Labels
 	}
+	if patch.Subscribe != nil {
+		user.Subscribe = patch.Subscribe
+	}
 	// write back
 	return r.insertUser(user)
 }

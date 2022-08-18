@@ -168,7 +168,6 @@ func testUsers(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Equal(t, "override", user.Comment)
 	// test modify
-	err = db.ModifyUser("1", UserPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}})
  	err = db.ModifyUser("1", UserPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}, Subscribe: []string{"d", "e", "f"}})
  	assert.NoError(t, err)
  	err = db.Optimize()
