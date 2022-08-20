@@ -295,14 +295,24 @@ type Database interface {
 func Open(path, tablePrefix string) (Database, error) {
 	var err error
 	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) {
-		opt, err := redis.ParseURL(path)
-		if err != nil {
-			return nil, err
+		if strings.Contains(path, ",") {
+			paths := strings.Split(path, ",")
+			dbCluster := new(RedisCluster)
+			clusterOpt := redis.ClusterOptions{
+				Addrs: paths,
+			}
+			dbCluster.client = redis.NewClusterClient(&clusterOpt)
+			return dbCluster, nil
+		} else {
+			opt, err := redis.ParseURL(path)
+			if err != nil {
+				return nil, err
+			}
+			database := new(Redis)
+			database.client = redis.NewClient(opt)
+			database.TablePrefix = storage.TablePrefix(tablePrefix)
+			return database, nil
 		}
-		database := new(Redis)
-		database.client = redis.NewClient(opt)
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		return database, nil
 	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
 		// connect to database
 		database := new(MongoDB)
