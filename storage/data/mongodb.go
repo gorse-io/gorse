@@ -363,6 +363,9 @@ func (db *MongoDB) ModifyUser(userId string, patch UserPatch) error {
 	if patch.Comment != nil {
 		update["comment"] = patch.Comment
 	}
+	if patch.Subscribe != nil {
+		update["subscribe"] = patch.Subscribe
+	}
 	// execute
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
