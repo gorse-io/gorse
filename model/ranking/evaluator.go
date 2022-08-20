@@ -88,7 +88,8 @@ func NDCG(targetSet *i32set.Set, rankList []int32) float32 {
 }
 
 // Precision is the fraction of relevant ItemFeedback among the recommended ItemFeedback.
-//   \frac{|relevant documents| \cap |retrieved documents|} {|{retrieved documents}|}
+//
+//	\frac{|relevant documents| \cap |retrieved documents|} {|{retrieved documents}|}
 func Precision(targetSet *i32set.Set, rankList []int32) float32 {
 	hit := float32(0)
 	for _, itemId := range rankList {
@@ -101,7 +102,8 @@ func Precision(targetSet *i32set.Set, rankList []int32) float32 {
 
 // Recall is the fraction of relevant ItemFeedback that have been recommended over the total
 // amount of relevant ItemFeedback.
-//   \frac{|relevant documents| \cap |retrieved documents|} {|{relevant documents}|}
+//
+//	\frac{|relevant documents| \cap |retrieved documents|} {|{relevant documents}|}
 func Recall(targetSet *i32set.Set, rankList []int32) float32 {
 	hit := 0
 	for _, itemId := range rankList {
@@ -146,7 +148,7 @@ func MAP(targetSet *i32set.Set, rankList []int32) float32 {
 // mean reciprocal rank is the average of the reciprocal ranks of results for
 // a sample of queries Q:
 //
-//   MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
+//	MRR = \frac{1}{Q} \sum^{|Q|}_{i=1} \frac{1}{rank_i}
 func MRR(targetSet *i32set.Set, rankList []int32) float32 {
 	for i, itemId := range rankList {
 		if targetSet.Has(itemId) {

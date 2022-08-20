@@ -65,6 +65,49 @@ func TestAVX2_Dot(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func TestAVX512_MulConstAddTo(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	avx512{}.MulConstAddTo(a, 2, b)
+	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	native{}.MulConstAddTo(a, 2, c)
+	assert.Equal(t, c, b)
+}
+
+func TestAVX512_MulConstTo(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	avx512{}.MulConstTo(a, 2, b)
+	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	native{}.MulConstTo(a, 2, c)
+	assert.Equal(t, c, b)
+}
+
+func TestAVX512_MulTo(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	expected, actual := make([]float32, len(a)), make([]float32, len(a))
+	avx2{}.MulTo(a, b, actual)
+	native{}.MulTo(a, b, expected)
+	assert.Equal(t, expected, actual)
+}
+
+func TestAVX512_MulConst(t *testing.T) {
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	avx512{}.MulConst(b, 2)
+	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	native{}.MulConst(c, 2)
+	assert.Equal(t, c, b)
+}
+
+func TestAVX512_Dot(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	actual := avx512{}.Dot(a, b)
+	expected := native{}.Dot(a, b)
+	assert.Equal(t, expected, actual)
+}
+
 func initializeFloat32Array(n int) []float32 {
 	x := make([]float32, n)
 	for i := 0; i < n; i++ {

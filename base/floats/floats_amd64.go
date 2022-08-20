@@ -28,38 +28,47 @@ func init() {
 type avx2 struct{}
 
 func (avx2) MulConstAddTo(a []float32, b float32, c []float32) {
-	__mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+	_mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
 }
 
 func (avx2) MulConstTo(a []float32, b float32, c []float32) {
-	__mm256_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+	_mm256_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
 }
 
 func (avx2) MulTo(a, b, c []float32) {
-	__mm256_mul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+	_mm256_mul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
 }
 
 func (avx2) MulConst(a []float32, b float32) {
-	__mm256_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
+	_mm256_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
 }
 
 func (avx2) Dot(a, b []float32) float32 {
 	var ret float32
-	__mm256_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
+	_mm256_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
 	return ret
 }
 
-//go:noescape
-func __mm256_mul_const_add_to(a, b, c, n unsafe.Pointer)
+type avx512 struct{}
 
-//go:noescape
-func __mm256_mul_const_to(a, b, c, n unsafe.Pointer)
+func (avx512) MulConstAddTo(a []float32, b float32, c []float32) {
+	_mm512_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+}
 
-//go:noescape
-func __mm256_mul_const(a, b, n unsafe.Pointer)
+func (avx512) MulConstTo(a []float32, b float32, c []float32) {
+	_mm512_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+}
 
-//go:noescape
-func __mm256_mul_to(a, b, c, n unsafe.Pointer)
+func (avx512) MulTo(a, b, c []float32) {
+	_mm512_mul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+}
 
-//go:noescape
-func __mm256_dot(a, b, n, ret unsafe.Pointer)
+func (avx512) MulConst(a []float32, b float32) {
+	_mm512_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
+}
+
+func (avx512) Dot(a, b []float32) float32 {
+	var ret float32
+	_mm512_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
+	return ret
+}

@@ -97,6 +97,7 @@ void vdot(float *a, float *b, int64_t n, float* ret) {
     }
     float partial[4];
     vst1q_f32(partial, s);
+    *ret = 0;
     for (int i = 0; i < 4; i++) {
         *ret += partial[i];
     }
