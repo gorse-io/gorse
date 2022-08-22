@@ -465,7 +465,10 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.MongoSrvPrefix,
 			storage.MySQLPrefix,
 			storage.PostgresPrefix,
+			storage.PostgreSQLPrefix,
 			storage.ClickhousePrefix,
+			storage.CHHTTPPrefix,
+			storage.CHHTTPSPrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)
@@ -482,10 +485,12 @@ func (config *Config) Validate(oneModel bool) error {
 	if err := validate.RegisterValidation("cache_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
 			storage.RedisPrefix,
+			storage.RedissPrefix,
 			storage.MongoPrefix,
 			storage.MongoSrvPrefix,
 			storage.MySQLPrefix,
 			storage.PostgresPrefix,
+			storage.PostgreSQLPrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)
