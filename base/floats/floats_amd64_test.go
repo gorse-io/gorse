@@ -22,45 +22,45 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAVX2_MulConstAddTo(t *testing.T) {
+func TestAVX_MulConstAddTo(t *testing.T) {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	avx2{}.MulConstAddTo(a, 2, b)
+	avx{}.MulConstAddTo(a, 2, b)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	native{}.MulConstAddTo(a, 2, c)
 	assert.Equal(t, c, b)
 }
 
-func TestAVX2_MulConstTo(t *testing.T) {
+func TestAVX_MulConstTo(t *testing.T) {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	avx2{}.MulConstTo(a, 2, b)
+	avx{}.MulConstTo(a, 2, b)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	native{}.MulConstTo(a, 2, c)
 	assert.Equal(t, c, b)
 }
 
-func TestAVX2_MulTo(t *testing.T) {
+func TestAVX_MulTo(t *testing.T) {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	expected, actual := make([]float32, len(a)), make([]float32, len(a))
-	avx2{}.MulTo(a, b, actual)
+	avx{}.MulTo(a, b, actual)
 	native{}.MulTo(a, b, expected)
 	assert.Equal(t, expected, actual)
 }
 
-func TestAVX2_MulConst(t *testing.T) {
+func TestAVX_MulConst(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	avx2{}.MulConst(b, 2)
+	avx{}.MulConst(b, 2)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	native{}.MulConst(c, 2)
 	assert.Equal(t, c, b)
 }
 
-func TestAVX2_Dot(t *testing.T) {
+func TestAVX_Dot(t *testing.T) {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	actual := avx2{}.Dot(a, b)
+	actual := avx{}.Dot(a, b)
 	expected := native{}.Dot(a, b)
 	assert.Equal(t, expected, actual)
 }
@@ -87,7 +87,7 @@ func TestAVX512_MulTo(t *testing.T) {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	expected, actual := make([]float32, len(a)), make([]float32, len(a))
-	avx2{}.MulTo(a, b, actual)
+	avx{}.MulTo(a, b, actual)
 	native{}.MulTo(a, b, expected)
 	assert.Equal(t, expected, actual)
 }
@@ -136,7 +136,7 @@ func BenchmarkDot_AXV2(b *testing.B) {
 			v2 := initializeFloat32Array(i)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				avx2{}.Dot(v1, v2)
+				avx{}.Dot(v1, v2)
 			}
 		})
 	}
@@ -162,7 +162,7 @@ func BenchmarkMulConstAddTo_AVX2(b *testing.B) {
 			v2 := initializeFloat32Array(i)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				avx2{}.MulConstAddTo(v1, 2, v2)
+				avx{}.MulConstAddTo(v1, 2, v2)
 			}
 		})
 	}
@@ -188,7 +188,7 @@ func BenchmarkMulConstTo_AVX2(b *testing.B) {
 			v2 := initializeFloat32Array(i)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				avx2{}.MulConstTo(v1, 2, v2)
+				avx{}.MulConstTo(v1, 2, v2)
 			}
 		})
 	}
@@ -212,7 +212,7 @@ func BenchmarkMulConst_AVX2(b *testing.B) {
 			v1 := initializeFloat32Array(i)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				avx2{}.MulConst(v1, 2)
+				avx{}.MulConst(v1, 2)
 			}
 		})
 	}
@@ -240,7 +240,7 @@ func BenchmarkMulTo_AXV2(b *testing.B) {
 			v3 := make([]float32, i)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				avx2{}.MulTo(v1, v2, v3)
+				avx{}.MulTo(v1, v2, v3)
 			}
 		})
 	}

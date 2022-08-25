@@ -24,13 +24,13 @@ import (
 )
 
 var (
-	attributeLine = lo.Must(regexp.Compile("^\\s+\\..+$"))
-	nameLine      = lo.Must(regexp.Compile("^\\w+:.+$"))
-	labelLine     = lo.Must(regexp.Compile("^\\.\\w+_\\d+:.*$"))
-	codeLine      = lo.Must(regexp.Compile("^\\s+\\w+.+$"))
+	attributeLine = lo.Must(regexp.Compile(`^\s+\..+$`))
+	nameLine      = lo.Must(regexp.Compile(`^\w+:.+$`))
+	labelLine     = lo.Must(regexp.Compile(`^\.\w+_\d+:.*$`))
+	codeLine      = lo.Must(regexp.Compile(`^\s+\w+.+$`))
 
-	symbolLine = lo.Must(regexp.Compile("^\\w+\\s+<\\w+>:$"))
-	dataLine   = lo.Must(regexp.Compile("^\\w+:\\s+\\w+\\s+.+$"))
+	symbolLine = lo.Must(regexp.Compile(`^\w+\s+<\w+>:$`))
+	dataLine   = lo.Must(regexp.Compile(`^\w+:\s+\w+\s+.+$`))
 
 	registers = []string{"DI", "SI", "DX", "CX"}
 )

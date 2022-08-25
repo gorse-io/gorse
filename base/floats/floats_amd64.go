@@ -20,30 +20,32 @@ import (
 )
 
 func init() {
-	if cpuid.CPU.Supports(cpuid.AVX2) {
-		impl = avx2{}
+	if cpuid.CPU.Supports(cpuid.AVX512F) && cpuid.CPU.Supports(cpuid.AVX512DQ) {
+		impl = avx{}
+	} else if cpuid.CPU.Supports(cpuid.AVX) && cpuid.CPU.Supports(cpuid.FMA3) {
+		impl = avx{}
 	}
 }
 
-type avx2 struct{}
+type avx struct{}
 
-func (avx2) MulConstAddTo(a []float32, b float32, c []float32) {
+func (avx) MulConstAddTo(a []float32, b float32, c []float32) {
 	_mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
 }
 
-func (avx2) MulConstTo(a []float32, b float32, c []float32) {
+func (avx) MulConstTo(a []float32, b float32, c []float32) {
 	_mm256_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
 }
 
-func (avx2) MulTo(a, b, c []float32) {
+func (avx) MulTo(a, b, c []float32) {
 	_mm256_mul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
 }
 
-func (avx2) MulConst(a []float32, b float32) {
+func (avx) MulConst(a []float32, b float32) {
 	_mm256_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
 }
 
-func (avx2) Dot(a, b []float32) float32 {
+func (avx) Dot(a, b []float32) float32 {
 	var ret float32
 	_mm256_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
 	return ret
