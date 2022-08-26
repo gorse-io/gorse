@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+//go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative protocol.proto
+
 func DecodeTask(in *PushTaskInfoRequest) *task.Task {
 	return &task.Task{
 		Name:       in.GetName(),
