@@ -15,6 +15,7 @@
 package floats
 
 import (
+	"github.com/klauspost/cpuid/v2"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -23,6 +24,9 @@ import (
 )
 
 func TestAVX_MulConstAddTo(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX) || !cpuid.CPU.Supports(cpuid.FMA3) {
+		t.Skip("AVX and FMA3 are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	avx{}.MulConstAddTo(a, 2, b)
@@ -32,6 +36,9 @@ func TestAVX_MulConstAddTo(t *testing.T) {
 }
 
 func TestAVX_MulConstTo(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX) || !cpuid.CPU.Supports(cpuid.FMA3) {
+		t.Skip("AVX and FMA3 are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	avx{}.MulConstTo(a, 2, b)
@@ -41,6 +48,9 @@ func TestAVX_MulConstTo(t *testing.T) {
 }
 
 func TestAVX_MulTo(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX) || !cpuid.CPU.Supports(cpuid.FMA3) {
+		t.Skip("AVX and FMA3 are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	expected, actual := make([]float32, len(a)), make([]float32, len(a))
@@ -50,6 +60,9 @@ func TestAVX_MulTo(t *testing.T) {
 }
 
 func TestAVX_MulConst(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX) || !cpuid.CPU.Supports(cpuid.FMA3) {
+		t.Skip("AVX and FMA3 are not supported in the current CPU")
+	}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	avx{}.MulConst(b, 2)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
@@ -58,6 +71,9 @@ func TestAVX_MulConst(t *testing.T) {
 }
 
 func TestAVX_Dot(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX) || !cpuid.CPU.Supports(cpuid.FMA3) {
+		t.Skip("AVX and FMA3 are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	actual := avx{}.Dot(a, b)
@@ -66,6 +82,9 @@ func TestAVX_Dot(t *testing.T) {
 }
 
 func TestAVX512_MulConstAddTo(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX512F) || !cpuid.CPU.Supports(cpuid.AVX512DQ) {
+		t.Skip("AVX512F and AVX512DQ are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	avx512{}.MulConstAddTo(a, 2, b)
@@ -75,6 +94,9 @@ func TestAVX512_MulConstAddTo(t *testing.T) {
 }
 
 func TestAVX512_MulConstTo(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX512F) || !cpuid.CPU.Supports(cpuid.AVX512DQ) {
+		t.Skip("AVX512F and AVX512DQ are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	avx512{}.MulConstTo(a, 2, b)
@@ -84,6 +106,9 @@ func TestAVX512_MulConstTo(t *testing.T) {
 }
 
 func TestAVX512_MulTo(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX512F) || !cpuid.CPU.Supports(cpuid.AVX512DQ) {
+		t.Skip("AVX512F and AVX512DQ are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	expected, actual := make([]float32, len(a)), make([]float32, len(a))
@@ -93,6 +118,9 @@ func TestAVX512_MulTo(t *testing.T) {
 }
 
 func TestAVX512_MulConst(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX512F) || !cpuid.CPU.Supports(cpuid.AVX512DQ) {
+		t.Skip("AVX512F and AVX512DQ are not supported in the current CPU")
+	}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	avx512{}.MulConst(b, 2)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
@@ -101,6 +129,9 @@ func TestAVX512_MulConst(t *testing.T) {
 }
 
 func TestAVX512_Dot(t *testing.T) {
+	if !cpuid.CPU.Supports(cpuid.AVX512F) || !cpuid.CPU.Supports(cpuid.AVX512DQ) {
+		t.Skip("AVX512F and AVX512DQ are not supported in the current CPU")
+	}
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	actual := avx512{}.Dot(a, b)
