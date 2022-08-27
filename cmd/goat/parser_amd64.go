@@ -17,7 +17,6 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/klauspost/asmfmt"
-	"github.com/samber/lo"
 	"os"
 	"regexp"
 	"strings"
@@ -27,13 +26,13 @@ import (
 const buildTags = "//go:build !noasm && amd64\n"
 
 var (
-	attributeLine = lo.Must(regexp.Compile(`^\s+\..+$`))
-	nameLine      = lo.Must(regexp.Compile(`^\w+:.+$`))
-	labelLine     = lo.Must(regexp.Compile(`^\.\w+_\d+:.*$`))
-	codeLine      = lo.Must(regexp.Compile(`^\s+\w+.+$`))
+	attributeLine = regexp.MustCompile(`^\s+\..+$`)
+	nameLine      = regexp.MustCompile(`^\w+:.+$`)
+	labelLine     = regexp.MustCompile(`^\.\w+_\d+:.*$`)
+	codeLine      = regexp.MustCompile(`^\s+\w+.+$`)
 
-	symbolLine = lo.Must(regexp.Compile(`^\w+\s+<\w+>:$`))
-	dataLine   = lo.Must(regexp.Compile(`^\w+:\s+\w+\s+.+$`))
+	symbolLine = regexp.MustCompile(`^\w+\s+<\w+>:$`)
+	dataLine   = regexp.MustCompile(`^\w+:\s+\w+\s+.+$`)
 
 	registers = []string{"DI", "SI", "DX", "CX"}
 )
@@ -62,7 +61,12 @@ func (line *Line) String() string {
 			if pos > 0 {
 				builder.WriteString("; ")
 			}
-			if len(line.Binary)-pos >= 4 {
+			if len(line.Binary)-pos >= 8 {
+				builder.WriteString(fmt.Sprintf("QUAD $0x%v%v%v%v%v%v%v%v",
+					line.Binary[pos+7], line.Binary[pos+6], line.Binary[pos+5], line.Binary[pos+4],
+					line.Binary[pos+3], line.Binary[pos+2], line.Binary[pos+1], line.Binary[pos]))
+				pos += 8
+			} else if len(line.Binary)-pos >= 4 {
 				builder.WriteString(fmt.Sprintf("LONG $0x%v%v%v%v",
 					line.Binary[pos+3], line.Binary[pos+2], line.Binary[pos+1], line.Binary[pos]))
 				pos += 4
@@ -156,8 +160,9 @@ func parseObjectDump(dump string, functions map[string][]Line) error {
 				}
 				binary = append(binary, s)
 			}
-			if assembly == "" ||
-				strings.HasPrefix(assembly, "nop") ||
+			if assembly == "" {
+				return fmt.Errorf("try to increase --insn-width of objdump")
+			} else if strings.HasPrefix(assembly, "nop") ||
 				assembly == "xchg   %ax,%ax" {
 				continue
 			}

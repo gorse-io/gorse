@@ -16,7 +16,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +38,7 @@ type TranslateUnit struct {
 	Go         string
 	Package    string
 	Options    []string
+	Offset     int
 }
 
 func NewTranslateUnit(source string, outputDir string, options ...string) TranslateUnit {
@@ -63,7 +63,7 @@ func (t *TranslateUnit) parseSource() ([]Function, error) {
 	if err != nil {
 		return nil, err
 	}
-	source, err := fixSource(t.Source)
+	source, err := t.fixSource(t.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (t *TranslateUnit) parseSource() ([]Function, error) {
 			if funcIdent.Case != cc.DirectDeclaratorFuncParam {
 				continue
 			}
-			if function, err := convertFunction(funcIdent); err != nil {
+			if function, err := t.convertFunction(funcIdent); err != nil {
 				return nil, err
 			} else {
 				functions = append(functions, function)
@@ -131,7 +131,7 @@ func (t *TranslateUnit) compile(args ...string) error {
 	if err != nil {
 		return err
 	}
-	_, err = runCommand("clang", append([]string{"-c", t.Source, "-o", t.Object}, args...)...)
+	_, err = runCommand("clang", append([]string{"-c", t.Assembly, "-o", t.Object}, args...)...)
 	return err
 }
 
@@ -150,7 +150,7 @@ func (t *TranslateUnit) Translate() error {
 	if err != nil {
 		return err
 	}
-	dump, _ := runCommand("objdump", "-d", t.Object)
+	dump, _ := runCommand("objdump", "-d", t.Object, "--insn-width", "16")
 	err = parseObjectDump(dump, assembly)
 	if err != nil {
 		return err
@@ -162,13 +162,17 @@ func (t *TranslateUnit) Translate() error {
 }
 
 // fixSource fixes compile errors in source.
-func fixSource(path string) (string, error) {
-	bytes, err := ioutil.ReadFile(path)
+func (t *TranslateUnit) fixSource(path string) (string, error) {
+	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	if runtime.GOARCH == "amd64" {
-		return string(bytes), nil
+		t.Offset = -1
+		var builder strings.Builder
+		builder.WriteString("#define __STDC_HOSTED__ 1\n")
+		builder.Write(bytes)
+		return builder.String(), nil
 	} else if runtime.GOARCH == "arm64" {
 		var (
 			builder     strings.Builder
@@ -226,8 +230,8 @@ type Function struct {
 }
 
 // convertFunction extracts the function definition from cc.DirectDeclarator.
-func convertFunction(declarator *cc.DirectDeclarator) (Function, error) {
-	params, err := convertFunctionParameters(declarator.ParameterTypeList.ParameterList)
+func (t *TranslateUnit) convertFunction(declarator *cc.DirectDeclarator) (Function, error) {
+	params, err := t.convertFunctionParameters(declarator.ParameterTypeList.ParameterList)
 	if err != nil {
 		return Function{}, err
 	}
@@ -239,7 +243,7 @@ func convertFunction(declarator *cc.DirectDeclarator) (Function, error) {
 }
 
 // convertFunctionParameters extracts function parameters from cc.ParameterList.
-func convertFunctionParameters(params *cc.ParameterList) ([]string, error) {
+func (t *TranslateUnit) convertFunctionParameters(params *cc.ParameterList) ([]string, error) {
 	declaration := params.ParameterDeclaration
 	paramName := declaration.Declarator.DirectDeclarator.Token.Value
 	paramType := declaration.DeclarationSpecifiers.TypeSpecifier.Token.Value
@@ -247,11 +251,11 @@ func convertFunctionParameters(params *cc.ParameterList) ([]string, error) {
 	if !isPointer && !supportedTypes.Has(paramType.String()) {
 		position := declaration.Position()
 		return nil, fmt.Errorf("%v:%v:%v: error: unsupported type: %v\n",
-			position.Filename, position.Line, position.Column, paramType)
+			position.Filename, position.Line+t.Offset, position.Column, paramType)
 	}
 	paramNames := []string{paramName.String()}
 	if params.ParameterList != nil {
-		if nextParamNames, err := convertFunctionParameters(params.ParameterList); err != nil {
+		if nextParamNames, err := t.convertFunctionParameters(params.ParameterList); err != nil {
 			return nil, err
 		} else {
 			paramNames = append(paramNames, nextParamNames...)

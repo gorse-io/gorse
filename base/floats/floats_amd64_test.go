@@ -15,12 +15,12 @@
 package floats
 
 import (
-	"github.com/klauspost/cpuid/v2"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"testing"
 
+	"github.com/klauspost/cpuid/v2"
 	"github.com/stretchr/testify/assert"
 )
 
