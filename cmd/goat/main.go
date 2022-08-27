@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -34,9 +35,10 @@ type TranslateUnit struct {
 	GoAssembly string
 	Go         string
 	Package    string
+	Options    []string
 }
 
-func NewTranslateUnit(source string, outputDir string) TranslateUnit {
+func NewTranslateUnit(source string, outputDir string, options ...string) TranslateUnit {
 	sourceExt := filepath.Ext(source)
 	noExtSourcePath := source[:len(source)-len(sourceExt)]
 	noExtSourceBase := filepath.Base(noExtSourcePath)
@@ -47,6 +49,7 @@ func NewTranslateUnit(source string, outputDir string) TranslateUnit {
 		GoAssembly: filepath.Join(outputDir, noExtSourceBase+".s"),
 		Go:         filepath.Join(outputDir, noExtSourceBase+".go"),
 		Package:    filepath.Base(outputDir),
+		Options:    options,
 	}
 }
 
@@ -77,6 +80,9 @@ func (t *TranslateUnit) parseSource() ([]Function, error) {
 			}
 		}
 	}
+	sort.Slice(functions, func(i, j int) bool {
+		return functions[i].Position < functions[j].Position
+	})
 	return functions, nil
 }
 
@@ -127,7 +133,7 @@ func (t *TranslateUnit) Translate() error {
 	if err = t.generateGoStubs(functions); err != nil {
 		return err
 	}
-	if err = t.compile("-O3", "-mavx", "-mfma"); err != nil {
+	if err = t.compile(t.Options...); err != nil {
 		return err
 	}
 	assembly, err := parseAssembly(t.Assembly)
@@ -147,6 +153,7 @@ func (t *TranslateUnit) Translate() error {
 
 type Function struct {
 	Name       string
+	Position   int
 	Parameters []string
 	Lines      []Line
 }
@@ -159,6 +166,7 @@ func convertFunction(declarator *cc.DirectDeclarator) (Function, error) {
 	}
 	return Function{
 		Name:       declarator.DirectDeclarator.Token.Value.String(),
+		Position:   declarator.Position().Line,
 		Parameters: params,
 	}, nil
 }
@@ -199,15 +207,36 @@ func runCommand(name string, arg ...string) (string, error) {
 }
 
 var command = &cobra.Command{
-	Use: "goat",
+	Use:  "goat source [-o output_directory]",
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		source := "/data/home/zhenghaoz/GolandProjects/gorse_bug/base/floats/src/floats_avx.c"
-		file := NewTranslateUnit(source, "/data/home/zhenghaoz/GolandProjects/gorse_bug/base/floats")
+		output, _ := cmd.PersistentFlags().GetString("output")
+		if output == "" {
+			var err error
+			if output, err = os.Getwd(); err != nil {
+				_, _ = fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		}
+		var options []string
+		machineOptions, _ := cmd.PersistentFlags().GetStringSlice("machine-option")
+		for _, m := range machineOptions {
+			options = append(options, "-m"+m)
+		}
+		optimizeLevel, _ := cmd.PersistentFlags().GetInt("optimize-level")
+		options = append(options, fmt.Sprintf("-O%d", optimizeLevel))
+		file := NewTranslateUnit(args[0], output, options...)
 		if err := file.Translate(); err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	},
+}
+
+func init() {
+	command.PersistentFlags().StringP("output", "o", "", "output directory of generated files")
+	command.PersistentFlags().StringSliceP("machine-option", "m", nil, "machine option for clang")
+	command.PersistentFlags().IntP("optimize-level", "O", 0, "optimization level for clang")
 }
 
 func main() {

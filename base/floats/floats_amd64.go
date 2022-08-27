@@ -19,6 +19,9 @@ import (
 	"unsafe"
 )
 
+//go:generate go run ../../cmd/goat src/floats_avx.c -O3 -mavx -mfma
+//go:generate go run ../../cmd/goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f -mavx512dq
+
 func init() {
 	if cpuid.CPU.Supports(cpuid.AVX512F) && cpuid.CPU.Supports(cpuid.AVX512DQ) {
 		impl = avx{}

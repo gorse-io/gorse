@@ -16,6 +16,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/klauspost/asmfmt"
 	"github.com/samber/lo"
 	"os"
 	"regexp"
@@ -194,6 +195,10 @@ func generateGoAssembly(path string, functions []Function) error {
 			os.Exit(1)
 		}
 	}(f)
-	_, err = f.WriteString(builder.String())
+	bytes, err := asmfmt.Format(strings.NewReader(builder.String()))
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(bytes)
 	return err
 }

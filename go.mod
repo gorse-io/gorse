@@ -23,6 +23,7 @@ require (
 	github.com/haxii/go-swagger-ui v3.19.4+incompatible
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v1.0.0
+	github.com/klauspost/asmfmt v1.3.2
 	github.com/klauspost/cpuid/v2 v2.1.0
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.10.6
@@ -133,7 +134,7 @@ require (
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
-	modernc.org/cc/v3 v3.36.0 // indirect
+	modernc.org/cc/v3 v3.36.0
 	modernc.org/ccgo/v3 v3.16.8 // indirect
 	modernc.org/libc v1.16.17 // indirect
 	modernc.org/memory v1.1.1 // indirect
