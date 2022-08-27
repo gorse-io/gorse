@@ -9,6 +9,7 @@ require (
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.10.1
+	github.com/dzwvip/oracle v1.2.4
 	github.com/emicklei/go-restful-openapi/v2 v2.9.0
 	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/go-playground/locales v0.14.0
@@ -53,7 +54,8 @@ require (
 	gorm.io/driver/postgres v1.3.5
 	gorm.io/driver/sqlite v1.3.4
 	gorm.io/gorm v1.23.6
-	modernc.org/mathutil v1.4.1
+	modernc.org/cc/v3 v3.36.3
+	modernc.org/mathutil v1.5.0
 	modernc.org/sortutil v1.1.0
 	modernc.org/sqlite v1.17.3
 	moul.io/zapgorm2 v1.1.3
@@ -65,7 +67,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/dzwvip/oracle v1.2.4
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
@@ -134,13 +135,12 @@ require (
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
-	modernc.org/cc/v3 v3.36.0
 	modernc.org/ccgo/v3 v3.16.8 // indirect
 	modernc.org/libc v1.16.17 // indirect
 	modernc.org/memory v1.1.1 // indirect
 	modernc.org/opt v0.1.3 // indirect
-	modernc.org/strutil v1.1.2 // indirect
-	modernc.org/token v1.0.0 // indirect
+	modernc.org/strutil v1.1.3 // indirect
+	modernc.org/token v1.0.1 // indirect
 )
 
 replace (

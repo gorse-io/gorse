@@ -18,6 +18,8 @@ import (
 	"unsafe"
 )
 
+//go:generate go run ../../cmd/goat src/floats_neon.c -O3
+
 func init() {
 	impl = neon{}
 }
@@ -45,18 +47,3 @@ func (neon) Dot(a, b []float32) float32 {
 	vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
 	return ret
 }
-
-//go:noescape
-func vmul_const_add_to(a, b, c, n unsafe.Pointer)
-
-//go:noescape
-func vmul_const_to(a, b, c, n unsafe.Pointer)
-
-//go:noescape
-func vmul_const(a, b, n unsafe.Pointer)
-
-//go:noescape
-func vmul_to(a, b, c, n unsafe.Pointer)
-
-//go:noescape
-func vdot(a, b, n, ret unsafe.Pointer)

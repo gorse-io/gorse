@@ -16,67 +16,44 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/klauspost/asmfmt"
-	"github.com/samber/lo"
 	"os"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/klauspost/asmfmt"
 )
 
-const buildTags = "//go:build !noasm && amd64\n"
+const buildTags = "//go:build !noasm && arm64\n"
 
 var (
-	attributeLine = lo.Must(regexp.Compile(`^\s+\..+$`))
-	nameLine      = lo.Must(regexp.Compile(`^\w+:.+$`))
-	labelLine     = lo.Must(regexp.Compile(`^\.\w+_\d+:.*$`))
-	codeLine      = lo.Must(regexp.Compile(`^\s+\w+.+$`))
+	attributeLine = regexp.MustCompile(`^\s+\..+$`)
+	nameLine      = regexp.MustCompile(`^\w+:.+$`)
+	labelLine     = regexp.MustCompile(`^\.\w+_\d+:.*$`)
+	codeLine      = regexp.MustCompile(`^\s+\w+.+$`)
 
-	symbolLine = lo.Must(regexp.Compile(`^\w+\s+<\w+>:$`))
-	dataLine   = lo.Must(regexp.Compile(`^\w+:\s+\w+\s+.+$`))
+	symbolLine = regexp.MustCompile(`^\w+\s+<\w+>:$`)
+	dataLine   = regexp.MustCompile(`^\w+:\s+\w+\s+.+$`)
 
-	registers = []string{"DI", "SI", "DX", "CX"}
+	registers = []string{"R0", "R1", "R2", "R3"}
 )
 
 type Line struct {
-	Label    string
+	Labels   []string
 	Assembly string
-	Binary   []string
+	Binary   string
 }
 
 func (line *Line) String() string {
 	var builder strings.Builder
-	if len(line.Label) > 0 {
-		builder.WriteString(line.Label)
+	for _, label := range line.Labels {
+		builder.WriteString(label)
 		builder.WriteString(":\n")
 	}
 	builder.WriteString("\t")
-	if strings.HasPrefix(line.Assembly, "j") {
-		splits := strings.Split(line.Assembly, ".")
-		op := strings.TrimSpace(splits[0])
-		operand := splits[1]
-		builder.WriteString(fmt.Sprintf("%s %s", strings.ToUpper(op), operand))
-	} else {
-		pos := 0
-		for pos < len(line.Binary) {
-			if pos > 0 {
-				builder.WriteString("; ")
-			}
-			if len(line.Binary)-pos >= 4 {
-				builder.WriteString(fmt.Sprintf("LONG $0x%v%v%v%v",
-					line.Binary[pos+3], line.Binary[pos+2], line.Binary[pos+1], line.Binary[pos]))
-				pos += 4
-			} else if len(line.Binary)-pos >= 2 {
-				builder.WriteString(fmt.Sprintf("WORD $0x%v%v", line.Binary[pos+1], line.Binary[pos]))
-				pos += 2
-			} else {
-				builder.WriteString(fmt.Sprintf("BYTE $0x%v", line.Binary[pos]))
-				pos += 1
-			}
-		}
-		builder.WriteString("\t// ")
-		builder.WriteString(line.Assembly)
-	}
+	builder.WriteString(fmt.Sprintf("WORD $0x%v", line.Binary))
+	builder.WriteString("\t// ")
+	builder.WriteString(line.Assembly)
 	builder.WriteString("\n")
 	return builder.String()
 }
@@ -109,7 +86,12 @@ func parseAssembly(path string) (map[string][]Line, error) {
 		} else if labelLine.Match([]byte(line)) {
 			labelName = strings.Split(line, ":")[0]
 			labelName = labelName[1:]
-			functions[functionName] = append(functions[functionName], Line{Label: labelName})
+			lines := functions[functionName]
+			if len(lines) == 1 || lines[len(lines)-1].Assembly != "" {
+				functions[functionName] = append(functions[functionName], Line{Labels: []string{labelName}})
+			} else {
+				lines[len(lines)-1].Labels = append(lines[len(lines)-1].Labels, labelName)
+			}
 		} else if codeLine.Match([]byte(line)) {
 			asm := strings.Split(line, "#")[0]
 			asm = strings.TrimSpace(asm)
@@ -145,7 +127,7 @@ func parseObjectDump(dump string, functions map[string][]Line) error {
 			data = strings.TrimSpace(data)
 			splits := strings.Split(data, " ")
 			var (
-				binary   []string
+				binary   string
 				assembly string
 			)
 			for i, s := range splits {
@@ -154,12 +136,7 @@ func parseObjectDump(dump string, functions map[string][]Line) error {
 					assembly = strings.TrimSpace(assembly)
 					break
 				}
-				binary = append(binary, s)
-			}
-			if assembly == "" ||
-				strings.HasPrefix(assembly, "nop") ||
-				assembly == "xchg   %ax,%ax" {
-				continue
+				binary = s
 			}
 			if lineNumber >= len(functions[functionName]) {
 				return fmt.Errorf("%d: unexpected objectdump line: %s", i, line)
@@ -179,7 +156,7 @@ func generateGoAssembly(path string, functions []Function) error {
 	for _, function := range functions {
 		builder.WriteString(fmt.Sprintf("\nTEXT ·%v(SB), $0-32\n", function.Name))
 		for i, param := range function.Parameters {
-			builder.WriteString(fmt.Sprintf("\tMOVQ %s+%d(FP), %s\n", param, i*8, registers[i]))
+			builder.WriteString(fmt.Sprintf("\tMOVD %s+%d(FP), %s\n", param, i*8, registers[i]))
 		}
 		for _, line := range function.Lines {
 			builder.WriteString(line.String())

@@ -16,6 +16,7 @@ package floats
 
 import (
 	"math/rand"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -74,130 +75,85 @@ func initializeFloat32Array(n int) []float32 {
 }
 
 func BenchmarkDot(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.Dot(v1, v2)
-			}
-		})
-	}
-}
-
-func BenchmarkDot_Neon(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				neon{}.Dot(v1, v2)
+	for _, impl := range []implementation{native{}, neon{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.Dot(v1, v2)
+					}
+				})
 			}
 		})
 	}
 }
 
 func BenchmarkMulConstAddTo(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulConstAddTo(v1, 2, v2)
-			}
-		})
-	}
-}
-
-func BenchmarkMulConstAddTo_Neon(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				neon{}.MulConstAddTo(v1, 2, v2)
+	for _, impl := range []implementation{native{}, neon{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.MulConstAddTo(v1, 2, v2)
+					}
+				})
 			}
 		})
 	}
 }
 
 func BenchmarkMulConstTo(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulConstTo(v1, 2, v2)
-			}
-		})
-	}
-}
-
-func BenchmarkMulConstTo_Neon(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				neon{}.MulConstTo(v1, 2, v2)
+	for _, impl := range []implementation{native{}, neon{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.MulConstTo(v1, 2, v2)
+					}
+				})
 			}
 		})
 	}
 }
 
 func BenchmarkMulConst(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulConst(v1, 2)
-			}
-		})
-	}
-}
-
-func BenchmarkMulConst_Neon(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				neon{}.MulConst(v1, 2)
+	for _, impl := range []implementation{native{}, neon{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.MulConst(v1, 2)
+					}
+				})
 			}
 		})
 	}
 }
 
 func BenchmarkMulTo(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			v3 := make([]float32, i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulTo(v1, v2, v3)
-			}
-		})
-	}
-}
-
-func BenchmarkMulTo_Neon(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			v3 := make([]float32, i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				neon{}.MulTo(v1, v2, v3)
+	for _, impl := range []implementation{native{}, neon{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.MulTo(v1, v2, v3)
+					}
+				})
 			}
 		})
 	}
