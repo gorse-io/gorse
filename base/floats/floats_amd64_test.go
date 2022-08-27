@@ -17,6 +17,7 @@ package floats
 import (
 	"github.com/klauspost/cpuid/v2"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -148,130 +149,68 @@ func initializeFloat32Array(n int) []float32 {
 }
 
 func BenchmarkDot(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.Dot(v1, v2)
-			}
-		})
-	}
-}
-
-func BenchmarkDot_AXV2(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				avx{}.Dot(v1, v2)
+	for _, impl := range []implementation{native{}, avx{}, avx512{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.Dot(v1, v2)
+					}
+				})
 			}
 		})
 	}
 }
 
 func BenchmarkMulConstAddTo(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulConstAddTo(v1, 2, v2)
-			}
-		})
-	}
-}
-
-func BenchmarkMulConstAddTo_AVX2(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				avx{}.MulConstAddTo(v1, 2, v2)
-			}
-		})
-	}
-}
-
-func BenchmarkMulConstTo(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulConstTo(v1, 2, v2)
-			}
-		})
-	}
-}
-
-func BenchmarkMulConstTo_AVX2(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				avx{}.MulConstTo(v1, 2, v2)
+	for _, impl := range []implementation{native{}, avx{}, avx512{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.MulConstAddTo(v1, 2, v2)
+					}
+				})
 			}
 		})
 	}
 }
 
 func BenchmarkMulConst(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulConst(v1, 2)
-			}
-		})
-	}
-}
-
-func BenchmarkMulConst_AVX2(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				avx{}.MulConst(v1, 2)
+	for _, impl := range []implementation{native{}, avx{}, avx512{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.MulConst(v1, 2)
+					}
+				})
 			}
 		})
 	}
 }
 
 func BenchmarkMulTo(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			v3 := make([]float32, i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				native{}.MulTo(v1, v2, v3)
-			}
-		})
-	}
-}
-
-func BenchmarkMulTo_AXV2(b *testing.B) {
-	for i := 16; i <= 128; i *= 2 {
-		b.Run(strconv.Itoa(i), func(b *testing.B) {
-			v1 := initializeFloat32Array(i)
-			v2 := initializeFloat32Array(i)
-			v3 := make([]float32, i)
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				avx{}.MulTo(v1, v2, v3)
+	for _, impl := range []implementation{native{}, avx{}, avx512{}} {
+		b.Run(reflect.TypeOf(impl).Name(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.MulTo(v1, v2, v3)
+					}
+				})
 			}
 		})
 	}
