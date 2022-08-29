@@ -51,10 +51,10 @@ LBB0_4:
 LBB0_6:
 	WORD $0xf983; BYTE $0x07     // cmpl	$7, %ecx
 	JLE  LBB0_8
-	LONG $0x0710fcc5             // vmovups	(%rdi), %ymm0
-	LONG $0x187de2c4; BYTE $0x0e // vbroadcastss	(%rsi), %ymm1
-	LONG $0xa87de2c4; BYTE $0x0a // vfmadd213ps	(%rdx), %ymm0, %ymm1
-	LONG $0x0a11fcc5             // vmovups	%ymm1, (%rdx)
+	LONG $0x187de2c4; BYTE $0x06 // vbroadcastss	(%rsi), %ymm0
+	LONG $0x0759fcc5             // vmulps	(%rdi), %ymm0, %ymm0
+	LONG $0x0258fcc5             // vaddps	(%rdx), %ymm0, %ymm0
+	LONG $0x0211fcc5             // vmovups	%ymm0, (%rdx)
 	LONG $0x20c78348             // addq	$32, %rdi
 	LONG $0x20c28348             // addq	$32, %rdx
 	WORD $0xc183; BYTE $0xf8     // addl	$-8, %ecx

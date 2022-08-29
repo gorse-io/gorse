@@ -27,26 +27,26 @@ TEXT ·_mm256_mul_const_add_to(SB), $0-32
 	WORD $0xd8f7             // negl	%eax
 
 LBB0_3:
-	LONG $0x0710fcc5               // vmovups	(%rdi), %ymm0
-	LONG $0x187de2c4; BYTE $0x0e   // vbroadcastss	(%rsi), %ymm1
-	LONG $0xa87de2c4; BYTE $0x0a   // vfmadd213ps	(%rdx), %ymm0, %ymm1
-	LONG $0x0a11fcc5               // vmovups	%ymm1, (%rdx)
-	LONG $0x4710fcc5; BYTE $0x20   // vmovups	32(%rdi), %ymm0
-	LONG $0x187de2c4; BYTE $0x0e   // vbroadcastss	(%rsi), %ymm1
-	LONG $0xa87de2c4; WORD $0x204a // vfmadd213ps	32(%rdx), %ymm0, %ymm1
-	LONG $0x4a11fcc5; BYTE $0x20   // vmovups	%ymm1, 32(%rdx)
-	LONG $0x40c78348               // addq	$64, %rdi
-	LONG $0x40c28348               // addq	$64, %rdx
-	WORD $0xc083; BYTE $0x02       // addl	$2, %eax
+	LONG $0x187de2c4; BYTE $0x06 // vbroadcastss	(%rsi), %ymm0
+	LONG $0x0759fcc5             // vmulps	(%rdi), %ymm0, %ymm0
+	LONG $0x0258fcc5             // vaddps	(%rdx), %ymm0, %ymm0
+	LONG $0x0211fcc5             // vmovups	%ymm0, (%rdx)
+	LONG $0x187de2c4; BYTE $0x06 // vbroadcastss	(%rsi), %ymm0
+	LONG $0x4759fcc5; BYTE $0x20 // vmulps	32(%rdi), %ymm0, %ymm0
+	LONG $0x4258fcc5; BYTE $0x20 // vaddps	32(%rdx), %ymm0, %ymm0
+	LONG $0x4211fcc5; BYTE $0x20 // vmovups	%ymm0, 32(%rdx)
+	LONG $0x40c78348             // addq	$64, %rdi
+	LONG $0x40c28348             // addq	$64, %rdx
+	WORD $0xc083; BYTE $0x02     // addl	$2, %eax
 	JNE  LBB0_3
 
 LBB0_4:
 	LONG $0x01c0f641             // testb	$1, %r8b
 	JE   LBB0_6
-	LONG $0x0710fcc5             // vmovups	(%rdi), %ymm0
-	LONG $0x187de2c4; BYTE $0x0e // vbroadcastss	(%rsi), %ymm1
-	LONG $0xa87de2c4; BYTE $0x0a // vfmadd213ps	(%rdx), %ymm0, %ymm1
-	LONG $0x0a11fcc5             // vmovups	%ymm1, (%rdx)
+	LONG $0x187de2c4; BYTE $0x06 // vbroadcastss	(%rsi), %ymm0
+	LONG $0x0759fcc5             // vmulps	(%rdi), %ymm0, %ymm0
+	LONG $0x0258fcc5             // vaddps	(%rdx), %ymm0, %ymm0
+	LONG $0x0211fcc5             // vmovups	%ymm0, (%rdx)
 	LONG $0x20c28348             // addq	$32, %rdx
 	LONG $0x20c78348             // addq	$32, %rdi
 
@@ -605,11 +605,14 @@ LBB4_17:
 	LONG $0x107cc1c4; WORD $0x2052 // vmovups	32(%r10), %ymm2
 	LONG $0x107cc1c4; WORD $0x405a // vmovups	64(%r10), %ymm3
 	LONG $0x107cc1c4; WORD $0x6062 // vmovups	96(%r10), %ymm4
-	LONG $0x987de2c4; BYTE $0x08   // vfmadd132ps	(%rax), %ymm0, %ymm1
-	LONG $0xb86de2c4; WORD $0x2048 // vfmadd231ps	32(%rax), %ymm2, %ymm1
-	LONG $0xb865e2c4; WORD $0x4048 // vfmadd231ps	64(%rax), %ymm3, %ymm1
-	LONG $0xc128fcc5               // vmovaps	%ymm1, %ymm0
-	LONG $0xb85de2c4; WORD $0x6040 // vfmadd231ps	96(%rax), %ymm4, %ymm0
+	LONG $0x0859f4c5               // vmulps	(%rax), %ymm1, %ymm1
+	LONG $0xc158fcc5               // vaddps	%ymm1, %ymm0, %ymm0
+	LONG $0x4859ecc5; BYTE $0x20   // vmulps	32(%rax), %ymm2, %ymm1
+	LONG $0x5059e4c5; BYTE $0x40   // vmulps	64(%rax), %ymm3, %ymm2
+	LONG $0xc158fcc5               // vaddps	%ymm1, %ymm0, %ymm0
+	LONG $0xc258fcc5               // vaddps	%ymm2, %ymm0, %ymm0
+	LONG $0x4859dcc5; BYTE $0x60   // vmulps	96(%rax), %ymm4, %ymm1
+	LONG $0xc158fcc5               // vaddps	%ymm1, %ymm0, %ymm0
 	LONG $0x80ea8349               // subq	$-128, %r10
 	LONG $0x80e88348               // subq	$-128, %rax
 	WORD $0xc383; BYTE $0x04       // addl	$4, %ebx
@@ -627,7 +630,8 @@ LBB4_5:
 
 LBB4_7:
 	LONG $0x107cc1c4; WORD $0x1a0c // vmovups	(%r10,%rbx), %ymm1
-	LONG $0xb875e2c4; WORD $0x1804 // vfmadd231ps	(%rax,%rbx), %ymm1, %ymm0
+	LONG $0x0c59f4c5; BYTE $0x18   // vmulps	(%rax,%rbx), %ymm1, %ymm1
+	LONG $0xc158fcc5               // vaddps	%ymm1, %ymm0, %ymm0
 	LONG $0x20c38348               // addq	$32, %rbx
 	WORD $0x3941; BYTE $0xd9       // cmpl	%ebx, %r9d
 	JNE  LBB4_7

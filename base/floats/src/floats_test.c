@@ -215,7 +215,7 @@ MunitTest mm512_tests[] = {
 static const MunitSuite mm512_suite = {
     "mm512_", mm512_tests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
 
-int main(int argc, char* const argv[MUNIT_ARRAY_PARAM(argc + 1)])
+int main(int argc, char *const argv[MUNIT_ARRAY_PARAM(argc + 1)])
 {
   munit_suite_main(&mm256_suite, NULL, argc, argv);
   munit_suite_main(&mm512_suite, NULL, argc, argv);
@@ -303,7 +303,7 @@ MunitTest vtests[] = {
 static const MunitSuite vsuite = {
     "v", vtests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
 
-int main(int argc, char* const argv[MUNIT_ARRAY_PARAM(argc + 1)])
+int main(int argc, char *const argv[MUNIT_ARRAY_PARAM(argc + 1)])
 {
   munit_suite_main(&vsuite, NULL, argc, argv);
   return 0;
