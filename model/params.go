@@ -43,12 +43,13 @@ const (
 // Params stores hyper-parameters for an model. It is a map between strings
 // (names) and interface{}s (values). For example, hyper-parameters for SVD
 // is given by:
-//  base.Params{
-//		base.Lr:       0.007,
-//		base.NEpochs:  100,
-//		base.NFactors: 80,
-//		base.Reg:      0.1,
-//	}
+//
+//	 base.Params{
+//			base.Lr:       0.007,
+//			base.NEpochs:  100,
+//			base.NFactors: 80,
+//			base.Reg:      0.1,
+//		}
 type Params map[ParamName]interface{}
 
 // Copy hyper-parameters.

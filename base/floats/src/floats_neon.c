@@ -15,7 +15,7 @@
 #include <arm_neon.h>
 #include <stdint.h>
 
-void vmul_const_add_to(float *a, float *b, float *c, int64_t n) {
+void vmul_const_add_to(float *a, float *b, float *c, long n) {
     int epoch = n / 4;
     int remain = n % 4;
     for (int i = 0; i < epoch; i++) {
@@ -31,7 +31,7 @@ void vmul_const_add_to(float *a, float *b, float *c, int64_t n) {
     }
 }
 
-void vmul_const_to(float *a, float *b, float *c, int64_t n) {
+void vmul_const_to(float *a, float *b, float *c, long n) {
     int epoch = n / 4;
     int remain = n % 4;
     for (int i = 0; i < epoch; i++) {
@@ -46,7 +46,7 @@ void vmul_const_to(float *a, float *b, float *c, int64_t n) {
     }
 }
 
-void vmul_const(float *a, float *b, int64_t n) {
+void vmul_const(float *a, float *b, long n) {
     int epoch = n / 4;
     int remain = n % 4;
     for (int i = 0; i < epoch; i++) {
@@ -60,7 +60,7 @@ void vmul_const(float *a, float *b, int64_t n) {
     }
 }
 
-void vmul_to(float *a, float *b, float *c, int64_t n) {
+void vmul_to(float *a, float *b, float *c, long n) {
     int epoch = n / 4;
     int remain = n % 4;
     for (int i = 0; i < epoch; i++) {
@@ -77,7 +77,7 @@ void vmul_to(float *a, float *b, float *c, int64_t n) {
     }
 }
 
-void vdot(float *a, float *b, int64_t n, float* ret) {
+void vdot(float *a, float *b, long n, float* ret) {
     int epoch = n / 4;
     int remain = n % 4;
     float32x4_t s;
@@ -97,6 +97,7 @@ void vdot(float *a, float *b, int64_t n, float* ret) {
     }
     float partial[4];
     vst1q_f32(partial, s);
+    *ret = 0;
     for (int i = 0; i < 4; i++) {
         *ret += partial[i];
     }
