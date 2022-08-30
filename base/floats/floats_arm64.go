@@ -1,3 +1,5 @@
+//go:build !noasm
+
 // Copyright 2022 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,49 +16,66 @@
 
 package floats
 
-import (
-	"unsafe"
+import "unsafe"
+
+//go:generate go run ../../cmd/goat src/floats_neon.c -O3
+
+var impl = Neon
+
+type implementation int
+
+const (
+	Default implementation = iota
+	Neon
 )
 
-func init() {
-	impl = neon{}
+func (i implementation) String() string {
+	switch i {
+	case Neon:
+		return "neon"
+	default:
+		return "default"
+	}
 }
 
-type neon struct{}
-
-func (neon) MulConstAddTo(a []float32, b float32, c []float32) {
-	vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+func (i implementation) mulConstAddTo(a []float32, b float32, c []float32) {
+	if i == Neon {
+		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+	} else {
+		mulConstAddTo(a, b, c)
+	}
 }
 
-func (neon) MulConstTo(a []float32, b float32, c []float32) {
-	vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+func (i implementation) mulConstTo(a []float32, b float32, c []float32) {
+	if i == Neon {
+		vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+	} else {
+		mulConstTo(a, b, c)
+	}
 }
 
-func (neon) MulTo(a, b, c []float32) {
-	vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+func (i implementation) mulTo(a, b, c []float32) {
+	if i == Neon {
+		vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+	} else {
+		mulTo(a, b, c)
+	}
 }
 
-func (neon) MulConst(a []float32, b float32) {
-	vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
+func (i implementation) mulConst(a []float32, b float32) {
+	if i == Neon {
+		vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
+	} else {
+		mulConst(a, b)
+	}
 }
 
-func (neon) Dot(a, b []float32) float32 {
-	var ret float32
-	vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
-	return ret
+func (i implementation) dot(a, b []float32) float32 {
+	if i == Neon {
+		var ret float32
+		vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
+		return ret
+	} else {
+		return dot(a, b)
+	}
 }
-
-//go:noescape
-func vmul_const_add_to(a, b, c, n unsafe.Pointer)
-
-//go:noescape
-func vmul_const_to(a, b, c, n unsafe.Pointer)
-
-//go:noescape
-func vmul_const(a, b, n unsafe.Pointer)
-
-//go:noescape
-func vmul_to(a, b, c, n unsafe.Pointer)
-
-//go:noescape
-func vdot(a, b, n, ret unsafe.Pointer)

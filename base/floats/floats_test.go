@@ -132,14 +132,14 @@ func TestDot(t *testing.T) {
 func TestNative_Dot(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
-	assert.Equal(t, float32(770), native{}.Dot(a, b))
+	assert.Equal(t, float32(770), dot(a, b))
 }
 
 func TestNative_MulConstAddTo(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	dst := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	target := []float32{0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30}
-	native{}.MulConstAddTo(a, 2, dst)
+	mulConstAddTo(a, 2, dst)
 	assert.Equal(t, target, dst)
 }
 
@@ -147,7 +147,7 @@ func TestNative_MulConstTo(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	dst := make([]float32, 11)
 	target := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
-	native{}.MulConstTo(a, 2, dst)
+	mulConstTo(a, 2, dst)
 	assert.Equal(t, target, dst)
 }
 
@@ -155,12 +155,12 @@ func TestNative_MulTo(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
 	b := []float32{5, 6, 7, 8}
 	c := make([]float32, 4)
-	native{}.MulTo(a, b, c)
+	mulTo(a, b, c)
 	assert.Equal(t, []float32{5, 12, 21, 32}, c)
 }
 
 func TestNative_MulConst(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
-	native{}.MulConst(a, 2)
+	mulConst(a, 2)
 	assert.Equal(t, []float32{2, 4, 6, 8}, a)
 }
