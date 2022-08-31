@@ -247,14 +247,30 @@ func Open(path, tablePrefix string) (Database, error) {
 		}
 		return database, nil
 	} else if strings.HasPrefix(path, storage.RedisPrefix) {
-		addr := path[len(storage.RedisPrefix):]
-		database := new(Redis)
-		database.client = redis.NewClient(&redis.Options{Addr: addr})
-		if tablePrefix != "" {
-			panic("table prefix is not supported for redis")
+		if strings.Contains(path, ",") {
+			addrsSlice := strings.Split(path, ",")
+			var addrs []string
+			for _, addr := range addrsSlice {
+				if addr != "" {
+					addrs = append(addrs, addr)
+				}
+			}
+			dbCluster := new(RedisCluster)
+			clusterOpt := redis.ClusterOptions{
+				Addrs: addrs,
+			}
+			dbCluster.client = redis.NewClusterClient(&clusterOpt)
+			return dbCluster, nil
+		} else {
+			addr := path[len(storage.RedisPrefix):]
+			database := new(Redis)
+			database.client = redis.NewClient(&redis.Options{Addr: addr})
+			if tablePrefix != "" {
+				panic("table prefix is not supported for redis")
+			}
+			log.Logger().Warn("redis is used for testing only")
+			return database, nil
 		}
-		log.Logger().Warn("redis is used for testing only")
-		return database, nil
 	} else if strings.HasPrefix(path, storage.OraclePrefix) {
 		database := new(SQLDatabase)
 		database.driver = Oracle

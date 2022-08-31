@@ -296,10 +296,16 @@ func Open(path, tablePrefix string) (Database, error) {
 	var err error
 	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) {
 		if strings.Contains(path, ",") {
-			paths := strings.Split(path, ",")
+			addrsSlice := strings.Split(path, ",")
+			var addrs []string
+			for _, addr := range addrsSlice {
+				if addr != "" {
+					addrs = append(addrs, addr)
+				}
+			}
 			dbCluster := new(RedisCluster)
 			clusterOpt := redis.ClusterOptions{
-				Addrs: paths,
+				Addrs: addrs,
 			}
 			dbCluster.client = redis.NewClusterClient(&clusterOpt)
 			return dbCluster, nil
