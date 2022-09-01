@@ -194,10 +194,10 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/", http.HandlerFunc(m.dashboard))
 	container.Handle("/login", http.HandlerFunc(m.login))
 	container.Handle("/logout", http.HandlerFunc(m.logout))
+	container.Handle("/api/purge", http.HandlerFunc(m.purge))
 	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
 	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
-	//http.HandleFunc("/api/bulk/libfm", m.exportToLibFM)
 	m.RestServer.StartHttpServer(container)
 }
 
@@ -959,6 +959,8 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		}
 		defer file.Close()
 		m.importItems(response, file, hasHeader, sep, labelSep, fmtString)
+	default:
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
@@ -1140,6 +1142,8 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		}
 		defer file.Close()
 		m.importFeedback(response, file, hasHeader, sep, fmtString)
+	default:
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
@@ -1229,27 +1233,29 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
-//func (m *Master) exportToLibFM(response http.ResponseWriter, _ *http.Request) {
-//// load dataset
-//dataSet, err := click.LoadDataFromDatabase(m.DataClient,
-//	m.Config.Database.PositiveFeedbackTypes,
-//	m.Config.Database.ReadFeedbackType)
-//if err != nil {
-//	server.InternalServerError(restful.NewResponse(response), err)
-//}
-//// write dataset
-//response.Header().Set("Content-Type", "text/plain")
-//response.Header().Set("Content-Disposition", "attachment;filename=libfm.txt")
-//for i := range dataSet.Features {
-//	builder := strings.Builder{}
-//	builder.WriteString(fmt.Sprintf("%f", dataSet.Target[i]))
-//	for _, j := range dataSet.Features[i] {
-//		builder.WriteString(fmt.Sprintf(" %d:1", j))
-//	}
-//	builder.WriteString("\r\n")
-//	_, err = response.Write([]byte(builder.String()))
-//	if err != nil {
-//		server.InternalServerError(restful.NewResponse(response), err)
-//	}
-//}
-//}
+func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
+	// check method
+	if request.Method != http.MethodPost {
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	// check password
+	if err := request.ParseForm(); err != nil {
+		server.BadRequest(restful.NewResponse(response), err)
+		return
+	}
+	password := request.Form.Get("password")
+	if password != m.Config.Master.DashboardPassword {
+		writeError(response, http.StatusUnauthorized, "password incorrect")
+		return
+	}
+}
+
+func writeError(response http.ResponseWriter, httpStatus int, message string) {
+	log.Logger().Error(strings.ToLower(http.StatusText(httpStatus)), zap.String("error", message))
+	response.Header().Set("Access-Control-Allow-Origin", "*")
+	response.WriteHeader(httpStatus)
+	if _, err := response.Write([]byte(message)); err != nil {
+		log.Logger().Error("failed to write error", zap.Error(err))
+	}
+}
