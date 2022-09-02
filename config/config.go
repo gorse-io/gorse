@@ -18,6 +18,11 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -28,10 +33,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.uber.org/zap"
-	"reflect"
-	"strings"
-	"sync"
-	"time"
 )
 
 const (
@@ -61,6 +62,8 @@ type MasterConfig struct {
 	Host              string        `mapstructure:"host"`                         // master host
 	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
 	HttpHost          string        `mapstructure:"http_host"`                    // HTTP host
+	HttpCorsDomains   []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
+	HttpCorsMethods   []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
 	NumJobs           int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
 	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
 	DashboardUserName string        `mapstructure:"dashboard_user_name"`          // dashboard user name
@@ -147,12 +150,14 @@ type OnlineConfig struct {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Master: MasterConfig{
-			Port:        8086,
-			Host:        "0.0.0.0",
-			HttpPort:    8088,
-			HttpHost:    "0.0.0.0",
-			NumJobs:     1,
-			MetaTimeout: 10 * time.Second,
+			Port:            8086,
+			Host:            "0.0.0.0",
+			HttpPort:        8088,
+			HttpHost:        "0.0.0.0",
+			HttpCorsDomains: []string{".*"},
+			HttpCorsMethods: []string{"GET", "POST", "PUT", "DELETE", "PATCH"},
+			NumJobs:         1,
+			MetaTimeout:     10 * time.Second,
 		},
 		Server: ServerConfig{
 			DefaultN:       10,
@@ -356,6 +361,8 @@ func setDefault() {
 	viper.SetDefault("master.host", defaultConfig.Master.Host)
 	viper.SetDefault("master.http_port", defaultConfig.Master.HttpPort)
 	viper.SetDefault("master.http_host", defaultConfig.Master.HttpHost)
+	viper.SetDefault("master.http_cors_domains", defaultConfig.Master.HttpCorsDomains)
+	viper.SetDefault("master.http_cors_methods", defaultConfig.Master.HttpCorsMethods)
 	viper.SetDefault("master.n_jobs", defaultConfig.Master.NumJobs)
 	viper.SetDefault("master.meta_timeout", defaultConfig.Master.MetaTimeout)
 	// [server]
@@ -424,6 +431,8 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.port", "GORSE_MASTER_PORT"},
 		{"master.host", "GORSE_MASTER_HOST"},
 		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
+		// {"master.http_cors_domains", "GORSE_MASTER_HTTP_CORS_DOMAINS"}, // TODO: check if array has to be parsed
+		// {"master.http_cors_methods", "GORSE_MASTER_HTTP_CORS_METHODS"}, // TODO: check if array has to be parsed
 		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
 		{"master.n_jobs", "GORSE_MASTER_JOBS"},
 		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},

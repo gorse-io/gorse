@@ -117,5 +117,6 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+.vscode
 
 # End of https://www.gitignore.io/api/go,windows,jetbrains
