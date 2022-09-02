@@ -111,6 +111,12 @@ func TestPostgres_Scan(t *testing.T) {
 	testScan(t, db.Database)
 }
 
+func TestPostgres_Purge(t *testing.T) {
+	db := newTestPostgresDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}
+
 func TestPostgres_Init(t *testing.T) {
 	db := newTestPostgresDatabase(t)
 	defer db.Close(t)
@@ -172,6 +178,12 @@ func TestMySQL_Scan(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
 	testScan(t, db.Database)
+}
+
+func TestMySQL_Purge(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
 }
 
 func TestMySQL_Init(t *testing.T) {
@@ -254,6 +266,12 @@ func TestOracle_Scan(t *testing.T) {
 	testScan(t, db.Database)
 }
 
+func TestOracle_Purge(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}
+
 func TestOracle_Init(t *testing.T) {
 	db := newTestOracleDatabase(t)
 	defer db.Close(t)
@@ -295,6 +313,12 @@ func TestSQLite_Scan(t *testing.T) {
 	db := newTestSQLiteDatabase(t)
 	defer db.Close(t)
 	testScan(t, db.Database)
+}
+
+func TestSQLite_Purge(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
 }
 
 func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) {

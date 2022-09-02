@@ -291,6 +291,10 @@ func (d *SQLDatabase) Close() error {
 	return d.client.Close()
 }
 
+func (d *SQLDatabase) Purge() error {
+	panic("implement me")
+}
+
 // BatchInsertItems inserts a batch of items into MySQL.
 func (d *SQLDatabase) BatchInsertItems(items []Item) error {
 	if len(items) == 0 {

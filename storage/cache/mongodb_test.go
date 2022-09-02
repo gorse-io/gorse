@@ -113,3 +113,9 @@ func TestMongo_Scan(t *testing.T) {
 	defer db.Close(t)
 	testScan(t, db.Database)
 }
+
+func TestMongo_Purge(t *testing.T) {
+	db := newTestMongo(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}

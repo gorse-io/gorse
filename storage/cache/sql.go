@@ -136,6 +136,10 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	return nil
 }
 
+func (db *SQLDatabase) Purge() error {
+	panic("not implement")
+}
+
 func (db *SQLDatabase) Set(values ...Value) error {
 	if len(values) == 0 {
 		return nil

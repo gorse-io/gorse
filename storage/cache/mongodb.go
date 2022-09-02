@@ -167,6 +167,10 @@ func (m MongoDB) Scan(work func(string) error) error {
 	return nil
 }
 
+func (m MongoDB) Purge() error {
+	panic("not implement")
+}
+
 func (m MongoDB) Set(values ...Value) error {
 	if len(values) == 0 {
 		return nil

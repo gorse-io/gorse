@@ -137,6 +137,10 @@ func (db *MongoDB) Close() error {
 	return db.client.Disconnect(context.Background())
 }
 
+func (db *MongoDB) Purge() error {
+	panic("implement me")
+}
+
 // BatchInsertItems insert items into MongoDB.
 func (db *MongoDB) BatchInsertItems(items []Item) error {
 	if len(items) == 0 {

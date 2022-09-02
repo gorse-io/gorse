@@ -17,6 +17,7 @@ package data
 import (
 	"fmt"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"reflect"
@@ -168,15 +169,15 @@ func testUsers(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Equal(t, "override", user.Comment)
 	// test modify
- 	err = db.ModifyUser("1", UserPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}, Subscribe: []string{"d", "e", "f"}})
- 	assert.NoError(t, err)
- 	err = db.Optimize()
- 	assert.NoError(t, err)
- 	user, err = db.GetUser("1")
- 	assert.NoError(t, err)
- 	assert.Equal(t, "modify", user.Comment)
- 	assert.Equal(t, []string{"a", "b", "c"}, user.Labels)
- 	assert.Equal(t, []string{"d", "e", "f"}, user.Subscribe)
+	err = db.ModifyUser("1", UserPatch{Comment: proto.String("modify"), Labels: []string{"a", "b", "c"}, Subscribe: []string{"d", "e", "f"}})
+	assert.NoError(t, err)
+	err = db.Optimize()
+	assert.NoError(t, err)
+	user, err = db.GetUser("1")
+	assert.NoError(t, err)
+	assert.Equal(t, "modify", user.Comment)
+	assert.Equal(t, []string{"a", "b", "c"}, user.Labels)
+	assert.Equal(t, []string{"d", "e", "f"}, user.Subscribe)
 
 	// test insert empty
 	err = db.BatchInsertUsers(nil)
@@ -687,6 +688,39 @@ func isClickHouse(db Database) bool {
 	} else {
 		return sqlDB.driver == ClickHouse
 	}
+}
+
+func testPurge(t *testing.T, db Database) {
+	// insert data
+	err := db.BatchInsertFeedback(lo.Map(lo.Range(100), func(t int, i int) Feedback {
+		return Feedback{FeedbackKey: FeedbackKey{
+			FeedbackType: "click",
+			UserId:       strconv.Itoa(t),
+			ItemId:       strconv.Itoa(t),
+		}}
+	}), true, true, true)
+	assert.NoError(t, err)
+	_, users, err := db.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, len(users))
+	_, items, err := db.GetItems("", 100, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, len(items))
+	_, feedbacks, err := db.GetFeedback("", 100, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, len(feedbacks))
+	// purge data
+	err = db.Purge()
+	assert.NoError(t, err)
+	_, users, err = db.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Empty(t, users)
+	_, items, err = db.GetItems("", 100, nil)
+	assert.NoError(t, err)
+	assert.Empty(t, items)
+	_, feedbacks, err = db.GetFeedback("", 100, nil)
+	assert.NoError(t, err)
+	assert.Empty(t, feedbacks)
 }
 
 func TestSortFeedbacks(t *testing.T) {
