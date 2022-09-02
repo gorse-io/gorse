@@ -1239,6 +1239,16 @@ func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	// check login
+	if !m.checkLogin(request) {
+		resp := restful.NewResponse(response)
+		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
+		if err != nil {
+			server.InternalServerError(resp, err)
+			return
+		}
+		return
+	}
 	// check password
 	if err := request.ParseForm(); err != nil {
 		server.BadRequest(restful.NewResponse(response), err)
