@@ -750,7 +750,7 @@ func TestMaster_Purge(t *testing.T) {
 	s.purge(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	ret, err = s.CacheClient.Get("key").String()
+	_, err = s.CacheClient.Get("key").String()
 	assert.ErrorIs(t, err, errors.NotFound)
 	set, err = s.CacheClient.GetSet("set")
 	assert.NoError(t, err)
