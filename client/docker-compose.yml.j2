@@ -108,7 +108,13 @@ services:
       - master_data:/var/lib/gorse
     depends_on:
       - redis
+      {% if database == 'mysql' %}
       - mysql
+      {% elif database == 'postgres' %}
+      - postgres
+      {% elif database == 'mongo' %}
+      - mongo
+      {% endif %}
 
 volumes:
   mysql_data:
