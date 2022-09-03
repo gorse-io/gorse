@@ -6,6 +6,8 @@ services:
     ports:
       - 6379:6379
 
+  {% if database == 'mysql' %}
+
   mysql:
     image: mysql/mysql-server
     restart: unless-stopped
@@ -18,6 +20,30 @@ services:
       MYSQL_PASSWORD: gorse_pass
     volumes:
       - mysql_data:/var/lib/mysql
+
+  {% elif database == 'postgres' %}
+
+  postgres:
+    image: postgres:10.0
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_DB: gorse
+      POSTGRES_USER: gorse
+      POSTGRES_PASSWORD: gorse_pass
+
+  {% elif database == 'mongo' %}
+
+  mongo:
+    image: mongo:4.0
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_DATABASE: gorse
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+
+  {% endif %}
 
   worker:
     build:
@@ -65,7 +91,13 @@ services:
       - 8088:8088
     environment:
       GORSE_CACHE_STORE: redis://redis:6379
+      {% if database == 'mysql' %}
       GORSE_DATA_STORE: mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse
+      {% elif database == 'postgres' %}
+      GORSE_DATA_STORE: postgres://gorse:gorse_pass@postgres/gorse?sslmode=disable
+      {% elif database == 'mongo' %}
+      GORSE_DATA_STORE: mongodb://root:password@mongo:27017/gorse?authSource=admin&connect=direct
+      {% endif %}
     command: >
       -c /etc/gorse/config.toml 
       --log-path /var/log/gorse/master.log 
