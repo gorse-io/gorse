@@ -80,3 +80,9 @@ func TestRedis_Scan(t *testing.T) {
 	defer db.Close(t)
 	testScan(t, db.Database)
 }
+
+func TestRedis_Purge(t *testing.T) {
+	db := newMockRedis(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}

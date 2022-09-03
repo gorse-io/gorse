@@ -61,6 +61,27 @@ func (r *Redis) Scan(work func(string) error) error {
 	}
 }
 
+func (r *Redis) Purge() error {
+	var (
+		ctx    = context.Background()
+		result []string
+		cursor uint64
+		err    error
+	)
+	for {
+		result, cursor, err = r.client.Scan(ctx, cursor, string(r.TablePrefix)+"*", 0).Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if err = r.client.Del(ctx, result...).Err(); err != nil {
+			return errors.Trace(err)
+		}
+		if cursor == 0 {
+			return nil
+		}
+	}
+}
+
 func (r *Redis) Set(values ...Value) error {
 	var ctx = context.Background()
 	p := r.client.Pipeline()

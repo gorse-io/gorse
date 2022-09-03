@@ -28,6 +28,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Init()
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.Purge()
+	assert.ErrorIs(t, err, ErrNoDatabase)
 
 	err = database.BatchInsertItems(nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
