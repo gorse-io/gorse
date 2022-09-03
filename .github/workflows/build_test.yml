@@ -134,7 +134,7 @@ jobs:
     - uses: actions/checkout@v1
 
     - name: Build the stack
-      run: docker-compose up -d
+      run: docker-compose -f client/docker-compose.yml --project-directory . up -d
 
     - name: Check the deployed service URL
       uses: jtalk/url-health-check-action@v2
@@ -147,6 +147,9 @@ jobs:
         retry-delay: 5s
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
+
+    - name: Test
+      run: go test -tags='integrate_test' ./client/
 
     - name: Download dataset
       run: wget https://cdn.gorse.io/example/github.sql

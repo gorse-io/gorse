@@ -19,30 +19,48 @@ package client
 import (
 	"context"
 	"github.com/go-redis/redis/v8"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
 )
 
 const (
-	GORSE_ENDPOINT = "http://127.0.0.1:8087"
+	RedisEndpoint = "redis://127.0.0.1:6379/0"
+	GorseEndpoint = "http://127.0.0.1:8087"
+	GorseApiKey   = ""
 )
 
-func TestFeedback(t *testing.T) {
-	client := NewGorseClient(GORSE_ENDPOINT, "zhenghaoz")
+type GorseClientTestSuite struct {
+	suite.Suite
+	client *GorseClient
+	redis  *redis.Client
+}
 
+func (suite *GorseClientTestSuite) SetupSuite() {
+	suite.client = NewGorseClient(GorseEndpoint, GorseApiKey)
+	options, err := redis.ParseURL(RedisEndpoint)
+	suite.NoError(err)
+	suite.redis = redis.NewClient(options)
+}
+
+func (suite *GorseClientTestSuite) TearDownSuite() {
+	err := suite.redis.Close()
+	suite.NoError(err)
+}
+
+func (suite *GorseClientTestSuite) TestFeedback() {
 	timestamp := time.Unix(1660459054, 0).UTC().Format(time.RFC3339)
 	userId := "800"
-	insertFeedbackResp, err := client.InsertFeedback([]Feedback{{
+	insertFeedbackResp, err := suite.client.InsertFeedback([]Feedback{{
 		FeedbackType: "like",
 		UserId:       userId,
 		Timestamp:    timestamp,
 		ItemId:       "200",
 	}})
-	assert.NoError(t, err)
-	assert.Equal(t, 1, insertFeedbackResp.RowAffected)
+	suite.NoError(err)
+	suite.Equal(1, insertFeedbackResp.RowAffected)
 
-	insertFeedbacksResp, err := client.InsertFeedback([]Feedback{{
+	insertFeedbacksResp, err := suite.client.InsertFeedback([]Feedback{{
 		FeedbackType: "read",
 		UserId:       userId,
 		Timestamp:    timestamp,
@@ -53,12 +71,12 @@ func TestFeedback(t *testing.T) {
 		Timestamp:    timestamp,
 		ItemId:       "400",
 	}})
-	assert.NoError(t, err)
-	assert.Equal(t, 2, insertFeedbacksResp.RowAffected)
+	suite.NoError(err)
+	suite.Equal(2, insertFeedbacksResp.RowAffected)
 
-	feedbacks, err := client.ListFeedbacks("read", userId)
-	assert.NoError(t, err)
-	assert.Equal(t, []Feedback{
+	feedbacks, err := suite.client.ListFeedbacks("read", userId)
+	suite.NoError(err)
+	suite.Equal([]Feedback{
 		{
 			FeedbackType: "read",
 			UserId:       userId,
@@ -73,13 +91,8 @@ func TestFeedback(t *testing.T) {
 	}, feedbacks)
 }
 
-func TestRecommend(t *testing.T) {
-	client := NewGorseClient(GORSE_ENDPOINT, "zhenghaoz")
-	r := redis.NewClient(&redis.Options{
-		Addr: "127.0.0.1:6379",
-		DB:   0,
-	})
-	r.ZAddArgs(context.Background(), "offline_recommend/100", redis.ZAddArgs{
+func (suite *GorseClientTestSuite) TestRecommend() {
+	suite.redis.ZAddArgs(context.Background(), "offline_recommend/100", redis.ZAddArgs{
 		Members: []redis.Z{
 			{
 				Score:  1,
@@ -95,19 +108,14 @@ func TestRecommend(t *testing.T) {
 			},
 		},
 	})
-	resp, err := client.GetRecommend("100", "", 10)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"3", "2", "1"}, resp)
+	resp, err := suite.client.GetRecommend("100", "", 10)
+	suite.NoError(err)
+	suite.Equal([]string{"3", "2", "1"}, resp)
 }
 
-func TestSessionRecommend(t *testing.T) {
-	client := NewGorseClient(GORSE_ENDPOINT, "zhenghaoz")
-	r := redis.NewClient(&redis.Options{
-		Addr: "127.0.0.1:6379",
-		DB:   0,
-	})
+func (suite *GorseClientTestSuite) TestSessionRecommend() {
 	ctx := context.Background()
-	r.ZAddArgs(ctx, "item_neighbors/1", redis.ZAddArgs{
+	suite.redis.ZAddArgs(ctx, "item_neighbors/1", redis.ZAddArgs{
 		Members: []redis.Z{
 			{
 				Score:  100000,
@@ -119,7 +127,7 @@ func TestSessionRecommend(t *testing.T) {
 			},
 		},
 	})
-	r.ZAddArgs(ctx, "item_neighbors/2", redis.ZAddArgs{
+	suite.redis.ZAddArgs(ctx, "item_neighbors/2", redis.ZAddArgs{
 		Members: []redis.Z{
 			{
 				Score:  100000,
@@ -135,7 +143,7 @@ func TestSessionRecommend(t *testing.T) {
 			},
 		},
 	})
-	r.ZAddArgs(ctx, "item_neighbors/3", redis.ZAddArgs{
+	suite.redis.ZAddArgs(ctx, "item_neighbors/3", redis.ZAddArgs{
 		Members: []redis.Z{
 			{
 				Score:  100000,
@@ -155,7 +163,7 @@ func TestSessionRecommend(t *testing.T) {
 			},
 		},
 	})
-	r.ZAddArgs(ctx, "item_neighbors/4", redis.ZAddArgs{
+	suite.redis.ZAddArgs(ctx, "item_neighbors/4", redis.ZAddArgs{
 		Members: []redis.Z{
 			{
 				Score:  100000,
@@ -183,7 +191,7 @@ func TestSessionRecommend(t *testing.T) {
 	feedbackType := "like"
 	userId := "0"
 	timestamp := time.Unix(1660459054, 0).UTC().Format(time.RFC3339)
-	resp, err := client.SessionRecommend([]Feedback{
+	resp, err := suite.client.SessionRecommend([]Feedback{
 		{
 			FeedbackType: feedbackType,
 			UserId:       userId,
@@ -209,8 +217,8 @@ func TestSessionRecommend(t *testing.T) {
 			Timestamp:    timestamp,
 		},
 	}, 3)
-	assert.NoError(t, err)
-	assert.Equal(t, []Score{
+	suite.NoError(err)
+	suite.Equal([]Score{
 		{
 			Id:    "9",
 			Score: 4,
@@ -226,8 +234,7 @@ func TestSessionRecommend(t *testing.T) {
 	}, resp)
 }
 
-func TestNeighbors(t *testing.T) {
-	client := NewGorseClient(GORSE_ENDPOINT, "zhenghaoz")
+func (suite *GorseClientTestSuite) TestNeighbors() {
 	r := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
 		DB:   0,
@@ -251,9 +258,9 @@ func TestNeighbors(t *testing.T) {
 	})
 
 	itemId := "100"
-	resp, err := client.GetNeighbors(itemId, 3)
-	assert.NoError(t, err)
-	assert.Equal(t, []Score{
+	resp, err := suite.client.GetNeighbors(itemId, 3)
+	suite.NoError(err)
+	suite.Equal([]Score{
 		{
 			Id:    "3",
 			Score: 3,
@@ -267,34 +274,30 @@ func TestNeighbors(t *testing.T) {
 	}, resp)
 }
 
-func TestUsers(t *testing.T) {
-
-	client := NewGorseClient(GORSE_ENDPOINT, "zhenghaoz")
+func (suite *GorseClientTestSuite) TestUsers() {
 	user := User{
 		UserId:    "100",
 		Labels:    []string{"a", "b", "c"},
 		Subscribe: []string{"d", "e"},
 		Comment:   "comment",
 	}
-	rowAffected, err := client.InsertUser(user)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, rowAffected.RowAffected)
+	rowAffected, err := suite.client.InsertUser(user)
+	suite.NoError(err)
+	suite.Equal(1, rowAffected.RowAffected)
 
-	userResp, err := client.GetUser("100")
-	assert.NoError(t, err)
-	assert.Equal(t, user, *userResp)
+	userResp, err := suite.client.GetUser("100")
+	suite.NoError(err)
+	suite.Equal(user, *userResp)
 
-	deleteAffect, err := client.DeleteUser("100")
-	assert.NoError(t, err)
-	assert.Equal(t, 1, deleteAffect.RowAffected)
+	deleteAffect, err := suite.client.DeleteUser("100")
+	suite.NoError(err)
+	suite.Equal(1, deleteAffect.RowAffected)
 
-	_, err = client.GetUser("100")
-	assert.Equal(t, "100: user not found", err.Error())
+	_, err = suite.client.GetUser("100")
+	suite.Equal("100: user not found", err.Error())
 }
 
-func TestItems(t *testing.T) {
-	client := NewGorseClient(GORSE_ENDPOINT, "zhenghaoz")
-
+func (suite *GorseClientTestSuite) TestItems() {
 	timestamp := time.Unix(1660459054, 0).UTC().Format(time.RFC3339)
 	item := Item{
 		ItemId:     "100",
@@ -304,18 +307,22 @@ func TestItems(t *testing.T) {
 		Timestamp:  timestamp,
 		Comment:    "comment",
 	}
-	rowAffected, err := client.InsertItem(item)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, rowAffected.RowAffected)
+	rowAffected, err := suite.client.InsertItem(item)
+	suite.NoError(err)
+	suite.Equal(1, rowAffected.RowAffected)
 
-	itemResp, err := client.GetItem("100")
-	assert.NoError(t, err)
-	assert.Equal(t, item, *itemResp)
+	itemResp, err := suite.client.GetItem("100")
+	suite.NoError(err)
+	suite.Equal(item, *itemResp)
 
-	deleteAffect, err := client.DeleteItem("100")
-	assert.NoError(t, err)
-	assert.Equal(t, 1, deleteAffect.RowAffected)
+	deleteAffect, err := suite.client.DeleteItem("100")
+	suite.NoError(err)
+	suite.Equal(1, deleteAffect.RowAffected)
 
-	_, err = client.GetItem("100")
-	assert.Equal(t, "100: item not found", err.Error())
+	_, err = suite.client.GetItem("100")
+	suite.Equal("100: item not found", err.Error())
+}
+
+func TestGorseClientTestSuite(t *testing.T) {
+	suite.Run(t, new(GorseClientTestSuite))
 }
