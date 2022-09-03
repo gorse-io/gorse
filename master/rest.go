@@ -1259,6 +1259,15 @@ func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 		writeError(response, http.StatusUnauthorized, "password incorrect")
 		return
 	}
+	// purge data
+	if err := m.DataClient.Purge(); err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := m.CacheClient.Purge(); err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
 }
 
 func writeError(response http.ResponseWriter, httpStatus int, message string) {

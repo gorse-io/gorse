@@ -16,6 +16,7 @@ package data
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
@@ -292,7 +293,23 @@ func (d *SQLDatabase) Close() error {
 }
 
 func (d *SQLDatabase) Purge() error {
-	panic("implement me")
+	tables := []string{d.ItemsTable(), d.FeedbackTable(), d.UsersTable()}
+	if d.driver == ClickHouse {
+		for _, tableName := range tables {
+			err := d.gormDB.Exec(fmt.Sprintf("alter table %s delete where 1=1", tableName)).Error
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+	} else {
+		for _, tableName := range tables {
+			err := d.gormDB.Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+	}
+	return nil
 }
 
 // BatchInsertItems inserts a batch of items into MySQL.

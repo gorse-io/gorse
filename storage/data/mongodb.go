@@ -138,7 +138,15 @@ func (db *MongoDB) Close() error {
 }
 
 func (db *MongoDB) Purge() error {
-	panic("implement me")
+	tables := []string{db.ItemsTable(), db.FeedbackTable(), db.UsersTable()}
+	for _, tableName := range tables {
+		c := db.client.Database(db.dbName).Collection(tableName)
+		_, err := c.DeleteMany(context.Background(), bson.D{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }
 
 // BatchInsertItems insert items into MongoDB.

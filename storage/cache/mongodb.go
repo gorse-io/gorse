@@ -168,7 +168,15 @@ func (m MongoDB) Scan(work func(string) error) error {
 }
 
 func (m MongoDB) Purge() error {
-	panic("not implement")
+	tables := []string{m.ValuesTable(), m.SortedSetsTable(), m.SetsTable()}
+	for _, tableName := range tables {
+		c := m.client.Database(m.dbName).Collection(tableName)
+		_, err := c.DeleteMany(context.Background(), bson.D{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }
 
 func (m MongoDB) Set(values ...Value) error {

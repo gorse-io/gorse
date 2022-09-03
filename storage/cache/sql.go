@@ -16,6 +16,7 @@ package cache
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
@@ -137,7 +138,14 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
-	panic("not implement")
+	tables := []string{db.ValuesTable(), db.SortedSetsTable(), db.SetsTable()}
+	for _, tableName := range tables {
+		err := db.gormDB.Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }
 
 func (db *SQLDatabase) Set(values ...Value) error {
