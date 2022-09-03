@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        database: [mysql, postgres, mongo]
+        database: [mysql, postgres, mongo, clickhouse]
     steps:
     - uses: actions/checkout@v1
 

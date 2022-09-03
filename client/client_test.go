@@ -76,7 +76,7 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 
 	feedbacks, err := suite.client.ListFeedbacks("read", userId)
 	suite.NoError(err)
-	suite.Equal([]Feedback{
+	suite.ElementsMatch([]Feedback{
 		{
 			FeedbackType: "read",
 			UserId:       userId,
