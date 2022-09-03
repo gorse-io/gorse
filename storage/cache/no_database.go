@@ -31,6 +31,10 @@ func (NoDatabase) Scan(_ func(string) error) error {
 	return ErrNoDatabase
 }
 
+func (NoDatabase) Purge() error {
+	return ErrNoDatabase
+}
+
 func (NoDatabase) Set(_ ...Value) error {
 	return ErrNoDatabase
 }

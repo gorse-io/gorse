@@ -52,6 +52,10 @@ func (r *Redis) Close() error {
 	return r.client.Close()
 }
 
+func (r *Redis) Purge() error {
+	return r.client.FlushDB(context.Background()).Err()
+}
+
 // insertItem inserts an item into Redis.
 func (r *Redis) insertItem(item Item) error {
 	var ctx = context.Background()

@@ -137,6 +137,12 @@ func TestMySQL_Timezone(t *testing.T) {
 	testTimeZone(t, db.Database)
 }
 
+func TestMySQL_Purge(t *testing.T) {
+	db := newTestMySQLDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}
+
 func TestMySQL_Init(t *testing.T) {
 	db := newTestMySQLDatabase(t)
 	defer db.Close(t)
@@ -236,6 +242,12 @@ func TestPostgres_Init(t *testing.T) {
 	assert.NoError(t, db.Init())
 }
 
+func TestPostgres_Purge(t *testing.T) {
+	db := newTestPostgresDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}
+
 func newTestClickHouseDatabase(t *testing.T) *testSQLDatabase {
 	// retrieve test name
 	var testName string
@@ -321,6 +333,12 @@ func TestClickHouse_Init(t *testing.T) {
 	db := newTestClickHouseDatabase(t)
 	defer db.Close(t)
 	assert.NoError(t, db.Init())
+}
+
+func TestClickHouse_Purge(t *testing.T) {
+	db := newTestClickHouseDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
 }
 
 func newTestOracleDatabase(t *testing.T) *testSQLDatabase {
@@ -421,6 +439,12 @@ func TestOracle_Init(t *testing.T) {
 	assert.NoError(t, db.Init())
 }
 
+func TestOracle_Purge(t *testing.T) {
+	db := newTestOracleDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}
+
 func newTestSQLiteDatabase(t *testing.T) *testSQLDatabase {
 	database := new(testSQLDatabase)
 	var err error
@@ -485,6 +509,12 @@ func TestSQLite_Init(t *testing.T) {
 	db := newTestSQLiteDatabase(t)
 	defer db.Close(t)
 	assert.NoError(t, db.Init())
+}
+
+func TestSQLite_Purge(t *testing.T) {
+	db := newTestSQLiteDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
 }
 
 func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) {

@@ -167,6 +167,18 @@ func (m MongoDB) Scan(work func(string) error) error {
 	return nil
 }
 
+func (m MongoDB) Purge() error {
+	tables := []string{m.ValuesTable(), m.SortedSetsTable(), m.SetsTable()}
+	for _, tableName := range tables {
+		c := m.client.Database(m.dbName).Collection(tableName)
+		_, err := c.DeleteMany(context.Background(), bson.D{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
 func (m MongoDB) Set(values ...Value) error {
 	if len(values) == 0 {
 		return nil

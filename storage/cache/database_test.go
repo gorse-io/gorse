@@ -212,6 +212,39 @@ func testScan(t *testing.T, db Database) {
 	assert.ElementsMatch(t, []string{"1", "2", "3"}, keys)
 }
 
+func testPurge(t *testing.T, db Database) {
+	// insert data
+	err := db.Set(String("key", "value"))
+	assert.NoError(t, err)
+	ret := db.Get("key")
+	assert.NoError(t, ret.err)
+	assert.Equal(t, "value", ret.value)
+
+	err = db.AddSet("set", "a", "b", "c")
+	assert.NoError(t, err)
+	s, err := db.GetSet("set")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a", "b", "c"}, s)
+
+	err = db.AddSorted(Sorted("sorted", []Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}))
+	assert.NoError(t, err)
+	z, err := db.GetSorted("sorted", 0, -1)
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}, z)
+
+	// purge data
+	err = db.Purge()
+	assert.NoError(t, err)
+	ret = db.Get("key")
+	assert.ErrorIs(t, ret.err, errors.NotFound)
+	s, err = db.GetSet("set")
+	assert.NoError(t, err)
+	assert.Empty(t, s)
+	z, err = db.GetSorted("sorted", 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, z)
+}
+
 func TestScored(t *testing.T) {
 	itemIds := []string{"2", "4", "6"}
 	scores := []float64{2, 4, 6}
