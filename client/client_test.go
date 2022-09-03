@@ -287,7 +287,7 @@ func (suite *GorseClientTestSuite) TestUsers() {
 
 	userResp, err := suite.client.GetUser("100")
 	suite.NoError(err)
-	suite.Equal(user, *userResp)
+	suite.Equal(user, userResp)
 
 	deleteAffect, err := suite.client.DeleteUser("100")
 	suite.NoError(err)
@@ -313,7 +313,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 
 	itemResp, err := suite.client.GetItem("100")
 	suite.NoError(err)
-	suite.Equal(item, *itemResp)
+	suite.Equal(item, itemResp)
 
 	deleteAffect, err := suite.client.DeleteItem("100")
 	suite.NoError(err)
