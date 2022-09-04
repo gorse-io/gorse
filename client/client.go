@@ -40,11 +40,11 @@ func (c *GorseClient) InsertFeedback(feedbacks []Feedback) (RowAffected, error) 
 }
 
 func (c *GorseClient) ListFeedbacks(feedbackType, userId string) ([]Feedback, error) {
-	return request[[]Feedback](c, "GET", c.entryPoint+fmt.Sprintf("/api/user/"+userId+"/feedback/"+feedbackType), nil)
+	return request[[]Feedback, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/user/"+userId+"/feedback/"+feedbackType), nil)
 }
 
 func (c *GorseClient) GetRecommend(userId string, category string, n int) ([]string, error) {
-	return request[[]string](c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s/%s?n=%d", userId, category, n), nil)
+	return request[[]string, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s/%s?n=%d", userId, category, n), nil)
 }
 
 func (c *GorseClient) SessionRecommend(feedbacks []Feedback, n int) ([]Score, error) {
@@ -52,7 +52,7 @@ func (c *GorseClient) SessionRecommend(feedbacks []Feedback, n int) ([]Score, er
 }
 
 func (c *GorseClient) GetNeighbors(itemId string, n int) ([]Score, error) {
-	return request[[]Score](c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors?n=%d", itemId, n), nil)
+	return request[[]Score, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors?n=%d", itemId, n), nil)
 }
 
 func (c *GorseClient) InsertUser(user User) (RowAffected, error) {
@@ -60,11 +60,11 @@ func (c *GorseClient) InsertUser(user User) (RowAffected, error) {
 }
 
 func (c *GorseClient) GetUser(userId string) (User, error) {
-	return request[User](c, "GET", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
+	return request[User, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
 }
 
 func (c *GorseClient) DeleteUser(userId string) (RowAffected, error) {
-	return request[RowAffected](c, "DELETE", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
+	return request[RowAffected, any](c, "DELETE", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
 }
 
 func (c *GorseClient) InsertItem(item Item) (RowAffected, error) {
@@ -72,31 +72,23 @@ func (c *GorseClient) InsertItem(item Item) (RowAffected, error) {
 }
 
 func (c *GorseClient) GetItem(itemId string) (Item, error) {
-	return request[Item](c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
+	return request[Item, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
 }
 
 func (c *GorseClient) DeleteItem(itemId string) (RowAffected, error) {
-	return request[RowAffected](c, "DELETE", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
+	return request[RowAffected, any](c, "DELETE", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
 }
 
-func request[Response any](c *GorseClient, method, url string, body interface{}) (result Response, err error) {
-	req := &http.Request{}
-	if body == nil {
-		req, err = http.NewRequest(method, url, nil)
-		if err != nil {
-			return result, err
-		}
-	} else {
-		bodyByte, marshalErr := json.Marshal(body)
-		if marshalErr != nil {
-			return result, marshalErr
-		}
-		req, err = http.NewRequest(method, url, strings.NewReader(string(bodyByte)))
-		if err != nil {
-			return result, err
-		}
+func request[Response any, Body any](c *GorseClient, method, url string, body Body) (result Response, err error) {
+	bodyByte, marshalErr := json.Marshal(body)
+	if marshalErr != nil {
+		return result, marshalErr
 	}
-
+	var req *http.Request
+	req, err = http.NewRequest(method, url, strings.NewReader(string(bodyByte)))
+	if err != nil {
+		return result, err
+	}
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
