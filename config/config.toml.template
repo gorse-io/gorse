@@ -64,7 +64,7 @@ clock_error = "5s"
 auto_insert_user = true
 
 # Insert new items while inserting feedback. The default value is true.
-auto_insert_item = false
+auto_insert_item = true
 
 # Server-side cache expire time. The default value is 10s.
 cache_expire = "10s"

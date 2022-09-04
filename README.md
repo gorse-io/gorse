@@ -1,4 +1,4 @@
-# gorse: Go Recommender System Engine
+# Gorse Recommender System Engine
 
 <img width=160 src="assets/gorse.png"/>
 
