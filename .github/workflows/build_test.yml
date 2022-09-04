@@ -159,6 +159,12 @@ jobs:
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
 
+    - name: Set up Go 1.19.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.19.x
+      id: go
+
     - name: Test
       run: go test -tags='integrate_test' ./client/
 
