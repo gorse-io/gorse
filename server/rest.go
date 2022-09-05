@@ -17,6 +17,12 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -33,20 +39,16 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"math"
 	"modernc.org/mathutil"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
 	*config.Settings
 
-	HttpHost   string
-	HttpPort   int
+	HttpHost string
+	HttpPort int
+
 	DisableLog bool
 	WebService *restful.WebService
 	HttpServer *http.Server
@@ -71,8 +73,20 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	// register prometheus
 	container.Handle("/metrics", promhttp.Handler())
 
+	// Add container filter to enable CORS
+	cors := restful.CrossOriginResourceSharing{
+		AllowedHeaders: []string{"Content-Type", "Accept"},
+		AllowedDomains: s.Config.Master.HttpCorsDomains,
+		AllowedMethods: s.Config.Master.HttpCorsMethods,
+		CookiesAllowed: false,
+		Container:      container}
+	container.Filter(cors.Filter)
+
 	log.Logger().Info("start http server",
-		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
+		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)),
+		zap.Strings("cors_methods", s.Config.Master.HttpCorsMethods),
+		zap.Strings("cors_doamins", s.Config.Master.HttpCorsDomains),
+	)
 	s.HttpServer = &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort),
 		Handler: container,

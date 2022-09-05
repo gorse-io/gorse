@@ -15,12 +15,13 @@
 package config
 
 import (
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -31,6 +32,8 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "dashboard_password = \"\"", "dashboard_password = \"password\"", -1)
 	text = strings.Replace(text, "api_key = \"\"", "api_key = \"19260817\"", -1)
 	text = strings.Replace(text, "table_prefix = \"\"", "table_prefix = \"gorse_\"", -1)
+	text = strings.Replace(text, "http_cors_domains = []", "http_cors_domains = [\".*\"]", -1)
+	text = strings.Replace(text, "http_cors_methods = []", "http_cors_methods = [\"GET\",\"PATCH\",\"POST\"]", -1)
 	viper.SetConfigType("toml")
 	err = viper.ReadConfig(strings.NewReader(text))
 	assert.NoError(t, err)
@@ -47,6 +50,8 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, "0.0.0.0", config.Master.Host)
 	assert.Equal(t, 8088, config.Master.HttpPort)
 	assert.Equal(t, "0.0.0.0", config.Master.HttpHost)
+	assert.Equal(t, []string{".*"}, config.Master.HttpCorsDomains)
+	assert.Equal(t, []string{"GET", "PATCH", "POST"}, config.Master.HttpCorsMethods)
 	assert.Equal(t, 1, config.Master.NumJobs)
 	assert.Equal(t, 10*time.Second, config.Master.MetaTimeout)
 	assert.Equal(t, "admin", config.Master.DashboardUserName)
