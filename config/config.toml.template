@@ -37,8 +37,9 @@ http_port = 8088
 # HTTP host of the master node. The default values is "0.0.0.0".
 http_host = "0.0.0.0"
 
-# AllowedDomainFunc is optional and is a function that will do the check
-# when the origin is not part of the AllowedDomains and it does not contain the wildcard ".*".
+# AllowedDomains is a list of allowed values for Http Origin.
+# The list may contain the special wildcard string ".*" ; all is allowed
+# If empty all are allowed.
 http_cors_domains = []
 
 # AllowedMethods is either empty or has a list of http methods names. Checking is case-insensitive.
