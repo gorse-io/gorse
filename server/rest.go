@@ -77,7 +77,6 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	log.Logger().Info("http server cors methods: ", zap.String("methods", strings.Join(s.Config.Master.HttpCorsMethods, ",")))
 	// Add container filter to enable CORS
 	cors := restful.CrossOriginResourceSharing{
-		ExposeHeaders:  []string{"X-Gorse-Header"},
 		AllowedHeaders: []string{"Content-Type", "Accept"},
 		AllowedDomains: s.Config.Master.HttpCorsDomains,
 		AllowedMethods: s.Config.Master.HttpCorsMethods,
