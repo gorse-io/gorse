@@ -15,12 +15,13 @@
 package config
 
 import (
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -47,6 +48,8 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, "0.0.0.0", config.Master.Host)
 	assert.Equal(t, 8088, config.Master.HttpPort)
 	assert.Equal(t, "0.0.0.0", config.Master.HttpHost)
+	assert.Equal(t, []string{}, config.Master.HttpCorsDomains)
+	assert.Equal(t, []string{}, config.Master.HttpCorsMethods)
 	assert.Equal(t, 1, config.Master.NumJobs)
 	assert.Equal(t, 10*time.Second, config.Master.MetaTimeout)
 	assert.Equal(t, "admin", config.Master.DashboardUserName)
