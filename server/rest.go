@@ -82,9 +82,6 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 		Container:      container}
 	container.Filter(cors.Filter)
 
-	// Add container filter to respond to OPTIONS
-	container.Filter(container.OPTIONSFilter)
-
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d CORS-Methods: %s, CORS-Doamins: %s",
 			s.HttpHost, s.HttpPort, strings.Join(s.Config.Master.HttpCorsMethods, ","), strings.Join(s.Config.Master.HttpCorsDomains, ","))))
