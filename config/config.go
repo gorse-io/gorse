@@ -431,8 +431,6 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.port", "GORSE_MASTER_PORT"},
 		{"master.host", "GORSE_MASTER_HOST"},
 		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
-		// {"master.http_cors_domains", "GORSE_MASTER_HTTP_CORS_DOMAINS"}, // TODO: check if array has to be parsed
-		// {"master.http_cors_methods", "GORSE_MASTER_HTTP_CORS_METHODS"}, // TODO: check if array has to be parsed
 		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
 		{"master.n_jobs", "GORSE_MASTER_JOBS"},
 		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
