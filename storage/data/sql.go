@@ -418,7 +418,7 @@ func (d *SQLDatabase) GetItem(itemId string) (Item, error) {
 // ModifyItem modify an item in MySQL.
 func (d *SQLDatabase) ModifyItem(itemId string, patch ItemPatch) error {
 	// ignore empty patch
-	if patch.Labels == nil && patch.Comment == nil && patch.Timestamp == nil {
+	if patch.IsHidden == nil && patch.Categories == nil && patch.Labels == nil && patch.Comment == nil && patch.Timestamp == nil {
 		log.Logger().Debug("empty item patch")
 		return nil
 	}
