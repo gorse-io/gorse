@@ -73,8 +73,6 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	// register prometheus
 	container.Handle("/metrics", promhttp.Handler())
 
-	log.Logger().Info("http server cors domains: ", zap.String("domains", strings.Join(s.Config.Master.HttpCorsDomains, ",")))
-	log.Logger().Info("http server cors methods: ", zap.String("methods", strings.Join(s.Config.Master.HttpCorsMethods, ",")))
 	// Add container filter to enable CORS
 	cors := restful.CrossOriginResourceSharing{
 		AllowedHeaders: []string{"Content-Type", "Accept"},
@@ -88,7 +86,8 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	container.Filter(container.OPTIONSFilter)
 
 	log.Logger().Info("start http server",
-		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)))
+		zap.String("url", fmt.Sprintf("http://%s:%d CORS-Methods: %s, CORS-Doamins: %s",
+			s.HttpHost, s.HttpPort, strings.Join(s.Config.Master.HttpCorsMethods, ","), strings.Join(s.Config.Master.HttpCorsDomains, ","))))
 	s.HttpServer = &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort),
 		Handler: container,
