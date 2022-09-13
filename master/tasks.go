@@ -175,20 +175,20 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// split ranking dataset
 	startTime := time.Now()
-	m.rankingModelMutex.Lock()
+	m.rankingDataMutex.Lock()
 	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
 	rankingDataset = nil
-	m.rankingModelMutex.Unlock()
+	m.rankingDataMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_ranking_dataset").Set(time.Since(startTime).Seconds())
 	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(m.rankingTrainSet.Bytes()))
 	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_test_set").Set(float64(m.rankingTestSet.Bytes()))
 
 	// split click dataset
 	startTime = time.Now()
-	m.clickModelMutex.Lock()
+	m.clickDataMutex.Lock()
 	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
 	clickDataset = nil
-	m.clickModelMutex.Unlock()
+	m.clickDataMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
 	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(m.clickTrainSet.Bytes()))
 	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(m.clickTestSet.Bytes()))
