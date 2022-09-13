@@ -143,9 +143,16 @@ func (s *JobsScheduler) allocateJobsForTask(taskName string, block bool, tracker
 		s.allocateJobsForAll()
 		if currentTask.jobs == 0 && block {
 			tracker.Suspend(true)
+			if currentTask.previous > 0 {
+				log.Logger().Debug("suspend task", zap.String("task", currentTask.name))
+				s.Broadcast()
+			}
 			s.Wait()
 		} else {
 			tracker.Suspend(false)
+			if currentTask.previous == 0 {
+				log.Logger().Debug("resume task", zap.String("task", currentTask.name))
+			}
 			return currentTask.jobs
 		}
 	}
