@@ -136,3 +136,9 @@ func TestMongoDatabase_Timezone(t *testing.T) {
 	defer db.Close(t)
 	testTimeZone(t, db.Database)
 }
+
+func TestMongoDatabase_Purge(t *testing.T) {
+	db := newTestMongoDatabase(t)
+	defer db.Close(t)
+	testPurge(t, db.Database)
+}

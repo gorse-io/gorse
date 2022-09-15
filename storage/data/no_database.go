@@ -36,6 +36,10 @@ func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
+func (NoDatabase) Purge() error {
+	return ErrNoDatabase
+}
+
 // BatchInsertItems method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) BatchInsertItems(_ []Item) error {
 	return ErrNoDatabase

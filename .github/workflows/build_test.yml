@@ -4,9 +4,11 @@ on:
   push:
     branches:    
       - master
+      - 'release-**'
   pull_request:
     branches:    
       - master
+      - 'release-**'
 
 jobs:
   unit_test:
@@ -130,11 +132,22 @@ jobs:
   integrate_test:
     name: integrate tests
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [mysql, postgres, mongo, clickhouse]
     steps:
     - uses: actions/checkout@v1
 
+    - uses: cuchi/jinja2-action@v1.2.0
+      with:
+        template: client/docker-compose.yml.j2
+        output_file: client/docker-compose.yml
+        strict: true
+        variables: |
+          database=${{ matrix.database }}
+
     - name: Build the stack
-      run: docker-compose up -d
+      run: docker-compose -f client/docker-compose.yml --project-directory . up -d
 
     - name: Check the deployed service URL
       uses: jtalk/url-health-check-action@v2
@@ -148,10 +161,21 @@ jobs:
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
 
+    - name: Set up Go 1.19.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.19.x
+      id: go
+
+    - name: Test
+      run: go test -tags='integrate_test' ./client/
+
     - name: Download dataset
+      if: ${{ matrix.database == 'mysql' }}
       run: wget https://cdn.gorse.io/example/github.sql
 
     - name: Import dataset
+      if: ${{ matrix.database == 'mysql' }}
       run: mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
 
   compat_test:

@@ -273,6 +273,7 @@ type Database interface {
 	Close() error
 	Init() error
 	Scan(work func(string) error) error
+	Purge() error
 
 	Set(values ...Value) error
 	Get(name string) *ReturnValue

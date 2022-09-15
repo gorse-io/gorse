@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
@@ -31,6 +33,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -696,4 +699,73 @@ func TestServer_GetRecommends(t *testing.T) {
 			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
 		})).
 		End()
+}
+
+func TestMaster_Purge(t *testing.T) {
+	s, cookie := newMockServer(t)
+	defer s.Close(t)
+
+	// insert data
+	err := s.CacheClient.Set(cache.String("key", "value"))
+	assert.NoError(t, err)
+	ret, err := s.CacheClient.Get("key").String()
+	assert.NoError(t, err)
+	assert.Equal(t, "value", ret)
+
+	err = s.CacheClient.AddSet("set", "a", "b", "c")
+	assert.NoError(t, err)
+	set, err := s.CacheClient.GetSet("set")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"a", "b", "c"}, set)
+
+	err = s.CacheClient.AddSorted(cache.Sorted("sorted", []cache.Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}))
+	assert.NoError(t, err)
+	z, err := s.CacheClient.GetSorted("sorted", 0, -1)
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []cache.Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}, z)
+
+	err = s.DataClient.BatchInsertFeedback(lo.Map(lo.Range(100), func(t int, i int) data.Feedback {
+		return data.Feedback{FeedbackKey: data.FeedbackKey{
+			FeedbackType: "click",
+			UserId:       strconv.Itoa(t),
+			ItemId:       strconv.Itoa(t),
+		}}
+	}), true, true, true)
+	assert.NoError(t, err)
+	_, users, err := s.DataClient.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, len(users))
+	_, items, err := s.DataClient.GetItems("", 100, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, len(items))
+	_, feedbacks, err := s.DataClient.GetFeedback("", 100, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, len(feedbacks))
+
+	// purge data
+	req := httptest.NewRequest("POST", "https://example.com/", strings.NewReader("password=p@ssword"))
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Content-Type", "application/www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.purge(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	_, err = s.CacheClient.Get("key").String()
+	assert.ErrorIs(t, err, errors.NotFound)
+	set, err = s.CacheClient.GetSet("set")
+	assert.NoError(t, err)
+	assert.Empty(t, set)
+	z, err = s.CacheClient.GetSorted("sorted", 0, -1)
+	assert.NoError(t, err)
+	assert.Empty(t, z)
+
+	_, users, err = s.DataClient.GetUsers("", 100)
+	assert.NoError(t, err)
+	assert.Empty(t, users)
+	_, items, err = s.DataClient.GetItems("", 100, nil)
+	assert.NoError(t, err)
+	assert.Empty(t, items)
+	_, feedbacks, err = s.DataClient.GetFeedback("", 100, nil)
+	assert.NoError(t, err)
+	assert.Empty(t, feedbacks)
 }

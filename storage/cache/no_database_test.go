@@ -27,6 +27,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Scan(nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.Purge()
+	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Set()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.Get(Key("", "")).String()
