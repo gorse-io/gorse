@@ -107,28 +107,28 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]data.Item{}))
+		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/popular/{category}").To(m.getPopular).
 		Doc("get popular items").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]data.Item{}))
+		Writes([]ScoredItem{}))
 	// Get latest items
 	ws.Route(ws.GET("/dashboard/latest/").To(m.getLatest).
 		Doc("get latest items").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]data.Item{}))
+		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/latest/{category}").To(m.getLatest).
 		Doc("get latest items").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]data.Item{}))
+		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/recommend/{user-id}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -156,7 +156,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]data.Item{}))
+		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors/{category}").To(m.getItemCategorizedNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -164,14 +164,14 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]data.Item{}))
+		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/user/{user-id}/neighbors").To(m.getUserNeighbors).
 		Doc("get neighbors of a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]data.User{}))
+		Writes([]ScoreUser{}))
 }
 
 // SinglePageAppFileSystem is the file system for single page app.
@@ -707,6 +707,16 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 	server.Ok(response, details)
 }
 
+type ScoredItem struct {
+	data.Item
+	Score float64
+}
+
+type ScoreUser struct {
+	data.User
+	Score float64
+}
+
 func (m *Master) getSort(key, category string, isItem bool, request *restful.Request, response *restful.Response, retType interface{}) {
 	var n, offset int
 	var err error
@@ -734,9 +744,10 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 	// Send result
 	switch retType.(type) {
 	case data.Item:
-		details := make([]data.Item, len(scores))
+		details := make([]ScoredItem, len(scores))
 		for i := range scores {
-			details[i], err = m.DataClient.GetItem(scores[i].Id)
+			details[i].Score = scores[i].Score
+			details[i].Item, err = m.DataClient.GetItem(scores[i].Id)
 			if err != nil {
 				server.InternalServerError(response, err)
 				return
@@ -744,9 +755,10 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		}
 		server.Ok(response, details)
 	case data.User:
-		details := make([]data.User, len(scores))
+		details := make([]ScoreUser, len(scores))
 		for i := range scores {
-			details[i], err = m.DataClient.GetUser(scores[i].Id)
+			details[i].Score = scores[i].Score
+			details[i].User, err = m.DataClient.GetUser(scores[i].Id)
 			if err != nil {
 				server.InternalServerError(response, err)
 				return

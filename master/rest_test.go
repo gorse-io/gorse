@@ -563,9 +563,9 @@ func TestServer_SortedItems(t *testing.T) {
 			assert.NoError(t, err)
 			err = server.NewCacheModification(s.CacheClient, s.HiddenItemsManager).HideItem(strconv.Itoa(i) + "3").Exec()
 			assert.NoError(t, err)
-			items := make([]data.Item, 0)
+			items := make([]ScoredItem, 0)
 			for _, score := range scores {
-				items = append(items, data.Item{ItemId: score.Id})
+				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
 				err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: score.Id}})
 				assert.NoError(t, err)
 			}
@@ -575,7 +575,7 @@ func TestServer_SortedItems(t *testing.T) {
 				Header("Cookie", cookie).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, []data.Item{items[0], items[1], items[2], items[4]})).
+				Body(marshal(t, []ScoredItem{items[0], items[1], items[2], items[4]})).
 				End()
 		})
 	}
@@ -604,9 +604,9 @@ func TestServer_SortedUsers(t *testing.T) {
 		}
 		err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
 		assert.NoError(t, err)
-		users := make([]data.User, 0)
+		users := make([]ScoreUser, 0)
 		for _, score := range scores {
-			users = append(users, data.User{UserId: score.Id})
+			users = append(users, ScoreUser{User: data.User{UserId: score.Id}, Score: score.Score})
 			err = s.DataClient.BatchInsertUsers([]data.User{{UserId: score.Id}})
 			assert.NoError(t, err)
 		}
