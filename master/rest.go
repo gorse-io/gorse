@@ -171,7 +171,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Writes([]ScoreUsers{}))
+		Writes([]ScoreUser{}))
 }
 
 // SinglePageAppFileSystem is the file system for single page app.
@@ -712,7 +712,7 @@ type ScoredItem struct {
 	Score float64
 }
 
-type ScoreUsers struct {
+type ScoreUser struct {
 	data.User
 	Score float64
 }
@@ -755,7 +755,7 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		}
 		server.Ok(response, details)
 	case data.User:
-		details := make([]ScoreUsers, len(scores))
+		details := make([]ScoreUser, len(scores))
 		for i := range scores {
 			details[i].Score = scores[i].Score
 			details[i].User, err = m.DataClient.GetUser(scores[i].Id)
