@@ -26,6 +26,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -1245,6 +1246,8 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
+var checkList = strset.New("delete_users", "delete_items", "delete_feedback", "delete_cache")
+
 func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 	// check method
 	if request.Method != http.MethodPost {
@@ -1262,13 +1265,18 @@ func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	// check password
+	if m.Config.Master.DashboardPassword == "" {
+		writeError(response, http.StatusUnauthorized, "purge is not allowed without dashboard password")
+		return
+	}
+	// check list
 	if err := request.ParseForm(); err != nil {
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
-	password := request.Form.Get("password")
-	if password != m.Config.Master.DashboardPassword {
-		writeError(response, http.StatusUnauthorized, "password incorrect")
+	checkedList := strings.Split(request.Form.Get("check_list"), ",")
+	if !checkList.IsEqual(strset.New(checkedList...)) {
+		writeError(response, http.StatusUnauthorized, "please confirm by checking all")
 		return
 	}
 	// purge data

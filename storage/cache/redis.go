@@ -73,6 +73,9 @@ func (r *Redis) Purge() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		if len(result) == 0 {
+			return nil
+		}
 		if err = r.client.Del(ctx, result...).Err(); err != nil {
 			return errors.Trace(err)
 		}

@@ -243,6 +243,10 @@ func testPurge(t *testing.T, db Database) {
 	z, err = db.GetSorted("sorted", 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, z)
+
+	// purge empty dataset
+	err = db.Purge()
+	assert.NoError(t, err)
 }
 
 func TestScored(t *testing.T) {

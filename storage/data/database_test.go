@@ -733,6 +733,9 @@ func testPurge(t *testing.T, db Database) {
 	_, feedbacks, err = db.GetFeedback("", 100, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, feedbacks)
+	// purge empty database
+	err = db.Purge()
+	assert.NoError(t, err)
 }
 
 func TestSortFeedbacks(t *testing.T) {

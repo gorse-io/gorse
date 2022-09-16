@@ -229,8 +229,8 @@ github.com/gorilla/securecookie v1.1.1 h1:miw7JPhV+b/lAHSXz4qd/nN9jRiAFV5FwjeKyC
 github.com/gorilla/securecookie v1.1.1/go.mod h1:ra0sb63/xPlUeL+yeDciTfxMRAA+MP+HVt/4epWDjd4=
 github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb h1:z/oOWE+Vy0PLcwIulZmIug4FtmvE3dJ1YOGprLeHwwY=
 github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb/go.mod h1:iILWzbul8U+gsf4kqbheF2QzBmdvVp63mloGGK8emDI=
-github.com/gorse-io/dashboard v0.0.0-20220915123232-7939097c42c4 h1:ivrCQ1AoRsM8BeaanTM7URLp5j8f6HAqyDTFymQ/78c=
-github.com/gorse-io/dashboard v0.0.0-20220915123232-7939097c42c4/go.mod h1:TLQBh+sD73+HSL6uEZJFRLv1SgUnqef02AYzo61ZdiE=
+github.com/gorse-io/dashboard v0.0.0-20220916155852-e87149763563 h1:1O37FEIhIDXp4cdyXl0Me/l/YHksoNL3VUANRyfoKbI=
+github.com/gorse-io/dashboard v0.0.0-20220916155852-e87149763563/go.mod h1:TLQBh+sD73+HSL6uEZJFRLv1SgUnqef02AYzo61ZdiE=
 github.com/gorse-io/oracle v1.2.2-0.20220717033501-725373bd8ae8 h1:hwQjR564WeIVqJyMtXeYS0VwU/UvQl5P3kovpwOmPQQ=
 github.com/gorse-io/oracle v1.2.2-0.20220717033501-725373bd8ae8/go.mod h1:Sjtk+MzBxCY6rb2X7Eg3NFiRMGFPug46WocXPg6s1VQ=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e h1:uPQtYQzG1QcC3Qbv+tuEe8Q2l++V4KEcqYSSwB9qobg=
