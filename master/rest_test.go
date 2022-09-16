@@ -17,6 +17,7 @@ package master
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
@@ -36,6 +37,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+)
+
+const (
+	mockMasterUsername = "admin"
+	mockMasterPassword = "pass"
 )
 
 type mockServer struct {
@@ -61,6 +67,8 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	assert.NoError(t, err)
 	// create server
 	s.Config = config.GetDefaultConfig()
+	s.Config.Master.DashboardUserName = mockMasterUsername
+	s.Config.Master.DashboardPassword = mockMasterPassword
 	s.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&s.RestServer)
 	s.RestServer.PopularItemsCache = server.NewPopularItemsCache(&s.RestServer)
 	s.WebService = new(restful.WebService)
@@ -69,8 +77,10 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	s.handler = restful.NewContainer()
 	s.handler.Add(s.WebService)
 	// login
-	req, err := http.NewRequest("POST", "/login", bytes.NewBuffer([]byte(`{"username":"admin","password":"admin"}`)))
+	req, err := http.NewRequest("POST", "/login",
+		strings.NewReader(fmt.Sprintf("user_name=%s&password=%s", mockMasterUsername, mockMasterPassword)))
 	assert.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp := httptest.NewRecorder()
 	s.login(resp, req)
 	assert.Equal(t, http.StatusFound, resp.Code)
@@ -743,9 +753,10 @@ func TestMaster_Purge(t *testing.T) {
 	assert.Equal(t, 100, len(feedbacks))
 
 	// purge data
-	req := httptest.NewRequest("POST", "https://example.com/", strings.NewReader("password=p@ssword"))
+	req := httptest.NewRequest("POST", "https://example.com/",
+		strings.NewReader("check_list=delete_users,delete_items,delete_feedback,delete_cache"))
 	req.Header.Set("Cookie", cookie)
-	req.Header.Set("Content-Type", "application/www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	s.purge(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
