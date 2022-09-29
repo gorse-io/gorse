@@ -18,7 +18,7 @@ package client
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v9"
 	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
