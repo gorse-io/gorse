@@ -190,6 +190,62 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: password
 
+      redis-node-0:
+        image: docker.io/bitnami/redis-cluster:7.0
+        ports:
+          - 6379
+        env:
+          - 'ALLOW_EMPTY_PASSWORD=yes'
+          - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+      redis-node-1:
+        image: docker.io/bitnami/redis-cluster:7.0
+        ports:
+          - 6379
+        env:
+          - 'ALLOW_EMPTY_PASSWORD=yes'
+          - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+      redis-node-2:
+        image: docker.io/bitnami/redis-cluster:7.0
+        ports:
+          - 6379
+        env:
+          - 'ALLOW_EMPTY_PASSWORD=yes'
+          - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+      redis-node-3:
+        image: docker.io/bitnami/redis-cluster:7.0
+        ports:
+          - 6379
+        env:
+          - 'ALLOW_EMPTY_PASSWORD=yes'
+          - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+      redis-node-4:
+        image: docker.io/bitnami/redis-cluster:7.0
+        ports:
+          - 6379
+        env:
+          - 'ALLOW_EMPTY_PASSWORD=yes'
+          - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+  redis-node-5:
+    image: docker.io/bitnami/redis-cluster:7.0
+    dependencies:
+      - redis-node-0
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+    ports:
+      - 6379
+    env:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_CLUSTER_REPLICAS=1'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+      - 'REDIS_CLUSTER_CREATOR=yes'
+
     steps:
       - name: Set up Go 1.19.x
         uses: actions/setup-go@v2
