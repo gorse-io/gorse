@@ -191,9 +191,6 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
 
     steps:
-      - name: Build the stack
-        run: docker-compose -f storage/docker-compose-redis.yml up -d
-
       - name: Set up Go 1.19.x
         uses: actions/setup-go@v2
         with:
@@ -202,6 +199,9 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
+
+      - name: Build the stack
+        run: docker-compose -f storage/docker-compose-redis.yml up -d
 
       - name: Test MariaDB
         run: go test ./storage/data -run ^TestMySQL_
