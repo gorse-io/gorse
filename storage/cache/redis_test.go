@@ -85,7 +85,7 @@ func (suite *RedisTestSuite) TestPurge() {
 	testPurge(suite.T(), suite.Database)
 }
 
-func TestRedisTestSuite(t *testing.T) {
+func TestRedis(t *testing.T) {
 	suite.Run(t, new(RedisTestSuite))
 }
 
