@@ -200,10 +200,18 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
+      - name: Build the stack
+        run: docker-compose -f storage/docker-compose-redis.yml up -d
+
       - name: Test MariaDB
         run: go test ./storage/data -run ^TestMySQL_
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
+
+      - name: Test Redis Cluster
+        run: go test ./storage/cache -run ^TestRedis
+        env:
+          REDIS_URI: redis+cluster://localhost:7000
 
   golangci:
     name: lint

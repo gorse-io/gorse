@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v9"
 	"github.com/go-resty/resty/v2"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"

@@ -17,7 +17,7 @@ package data
 import (
 	"context"
 	"encoding/json"
-	"github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"

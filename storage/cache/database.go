@@ -19,7 +19,7 @@ import (
 	"database/sql"
 	"github.com/araddon/dateparse"
 	"github.com/dzwvip/oracle"
-	"github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -302,6 +302,15 @@ func Open(path, tablePrefix string) (Database, error) {
 		}
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		return database, nil
+	} else if strings.HasPrefix(path, storage.RedisClusterPrefix) {
+		opt, err := ParseRedisClusterURL(path)
+		if err != nil {
+			return nil, err
+		}
+		database := new(Redis)
+		database.client = redis.NewClusterClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		return database, nil
 	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {

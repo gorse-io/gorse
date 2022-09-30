@@ -28,18 +28,19 @@ import (
 )
 
 const (
-	MySQLPrefix      = "mysql://"
-	MongoPrefix      = "mongodb://"
-	MongoSrvPrefix   = "mongodb+srv://"
-	PostgresPrefix   = "postgres://"
-	PostgreSQLPrefix = "postgresql://"
-	ClickhousePrefix = "clickhouse://"
-	CHHTTPPrefix     = "chhttp://"
-	CHHTTPSPrefix    = "chhttps://"
-	SQLitePrefix     = "sqlite://"
-	RedisPrefix      = "redis://"
-	RedissPrefix     = "rediss://"
-	OraclePrefix     = "oracle://"
+	MySQLPrefix        = "mysql://"
+	MongoPrefix        = "mongodb://"
+	MongoSrvPrefix     = "mongodb+srv://"
+	PostgresPrefix     = "postgres://"
+	PostgreSQLPrefix   = "postgresql://"
+	ClickhousePrefix   = "clickhouse://"
+	CHHTTPPrefix       = "chhttp://"
+	CHHTTPSPrefix      = "chhttps://"
+	SQLitePrefix       = "sqlite://"
+	RedisPrefix        = "redis://"
+	RedissPrefix       = "rediss://"
+	RedisClusterPrefix = "redis+cluster://"
+	OraclePrefix       = "oracle://"
 )
 
 func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {

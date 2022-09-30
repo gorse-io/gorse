@@ -16,15 +16,14 @@ package cache
 
 import (
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
+	"github.com/stretchr/testify/suite"
 	"os"
-	"strconv"
 	"testing"
+	"time"
 )
 
 var (
 	redisDSN string
-	database atomic.Int64
 )
 
 func init() {
@@ -38,51 +37,76 @@ func init() {
 	redisDSN = env("REDIS_URI", "redis://127.0.0.1:6379/")
 }
 
-type testRedis struct {
+type RedisTestSuite struct {
+	suite.Suite
 	Database
 }
 
-func newMockRedis(t *testing.T) *testRedis {
+func (suite *RedisTestSuite) SetupSuite() {
 	var err error
-	db := new(testRedis)
-	assert.NoError(t, err)
-	database.Inc()
-	db.Database, err = Open(redisDSN+strconv.Itoa(int(database.Load())), "gorse_")
-	assert.NoError(t, err)
-	return db
+	suite.Database, err = Open(redisDSN, "gorse_")
+	suite.NoError(err)
 }
 
-func (db *testRedis) Close(t *testing.T) {
-	err := db.Database.Close()
-	assert.NoError(t, err)
+func (suite *RedisTestSuite) TearDownSuite() {
+	err := suite.Database.Close()
+	suite.NoError(err)
 }
 
-func TestRedis_Meta(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testMeta(t, db.Database)
+func (suite *RedisTestSuite) SetupTest() {
+	err := suite.Database.Purge()
+	suite.NoError(err)
 }
 
-func TestRedis_Sort(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testSort(t, db.Database)
+func (suite *RedisTestSuite) TearDownTest() {
+	err := suite.Database.Purge()
+	suite.NoError(err)
 }
 
-func TestRedis_Set(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testSet(t, db.Database)
+func (suite *RedisTestSuite) TestMeta() {
+	testMeta(suite.T(), suite.Database)
 }
 
-func TestRedis_Scan(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testScan(t, db.Database)
+func (suite *RedisTestSuite) TestSort() {
+	testSort(suite.T(), suite.Database)
 }
 
-func TestRedis_Purge(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testPurge(t, db.Database)
+func (suite *RedisTestSuite) TestSet() {
+	testSet(suite.T(), suite.Database)
+}
+
+func (suite *RedisTestSuite) TestScan() {
+	testScan(suite.T(), suite.Database)
+}
+
+func (suite *RedisTestSuite) TestPurge() {
+	testPurge(suite.T(), suite.Database)
+}
+
+func TestRedis(t *testing.T) {
+	suite.Run(t, new(RedisTestSuite))
+}
+
+func TestParseRedisClusterURL(t *testing.T) {
+	options, err := ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/?" +
+		"max_retries=1000&dial_timeout=1h&pool_fifo=true")
+	if assert.NoError(t, err) {
+		assert.Equal(t, "username", options.Username)
+		assert.Equal(t, "password", options.Password)
+		assert.Equal(t, []string{"127.0.0.1:6379", "127.0.0.1:6380", "127.0.0.1:6381"}, options.Addrs)
+		assert.Equal(t, 1000, options.MaxRetries)
+		assert.Equal(t, time.Hour, options.DialTimeout)
+		assert.True(t, options.PoolFIFO)
+	}
+
+	_, err = ParseRedisClusterURL("redis://")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?max_retries=a")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?dial_timeout=a")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?pool_fifo=a")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?a=1")
+	assert.Error(t, err)
 }
