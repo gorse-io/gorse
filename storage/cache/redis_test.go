@@ -17,7 +17,6 @@ package cache
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"go.uber.org/atomic"
 	"os"
 	"testing"
 	"time"
@@ -25,7 +24,6 @@ import (
 
 var (
 	redisDSN string
-	database atomic.Int64
 )
 
 func init() {
@@ -102,5 +100,13 @@ func TestParseRedisClusterURL(t *testing.T) {
 	}
 
 	_, err = ParseRedisClusterURL("redis://")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?max_retries=a")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?dial_timeout=a")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?pool_fifo=a")
+	assert.Error(t, err)
+	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?a=1")
 	assert.Error(t, err)
 }
