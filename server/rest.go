@@ -212,7 +212,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
 		Reads(data.Item{}).
 		Returns(http.StatusOK, "OK", Success{}).
-		Writes(ItemIterator{}))
+		Writes(Success{}))
 	// Modify an item
 	ws.Route(ws.PATCH("/item/{item-id}").To(s.modifyItem).
 		Doc("Modify an item.").
@@ -221,7 +221,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("item-id", "item id").DataType("string")).
 		Reads(data.ItemPatch{}).
 		Returns(http.StatusOK, "OK", Success{}).
-		Writes(ItemIterator{}))
+		Writes(Success{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
 		Doc("Get items.").
