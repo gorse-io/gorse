@@ -57,35 +57,42 @@ func (m *Master) CreateWebService() {
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", []Node{}).
 		Writes([]Node{}))
 	ws.Route(ws.GET("/dashboard/categories").To(m.getCategories).
 		Doc("Get categories of items.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.GET("/dashboard/config").To(m.getConfig).
 		Doc("Get config.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", config.Config{}).
 		Writes(config.Config{}))
 	ws.Route(ws.GET("/dashboard/stats").To(m.getStats).
 		Doc("Get global status.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Returns(http.StatusOK, "OK", Status{}).
 		Writes(Status{}))
 	ws.Route(ws.GET("/dashboard/tasks").To(m.getTasks).
 		Doc("Get tasks.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Returns(http.StatusOK, "OK", []task.Task{}).
 		Writes([]task.Task{}))
 	ws.Route(ws.GET("/dashboard/rates").To(m.getRates).
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Returns(http.StatusOK, "OK", map[string][]server.Measurement{}).
 		Writes(map[string][]server.Measurement{}))
 	// Get a user
 	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
 		Doc("Get a user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(http.StatusOK, "OK", User{}).
 		Writes(User{}))
 	// Get a user feedback
 	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/{feedback-type}").To(m.getTypedFeedbackByUser).
@@ -94,6 +101,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Returns(http.StatusOK, "OK", []Feedback{}).
 		Writes([]Feedback{}))
 	// Get users
 	ws.Route(ws.GET("/dashboard/users").To(m.getUsers).
@@ -101,6 +109,7 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
+		Returns(http.StatusOK, "OK", UserIterator{}).
 		Writes(UserIterator{}))
 	// Get popular items
 	ws.Route(ws.GET("/dashboard/popular/").To(m.getPopular).
@@ -108,6 +117,7 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/popular/{category}").To(m.getPopular).
 		Doc("get popular items").
@@ -115,6 +125,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
 	// Get latest items
 	ws.Route(ws.GET("/dashboard/latest/").To(m.getLatest).
@@ -122,6 +133,7 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/latest/{category}").To(m.getLatest).
 		Doc("get latest items").
@@ -129,12 +141,14 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/recommend/{user-id}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
@@ -142,6 +156,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}/{category}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
@@ -150,6 +165,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
 		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
+		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
 		Doc("get neighbors of a item").
@@ -157,6 +173,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors/{category}").To(m.getItemCategorizedNeighbors).
 		Doc("get neighbors of a item").
@@ -165,6 +182,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/user/{user-id}/neighbors").To(m.getUserNeighbors).
 		Doc("get neighbors of a user").
@@ -172,6 +190,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned users").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
+		Returns(http.StatusOK, "OK", []ScoreUser{}).
 		Writes([]ScoreUser{}))
 }
 
