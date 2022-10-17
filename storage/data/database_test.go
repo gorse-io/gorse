@@ -96,13 +96,13 @@ func getItemStream(t *testing.T, db Database, batchSize int) []Item {
 	return items
 }
 
-func getFeedback(t *testing.T, db Database, batchSize int, feedbackTypes ...string) []Feedback {
+func getFeedback(t *testing.T, db Database, batchSize int, timeLimit *time.Time, feedbackTypes ...string) []Feedback {
 	feedback := make([]Feedback, 0)
 	var err error
 	var data []Feedback
 	cursor := ""
 	for {
-		cursor, data, err = db.GetFeedback(cursor, batchSize, nil, feedbackTypes...)
+		cursor, data, err = db.GetFeedback(cursor, batchSize, timeLimit, feedbackTypes...)
 		assert.NoError(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
@@ -118,9 +118,9 @@ func getFeedback(t *testing.T, db Database, batchSize int, feedbackTypes ...stri
 	}
 }
 
-func getFeedbackStream(t *testing.T, db Database, batchSize int, feedbackTypes ...string) []Feedback {
+func getFeedbackStream(t *testing.T, db Database, batchSize int, timeLimit *time.Time, feedbackTypes ...string) []Feedback {
 	var feedbacks []Feedback
-	feedbackChan, errChan := db.GetFeedbackStream(batchSize, nil, feedbackTypes...)
+	feedbackChan, errChan := db.GetFeedbackStream(batchSize, timeLimit, feedbackTypes...)
 	for batchFeedback := range feedbackChan {
 		feedbacks = append(feedbacks, batchFeedback...)
 	}
@@ -200,12 +200,13 @@ func testFeedback(t *testing.T, db Database) {
 	err = db.BatchInsertItems([]Item{{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
 	assert.NoError(t, err)
 	// insert feedbacks
+	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "1", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "3", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "4", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{positiveFeedbackType, "0", "8"}, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType, "1", "6"}, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType, "2", "4"}, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType, "3", "2"}, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType, "4", "0"}, timestamp, "comment"},
 	}
 	err = db.BatchInsertFeedback(feedback, true, true, true)
 	assert.NoError(t, err)
@@ -225,15 +226,19 @@ func testFeedback(t *testing.T, db Database) {
 	err = db.BatchInsertFeedback(futureFeedback, true, true, true)
 	assert.NoError(t, err)
 	// Get feedback
-	ret := getFeedback(t, db, 3, positiveFeedbackType)
+	ret := getFeedback(t, db, 3, nil, positiveFeedbackType)
 	assert.Equal(t, feedback, ret)
-	ret = getFeedback(t, db, 2)
+	ret = getFeedback(t, db, 2, nil)
 	assert.Equal(t, len(feedback)+2, len(ret))
+	ret = getFeedback(t, db, 2, lo.ToPtr(timestamp.Add(time.Second)))
+	assert.Empty(t, ret)
 	// Get feedback stream
-	feedbackFromStream := getFeedbackStream(t, db, 3, positiveFeedbackType)
+	feedbackFromStream := getFeedbackStream(t, db, 3, nil, positiveFeedbackType)
 	assert.ElementsMatch(t, feedback, feedbackFromStream)
-	feedbackFromStream = getFeedbackStream(t, db, 3)
+	feedbackFromStream = getFeedbackStream(t, db, 3, nil)
 	assert.Equal(t, len(feedback)+2, len(feedbackFromStream))
+	feedbackFromStream = getFeedbackStream(t, db, 3, lo.ToPtr(timestamp.Add(time.Second)))
+	assert.Empty(t, feedbackFromStream)
 	// Get items
 	err = db.Optimize()
 	assert.NoError(t, err)
@@ -628,7 +633,7 @@ func testTimeZone(t *testing.T, db Database) {
 	}, true, true, true)
 	assert.NoError(t, err)
 	// get feedback stream
-	feedback := getFeedback(t, db, 10)
+	feedback := getFeedback(t, db, 10, nil)
 	assert.Equal(t, 3, len(feedback))
 	// get feedback
 	_, feedback, err = db.GetFeedback("", 10, nil)

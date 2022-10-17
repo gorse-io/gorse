@@ -611,7 +611,6 @@ func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedb
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"feedbackkey", 1}})
 	filter := make(bson.M)
-	filter["timestamp"] = bson.M{"$lte": time.Now()}
 	// pass cursor to filter
 	if cursor != "" {
 		feedbackKey, err := feedbackKeyFromString(cursor)
@@ -625,9 +624,11 @@ func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedb
 		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
 	}
 	// pass time limit to filter
+	timestampConditions := bson.M{"$lte": time.Now()}
 	if timeLimit != nil {
-		filter["timestamp"] = bson.M{"$gt": *timeLimit}
+		timestampConditions["$gt"] = *timeLimit
 	}
+	filter["timestamp"] = timestampConditions
 	r, err := c.Find(ctx, filter, opt)
 	if err != nil {
 		return "", nil, err
@@ -664,15 +665,16 @@ func (db *MongoDB) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedba
 		c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 		opt := options.Find()
 		filter := make(bson.M)
-		filter["timestamp"] = bson.M{"$lte": time.Now()}
 		// pass feedback type to filter
 		if len(feedbackTypes) > 0 {
 			filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
 		}
 		// pass time limit to filter
+		timestampConditions := bson.M{"$lte": time.Now()}
 		if timeLimit != nil {
-			filter["timestamp"] = bson.M{"$gt": *timeLimit}
+			timestampConditions["$gt"] = *timeLimit
 		}
+		filter["timestamp"] = timestampConditions
 		r, err := c.Find(ctx, filter, opt)
 		if err != nil {
 			errChan <- errors.Trace(err)
