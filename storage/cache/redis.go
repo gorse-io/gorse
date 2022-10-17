@@ -253,26 +253,25 @@ func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isClust
 		if err != nil {
 			return errors.Trace(err)
 		}
-		if cursor == 0 {
-			return nil
-		}
-		if len(result) == 0 {
-			continue
-		}
-		if isCluster {
-			p := client.Pipeline()
-			for _, key := range result {
-				if err = p.Del(ctx, key).Err(); err != nil {
+		if len(result) > 0 {
+			if isCluster {
+				p := client.Pipeline()
+				for _, key := range result {
+					if err = p.Del(ctx, key).Err(); err != nil {
+						return errors.Trace(err)
+					}
+				}
+				if _, err = p.Exec(ctx); err != nil {
+					return errors.Trace(err)
+				}
+			} else {
+				if err = client.Del(ctx, result...).Err(); err != nil {
 					return errors.Trace(err)
 				}
 			}
-			if _, err = p.Exec(ctx); err != nil {
-				return errors.Trace(err)
-			}
-		} else {
-			if err = client.Del(ctx, result...).Err(); err != nil {
-				return errors.Trace(err)
-			}
+		}
+		if cursor == 0 {
+			return nil
 		}
 	}
 }
