@@ -717,7 +717,7 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 	if ctx.userFeedback == nil {
 		start := time.Now()
 		var err error
-		ctx.userFeedback, err = s.DataClient.GetUserFeedback(ctx.userId, false)
+		ctx.userFeedback, err = s.DataClient.GetUserFeedback(ctx.userId, s.Config.Now())
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -822,7 +822,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, false, s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
+			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, s.Config.Now(), s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1232,7 +1232,7 @@ func (s *RestServer) deleteUser(request *restful.Request, response *restful.Resp
 func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(userId, false, feedbackType)
+	feedback, err := s.DataClient.GetUserFeedback(userId, s.Config.Now(), feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1243,7 +1243,7 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 // get feedback by user-id
 func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(userId, false)
+	feedback, err := s.DataClient.GetUserFeedback(userId, s.Config.Now())
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1627,7 +1627,7 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil)
+	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil, s.Config.Now())
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1644,7 +1644,7 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil, feedbackType)
+	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil, s.Config.Now(), feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return

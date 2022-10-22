@@ -347,7 +347,7 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.DataClient.GetFeedback("", 100, nil)
+	_, feedback, err := s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -379,7 +379,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.DataClient.GetFeedback("", 100, nil)
+	_, feedback, err := s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -748,7 +748,7 @@ func TestMaster_Purge(t *testing.T) {
 	_, items, err := s.DataClient.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 100, len(items))
-	_, feedbacks, err := s.DataClient.GetFeedback("", 100, nil)
+	_, feedbacks, err := s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, 100, len(feedbacks))
 
@@ -776,7 +776,7 @@ func TestMaster_Purge(t *testing.T) {
 	_, items, err = s.DataClient.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, items)
-	_, feedbacks, err = s.DataClient.GetFeedback("", 100, nil)
+	_, feedbacks, err = s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Empty(t, feedbacks)
 }

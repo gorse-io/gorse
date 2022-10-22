@@ -724,7 +724,7 @@ func TestServer_Feedback(t *testing.T) {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err := s.DataClient.GetUserFeedback("0", false, "click")
+	ret, err := s.DataClient.GetUserFeedback("0", s.Config.Now(), "click")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
@@ -741,7 +741,7 @@ func TestServer_Feedback(t *testing.T) {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err = s.DataClient.GetUserFeedback("0", false, "click")
+	ret, err = s.DataClient.GetUserFeedback("0", s.Config.Now(), "click")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)

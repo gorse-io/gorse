@@ -462,7 +462,7 @@ func (w *Worker) Recommend(users []data.User) {
 		popularRecommendSeconds       atomic.Float64
 	)
 
-	userFeedbackCache := NewFeedbackCache(w.DataClient, w.Config.Recommend.DataSource.PositiveFeedbackTypes...)
+	userFeedbackCache := NewFeedbackCache(w, w.Config.Recommend.DataSource.PositiveFeedbackTypes...)
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
 	err = parallel.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
 		defer func() {
@@ -477,7 +477,7 @@ func (w *Worker) Recommend(users []data.User) {
 		updateUserCount.Add(1)
 
 		// load historical items
-		historyItems, feedbacks, err := loadUserHistoricalItems(w.DataClient, userId)
+		historyItems, feedbacks, err := w.loadUserHistoricalItems(w.DataClient, userId)
 		excludeSet := set.NewStringSet(historyItems...)
 		if err != nil {
 			log.Logger().Error("failed to pull user feedback",
@@ -1019,9 +1019,9 @@ func (w *Worker) checkRecommendCacheTimeout(userId string, categories []string) 
 	return true
 }
 
-func loadUserHistoricalItems(database data.Database, userId string) ([]string, []data.Feedback, error) {
+func (w *Worker) loadUserHistoricalItems(database data.Database, userId string) ([]string, []data.Feedback, error) {
 	items := make([]string, 0)
-	feedbacks, err := database.GetUserFeedback(userId, false)
+	feedbacks, err := database.GetUserFeedback(userId, w.Config.Now())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1047,7 +1047,7 @@ func (w *Worker) refreshCache(userId string) error {
 			return errors.Trace(err)
 		}
 	} else {
-		feedback, err := w.DataClient.GetUserFeedback(userId, true)
+		feedback, err := w.DataClient.GetUserFeedback(userId, nil)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1251,17 +1251,19 @@ func (c *ItemCache) Bytes() int {
 
 // FeedbackCache is the cache for user feedbacks.
 type FeedbackCache struct {
+	*config.Config
+	Client    data.Database
 	Types     []string
 	Cache     cmap.ConcurrentMap
-	Client    data.Database
 	ByteCount uintptr
 }
 
 // NewFeedbackCache creates a new FeedbackCache.
-func NewFeedbackCache(client data.Database, feedbackTypes ...string) *FeedbackCache {
+func NewFeedbackCache(worker *Worker, feedbackTypes ...string) *FeedbackCache {
 	return &FeedbackCache{
+		Config: worker.Config,
+		Client: worker.DataClient,
 		Types:  feedbackTypes,
-		Client: client,
 		Cache:  cmap.New(),
 	}
 }
@@ -1272,7 +1274,7 @@ func (c *FeedbackCache) GetUserFeedback(userId string) ([]string, error) {
 		return tmp.([]string), nil
 	} else {
 		items := make([]string, 0)
-		feedbacks, err := c.Client.GetUserFeedback(userId, false, c.Types...)
+		feedbacks, err := c.Client.GetUserFeedback(userId, c.Config.Now(), c.Types...)
 		if err != nil {
 			return nil, err
 		}

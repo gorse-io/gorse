@@ -744,17 +744,10 @@ func (d *SQLDatabase) GetUserStream(batchSize int) (chan []User, chan error) {
 }
 
 // GetUserFeedback returns feedback of a user from MySQL.
-func (d *SQLDatabase) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
+func (d *SQLDatabase) GetUserFeedback(userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment").Where("user_id = ?", userId)
-	if !withFuture {
-		switch d.driver {
-		case SQLite:
-			tx.Where("time_stamp <= DATETIME()")
-		case Oracle:
-			tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP)")
-		default:
-			tx.Where("time_stamp <= NOW()")
-		}
+	if endTime != nil {
+		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -928,7 +921,7 @@ func (d *SQLDatabase) BatchInsertFeedback(feedback []Feedback, insertUser, inser
 }
 
 // GetFeedback returns feedback from MySQL.
-func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+func (d *SQLDatabase) GetFeedback(cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	tx := d.gormDB.Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
 	if cursor != "" {
 		var cursorKey FeedbackKey
@@ -944,19 +937,14 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 			tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
 		}
 	}
-	switch d.driver {
-	case SQLite:
-		tx.Where("time_stamp <= DATETIME()")
-	case Oracle:
-		tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP)")
-	default:
-		tx.Where("time_stamp <= NOW()")
-	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
-	if timeLimit != nil {
-		tx.Where("time_stamp >= ?", *timeLimit)
+	if beginTime != nil {
+		tx.Where("time_stamp >= ?", d.convertTimeZone(beginTime))
+	}
+	if endTime != nil {
+		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 	}
 	tx.Order("feedback_type, user_id, item_id").Limit(n + 1)
 	result, err := tx.Rows()
@@ -986,7 +974,7 @@ func (d *SQLDatabase) GetFeedback(cursor string, n int, timeLimit *time.Time, fe
 }
 
 // GetFeedbackStream reads feedback by stream.
-func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+func (d *SQLDatabase) GetFeedbackStream(batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
@@ -994,19 +982,14 @@ func (d *SQLDatabase) GetFeedbackStream(batchSize int, timeLimit *time.Time, fee
 		defer close(errChan)
 		// send query
 		tx := d.gormDB.Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
-		switch d.driver {
-		case SQLite:
-			tx.Where("time_stamp <= DATETIME()")
-		case Oracle:
-			tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP)")
-		default:
-			tx.Where("time_stamp <= NOW()")
-		}
 		if len(feedbackTypes) > 0 {
 			tx.Where("feedback_type IN ?", feedbackTypes)
 		}
-		if timeLimit != nil {
-			tx.Where("time_stamp >= ?", *timeLimit)
+		if beginTime != nil {
+			tx.Where("time_stamp >= ?", d.convertTimeZone(beginTime))
+		}
+		if endTime != nil {
+			tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 		}
 		result, err := tx.Rows()
 		if err != nil {
@@ -1076,4 +1059,13 @@ func (d *SQLDatabase) DeleteUserItemFeedback(userId, itemId string, feedbackType
 		return 0, errors.Trace(tx.Error)
 	}
 	return int(tx.RowsAffected), nil
+}
+
+func (d *SQLDatabase) convertTimeZone(timestamp *time.Time) time.Time {
+	switch d.driver {
+	case ClickHouse, SQLite, Oracle:
+		return timestamp.In(time.UTC)
+	default:
+		return *timestamp
+	}
 }

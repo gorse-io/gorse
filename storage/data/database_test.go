@@ -96,13 +96,13 @@ func getItemStream(t *testing.T, db Database, batchSize int) []Item {
 	return items
 }
 
-func getFeedback(t *testing.T, db Database, batchSize int, timeLimit *time.Time, feedbackTypes ...string) []Feedback {
+func getFeedback(t *testing.T, db Database, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) []Feedback {
 	feedback := make([]Feedback, 0)
 	var err error
 	var data []Feedback
 	cursor := ""
 	for {
-		cursor, data, err = db.GetFeedback(cursor, batchSize, timeLimit, feedbackTypes...)
+		cursor, data, err = db.GetFeedback(cursor, batchSize, beginTime, endTime, feedbackTypes...)
 		assert.NoError(t, err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
@@ -118,9 +118,9 @@ func getFeedback(t *testing.T, db Database, batchSize int, timeLimit *time.Time,
 	}
 }
 
-func getFeedbackStream(t *testing.T, db Database, batchSize int, timeLimit *time.Time, feedbackTypes ...string) []Feedback {
+func getFeedbackStream(t *testing.T, db Database, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) []Feedback {
 	var feedbacks []Feedback
-	feedbackChan, errChan := db.GetFeedbackStream(batchSize, timeLimit, feedbackTypes...)
+	feedbackChan, errChan := db.GetFeedbackStream(batchSize, beginTime, endTime, feedbackTypes...)
 	for batchFeedback := range feedbackChan {
 		feedbacks = append(feedbacks, batchFeedback...)
 	}
@@ -226,18 +226,18 @@ func testFeedback(t *testing.T, db Database) {
 	err = db.BatchInsertFeedback(futureFeedback, true, true, true)
 	assert.NoError(t, err)
 	// Get feedback
-	ret := getFeedback(t, db, 3, nil, positiveFeedbackType)
+	ret := getFeedback(t, db, 3, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.Equal(t, feedback, ret)
-	ret = getFeedback(t, db, 2, nil)
+	ret = getFeedback(t, db, 2, nil, lo.ToPtr(time.Now()))
 	assert.Equal(t, len(feedback)+2, len(ret))
-	ret = getFeedback(t, db, 2, lo.ToPtr(timestamp.Add(time.Second)))
+	ret = getFeedback(t, db, 2, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	assert.Empty(t, ret)
 	// Get feedback stream
-	feedbackFromStream := getFeedbackStream(t, db, 3, nil, positiveFeedbackType)
+	feedbackFromStream := getFeedbackStream(t, db, 3, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.ElementsMatch(t, feedback, feedbackFromStream)
-	feedbackFromStream = getFeedbackStream(t, db, 3, nil)
+	feedbackFromStream = getFeedbackStream(t, db, 3, nil, lo.ToPtr(time.Now()))
 	assert.Equal(t, len(feedback)+2, len(feedbackFromStream))
-	feedbackFromStream = getFeedbackStream(t, db, 3, lo.ToPtr(timestamp.Add(time.Second)))
+	feedbackFromStream = getFeedbackStream(t, db, 3, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	assert.Empty(t, feedbackFromStream)
 	// Get items
 	err = db.Optimize()
@@ -277,13 +277,13 @@ func testFeedback(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	assert.Equal(t, Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
-	ret, err = db.GetUserFeedback("2", false, positiveFeedbackType)
+	ret, err = db.GetUserFeedback("2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "2", ret[0].UserId)
 	assert.Equal(t, "4", ret[0].ItemId)
 	// Get all feedback by user
-	ret, err = db.GetUserFeedback("2", false)
+	ret, err = db.GetUserFeedback("2", lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(ret))
 	// Get typed feedback by item
@@ -304,7 +304,7 @@ func testFeedback(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
-	ret, err = db.GetUserFeedback("0", false, positiveFeedbackType)
+	ret, err = db.GetUserFeedback("0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
@@ -316,7 +316,7 @@ func testFeedback(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	err = db.Optimize()
 	assert.NoError(t, err)
-	ret, err = db.GetUserFeedback("0", false, positiveFeedbackType)
+	ret, err = db.GetUserFeedback("0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
@@ -487,10 +487,10 @@ func testDeleteUser(t *testing.T, db Database) {
 	assert.NoError(t, err)
 	_, err = db.GetUser("a")
 	assert.NotNil(t, err, "failed to delete user")
-	ret, err := db.GetUserFeedback("a", false, positiveFeedbackType)
+	ret, err := db.GetUserFeedback("a", lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
-	_, ret, err = db.GetFeedback("", 100, nil, positiveFeedbackType)
+	_, ret, err = db.GetFeedback("", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Empty(t, ret)
 }
@@ -514,7 +514,7 @@ func testDeleteItem(t *testing.T, db Database) {
 	ret, err := db.GetItemFeedback("b", positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(ret))
-	_, ret, err = db.GetFeedback("", 100, nil, positiveFeedbackType)
+	_, ret, err = db.GetFeedback("", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
 	assert.NoError(t, err)
 	assert.Empty(t, ret)
 }
@@ -610,11 +610,11 @@ func testTimeLimit(t *testing.T, db Database) {
 	}
 	err = db.BatchInsertFeedback(feedbacks, true, true, true)
 	assert.NoError(t, err)
-	_, retFeedback, err := db.GetFeedback("", 100, &timeLimit)
+	_, retFeedback, err := db.GetFeedback("", 100, &timeLimit, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, []Feedback{feedbacks[4], feedbacks[3], feedbacks[2]}, retFeedback)
 	typeFilter := "type1"
-	_, retFeedback, err = db.GetFeedback("", 100, &timeLimit, typeFilter)
+	_, retFeedback, err = db.GetFeedback("", 100, &timeLimit, lo.ToPtr(time.Now()), typeFilter)
 	assert.NoError(t, err)
 	assert.Equal(t, []Feedback{feedbacks[4], feedbacks[3]}, retFeedback)
 }
@@ -633,14 +633,14 @@ func testTimeZone(t *testing.T, db Database) {
 	}, true, true, true)
 	assert.NoError(t, err)
 	// get feedback stream
-	feedback := getFeedback(t, db, 10, nil)
+	feedback := getFeedback(t, db, 10, nil, lo.ToPtr(time.Now()))
 	assert.Equal(t, 3, len(feedback))
 	// get feedback
-	_, feedback, err = db.GetFeedback("", 10, nil)
+	_, feedback, err = db.GetFeedback("", 10, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(feedback))
 	// get user feedback
-	feedback, err = db.GetUserFeedback("1", false)
+	feedback, err = db.GetUserFeedback("1", lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(feedback))
 	// get item feedback
@@ -723,7 +723,7 @@ func testPurge(t *testing.T, db Database) {
 	_, items, err := db.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 100, len(items))
-	_, feedbacks, err := db.GetFeedback("", 100, nil)
+	_, feedbacks, err := db.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, 100, len(feedbacks))
 	// purge data
@@ -735,7 +735,7 @@ func testPurge(t *testing.T, db Database) {
 	_, items, err = db.GetItems("", 100, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, items)
-	_, feedbacks, err = db.GetFeedback("", 100, nil)
+	_, feedbacks, err = db.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Empty(t, feedbacks)
 	// purge empty database

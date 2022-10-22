@@ -1507,7 +1507,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	// STEP 3: pull positive feedback
 	var feedbackCount float64
 	start = time.Now()
-	feedbackChan, errChan := database.GetFeedbackStream(batchSize, feedbackTimeLimit, posFeedbackTypes...)
+	feedbackChan, errChan := database.GetFeedbackStream(batchSize, feedbackTimeLimit, m.Config.Now(), posFeedbackTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
 			feedbackCount++
@@ -1546,7 +1546,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	feedbackChan, errChan = database.GetFeedbackStream(batchSize, feedbackTimeLimit, readTypes...)
+	feedbackChan, errChan = database.GetFeedbackStream(batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
 			feedbackCount++
