@@ -115,7 +115,7 @@ func (NoDatabase) GetUserStream(_ int) (chan []User, chan error) {
 }
 
 // GetUserFeedback method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetUserFeedback(_ string, _ bool, _ ...string) ([]Feedback, error) {
+func (NoDatabase) GetUserFeedback(_ string, _ *time.Time, _ ...string) ([]Feedback, error) {
 	return nil, ErrNoDatabase
 }
 
@@ -135,12 +135,12 @@ func (NoDatabase) BatchInsertFeedback(_ []Feedback, _, _, _ bool) error {
 }
 
 // GetFeedback method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetFeedback(_ string, _ int, _ *time.Time, _ ...string) (string, []Feedback, error) {
+func (NoDatabase) GetFeedback(_ string, _ int, _, _ *time.Time, _ ...string) (string, []Feedback, error) {
 	return "", nil, ErrNoDatabase
 }
 
 // GetFeedbackStream method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetFeedbackStream(_ int, _ *time.Time, _ ...string) (chan []Feedback, chan error) {
+func (NoDatabase) GetFeedbackStream(_ int, _, _ *time.Time, _ ...string) (chan []Feedback, chan error) {
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
 	go func() {

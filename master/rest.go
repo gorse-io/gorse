@@ -705,7 +705,7 @@ type Feedback struct {
 func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataClient.GetUserFeedback(userId, false, feedbackType)
+	feedback, err := m.DataClient.GetUserFeedback(userId, m.Config.Now(), feedbackType)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1143,7 +1143,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			return
 		}
 		// write rows
-		feedbackChan, errChan := m.DataClient.GetFeedbackStream(batchSize, nil)
+		feedbackChan, errChan := m.DataClient.GetFeedbackStream(batchSize, nil, m.Config.Now())
 		for feedback := range feedbackChan {
 			for _, v := range feedback {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s,%s,%v\r\n",

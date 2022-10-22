@@ -122,21 +122,21 @@ type Database interface {
 	DeleteItem(itemId string) error
 	GetItem(itemId string) (Item, error)
 	ModifyItem(itemId string, patch ItemPatch) error
-	GetItems(cursor string, n int, timeLimit *time.Time) (string, []Item, error)
+	GetItems(cursor string, n int, beginTime *time.Time) (string, []Item, error)
 	GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error)
 	BatchInsertUsers(users []User) error
 	DeleteUser(userId string) error
 	GetUser(userId string) (User, error)
 	ModifyUser(userId string, patch UserPatch) error
 	GetUsers(cursor string, n int) (string, []User, error)
-	GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error)
+	GetUserFeedback(userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error)
 	GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
 	DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error)
 	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error
-	GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error)
+	GetFeedback(cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error)
 	GetUserStream(batchSize int) (chan []User, chan error)
 	GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error)
-	GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
+	GetFeedbackStream(batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
 }
 
 // Open a connection to a database.

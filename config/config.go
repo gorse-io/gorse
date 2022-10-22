@@ -216,6 +216,10 @@ func GetDefaultConfig() *Config {
 	}
 }
 
+func (config *Config) Now() *time.Time {
+	return lo.ToPtr(time.Now().Add(config.Server.ClockError))
+}
+
 func (config *Config) UserNeighborDigest() string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("%v-%v", config.Recommend.UserNeighbors.NeighborType, config.Recommend.UserNeighbors.EnableIndex))

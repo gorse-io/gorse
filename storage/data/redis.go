@@ -422,7 +422,7 @@ func (r *Redis) GetUserStream(batchSize int) (chan []User, chan error) {
 }
 
 // GetUserFeedback returns feedback of a user from Redis.
-func (r *Redis) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
+func (r *Redis) GetUserFeedback(userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	feedbackTypeSet := strset.New(feedbackTypes...)
@@ -433,7 +433,7 @@ func (r *Redis) GetUserFeedback(userId string, withFuture bool, feedbackTypes ..
 			if err != nil {
 				return errors.Trace(err)
 			}
-			if withFuture || val.Timestamp.Before(time.Now()) {
+			if endTime == nil || val.Timestamp.Before(*endTime) {
 				feedback = append(feedback, val)
 			}
 		}
@@ -550,7 +550,7 @@ func (r *Redis) BatchInsertFeedback(feedback []Feedback, insertUser, insertItem,
 }
 
 // GetFeedback returns feedback from Redis.
-func (r *Redis) GetFeedback(_ string, _ int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+func (r *Redis) GetFeedback(_ string, _ int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	var ctx = context.Background()
 	feedback := make([]Feedback, 0)
 	feedbackTypeSet := strset.New(feedbackTypes...)
@@ -560,12 +560,13 @@ func (r *Redis) GetFeedback(_ string, _ int, timeLimit *time.Time, feedbackTypes
 			if err != nil {
 				return errors.Trace(err)
 			}
-			if timeLimit != nil && val.Timestamp.Unix() < timeLimit.Unix() {
+			if beginTime != nil && val.Timestamp.Before(*beginTime) {
 				return nil
 			}
-			if val.Timestamp.Before(time.Now()) {
-				feedback = append(feedback, val)
+			if endTime != nil && val.Timestamp.After(*endTime) {
+				return nil
 			}
+			feedback = append(feedback, val)
 		}
 		return nil
 	})
@@ -573,7 +574,7 @@ func (r *Redis) GetFeedback(_ string, _ int, timeLimit *time.Time, feedbackTypes
 }
 
 // GetFeedbackStream reads feedback by stream.
-func (r *Redis) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+func (r *Redis) GetFeedbackStream(batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
@@ -588,15 +589,16 @@ func (r *Redis) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackT
 				if err != nil {
 					return errors.Trace(err)
 				}
-				if timeLimit != nil && val.Timestamp.Unix() < timeLimit.Unix() {
+				if beginTime != nil && val.Timestamp.Before(*beginTime) {
 					return nil
 				}
-				if val.Timestamp.Before(time.Now()) {
-					feedback = append(feedback, val)
-					if len(feedback) == batchSize {
-						feedbackChan <- feedback
-						feedback = make([]Feedback, 0, batchSize)
-					}
+				if endTime != nil && val.Timestamp.After(*endTime) {
+					return nil
+				}
+				feedback = append(feedback, val)
+				if len(feedback) == batchSize {
+					feedbackChan <- feedback
+					feedback = make([]Feedback, 0, batchSize)
 				}
 			}
 			return nil

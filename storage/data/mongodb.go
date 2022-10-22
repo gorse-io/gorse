@@ -480,7 +480,7 @@ func (db *MongoDB) GetUserStream(batchSize int) (chan []User, chan error) {
 }
 
 // GetUserFeedback returns feedback of a user from MongoDB.
-func (db *MongoDB) GetUserFeedback(userId string, withFuture bool, feedbackTypes ...string) ([]Feedback, error) {
+func (db *MongoDB) GetUserFeedback(userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var r *mongo.Cursor
@@ -488,8 +488,8 @@ func (db *MongoDB) GetUserFeedback(userId string, withFuture bool, feedbackTypes
 	filter := bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},
 	}
-	if !withFuture {
-		filter["timestamp"] = bson.M{"$lte": time.Now()}
+	if endTime != nil {
+		filter["timestamp"] = bson.M{"$lte": endTime}
 	}
 	if len(feedbackTypes) > 0 {
 		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
@@ -604,7 +604,7 @@ func (db *MongoDB) BatchInsertFeedback(feedback []Feedback, insertUser, insertIt
 }
 
 // GetFeedback returns multiple feedback from MongoDB.
-func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+func (db *MongoDB) GetFeedback(cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	ctx := context.Background()
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	opt := options.Find()
@@ -624,9 +624,12 @@ func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedb
 		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
 	}
 	// pass time limit to filter
-	timestampConditions := bson.M{"$lte": time.Now()}
-	if timeLimit != nil {
-		timestampConditions["$gt"] = *timeLimit
+	timestampConditions := bson.M{}
+	if beginTime != nil {
+		timestampConditions["$gt"] = *beginTime
+	}
+	if endTime != nil {
+		timestampConditions["$lte"] = *endTime
 	}
 	filter["timestamp"] = timestampConditions
 	r, err := c.Find(ctx, filter, opt)
@@ -654,7 +657,7 @@ func (db *MongoDB) GetFeedback(cursor string, n int, timeLimit *time.Time, feedb
 }
 
 // GetFeedbackStream reads feedback from MongoDB by stream.
-func (db *MongoDB) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+func (db *MongoDB) GetFeedbackStream(batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
@@ -670,9 +673,12 @@ func (db *MongoDB) GetFeedbackStream(batchSize int, timeLimit *time.Time, feedba
 			filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
 		}
 		// pass time limit to filter
-		timestampConditions := bson.M{"$lte": time.Now()}
-		if timeLimit != nil {
-			timestampConditions["$gt"] = *timeLimit
+		timestampConditions := bson.M{}
+		if beginTime != nil {
+			timestampConditions["$gt"] = *beginTime
+		}
+		if endTime != nil {
+			timestampConditions["$lte"] = *endTime
 		}
 		filter["timestamp"] = timestampConditions
 		r, err := c.Find(ctx, filter, opt)
@@ -745,20 +751,4 @@ func (db *MongoDB) DeleteUserItemFeedback(userId, itemId string, feedbackTypes .
 		return 0, err
 	}
 	return int(r.DeletedCount), nil
-}
-
-// CountActiveUsers returns the number active users starting from a specified date.
-func (db *MongoDB) CountActiveUsers(date time.Time) (int, error) {
-	ctx := context.Background()
-	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
-	distinct, err := c.Distinct(ctx, "feedbackkey.userid", bson.M{
-		"timestamp": bson.M{
-			"$gte": time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
-			"$lt":  time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC),
-		},
-	})
-	if err != nil {
-		return 0, err
-	}
-	return len(distinct), nil
 }
