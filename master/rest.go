@@ -16,6 +16,7 @@ package master
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -380,8 +381,12 @@ func (m *Master) checkLogin(request *http.Request) bool {
 	return false
 }
 
-func (m *Master) getCategories(_ *restful.Request, response *restful.Response) {
-	categories, err := m.CacheClient.GetSet(cache.ItemCategories)
+func (m *Master) getCategories(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
+	categories, err := m.CacheClient.GetSet(ctx, cache.ItemCategories)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -462,35 +467,39 @@ type Status struct {
 	MatchingIndexRecall     float32
 }
 
-func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
+func (m *Master) getStats(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	status := Status{BinaryVersion: version.Version}
 	var err error
 	// read number of users
-	if status.NumUsers, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumUsers)).Integer(); err != nil {
+	if status.NumUsers, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.NumUsers)).Integer(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get number of users", zap.Error(err))
 	}
 	// read number of items
-	if status.NumItems, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumItems)).Integer(); err != nil {
+	if status.NumItems, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.NumItems)).Integer(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get number of items", zap.Error(err))
 	}
 	// read number of user labels
-	if status.NumUserLabels, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumUserLabels)).Integer(); err != nil {
+	if status.NumUserLabels, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.NumUserLabels)).Integer(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get number of user labels", zap.Error(err))
 	}
 	// read number of item labels
-	if status.NumItemLabels, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumItemLabels)).Integer(); err != nil {
+	if status.NumItemLabels, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.NumItemLabels)).Integer(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get number of item labels", zap.Error(err))
 	}
 	// read number of total positive feedback
-	if status.NumTotalPosFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks)).Integer(); err != nil {
+	if status.NumTotalPosFeedback, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks)).Integer(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get number of total positive feedbacks", zap.Error(err))
 	}
 	// read number of valid positive feedback
-	if status.NumValidPosFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks)).Integer(); err != nil {
+	if status.NumValidPosFeedback, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks)).Integer(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get number of valid positive feedbacks", zap.Error(err))
 	}
 	// read number of valid negative feedback
-	if status.NumValidNegFeedback, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks)).Integer(); err != nil {
+	if status.NumValidNegFeedback, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks)).Integer(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get number of valid negative feedbacks", zap.Error(err))
 	}
 	// count the number of workers and servers
@@ -505,27 +514,27 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	}
 	m.nodesInfoMutex.Unlock()
 	// read popular items update time
-	if status.PopularItemsUpdateTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime)).Time(); err != nil {
+	if status.PopularItemsUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get popular items update time", zap.Error(err))
 	}
 	// read the latest items update time
-	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
+	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
 	}
 	status.MatchingModelScore = m.rankingScore
 	status.RankingModelScore = m.clickScore
 	// read last fit matching model time
-	if status.MatchingModelFitTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {
+	if status.MatchingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get last fit matching model time", zap.Error(err))
 	}
 	// read last fit ranking model time
-	if status.RankingModelFitTime, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime)).Time(); err != nil {
+	if status.RankingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get last fit ranking model time", zap.Error(err))
 	}
 	// read user neighbor index recall
 	var temp string
 	if m.Config.Recommend.UserNeighbors.EnableIndex {
-		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
+		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get user neighbor index recall", zap.Error(err))
 		} else {
 			status.UserNeighborIndexRecall = encoding.ParseFloat32(temp)
@@ -533,7 +542,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	}
 	// read item neighbor index recall
 	if m.Config.Recommend.ItemNeighbors.EnableIndex {
-		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
+		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get item neighbor index recall", zap.Error(err))
 		} else {
 			status.ItemNeighborIndexRecall = encoding.ParseFloat32(temp)
@@ -541,7 +550,7 @@ func (m *Master) getStats(_ *restful.Request, response *restful.Response) {
 	}
 	// read matching index recall
 	if m.Config.Recommend.Collaborative.EnableIndex {
-		if temp, err = m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
+		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
 		} else {
 			status.MatchingIndexRecall = encoding.ParseFloat32(temp)
@@ -566,6 +575,10 @@ func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 }
 
 func (m *Master) getRates(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	n, err := server.ParseInt(request, "n", 100)
 	if err != nil {
@@ -574,7 +587,7 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 	}
 	measurements := make(map[string][]server.Measurement, len(m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 	for _, feedbackType := range m.Config.Recommend.DataSource.PositiveFeedbackTypes {
-		measurements[feedbackType], err = m.RestServer.GetMeasurements(cache.Key(PositiveFeedbackRate, feedbackType), n)
+		measurements[feedbackType], err = m.RestServer.GetMeasurements(ctx, cache.Key(PositiveFeedbackRate, feedbackType), n)
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -595,10 +608,14 @@ type User struct {
 }
 
 func (m *Master) getUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// get user id
 	userId := request.PathParameter("user-id")
 	// get user
-	user, err := m.DataClient.GetUser(userId)
+	user, err := m.DataClient.GetUser(ctx, userId)
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
 			server.PageNotFound(response, err)
@@ -608,11 +625,11 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 		return
 	}
 	detail := User{User: user}
-	if detail.LastActiveTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+	if detail.LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
-	if detail.LastUpdateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+	if detail.LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
@@ -620,6 +637,10 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 }
 
 func (m *Master) getUsers(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Authorize
 	cursor := request.QueryParameter("cursor")
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
@@ -628,7 +649,7 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 		return
 	}
 	// get all users
-	cursor, users, err := m.DataClient.GetUsers(cursor, n)
+	cursor, users, err := m.DataClient.GetUsers(ctx, cursor, n)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -636,11 +657,11 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 	details := make([]User, len(users))
 	for i, user := range users {
 		details[i].User = user
-		if details[i].LastActiveTime, err = m.CacheClient.Get(cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+		if details[i].LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
-		if details[i].LastUpdateTime, err = m.CacheClient.Get(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+		if details[i].LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
@@ -649,6 +670,10 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 }
 
 func (m *Master) getRecommend(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// parse arguments
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
@@ -661,13 +686,13 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	var results []string
 	switch recommender {
 	case "offline":
-		results, err = m.Recommend(response, userId, category, n, m.RecommendOffline)
+		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendOffline)
 	case "collaborative":
-		results, err = m.Recommend(response, userId, category, n, m.RecommendCollaborative)
+		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendCollaborative)
 	case "user_based":
-		results, err = m.Recommend(response, userId, category, n, m.RecommendUserBased)
+		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendUserBased)
 	case "item_based":
-		results, err = m.Recommend(response, userId, category, n, m.RecommendItemBased)
+		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendItemBased)
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
 		for _, recommender := range m.Config.Recommend.Online.FallbackRecommend {
@@ -687,7 +712,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 				return
 			}
 		}
-		results, err = m.Recommend(response, userId, category, n, recommenders...)
+		results, err = m.Recommend(ctx, response, userId, category, n, recommenders...)
 	}
 	if err != nil {
 		server.InternalServerError(response, err)
@@ -696,7 +721,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// Send result
 	details := make([]data.Item, len(results))
 	for i := range results {
-		details[i], err = m.DataClient.GetItem(results[i])
+		details[i], err = m.DataClient.GetItem(ctx, results[i])
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -715,9 +740,13 @@ type Feedback struct {
 
 // get feedback by user-id with feedback type
 func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataClient.GetUserFeedback(userId, m.Config.Now(), feedbackType)
+	feedback, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), feedbackType)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -728,7 +757,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		details[i].UserId = feedback[i].UserId
 		details[i].Timestamp = feedback[i].Timestamp
 		details[i].Comment = feedback[i].Comment
-		details[i].Item, err = m.DataClient.GetItem(feedback[i].ItemId)
+		details[i].Item, err = m.DataClient.GetItem(ctx, feedback[i].ItemId)
 		if errors.Is(err, errors.NotFound) {
 			details[i].Item = data.Item{ItemId: feedback[i].ItemId, Comment: "** This item doesn't exist in Gorse **"}
 		} else if err != nil {
@@ -750,6 +779,10 @@ type ScoreUser struct {
 }
 
 func (m *Master) getSort(key, category string, isItem bool, request *restful.Request, response *restful.Response, retType interface{}) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	var n, offset int
 	var err error
 	// read arguments
@@ -762,7 +795,7 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		return
 	}
 	// Get the popular list
-	scores, err := m.CacheClient.GetSorted(cache.Key(key, category), offset, m.Config.Recommend.CacheSize)
+	scores, err := m.CacheClient.GetSorted(ctx, cache.Key(key, category), offset, m.Config.Recommend.CacheSize)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -779,7 +812,7 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		details := make([]ScoredItem, len(scores))
 		for i := range scores {
 			details[i].Score = scores[i].Score
-			details[i].Item, err = m.DataClient.GetItem(scores[i].Id)
+			details[i].Item, err = m.DataClient.GetItem(ctx, scores[i].Id)
 			if err != nil {
 				server.InternalServerError(response, err)
 				return
@@ -790,7 +823,7 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		details := make([]ScoreUser, len(scores))
 		for i := range scores {
 			details[i].Score = scores[i].Score
-			details[i].User, err = m.DataClient.GetUser(scores[i].Id)
+			details[i].User, err = m.DataClient.GetUser(ctx, scores[i].Id)
 			if err != nil {
 				server.InternalServerError(response, err)
 				return
@@ -830,6 +863,10 @@ func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Re
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
+	ctx := context.Background()
+	if request != nil {
+		ctx = request.Context()
+	}
 	if !m.checkLogin(request) {
 		resp := restful.NewResponse(response)
 		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
@@ -850,7 +887,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 			return
 		}
 		// write rows
-		userChan, errChan := m.DataClient.GetUserStream(batchSize)
+		userChan, errChan := m.DataClient.GetUserStream(ctx, batchSize)
 		for users := range userChan {
 			for _, user := range users {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
@@ -880,11 +917,12 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 			return
 		}
 		defer file.Close()
-		m.importUsers(response, file, hasHeader, sep, labelSep, fmtString)
+		m.importUsers(ctx, response, file, hasHeader, sep, labelSep, fmtString)
 	}
 }
 
-func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
+func (m *Master) importUsers(ctx context.Context, response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
+
 	lineCount := 0
 	timeStart := time.Now()
 	users := make([]data.User, 0)
@@ -921,7 +959,7 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 		users = append(users, user)
 		// batch insert
 		if len(users) == batchSize {
-			err = m.DataClient.BatchInsertUsers(users)
+			err = m.DataClient.BatchInsertUsers(ctx, users)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
 				return false
@@ -936,7 +974,7 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 		return
 	}
 	if len(users) > 0 {
-		err = m.DataClient.BatchInsertUsers(users)
+		err = m.DataClient.BatchInsertUsers(ctx, users)
 		if err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return
@@ -951,6 +989,10 @@ func (m *Master) importUsers(response http.ResponseWriter, file io.Reader, hasHe
 }
 
 func (m *Master) importExportItems(response http.ResponseWriter, request *http.Request) {
+	ctx := context.Background()
+	if request != nil {
+		ctx = request.Context()
+	}
 	if !m.checkLogin(request) {
 		resp := restful.NewResponse(response)
 		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
@@ -971,7 +1013,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			return
 		}
 		// write rows
-		itemChan, errChan := m.DataClient.GetItemStream(batchSize, nil)
+		itemChan, errChan := m.DataClient.GetItemStream(ctx, batchSize, nil)
 		for items := range itemChan {
 			for _, item := range items {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%t,%s,%v,%s,%s\r\n",
@@ -1002,13 +1044,13 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			return
 		}
 		defer file.Close()
-		m.importItems(response, file, hasHeader, sep, labelSep, fmtString)
+		m.importItems(ctx, response, file, hasHeader, sep, labelSep, fmtString)
 	default:
 		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
-func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
+func (m *Master) importItems(ctx context.Context, response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
 	lineCount := 0
 	timeStart := time.Now()
 	items := make([]data.Item, 0)
@@ -1076,7 +1118,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		items = append(items, item)
 		// batch insert
 		if len(items) == batchSize {
-			err = m.DataClient.BatchInsertItems(items)
+			err = m.DataClient.BatchInsertItems(ctx, items)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
 				return false
@@ -1091,7 +1133,7 @@ func (m *Master) importItems(response http.ResponseWriter, file io.Reader, hasHe
 		return
 	}
 	if len(items) > 0 {
-		err = m.DataClient.BatchInsertItems(items)
+		err = m.DataClient.BatchInsertItems(ctx, items)
 		if err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return
@@ -1135,6 +1177,10 @@ func formValue(request *http.Request, fieldName, defaultValue string) string {
 }
 
 func (m *Master) importExportFeedback(response http.ResponseWriter, request *http.Request) {
+	ctx := context.Background()
+	if request != nil {
+		ctx = request.Context()
+	}
 	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
@@ -1150,7 +1196,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			return
 		}
 		// write rows
-		feedbackChan, errChan := m.DataClient.GetFeedbackStream(batchSize, nil, m.Config.Now())
+		feedbackChan, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, nil, m.Config.Now())
 		for feedback := range feedbackChan {
 			for _, v := range feedback {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s,%s,%v\r\n",
@@ -1180,13 +1226,13 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			return
 		}
 		defer file.Close()
-		m.importFeedback(response, file, hasHeader, sep, fmtString)
+		m.importFeedback(ctx, response, file, hasHeader, sep, fmtString)
 	default:
 		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
-func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, hasHeader bool, sep, fmtString string) {
+func (m *Master) importFeedback(ctx context.Context, response http.ResponseWriter, file io.Reader, hasHeader bool, sep, fmtString string) {
 	var err error
 	scanner := bufio.NewScanner(file)
 	lineCount := 0
@@ -1234,7 +1280,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 		feedbacks = append(feedbacks, feedback)
 		// batch insert
 		if len(feedbacks) == batchSize {
-			err = m.InsertFeedbackToCache(feedbacks)
+			err = m.InsertFeedbackToCache(ctx, feedbacks)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
 				return false
@@ -1249,7 +1295,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 		return
 	}
 	// insert to data store
-	err = m.DataClient.BatchInsertFeedback(feedbacks,
+	err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
 		m.Config.Server.AutoInsertUser,
 		m.Config.Server.AutoInsertItem, true)
 	if err != nil {
@@ -1258,7 +1304,7 @@ func (m *Master) importFeedback(response http.ResponseWriter, file io.Reader, ha
 	}
 	// insert to cache store
 	if len(feedbacks) > 0 {
-		err = m.InsertFeedbackToCache(feedbacks)
+		err = m.InsertFeedbackToCache(ctx, feedbacks)
 		if err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return

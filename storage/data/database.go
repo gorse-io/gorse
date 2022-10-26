@@ -117,26 +117,26 @@ type Database interface {
 	Close() error
 	Optimize() error
 	Purge() error
-	BatchInsertItems(items []Item) error
-	BatchGetItems(itemIds []string) ([]Item, error)
-	DeleteItem(itemId string) error
-	GetItem(itemId string) (Item, error)
-	ModifyItem(itemId string, patch ItemPatch) error
-	GetItems(cursor string, n int, beginTime *time.Time) (string, []Item, error)
-	GetItemFeedback(itemId string, feedbackTypes ...string) ([]Feedback, error)
-	BatchInsertUsers(users []User) error
-	DeleteUser(userId string) error
-	GetUser(userId string) (User, error)
-	ModifyUser(userId string, patch UserPatch) error
-	GetUsers(cursor string, n int) (string, []User, error)
-	GetUserFeedback(userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error)
-	GetUserItemFeedback(userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
-	DeleteUserItemFeedback(userId, itemId string, feedbackTypes ...string) (int, error)
-	BatchInsertFeedback(feedback []Feedback, insertUser, insertItem, overwrite bool) error
-	GetFeedback(cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error)
-	GetUserStream(batchSize int) (chan []User, chan error)
-	GetItemStream(batchSize int, timeLimit *time.Time) (chan []Item, chan error)
-	GetFeedbackStream(batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
+	BatchInsertItems(ctx context.Context, items []Item) error
+	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)
+	DeleteItem(ctx context.Context, itemId string) error
+	GetItem(ctx context.Context, itemId string) (Item, error)
+	ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error
+	GetItems(ctx context.Context, cursor string, n int, beginTime *time.Time) (string, []Item, error)
+	GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error)
+	BatchInsertUsers(ctx context.Context, users []User) error
+	DeleteUser(ctx context.Context, userId string) error
+	GetUser(ctx context.Context, userId string) (User, error)
+	ModifyUser(ctx context.Context, userId string, patch UserPatch) error
+	GetUsers(ctx context.Context, cursor string, n int) (string, []User, error)
+	GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error)
+	GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
+	DeleteUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) (int, error)
+	BatchInsertFeedback(ctx context.Context, feedback []Feedback, insertUser, insertItem, overwrite bool) error
+	GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error)
+	GetUserStream(ctx context.Context, batchSize int) (chan []User, chan error)
+	GetItemStream(ctx context.Context, batchSize int, timeLimit *time.Time) (chan []Item, chan error)
+	GetFeedbackStream(ctx context.Context, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
 }
 
 // Open a connection to a database.

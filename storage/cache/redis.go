@@ -276,8 +276,7 @@ func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isClust
 	}
 }
 
-func (r *Redis) Set(values ...Value) error {
-	var ctx = context.Background()
+func (r *Redis) Set(ctx context.Context, values ...Value) error {
 	p := r.client.Pipeline()
 	for _, v := range values {
 		if err := p.Set(ctx, r.Key(v.name), v.value, 0).Err(); err != nil {
@@ -289,8 +288,7 @@ func (r *Redis) Set(values ...Value) error {
 }
 
 // Get returns a value from Redis.
-func (r *Redis) Get(key string) *ReturnValue {
-	var ctx = context.Background()
+func (r *Redis) Get(ctx context.Context, key string) *ReturnValue {
 	val, err := r.client.Get(ctx, r.Key(key)).Result()
 	if err != nil {
 		if err == redis.Nil {
@@ -302,19 +300,17 @@ func (r *Redis) Get(key string) *ReturnValue {
 }
 
 // Delete object from Redis.
-func (r *Redis) Delete(key string) error {
-	ctx := context.Background()
+func (r *Redis) Delete(ctx context.Context, key string) error {
 	return r.client.Del(ctx, r.Key(key)).Err()
 }
 
 // GetSet returns members of a set from Redis.
-func (r *Redis) GetSet(key string) ([]string, error) {
-	ctx := context.Background()
+func (r *Redis) GetSet(ctx context.Context, key string) ([]string, error) {
 	return r.client.SMembers(ctx, r.Key(key)).Result()
 }
 
 // SetSet overrides a set with members in Redis.
-func (r *Redis) SetSet(key string, members ...string) error {
+func (r *Redis) SetSet(ctx context.Context, key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -324,7 +320,6 @@ func (r *Redis) SetSet(key string, members ...string) error {
 		values = append(values, member)
 	}
 	// push set
-	ctx := context.Background()
 	pipeline := r.client.Pipeline()
 	pipeline.Del(ctx, r.Key(key))
 	pipeline.SAdd(ctx, r.Key(key), values...)
@@ -333,7 +328,7 @@ func (r *Redis) SetSet(key string, members ...string) error {
 }
 
 // AddSet adds members to a set in Redis.
-func (r *Redis) AddSet(key string, members ...string) error {
+func (r *Redis) AddSet(ctx context.Context, key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -343,22 +338,19 @@ func (r *Redis) AddSet(key string, members ...string) error {
 		values = append(values, member)
 	}
 	// push set
-	ctx := context.Background()
 	return r.client.SAdd(ctx, r.Key(key), values...).Err()
 }
 
 // RemSet removes members from a set in Redis.
-func (r *Redis) RemSet(key string, members ...string) error {
+func (r *Redis) RemSet(ctx context.Context, key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
-	ctx := context.Background()
 	return r.client.SRem(ctx, r.Key(key), members).Err()
 }
 
 // GetSorted get scores from sorted set.
-func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
-	ctx := context.Background()
+func (r *Redis) GetSorted(ctx context.Context, key string, begin, end int) ([]Scored, error) {
 	members, err := r.client.ZRevRangeWithScores(ctx, r.Key(key), int64(begin), int64(end)).Result()
 	if err != nil {
 		return nil, err
@@ -370,8 +362,7 @@ func (r *Redis) GetSorted(key string, begin, end int) ([]Scored, error) {
 	return results, nil
 }
 
-func (r *Redis) GetSortedByScore(key string, begin, end float64) ([]Scored, error) {
-	ctx := context.Background()
+func (r *Redis) GetSortedByScore(ctx context.Context, key string, begin, end float64) ([]Scored, error) {
 	members, err := r.client.ZRangeByScoreWithScores(ctx, r.Key(key), &redis.ZRangeBy{
 		Min:    strconv.FormatFloat(begin, 'g', -1, 64),
 		Max:    strconv.FormatFloat(end, 'g', -1, 64),
@@ -388,8 +379,7 @@ func (r *Redis) GetSortedByScore(key string, begin, end float64) ([]Scored, erro
 	return results, nil
 }
 
-func (r *Redis) RemSortedByScore(key string, begin, end float64) error {
-	ctx := context.Background()
+func (r *Redis) RemSortedByScore(ctx context.Context, key string, begin, end float64) error {
 	return r.client.ZRemRangeByScore(ctx, r.Key(key),
 		strconv.FormatFloat(begin, 'g', -1, 64),
 		strconv.FormatFloat(end, 'g', -1, 64)).
@@ -397,8 +387,7 @@ func (r *Redis) RemSortedByScore(key string, begin, end float64) error {
 }
 
 // AddSorted add scores to sorted set.
-func (r *Redis) AddSorted(sortedSets ...SortedSet) error {
-	ctx := context.Background()
+func (r *Redis) AddSorted(ctx context.Context, sortedSets ...SortedSet) error {
 	p := r.client.Pipeline()
 	for _, sorted := range sortedSets {
 		if len(sorted.scores) > 0 {
@@ -414,12 +403,11 @@ func (r *Redis) AddSorted(sortedSets ...SortedSet) error {
 }
 
 // SetSorted set scores in sorted set and clear previous scores.
-func (r *Redis) SetSorted(key string, scores []Scored) error {
+func (r *Redis) SetSorted(ctx context.Context, key string, scores []Scored) error {
 	members := make([]redis.Z, 0, len(scores))
 	for _, score := range scores {
 		members = append(members, redis.Z{Member: score.Id, Score: float64(score.Score)})
 	}
-	ctx := context.Background()
 	pipeline := r.client.Pipeline()
 	pipeline.Del(ctx, r.Key(key))
 	if len(scores) > 0 {
@@ -430,11 +418,10 @@ func (r *Redis) SetSorted(key string, scores []Scored) error {
 }
 
 // RemSorted method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) RemSorted(members ...SetMember) error {
+func (r *Redis) RemSorted(ctx context.Context, members ...SetMember) error {
 	if len(members) == 0 {
 		return nil
 	}
-	ctx := context.Background()
 	pipe := r.client.Pipeline()
 	for _, member := range members {
 		pipe.ZRem(ctx, r.Key(member.name), member.member)

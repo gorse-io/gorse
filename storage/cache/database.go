@@ -275,21 +275,21 @@ type Database interface {
 	Scan(work func(string) error) error
 	Purge() error
 
-	Set(values ...Value) error
-	Get(name string) *ReturnValue
-	Delete(name string) error
+	Set(ctx context.Context, values ...Value) error
+	Get(ctx context.Context, name string) *ReturnValue
+	Delete(ctx context.Context, name string) error
 
-	GetSet(key string) ([]string, error)
-	SetSet(key string, members ...string) error
-	AddSet(key string, members ...string) error
-	RemSet(key string, members ...string) error
+	GetSet(ctx context.Context, key string) ([]string, error)
+	SetSet(ctx context.Context, key string, members ...string) error
+	AddSet(ctx context.Context, key string, members ...string) error
+	RemSet(ctx context.Context, key string, members ...string) error
 
-	AddSorted(sortedSets ...SortedSet) error
-	GetSorted(key string, begin, end int) ([]Scored, error)
-	GetSortedByScore(key string, begin, end float64) ([]Scored, error)
-	RemSortedByScore(key string, begin, end float64) error
-	SetSorted(key string, scores []Scored) error
-	RemSorted(members ...SetMember) error
+	AddSorted(ctx context.Context, sortedSets ...SortedSet) error
+	GetSorted(ctx context.Context, key string, begin, end int) ([]Scored, error)
+	GetSortedByScore(ctx context.Context, key string, begin, end float64) ([]Scored, error)
+	RemSortedByScore(ctx context.Context, key string, begin, end float64) error
+	SetSorted(ctx context.Context, key string, scores []Scored) error
+	RemSorted(ctx context.Context, members ...SetMember) error
 }
 
 // Open a connection to a database.

@@ -439,7 +439,8 @@ func (m *Master) RunManagedTasksLoop() {
 }
 
 func (m *Master) checkDataImported() bool {
-	isDataImported, err := m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
+	ctx := context.Background()
+	isDataImported, err := m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read meta", zap.Error(err))
@@ -447,7 +448,7 @@ func (m *Master) checkDataImported() bool {
 		return false
 	}
 	if isDataImported > 0 {
-		err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 0))
+		err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 0))
 		if err != nil {
 			log.Logger().Error("failed to write meta", zap.Error(err))
 		}
@@ -457,7 +458,8 @@ func (m *Master) checkDataImported() bool {
 }
 
 func (m *Master) notifyDataImported() {
-	err := m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 1))
+	ctx := context.Background()
+	err := m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 1))
 	if err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}

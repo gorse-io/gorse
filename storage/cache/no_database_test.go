@@ -15,11 +15,13 @@
 package cache
 
 import (
+	"context"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestNoDatabase(t *testing.T) {
+	ctx := context.Background()
 	var database NoDatabase
 	err := database.Close()
 	assert.ErrorIs(t, err, ErrNoDatabase)
@@ -29,36 +31,36 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Purge()
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.Set()
+	err = database.Set(ctx)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.Get(Key("", "")).String()
+	_, err = database.Get(ctx, Key("", "")).String()
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.Get(Key("", "")).Integer()
+	_, err = database.Get(ctx, Key("", "")).Integer()
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.Get(Key("", "")).Time()
+	_, err = database.Get(ctx, Key("", "")).Time()
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.Delete(Key("", ""))
-	assert.ErrorIs(t, err, ErrNoDatabase)
-
-	_, err = database.GetSet("")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetSet("")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.AddSet("")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSet("", "")
+	err = database.Delete(ctx, Key("", ""))
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	_, err = database.GetSorted("", 0, 0)
+	_, err = database.GetSet(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.GetSortedByScore("", 0, 0)
+	err = database.SetSet(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSortedByScore("", 0, 0)
+	err = database.AddSet(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetSorted("", nil)
+	err = database.RemSet(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.AddSorted()
+
+	_, err = database.GetSorted(ctx, "", 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSorted()
+	_, err = database.GetSortedByScore(ctx, "", 0, 0)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.RemSortedByScore(ctx, "", 0, 0)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.SetSorted(ctx, "", nil)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.AddSorted(ctx)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.RemSorted(ctx)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

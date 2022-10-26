@@ -179,11 +179,10 @@ func (m MongoDB) Purge() error {
 	return nil
 }
 
-func (m MongoDB) Set(values ...Value) error {
+func (m MongoDB) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil
 	}
-	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	var models []mongo.WriteModel
 	for _, value := range values {
@@ -196,8 +195,7 @@ func (m MongoDB) Set(values ...Value) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) Get(name string) *ReturnValue {
-	ctx := context.Background()
+func (m MongoDB) Get(ctx context.Context, name string) *ReturnValue {
 	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	r := c.FindOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	if err := r.Err(); err == mongo.ErrNoDocuments {
@@ -212,15 +210,13 @@ func (m MongoDB) Get(name string) *ReturnValue {
 	}
 }
 
-func (m MongoDB) Delete(name string) error {
-	ctx := context.Background()
+func (m MongoDB) Delete(ctx context.Context, name string) error {
 	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	_, err := c.DeleteOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetSet(name string) ([]string, error) {
-	ctx := context.Background()
+func (m MongoDB) GetSet(ctx context.Context, name string) ([]string, error) {
 	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	r, err := c.Find(ctx, bson.M{"name": name})
 	if err != nil {
@@ -237,8 +233,7 @@ func (m MongoDB) GetSet(name string) ([]string, error) {
 	return members, nil
 }
 
-func (m MongoDB) SetSet(name string, members ...string) error {
-	ctx := context.Background()
+func (m MongoDB) SetSet(ctx context.Context, name string, members ...string) error {
 	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	var models []mongo.WriteModel
 	models = append(models, mongo.NewDeleteManyModel().SetFilter(bson.M{"name": bson.M{"$eq": name}}))
@@ -252,11 +247,10 @@ func (m MongoDB) SetSet(name string, members ...string) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) AddSet(name string, members ...string) error {
+func (m MongoDB) AddSet(ctx context.Context, name string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
-	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	var models []mongo.WriteModel
 	for _, member := range members {
@@ -269,11 +263,10 @@ func (m MongoDB) AddSet(name string, members ...string) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) RemSet(name string, members ...string) error {
+func (m MongoDB) RemSet(ctx context.Context, name string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
-	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection(m.SetsTable())
 	var models []mongo.WriteModel
 	for _, member := range members {
@@ -284,8 +277,7 @@ func (m MongoDB) RemSet(name string, members ...string) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {
-	ctx := context.Background()
+func (m MongoDB) GetSorted(ctx context.Context, name string, begin, end int) ([]Scored, error) {
 	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	opt := options.Find()
 	opt.SetSort(bson.M{"score": -1})
@@ -313,8 +305,7 @@ func (m MongoDB) GetSorted(name string, begin, end int) ([]Scored, error) {
 	return scores, nil
 }
 
-func (m MongoDB) GetSortedByScore(name string, begin, end float64) ([]Scored, error) {
-	ctx := context.Background()
+func (m MongoDB) GetSortedByScore(ctx context.Context, name string, begin, end float64) ([]Scored, error) {
 	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	opt := options.Find()
 	opt.SetSort(bson.M{"score": 1})
@@ -340,8 +331,7 @@ func (m MongoDB) GetSortedByScore(name string, begin, end float64) ([]Scored, er
 	return scores, nil
 }
 
-func (m MongoDB) RemSortedByScore(name string, begin, end float64) error {
-	ctx := context.Background()
+func (m MongoDB) RemSortedByScore(ctx context.Context, name string, begin, end float64) error {
 	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	_, err := c.DeleteMany(ctx, bson.D{
 		{"name", name},
@@ -351,8 +341,7 @@ func (m MongoDB) RemSortedByScore(name string, begin, end float64) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) AddSorted(sortedSets ...SortedSet) error {
-	ctx := context.Background()
+func (m MongoDB) AddSorted(ctx context.Context, sortedSets ...SortedSet) error {
 	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	var models []mongo.WriteModel
 	for _, sorted := range sortedSets {
@@ -370,8 +359,7 @@ func (m MongoDB) AddSorted(sortedSets ...SortedSet) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) SetSorted(name string, scores []Scored) error {
-	ctx := context.Background()
+func (m MongoDB) SetSorted(ctx context.Context, name string, scores []Scored) error {
 	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	var models []mongo.WriteModel
 	models = append(models, mongo.NewDeleteManyModel().SetFilter(bson.M{"name": bson.M{"$eq": name}}))
@@ -385,11 +373,10 @@ func (m MongoDB) SetSorted(name string, scores []Scored) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) RemSorted(members ...SetMember) error {
+func (m MongoDB) RemSorted(ctx context.Context, members ...SetMember) error {
 	if len(members) == 0 {
 		return nil
 	}
-	ctx := context.Background()
 	c := m.client.Database(m.dbName).Collection(m.SortedSetsTable())
 	var models []mongo.WriteModel
 	for _, member := range members {

@@ -15,6 +15,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -550,8 +551,12 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 		BadRequest(response, err)
 		return
 	}
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Get the popular list
-	items, err := s.CacheClient.GetSorted(cache.Key(key, category), offset, s.Config.Recommend.CacheSize)
+	items, err := s.CacheClient.GetSorted(ctx, cache.Key(key, category), offset, s.Config.Recommend.CacheSize)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -580,9 +585,13 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 
 // get feedback by item-id with feedback type
 func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataClient.GetItemFeedback(itemId, feedbackType)
+	feedback, err := s.DataClient.GetItemFeedback(ctx, itemId, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -592,8 +601,12 @@ func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *
 
 // get feedback by item-id
 func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataClient.GetItemFeedback(itemId)
+	feedback, err := s.DataClient.GetItemFeedback(ctx, itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -628,47 +641,48 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 // 1. If there are recommendations in cache, return cached recommendations.
 // 2. If there are historical interactions of the users, return similar items.
 // 3. Otherwise, return fallback recommendation (popular/latest).
-func (s *RestServer) Recommend(response *restful.Response, userId, category string, n int, recommenders ...Recommender) ([]string, error) {
+func (s *RestServer) Recommend(ctx context.Context, response *restful.Response, userId, category string, n int, recommenders ...Recommender) ([]string, error) {
 	initStart := time.Now()
 
 	// create context
-	ctx, err := s.createRecommendContext(userId, category, n)
+	recommendCtx, err := s.createRecommendContext(ctx, userId, category, n)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	// execute recommenders
 	for _, recommender := range recommenders {
-		err = recommender(ctx)
+		err = recommender(recommendCtx)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 	}
 
 	// return recommendations
-	if len(ctx.results) > n {
-		ctx.results = ctx.results[:n]
+	if len(recommendCtx.results) > n {
+		recommendCtx.results = recommendCtx.results[:n]
 	}
 	totalTime := time.Since(initStart)
 	log.ResponseLogger(response).Info("complete recommendation",
-		zap.Int("num_from_final", ctx.numFromOffline),
-		zap.Int("num_from_collaborative", ctx.numFromCollaborative),
-		zap.Int("num_from_item_based", ctx.numFromItemBased),
-		zap.Int("num_from_user_based", ctx.numFromUserBased),
-		zap.Int("num_from_latest", ctx.numFromLatest),
-		zap.Int("num_from_poplar", ctx.numFromPopular),
+		zap.Int("num_from_final", recommendCtx.numFromOffline),
+		zap.Int("num_from_collaborative", recommendCtx.numFromCollaborative),
+		zap.Int("num_from_item_based", recommendCtx.numFromItemBased),
+		zap.Int("num_from_user_based", recommendCtx.numFromUserBased),
+		zap.Int("num_from_latest", recommendCtx.numFromLatest),
+		zap.Int("num_from_poplar", recommendCtx.numFromPopular),
 		zap.Duration("total_time", totalTime),
-		zap.Duration("load_final_recommend_time", ctx.loadOfflineRecTime),
-		zap.Duration("load_col_recommend_time", ctx.loadColRecTime),
-		zap.Duration("load_hist_time", ctx.loadLoadHistTime),
-		zap.Duration("item_based_recommend_time", ctx.itemBasedTime),
-		zap.Duration("user_based_recommend_time", ctx.userBasedTime),
-		zap.Duration("load_latest_time", ctx.loadLatestTime),
-		zap.Duration("load_popular_time", ctx.loadPopularTime))
-	return ctx.results, nil
+		zap.Duration("load_final_recommend_time", recommendCtx.loadOfflineRecTime),
+		zap.Duration("load_col_recommend_time", recommendCtx.loadColRecTime),
+		zap.Duration("load_hist_time", recommendCtx.loadLoadHistTime),
+		zap.Duration("item_based_recommend_time", recommendCtx.itemBasedTime),
+		zap.Duration("user_based_recommend_time", recommendCtx.userBasedTime),
+		zap.Duration("load_latest_time", recommendCtx.loadLatestTime),
+		zap.Duration("load_popular_time", recommendCtx.loadPopularTime))
+	return recommendCtx.results, nil
 }
 
 type recommendContext struct {
+	context      context.Context
 	response     *restful.Response
 	userId       string
 	category     string
@@ -694,9 +708,9 @@ type recommendContext struct {
 	loadPopularTime    time.Duration
 }
 
-func (s *RestServer) createRecommendContext(userId, category string, n int) (*recommendContext, error) {
+func (s *RestServer) createRecommendContext(ctx context.Context, userId, category string, n int) (*recommendContext, error) {
 	// pull ignored items
-	ignoreItems, err := s.CacheClient.GetSortedByScore(cache.Key(cache.IgnoreItems, userId),
+	ignoreItems, err := s.CacheClient.GetSortedByScore(ctx, cache.Key(cache.IgnoreItems, userId),
 		math.Inf(-1), float64(time.Now().Add(s.Config.Server.ClockError).Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -710,6 +724,7 @@ func (s *RestServer) createRecommendContext(userId, category string, n int) (*re
 		category:   category,
 		n:          n,
 		excludeSet: excludeSet,
+		context:    ctx,
 	}, nil
 }
 
@@ -717,7 +732,7 @@ func (s *RestServer) requireUserFeedback(ctx *recommendContext) error {
 	if ctx.userFeedback == nil {
 		start := time.Now()
 		var err error
-		ctx.userFeedback, err = s.DataClient.GetUserFeedback(ctx.userId, s.Config.Now())
+		ctx.userFeedback, err = s.DataClient.GetUserFeedback(ctx.context, ctx.userId, s.Config.Now())
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -768,7 +783,7 @@ type Recommender func(ctx *recommendContext) error
 func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		recommendation, err := s.CacheClient.GetSorted(cache.Key(cache.OfflineRecommend, ctx.userId, ctx.category), 0, s.Config.Recommend.CacheSize)
+		recommendation, err := s.CacheClient.GetSorted(ctx.context, cache.Key(cache.OfflineRecommend, ctx.userId, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -789,7 +804,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.GetSorted(cache.Key(cache.CollaborativeRecommend, ctx.userId, ctx.category), 0, s.Config.Recommend.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.GetSorted(ctx.context, cache.Key(cache.CollaborativeRecommend, ctx.userId, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -816,13 +831,13 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		start := time.Now()
 		candidates := make(map[string]float64)
 		// load similar users
-		similarUsers, err := s.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, ctx.userId), 0, s.Config.Recommend.CacheSize)
+		similarUsers, err := s.CacheClient.GetSorted(ctx.context, cache.Key(cache.UserNeighbors, ctx.userId), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(user.Id, s.Config.Now(), s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
+			feedbacks, err := s.DataClient.GetUserFeedback(ctx.context, user.Id, s.Config.Now(), s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -830,7 +845,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !ctx.excludeSet.Has(feedback.ItemId) {
-					item, err := s.DataClient.GetItem(feedback.ItemId)
+					item, err := s.DataClient.GetItem(ctx.context, feedback.ItemId)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -878,7 +893,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		candidates := make(map[string]float64)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.Config.Recommend.CacheSize)
+			similarItems, err := s.CacheClient.GetSorted(ctx.context, cache.Key(cache.ItemNeighbors, feedback.ItemId, ctx.category), 0, s.Config.Recommend.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -913,7 +928,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.LatestItems, ctx.category), 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.GetSorted(ctx.context, cache.Key(cache.LatestItems, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -938,7 +953,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 			return errors.Trace(err)
 		}
 		start := time.Now()
-		items, err := s.CacheClient.GetSorted(cache.Key(cache.PopularItems, ctx.category), 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.GetSorted(ctx.context, cache.Key(cache.PopularItems, ctx.category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -957,6 +972,10 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 }
 
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// parse arguments
 	userId := request.PathParameter("user-id")
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
@@ -995,7 +1014,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			return
 		}
 	}
-	results, err := s.Recommend(response, userId, category, offset+n, recommenders...)
+	results, err := s.Recommend(ctx, response, userId, category, offset+n, recommenders...)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1014,13 +1033,13 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 				},
 				Timestamp: startTime.Add(writeBackDelay),
 			}
-			err = s.DataClient.BatchInsertFeedback([]data.Feedback{feedback}, false, false, false)
+			err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{feedback}, false, false, false)
 			if err != nil {
 				InternalServerError(response, err)
 				return
 			}
 			// insert to cache store
-			err = s.InsertFeedbackToCache([]data.Feedback{feedback})
+			err = s.InsertFeedbackToCache(ctx, []data.Feedback{feedback})
 			if err != nil {
 				InternalServerError(response, err)
 				return
@@ -1032,6 +1051,10 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 }
 
 func (s *RestServer) sessionRecommend(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// parse arguments
 	var feedbacks []Feedback
 	if err := request.ReadEntity(&feedbacks); err != nil {
@@ -1076,7 +1099,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	usedFeedbackCount := 0
 	for _, feedback := range userFeedback {
 		// load similar items
-		similarItems, err := s.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, feedback.ItemId, category), 0, s.Config.Recommend.CacheSize)
+		similarItems, err := s.CacheClient.GetSorted(ctx, cache.Key(cache.ItemNeighbors, feedback.ItemId, category), 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			BadRequest(response, err)
 			return
@@ -1118,18 +1141,22 @@ type Success struct {
 }
 
 func (s *RestServer) insertUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	temp := data.User{}
 	// get userInfo from request and put into temp
 	if err := request.ReadEntity(&temp); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	if err := s.DataClient.BatchInsertUsers([]data.User{temp}); err != nil {
+	if err := s.DataClient.BatchInsertUsers(ctx, []data.User{temp}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, temp.UserId), time.Now())); err != nil {
+	if err := s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, temp.UserId), time.Now())); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1137,6 +1164,10 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 }
 
 func (s *RestServer) modifyUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// get user id
 	userId := request.PathParameter("user-id")
 	// modify user
@@ -1145,22 +1176,26 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
-	if err := s.DataClient.ModifyUser(userId, patch); err != nil {
+	if err := s.DataClient.ModifyUser(ctx, userId, patch); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, userId), time.Now())); err != nil {
+	if err := s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, userId), time.Now())); err != nil {
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
 }
 
 func (s *RestServer) getUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// get user id
 	userId := request.PathParameter("user-id")
 	// get user
-	user, err := s.DataClient.GetUser(userId)
+	user, err := s.DataClient.GetUser(ctx, userId)
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
 			PageNotFound(response, err)
@@ -1173,6 +1208,10 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 }
 
 func (s *RestServer) insertUsers(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	var temp []data.User
 	// get param from request and put into temp
 	if err := request.ReadEntity(&temp); err != nil {
@@ -1180,7 +1219,7 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 		return
 	}
 	// range temp and achieve user
-	if err := s.DataClient.BatchInsertUsers(temp); err != nil {
+	if err := s.DataClient.BatchInsertUsers(ctx, temp); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1189,7 +1228,7 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	for i, user := range temp {
 		values[i] = cache.Time(cache.Key(cache.LastModifyUserTime, user.UserId), time.Now())
 	}
-	if err := s.CacheClient.Set(values...); err != nil {
+	if err := s.CacheClient.Set(ctx, values...); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1202,6 +1241,10 @@ type UserIterator struct {
 }
 
 func (s *RestServer) getUsers(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
@@ -1209,7 +1252,7 @@ func (s *RestServer) getUsers(request *restful.Request, response *restful.Respon
 		return
 	}
 	// get all users
-	cursor, users, err := s.DataClient.GetUsers(cursor, n)
+	cursor, users, err := s.DataClient.GetUsers(ctx, cursor, n)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1219,9 +1262,13 @@ func (s *RestServer) getUsers(request *restful.Request, response *restful.Respon
 
 // delete a user by user-id
 func (s *RestServer) deleteUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// get user-id and put into temp
 	userId := request.PathParameter("user-id")
-	if err := s.DataClient.DeleteUser(userId); err != nil {
+	if err := s.DataClient.DeleteUser(ctx, userId); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1230,9 +1277,13 @@ func (s *RestServer) deleteUser(request *restful.Request, response *restful.Resp
 
 // get feedback by user-id with feedback type
 func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(userId, s.Config.Now(), feedbackType)
+	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now(), feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1242,8 +1293,12 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 
 // get feedback by user-id
 func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(userId, s.Config.Now())
+	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1261,7 +1316,7 @@ type Item struct {
 	Comment    string
 }
 
-func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
+func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Response, temp []Item) {
 	var (
 		count        int
 		items        = make([]data.Item, 0, len(temp))
@@ -1277,7 +1332,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 	)
 	// load existed items
 	start := time.Now()
-	existedItems, err := s.DataClient.BatchGetItems(lo.Map(temp, func(t Item, i int) string {
+	existedItems, err := s.DataClient.BatchGetItems(ctx, lo.Map(temp, func(t Item, i int) string {
 		return t.ItemId
 	}))
 	if err != nil {
@@ -1327,7 +1382,7 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 
 	// insert items
 	start = time.Now()
-	if err = s.DataClient.BatchInsertItems(items); err != nil {
+	if err = s.DataClient.BatchInsertItems(ctx, items); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1341,12 +1396,12 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 		values[i] = cache.Time(cache.Key(cache.LastModifyItemTime, item.ItemId), time.Now())
 		categories.Add(item.Categories...)
 	}
-	if err = s.CacheClient.Set(values...); err != nil {
+	if err = s.CacheClient.Set(ctx, values...); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	// insert categories
-	if err = s.CacheClient.AddSet(cache.ItemCategories, categories.List()...); err != nil {
+	if err = s.CacheClient.AddSet(ctx, cache.ItemCategories, categories.List()...); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1365,26 +1420,38 @@ func (s *RestServer) batchInsertItems(response *restful.Response, temp []Item) {
 }
 
 func (s *RestServer) insertItems(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	var items []Item
 	if err := request.ReadEntity(&items); err != nil {
 		BadRequest(response, err)
 		return
 	}
 	// Insert items
-	s.batchInsertItems(response, items)
+	s.batchInsertItems(ctx, response, items)
 }
 
 func (s *RestServer) insertItem(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	var item Item
 	var err error
 	if err = request.ReadEntity(&item); err != nil {
 		BadRequest(response, err)
 		return
 	}
-	s.batchInsertItems(response, []Item{item})
+	s.batchInsertItems(ctx, response, []Item{item})
 }
 
 func (s *RestServer) modifyItem(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	itemId := request.PathParameter("item-id")
 	var patch data.ItemPatch
 	if err := request.ReadEntity(&patch); err != nil {
@@ -1402,7 +1469,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	}
 	// insert new timestamp to the latest scores
 	if patch.Timestamp != nil || patch.Categories != nil {
-		item, err := s.DataClient.GetItem(itemId)
+		item, err := s.DataClient.GetItem(ctx, itemId)
 		if err != nil {
 			InternalServerError(response, err)
 			return
@@ -1414,12 +1481,12 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 			popularScore)
 	}
 	// modify item
-	if err := s.DataClient.ModifyItem(itemId, patch); err != nil {
+	if err := s.DataClient.ModifyItem(ctx, itemId, patch); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	// insert modify timestamp
-	if err := s.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now())); err != nil {
+	if err := s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now())); err != nil {
 		return
 	}
 	// refresh cache
@@ -1437,13 +1504,17 @@ type ItemIterator struct {
 }
 
 func (s *RestServer) getItems(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
 	}
-	cursor, items, err := s.DataClient.GetItems(cursor, n, nil)
+	cursor, items, err := s.DataClient.GetItems(ctx, cursor, n, nil)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1452,10 +1523,14 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 }
 
 func (s *RestServer) getItem(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get item
-	item, err := s.DataClient.GetItem(itemId)
+	item, err := s.DataClient.GetItem(ctx, itemId)
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
 			PageNotFound(response, err)
@@ -1468,9 +1543,13 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 }
 
 func (s *RestServer) deleteItem(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	itemId := request.PathParameter("item-id")
 	// delete item
-	if err := s.DataClient.DeleteItem(itemId); err != nil {
+	if err := s.DataClient.DeleteItem(ctx, itemId); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1483,11 +1562,15 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 }
 
 func (s *RestServer) insertItemCategory(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Get item id and category
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
 	// Insert category
-	item, err := s.DataClient.GetItem(itemId)
+	item, err := s.DataClient.GetItem(ctx, itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1495,7 +1578,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 	if !funk.ContainsString(item.Categories, category) {
 		item.Categories = append(item.Categories, category)
 	}
-	err = s.DataClient.BatchInsertItems([]data.Item{item})
+	err = s.DataClient.BatchInsertItems(ctx, []data.Item{item})
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1512,11 +1595,15 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 }
 
 func (s *RestServer) deleteItemCategory(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Get item id and category
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
 	// Delete category
-	item, err := s.DataClient.GetItem(itemId)
+	item, err := s.DataClient.GetItem(ctx, itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1528,7 +1615,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 		}
 	}
 	item.Categories = categories
-	err = s.DataClient.BatchInsertItems([]data.Item{item})
+	err = s.DataClient.BatchInsertItems(ctx, []data.Item{item})
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1564,6 +1651,10 @@ func (f Feedback) ToDataFeedback() (data.Feedback, error) {
 
 func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Request, response *restful.Response) {
 	return func(request *restful.Request, response *restful.Response) {
+		ctx := context.Background()
+		if request != nil && request.Request != nil {
+			ctx = request.Request.Context()
+		}
 		// add ratings
 		var feedbackLiterTime []Feedback
 		if err := request.ReadEntity(&feedbackLiterTime); err != nil {
@@ -1585,7 +1676,7 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 			}
 		}
 		// insert feedback to data store
-		err = s.DataClient.BatchInsertFeedback(feedback,
+		err = s.DataClient.BatchInsertFeedback(ctx, feedback,
 			s.Config.Server.AutoInsertUser,
 			s.Config.Server.AutoInsertItem, overwrite)
 		if err != nil {
@@ -1593,7 +1684,7 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 			return
 		}
 		// insert feedback to cache store
-		if err = s.InsertFeedbackToCache(feedback); err != nil {
+		if err = s.InsertFeedbackToCache(ctx, feedback); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1604,7 +1695,7 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 		for _, itemId := range items.List() {
 			values = append(values, cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now()))
 		}
-		if err = s.CacheClient.Set(values...); err != nil {
+		if err = s.CacheClient.Set(ctx, values...); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1620,6 +1711,10 @@ type FeedbackIterator struct {
 }
 
 func (s *RestServer) getFeedback(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
@@ -1627,7 +1722,7 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil, s.Config.Now())
+	cursor, feedback, err := s.DataClient.GetFeedback(ctx, cursor, n, nil, s.Config.Now())
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1636,6 +1731,10 @@ func (s *RestServer) getFeedback(request *restful.Request, response *restful.Res
 }
 
 func (s *RestServer) getTypedFeedback(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	cursor := request.QueryParameter("cursor")
@@ -1644,7 +1743,7 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 		BadRequest(response, err)
 		return
 	}
-	cursor, feedback, err := s.DataClient.GetFeedback(cursor, n, nil, s.Config.Now(), feedbackType)
+	cursor, feedback, err := s.DataClient.GetFeedback(ctx, cursor, n, nil, s.Config.Now(), feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1653,10 +1752,14 @@ func (s *RestServer) getTypedFeedback(request *restful.Request, response *restfu
 }
 
 func (s *RestServer) getUserItemFeedback(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataClient.GetUserItemFeedback(userId, itemId); err != nil {
+	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, feedback)
@@ -1664,10 +1767,14 @@ func (s *RestServer) getUserItemFeedback(request *restful.Request, response *res
 }
 
 func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(userId, itemId); err != nil {
+	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(ctx, userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{RowAffected: deleteCount})
@@ -1675,11 +1782,15 @@ func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *
 }
 
 func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataClient.GetUserItemFeedback(userId, itemId, feedbackType); err != nil {
+	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else if feedbackType == "" {
 		Text(response, "{}")
@@ -1689,11 +1800,15 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 }
 
 func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(userId, itemId, feedbackType); err != nil {
+	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(ctx, userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{deleteCount})
@@ -1733,8 +1848,8 @@ func (m Measurement) GetScore() cache.Scored {
 	return cache.Scored{Id: string(buf), Score: float64(m.Timestamp.Unix())}
 }
 
-func (s *RestServer) GetMeasurements(name string, n int) ([]Measurement, error) {
-	scores, err := s.CacheClient.GetSorted(cache.Key(cache.Measurements, name), 0, n-1)
+func (s *RestServer) GetMeasurements(ctx context.Context, name string, n int) ([]Measurement, error) {
+	scores, err := s.CacheClient.GetSorted(ctx, cache.Key(cache.Measurements, name), 0, n-1)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -1749,20 +1864,24 @@ func (s *RestServer) GetMeasurements(name string, n int) ([]Measurement, error) 
 	return measurements, nil
 }
 
-func (s *RestServer) InsertMeasurement(measurements ...Measurement) error {
+func (s *RestServer) InsertMeasurement(ctx context.Context, measurements ...Measurement) error {
 	sortedSets := lo.Map(measurements, func(m Measurement, _ int) cache.SortedSet {
 		name := cache.Key(cache.Measurements, m.Name)
 		score := m.GetScore()
-		err := s.CacheClient.RemSortedByScore(name, score.Score, score.Score)
+		err := s.CacheClient.RemSortedByScore(ctx, name, score.Score, score.Score)
 		if err != nil {
 			log.Logger().Warn("failed to remove stale measurement", zap.Error(err))
 		}
 		return cache.Sorted(name, []cache.Scored{score})
 	})
-	return s.CacheClient.AddSorted(sortedSets...)
+	return s.CacheClient.AddSorted(ctx, sortedSets...)
 }
 
 func (s *RestServer) getMeasurements(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
 	// Parse parameters
 	name := request.PathParameter("name")
 	n, err := ParseInt(request, "n", 100)
@@ -1770,7 +1889,7 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 		BadRequest(response, err)
 		return
 	}
-	measurements, err := s.GetMeasurements(name, n)
+	measurements, err := s.GetMeasurements(ctx, name, n)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1821,13 +1940,13 @@ func Text(response *restful.Response, content string) {
 }
 
 // InsertFeedbackToCache inserts feedback to cache.
-func (s *RestServer) InsertFeedbackToCache(feedback []data.Feedback) error {
+func (s *RestServer) InsertFeedbackToCache(ctx context.Context, feedback []data.Feedback) error {
 	if !s.Config.Recommend.Replacement.EnableReplacement {
 		sortedSets := make([]cache.SortedSet, len(feedback))
 		for i, v := range feedback {
 			sortedSets[i] = cache.Sorted(cache.Key(cache.IgnoreItems, v.UserId), []cache.Scored{{Id: v.ItemId, Score: float64(v.Timestamp.Unix())}})
 		}
-		if err := s.CacheClient.AddSorted(sortedSets...); err != nil {
+		if err := s.CacheClient.AddSorted(ctx, sortedSets...); err != nil {
 			return errors.Trace(err)
 		}
 	}
