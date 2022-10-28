@@ -50,6 +50,7 @@ type Master struct {
 	taskMonitor   *task.Monitor
 	jobsScheduler *task.JobsScheduler
 	cacheFile     string
+	managedMode   bool
 
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache
@@ -86,7 +87,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFile string) *Master {
+func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
 	taskMonitor := task.NewTaskMonitor()
@@ -99,6 +100,7 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		nodesInfo: make(map[string]*Node),
 		// create task monitor
 		cacheFile:     cacheFile,
+		managedMode:   managedMode,
 		taskMonitor:   taskMonitor,
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
 		// default ranking model

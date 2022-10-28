@@ -55,7 +55,8 @@ var masterCommand = &cobra.Command{
 			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		m := master.NewMaster(conf, cachePath)
+		managedMode, _ := cmd.PersistentFlags().GetBool("managed")
+		m := master.NewMaster(conf, cachePath, managedMode)
 		// Stop master
 		done := make(chan struct{})
 		go func() {
@@ -74,6 +75,7 @@ var masterCommand = &cobra.Command{
 
 func init() {
 	masterCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
+	masterCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	masterCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	masterCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	masterCommand.PersistentFlags().String("log-path", "", "path of log file")

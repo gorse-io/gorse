@@ -58,8 +58,9 @@ const (
 
 // Worker manages states of a worker node.
 type Worker struct {
-	oneMode  bool
-	testMode bool
+	oneMode     bool
+	testMode    bool
+	managedMode bool
 	*config.Settings
 
 	// worker config
@@ -91,14 +92,15 @@ type Worker struct {
 	// events
 	tickDuration time.Duration
 	ticker       *time.Ticker
-	syncedChan   chan bool // meta synced events
-	pulledChan   chan bool // model pulled events
+	syncedChan   chan struct{} // meta synced events
+	pulledChan   chan struct{} // model pulled events
 }
 
 // NewWorker creates a new worker node.
-func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string) *Worker {
+func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string, managedMode bool) *Worker {
 	return &Worker{
-		Settings: config.NewSettings(),
+		managedMode: managedMode,
+		Settings:    config.NewSettings(),
 		// config
 		cacheFile:  cacheFile,
 		masterHost: masterHost,
@@ -109,8 +111,8 @@ func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, job
 		// events
 		tickDuration: time.Minute,
 		ticker:       time.NewTicker(time.Minute),
-		syncedChan:   make(chan bool, 1024),
-		pulledChan:   make(chan bool, 1024),
+		syncedChan:   make(chan struct{}, 1024),
+		pulledChan:   make(chan struct{}, 1024),
 	}
 }
 
@@ -183,7 +185,7 @@ func (w *Worker) Sync() {
 			log.Logger().Info("new ranking model found",
 				zap.String("old_version", encoding.Hex(w.RankingModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
-			w.syncedChan <- true
+			w.syncedChan <- struct{}{}
 		}
 
 		// check click model version
@@ -192,7 +194,7 @@ func (w *Worker) Sync() {
 			log.Logger().Info("new click model found",
 				zap.String("old_version", encoding.Hex(w.ClickModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestClickModelVersion)))
-			w.syncedChan <- true
+			w.syncedChan <- struct{}{}
 		}
 
 		w.peers = meta.Workers
@@ -262,17 +264,30 @@ func (w *Worker) Pull() {
 			return
 		}
 		if pulled {
-			w.pulledChan <- true
+			w.pulledChan <- struct{}{}
 		}
 	}
 }
 
-// ServeMetrics serves Prometheus metrics.
-func (w *Worker) ServeMetrics() {
+// ServeHTTP serves Prometheus metrics and API.
+func (w *Worker) ServeHTTP() {
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/api/task", w.taskAPIHandler)
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
 	if err != nil {
 		log.Logger().Fatal("failed to start http server", zap.Error(err))
+	}
+}
+
+func (w *Worker) taskAPIHandler(writer http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	//case http.MethodGet:
+	//case http.MethodPost:
+	default:
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+		if _, err := writer.Write([]byte("method not allowed")); err != nil {
+			log.Logger().Error("failed to write http response", zap.Error(err))
+		}
 	}
 }
 
@@ -316,7 +331,7 @@ func (w *Worker) Serve() {
 	} else {
 		go w.Sync()
 		go w.Pull()
-		go w.ServeMetrics()
+		go w.ServeHTTP()
 	}
 
 	loop := func() {
