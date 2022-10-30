@@ -18,6 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
+	"net/http"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/lafikl/consistent"
 	cmap "github.com/orcaman/concurrent-map"
@@ -43,12 +50,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"math"
-	"math/rand"
-	"net/http"
-	"reflect"
-	"strings"
-	"time"
 )
 
 const (
@@ -56,10 +57,16 @@ const (
 	recommendComplexityFactor = 100
 )
 
+type ScheduleState struct {
+	IsRunning bool      `json:"is_running"`
+	StartTime time.Time `json:"start_time"`
+}
+
 // Worker manages states of a worker node.
 type Worker struct {
-	oneMode  bool
-	testMode bool
+	oneMode     bool
+	testMode    bool
+	managedMode bool
 	*config.Settings
 
 	// worker config
@@ -88,17 +95,22 @@ type Worker struct {
 	peers []string
 	me    string
 
+	// scheduler state
+	scheduleState ScheduleState
+
 	// events
 	tickDuration time.Duration
 	ticker       *time.Ticker
-	syncedChan   chan bool // meta synced events
-	pulledChan   chan bool // model pulled events
+	syncedChan   *parallel.ConditionChannel // meta synced events
+	pulledChan   *parallel.ConditionChannel // model pulled events
+	triggerChan  *parallel.ConditionChannel // manually triggered events
 }
 
 // NewWorker creates a new worker node.
-func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string) *Worker {
+func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string, managedMode bool) *Worker {
 	return &Worker{
-		Settings: config.NewSettings(),
+		managedMode: managedMode,
+		Settings:    config.NewSettings(),
 		// config
 		cacheFile:  cacheFile,
 		masterHost: masterHost,
@@ -109,8 +121,9 @@ func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, job
 		// events
 		tickDuration: time.Minute,
 		ticker:       time.NewTicker(time.Minute),
-		syncedChan:   make(chan bool, 1024),
-		pulledChan:   make(chan bool, 1024),
+		syncedChan:   parallel.NewConditionChannel(),
+		pulledChan:   parallel.NewConditionChannel(),
+		triggerChan:  parallel.NewConditionChannel(),
 	}
 }
 
@@ -183,7 +196,7 @@ func (w *Worker) Sync() {
 			log.Logger().Info("new ranking model found",
 				zap.String("old_version", encoding.Hex(w.RankingModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
-			w.syncedChan <- true
+			w.syncedChan.Signal()
 		}
 
 		// check click model version
@@ -192,7 +205,7 @@ func (w *Worker) Sync() {
 			log.Logger().Info("new click model found",
 				zap.String("old_version", encoding.Hex(w.ClickModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestClickModelVersion)))
-			w.syncedChan <- true
+			w.syncedChan.Signal()
 		}
 
 		w.peers = meta.Workers
@@ -208,7 +221,7 @@ func (w *Worker) Sync() {
 // Pull user index and ranking model from master.
 func (w *Worker) Pull() {
 	defer base.CheckPanic()
-	for range w.syncedChan {
+	for range w.syncedChan.C {
 		pulled := false
 
 		// pull ranking model
@@ -262,18 +275,56 @@ func (w *Worker) Pull() {
 			return
 		}
 		if pulled {
-			w.pulledChan <- true
+			w.pulledChan.Signal()
 		}
 	}
 }
 
-// ServeMetrics serves Prometheus metrics.
-func (w *Worker) ServeMetrics() {
+// ServeHTTP serves Prometheus metrics and API.
+func (w *Worker) ServeHTTP() {
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/api/admin/schedule", w.ScheduleAPIHandler)
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
 	if err != nil {
 		log.Logger().Fatal("failed to start http server", zap.Error(err))
 	}
+}
+
+func (w *Worker) ScheduleAPIHandler(writer http.ResponseWriter, request *http.Request) {
+	if !w.checkAdmin(request) {
+		writeError(writer, "unauthorized", http.StatusMethodNotAllowed)
+		return
+	}
+	switch request.Method {
+	case http.MethodGet:
+		writer.WriteHeader(http.StatusOK)
+		bytes, err := json.Marshal(w.scheduleState)
+		if err != nil {
+			writeError(writer, err.Error(), http.StatusInternalServerError)
+		}
+		if _, err = writer.Write(bytes); err != nil {
+			writeError(writer, err.Error(), http.StatusInternalServerError)
+		}
+	case http.MethodPost:
+		w.triggerChan.Signal()
+	default:
+		writeError(writer, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (w *Worker) checkAdmin(request *http.Request) bool {
+	if w.Config.Master.AdminAPIKey == "" {
+		return true
+	}
+	if request.FormValue("X-API-Key") == w.Config.Master.AdminAPIKey {
+		return true
+	}
+	return false
+}
+
+func writeError(w http.ResponseWriter, error string, code int) {
+	log.Logger().Error(strings.ToLower(http.StatusText(code)), zap.String("error", error))
+	http.Error(w, error, code)
 }
 
 // Serve as a worker node.
@@ -299,6 +350,7 @@ func (w *Worker) Serve() {
 		}
 		w.workerName = state.WorkerName
 		log.Logger().Info("start worker",
+			zap.Bool("managed", w.managedMode),
 			zap.Int("n_jobs", w.jobs),
 			zap.String("worker_name", w.workerName))
 	}
@@ -316,10 +368,17 @@ func (w *Worker) Serve() {
 	} else {
 		go w.Sync()
 		go w.Pull()
-		go w.ServeMetrics()
+		go w.ServeHTTP()
 	}
 
 	loop := func() {
+		w.scheduleState.IsRunning = true
+		w.scheduleState.StartTime = time.Now()
+		defer func() {
+			w.scheduleState.IsRunning = false
+			w.scheduleState.StartTime = time.Time{}
+		}()
+
 		// pull users
 		workingUsers, err := w.pullUsers(w.peers, w.me)
 		if err != nil {
@@ -333,14 +392,20 @@ func (w *Worker) Serve() {
 		w.Recommend(workingUsers)
 	}
 
-	for {
-		select {
-		case tick := <-w.ticker.C:
-			if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
+	if w.managedMode {
+		for range w.triggerChan.C {
+			loop()
+		}
+	} else {
+		for {
+			select {
+			case tick := <-w.ticker.C:
+				if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
+					loop()
+				}
+			case <-w.pulledChan.C:
 				loop()
 			}
-		case <-w.pulledChan:
-			loop()
 		}
 	}
 }

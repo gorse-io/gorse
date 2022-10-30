@@ -15,12 +15,13 @@ package main
 
 import (
 	"fmt"
+	_ "net/http/pprof"
+
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
-	_ "net/http/pprof"
 )
 
 var workerCommand = &cobra.Command{
@@ -38,6 +39,7 @@ var workerCommand = &cobra.Command{
 		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
 		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
 		workingJobs, _ := cmd.PersistentFlags().GetInt("jobs")
+		managedModel, _ := cmd.PersistentFlags().GetBool("managed")
 		// setup logger
 		var outputPaths []string
 		if cmd.PersistentFlags().Changed("log-path") {
@@ -52,7 +54,7 @@ var workerCommand = &cobra.Command{
 		}
 		// create worker
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath)
+		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, managedModel)
 		w.Serve()
 	},
 }
@@ -64,6 +66,7 @@ func init() {
 	workerCommand.PersistentFlags().String("http-host", "127.0.0.1", "host for Prometheus metrics export")
 	workerCommand.PersistentFlags().Int("http-port", 8089, "port for Prometheus metrics export")
 	workerCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
+	workerCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
 	workerCommand.PersistentFlags().String("log-path", "", "path of log file")
 	workerCommand.PersistentFlags().String("cache-path", "worker_cache.data", "path of cache file")

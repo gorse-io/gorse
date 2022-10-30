@@ -16,7 +16,16 @@ package master
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"reflect"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/araddon/dateparse"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -39,13 +48,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
-	"os"
-	"reflect"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func (m *Master) CreateWebService() {
@@ -208,6 +210,10 @@ func (fs *SinglePageAppFileSystem) Open(name string) (http.File, error) {
 	return f, err
 }
 
+func (m *Master) SetOneMode(workerScheduleHandler http.HandlerFunc) {
+	m.workerScheduleHandler = workerScheduleHandler
+}
+
 func (m *Master) StartHttpServer() {
 	m.CreateWebService()
 	container := restful.NewContainer()
@@ -218,6 +224,12 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
 	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
+	if m.workerScheduleHandler == nil {
+		container.Handle("/api/admin/schedule", http.HandlerFunc(m.scheduleAPIHandler))
+	} else {
+		container.Handle("/api/admin/schedule/master", http.HandlerFunc(m.scheduleAPIHandler))
+		container.Handle("/api/admin/schedule/worker", m.workerScheduleHandler)
+	}
 	m.RestServer.StartHttpServer(container)
 }
 
@@ -1124,12 +1136,7 @@ func formValue(request *http.Request, fieldName, defaultValue string) string {
 
 func (m *Master) importExportFeedback(response http.ResponseWriter, request *http.Request) {
 	if !m.checkLogin(request) {
-		resp := restful.NewResponse(response)
-		err := resp.WriteErrorString(http.StatusUnauthorized, "unauthorized")
-		if err != nil {
-			server.InternalServerError(resp, err)
-			return
-		}
+		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	switch request.Method {
@@ -1309,6 +1316,37 @@ func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func (m *Master) scheduleAPIHandler(writer http.ResponseWriter, request *http.Request) {
+	if !m.checkAdmin(request) {
+		writeError(writer, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	switch request.Method {
+	case http.MethodGet:
+		writer.WriteHeader(http.StatusOK)
+		bytes, err := json.Marshal(m.scheduleState)
+		if err != nil {
+			writeError(writer, http.StatusInternalServerError, err.Error())
+		}
+		if _, err = writer.Write(bytes); err != nil {
+			writeError(writer, http.StatusInternalServerError, err.Error())
+		}
+	case http.MethodPost:
+		s := request.FormValue("search_model")
+		if s != "" {
+			if searchModel, err := strconv.ParseBool(s); err != nil {
+				writeError(writer, http.StatusBadRequest, err.Error())
+			} else {
+				m.scheduleState.SearchModel = searchModel
+			}
+		}
+		fmt.Println(m.scheduleState.SearchModel)
+		m.triggerChan.Signal()
+	default:
+		writeError(writer, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
 func writeError(response http.ResponseWriter, httpStatus int, message string) {
 	log.Logger().Error(strings.ToLower(http.StatusText(httpStatus)), zap.String("error", message))
 	response.Header().Set("Access-Control-Allow-Origin", "*")
@@ -1316,4 +1354,14 @@ func writeError(response http.ResponseWriter, httpStatus int, message string) {
 	if _, err := response.Write([]byte(message)); err != nil {
 		log.Logger().Error("failed to write error", zap.Error(err))
 	}
+}
+
+func (s *Master) checkAdmin(request *http.Request) bool {
+	if s.Config.Master.AdminAPIKey == "" {
+		return true
+	}
+	if request.FormValue("X-API-Key") == s.Config.Master.AdminAPIKey {
+		return true
+	}
+	return false
 }

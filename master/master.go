@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -41,6 +43,12 @@ import (
 	"google.golang.org/grpc"
 )
 
+type ScheduleState struct {
+	IsRunning   bool      `json:"is_running"`
+	SearchModel bool      `json:"search_model"`
+	StartTime   time.Time `json:"start_time"`
+}
+
 // Master is the master node.
 type Master struct {
 	protocol.UnimplementedMasterServer
@@ -50,6 +58,7 @@ type Master struct {
 	taskMonitor   *task.Monitor
 	jobsScheduler *task.JobsScheduler
 	cacheFile     string
+	managedMode   bool
 
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache
@@ -81,12 +90,16 @@ type Master struct {
 
 	// events
 	fitTicker    *time.Ticker
-	importedChan chan struct{} // feedback inserted events
-	loadDataChan chan struct{} // dataset loaded events
+	importedChan *parallel.ConditionChannel // feedback inserted events
+	loadDataChan *parallel.ConditionChannel // dataset loaded events
+	triggerChan  *parallel.ConditionChannel // manually trigger events
+
+	scheduleState         ScheduleState
+	workerScheduleHandler http.HandlerFunc
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFile string) *Master {
+func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	rand.Seed(time.Now().UnixNano())
 	// create task monitor
 	taskMonitor := task.NewTaskMonitor()
@@ -99,6 +112,7 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		nodesInfo: make(map[string]*Node),
 		// create task monitor
 		cacheFile:     cacheFile,
+		managedMode:   managedMode,
 		taskMonitor:   taskMonitor,
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
 		// default ranking model
@@ -130,8 +144,9 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 			WebService: new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.ModelFitPeriod),
-		importedChan: make(chan struct{}),
-		loadDataChan: make(chan struct{}),
+		importedChan: parallel.NewConditionChannel(),
+		loadDataChan: parallel.NewConditionChannel(),
+		triggerChan:  parallel.NewConditionChannel(),
 	}
 }
 
@@ -208,10 +223,14 @@ func (m *Master) Serve() {
 	m.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&m.RestServer)
 	m.RestServer.PopularItemsCache = server.NewPopularItemsCache(&m.RestServer)
 
-	go m.RunPrivilegedTasksLoop()
-	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
-	go m.RunRagtagTasksLoop()
-	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
+	if m.managedMode {
+		go m.RunManagedTasksLoop()
+	} else {
+		go m.RunPrivilegedTasksLoop()
+		log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
+		go m.RunRagtagTasksLoop()
+		log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
+	}
 
 	// start rpc server
 	go func() {
@@ -256,10 +275,10 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		firstLoop = true
 	)
 	go func() {
-		m.importedChan <- struct{}{}
+		m.importedChan.Signal()
 		for {
 			if m.checkDataImported() {
-				m.importedChan <- struct{}{}
+				m.importedChan.Signal()
 			}
 			time.Sleep(time.Second)
 		}
@@ -267,7 +286,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 	for {
 		select {
 		case <-m.fitTicker.C:
-		case <-m.importedChan:
+		case <-m.importedChan.C:
 		}
 
 		// download dataset
@@ -283,7 +302,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		}
 
 		if firstLoop {
-			m.loadDataChan <- struct{}{}
+			m.loadDataChan.Signal()
 			firstLoop = false
 		}
 
@@ -311,7 +330,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 // rankingModelSearcher, clickSearchedModel and clickSearchedScore.
 func (m *Master) RunRagtagTasksLoop() {
 	defer base.CheckPanic()
-	<-m.loadDataChan
+	<-m.loadDataChan.C
 	var (
 		err   error
 		tasks = []Task{
@@ -343,6 +362,79 @@ func (m *Master) RunRagtagTasksLoop() {
 			}(t)
 		}
 		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
+	}
+}
+
+func (m *Master) RunManagedTasksLoop() {
+	var (
+		privilegedTasks = []Task{
+			NewFitClickModelTask(m),
+			NewFitRankingModelTask(m),
+			NewFindUserNeighborsTask(m),
+			NewFindItemNeighborsTask(m),
+		}
+		ragtagTasks = []Task{
+			NewCacheGarbageCollectionTask(m),
+			NewSearchRankingModelTask(m),
+			NewSearchClickModelTask(m),
+		}
+	)
+
+	for range m.triggerChan.C {
+		func() {
+			defer base.CheckPanic()
+
+			searchModel := m.scheduleState.SearchModel
+			m.scheduleState.IsRunning = true
+			m.scheduleState.StartTime = time.Now()
+			defer func() {
+				m.scheduleState.IsRunning = false
+				m.scheduleState.SearchModel = false
+				m.scheduleState.StartTime = time.Time{}
+			}()
+			_ = searchModel
+
+			// download dataset
+			if err := m.runLoadDatasetTask(); err != nil {
+				log.Logger().Error("failed to load ranking dataset", zap.Error(err))
+				return
+			}
+			if m.rankingTrainSet.UserCount() == 0 && m.rankingTrainSet.ItemCount() == 0 && m.rankingTrainSet.Count() == 0 {
+				log.Logger().Warn("empty ranking dataset",
+					zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
+				return
+			}
+
+			var registeredTask []Task
+			for _, t := range privilegedTasks {
+				if m.jobsScheduler.Register(t.name(), t.priority(), true) {
+					registeredTask = append(registeredTask, t)
+				}
+			}
+			if searchModel {
+				for _, t := range ragtagTasks {
+					if m.jobsScheduler.Register(t.name(), t.priority(), false) {
+						registeredTask = append(registeredTask, t)
+					}
+				}
+			}
+
+			var wg sync.WaitGroup
+			wg.Add(len(registeredTask))
+			for _, t := range registeredTask {
+				go func(task Task) {
+					j := m.jobsScheduler.GetJobsAllocator(task.name())
+					defer m.jobsScheduler.Unregister(task.name())
+					defer wg.Done()
+					j.Init()
+					if err := task.run(j); err != nil {
+						log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
+						return
+					}
+				}(t)
+			}
+			wg.Wait()
+		}()
 	}
 }
 

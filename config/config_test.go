@@ -30,6 +30,7 @@ func TestUnmarshal(t *testing.T) {
 	text := string(data)
 	text = strings.Replace(text, "dashboard_user_name = \"\"", "dashboard_user_name = \"admin\"", -1)
 	text = strings.Replace(text, "dashboard_password = \"\"", "dashboard_password = \"password\"", -1)
+	text = strings.Replace(text, "admin_api_key = \"\"", "admin_api_key = \"super_api_key\"", -1)
 	text = strings.Replace(text, "api_key = \"\"", "api_key = \"19260817\"", -1)
 	text = strings.Replace(text, "table_prefix = \"\"", "table_prefix = \"gorse_\"", -1)
 	text = strings.Replace(text, "http_cors_domains = []", "http_cors_domains = [\".*\"]", -1)
@@ -56,6 +57,7 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, 10*time.Second, config.Master.MetaTimeout)
 	assert.Equal(t, "admin", config.Master.DashboardUserName)
 	assert.Equal(t, "password", config.Master.DashboardPassword)
+	assert.Equal(t, "super_api_key", config.Master.AdminAPIKey)
 	// [server]
 	assert.Equal(t, 10, config.Server.DefaultN)
 	assert.Equal(t, "19260817", config.Server.APIKey)
@@ -146,6 +148,7 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_MASTER_JOBS", "789"},
 		{"GORSE_DASHBOARD_USER_NAME", "user_name"},
 		{"GORSE_DASHBOARD_PASSWORD", "password"},
+		{"GORSE_ADMIN_API_KEY", "<admin_api_key>"},
 		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
 	}
 	for _, variable := range variables {
@@ -165,6 +168,7 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, 789, config.Master.NumJobs)
 	assert.Equal(t, "user_name", config.Master.DashboardUserName)
 	assert.Equal(t, "password", config.Master.DashboardPassword)
+	assert.Equal(t, "<admin_api_key>", config.Master.AdminAPIKey)
 	assert.Equal(t, "<server_api_key>", config.Server.APIKey)
 
 	// check default values

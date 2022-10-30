@@ -20,6 +20,12 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
 	"github.com/juju/errors"
@@ -33,11 +39,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
-	"os"
-	"os/signal"
-	"strings"
 )
 
 //go:embed mysql2sqlite
@@ -105,12 +106,13 @@ var oneCommand = &cobra.Command{
 
 		// create master
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		m := master.NewMaster(conf, cachePath)
+		managedMode, _ := cmd.PersistentFlags().GetBool("managed")
+		m := master.NewMaster(conf, cachePath, managedMode)
 		// Start worker
+		workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
+		w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
+			0, workerJobs, "", managedMode)
 		go func() {
-			workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
-			w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-				0, workerJobs, "")
 			w.SetOneMode(m.Settings)
 			w.Serve()
 		}()
@@ -124,6 +126,7 @@ var oneCommand = &cobra.Command{
 			close(done)
 		}()
 		// Start master
+		m.SetOneMode(w.ScheduleAPIHandler)
 		m.Serve()
 		<-done
 		log.Logger().Info("stop gorse-in-one successfully")
@@ -132,6 +135,7 @@ var oneCommand = &cobra.Command{
 
 func init() {
 	oneCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
+	oneCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	oneCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	oneCommand.PersistentFlags().String("log-path", "", "path of log file")
 	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
