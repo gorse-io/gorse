@@ -18,12 +18,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/bits-and-blooms/bitset"
 	"github.com/scylladb/go-set/strset"
 	"github.com/stretchr/testify/assert"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -33,11 +40,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"io"
-	"net"
-	"strconv"
-	"testing"
-	"time"
 )
 
 func TestPullUsers(t *testing.T) {
@@ -706,7 +708,7 @@ func TestWorker_Sync(t *testing.T) {
 		Settings:     config.NewSettings(),
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
-		syncedChan:   make(chan bool, 1024),
+		syncedChan:   parallel.NewConditionChannel(),
 		ticker:       time.NewTicker(time.Minute),
 	}
 

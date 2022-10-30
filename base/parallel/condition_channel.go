@@ -25,10 +25,8 @@ func NewConditionChannel() *ConditionChannel {
 		count := 0
 		for {
 			if count == 0 {
-				select {
-				case <-in:
-					count++
-				}
+				<-in
+				count++
 			} else {
 				select {
 				case <-in:
