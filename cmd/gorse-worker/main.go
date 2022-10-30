@@ -15,12 +15,13 @@ package main
 
 import (
 	"fmt"
+	_ "net/http/pprof"
+
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
-	_ "net/http/pprof"
 )
 
 var workerCommand = &cobra.Command{

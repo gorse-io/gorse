@@ -20,6 +20,12 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+
 	"github.com/benhoyt/goawk/interp"
 	"github.com/benhoyt/goawk/parser"
 	"github.com/juju/errors"
@@ -33,11 +39,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
-	"io"
-	"net/http"
-	"os"
-	"os/signal"
-	"strings"
 )
 
 //go:embed mysql2sqlite
@@ -133,6 +134,7 @@ var oneCommand = &cobra.Command{
 
 func init() {
 	oneCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
+	oneCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	oneCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	oneCommand.PersistentFlags().String("log-path", "", "path of log file")
 	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")

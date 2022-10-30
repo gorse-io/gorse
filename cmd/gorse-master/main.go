@@ -15,15 +15,16 @@ package main
 
 import (
 	"fmt"
+	_ "net/http/pprof"
+	"os"
+	"os/signal"
+
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/master"
 	"go.uber.org/zap"
-	_ "net/http/pprof"
-	"os"
-	"os/signal"
 )
 
 var masterCommand = &cobra.Command{

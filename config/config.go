@@ -68,6 +68,7 @@ type MasterConfig struct {
 	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
 	DashboardUserName string        `mapstructure:"dashboard_user_name"`          // dashboard user name
 	DashboardPassword string        `mapstructure:"dashboard_password"`           // dashboard password
+	AdminAPIKey       string        `mapstructure:"admin_api_key"`
 }
 
 // ServerConfig is the configuration for the server.
@@ -439,6 +440,7 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.n_jobs", "GORSE_MASTER_JOBS"},
 		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
 		{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
+		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
 		{"server.api_key", "GORSE_SERVER_API_KEY"},
 	}
 	for _, binding := range bindings {

@@ -58,6 +58,9 @@ dashboard_user_name = ""
 # Password for the master node dashboard.
 dashboard_password = ""
 
+# Secret key for admin APIs (SSL required).
+admin_api_key = ""
+
 [server]
 
 # Default number of returned items. The default value is 10.
