@@ -96,7 +96,7 @@ type Worker struct {
 	me    string
 
 	// scheduler state
-	ScheduleState
+	scheduleState ScheduleState
 
 	// events
 	tickDuration time.Duration
@@ -283,18 +283,22 @@ func (w *Worker) Pull() {
 // ServeHTTP serves Prometheus metrics and API.
 func (w *Worker) ServeHTTP() {
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/api/admin/schedule", w.scheduleAPIHandler)
+	http.HandleFunc("/api/admin/schedule", w.ScheduleAPIHandler)
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
 	if err != nil {
 		log.Logger().Fatal("failed to start http server", zap.Error(err))
 	}
 }
 
-func (w *Worker) scheduleAPIHandler(writer http.ResponseWriter, request *http.Request) {
+func (w *Worker) ScheduleAPIHandler(writer http.ResponseWriter, request *http.Request) {
+	if !w.checkAdmin(request) {
+		writeError(writer, "unauthorized", http.StatusMethodNotAllowed)
+		return
+	}
 	switch request.Method {
 	case http.MethodGet:
 		writer.WriteHeader(http.StatusOK)
-		bytes, err := json.Marshal(w.ScheduleState)
+		bytes, err := json.Marshal(w.scheduleState)
 		if err != nil {
 			writeError(writer, err.Error(), http.StatusInternalServerError)
 		}
@@ -306,6 +310,16 @@ func (w *Worker) scheduleAPIHandler(writer http.ResponseWriter, request *http.Re
 	default:
 		writeError(writer, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (w *Worker) checkAdmin(request *http.Request) bool {
+	if w.Config.Master.AdminAPIKey == "" {
+		return true
+	}
+	if request.FormValue("X-API-Key") == w.Config.Master.AdminAPIKey {
+		return true
+	}
+	return false
 }
 
 func writeError(w http.ResponseWriter, error string, code int) {
@@ -358,11 +372,11 @@ func (w *Worker) Serve() {
 	}
 
 	loop := func() {
-		w.ScheduleState.IsRunning = true
-		w.ScheduleState.StartTime = time.Now()
+		w.scheduleState.IsRunning = true
+		w.scheduleState.StartTime = time.Now()
 		defer func() {
-			w.ScheduleState.IsRunning = false
-			w.ScheduleState.StartTime = time.Time{}
+			w.scheduleState.IsRunning = false
+			w.scheduleState.StartTime = time.Time{}
 		}()
 
 		// pull users

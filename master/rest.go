@@ -210,6 +210,10 @@ func (fs *SinglePageAppFileSystem) Open(name string) (http.File, error) {
 	return f, err
 }
 
+func (m *Master) SetOneMode(workerScheduleHandler http.HandlerFunc) {
+	m.workerScheduleHandler = workerScheduleHandler
+}
+
 func (m *Master) StartHttpServer() {
 	m.CreateWebService()
 	container := restful.NewContainer()
@@ -220,7 +224,12 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
 	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
-	container.Handle("/api/admin/schedule", http.HandlerFunc(m.scheduleAPIHandler))
+	if m.workerScheduleHandler == nil {
+		container.Handle("/api/admin/schedule", http.HandlerFunc(m.scheduleAPIHandler))
+	} else {
+		container.Handle("/api/admin/schedule/master", http.HandlerFunc(m.scheduleAPIHandler))
+		container.Handle("/api/admin/schedule/worker", m.workerScheduleHandler)
+	}
 	m.RestServer.StartHttpServer(container)
 }
 
@@ -1315,7 +1324,7 @@ func (m *Master) scheduleAPIHandler(writer http.ResponseWriter, request *http.Re
 	switch request.Method {
 	case http.MethodGet:
 		writer.WriteHeader(http.StatusOK)
-		bytes, err := json.Marshal(m.ScheduleState)
+		bytes, err := json.Marshal(m.scheduleState)
 		if err != nil {
 			writeError(writer, http.StatusInternalServerError, err.Error())
 		}
@@ -1328,10 +1337,10 @@ func (m *Master) scheduleAPIHandler(writer http.ResponseWriter, request *http.Re
 			if searchModel, err := strconv.ParseBool(s); err != nil {
 				writeError(writer, http.StatusBadRequest, err.Error())
 			} else {
-				m.ScheduleState.SearchModel = searchModel
+				m.scheduleState.SearchModel = searchModel
 			}
 		}
-		fmt.Println(m.ScheduleState.SearchModel)
+		fmt.Println(m.scheduleState.SearchModel)
 		m.triggerChan.Signal()
 	default:
 		writeError(writer, http.StatusMethodNotAllowed, "method not allowed")

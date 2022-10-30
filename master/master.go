@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -92,7 +93,9 @@ type Master struct {
 	importedChan *parallel.ConditionChannel // feedback inserted events
 	loadDataChan *parallel.ConditionChannel // dataset loaded events
 	triggerChan  *parallel.ConditionChannel // manually trigger events
-	ScheduleState
+
+	scheduleState         ScheduleState
+	workerScheduleHandler http.HandlerFunc
 }
 
 // NewMaster creates a master node.
@@ -381,13 +384,13 @@ func (m *Master) RunManagedTasksLoop() {
 		func() {
 			defer base.CheckPanic()
 
-			searchModel := m.ScheduleState.SearchModel
-			m.ScheduleState.IsRunning = true
-			m.ScheduleState.StartTime = time.Now()
+			searchModel := m.scheduleState.SearchModel
+			m.scheduleState.IsRunning = true
+			m.scheduleState.StartTime = time.Now()
 			defer func() {
-				m.ScheduleState.IsRunning = false
-				m.ScheduleState.SearchModel = false
-				m.ScheduleState.StartTime = time.Time{}
+				m.scheduleState.IsRunning = false
+				m.scheduleState.SearchModel = false
+				m.scheduleState.StartTime = time.Time{}
 			}()
 			_ = searchModel
 

@@ -109,10 +109,10 @@ var oneCommand = &cobra.Command{
 		managedMode, _ := cmd.PersistentFlags().GetBool("managed")
 		m := master.NewMaster(conf, cachePath, managedMode)
 		// Start worker
+		workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
+		w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
+			0, workerJobs, "", managedMode)
 		go func() {
-			workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
-			w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-				0, workerJobs, "", managedMode)
 			w.SetOneMode(m.Settings)
 			w.Serve()
 		}()
@@ -126,6 +126,7 @@ var oneCommand = &cobra.Command{
 			close(done)
 		}()
 		// Start master
+		m.SetOneMode(w.ScheduleAPIHandler)
 		m.Serve()
 		<-done
 		log.Logger().Info("stop gorse-in-one successfully")
