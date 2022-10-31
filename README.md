@@ -14,17 +14,16 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be a 
 
 <img width=520 src="assets/workflow.png"/>
 
-- **Multi-source Recommendation:** For a user, recommended items are collected from different ways (popular, latest, user-based, item-based, and collaborative filtering) and ranked by click-through rate prediction.
-- **AutoML**: Choose the best recommendation model and strategy automatically by model searching in the background.
-- **Distributed Recommendation**: Single node training, distributed prediction, and ability to achieve horizontal scaling in the recommendation stage.
-- **RESTful API**: Provide RESTful APIs for data CRUD and recommendation requests.
-- **Dashboard**: Provide dashboard for data import and export, monitoring, and cluster status checking.
-
-<img width=720 src="assets/dashboard.jpeg"/>
+- **Multi-source:** Recommend items from Popular, latest, user-based, item-based and collaborative filtering.
+- **AutoML:** Search the best recommendation model automatically in the background.
+- **Distributed prediction:** Support horizontal scaling in the recommendation stage after single node training.
+- **RESTful APIs:** Expose RESTful APIs for data CRUD and recommendation requests.
+- **Online evaluation:** Analyze online recommendation performance from recently inserted feedback.
+- **Dashboard:** Provide GUI for data management, system monitoring, and cluster status checking.
 
 ## Quick Start
 
-The playground mode has been prepared for beginners. Just set up a recommender system for GitHub repositories by following commands. 
+The playground mode has been prepared for beginners. Just set up a recommender system for GitHub repositories by the following commands. 
 
 - Linux/macOS:
 
@@ -38,7 +37,57 @@ curl -fsSL https://gorse.io/playground | bash
 docker run -p 8088:8088 zhenghaoz/gorse-in-one --playground
 ```
 
-The playground mode will download data from [GitRec](https://gitrec.gorse.io/) and import it into Gorse. For more information：
+The playground mode will download data from [GitRec](https://gitrec.gorse.io/) and import it into Gorse. The dashboard is available at `http://localhost:8088`.
+
+<img width=720 src="assets/dashboard.jpeg"/>
+
+After the "Find neighbors of items" task is completed on the "Tasks" page, try to insert several feedbacks into Gorse. Suppose Bob is a frontend developer who starred several frontend repositories in GitHub. We insert his star feedback to Gorse.
+
+```bash
+read -d '' JSON << EOF
+[
+    { \"FeedbackType\": \"star\", \"UserId\": \"bob\", \"ItemId\": \"vuejs:vue\", \"Timestamp\": \"2022-02-24\" },
+    { \"FeedbackType\": \"star\", \"UserId\": \"bob\", \"ItemId\": \"d3:d3\", \"Timestamp\": \"2022-02-25\" },
+    { \"FeedbackType\": \"star\", \"UserId\": \"bob\", \"ItemId\": \"dogfalo:materialize\", \"Timestamp\": \"2022-02-26\" },
+    { \"FeedbackType\": \"star\", \"UserId\": \"bob\", \"ItemId\": \"mozilla:pdf.js\", \"Timestamp\": \"2022-02-27\" },
+    { \"FeedbackType\": \"star\", \"UserId\": \"bob\", \"ItemId\": \"moment:moment\", \"Timestamp\": \"2022-02-28\" }
+]
+EOF
+
+curl -X POST http://127.0.0.1:8088/api/feedback \
+   -H 'Content-Type: application/json' \
+   -d "$JSON"
+```
+
+Then, fetch 10 recommended items from Gorse. We can find that frontend-related repositories are recommended for Bob.
+
+```bash
+curl http://127.0.0.1:8088/api/recommend/bob?n=10
+```
+
+<details>
+<summary>Example outputs:</summary>
+
+```
+[
+ "mbostock:d3",
+ "nt1m:material-framework",
+ "mdbootstrap:vue-bootstrap-with-material-design",
+ "justice47:f2-vue",
+ "10clouds:cyclejs-cookie",
+ "academicpages:academicpages.github.io",
+ "accenture:alexia",
+ "addyosmani:tmi",
+ "1wheel:d3-starterkit",
+ "acdlite:redux-promise"
+]
+```
+
+</details>
+
+> The exact output might be different from the example since the playground dataset changes over time.
+
+For more information：
 
 - Read [official documents](https://docs.gorse.io/)
 - Visit [official demo](https://gitrec.gorse.io/)
@@ -46,7 +95,7 @@ The playground mode will download data from [GitRec](https://gitrec.gorse.io/) a
 
 ## Architecture
 
-Gorse is a single node training and distributed prediction recommender system. Gorse stores data in MySQL, MongoDB, Postgres, or ClickHouse, with intermediate results cached in Redis, MySQL, MongoDB and Postgres.
+Gorse is a single-node training and distributed prediction recommender system. Gorse stores data in MySQL, MongoDB, Postgres, or ClickHouse, with intermediate results cached in Redis, MySQL, MongoDB and Postgres.
 
 1. The cluster consists of a master node, multiple worker nodes, and server nodes.
 1. The master node is responsible for model training, non-personalized item recommendation, configuration management, and membership management.
