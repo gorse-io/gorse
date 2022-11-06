@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"database/sql"
 	_ "embed"
 	"fmt"
@@ -44,7 +45,7 @@ import (
 //go:embed mysql2sqlite
 var mysql2SQLite string
 
-const playgroundDataFile = "https://cdn.gorse.io/example/github.sql"
+const playgroundDataFile = "https://cdn.gorse.io/example/github.sql.gz"
 
 var oneCommand = &cobra.Command{
 	Use:   "gorse-in-one",
@@ -188,15 +189,18 @@ func initializeDatabase(path string) error {
 	}
 
 	// load mysqldump file
-	bar := progressbar.DefaultBytes(
+	pbReader := progressbar.NewReader(resp.Body, progressbar.DefaultBytes(
 		resp.ContentLength,
 		"Downloading playground dataset",
-	)
-	reader := bufio.NewReader(resp.Body)
+	))
+	gzipReader, err := gzip.NewReader(&pbReader)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	reader := bufio.NewReader(gzipReader)
 	var builder strings.Builder
 	for {
 		line, isPrefix, err := reader.ReadLine()
-		_ = bar.Add(len(line))
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -204,7 +208,6 @@ func initializeDatabase(path string) error {
 		}
 		builder.Write(line)
 		if !isPrefix {
-			_ = bar.Add(1)
 			text := builder.String()
 			if strings.HasPrefix(text, "INSERT INTO ") {
 				// convert to SQLite sql
