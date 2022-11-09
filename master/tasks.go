@@ -286,7 +286,11 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemFeedback))
 		// inverse document frequency of users
 		for i := range dataset.UserFeedback {
-			userIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(dataset.UserFeedback[i])))
+			if dataset.ItemCount() == len(dataset.UserFeedback[i]) {
+				userIDF[i] = 1
+			} else {
+				userIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(dataset.UserFeedback[i])))
+			}
 		}
 		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.UserFeedback))
 	}
@@ -303,7 +307,11 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemLabels))
 		// inverse document frequency of labels
 		for i := range labeledItems {
-			labelIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
+			if dataset.ItemCount() == len(labeledItems[i]) {
+				labelIDF[i] = 1
+			} else {
+				labelIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
+			}
 		}
 		t.taskMonitor.Add(TaskFindItemNeighbors, len(labeledItems))
 	}
@@ -597,7 +605,11 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserFeedback))
 		// inverse document frequency of items
 		for i := range dataset.ItemFeedback {
-			itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
+			if dataset.UserCount() == len(dataset.ItemFeedback[i]) {
+				itemIDF[i] = 1
+			} else {
+				itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
+			}
 		}
 		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.ItemFeedback))
 	}
@@ -614,7 +626,11 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserLabels))
 		// inverse document frequency of labels
 		for i := range labeledUsers {
-			labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
+			if dataset.UserCount() == len(labeledUsers[i]) {
+				labelIDF[i] = 1
+			} else {
+				labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
+			}
 		}
 		t.taskMonitor.Add(TaskFindUserNeighbors, len(labeledUsers))
 	}

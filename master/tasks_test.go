@@ -248,6 +248,50 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
 
+func TestMaster_FindItemNeighborsIVF_ZeroIDF(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+	// create config
+	m.Config = &config.Config{}
+	m.Config.Recommend.CacheSize = 3
+	m.Config.Master.NumJobs = 4
+	m.Config.Recommend.ItemNeighbors.EnableIndex = true
+	m.Config.Recommend.ItemNeighbors.IndexRecall = 1
+	m.Config.Recommend.ItemNeighbors.IndexFitEpoch = 10
+
+	// create dataset
+	err := m.DataClient.BatchInsertItems([]data.Item{
+		{"0", false, []string{"*"}, time.Now(), []string{"a"}, ""},
+		{"1", false, []string{"*"}, time.Now(), []string{"a"}, ""},
+	})
+	assert.NoError(t, err)
+	err = m.DataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "0", ItemId: "0"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "0", ItemId: "1"}},
+	}, true, true, true)
+	assert.NoError(t, err)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	assert.NoError(t, err)
+	m.rankingTrainSet = dataset
+
+	// similar items (common users)
+	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
+	neighborTask := NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
+	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "0"), 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
+
+	// similar items (common labels)
+	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
+	neighborTask = NewFindItemNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
+	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "0"), 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
+}
+
 func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	// create mock master
 	m := newMockMaster(t)
@@ -419,6 +463,50 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.Equal(t, []string{"7", "5", "3"}, cache.RemoveScores(similar))
 	assert.Equal(t, m.estimateFindUserNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
+}
+
+func TestMaster_FindUserNeighborsIVF_ZeroIDF(t *testing.T) {
+	// create mock master
+	m := newMockMaster(t)
+	defer m.Close()
+	// create config
+	m.Config = &config.Config{}
+	m.Config.Recommend.CacheSize = 3
+	m.Config.Master.NumJobs = 4
+	m.Config.Recommend.UserNeighbors.EnableIndex = true
+	m.Config.Recommend.UserNeighbors.IndexRecall = 1
+	m.Config.Recommend.UserNeighbors.IndexFitEpoch = 10
+
+	// create dataset
+	err := m.DataClient.BatchInsertUsers([]data.User{
+		{"0", []string{"a"}, nil, ""},
+		{"1", []string{"a"}, nil, ""},
+	})
+	assert.NoError(t, err)
+	err = m.DataClient.BatchInsertFeedback([]data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "0", ItemId: "0"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "1", ItemId: "0"}},
+	}, true, true, true)
+	assert.NoError(t, err)
+	dataset, _, _, _, err := m.LoadDataFromDatabase(m.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	assert.NoError(t, err)
+	m.rankingTrainSet = dataset
+
+	// similar users (common items)
+	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
+	neighborTask := NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
+	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "0"), 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
+
+	// similar users (common labels)
+	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
+	neighborTask = NewFindUserNeighborsTask(&m.Master)
+	assert.NoError(t, neighborTask.run(nil))
+	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "0"), 0, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
 }
 
 func TestMaster_LoadDataFromDatabase(t *testing.T) {
