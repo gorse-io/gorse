@@ -265,12 +265,12 @@ func TestMaster_FindItemNeighborsIVF_ZeroIDF(t *testing.T) {
 	m.Config.Recommend.ItemNeighbors.IndexFitEpoch = 10
 
 	// create dataset
-	err := m.DataClient.BatchInsertItems([]data.Item{
+	err := m.DataClient.BatchInsertItems(ctx, []data.Item{
 		{"0", false, []string{"*"}, time.Now(), []string{"a"}, ""},
 		{"1", false, []string{"*"}, time.Now(), []string{"a"}, ""},
 	})
 	assert.NoError(t, err)
-	err = m.DataClient.BatchInsertFeedback([]data.Feedback{
+	err = m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "0", ItemId: "0"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "0", ItemId: "1"}},
 	}, true, true, true)
@@ -283,7 +283,7 @@ func TestMaster_FindItemNeighborsIVF_ZeroIDF(t *testing.T) {
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindItemNeighborsTask(&m.Master)
 	assert.NoError(t, neighborTask.run(nil))
-	similar, err := m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "0"), 0, 100)
+	similar, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.ItemNeighbors, "0"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
 
@@ -291,7 +291,7 @@ func TestMaster_FindItemNeighborsIVF_ZeroIDF(t *testing.T) {
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindItemNeighborsTask(&m.Master)
 	assert.NoError(t, neighborTask.run(nil))
-	similar, err = m.CacheClient.GetSorted(cache.Key(cache.ItemNeighbors, "0"), 0, 100)
+	similar, err = m.CacheClient.GetSorted(ctx, cache.Key(cache.ItemNeighbors, "0"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
 }
@@ -386,6 +386,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	// create mock master
 	m := newMockMaster(t)
 	defer m.Close()
+	ctx := context.Background()
 	// create config
 	m.Config = &config.Config{}
 	m.Config.Recommend.CacheSize = 3
@@ -484,12 +485,12 @@ func TestMaster_FindUserNeighborsIVF_ZeroIDF(t *testing.T) {
 	m.Config.Recommend.UserNeighbors.IndexFitEpoch = 10
 
 	// create dataset
-	err := m.DataClient.BatchInsertUsers([]data.User{
+	err := m.DataClient.BatchInsertUsers(ctx, []data.User{
 		{"0", []string{"a"}, nil, ""},
 		{"1", []string{"a"}, nil, ""},
 	})
 	assert.NoError(t, err)
-	err = m.DataClient.BatchInsertFeedback([]data.Feedback{
+	err = m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "0", ItemId: "0"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "1", ItemId: "0"}},
 	}, true, true, true)
@@ -502,7 +503,7 @@ func TestMaster_FindUserNeighborsIVF_ZeroIDF(t *testing.T) {
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&m.Master)
 	assert.NoError(t, neighborTask.run(nil))
-	similar, err := m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "0"), 0, 100)
+	similar, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.UserNeighbors, "0"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
 
@@ -510,7 +511,7 @@ func TestMaster_FindUserNeighborsIVF_ZeroIDF(t *testing.T) {
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindUserNeighborsTask(&m.Master)
 	assert.NoError(t, neighborTask.run(nil))
-	similar, err = m.CacheClient.GetSorted(cache.Key(cache.UserNeighbors, "0"), 0, 100)
+	similar, err = m.CacheClient.GetSorted(ctx, cache.Key(cache.UserNeighbors, "0"), 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"1"}, cache.RemoveScores(similar))
 }
@@ -519,6 +520,7 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	// create mock master
 	m := newMockMaster(t)
 	defer m.Close()
+	ctx := context.Background()
 	// create config
 	m.Config = &config.Config{}
 	m.Config.Recommend.CacheSize = 3

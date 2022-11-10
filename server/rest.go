@@ -39,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful"
 	"go.uber.org/zap"
 	"modernc.org/mathutil"
 )
@@ -151,7 +152,8 @@ func (s *RestServer) CreateWebService() {
 		Produces(restful.MIME_JSON).
 		Filter(s.LogFilter).
 		Filter(s.AuthFilter).
-		Filter(s.MetricsFilter)
+		Filter(s.MetricsFilter).
+		Filter(otelrestful.OTelFilter("gorse"))
 
 	/* Interactions with data store */
 

@@ -392,7 +392,7 @@ func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
 func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) {
 	var result *sql.Rows
 	var err error
-	result, err = d.gormDB.Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
+	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
 	if err != nil {
 		return Item{}, errors.Trace(err)
 	}

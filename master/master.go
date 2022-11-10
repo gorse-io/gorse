@@ -39,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -101,6 +102,12 @@ type Master struct {
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	rand.Seed(time.Now().UnixNano())
+	// setup trace provider
+	tp, err := cfg.Tracing.NewTracerProvider()
+	if err != nil {
+		log.Logger().Fatal("failed to create trace provider", zap.Error(err))
+	}
+	otel.SetTracerProvider(tp)
 	// create task monitor
 	taskMonitor := task.NewTaskMonitor()
 	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,

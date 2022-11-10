@@ -16,7 +16,12 @@ package data
 
 import (
 	"context"
-	"database/sql"
+	"net/url"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/XSAM/otelsql"
 	"github.com/dzwvip/oracle"
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
@@ -26,6 +31,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
+	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -33,10 +40,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"moul.io/zapgorm2"
-	"net/url"
-	"sort"
-	"strings"
-	"time"
 )
 
 var (
@@ -161,7 +164,10 @@ func Open(path, tablePrefix string) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = MySQL
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = sql.Open("mysql", name); err != nil {
+		if database.client, err = otelsql.Open("mysql", name,
+			otelsql.WithAttributes(semconv.DBSystemMySQL),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
@@ -173,7 +179,10 @@ func Open(path, tablePrefix string) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = sql.Open("postgres", path); err != nil {
+		if database.client, err = otelsql.Open("postgres", path,
+			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
@@ -196,7 +205,10 @@ func Open(path, tablePrefix string) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = ClickHouse
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = sql.Open("chhttp", uri); err != nil {
+		if database.client, err = otelsql.Open("chhttp", uri,
+			otelsql.WithAttributes(semconv.DBSystemKey.String("clickhouse")),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
@@ -207,7 +219,10 @@ func Open(path, tablePrefix string) (Database, error) {
 	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
 		// connect to database
 		database := new(MongoDB)
-		if database.client, err = mongo.Connect(context.Background(), options.Client().ApplyURI(path)); err != nil {
+		opts := options.Client()
+		opts.Monitor = otelmongo.NewMonitor()
+		opts.ApplyURI(path)
+		if database.client, err = mongo.Connect(context.Background(), opts); err != nil {
 			return nil, errors.Trace(err)
 		}
 		// parse DSN and extract database name
@@ -231,7 +246,10 @@ func Open(path, tablePrefix string) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = SQLite
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = sql.Open("sqlite", name); err != nil {
+		if database.client, err = otelsql.Open("sqlite", name,
+			otelsql.WithAttributes(semconv.DBSystemSqlite),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
 			return nil, errors.Trace(err)
 		}
 		gormConfig := storage.NewGORMConfig(tablePrefix)
@@ -260,7 +278,10 @@ func Open(path, tablePrefix string) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = Oracle
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = sql.Open("oracle", path); err != nil {
+		if database.client, err = otelsql.Open("oracle", path,
+			otelsql.WithAttributes(semconv.DBSystemOracle),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
 			return nil, errors.Trace(err)
 		}
 		database.gormDB, err = gorm.Open(oracle.New(oracle.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
