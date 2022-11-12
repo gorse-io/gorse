@@ -149,7 +149,7 @@ func (db *SQLDatabase) Purge() error {
 	return nil
 }
 
-func (db *SQLDatabase) Set(_ context.Context, values ...Value) error {
+func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil
 	}
@@ -164,15 +164,15 @@ func (db *SQLDatabase) Set(_ context.Context, values ...Value) error {
 			valueSet.Add(value.name)
 		}
 	}
-	err := db.gormDB.Clauses(clause.OnConflict{
+	err := db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),
 	}).Create(rows).Error
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) Get(_ context.Context, name string) *ReturnValue {
-	rs, err := db.gormDB.Table(db.ValuesTable()).Where("name = ?", name).Select("value").Rows()
+func (db *SQLDatabase) Get(ctx context.Context, name string) *ReturnValue {
+	rs, err := db.gormDB.WithContext(ctx).Table(db.ValuesTable()).Where("name = ?", name).Select("value").Rows()
 	if err != nil {
 		return &ReturnValue{err: errors.Trace(err)}
 	}
@@ -188,13 +188,13 @@ func (db *SQLDatabase) Get(_ context.Context, name string) *ReturnValue {
 	return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, name)}
 }
 
-func (db *SQLDatabase) Delete(_ context.Context, name string) error {
-	err := db.gormDB.Delete(&SQLValue{Name: name}).Error
+func (db *SQLDatabase) Delete(ctx context.Context, name string) error {
+	err := db.gormDB.WithContext(ctx).Delete(&SQLValue{Name: name}).Error
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) GetSet(_ context.Context, key string) ([]string, error) {
-	rs, err := db.gormDB.Table(db.SetsTable()).Select("member").Where("name = ?", key).Rows()
+func (db *SQLDatabase) GetSet(ctx context.Context, key string) ([]string, error) {
+	rs, err := db.gormDB.WithContext(ctx).Table(db.SetsTable()).Select("member").Where("name = ?", key).Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -210,8 +210,9 @@ func (db *SQLDatabase) GetSet(_ context.Context, key string) ([]string, error) {
 	return members, nil
 }
 
-func (db *SQLDatabase) SetSet(_ context.Context, key string, members ...string) error {
-	err := db.gormDB.Delete(&SQLSet{}, "name = ?", key).Error
+func (db *SQLDatabase) SetSet(ctx context.Context, key string, members ...string) error {
+	tx := db.gormDB.WithContext(ctx)
+	err := tx.Delete(&SQLSet{}, "name = ?", key).Error
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -224,11 +225,11 @@ func (db *SQLDatabase) SetSet(_ context.Context, key string, members ...string) 
 			Member: member,
 		}
 	})
-	err = db.gormDB.Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
+	err = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) AddSet(_ context.Context, key string, members ...string) error {
+func (db *SQLDatabase) AddSet(ctx context.Context, key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -238,11 +239,11 @@ func (db *SQLDatabase) AddSet(_ context.Context, key string, members ...string) 
 			Member: member,
 		}
 	})
-	err := db.gormDB.Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
+	err := db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) RemSet(_ context.Context, key string, members ...string) error {
+func (db *SQLDatabase) RemSet(ctx context.Context, key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -252,11 +253,11 @@ func (db *SQLDatabase) RemSet(_ context.Context, key string, members ...string) 
 			Member: member,
 		}
 	})
-	err := db.gormDB.Delete(rows).Error
+	err := db.gormDB.WithContext(ctx).Delete(rows).Error
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) AddSorted(_ context.Context, sortedSets ...SortedSet) error {
+func (db *SQLDatabase) AddSorted(ctx context.Context, sortedSets ...SortedSet) error {
 	rows := make([]SQLSortedSet, 0, len(sortedSets))
 	memberSets := make(map[lo.Tuple2[string, string]]struct{})
 	for _, sortedSet := range sortedSets {
@@ -274,7 +275,7 @@ func (db *SQLDatabase) AddSorted(_ context.Context, sortedSets ...SortedSet) err
 	if len(rows) == 0 {
 		return nil
 	}
-	if err := db.gormDB.Clauses(clause.OnConflict{
+	if err := db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}, {Name: "member"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score"}),
 	}).Create(rows).Error; err != nil {
@@ -283,8 +284,11 @@ func (db *SQLDatabase) AddSorted(_ context.Context, sortedSets ...SortedSet) err
 	return nil
 }
 
-func (db *SQLDatabase) GetSorted(_ context.Context, key string, begin, end int) ([]Scored, error) {
-	tx := db.gormDB.Table(db.SortedSetsTable()).Select("member, score").Where("name = ?", key).Order("score DESC")
+func (db *SQLDatabase) GetSorted(ctx context.Context, key string, begin, end int) ([]Scored, error) {
+	tx := db.gormDB.WithContext(ctx).Table(db.SortedSetsTable()).
+		Select("member, score").
+		Where("name = ?", key).
+		Order("score DESC")
 	if end < begin {
 		tx.Offset(begin).Limit(math.MaxInt64)
 	} else {
@@ -306,8 +310,8 @@ func (db *SQLDatabase) GetSorted(_ context.Context, key string, begin, end int) 
 	return members, nil
 }
 
-func (db *SQLDatabase) GetSortedByScore(_ context.Context, key string, begin, end float64) ([]Scored, error) {
-	rs, err := db.gormDB.Table(db.SortedSetsTable()).
+func (db *SQLDatabase) GetSortedByScore(ctx context.Context, key string, begin, end float64) ([]Scored, error) {
+	rs, err := db.gormDB.WithContext(ctx).Table(db.SortedSetsTable()).
 		Select("member, score").
 		Where("name = ? AND score >= ? AND score <= ?", key, begin, end).
 		Order("score").Rows()
@@ -326,13 +330,14 @@ func (db *SQLDatabase) GetSortedByScore(_ context.Context, key string, begin, en
 	return members, nil
 }
 
-func (db *SQLDatabase) RemSortedByScore(_ context.Context, key string, begin, end float64) error {
-	err := db.gormDB.Delete(&SQLSortedSet{}, "name = ? AND ? <= score AND score <= ?", key, begin, end).Error
+func (db *SQLDatabase) RemSortedByScore(ctx context.Context, key string, begin, end float64) error {
+	err := db.gormDB.WithContext(ctx).Delete(&SQLSortedSet{}, "name = ? AND ? <= score AND score <= ?", key, begin, end).Error
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) SetSorted(_ context.Context, key string, scores []Scored) error {
-	err := db.gormDB.Delete(&SQLSortedSet{}, "name = ?", key).Error
+func (db *SQLDatabase) SetSorted(ctx context.Context, key string, scores []Scored) error {
+	tx := db.gormDB.WithContext(ctx)
+	err := tx.Delete(&SQLSortedSet{}, "name = ?", key).Error
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -349,7 +354,7 @@ func (db *SQLDatabase) SetSorted(_ context.Context, key string, scores []Scored)
 				memberSets[lo.Tuple2[string, string]{key, member.Id}] = struct{}{}
 			}
 		}
-		err = db.gormDB.Clauses(clause.OnConflict{
+		err = tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "name"}, {Name: "member"}},
 			DoUpdates: clause.AssignmentColumns([]string{"score"}),
 		}).Create(&rows).Error
@@ -370,6 +375,6 @@ func (db *SQLDatabase) RemSorted(ctx context.Context, members ...SetMember) erro
 			Member: member.member,
 		}
 	})
-	err := db.gormDB.Delete(rows).Error
+	err := db.gormDB.WithContext(ctx).Delete(rows).Error
 	return errors.Trace(err)
 }
