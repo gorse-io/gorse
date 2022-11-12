@@ -29,6 +29,8 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -41,6 +43,7 @@ import (
 // Server manages states of a server node.
 type Server struct {
 	RestServer
+	traceConfig  config.TracingConfig
 	cachePath    string
 	cachePrefix  string
 	dataPath     string
@@ -165,6 +168,19 @@ func (s *Server) Sync() {
 			}
 			s.cachePath = s.Config.Database.CacheStore
 			s.cachePrefix = s.Config.Database.TablePrefix
+		}
+
+		// create trace provider
+		if !s.traceConfig.Equal(s.Config.Tracing) {
+			log.Logger().Info("create trace provider", zap.Any("tracing_config", s.Config.Tracing))
+			tp, err := s.Config.Tracing.NewTracerProvider()
+			if err != nil {
+				log.Logger().Fatal("failed to create trace provider", zap.Error(err))
+			}
+			otel.SetTracerProvider(tp)
+			otel.SetErrorHandler(log.GetErrorHandler())
+			otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+			s.traceConfig = s.Config.Tracing
 		}
 
 	sleep:

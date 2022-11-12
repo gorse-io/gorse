@@ -121,8 +121,10 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, 10, config.Recommend.Online.NumFeedbackFallbackItemBased)
 	// [tracing]
 	assert.False(t, config.Tracing.EnableTracing)
-	assert.Equal(t, "jaeger", config.Tracing.ExporterType)
+	assert.Equal(t, "jaeger", config.Tracing.Exporter)
 	assert.Equal(t, "http://localhost:14268/api/traces", config.Tracing.CollectorEndpoint)
+	assert.Equal(t, "always", config.Tracing.Sampler)
+	assert.Equal(t, 1.0, config.Tracing.Ratio)
 }
 
 func TestSetDefault(t *testing.T) {

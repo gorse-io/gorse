@@ -15,6 +15,7 @@
 package config
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -33,6 +34,10 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
@@ -155,9 +160,11 @@ type OnlineConfig struct {
 }
 
 type TracingConfig struct {
-	EnableTracing     bool   `mapstructure:"enable_tracing"`
-	ExporterType      string `mapstructure:"exporter_type" validate:"oneof=jaeger"`
-	CollectorEndpoint string `mapstructure:"collector_endpoint"`
+	EnableTracing     bool    `mapstructure:"enable_tracing"`
+	Exporter          string  `mapstructure:"exporter" validate:"oneof=jaeger zipkin otlp otlphttp"`
+	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
+	Sampler           string  `mapstructure:"sampler"`
+	Ratio             float64 `mapstructure:"ratio"`
 }
 
 func GetDefaultConfig() *Config {
@@ -225,6 +232,10 @@ func GetDefaultConfig() *Config {
 				FallbackRecommend:            []string{"latest"},
 				NumFeedbackFallbackItemBased: 10,
 			},
+		},
+		Tracing: TracingConfig{
+			Exporter: "jaeger",
+			Sampler:  "always",
 		},
 	}
 }
@@ -375,33 +386,67 @@ func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 	if !config.EnableTracing {
 		return trace.NewNoopTracerProvider(), nil
 	}
-	switch config.ExporterType {
+
+	var exporter tracesdk.SpanExporter
+	var err error
+	switch config.Exporter {
 	case "jaeger":
-		exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.CollectorEndpoint)))
+		exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.CollectorEndpoint)))
 		if err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
-		return tracesdk.NewTracerProvider(
-			tracesdk.WithBatcher(exp),
-			tracesdk.WithResource(resource.NewWithAttributes(
-				semconv.SchemaURL,
-				semconv.ServiceNameKey.String("gorse"),
-			)),
-		), nil
+	case "zipkin":
+		exporter, err = zipkin.New(config.CollectorEndpoint)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	case "otlp":
+		client := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(config.CollectorEndpoint))
+		exporter, err = otlptrace.New(context.TODO(), client)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	case "otlphttp":
+		client := otlptracehttp.NewClient(otlptracehttp.WithInsecure(), otlptracehttp.WithEndpoint(config.CollectorEndpoint))
+		exporter, err = otlptrace.New(context.TODO(), client)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	default:
+		return nil, errors.NotSupportedf("exporter %s", config.Exporter)
 	}
-	return nil, errors.NotSupportedf("exporter type %s", config.ExporterType)
+
+	var sampler tracesdk.Sampler
+	switch config.Sampler {
+	case "always":
+		sampler = tracesdk.AlwaysSample()
+	case "never":
+		sampler = tracesdk.NeverSample()
+	case "ratio":
+		sampler = tracesdk.TraceIDRatioBased(config.Ratio)
+	default:
+		return nil, errors.NotSupportedf("sampler %s", config.Sampler)
+	}
+
+	return tracesdk.NewTracerProvider(
+		tracesdk.WithSampler(sampler),
+		tracesdk.WithBatcher(exporter),
+		tracesdk.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("gorse"),
+		)),
+	), nil
 }
 
-func (config *TracingConfig) Equal(other *TracingConfig) bool {
-	if config == nil && other == nil {
-		return true
-	}
-	if config == nil || other == nil {
+func (config *TracingConfig) Equal(other TracingConfig) bool {
+	if config == nil {
 		return false
 	}
 	return config.EnableTracing == other.EnableTracing &&
-		config.ExporterType == other.ExporterType &&
-		config.CollectorEndpoint == other.CollectorEndpoint
+		config.Exporter == other.Exporter &&
+		config.CollectorEndpoint == other.CollectorEndpoint &&
+		config.Sampler == other.Sampler &&
+		config.Ratio == other.Ratio
 }
 
 func setDefault() {
@@ -461,6 +506,9 @@ func setDefault() {
 	// [recommend.online]
 	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)
 	viper.SetDefault("recommend.online.num_feedback_fallback_item_based", defaultConfig.Recommend.Online.NumFeedbackFallbackItemBased)
+	// [tracing]
+	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
+	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
 }
 
 type configBinding struct {

@@ -17,6 +17,7 @@ package log
 import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-sql-driver/mysql"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"net/url"
 	"os"
@@ -104,4 +105,14 @@ func RedactDBURL(rawURL string) string {
 		parsed.User = url.UserPassword(strings.Repeat("x", len(username)), strings.Repeat("x", len(password)))
 		return parsed.String()
 	}
+}
+
+func GetErrorHandler() otel.ErrorHandler {
+	return &errorHandler{}
+}
+
+type errorHandler struct{}
+
+func (h *errorHandler) Handle(err error) {
+	Logger().Error("opentelemetry failure", zap.Error(err))
 }

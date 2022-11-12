@@ -40,6 +40,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -108,6 +109,8 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 		log.Logger().Fatal("failed to create trace provider", zap.Error(err))
 	}
 	otel.SetTracerProvider(tp)
+	otel.SetErrorHandler(log.GetErrorHandler())
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	// create task monitor
 	taskMonitor := task.NewTaskMonitor()
 	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,

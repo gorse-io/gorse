@@ -19,16 +19,14 @@ import (
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type Settings struct {
 	Config *Config
 
 	// database clients
-	CacheClient   cache.Database
-	DataClient    data.Database
-	TraceProvider trace.TracerProvider
+	CacheClient cache.Database
+	DataClient  data.Database
 
 	// recommendation models
 	RankingModel        ranking.MatrixFactorization
@@ -39,9 +37,8 @@ type Settings struct {
 
 func NewSettings() *Settings {
 	return &Settings{
-		Config:        GetDefaultConfig(),
-		CacheClient:   cache.NoDatabase{},
-		DataClient:    data.NoDatabase{},
-		TraceProvider: trace.NewNoopTracerProvider(),
+		Config:      GetDefaultConfig(),
+		CacheClient: cache.NoDatabase{},
+		DataClient:  data.NoDatabase{},
 	}
 }

@@ -233,8 +233,14 @@ num_feedback_fallback_item_based = 10
 # Enable tracing for REST APIs. The default value is false.
 enable_tracing = false
 
-# The type of tracing exporters. The default value is "jaeger".
-exporter_type = "jaeger"
+# The type of tracing exporters should be one of "jaeger", "zipkin", "otlp" and "otlphttp". The default value is "jaeger".
+exporter = "jaeger"
 
 # The endpoint of tracing collector.
 collector_endpoint = "http://localhost:14268/api/traces"
+
+# The type of tracing sampler should be one of "always", "never" and "ratio". The default value is "always".
+sampler = "always"
+
+# The ratio of ratio based sampler. The default value is 1.
+ratio = 1
