@@ -71,6 +71,7 @@ type benchServer struct {
 }
 
 func newBenchServer(b *testing.B) *benchServer {
+	ctx := context.Background()
 	// retrieve benchmark name
 	var benchName string
 	pc, _, _, ok := runtime.Caller(1)
@@ -116,7 +117,7 @@ func newBenchServer(b *testing.B) *benchServer {
 			Comment: fmt.Sprintf("comment_%d", i),
 		})
 	}
-	err = s.DataClient.BatchInsertUsers(users)
+	err = s.DataClient.BatchInsertUsers(ctx, users)
 	require.NoError(b, err)
 
 	// insert items
@@ -137,7 +138,7 @@ func newBenchServer(b *testing.B) *benchServer {
 			IsHidden:  false,
 		})
 	}
-	err = s.DataClient.BatchInsertItems(items)
+	err = s.DataClient.BatchInsertItems(ctx, items)
 	require.NoError(b, err)
 
 	// insert feedback
@@ -153,7 +154,7 @@ func newBenchServer(b *testing.B) *benchServer {
 			Timestamp: time.Now(),
 		})
 	}
-	err = s.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
+	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	require.NoError(b, err)
 
 	// start http server
@@ -792,6 +793,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 	s := newBenchServer(b)
 	defer s.Close(b)
 
+	ctx := context.Background()
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
 			scores := make([]cache.Scored, batchSize*2)
@@ -808,7 +810,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 			}
 			lo.Reverse(scores)
 			lo.Reverse(expects)
-			err := s.CacheClient.SetSorted(cache.PopularItems, scores)
+			err := s.CacheClient.SetSorted(ctx, cache.PopularItems, scores)
 			require.NoError(b, err)
 			s.Config.Recommend.CacheSize = len(scores)
 
@@ -837,6 +839,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 	s := newBenchServer(b)
 	defer s.Close(b)
 
+	ctx := context.Background()
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
 			scores := make([]cache.Scored, batchSize*2)
@@ -847,13 +850,13 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 				if i%2 == 0 {
 					expects[i/2] = scores[i].Id
 				} else {
-					err := s.CacheClient.AddSorted(cache.Sorted(cache.Key(cache.IgnoreItems, "init_user_1"), []cache.Scored{{scores[i].Id, 0}}))
+					err := s.CacheClient.AddSorted(ctx, cache.Sorted(cache.Key(cache.IgnoreItems, "init_user_1"), []cache.Scored{{scores[i].Id, 0}}))
 					require.NoError(b, err)
 				}
 			}
 			lo.Reverse(scores)
 			lo.Reverse(expects)
-			err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "init_user_1"), scores)
+			err := s.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "init_user_1"), scores)
 			require.NoError(b, err)
 			s.Config.Recommend.CacheSize = len(scores)
 
@@ -878,6 +881,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 }
 
 func BenchmarkRecommendFromLatest(b *testing.B) {
+	ctx := context.Background()
 	log.CloseLogger()
 	s := newBenchServer(b)
 	defer s.Close(b)
@@ -892,7 +896,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 				if i%2 == 0 {
 					expects[i/2] = scores[i].Id
 				} else {
-					err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
+					err := s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 						FeedbackKey: data.FeedbackKey{
 							FeedbackType: "feedback_type",
 							UserId:       "init_user_1",
@@ -904,7 +908,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 			}
 			lo.Reverse(scores)
 			lo.Reverse(expects)
-			err := s.CacheClient.SetSorted(cache.LatestItems, scores)
+			err := s.CacheClient.SetSorted(ctx, cache.LatestItems, scores)
 			require.NoError(b, err)
 			s.Config.Recommend.CacheSize = len(scores)
 
@@ -929,6 +933,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 }
 
 func BenchmarkRecommendFromItemBased(b *testing.B) {
+	ctx := context.Background()
 	log.CloseLogger()
 	s := newBenchServer(b)
 	defer s.Close(b)
@@ -941,7 +946,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 				scores[i].Id = fmt.Sprintf("init_item_%d", i)
 				scores[i].Score = float64(i)
 				if i < s.Config.Recommend.Online.NumFeedbackFallbackItemBased {
-					err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
+					err := s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 						FeedbackKey: data.FeedbackKey{
 							FeedbackType: "feedback_type_positive",
 							UserId:       "init_user_1",
@@ -955,7 +960,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 
 			// insert user neighbors
 			for i := 0; i < s.Config.Recommend.Online.NumFeedbackFallbackItemBased; i++ {
-				err := s.CacheClient.SetSorted(cache.Key(cache.ItemNeighbors, fmt.Sprintf("init_item_%d", i)), scores)
+				err := s.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, fmt.Sprintf("init_item_%d", i)), scores)
 				require.NoError(b, err)
 			}
 

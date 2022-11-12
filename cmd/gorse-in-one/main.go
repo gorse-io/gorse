@@ -92,9 +92,9 @@ var oneCommand = &cobra.Command{
 			}
 
 			fmt.Println()
-			fmt.Printf("    Dashboard:     http://%s:%d/overview\n", conf.Master.HttpHost, conf.Master.HttpPort)
-			fmt.Printf("    RESTful APIs:  http://%s:%d/apidocs\n", conf.Master.HttpHost, conf.Master.HttpPort)
-			fmt.Printf("    Documentation: https://docs.gorse.io/\n")
+			fmt.Printf("    Dashboard:     http://127.0.0.1:%d/overview\n", conf.Master.HttpPort)
+			fmt.Printf("    RESTful APIs:  http://127.0.0.1:%d/apidocs\n", conf.Master.HttpPort)
+			fmt.Printf("    Documentation: https://gorse.io/docs\n")
 			fmt.Println()
 		} else {
 			configPath, _ := cmd.PersistentFlags().GetString("config")

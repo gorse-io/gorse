@@ -29,6 +29,8 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -41,6 +43,7 @@ import (
 // Server manages states of a server node.
 type Server struct {
 	RestServer
+	traceConfig  config.TracingConfig
 	cachePath    string
 	cachePrefix  string
 	dataPath     string
@@ -167,6 +170,19 @@ func (s *Server) Sync() {
 			s.cachePrefix = s.Config.Database.TablePrefix
 		}
 
+		// create trace provider
+		if !s.traceConfig.Equal(s.Config.Tracing) {
+			log.Logger().Info("create trace provider", zap.Any("tracing_config", s.Config.Tracing))
+			tp, err := s.Config.Tracing.NewTracerProvider()
+			if err != nil {
+				log.Logger().Fatal("failed to create trace provider", zap.Error(err))
+			}
+			otel.SetTracerProvider(tp)
+			otel.SetErrorHandler(log.GetErrorHandler())
+			otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+			s.traceConfig = s.Config.Tracing
+		}
+
 	sleep:
 		if s.testMode {
 			return
@@ -207,8 +223,9 @@ func newPopularItemsCacheForTest(s *RestServer) *PopularItemsCache {
 }
 
 func (sc *PopularItemsCache) sync() {
+	ctx := context.Background()
 	// load popular items
-	items, err := sc.server.CacheClient.GetSorted(cache.Key(cache.PopularItems), 0, -1)
+	items, err := sc.server.CacheClient.GetSorted(ctx, cache.Key(cache.PopularItems), 0, -1)
 	if err != nil {
 		if !errors.Is(err, errors.NotAssigned) {
 			log.Logger().Error("failed to get popular items", zap.Error(err))
@@ -267,9 +284,10 @@ func newHiddenItemsManagerForTest(s *RestServer) *HiddenItemsManager {
 }
 
 func (hc *HiddenItemsManager) sync() {
+	ctx := context.Background()
 	ts := time.Now()
 	// load categories
-	categories, err := hc.server.CacheClient.GetSet(cache.ItemCategories)
+	categories, err := hc.server.CacheClient.GetSet(ctx, cache.ItemCategories)
 	if err != nil {
 		if !errors.Is(err, errors.NotAssigned) {
 			log.Logger().Error("failed to load item categories", zap.Error(err))
@@ -277,7 +295,7 @@ func (hc *HiddenItemsManager) sync() {
 		return
 	}
 	// load hidden items
-	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, math.Inf(-1), float64(ts.Unix()))
+	score, err := hc.server.CacheClient.GetSortedByScore(ctx, cache.HiddenItemsV2, math.Inf(-1), float64(ts.Unix()))
 	if err != nil {
 		if !errors.Is(err, errors.NotAssigned) {
 			log.Logger().Error("failed to load hidden items", zap.Error(err))
@@ -287,7 +305,7 @@ func (hc *HiddenItemsManager) sync() {
 	hiddenItems := strset.New(cache.RemoveScores(score)...)
 	// load hidden items in categories
 	for _, category := range categories {
-		score, err = hc.server.CacheClient.GetSortedByScore(cache.Key(cache.HiddenItemsV2, category), math.Inf(-1), float64(ts.Unix()))
+		score, err = hc.server.CacheClient.GetSortedByScore(ctx, cache.Key(cache.HiddenItemsV2, category), math.Inf(-1), float64(ts.Unix()))
 		if err != nil {
 			if !errors.Is(err, errors.NotAssigned) {
 				log.Logger().Error("failed to load categorized hidden items", zap.Error(err))
@@ -303,6 +321,7 @@ func (hc *HiddenItemsManager) sync() {
 }
 
 func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]bool, error) {
+	ctx := context.Background()
 	if hc.test {
 		hc.sync()
 	}
@@ -319,7 +338,7 @@ func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]boo
 		}
 	}
 	// load delta hidden items
-	score, err := hc.server.CacheClient.GetSortedByScore(cache.HiddenItemsV2, float64(updateTime.Unix()), float64(time.Now().Unix()))
+	score, err := hc.server.CacheClient.GetSortedByScore(ctx, cache.HiddenItemsV2, float64(updateTime.Unix()), float64(time.Now().Unix()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -327,7 +346,7 @@ func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]boo
 	// load delta hidden items in category
 	deltaHiddenItemsInCategory := strset.New()
 	if category != "" {
-		score, err = hc.server.CacheClient.GetSortedByScore(cache.Key(cache.HiddenItemsV2, category), float64(updateTime.Unix()), float64(time.Now().Unix()))
+		score, err = hc.server.CacheClient.GetSortedByScore(ctx, cache.Key(cache.HiddenItemsV2, category), float64(updateTime.Unix()), float64(time.Now().Unix()))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -458,13 +477,14 @@ func (cm *CacheModification) addItem(itemId string, categories []string, latest,
 }
 
 func (cm *CacheModification) Exec() error {
+	ctx := context.Background()
 	if len(cm.deletion) > 0 {
-		if err := cm.client.RemSorted(cm.deletion...); err != nil {
+		if err := cm.client.RemSorted(ctx, cm.deletion...); err != nil {
 			return errors.Trace(err)
 		}
 	}
 	if len(cm.insertion) > 0 {
-		if err := cm.client.AddSorted(cm.insertion...); err != nil {
+		if err := cm.client.AddSorted(ctx, cm.insertion...); err != nil {
 			return errors.Trace(err)
 		}
 	}

@@ -49,9 +49,10 @@ func (suite *GorseClientTestSuite) TearDownSuite() {
 }
 
 func (suite *GorseClientTestSuite) TestFeedback() {
+	ctx := context.TODO()
 	timestamp := time.Unix(1660459054, 0).UTC().Format(time.RFC3339)
 	userId := "800"
-	insertFeedbackResp, err := suite.client.InsertFeedback([]Feedback{{
+	insertFeedbackResp, err := suite.client.InsertFeedback(ctx, []Feedback{{
 		FeedbackType: "like",
 		UserId:       userId,
 		Timestamp:    timestamp,
@@ -60,7 +61,7 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(1, insertFeedbackResp.RowAffected)
 
-	insertFeedbacksResp, err := suite.client.InsertFeedback([]Feedback{{
+	insertFeedbacksResp, err := suite.client.InsertFeedback(ctx, []Feedback{{
 		FeedbackType: "read",
 		UserId:       userId,
 		Timestamp:    timestamp,
@@ -74,7 +75,7 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(2, insertFeedbacksResp.RowAffected)
 
-	feedbacks, err := suite.client.ListFeedbacks("read", userId)
+	feedbacks, err := suite.client.ListFeedbacks(ctx, "read", userId)
 	suite.NoError(err)
 	suite.ElementsMatch([]Feedback{
 		{
@@ -92,7 +93,8 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 }
 
 func (suite *GorseClientTestSuite) TestRecommend() {
-	suite.redis.ZAddArgs(context.Background(), "offline_recommend/100", redis.ZAddArgs{
+	ctx := context.TODO()
+	suite.redis.ZAddArgs(ctx, "offline_recommend/100", redis.ZAddArgs{
 		Members: []redis.Z{
 			{
 				Score:  1,
@@ -108,7 +110,7 @@ func (suite *GorseClientTestSuite) TestRecommend() {
 			},
 		},
 	})
-	resp, err := suite.client.GetRecommend("100", "", 10)
+	resp, err := suite.client.GetRecommend(ctx, "100", "", 10)
 	suite.NoError(err)
 	suite.Equal([]string{"3", "2", "1"}, resp)
 }
@@ -191,7 +193,7 @@ func (suite *GorseClientTestSuite) TestSessionRecommend() {
 	feedbackType := "like"
 	userId := "0"
 	timestamp := time.Unix(1660459054, 0).UTC().Format(time.RFC3339)
-	resp, err := suite.client.SessionRecommend([]Feedback{
+	resp, err := suite.client.SessionRecommend(ctx, []Feedback{
 		{
 			FeedbackType: feedbackType,
 			UserId:       userId,
@@ -258,7 +260,7 @@ func (suite *GorseClientTestSuite) TestNeighbors() {
 	})
 
 	itemId := "100"
-	resp, err := suite.client.GetNeighbors(itemId, 3)
+	resp, err := suite.client.GetNeighbors(ctx, itemId, 3)
 	suite.NoError(err)
 	suite.Equal([]Score{
 		{
@@ -275,29 +277,31 @@ func (suite *GorseClientTestSuite) TestNeighbors() {
 }
 
 func (suite *GorseClientTestSuite) TestUsers() {
+	ctx := context.TODO()
 	user := User{
 		UserId:    "100",
 		Labels:    []string{"a", "b", "c"},
 		Subscribe: []string{"d", "e"},
 		Comment:   "comment",
 	}
-	rowAffected, err := suite.client.InsertUser(user)
+	rowAffected, err := suite.client.InsertUser(ctx, user)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
-	userResp, err := suite.client.GetUser("100")
+	userResp, err := suite.client.GetUser(ctx, "100")
 	suite.NoError(err)
 	suite.Equal(user, userResp)
 
-	deleteAffect, err := suite.client.DeleteUser("100")
+	deleteAffect, err := suite.client.DeleteUser(ctx, "100")
 	suite.NoError(err)
 	suite.Equal(1, deleteAffect.RowAffected)
 
-	_, err = suite.client.GetUser("100")
+	_, err = suite.client.GetUser(ctx, "100")
 	suite.Equal("100: user not found", err.Error())
 }
 
 func (suite *GorseClientTestSuite) TestItems() {
+	ctx := context.TODO()
 	timestamp := time.Unix(1660459054, 0).UTC().Format(time.RFC3339)
 	item := Item{
 		ItemId:     "100",
@@ -307,19 +311,19 @@ func (suite *GorseClientTestSuite) TestItems() {
 		Timestamp:  timestamp,
 		Comment:    "comment",
 	}
-	rowAffected, err := suite.client.InsertItem(item)
+	rowAffected, err := suite.client.InsertItem(ctx, item)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
-	itemResp, err := suite.client.GetItem("100")
+	itemResp, err := suite.client.GetItem(ctx, "100")
 	suite.NoError(err)
 	suite.Equal(item, itemResp)
 
-	deleteAffect, err := suite.client.DeleteItem("100")
+	deleteAffect, err := suite.client.DeleteItem(ctx, "100")
 	suite.NoError(err)
 	suite.Equal(1, deleteAffect.RowAffected)
 
-	_, err = suite.client.GetItem("100")
+	_, err = suite.client.GetItem(ctx, "100")
 	suite.Equal("100: item not found", err.Error())
 }
 

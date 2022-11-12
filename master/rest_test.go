@@ -16,6 +16,7 @@ package master
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/alicebob/miniredis/v2"
@@ -105,13 +106,14 @@ func marshal(t *testing.T, v interface{}) string {
 func TestMaster_ExportUsers(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+	ctx := context.Background()
 	// insert users
 	users := []data.User{
 		{UserId: "1", Labels: []string{"a", "b"}},
 		{UserId: "2", Labels: []string{"b", "c"}},
 		{UserId: "3", Labels: []string{"c", "d"}},
 	}
-	err := s.DataClient.BatchInsertUsers(users)
+	err := s.DataClient.BatchInsertUsers(ctx, users)
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
@@ -130,13 +132,14 @@ func TestMaster_ExportUsers(t *testing.T) {
 func TestMaster_ExportItems(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+	ctx := context.Background()
 	// insert items
 	items := []data.Item{
 		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
 		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
 		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), nil, "\"three\""},
 	}
-	err := s.DataClient.BatchInsertItems(items)
+	err := s.DataClient.BatchInsertItems(ctx, items)
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
@@ -155,13 +158,15 @@ func TestMaster_ExportItems(t *testing.T) {
 func TestMaster_ExportFeedback(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+
+	ctx := context.Background()
 	// insert feedback
 	feedbacks := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
 	}
-	err := s.DataClient.BatchInsertFeedback(feedbacks, true, true, true)
+	err := s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	assert.NoError(t, err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
@@ -180,6 +185,8 @@ func TestMaster_ExportFeedback(t *testing.T) {
 func TestMaster_ImportUsers(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+
+	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
@@ -207,7 +214,7 @@ func TestMaster_ImportUsers(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetUsers("", 100)
+	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.User{
 		{UserId: "1", Labels: []string{"a", "b"}},
@@ -219,6 +226,7 @@ func TestMaster_ImportUsers(t *testing.T) {
 func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
@@ -239,7 +247,7 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetUsers("", 100)
+	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.User{
 		{UserId: "1", Labels: []string{"a", "用例"}},
@@ -251,6 +259,8 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 func TestMaster_ImportItems(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+
+	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
@@ -278,7 +288,7 @@ func TestMaster_ImportItems(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetItems("", 100, nil)
+	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
 		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
@@ -290,6 +300,8 @@ func TestMaster_ImportItems(t *testing.T) {
 func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+
+	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
@@ -310,7 +322,7 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetItems("", 100, nil)
+	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
 		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
@@ -322,6 +334,8 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 func TestMaster_ImportFeedback(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+
+	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
@@ -347,7 +361,7 @@ func TestMaster_ImportFeedback(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
+	_, feedback, err := s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -360,6 +374,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// send request
+	ctx := context.Background()
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "feedback.csv")
@@ -379,7 +394,7 @@ func TestMaster_ImportFeedback_Default(t *testing.T) {
 	// check
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
+	_, feedback, err := s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -411,16 +426,18 @@ func TestMaster_GetCluster(t *testing.T) {
 func TestMaster_GetStats(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+
+	ctx := context.Background()
 	// set stats
 	s.rankingScore = ranking.Score{Precision: 0.1}
 	s.clickScore = click.Score{Precision: 0.2}
-	err := s.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
+	err := s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	assert.NoError(t, err)
-	err = s.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
+	err = s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
 	assert.NoError(t, err)
-	err = s.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), 345))
+	err = s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), 345))
 	assert.NoError(t, err)
-	err = s.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), 456))
+	err = s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), 456))
 	assert.NoError(t, err)
 	// get stats
 	apitest.New().
@@ -445,22 +462,23 @@ func TestMaster_GetRates(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 
+	ctx := context.Background()
 	// write rates
 	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
 	// This first measurement should be overwritten.
-	err := s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
+	err := s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
+	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
+	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
+	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
+	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
+	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
+	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
 	assert.NoError(t, err)
 
 	// get rates
@@ -488,8 +506,9 @@ func TestMaster_GetRates(t *testing.T) {
 func TestMaster_GetCategories(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+	ctx := context.Background()
 	// insert categories
-	err := s.CacheClient.SetSet(cache.ItemCategories, "a", "b", "c")
+	err := s.CacheClient.SetSet(ctx, cache.ItemCategories, "a", "b", "c")
 	assert.NoError(t, err)
 	// get categories
 	apitest.New().
@@ -505,6 +524,7 @@ func TestMaster_GetCategories(t *testing.T) {
 func TestMaster_GetUsers(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+	ctx := context.Background()
 	// add users
 	users := []User{
 		{data.User{UserId: "0"}, time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC), time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)},
@@ -512,11 +532,11 @@ func TestMaster_GetUsers(t *testing.T) {
 		{data.User{UserId: "2"}, time.Date(2002, 1, 1, 1, 1, 1, 1, time.UTC), time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
 	}
 	for _, user := range users {
-		err := s.DataClient.BatchInsertUsers([]data.User{user.User})
+		err := s.DataClient.BatchInsertUsers(ctx, []data.User{user.User})
 		assert.NoError(t, err)
-		err = s.CacheClient.Set(cache.Time(cache.Key(cache.LastModifyUserTime, user.UserId), user.LastActiveTime))
+		err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, user.UserId), user.LastActiveTime))
 		assert.NoError(t, err)
-		err = s.CacheClient.Set(cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId), user.LastUpdateTime))
+		err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId), user.LastUpdateTime))
 		assert.NoError(t, err)
 	}
 	// get users
@@ -551,6 +571,7 @@ func TestServer_SortedItems(t *testing.T) {
 		Label  string
 		Get    string
 	}
+	ctx := context.Background()
 	operators := []ListOperator{
 		{"Item Neighbors", cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.ItemNeighbors, "0/*", "/api/dashboard/item/0/neighbors/*"},
@@ -569,14 +590,14 @@ func TestServer_SortedItems(t *testing.T) {
 				{strconv.Itoa(i) + "3", 97},
 				{strconv.Itoa(i) + "4", 96},
 			}
-			err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
+			err := s.CacheClient.SetSorted(ctx, cache.Key(operator.Prefix, operator.Label), scores)
 			assert.NoError(t, err)
 			err = server.NewCacheModification(s.CacheClient, s.HiddenItemsManager).HideItem(strconv.Itoa(i) + "3").Exec()
 			assert.NoError(t, err)
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
 				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
-				err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: score.Id}})
+				err = s.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: score.Id}})
 				assert.NoError(t, err)
 			}
 			apitest.New().
@@ -599,6 +620,7 @@ func TestServer_SortedUsers(t *testing.T) {
 		Label  string
 		Get    string
 	}
+	ctx := context.Background()
 	operators := []ListOperator{
 		{cache.UserNeighbors, "0", "/api/dashboard/user/0/neighbors"},
 	}
@@ -612,12 +634,12 @@ func TestServer_SortedUsers(t *testing.T) {
 			{"3", 97},
 			{"4", 96},
 		}
-		err := s.CacheClient.SetSorted(cache.Key(operator.Prefix, operator.Label), scores)
+		err := s.CacheClient.SetSorted(ctx, cache.Key(operator.Prefix, operator.Label), scores)
 		assert.NoError(t, err)
 		users := make([]ScoreUser, 0)
 		for _, score := range scores {
 			users = append(users, ScoreUser{User: data.User{UserId: score.Id}, Score: score.Score})
-			err = s.DataClient.BatchInsertUsers([]data.User{{UserId: score.Id}})
+			err = s.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: score.Id}})
 			assert.NoError(t, err)
 		}
 		apitest.New().
@@ -634,6 +656,7 @@ func TestServer_SortedUsers(t *testing.T) {
 func TestServer_Feedback(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
+	ctx := context.Background()
 	// insert feedback
 	feedback := []Feedback{
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "0"}},
@@ -643,7 +666,7 @@ func TestServer_Feedback(t *testing.T) {
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "8"}},
 	}
 	for _, v := range feedback {
-		err := s.DataClient.BatchInsertFeedback([]data.Feedback{{
+		err := s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 			FeedbackKey: data.FeedbackKey{FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId},
 		}}, true, true, true)
 		assert.NoError(t, err)
@@ -673,18 +696,19 @@ func TestServer_GetRecommends(t *testing.T) {
 		{"7", 93},
 		{"8", 92},
 	}
-	err := s.CacheClient.SetSorted(cache.Key(cache.OfflineRecommend, "0"), itemIds)
+	ctx := context.Background()
+	err := s.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}
-	err = s.RestServer.InsertFeedbackToCache(feedback)
+	err = s.RestServer.InsertFeedbackToCache(ctx, feedback)
 	assert.NoError(t, err)
 	// insert items
 	for _, item := range itemIds {
-		err = s.DataClient.BatchInsertItems([]data.Item{{ItemId: item.Id}})
+		err = s.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: item.Id}})
 		assert.NoError(t, err)
 	}
 	apitest.New().
@@ -715,26 +739,27 @@ func TestMaster_Purge(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 
+	ctx := context.Background()
 	// insert data
-	err := s.CacheClient.Set(cache.String("key", "value"))
+	err := s.CacheClient.Set(ctx, cache.String("key", "value"))
 	assert.NoError(t, err)
-	ret, err := s.CacheClient.Get("key").String()
+	ret, err := s.CacheClient.Get(ctx, "key").String()
 	assert.NoError(t, err)
 	assert.Equal(t, "value", ret)
 
-	err = s.CacheClient.AddSet("set", "a", "b", "c")
+	err = s.CacheClient.AddSet(ctx, "set", "a", "b", "c")
 	assert.NoError(t, err)
-	set, err := s.CacheClient.GetSet("set")
+	set, err := s.CacheClient.GetSet(ctx, "set")
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, set)
 
-	err = s.CacheClient.AddSorted(cache.Sorted("sorted", []cache.Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}))
+	err = s.CacheClient.AddSorted(ctx, cache.Sorted("sorted", []cache.Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}))
 	assert.NoError(t, err)
-	z, err := s.CacheClient.GetSorted("sorted", 0, -1)
+	z, err := s.CacheClient.GetSorted(ctx, "sorted", 0, -1)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []cache.Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}, z)
 
-	err = s.DataClient.BatchInsertFeedback(lo.Map(lo.Range(100), func(t int, i int) data.Feedback {
+	err = s.DataClient.BatchInsertFeedback(ctx, lo.Map(lo.Range(100), func(t int, i int) data.Feedback {
 		return data.Feedback{FeedbackKey: data.FeedbackKey{
 			FeedbackType: "click",
 			UserId:       strconv.Itoa(t),
@@ -742,13 +767,13 @@ func TestMaster_Purge(t *testing.T) {
 		}}
 	}), true, true, true)
 	assert.NoError(t, err)
-	_, users, err := s.DataClient.GetUsers("", 100)
+	_, users, err := s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, 100, len(users))
-	_, items, err := s.DataClient.GetItems("", 100, nil)
+	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 100, len(items))
-	_, feedbacks, err := s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
+	_, feedbacks, err := s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Equal(t, 100, len(feedbacks))
 
@@ -761,22 +786,22 @@ func TestMaster_Purge(t *testing.T) {
 	s.purge(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	_, err = s.CacheClient.Get("key").String()
+	_, err = s.CacheClient.Get(ctx, "key").String()
 	assert.ErrorIs(t, err, errors.NotFound)
-	set, err = s.CacheClient.GetSet("set")
+	set, err = s.CacheClient.GetSet(ctx, "set")
 	assert.NoError(t, err)
 	assert.Empty(t, set)
-	z, err = s.CacheClient.GetSorted("sorted", 0, -1)
+	z, err = s.CacheClient.GetSorted(ctx, "sorted", 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, z)
 
-	_, users, err = s.DataClient.GetUsers("", 100)
+	_, users, err = s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Empty(t, users)
-	_, items, err = s.DataClient.GetItems("", 100, nil)
+	_, items, err = s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Empty(t, items)
-	_, feedbacks, err = s.DataClient.GetFeedback("", 100, nil, lo.ToPtr(time.Now()))
+	_, feedbacks, err = s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Empty(t, feedbacks)
 }

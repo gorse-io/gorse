@@ -14,6 +14,8 @@
 
 package cache
 
+import "context"
+
 // NoDatabase means no database used for cache.
 type NoDatabase struct{}
 
@@ -35,66 +37,66 @@ func (NoDatabase) Purge() error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) Set(_ ...Value) error {
+func (NoDatabase) Set(_ context.Context, _ ...Value) error {
 	return ErrNoDatabase
 }
 
 // Get method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) Get(_ string) *ReturnValue {
+func (NoDatabase) Get(_ context.Context, _ string) *ReturnValue {
 	return &ReturnValue{err: ErrNoDatabase}
 }
 
 // Delete method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) Delete(_ string) error {
+func (NoDatabase) Delete(_ context.Context, _ string) error {
 	return ErrNoDatabase
 }
 
 // GetSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSet(_ string) ([]string, error) {
+func (NoDatabase) GetSet(_ context.Context, _ string) ([]string, error) {
 	return nil, ErrNoDatabase
 }
 
 // SetSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetSet(_ string, _ ...string) error {
+func (NoDatabase) SetSet(_ context.Context, _ string, _ ...string) error {
 	return ErrNoDatabase
 }
 
 // AddSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AddSet(_ string, _ ...string) error {
+func (NoDatabase) AddSet(_ context.Context, _ string, _ ...string) error {
 	return ErrNoDatabase
 }
 
 // RemSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSet(_ string, _ ...string) error {
+func (NoDatabase) RemSet(_ context.Context, _ string, _ ...string) error {
 	return ErrNoDatabase
 }
 
 // GetSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSorted(_ string, _, _ int) ([]Scored, error) {
+func (NoDatabase) GetSorted(_ context.Context, _ string, _, _ int) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
 // GetSortedByScore method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSortedByScore(_ string, _, _ float64) ([]Scored, error) {
+func (NoDatabase) GetSortedByScore(_ context.Context, _ string, _, _ float64) ([]Scored, error) {
 	return nil, ErrNoDatabase
 }
 
 // RemSortedByScore method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSortedByScore(_ string, _, _ float64) error {
+func (NoDatabase) RemSortedByScore(_ context.Context, _ string, _, _ float64) error {
 	return ErrNoDatabase
 }
 
 // AddSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AddSorted(_ ...SortedSet) error {
+func (NoDatabase) AddSorted(_ context.Context, _ ...SortedSet) error {
 	return ErrNoDatabase
 }
 
 // SetSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetSorted(_ string, _ []Scored) error {
+func (NoDatabase) SetSorted(_ context.Context, _ string, _ []Scored) error {
 	return ErrNoDatabase
 }
 
 // RemSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSorted(_ ...SetMember) error {
+func (NoDatabase) RemSorted(_ context.Context, _ ...SetMember) error {
 	return ErrNoDatabase
 }

@@ -39,6 +39,8 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -101,6 +103,14 @@ type Master struct {
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	rand.Seed(time.Now().UnixNano())
+	// setup trace provider
+	tp, err := cfg.Tracing.NewTracerProvider()
+	if err != nil {
+		log.Logger().Fatal("failed to create trace provider", zap.Error(err))
+	}
+	otel.SetTracerProvider(tp)
+	otel.SetErrorHandler(log.GetErrorHandler())
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	// create task monitor
 	taskMonitor := task.NewTaskMonitor()
 	for _, taskName := range []string{TaskLoadDataset, TaskFindItemNeighbors, TaskFindUserNeighbors,
@@ -439,7 +449,8 @@ func (m *Master) RunManagedTasksLoop() {
 }
 
 func (m *Master) checkDataImported() bool {
-	isDataImported, err := m.CacheClient.Get(cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
+	ctx := context.Background()
+	isDataImported, err := m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read meta", zap.Error(err))
@@ -447,7 +458,7 @@ func (m *Master) checkDataImported() bool {
 		return false
 	}
 	if isDataImported > 0 {
-		err = m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 0))
+		err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 0))
 		if err != nil {
 			log.Logger().Error("failed to write meta", zap.Error(err))
 		}
@@ -457,7 +468,8 @@ func (m *Master) checkDataImported() bool {
 }
 
 func (m *Master) notifyDataImported() {
-	err := m.CacheClient.Set(cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 1))
+	ctx := context.Background()
+	err := m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 1))
 	if err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}

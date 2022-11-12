@@ -15,11 +15,14 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type GorseClient struct {
@@ -28,64 +31,65 @@ type GorseClient struct {
 	httpClient http.Client
 }
 
-func NewGorseClient(EntryPoint, ApiKey string) *GorseClient {
+func NewGorseClient(entryPoint, apiKey string) *GorseClient {
 	return &GorseClient{
-		entryPoint: EntryPoint,
-		apiKey:     ApiKey,
+		entryPoint: entryPoint,
+		apiKey:     apiKey,
+		httpClient: http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 
-func (c *GorseClient) InsertFeedback(feedbacks []Feedback) (RowAffected, error) {
-	return request[RowAffected](c, "POST", c.entryPoint+"/api/feedback", feedbacks)
+func (c *GorseClient) InsertFeedback(ctx context.Context, feedbacks []Feedback) (RowAffected, error) {
+	return request[RowAffected](ctx, c, "POST", c.entryPoint+"/api/feedback", feedbacks)
 }
 
-func (c *GorseClient) ListFeedbacks(feedbackType, userId string) ([]Feedback, error) {
-	return request[[]Feedback, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/user/"+userId+"/feedback/"+feedbackType), nil)
+func (c *GorseClient) ListFeedbacks(ctx context.Context, feedbackType, userId string) ([]Feedback, error) {
+	return request[[]Feedback, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/user/"+userId+"/feedback/"+feedbackType), nil)
 }
 
-func (c *GorseClient) GetRecommend(userId string, category string, n int) ([]string, error) {
-	return request[[]string, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s/%s?n=%d", userId, category, n), nil)
+func (c *GorseClient) GetRecommend(ctx context.Context, userId string, category string, n int) ([]string, error) {
+	return request[[]string, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s/%s?n=%d", userId, category, n), nil)
 }
 
-func (c *GorseClient) SessionRecommend(feedbacks []Feedback, n int) ([]Score, error) {
-	return request[[]Score](c, "POST", c.entryPoint+fmt.Sprintf("/api/session/recommend?n=%d", n), feedbacks)
+func (c *GorseClient) SessionRecommend(ctx context.Context, feedbacks []Feedback, n int) ([]Score, error) {
+	return request[[]Score](ctx, c, "POST", c.entryPoint+fmt.Sprintf("/api/session/recommend?n=%d", n), feedbacks)
 }
 
-func (c *GorseClient) GetNeighbors(itemId string, n int) ([]Score, error) {
-	return request[[]Score, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors?n=%d", itemId, n), nil)
+func (c *GorseClient) GetNeighbors(ctx context.Context, itemId string, n int) ([]Score, error) {
+	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors?n=%d", itemId, n), nil)
 }
 
-func (c *GorseClient) InsertUser(user User) (RowAffected, error) {
-	return request[RowAffected](c, "POST", c.entryPoint+"/api/user", user)
+func (c *GorseClient) InsertUser(ctx context.Context, user User) (RowAffected, error) {
+	return request[RowAffected](ctx, c, "POST", c.entryPoint+"/api/user", user)
 }
 
-func (c *GorseClient) GetUser(userId string) (User, error) {
-	return request[User, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
+func (c *GorseClient) GetUser(ctx context.Context, userId string) (User, error) {
+	return request[User, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
 }
 
-func (c *GorseClient) DeleteUser(userId string) (RowAffected, error) {
-	return request[RowAffected, any](c, "DELETE", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
+func (c *GorseClient) DeleteUser(ctx context.Context, userId string) (RowAffected, error) {
+	return request[RowAffected, any](ctx, c, "DELETE", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
 }
 
-func (c *GorseClient) InsertItem(item Item) (RowAffected, error) {
-	return request[RowAffected](c, "POST", c.entryPoint+"/api/item", item)
+func (c *GorseClient) InsertItem(ctx context.Context, item Item) (RowAffected, error) {
+	return request[RowAffected](ctx, c, "POST", c.entryPoint+"/api/item", item)
 }
 
-func (c *GorseClient) GetItem(itemId string) (Item, error) {
-	return request[Item, any](c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
+func (c *GorseClient) GetItem(ctx context.Context, itemId string) (Item, error) {
+	return request[Item, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
 }
 
-func (c *GorseClient) DeleteItem(itemId string) (RowAffected, error) {
-	return request[RowAffected, any](c, "DELETE", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
+func (c *GorseClient) DeleteItem(ctx context.Context, itemId string) (RowAffected, error) {
+	return request[RowAffected, any](ctx, c, "DELETE", c.entryPoint+fmt.Sprintf("/api/item/%s", itemId), nil)
 }
 
-func request[Response any, Body any](c *GorseClient, method, url string, body Body) (result Response, err error) {
+func request[Response any, Body any](ctx context.Context, c *GorseClient, method, url string, body Body) (result Response, err error) {
 	bodyByte, marshalErr := json.Marshal(body)
 	if marshalErr != nil {
 		return result, marshalErr
 	}
 	var req *http.Request
-	req, err = http.NewRequest(method, url, strings.NewReader(string(bodyByte)))
+	req, err = http.NewRequestWithContext(ctx, method, url, strings.NewReader(string(bodyByte)))
 	if err != nil {
 		return result, err
 	}

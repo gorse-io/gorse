@@ -17,10 +17,14 @@ package log
 import (
 	"github.com/stretchr/testify/assert"
 	"os"
+	"runtime"
 	"testing"
 )
 
 func TestSetDevelopmentLogger(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
 	temp, err := os.MkdirTemp("", "test_gorse")
 	assert.NoError(t, err)
 	// set existed path
@@ -41,6 +45,9 @@ func TestSetDevelopmentLogger(t *testing.T) {
 }
 
 func TestSetProductionLogger(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
 	temp, err := os.MkdirTemp("", "test_gorse")
 	assert.NoError(t, err)
 	// set existed path
