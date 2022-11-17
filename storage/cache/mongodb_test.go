@@ -16,11 +16,10 @@ package cache
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"os"
-	"runtime"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 var (
@@ -38,84 +37,40 @@ func init() {
 	mongoUri = env("MONGO_URI", "mongodb://root:password@127.0.0.1:27017/")
 }
 
-type testMongo struct {
-	Database
+type MongoTestSuite struct {
+	baseTestSuite
 }
 
-func (db *testMongo) GetMongoDB(t *testing.T) *MongoDB {
+func (suite *MongoTestSuite) SetupSuite() {
+	ctx := context.Background()
+	var err error
+	// create database
+	suite.Database, err = Open(mongoUri, "gorse_")
+	suite.NoError(err)
+	dbName := "gorse_cache_test"
+	databaseComm := suite.getMongoDB()
+	suite.NoError(err)
+	err = databaseComm.client.Database(dbName).Drop(ctx)
+	if err == nil {
+		suite.T().Log("delete existed database:", dbName)
+	}
+	err = suite.Database.Close()
+	suite.NoError(err)
+	// create schema
+	suite.Database, err = Open(mongoUri+dbName+"?authSource=admin&connect=direct", "gorse_")
+	suite.NoError(err)
+	err = suite.Database.Init()
+	suite.NoError(err)
+}
+
+func (suite *MongoTestSuite) getMongoDB() *MongoDB {
 	var mongoDatabase *MongoDB
 	var ok bool
-	mongoDatabase, ok = db.Database.(*MongoDB)
-	assert.True(t, ok)
+	mongoDatabase, ok = suite.Database.(*MongoDB)
+	suite.True(ok)
 	return mongoDatabase
 }
 
-func (db *testMongo) Close(t *testing.T) {
-	err := db.Database.Close()
-	assert.NoError(t, err)
-}
-
-func newTestMongo(t *testing.T) *testMongo {
-	// retrieve test name
-	var testName string
-	pc, _, _, ok := runtime.Caller(1)
-	details := runtime.FuncForPC(pc)
-	if ok && details != nil {
-		splits := strings.Split(details.Name(), ".")
-		testName = splits[len(splits)-1]
-	} else {
-		t.Fatalf("failed to retrieve test name")
-	}
-
-	ctx := context.Background()
-	database := new(testMongo)
-	var err error
-	// create database
-	database.Database, err = Open(mongoUri, "gorse_")
-	assert.NoError(t, err)
-	dbName := "gorse_" + testName
-	databaseComm := database.GetMongoDB(t)
-	assert.NoError(t, err)
-	err = databaseComm.client.Database(dbName).Drop(ctx)
-	if err == nil {
-		t.Log("delete existed database:", dbName)
-	}
-	err = database.Database.Close()
-	assert.NoError(t, err)
-	// create schema
-	database.Database, err = Open(mongoUri+dbName+"?authSource=admin&connect=direct", "gorse_")
-	assert.NoError(t, err)
-	err = database.Init()
-	assert.NoError(t, err)
-	return database
-}
-
-func TestMongo_Meta(t *testing.T) {
-	db := newTestMongo(t)
-	defer db.Close(t)
-	testMeta(t, db.Database)
-}
-
-func TestMongo_Sort(t *testing.T) {
-	db := newTestMongo(t)
-	//defer db.Close(t)
-	testSort(t, db.Database)
-}
-
-func TestMongo_Set(t *testing.T) {
-	db := newTestMongo(t)
-	defer db.Close(t)
-	testSet(t, db.Database)
-}
-
-func TestMongo_Scan(t *testing.T) {
-	db := newTestMongo(t)
-	defer db.Close(t)
-	testScan(t, db.Database)
-}
-
-func TestMongo_Purge(t *testing.T) {
-	db := newTestMongo(t)
-	defer db.Close(t)
-	testPurge(t, db.Database)
+func TestMongo(t *testing.T) {
+	suite.Run(t, new(MongoTestSuite))
 }

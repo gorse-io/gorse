@@ -15,11 +15,12 @@
 package cache
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 var (
@@ -38,49 +39,13 @@ func init() {
 }
 
 type RedisTestSuite struct {
-	suite.Suite
-	Database
+	baseTestSuite
 }
 
 func (suite *RedisTestSuite) SetupSuite() {
 	var err error
 	suite.Database, err = Open(redisDSN, "gorse_")
 	suite.NoError(err)
-}
-
-func (suite *RedisTestSuite) TearDownSuite() {
-	err := suite.Database.Close()
-	suite.NoError(err)
-}
-
-func (suite *RedisTestSuite) SetupTest() {
-	err := suite.Database.Purge()
-	suite.NoError(err)
-}
-
-func (suite *RedisTestSuite) TearDownTest() {
-	err := suite.Database.Purge()
-	suite.NoError(err)
-}
-
-func (suite *RedisTestSuite) TestMeta() {
-	testMeta(suite.T(), suite.Database)
-}
-
-func (suite *RedisTestSuite) TestSort() {
-	testSort(suite.T(), suite.Database)
-}
-
-func (suite *RedisTestSuite) TestSet() {
-	testSet(suite.T(), suite.Database)
-}
-
-func (suite *RedisTestSuite) TestScan() {
-	testScan(suite.T(), suite.Database)
-}
-
-func (suite *RedisTestSuite) TestPurge() {
-	testPurge(suite.T(), suite.Database)
 }
 
 func TestRedis(t *testing.T) {

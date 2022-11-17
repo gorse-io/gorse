@@ -14,77 +14,32 @@
 package data
 
 import (
-	"github.com/alicebob/miniredis/v2"
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/storage"
 	"testing"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/storage"
 )
 
-type mockRedis struct {
-	Database
+type RedisTestSuite struct {
+	baseTestSuite
 	server *miniredis.Miniredis
 }
 
-func newMockRedis(t *testing.T) *mockRedis {
+func (suite *RedisTestSuite) SetupSuite() {
 	var err error
-	db := new(mockRedis)
-	db.server, err = miniredis.Run()
-	assert.NoError(t, err)
-	db.Database, err = Open(storage.RedisPrefix+db.server.Addr(), "")
-	assert.NoError(t, err)
-	return db
+	suite.server, err = miniredis.Run()
+	suite.NoError(err)
+	suite.Database, err = Open(storage.RedisPrefix+suite.server.Addr(), "")
+	suite.NoError(err)
 }
 
-func (db *mockRedis) Close(t *testing.T) {
-	err := db.Database.Close()
-	assert.NoError(t, err)
-	db.server.Close()
+func (suite *RedisTestSuite) TearDownSuite() {
+	err := suite.Database.Close()
+	suite.NoError(err)
+	suite.server.Close()
 }
 
-func TestRedis_Users(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testUsers(t, db.Database)
-}
-
-func TestRedis_Feedback(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testFeedback(t, db.Database)
-}
-
-func TestRedis_Item(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testItems(t, db.Database)
-}
-
-func TestRedis_DeleteUser(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testDeleteUser(t, db.Database)
-}
-
-func TestRedis_DeleteItem(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testDeleteItem(t, db.Database)
-}
-
-func TestRedis_DeleteFeedback(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testDeleteFeedback(t, db.Database)
-}
-
-func TestRedis_TimeLimit(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testTimeLimit(t, db.Database)
-}
-
-func TestRedis_Purge(t *testing.T) {
-	db := newMockRedis(t)
-	defer db.Close(t)
-	testPurge(t, db.Database)
+func TestRedis(t *testing.T) {
+	suite.Run(t, new(RedisTestSuite))
 }
