@@ -101,6 +101,10 @@ func (m MongoDB) Close() error {
 	return m.client.Disconnect(context.Background())
 }
 
+func (m MongoDB) Ping() error {
+	return m.client.Ping(nil, nil)
+}
+
 func (m MongoDB) Scan(work func(string) error) error {
 	ctx := context.Background()
 

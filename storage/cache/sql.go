@@ -67,6 +67,10 @@ func (db *SQLDatabase) Close() error {
 	return db.client.Close()
 }
 
+func (db *SQLDatabase) Ping() error {
+	return db.client.Ping()
+}
+
 func (db *SQLDatabase) Init() error {
 	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{})
 	return errors.Trace(err)

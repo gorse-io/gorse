@@ -25,6 +25,8 @@ func TestNoDatabase(t *testing.T) {
 	var database NoDatabase
 	err := database.Close()
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.Ping()
+	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Init()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Scan(nil)

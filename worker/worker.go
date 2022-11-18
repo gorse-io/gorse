@@ -283,6 +283,7 @@ func (w *Worker) Pull() {
 // ServeHTTP serves Prometheus metrics and API.
 func (w *Worker) ServeHTTP() {
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/api/health/live", w.checkLive)
 	http.HandleFunc("/api/admin/schedule", w.ScheduleAPIHandler)
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
 	if err != nil {
@@ -320,6 +321,17 @@ func (w *Worker) checkAdmin(request *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+func writeJSON(w http.ResponseWriter, content any) {
+	w.WriteHeader(http.StatusOK)
+	bytes, err := json.Marshal(content)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+	}
+	if _, err = w.Write(bytes); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func writeError(w http.ResponseWriter, error string, code int) {
@@ -1267,6 +1279,27 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 		cache.SortScores(r)
 	}
 	return newRecommend, nil
+}
+
+type HealthStatus struct {
+	DataStoreError      error
+	CacheStoreError     error
+	DataStoreConnected  bool
+	CacheStoreConnected bool
+}
+
+func (w *Worker) checkHealth() HealthStatus {
+	healthStatus := HealthStatus{}
+	healthStatus.DataStoreError = w.DataClient.Ping()
+	healthStatus.CacheStoreError = w.CacheClient.Ping()
+	healthStatus.DataStoreConnected = healthStatus.DataStoreError == nil
+	healthStatus.CacheStoreConnected = healthStatus.CacheStoreError == nil
+	return healthStatus
+}
+
+func (w *Worker) checkLive(writer http.ResponseWriter, _ *http.Request) {
+	healthStatus := w.checkHealth()
+	writeJSON(writer, healthStatus)
 }
 
 // ItemCache is alias of map[string]data.Item.
