@@ -62,9 +62,11 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore   string `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
-	CacheStore  string `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
-	TablePrefix string `mapstructure:"table_prefix"`
+	DataStore        string `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
+	CacheStore       string `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	TablePrefix      string `mapstructure:"table_prefix"`
+	DataTablePrefix  string `mapstructure:"data_table_prefix"`
+	CacheTablePrefix string `mapstructure:"cache_table_prefix"`
 }
 
 // MasterConfig is the configuration for the master.
@@ -526,6 +528,8 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"database.cache_store", "GORSE_CACHE_STORE"},
 		{"database.data_store", "GORSE_DATA_STORE"},
 		{"database.table_prefix", "GORSE_TABLE_PREFIX"},
+		{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
+		{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
 		{"master.port", "GORSE_MASTER_PORT"},
 		{"master.host", "GORSE_MASTER_HOST"},
 		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
@@ -559,6 +563,14 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 	// validate config file
 	if err := conf.Validate(oneModel); err != nil {
 		return nil, errors.Trace(err)
+	}
+
+	// apply table prefix
+	if conf.Database.CacheTablePrefix == "" {
+		conf.Database.CacheTablePrefix = conf.Database.TablePrefix
+	}
+	if conf.Database.DataTablePrefix == "" {
+		conf.Database.DataTablePrefix = conf.Database.TablePrefix
 	}
 	return &conf, nil
 }
