@@ -167,27 +167,27 @@ func (w *Worker) Sync() {
 		}
 
 		// connect to data store
-		if w.dataPath != w.Config.Database.DataStore || w.dataPrefix != w.Config.Database.TablePrefix {
+		if w.dataPath != w.Config.Database.DataStore || w.dataPrefix != w.Config.Database.DataTablePrefix {
 			log.Logger().Info("connect data store",
 				zap.String("database", log.RedactDBURL(w.Config.Database.DataStore)))
-			if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.TablePrefix); err != nil {
+			if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix); err != nil {
 				log.Logger().Error("failed to connect data store", zap.Error(err))
 				goto sleep
 			}
 			w.dataPath = w.Config.Database.DataStore
-			w.dataPrefix = w.Config.Database.TablePrefix
+			w.dataPrefix = w.Config.Database.DataTablePrefix
 		}
 
 		// connect to cache store
-		if w.cachePath != w.Config.Database.CacheStore || w.cachePrefix != w.Config.Database.TablePrefix {
+		if w.cachePath != w.Config.Database.CacheStore || w.cachePrefix != w.Config.Database.CacheTablePrefix {
 			log.Logger().Info("connect cache store",
 				zap.String("database", log.RedactDBURL(w.Config.Database.CacheStore)))
-			if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.TablePrefix); err != nil {
+			if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix); err != nil {
 				log.Logger().Error("failed to connect cache store", zap.Error(err))
 				goto sleep
 			}
 			w.cachePath = w.Config.Database.CacheStore
-			w.cachePrefix = w.Config.Database.TablePrefix
+			w.cachePrefix = w.Config.Database.CacheTablePrefix
 		}
 
 		// check ranking model version

@@ -21,8 +21,14 @@ cache_store = "redis://localhost:6379/0"
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 
-# The naming prefix for tables (collections, keys) in databases.
+# The naming prefix for tables (collections, keys) in databases. The default value is empty.
 table_prefix = ""
+
+# The naming prefix for tables (collections, keys) in cache storage databases. The default value is `table_prefix`.
+cache_table_prefix = ""
+
+# The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
+data_table_prefix = ""
 
 [master]
 

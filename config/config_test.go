@@ -16,6 +16,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +34,8 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "admin_api_key = \"\"", "admin_api_key = \"super_api_key\"", -1)
 	text = strings.Replace(text, "api_key = \"\"", "api_key = \"19260817\"", -1)
 	text = strings.Replace(text, "table_prefix = \"\"", "table_prefix = \"gorse_\"", -1)
+	text = strings.Replace(text, "cache_table_prefix = \"gorse_\"", "cache_table_prefix = \"gorse_cache_\"", -1)
+	text = strings.Replace(text, "data_table_prefix = \"gorse_\"", "data_table_prefix = \"gorse_data_\"", -1)
 	text = strings.Replace(text, "http_cors_domains = []", "http_cors_domains = [\".*\"]", -1)
 	text = strings.Replace(text, "http_cors_methods = []", "http_cors_methods = [\"GET\",\"PATCH\",\"POST\"]", -1)
 	viper.SetConfigType("toml")
@@ -46,6 +49,9 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
 	assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse", config.Database.DataStore)
 	assert.Equal(t, "gorse_", config.Database.TablePrefix)
+	assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
+	assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
+
 	// [master]
 	assert.Equal(t, 8086, config.Master.Port)
 	assert.Equal(t, "0.0.0.0", config.Master.Host)
@@ -147,6 +153,8 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_CACHE_STORE", "redis://<cache_store>"},
 		{"GORSE_DATA_STORE", "mysql://<data_store>"},
 		{"GORSE_TABLE_PREFIX", "gorse_"},
+		{"GORSE_DATA_TABLE_PREFIX", "gorse_data_"},
+		{"GORSE_CACHE_TABLE_PREFIX", "gorse_cache_"},
 		{"GORSE_MASTER_PORT", "123"},
 		{"GORSE_MASTER_HOST", "<master_host>"},
 		{"GORSE_MASTER_HTTP_PORT", "456"},
@@ -158,8 +166,7 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
 	}
 	for _, variable := range variables {
-		err := os.Setenv(variable.key, variable.value)
-		assert.NoError(t, err)
+		t.Setenv(variable.key, variable.value)
 	}
 
 	config, err := LoadConfig("config.toml.template", false)
@@ -167,6 +174,8 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "redis://<cache_store>", config.Database.CacheStore)
 	assert.Equal(t, "mysql://<data_store>", config.Database.DataStore)
 	assert.Equal(t, "gorse_", config.Database.TablePrefix)
+	assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
+	assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
 	assert.Equal(t, 123, config.Master.Port)
 	assert.Equal(t, "<master_host>", config.Master.Host)
 	assert.Equal(t, 456, config.Master.HttpPort)
@@ -179,6 +188,24 @@ func TestBindEnv(t *testing.T) {
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)
+}
+
+func TestTablePrefixCompat(t *testing.T) {
+	data, err := os.ReadFile("config.toml.template")
+	assert.NoError(t, err)
+	text := string(data)
+	text = strings.Replace(text, "cache_table_prefix = \"\"", "", -1)
+	text = strings.Replace(text, "data_table_prefix = \"\"", "", -1)
+	text = strings.Replace(text, "table_prefix = \"\"", "table_prefix = \"gorse_\"", -1)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	err = os.WriteFile(path, []byte(text), os.ModePerm)
+	assert.NoError(t, err)
+
+	config, err := LoadConfig(path, false)
+	assert.NoError(t, err)
+	assert.Equal(t, "gorse_", config.Database.TablePrefix)
+	assert.Equal(t, "gorse_", config.Database.CacheTablePrefix)
+	assert.Equal(t, "gorse_", config.Database.DataTablePrefix)
 }
 
 func TestConfig_UserNeighborDigest(t *testing.T) {
