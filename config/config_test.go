@@ -166,8 +166,7 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
 	}
 	for _, variable := range variables {
-		err := os.Setenv(variable.key, variable.value)
-		assert.NoError(t, err)
+		t.Setenv(variable.key, variable.value)
 	}
 
 	config, err := LoadConfig("config.toml.template", false)
