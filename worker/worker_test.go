@@ -295,12 +295,6 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationHNSW() {
 		{"1", 1},
 		{"0", 0},
 	}, recommends)
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"), 0, -1)
-	suite.NoError(err)
-	suite.Equal([]cache.Scored{
-		{"3", 3},
-		{"1", 1},
-	}, recommends)
 
 	readCache, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
