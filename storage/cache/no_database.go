@@ -24,6 +24,10 @@ func (NoDatabase) Close() error {
 	return ErrNoDatabase
 }
 
+func (NoDatabase) Ping() error {
+	return ErrNoDatabase
+}
+
 // Init method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) Init() error {
 	return ErrNoDatabase

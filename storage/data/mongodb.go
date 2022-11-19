@@ -132,6 +132,10 @@ func (db *MongoDB) Init() error {
 	return nil
 }
 
+func (db *MongoDB) Ping() error {
+	return db.client.Ping(context.Background(), nil)
+}
+
 // Close connection to MongoDB.
 func (db *MongoDB) Close() error {
 	return db.client.Disconnect(context.Background())

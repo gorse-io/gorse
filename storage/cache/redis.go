@@ -193,6 +193,10 @@ func (r *Redis) Close() error {
 	return r.client.Close()
 }
 
+func (r *Redis) Ping() error {
+	return r.client.Ping(context.Background()).Err()
+}
+
 // Init nothing.
 func (r *Redis) Init() error {
 	return nil

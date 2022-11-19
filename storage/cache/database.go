@@ -276,6 +276,7 @@ func Member(name, member string) SetMember {
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
+	Ping() error
 	Init() error
 	Scan(work func(string) error) error
 	Purge() error

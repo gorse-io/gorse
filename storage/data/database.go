@@ -117,6 +117,7 @@ func (sorter feedbackSorter) Swap(i, j int) {
 
 type Database interface {
 	Init() error
+	Ping() error
 	Close() error
 	Optimize() error
 	Purge() error

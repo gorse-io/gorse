@@ -150,17 +150,15 @@ func (suite *baseTestSuite) TearDownSuite() {
 }
 
 func (suite *baseTestSuite) SetupTest() {
-	err := suite.Database.Purge()
+	err := suite.Database.Ping()
+	suite.NoError(err)
+	err = suite.Database.Purge()
 	suite.NoError(err)
 }
 
 func (suite *baseTestSuite) TearDownTest() {
 	err := suite.Database.Purge()
 	suite.NoError(err)
-}
-
-func (suite *baseTestSuite) TestInit() {
-	suite.NoError(suite.Database.Init())
 }
 
 func (suite *baseTestSuite) TestUsers() {

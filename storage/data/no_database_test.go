@@ -32,6 +32,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Init()
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.Ping()
+	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Purge()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 

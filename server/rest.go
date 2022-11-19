@@ -115,6 +115,11 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 }
 
 func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	if strings.HasPrefix(req.SelectedRoute().Path(), "/api/health/") {
+		// Health check APIs don't need API key,
+		chain.ProcessFilter(req, resp)
+		return
+	}
 	if s.Config.Server.APIKey == "" {
 		chain.ProcessFilter(req, resp)
 		return
@@ -154,6 +159,18 @@ func (s *RestServer) CreateWebService() {
 		Filter(s.AuthFilter).
 		Filter(s.MetricsFilter).
 		Filter(otelrestful.OTelFilter("gorse"))
+
+	/* Health check */
+	ws.Route(ws.GET("/health/live").To(s.checkLive).
+		Doc("Probe the liveness of this node.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"health"}).
+		Returns(http.StatusOK, "OK", HealthStatus{}).
+		Writes(HealthStatus{}))
+	ws.Route(ws.GET("/health/ready").To(s.checkReady).
+		Doc("Probe the readiness of this node.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"health"}).
+		Returns(http.StatusOK, "OK", HealthStatus{}).
+		Writes(HealthStatus{}))
 
 	/* Interactions with data store */
 
@@ -1846,6 +1863,43 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	}
 }
 
+type HealthStatus struct {
+	Ready               bool
+	DataStoreError      error
+	CacheStoreError     error
+	DataStoreConnected  bool
+	CacheStoreConnected bool
+}
+
+func (s *RestServer) checkHealth() HealthStatus {
+	healthStatus := HealthStatus{}
+	healthStatus.DataStoreError = s.DataClient.Ping()
+	healthStatus.CacheStoreError = s.CacheClient.Ping()
+	healthStatus.DataStoreConnected = healthStatus.DataStoreError == nil
+	healthStatus.CacheStoreConnected = healthStatus.CacheStoreError == nil
+	healthStatus.Ready = healthStatus.DataStoreConnected && healthStatus.CacheStoreConnected
+	return healthStatus
+}
+
+func (s *RestServer) checkReady(_ *restful.Request, response *restful.Response) {
+	healthStatus := s.checkHealth()
+	if healthStatus.Ready {
+		Ok(response, healthStatus)
+	} else {
+		errReason, err := json.Marshal(healthStatus)
+		if err != nil {
+			Error(response, http.StatusInternalServerError, err)
+		} else {
+			Error(response, http.StatusServiceUnavailable, errors.New(string(errReason)))
+		}
+	}
+}
+
+func (s *RestServer) checkLive(_ *restful.Request, response *restful.Response) {
+	healthStatus := s.checkHealth()
+	Ok(response, healthStatus)
+}
+
 // Measurement stores a statistical value.
 type Measurement struct {
 	Name      string
@@ -1959,6 +2013,13 @@ func Ok(response *restful.Response, content interface{}) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := response.WriteAsJson(content); err != nil {
 		log.ResponseLogger(response).Error("failed to write json", zap.Error(err))
+	}
+}
+
+func Error(response *restful.Response, httpStatus int, responseError error) {
+	response.Header().Set("Access-Control-Allow-Origin", "*")
+	if err := response.WriteError(httpStatus, responseError); err != nil {
+		log.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }
 

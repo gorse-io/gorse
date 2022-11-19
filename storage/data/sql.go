@@ -288,6 +288,10 @@ func (d *SQLDatabase) Init() error {
 	return nil
 }
 
+func (d *SQLDatabase) Ping() error {
+	return d.client.Ping()
+}
+
 // Close MySQL connection.
 func (d *SQLDatabase) Close() error {
 	return d.client.Close()
