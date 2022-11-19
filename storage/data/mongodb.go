@@ -133,7 +133,7 @@ func (db *MongoDB) Init() error {
 }
 
 func (db *MongoDB) Ping() error {
-	return db.client.Ping(nil, nil)
+	return db.client.Ping(context.Background(), nil)
 }
 
 // Close connection to MongoDB.

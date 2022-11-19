@@ -102,7 +102,7 @@ func (m MongoDB) Close() error {
 }
 
 func (m MongoDB) Ping() error {
-	return m.client.Ping(nil, nil)
+	return m.client.Ping(context.Background(), nil)
 }
 
 func (m MongoDB) Scan(work func(string) error) error {

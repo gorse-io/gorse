@@ -115,6 +115,11 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 }
 
 func (s *RestServer) AuthFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	if strings.HasPrefix(req.SelectedRoute().Path(), "/api/health/") {
+		// Health check APIs don't need API key,
+		chain.ProcessFilter(req, resp)
+		return
+	}
 	if s.Config.Server.APIKey == "" {
 		chain.ProcessFilter(req, resp)
 		return

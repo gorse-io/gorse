@@ -56,9 +56,7 @@ func (suite *ServerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open("redis://"+suite.cacheStoreServer.Addr(), "")
 	suite.NoError(err)
-	// configuration
-	suite.Config = config.GetDefaultConfig()
-	suite.Config.Server.APIKey = apiKey
+
 	suite.PopularItemsCache = newPopularItemsCacheForTest(&suite.RestServer)
 	suite.HiddenItemsManager = newHiddenItemsManagerForTest(&suite.RestServer)
 	suite.WebService = new(restful.WebService)
@@ -82,13 +80,14 @@ func (suite *ServerTestSuite) SetupTest() {
 	suite.NoError(err)
 	err = suite.CacheClient.Purge()
 	suite.NoError(err)
+	// configuration
 	suite.Config = config.GetDefaultConfig()
 	suite.Config.Server.APIKey = apiKey
 }
 
-func marshal(t *testing.T, v interface{}) string {
+func (suite *ServerTestSuite) marshal(v interface{}) string {
 	s, err := json.Marshal(v)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	return string(s)
 }
 
@@ -116,7 +115,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, users[0])).
+		Body(suite.marshal(users[0])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -137,7 +136,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, UserIterator{
+		Body(suite.marshal(UserIterator{
 			Cursor: "",
 			Users:  users,
 		})).
@@ -173,7 +172,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, data.User{
+		Body(suite.marshal(data.User{
 			UserId:  "1",
 			Comment: "modified",
 			Labels:  []string{"a", "b", "c"},
@@ -262,7 +261,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, ItemIterator{
+		Body(suite.marshal(ItemIterator{
 			Cursor: "",
 			Items:  items,
 		})).
@@ -277,7 +276,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
@@ -291,7 +290,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
@@ -306,7 +305,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[3].ItemId, Score: 16},
 			{Id: items[1].ItemId, Score: 12},
 		})).
@@ -320,7 +319,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[3].ItemId, Score: 16},
 			{Id: items[1].ItemId, Score: 12},
 		})).
@@ -360,7 +359,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
@@ -373,7 +372,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
@@ -387,7 +386,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[1].ItemId, Score: 12},
 		})).
 		End()
@@ -400,7 +399,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: items[1].ItemId, Score: 12},
 		})).
 		End()
@@ -428,7 +427,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, data.Item{
+		Body(suite.marshal(data.Item{
 			ItemId:     "2",
 			IsHidden:   true,
 			Categories: []string{"-"},
@@ -461,7 +460,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: "2", Score: float64(timestamp.Unix())},
 		})).
 		End()
@@ -474,7 +473,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{})).
+		Body(suite.marshal([]cache.Scored{})).
 		End()
 	// get popular items
 	apitest.New().
@@ -486,7 +485,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: "2", Score: 12},
 		})).
 		End()
@@ -499,7 +498,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{})).
+		Body(suite.marshal([]cache.Scored{})).
 		End()
 
 	// insert category
@@ -509,7 +508,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, Success{RowAffected: 1})).
+		Body(suite.marshal(Success{RowAffected: 1})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -517,7 +516,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, data.Item{
+		Body(suite.marshal(data.Item{
 			ItemId:     "2",
 			IsHidden:   false,
 			Categories: []string{"-", "@"},
@@ -536,7 +535,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: "2", Score: float64(timestamp.Unix())},
 		})).
 		End()
@@ -550,7 +549,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{
+		Body(suite.marshal([]cache.Scored{
 			{Id: "2", Score: 12},
 		})).
 		End()
@@ -562,7 +561,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, Success{RowAffected: 1})).
+		Body(suite.marshal(Success{RowAffected: 1})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -570,7 +569,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, data.Item{
+		Body(suite.marshal(data.Item{
 			ItemId:     "2",
 			IsHidden:   false,
 			Categories: []string{"-"},
@@ -589,7 +588,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{})).
+		Body(suite.marshal([]cache.Scored{})).
 		End()
 	// get popular items
 	apitest.New().
@@ -601,7 +600,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{})).
+		Body(suite.marshal([]cache.Scored{})).
 		End()
 
 	// insert items without timestamp
@@ -647,7 +646,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 			"n":      "100",
 		}).
 		Expect(t).
-		Body(marshal(t, FeedbackIterator{
+		Body(suite.marshal(FeedbackIterator{
 			Cursor:   "",
 			Feedback: feedback,
 		})).
@@ -659,7 +658,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Get("/api/user/1/feedback").
 		Header("X-API-Key", apiKey).
 		Expect(t).
-		Body(marshal(t, []data.Feedback{feedback[1]})).
+		Body(suite.marshal([]data.Feedback{feedback[1]})).
 		Status(http.StatusOK).
 		End()
 	// get feedback by item
@@ -668,7 +667,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Get("/api/item/2/feedback").
 		Header("X-API-Key", apiKey).
 		Expect(t).
-		Body(marshal(t, []data.Feedback{feedback[1]})).
+		Body(suite.marshal([]data.Feedback{feedback[1]})).
 		Status(http.StatusOK).
 		End()
 	//Get Items
@@ -678,7 +677,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, ItemIterator{
+		Body(suite.marshal(ItemIterator{
 			Cursor: "",
 			Items: []data.Item{
 				{ItemId: "0"},
@@ -695,7 +694,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, UserIterator{
+		Body(suite.marshal(UserIterator{
 			Cursor: "",
 			Users: []data.User{
 				{UserId: "0"},
@@ -820,7 +819,7 @@ func (suite *ServerTestSuite) TestSort() {
 				Header("X-API-Key", apiKey).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
+				Body(suite.marshal([]cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
 				End()
 			apitest.New().
 				Handler(suite.handler).
@@ -831,7 +830,7 @@ func (suite *ServerTestSuite) TestSort() {
 					"n":      "3"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2]})).
+				Body(suite.marshal([]cache.Scored{scores[0], scores[1], scores[2]})).
 				End()
 			apitest.New().
 				Handler(suite.handler).
@@ -842,7 +841,7 @@ func (suite *ServerTestSuite) TestSort() {
 					"n":      "3"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[1], scores[2], scores[4]})).
+				Body(suite.marshal([]cache.Scored{scores[1], scores[2], scores[4]})).
 				End()
 			apitest.New().
 				Handler(suite.handler).
@@ -853,7 +852,7 @@ func (suite *ServerTestSuite) TestSort() {
 					"n":      "0"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
+				Body(suite.marshal([]cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
 				End()
 			apitest.New().
 				Handler(suite.handler).
@@ -865,7 +864,7 @@ func (suite *ServerTestSuite) TestSort() {
 					"n":       "0"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(marshal(t, []cache.Scored{scores[0], scores[2], scores[4]})).
+				Body(suite.marshal([]cache.Scored{scores[0], scores[2], scores[4]})).
 				End()
 		})
 	}
@@ -896,7 +895,7 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 		Get("/api/feedback/2/3").
 		Header("X-API-Key", apiKey).
 		Expect(t).
-		Body(marshal(t, []data.Feedback{feedback[0], feedback[1], feedback[2]})).
+		Body(suite.marshal([]data.Feedback{feedback[0], feedback[1], feedback[2]})).
 		Status(http.StatusOK).
 		End()
 	// Get typed feedback
@@ -906,7 +905,7 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, feedback[1])).
+		Body(suite.marshal(feedback[1])).
 		End()
 	// delete feedback
 	apitest.New().
@@ -948,7 +947,7 @@ func (suite *ServerTestSuite) TestMeasurement() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []Measurement{
+		Body(suite.marshal([]Measurement{
 			measurements[4],
 			measurements[3],
 			measurements[2],
@@ -1008,7 +1007,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"1", "3", "5"})).
+		Body(suite.marshal([]string{"1", "3", "5"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1020,7 +1019,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"6", "7", "8"})).
+		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1032,7 +1031,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{})).
+		Body(suite.marshal([]string{})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1044,7 +1043,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"1", "3", "5"})).
+		Body(suite.marshal([]string{"1", "3", "5"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1057,7 +1056,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"6", "7", "8"})).
+		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1068,7 +1067,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"6", "7", "8"})).
+		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
 }
 
@@ -1117,7 +1116,7 @@ func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"1", "2", "3"})).
+		Body(suite.marshal([]string{"1", "2", "3"})).
 		End()
 }
 
@@ -1217,7 +1216,7 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"9", "8", "7"})).
+		Body(suite.marshal([]string{"9", "8", "7"})).
 		End()
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
 	apitest.New().
@@ -1229,7 +1228,7 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"9", "7"})).
+		Body(suite.marshal([]string{"9", "7"})).
 		End()
 }
 
@@ -1294,7 +1293,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"48", "11", "12"})).
+		Body(suite.marshal([]string{"48", "11", "12"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1305,7 +1304,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"48", "12"})).
+		Body(suite.marshal([]string{"48", "12"})).
 		End()
 }
 
@@ -1351,7 +1350,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"1", "2", "3", "4", "9", "10", "11", "12"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "9", "10", "11", "12"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1362,7 +1361,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"101", "102", "103", "104", "109", "110", "111", "112"})).
+		Body(suite.marshal([]string{"101", "102", "103", "104", "109", "110", "111", "112"})).
 		End()
 	// test latest fallback
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"latest"}
@@ -1375,7 +1374,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "5", "6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1386,7 +1385,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"101", "102", "103", "104", "105", "106", "107", "108"})).
+		Body(suite.marshal([]string{"101", "102", "103", "104", "105", "106", "107", "108"})).
 		End()
 	// test collaborative filtering
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative"}
@@ -1399,7 +1398,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"1", "2", "3", "4", "13", "14", "15", "16"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1410,7 +1409,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"101", "102", "103", "104", "113", "114", "115", "116"})).
+		Body(suite.marshal([]string{"101", "102", "103", "104", "113", "114", "115", "116"})).
 		End()
 	// test wrong fallback
 	suite.Config.Recommend.Online.FallbackRecommend = []string{""}
@@ -1520,7 +1519,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{{"9", 4}, {"8", 3}, {"7", 2}})).
+		Body(suite.marshal([]cache.Scored{{"9", 4}, {"8", 3}, {"7", 2}})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1532,7 +1531,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored(nil))).
+		Body(suite.marshal([]cache.Scored(nil))).
 		End()
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
 	apitest.New().
@@ -1545,7 +1544,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []cache.Scored{{"9", 4}, {"7", 2}})).
+		Body(suite.marshal([]cache.Scored{{"9", 4}, {"7", 2}})).
 		End()
 }
 
@@ -1624,7 +1623,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores[:2])).
+		Body(suite.marshal(scores[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1633,7 +1632,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores[:2])).
+		Body(suite.marshal(scores[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1642,7 +1641,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores[:2])).
+		Body(suite.marshal(scores[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1651,7 +1650,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, cache.RemoveScores(scores[:2]))).
+		Body(suite.marshal(cache.RemoveScores(scores[:2]))).
 		End()
 
 	// insert item
@@ -1690,7 +1689,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores)).
+		Body(suite.marshal(scores)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1699,7 +1698,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores)).
+		Body(suite.marshal(scores)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1708,7 +1707,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores)).
+		Body(suite.marshal(scores)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1717,7 +1716,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, cache.RemoveScores(scores))).
+		Body(suite.marshal(cache.RemoveScores(scores))).
 		End()
 
 	// insert cache
@@ -1766,7 +1765,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores[:2])).
+		Body(suite.marshal(scores[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1775,7 +1774,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores[:2])).
+		Body(suite.marshal(scores[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1784,7 +1783,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores[:2])).
+		Body(suite.marshal(scores[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1793,7 +1792,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, cache.RemoveScores(scores[:2]))).
+		Body(suite.marshal(cache.RemoveScores(scores[:2]))).
 		End()
 
 	// delete category
@@ -1832,7 +1831,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores)).
+		Body(suite.marshal(scores)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1841,7 +1840,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores)).
+		Body(suite.marshal(scores)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1850,7 +1849,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, scores)).
+		Body(suite.marshal(scores)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1859,8 +1858,70 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, cache.RemoveScores(scores))).
+		Body(suite.marshal(cache.RemoveScores(scores))).
 		End()
+}
+
+func (suite *ServerTestSuite) TestHealth() {
+	t := suite.T()
+	// ready
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/health/live").
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal(HealthStatus{
+			Ready:               true,
+			DataStoreError:      nil,
+			CacheStoreError:     nil,
+			DataStoreConnected:  true,
+			CacheStoreConnected: true,
+		})).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/health/ready").
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal(HealthStatus{
+			Ready:               true,
+			DataStoreError:      nil,
+			CacheStoreError:     nil,
+			DataStoreConnected:  true,
+			CacheStoreConnected: true,
+		})).
+		End()
+
+	// not ready
+	dataClient, cacheClient := suite.DataClient, suite.CacheClient
+	suite.DataClient, suite.CacheClient = data.NoDatabase{}, cache.NoDatabase{}
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/health/live").
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal(HealthStatus{
+			Ready:               false,
+			DataStoreError:      data.ErrNoDatabase,
+			CacheStoreError:     cache.ErrNoDatabase,
+			DataStoreConnected:  false,
+			CacheStoreConnected: false,
+		})).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/health/ready").
+		Expect(t).
+		Status(http.StatusServiceUnavailable).
+		Body(suite.marshal(HealthStatus{
+			Ready:               false,
+			DataStoreError:      data.ErrNoDatabase,
+			CacheStoreError:     cache.ErrNoDatabase,
+			DataStoreConnected:  false,
+			CacheStoreConnected: false,
+		})).
+		End()
+	suite.DataClient, suite.CacheClient = dataClient, cacheClient
 }
 
 func TestServer(t *testing.T) {

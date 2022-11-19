@@ -16,6 +16,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
@@ -43,9 +44,11 @@ func newMockMaster(t *testing.T) *mockMaster {
 	cfg := config.GetDefaultConfig()
 	cfg.Database.DataStore = "redis://" + dataStore.Addr()
 	cfg.Database.CacheStore = "redis://" + cacheStore.Addr()
+	bytes, err := json.Marshal(cfg)
+	assert.NoError(t, err)
 	return &mockMaster{
 		addr:       make(chan string),
-		meta:       &protocol.Meta{Config: marshal(t, cfg)},
+		meta:       &protocol.Meta{Config: string(bytes)},
 		cacheStore: cacheStore,
 		dataStore:  dataStore,
 	}
@@ -64,7 +67,7 @@ func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, _ protocol.Master_Ge
 }
 
 func (m *mockMaster) Start(t *testing.T) {
-	listen, err := net.Listen("tcp", ":0")
+	listen, err := net.Listen("tcp", "localhost:0")
 	assert.NoError(t, err)
 	m.addr <- listen.Addr().String()
 	var opts []grpc.ServerOption
