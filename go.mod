@@ -30,7 +30,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.1.0
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.10.6
-	github.com/mailru/go-clickhouse/v2 v2.0.0
+	github.com/mailru/go-clickhouse/v2 v2.0.1-0.20221121001540-b259988ad8e5
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.13.0
