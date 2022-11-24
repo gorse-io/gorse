@@ -77,7 +77,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 
 	// Add container filter to enable CORS
 	cors := restful.CrossOriginResourceSharing{
-		AllowedHeaders: []string{"Content-Type", "Accept"},
+		AllowedHeaders: []string{"Content-Type", "Accept", "X-API-Key"},
 		AllowedDomains: s.Config.Master.HttpCorsDomains,
 		AllowedMethods: s.Config.Master.HttpCorsMethods,
 		CookiesAllowed: false,
