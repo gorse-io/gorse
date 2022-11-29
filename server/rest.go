@@ -44,6 +44,16 @@ import (
 	"modernc.org/mathutil"
 )
 
+const (
+	HealthAPITag         = "health"
+	UsersAPITag          = "users"
+	ItemsAPITag          = "items"
+	FeedbackAPITag       = "feedback"
+	RecommendationAPITag = "recommendation"
+	MeasurementsAPITag   = "measurements"
+	DepractedAPITag      = "deprecated"
+)
+
 // RestServer implements a REST-ful API server.
 type RestServer struct {
 	*config.Settings
@@ -162,382 +172,374 @@ func (s *RestServer) CreateWebService() {
 
 	/* Health check */
 	ws.Route(ws.GET("/health/live").To(s.checkLive).
-		Doc("Probe the liveness of this node.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"health"}).
+		Doc("Probe the liveness of this node. Return OK once the server starts.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{HealthAPITag}).
 		Returns(http.StatusOK, "OK", HealthStatus{}).
 		Writes(HealthStatus{}))
 	ws.Route(ws.GET("/health/ready").To(s.checkReady).
-		Doc("Probe the readiness of this node.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"health"}).
+		Doc("Probe the readiness of this node. Return OK if the server is able to handle requests.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{HealthAPITag}).
 		Returns(http.StatusOK, "OK", HealthStatus{}).
 		Writes(HealthStatus{}))
-
-	/* Interactions with data store */
 
 	// Insert a user
 	ws.Route(ws.POST("/user").To(s.insertUser).
 		Doc("Insert a user.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Reads(data.User{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Modify a user
 	ws.Route(ws.PATCH("/user/{user-id}").To(s.modifyUser).
 		Doc("Modify a user.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to modify").DataType("string")).
 		Reads(data.UserPatch{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Get a user
 	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
 		Doc("Get a user.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get").DataType("string")).
 		Returns(http.StatusOK, "OK", data.User{}).
 		Writes(data.User{}))
 	// Insert users
 	ws.Route(ws.POST("/users").To(s.insertUsers).
 		Doc("Insert users.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Reads([]data.User{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Get users
 	ws.Route(ws.GET("/users").To(s.getUsers).
 		Doc("Get users.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned users").DataType("integer")).
-		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned users").DataType("integer")).
+		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
 		Returns(http.StatusOK, "OK", UserIterator{}).
 		Writes(UserIterator{}))
 	// Delete a user
 	ws.Route(ws.DELETE("/user/{user-id}").To(s.deleteUser).
 		Doc("Delete a user and his or her feedback.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"user"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to delete").DataType("string")).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 
 	// Insert an item
 	ws.Route(ws.POST("/item").To(s.insertItem).
 		Doc("Insert an item. Overwrite if the item exists.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Reads(data.Item{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Modify an item
 	ws.Route(ws.PATCH("/item/{item-id}").To(s.modifyItem).
 		Doc("Modify an item.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to modify").DataType("string")).
 		Reads(data.ItemPatch{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
 		Doc("Get items.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
 		Returns(http.StatusOK, "OK", ItemIterator{}).
 		Writes(ItemIterator{}))
 	// Get item
 	ws.Route(ws.GET("/item/{item-id}").To(s.getItem).
 		Doc("Get a item.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to get.").DataType("string")).
 		Returns(http.StatusOK, "OK", data.Item{}).
 		Writes(data.Item{}))
 	// Insert items
 	ws.Route(ws.POST("/items").To(s.insertItems).
 		Doc("Insert items. Overwrite if items exist").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Reads([]data.Item{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Delete item
 	ws.Route(ws.DELETE("/item/{item-id}").To(s.deleteItem).
 		Doc("Delete an item and its feedback.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to delete").DataType("string")).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Insert category
 	ws.Route(ws.PUT("/item/{item-id}/category/{category}").To(s.insertItemCategory).
-		Doc("Insert a category for a item").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
-		Param(ws.PathParameter("category", "item category").DataType("string")).
+		Doc("Insert a category for a item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to insert category").DataType("string")).
+		Param(ws.PathParameter("category", "Category to insert").DataType("string")).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Delete category
 	ws.Route(ws.DELETE("/item/{item-id}/category/{category}").To(s.deleteItemCategory).
-		Doc("Delete a category from a item").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"item"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
-		Param(ws.PathParameter("category", "item category").DataType("string")).
+		Doc("Delete a category from a item.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to delete categoryßßß").DataType("string")).
+		Param(ws.PathParameter("category", "Category to delete").DataType("string")).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
-
 	// Insert feedback
 	ws.Route(ws.POST("/feedback").To(s.insertFeedback(false)).
 		Doc("Insert feedbacks. Ignore insertion if feedback exists.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Reads([]data.Feedback{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	ws.Route(ws.PUT("/feedback").To(s.insertFeedback(true)).
 		Doc("Insert feedbacks. Existed feedback will be overwritten.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Reads([]data.Feedback{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Get feedback
 	ws.Route(ws.GET("/feedback").To(s.getFeedback).
 		Doc("Get feedbacks.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned feedback").DataType("integer")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned feedback").DataType("integer")).
 		Returns(http.StatusOK, "OK", FeedbackIterator{}).
 		Writes(FeedbackIterator{}))
 	ws.Route(ws.GET("/feedback/{user-id}/{item-id}").To(s.getUserItemFeedback).
 		Doc("Get feedbacks between a user and a item.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.DELETE("/feedback/{user-id}/{item-id}").To(s.deleteUserItemFeedback).
 		Doc("Delete feedbacks between a user and a item.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/feedback/{feedback-type}").To(s.getTypedFeedback).
 		Doc("Get feedbacks with feedback type.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
-		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned feedback").DataType("integer")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("feedback-type", "Type of returned feedbacks").DataType("string")).
+		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned feedbacks").DataType("integer")).
 		Returns(http.StatusOK, "OK", FeedbackIterator{}).
 		Writes(FeedbackIterator{}))
 	ws.Route(ws.GET("/feedback/{feedback-type}/{user-id}/{item-id}").To(s.getTypedUserItemFeedback).
 		Doc("Get feedbacks between a user and a item with feedback type.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("feedback-type", "Type of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", data.Feedback{}).
 		Writes(data.Feedback{}))
 	ws.Route(ws.DELETE("/feedback/{feedback-type}/{user-id}/{item-id}").To(s.deleteTypedUserItemFeedback).
 		Doc("Delete feedbacks between a user and a item with feedback type.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("feedback-type", "Type of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", data.Feedback{}).
 		Writes(data.Feedback{}))
 	// Get feedback by user id
 	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByUser).
 		Doc("Get feedbacks by user id with feedback type.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("feedback-type", "Type of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/user/{user-id}/feedback").To(s.getFeedbackByUser).
 		Doc("Get feedbacks by user id.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	// Get feedback by item-id
 	ws.Route(ws.GET("/item/{item-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByItem).
 		Doc("Get feedbacks by item id with feedback type.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
-		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
+		Param(ws.PathParameter("feedback-type", "Type of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 	ws.Route(ws.GET("/item/{item-id}/feedback/").To(s.getFeedbackByItem).
 		Doc("Get feedbacks by item id.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
 		Returns(http.StatusOK, "OK", []data.Feedback{}).
 		Writes([]data.Feedback{}))
 
-	/* Interaction with intermediate result */
-
 	// Get collaborative filtering recommendation by user id
 	ws.Route(ws.GET("/intermediate/recommend/{user-id}").To(s.getCollaborative).
-		Doc("get the collaborative filtering recommendation for a user").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"intermediate"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
+		Doc("Get the collaborative filtering recommendation for a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{DepractedAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get recommendation").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/intermediate/recommend/{user-id}/{category}").To(s.getCollaborative).
-		Doc("get the collaborative filtering recommendation for a user").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"intermediate"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Param(ws.PathParameter("category", "category of items").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("integer")).
+		Doc("Get the collaborative filtering recommendation for a user").
+		Metadata(restfulspec.KeyOpenAPITags, []string{DepractedAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get recommendation").DataType("string")).
+		Param(ws.PathParameter("category", "Category of returned items.").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
-
-	/* Rank recommendation */
 
 	// Get popular items
 	ws.Route(ws.GET("/popular").To(s.getPopular).
-		Doc("Get popular items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned recommendations").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned recommendations").DataType("integer")).
-		Param(ws.QueryParameter("user-id", "remove read items of a user").DataType("string")).
+		Doc("Get popular items.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned recommendations").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned recommendations").DataType("integer")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/popular/{category}").To(s.getPopular).
-		Doc("Get popular items in category").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("category", "item category").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("user-id", "remove read items of a user").DataType("string")).
+		Doc("Get popular items in category.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("category", "Category of returned items.").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
-		Doc("get latest items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("user-id", "remove read items of a user").DataType("string")).
+		Doc("Get the latest items.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/latest/{category}").To(s.getLatest).
-		Doc("get latest items in category").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("category", "items category").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("user-id", "remove read items of a user").DataType("string")).
+		Doc("Get the latest items in category.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("category", "Category of returned items.").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
 		Doc("get neighbors of a item").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to get neighbors").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/item/{item-id}/neighbors/{category}").To(s.getItemNeighbors).
-		Doc("get neighbors of a item").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("item-id", "item id").DataType("string")).
-		Param(ws.PathParameter("category", "item category").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Doc("Get neighbors of a item in category.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to get neighbors").DataType("string")).
+		Param(ws.PathParameter("category", "Category of returned items").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/user/{user-id}/neighbors/").To(s.getUserNeighbors).
-		Doc("get neighbors of a user").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned users").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned users").DataType("integer")).
+		Doc("Get neighbors of a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get neighbors").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned users").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned users").DataType("integer")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
 		Doc("Get recommendation for user.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.QueryParameter("write-back-type", "type of write back feedback").DataType("string")).
-		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get recommendation").DataType("string")).
+		Param(ws.QueryParameter("write-back-type", "Type of write back feedback").DataType("string")).
+		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
 		Doc("Get recommendation for user.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("user-id", "user id").DataType("string")).
-		Param(ws.PathParameter("category", "item category").DataType("string")).
-		Param(ws.QueryParameter("write-back-type", "type of write back feedback").DataType("string")).
-		Param(ws.QueryParameter("write-back-delay", "timestamp delay of write back feedback").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get recommendation").DataType("string")).
+		Param(ws.PathParameter("category", "Category of the returned items").DataType("string")).
+		Param(ws.QueryParameter("write-back-type", "Type of write back feedback").DataType("string")).
+		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.POST("/session/recommend").To(s.sessionRecommend).
 		Doc("Get recommendation for session.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Reads([]Feedback{}).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.POST("/session/recommend/{category}").To(s.sessionRecommend).
 		Doc("Get recommendation for session.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.PathParameter("category", "item category").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "offset of returned items").DataType("integer")).
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("category", "Category of the returned items").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Reads([]Feedback{}).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 
-	/* Interaction with measurements */
-
 	ws.Route(ws.GET("/measurements/{name}").To(s.getMeasurements).
-		Doc("Get measurements").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"measurements"}).
-		Param(ws.HeaderParameter("X-API-Key", "api key").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned measurements.").DataType("integer")).
+		Doc("Get measurements.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{MeasurementsAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("name", "Name of returned measurements").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned measurements").DataType("integer")).
 		Returns(http.StatusOK, "OK", []Measurement{}).
 		Writes([]Measurement{}))
 }
