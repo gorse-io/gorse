@@ -11,8 +11,8 @@ require (
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.10.1
 	github.com/dzwvip/oracle v1.2.4
-	github.com/emicklei/go-restful-openapi/v2 v2.9.1
-	github.com/emicklei/go-restful/v3 v3.10.1
+	github.com/emicklei/go-restful-openapi/v2 v2.9.0
+	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.0
