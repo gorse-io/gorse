@@ -464,7 +464,7 @@ func (s *RestServer) CreateWebService() {
 		Writes([]cache.Scored{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
-		Doc("get neighbors of a item").
+		Doc("Get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Param(ws.PathParameter("item-id", "ID of the item to get neighbors").DataType("string")).
