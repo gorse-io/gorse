@@ -548,7 +548,6 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 	}
 
 	// load config file
-	viper.SetConfigType("toml")
 	viper.SetConfigFile(path)
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, errors.Trace(err)
