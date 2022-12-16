@@ -42,7 +42,7 @@ mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
 ### Option 1: Run an All-in-one Node
 
 ```bash
-go run cmd/gorse-in-one/main.go --config config/config.toml.template
+go run cmd/gorse-in-one/main.go --config config/config.toml
 ```
 
 ### Option 2: Run Nodes
@@ -50,7 +50,7 @@ go run cmd/gorse-in-one/main.go --config config/config.toml.template
 - Start the master node with the configuration file.
 
 ```bash
-go run cmd/gorse-master/main.go --config config/config.toml.template
+go run cmd/gorse-master/main.go --config config/config.toml
 ```
 
 - Start the worker node.

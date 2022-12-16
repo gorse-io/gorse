@@ -29,7 +29,7 @@ import (
 )
 
 func TestUnmarshal(t *testing.T) {
-	data, err := os.ReadFile("config.toml.template")
+	data, err := os.ReadFile("config.toml")
 	assert.NoError(t, err)
 	text := string(data)
 	text = strings.Replace(text, "dashboard_user_name = \"\"", "dashboard_user_name = \"admin\"", -1)
@@ -146,6 +146,7 @@ func TestUnmarshal(t *testing.T) {
 
 func TestSetDefault(t *testing.T) {
 	setDefault()
+	viper.SetConfigType("toml")
 	err := viper.ReadConfig(strings.NewReader(""))
 	assert.NoError(t, err)
 	var config Config
@@ -180,7 +181,7 @@ func TestBindEnv(t *testing.T) {
 		t.Setenv(variable.key, variable.value)
 	}
 
-	config, err := LoadConfig("config.toml.template", false)
+	config, err := LoadConfig("config.toml", false)
 	assert.NoError(t, err)
 	assert.Equal(t, "redis://<cache_store>", config.Database.CacheStore)
 	assert.Equal(t, "mysql://<data_store>", config.Database.DataStore)
@@ -202,7 +203,7 @@ func TestBindEnv(t *testing.T) {
 }
 
 func TestTablePrefixCompat(t *testing.T) {
-	data, err := os.ReadFile("config.toml.template")
+	data, err := os.ReadFile("config.toml")
 	assert.NoError(t, err)
 	text := string(data)
 	text = strings.Replace(text, "cache_table_prefix = \"\"", "", -1)
