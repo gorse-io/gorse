@@ -37,6 +37,7 @@ require (
 	github.com/rakyll/statik v0.1.7
 	github.com/samber/lo v1.33.0
 	github.com/schollz/progressbar/v3 v3.9.0
+	github.com/sclevine/yj v0.0.0-20210612025309-737bdf40a5d1
 	github.com/scylladb/go-set v1.0.2
 	github.com/sijms/go-ora/v2 v2.4.27
 	github.com/spf13/cobra v1.5.0
