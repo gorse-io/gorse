@@ -1115,11 +1115,11 @@ func (w *Worker) loadUserHistoricalItems(database data.Database, userId string) 
 }
 
 func (w *Worker) refreshCache(ctx context.Context, userId string) error {
-	var timeLimit *time.Time
+	var timeLimit time.Time
 	// read recommend time
 	recommendTime, err := w.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err == nil {
-		timeLimit = &recommendTime
+		timeLimit = recommendTime
 	} else if !errors.Is(err, errors.NotFound) {
 		return errors.Trace(err)
 	}
