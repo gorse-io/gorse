@@ -793,9 +793,10 @@ func (w *Worker) Recommend(users []data.User) {
 				return errors.Trace(err)
 			}
 		}
+		recommendTime := time.Now()
 		if err = w.CacheClient.Set(
 			ctx,
-			cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, userId), time.Now()),
+			cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, userId), recommendTime),
 			cache.String(cache.Key(cache.OfflineRecommendDigest, userId), w.Config.OfflineRecommendDigest(
 				config.WithCollaborative(collaborativeUsed),
 				config.WithRanking(ctrUsed),
@@ -806,7 +807,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// refresh cache
-		err = w.refreshCache(ctx, userId)
+		err = w.refreshCache(ctx, userId, recommendTime)
 		if err != nil {
 			log.Logger().Error("failed to refresh cache", zap.Error(err))
 			return errors.Trace(err)
@@ -1114,18 +1115,10 @@ func (w *Worker) loadUserHistoricalItems(database data.Database, userId string) 
 	return items, feedbacks, nil
 }
 
-func (w *Worker) refreshCache(ctx context.Context, userId string) error {
-	var timeLimit time.Time
-	// read recommend time
-	recommendTime, err := w.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
-	if err == nil {
-		timeLimit = recommendTime
-	} else if !errors.Is(err, errors.NotFound) {
-		return errors.Trace(err)
-	}
+func (w *Worker) refreshCache(ctx context.Context, userId string, recommendTime time.Time) error {
 	// reload cache
 	if w.Config.Recommend.Replacement.EnableReplacement {
-		err = w.CacheClient.SetSorted(ctx, cache.IgnoreItems, nil)
+		err := w.CacheClient.SetSorted(ctx, cache.IgnoreItems, nil)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1136,7 +1129,7 @@ func (w *Worker) refreshCache(ctx context.Context, userId string) error {
 		}
 		var items []cache.Scored
 		for _, v := range feedback {
-			if v.Timestamp.Unix() > timeLimit.Unix() {
+			if v.Timestamp.Unix() > recommendTime.Unix() {
 				items = append(items, cache.Scored{Id: v.ItemId, Score: float64(v.Timestamp.Unix())})
 			}
 		}
@@ -1144,7 +1137,7 @@ func (w *Worker) refreshCache(ctx context.Context, userId string) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = w.CacheClient.RemSortedByScore(ctx, cache.Key(cache.IgnoreItems, userId), math.Inf(-1), float64(timeLimit.Unix())-1)
+		err = w.CacheClient.RemSortedByScore(ctx, cache.Key(cache.IgnoreItems, userId), math.Inf(-1), float64(recommendTime.Unix())-1)
 		if err != nil {
 			return errors.Trace(err)
 		}
