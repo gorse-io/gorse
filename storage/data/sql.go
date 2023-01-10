@@ -17,6 +17,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -462,9 +463,14 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 
 // GetItems returns items from MySQL.
 func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
+	buf, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+	cursorItem := string(buf)
 	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
-	if cursor != "" {
-		tx.Where("item_id >= ?", cursor)
+	if cursorItem != "" {
+		tx.Where("item_id >= ?", cursorItem)
 	}
 	if timeLimit != nil {
 		tx.Where("time_stamp >= ?", *timeLimit)
@@ -492,7 +498,7 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		items = append(items, item)
 	}
 	if len(items) == n+1 {
-		return items[len(items)-1].ItemId, items[:len(items)-1], nil
+		return base64.StdEncoding.EncodeToString([]byte(items[len(items)-1].ItemId)), items[:len(items)-1], nil
 	}
 	return "", items, nil
 }
@@ -674,9 +680,14 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 
 // GetUsers returns users from MySQL.
 func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (string, []User, error) {
+	buf, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+	cursorUser := string(buf)
 	tx := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, subscribe, comment")
-	if cursor != "" {
-		tx.Where("user_id >= ?", cursor)
+	if cursorUser != "" {
+		tx.Where("user_id >= ?", cursorUser)
 	}
 	result, err := tx.Order("user_id").Limit(n + 1).Rows()
 	if err != nil {
@@ -701,7 +712,7 @@ func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (strin
 		users = append(users, user)
 	}
 	if len(users) == n+1 {
-		return users[len(users)-1].UserId, users[:len(users)-1], nil
+		return base64.StdEncoding.EncodeToString([]byte(users[len(users)-1].UserId)), users[:len(users)-1], nil
 	}
 	return "", users, nil
 }
@@ -934,10 +945,14 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 
 // GetFeedback returns feedback from MySQL.
 func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+	buf, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
-	if cursor != "" {
+	if len(buf) > 0 {
 		var cursorKey FeedbackKey
-		if err := json.Unmarshal([]byte(cursor), &cursorKey); err != nil {
+		if err := json.Unmarshal(buf, &cursorKey); err != nil {
 			return "", nil, err
 		}
 		if d.driver == Oracle {
@@ -980,7 +995,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 		if err != nil {
 			return "", nil, errors.Trace(err)
 		}
-		return string(nextCursor), feedbacks[:len(feedbacks)-1], nil
+		return base64.StdEncoding.EncodeToString(nextCursor), feedbacks[:len(feedbacks)-1], nil
 	}
 	return "", feedbacks, nil
 }
