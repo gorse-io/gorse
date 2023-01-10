@@ -16,6 +16,7 @@ package data
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
@@ -244,11 +245,16 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 
 // GetItems returns items from MongoDB.
 func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
+	buf, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+	cursorItem := string(buf)
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"itemid", 1}})
-	filter := bson.M{"itemid": bson.M{"$gt": cursor}}
+	filter := bson.M{"itemid": bson.M{"$gt": cursorItem}}
 	if timeLimit != nil {
 		filter["timestamp"] = bson.M{"$gt": *timeLimit}
 	}
@@ -270,7 +276,7 @@ func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit
 	} else {
 		cursor = ""
 	}
-	return cursor, items, nil
+	return base64.StdEncoding.EncodeToString([]byte(cursor)), items, nil
 }
 
 // GetItemStream read items from MongoDB by stream.
@@ -408,11 +414,16 @@ func (db *MongoDB) GetUser(ctx context.Context, userId string) (user User, err e
 
 // GetUsers returns users from MongoDB.
 func (db *MongoDB) GetUsers(ctx context.Context, cursor string, n int) (string, []User, error) {
+	buf, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+	cursorUser := string(buf)
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"userid", 1}})
-	r, err := c.Find(ctx, bson.M{"userid": bson.M{"$gt": cursor}}, opt)
+	r, err := c.Find(ctx, bson.M{"userid": bson.M{"$gt": cursorUser}}, opt)
 	if err != nil {
 		return "", nil, err
 	}
@@ -430,7 +441,7 @@ func (db *MongoDB) GetUsers(ctx context.Context, cursor string, n int) (string, 
 	} else {
 		cursor = ""
 	}
-	return cursor, users, nil
+	return base64.StdEncoding.EncodeToString([]byte(cursor)), users, nil
 }
 
 // GetUserStream reads users from MongoDB by stream.
@@ -595,14 +606,18 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 
 // GetFeedback returns multiple feedback from MongoDB.
 func (db *MongoDB) GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+	buf, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"feedbackkey", 1}})
 	filter := make(bson.M)
 	// pass cursor to filter
-	if cursor != "" {
-		feedbackKey, err := feedbackKeyFromString(cursor)
+	if len(buf) > 0 {
+		feedbackKey, err := feedbackKeyFromString(string(buf))
 		if err != nil {
 			return "", nil, err
 		}
@@ -642,7 +657,7 @@ func (db *MongoDB) GetFeedback(ctx context.Context, cursor string, n int, beginT
 	} else {
 		cursor = ""
 	}
-	return cursor, feedbacks, nil
+	return base64.StdEncoding.EncodeToString([]byte(cursor)), feedbacks, nil
 }
 
 // GetFeedbackStream reads feedback from MongoDB by stream.
