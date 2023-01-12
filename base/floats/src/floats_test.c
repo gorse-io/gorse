@@ -137,7 +137,8 @@ MunitTest mm256_tests[] = {
     {"mul_const_to", mm256_mul_const_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const", mm256_mul_const_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_to", mm256_mul_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
-    {"dot", mm256_dot_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
+    {"dot", mm256_dot_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite mm256_suite = {
     "mm256_", mm256_tests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
@@ -210,7 +211,8 @@ MunitTest mm512_tests[] = {
     {"mul_const_to", mm512_mul_const_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const", mm512_mul_const_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_to", mm512_mul_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
-    {"dot", mm512_dot_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
+    {"dot", mm512_dot_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite mm512_suite = {
     "mm512_", mm512_tests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
@@ -298,14 +300,82 @@ MunitTest vtests[] = {
     {"mul_const_to", vmul_const_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const", vmul_const_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_to", vmul_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
-    {"dot", vdot_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
+    {"dot", vdot_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite vsuite = {
     "v", vtests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
 
+void svmul_const_add_to(float *a, float *b, float *c, long n);
+void svmul_const_to(float *a, float *b, float *c, long n);
+void svmul_const(float *a, float *b, long n);
+void svmul_to(float *a, float *b, float *c, long n);
+
+MunitResult svmul_const_add_to_test(const MunitParameter params[], void *user_data_or_fixture)
+{
+  float a[kVectorLength], expect[kVectorLength], actual[kVectorLength];
+  rand_float(a, kVectorLength);
+  rand_float(expect, kVectorLength);
+  memcpy(expect, actual, sizeof(float) * kVectorLength);
+  float b = munit_rand_double();
+
+  mul_const_add_to(a, &b, expect, kVectorLength);
+  svmul_const_add_to(a, &b, actual, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expect, actual);
+  return MUNIT_OK;
+}
+
+MunitResult svmul_const_to_test(const MunitParameter params[], void *user_data_or_fixture)
+{
+  float a[kVectorLength], expect[kVectorLength], actual[kVectorLength];
+  rand_float(a, kVectorLength);
+  float b = munit_rand_double();
+
+  mul_const_to(a, &b, expect, kVectorLength);
+  svmul_const_to(a, &b, actual, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expect, actual);
+  return MUNIT_OK;
+}
+
+MunitResult svmul_const_test(const MunitParameter params[], void *user_data_or_fixture)
+{
+  float expect[kVectorLength], actual[kVectorLength];
+  rand_float(expect, kVectorLength);
+  memcpy(expect, actual, sizeof(float) * kVectorLength);
+  float b = munit_rand_double();
+
+  mul_const(expect, &b, kVectorLength);
+  svmul_const(actual, &b, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expect, actual);
+  return MUNIT_OK;
+}
+
+MunitResult svmul_to_test(const MunitParameter params[], void *user_data_or_fixture)
+{
+  float a[kVectorLength], b[kVectorLength], expect[kVectorLength], actual[kVectorLength];
+  rand_float(a, kVectorLength);
+  rand_float(b, kVectorLength);
+
+  mul_to(a, b, expect, kVectorLength);
+  svmul_to(a, b, actual, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expect, actual);
+  return MUNIT_OK;
+}
+
+MunitTest svtests[] = {
+    {"mul_const_add_to", svmul_const_add_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"mul_const_to", svmul_const_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"mul_const", svmul_const_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"mul_to", svmul_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
+
+static const MunitSuite svsuite = {
+    "v", svtests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
+
 int main(int argc, char *const argv[MUNIT_ARRAY_PARAM(argc + 1)])
 {
   munit_suite_main(&vsuite, NULL, argc, argv);
+  munit_suite_main(&svsuite, NULL, argc, argv);
   return 0;
 }
 
