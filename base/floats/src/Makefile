@@ -4,8 +4,8 @@ ifeq ($(shell uname -m),x86_64)
 	SOURCES += floats_avx.c floats_avx512.c
 	CFLAGS = -O3 -mavx -mavx512f -mavx512dq
 else ifeq ($(shell uname -m),aarch64)
-	SOURCES += floats_neon.c floats_sve2.c
-	CFLAGS = -O3 -march=armv8-a+sve2
+	SOURCES += floats_neon.c
+	CFLAGS = -O3
 endif
 
 OBJECTS		= $(SOURCES:.c=.o)
