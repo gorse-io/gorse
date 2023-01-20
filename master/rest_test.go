@@ -19,9 +19,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
 	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
@@ -31,13 +40,6 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"mime/multipart"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
 )
 
 const (
@@ -101,6 +103,13 @@ func marshal(t *testing.T, v interface{}) string {
 	s, err := json.Marshal(v)
 	assert.NoError(t, err)
 	return string(s)
+}
+
+func convertToMapStructure(t *testing.T, v interface{}) map[string]interface{} {
+	var m map[string]interface{}
+	err := mapstructure.Decode(v, &m)
+	assert.NoError(t, err)
+	return m
 }
 
 func TestMaster_ExportUsers(t *testing.T) {
@@ -804,4 +813,30 @@ func TestMaster_Purge(t *testing.T) {
 	_, feedbacks, err = s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
 	assert.NoError(t, err)
 	assert.Empty(t, feedbacks)
+}
+
+func TestMaster_GetConfig(t *testing.T) {
+	s, cookie := newMockServer(t)
+	defer s.Close(t)
+
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/dashboard/config").
+		Header("Cookie", cookie).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, formatConfig(convertToMapStructure(t, s.Config)))).
+		End()
+
+	s.managedMode = true
+	managedConfig := formatConfig(convertToMapStructure(t, s.Config))
+	delete(managedConfig, "database")
+	apitest.New().
+		Handler(s.handler).
+		Get("/api/dashboard/config").
+		Header("Cookie", cookie).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(marshal(t, managedConfig)).
+		End()
 }
