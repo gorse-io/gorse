@@ -42,7 +42,7 @@ require (
 	github.com/sijms/go-ora/v2 v2.4.27
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
-	github.com/steinfletcher/apitest v1.5.12
+	github.com/steinfletcher/apitest v1.5.14
 	github.com/stretchr/testify v1.8.0
 	github.com/thoas/go-funk v0.9.2
 	go.mongodb.org/mongo-driver v1.10.3
