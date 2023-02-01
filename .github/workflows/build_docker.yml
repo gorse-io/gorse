@@ -47,7 +47,7 @@ jobs:
       - name: Build docker image
         run: |
           docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
-          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows \
+          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
             -t zhenghaoz/${{ matrix.image }}:nightly .
           docker image push --all-tags zhenghaoz/${{ matrix.image }}
           docker logout
