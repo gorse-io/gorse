@@ -82,3 +82,29 @@ jobs:
             zhenghaoz/${{ matrix.image }}:latest
             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
+
+  build-windows-images:
+    name: build windows images
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
+    steps:
+      - name: Pull source
+        uses: actions/checkout@v1
+        
+      - id: get_version
+        uses: battila7/get-version-action@v2
+
+      - name: Build docker image
+        run: |
+          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
+          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
+            -t zhenghaoz/${{ matrix.image }}:windowsservercore `
+            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}-windowsservercore \
+            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
+          docker image push --all-tags zhenghaoz/${{ matrix.image }}
+          docker logout
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
