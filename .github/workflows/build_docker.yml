@@ -48,7 +48,7 @@ jobs:
         run: |
           docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
-            -t zhenghaoz/${{ matrix.image }}:nightly .
+            -t zhenghaoz/${{ matrix.image }}:nightly-windowsservercore .
           docker image push --all-tags zhenghaoz/${{ matrix.image }}
           docker logout
         env:
