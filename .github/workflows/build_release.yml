@@ -23,7 +23,7 @@ jobs:
         
       - name: Build release
         run: >
-          gox  -output="{{.OS}}/{{.Arch}}/{{.Dir}}"
+          gox  -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
             -osarch='darwin/arm64 darwin/amd64 windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
             -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
             -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
