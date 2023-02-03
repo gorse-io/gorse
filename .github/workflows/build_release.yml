@@ -23,7 +23,8 @@ jobs:
         
       - name: Build release
         run: >
-          gox -osarch='darwin/arm64 darwin/amd64 windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
+          gox  -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
+            -osarch='darwin/arm64 darwin/amd64 windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
             -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
             -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
             -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" ./...
@@ -33,12 +34,12 @@ jobs:
 
       - name: Zip binaries
         run: |
-          zip gorse_linux_amd64.zip gorse-*_linux_amd64
-          zip gorse_linux_arm64.zip gorse-*_linux_arm64
-          zip gorse_windows_amd64.zip gorse-*_windows_amd64.exe
-          zip gorse_windows_arm64.zip gorse-*_windows_arm64.exe
-          zip gorse_darwin_amd64.zip gorse-*_darwin_amd64
-          zip gorse_darwin_arm64.zip gorse-*_darwin_arm64
+          zip -j gorse_linux_amd64.zip linux/amd64/gorse-*
+          zip -j gorse_linux_arm64.zip linux/arm64/gorse-*
+          zip -j gorse_windows_amd64.zip windows/amd64/gorse-*
+          zip -j gorse_windows_arm64.zip windows/arm64/gorse-*
+          zip -j gorse_darwin_amd64.zip darwin/amd64/gorse-*
+          zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
           
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
