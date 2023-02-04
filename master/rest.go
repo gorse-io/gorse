@@ -1283,6 +1283,15 @@ func (m *Master) importFeedback(ctx context.Context, response http.ResponseWrite
 		feedbacks = append(feedbacks, feedback)
 		// batch insert
 		if len(feedbacks) == batchSize {
+			// batch insert to data store
+			err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
+				m.Config.Server.AutoInsertUser,
+				m.Config.Server.AutoInsertItem, true)
+			if err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return false
+			}
+			// batch insert to cache store
 			err = m.InsertFeedbackToCache(ctx, feedbacks)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
@@ -1297,16 +1306,17 @@ func (m *Master) importFeedback(ctx context.Context, response http.ResponseWrite
 		server.BadRequest(restful.NewResponse(response), err)
 		return
 	}
-	// insert to data store
-	err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
-		m.Config.Server.AutoInsertUser,
-		m.Config.Server.AutoInsertItem, true)
-	if err != nil {
-		server.InternalServerError(restful.NewResponse(response), err)
-		return
-	}
 	// insert to cache store
 	if len(feedbacks) > 0 {
+		// insert to data store
+		err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
+			m.Config.Server.AutoInsertUser,
+			m.Config.Server.AutoInsertItem, true)
+		if err != nil {
+			server.InternalServerError(restful.NewResponse(response), err)
+			return
+		}
+		// insert to cache store
 		err = m.InsertFeedbackToCache(ctx, feedbacks)
 		if err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
