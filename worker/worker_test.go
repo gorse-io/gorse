@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -84,6 +85,8 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// configuration
 	suite.Config = config.GetDefaultConfig()
 	suite.jobs = 1
+	// reset random generator
+	suite.randGenerator = rand.New(rand.NewSource(0))
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
@@ -544,9 +547,9 @@ func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(recommends))
 }
 
-func TestMergeAndShuffle(t *testing.T) {
-	scores := mergeAndShuffle([][]string{{"1", "2", "3"}, {"1", "3", "5"}})
-	assert.ElementsMatch(t, []string{"1", "2", "3", "5"}, cache.RemoveScores(scores))
+func (suite *WorkerTestSuite) TestMergeAndShuffle() {
+	scores := suite.mergeAndShuffle([][]string{{"1", "2", "3"}, {"1", "3", "5"}})
+	suite.ElementsMatch([]string{"1", "2", "3", "5"}, cache.RemoveScores(scores))
 }
 
 func (suite *WorkerTestSuite) TestExploreRecommend() {
