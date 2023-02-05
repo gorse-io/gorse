@@ -15,19 +15,30 @@
 package log
 
 import (
-	"github.com/emicklei/go-restful/v3"
-	"github.com/go-sql-driver/mysql"
-	"go.opentelemetry.io/otel"
-	"go.uber.org/zap"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+
+	"github.com/emicklei/go-restful/v3"
+	"github.com/go-sql-driver/mysql"
+	"github.com/samber/lo"
+	"go.opentelemetry.io/otel"
+	"go.uber.org/zap"
 )
 
 var logger *zap.Logger
 
 func init() {
+	if runtime.GOOS == "windows" {
+		// Windows file sink support: https://github.com/uber-go/zap/issues/621
+		zap.RegisterSink("windows", func(u *url.URL) (zap.Sink, error) {
+			// Remove leading slash left by url.Parse()
+			return os.OpenFile(u.Path[1:], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		})
+	}
+	// setup default logger
 	SetProductionLogger()
 }
 
@@ -49,7 +60,13 @@ func SetProductionLogger(outputPaths ...string) {
 		}
 	}
 	cfg := zap.NewProductionConfig()
-	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
+	if runtime.GOOS == "windows" {
+		cfg.OutputPaths = append(cfg.OutputPaths, lo.Map(outputPaths, func(path string, _ int) string {
+			return "windows:///" + path
+		})...)
+	} else {
+		cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
+	}
 	var err error
 	logger, err = cfg.Build()
 	if err != nil {
