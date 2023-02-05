@@ -90,6 +90,7 @@ type Worker struct {
 	latestRankingModelVersion int64
 	latestClickModelVersion   int64
 	rankingIndex              *search.HNSW
+	randGenerator             *rand.Rand
 
 	// peers
 	peers []string
@@ -109,8 +110,9 @@ type Worker struct {
 // NewWorker creates a new worker node.
 func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string, managedMode bool) *Worker {
 	return &Worker{
-		managedMode: managedMode,
-		Settings:    config.NewSettings(),
+		managedMode:   managedMode,
+		Settings:      config.NewSettings(),
+		randGenerator: rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 		// config
 		cacheFile:  cacheFile,
 		masterHost: masterHost,
@@ -341,7 +343,6 @@ func writeError(w http.ResponseWriter, error string, code int) {
 
 // Serve as a worker node.
 func (w *Worker) Serve() {
-	rand.Seed(time.Now().UTC().UnixNano())
 	// open local store
 	if !w.oneMode {
 		state, err := LoadLocalCache(w.cacheFile)
@@ -768,7 +769,7 @@ func (w *Worker) Recommend(users []data.User) {
 					return errors.Trace(err)
 				}
 			} else {
-				results[category] = mergeAndShuffle(catCandidates)
+				results[category] = w.mergeAndShuffle(catCandidates)
 			}
 		}
 
@@ -954,7 +955,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	return topItems, nil
 }
 
-func mergeAndShuffle(candidates [][]string) []cache.Scored {
+func (w *Worker) mergeAndShuffle(candidates [][]string) []cache.Scored {
 	memo := strset.New()
 	pos := make([]int, len(candidates))
 	var recommend []cache.Scored
@@ -970,7 +971,7 @@ func mergeAndShuffle(candidates [][]string) []cache.Scored {
 			break
 		}
 		// select a slice randomly
-		j := src[rand.Intn(len(src))]
+		j := src[w.randGenerator.Intn(len(src))]
 		candidateId := candidates[j][pos[j]]
 		pos[j]++
 		if !memo.Has(candidateId) {
@@ -1015,7 +1016,7 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 		score += exploitRecommend[0].Score
 	}
 	for range exploitRecommend {
-		dice := rand.Float64()
+		dice := w.randGenerator.Float64()
 		var recommendItem cache.Scored
 		if dice < explorePopularThreshold && len(popularItems) > 0 {
 			score -= 1e-5
@@ -1239,9 +1240,9 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 				upper := upperBounds[""]
 				lower := lowerBounds[""]
 				if !math.IsInf(upper, 1) && !math.IsInf(lower, -1) {
-					score = lower + rand.Float64()*(upper-lower)
+					score = lower + w.randGenerator.Float64()*(upper-lower)
 				} else {
-					score = rand.Float64()
+					score = w.randGenerator.Float64()
 				}
 			}
 			// replace item
