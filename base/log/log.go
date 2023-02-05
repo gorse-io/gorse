@@ -31,15 +31,17 @@ import (
 var logger *zap.Logger
 
 func init() {
-	if runtime.GOOS == "windows" {
-		// Windows file sink support: https://github.com/uber-go/zap/issues/621
-		zap.RegisterSink("windows", func(u *url.URL) (zap.Sink, error) {
-			// Remove leading slash left by url.Parse()
-			return os.OpenFile(u.Path[1:], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-		})
-	}
 	// setup default logger
 	SetProductionLogger()
+	// Windows file sink support: https://github.com/uber-go/zap/issues/621
+	if runtime.GOOS == "windows" {
+		if err := zap.RegisterSink("windows", func(u *url.URL) (zap.Sink, error) {
+			// Remove leading slash left by url.Parse()
+			return os.OpenFile(u.Path[1:], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		}); err != nil {
+			logger.Fatal("failed to register Windows file sink", zap.Error(err))
+		}
+	}
 }
 
 // Logger get current logger
