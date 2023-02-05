@@ -308,15 +308,59 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	staticFileServer.ServeHTTP(response, request)
 }
 
+func (m *Master) checkToken(token string) (bool, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/auth/dashboard/%s", m.Config.Master.DashboardAuthServer, token))
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	} else if resp.StatusCode == http.StatusUnauthorized {
+		return false, nil
+	} else {
+		if message, err := io.ReadAll(resp.Body); err != nil {
+			return false, errors.Trace(err)
+		} else {
+			return false, errors.New(string(message))
+		}
+	}
+}
+
 func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 	switch request.Method {
 	case http.MethodGet:
 		log.Logger().Info("GET /login", zap.Int("status_code", http.StatusOK))
 		staticFileServer.ServeHTTP(response, request)
 	case http.MethodPost:
+		token := request.FormValue("token")
 		name := request.FormValue("user_name")
 		pass := request.FormValue("password")
-		if name == m.Config.Master.DashboardUserName && pass == m.Config.Master.DashboardPassword {
+		if m.Config.Master.DashboardAuthServer != "" && token != "" {
+			// check access token
+			if isValid, err := m.checkToken(token); err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			} else if !isValid {
+				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
+				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
+				return
+			}
+			// save token to cache
+			if encoded, err := cookieHandler.Encode("token", token); err != nil {
+				server.InternalServerError(restful.NewResponse(response), err)
+				return
+			} else {
+				cookie := &http.Cookie{
+					Name:  "token",
+					Value: encoded,
+					Path:  "/",
+				}
+				http.SetCookie(response, cookie)
+				http.Redirect(response, request, "/", http.StatusFound)
+				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
+				return
+			}
+		} else if name == m.Config.Master.DashboardUserName && pass == m.Config.Master.DashboardPassword {
 			value := map[string]string{
 				"user_name": name,
 				"password":  pass,
@@ -368,9 +412,19 @@ func (m *Master) checkLogin(request *http.Request) bool {
 	if m.Config.Master.DashboardUserName == "" || m.Config.Master.DashboardPassword == "" {
 		return true
 	}
-	if cookie, err := request.Cookie("session"); err == nil {
+	if tokenCookie, err := request.Cookie("token"); err != nil {
+		var token string
+		if err = cookieHandler.Decode("token", tokenCookie.Value, &token); err != nil {
+			if isValid, err := m.checkToken(token); err != nil {
+				log.Logger().Error("failed to check access token", zap.Error(err))
+			} else if isValid {
+				return true
+			}
+		}
+	}
+	if sessionCookie, err := request.Cookie("session"); err == nil {
 		cookieValue := make(map[string]string)
-		if err = cookieHandler.Decode("session", cookie.Value, &cookieValue); err == nil {
+		if err = cookieHandler.Decode("session", sessionCookie.Value, &cookieValue); err == nil {
 			userName := cookieValue["user_name"]
 			password := cookieValue["password"]
 			if userName == m.Config.Master.DashboardUserName && password == m.Config.Master.DashboardPassword {

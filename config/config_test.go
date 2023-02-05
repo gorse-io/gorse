@@ -174,6 +174,7 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_MASTER_JOBS", "789"},
 		{"GORSE_DASHBOARD_USER_NAME", "user_name"},
 		{"GORSE_DASHBOARD_PASSWORD", "password"},
+		{"GORSE_DASHBOARD_AUTH_SERVER", "http://127.0.0.1:8888"},
 		{"GORSE_ADMIN_API_KEY", "<admin_api_key>"},
 		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
 	}
@@ -195,6 +196,7 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, 789, config.Master.NumJobs)
 	assert.Equal(t, "user_name", config.Master.DashboardUserName)
 	assert.Equal(t, "password", config.Master.DashboardPassword)
+	assert.Equal(t, "http://127.0.0.1:8888", config.Master.DashboardAuthServer)
 	assert.Equal(t, "<admin_api_key>", config.Master.AdminAPIKey)
 	assert.Equal(t, "<server_api_key>", config.Server.APIKey)
 
