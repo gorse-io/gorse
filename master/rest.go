@@ -335,7 +335,7 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 		token := request.FormValue("token")
 		name := request.FormValue("user_name")
 		pass := request.FormValue("password")
-		if m.Config.Master.DashboardAuthServer != "" && token != "" {
+		if m.Config.Master.DashboardAuthServer != "" {
 			// check access token
 			if isValid, err := m.checkToken(token); err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
@@ -360,7 +360,12 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
 				return
 			}
-		} else if name == m.Config.Master.DashboardUserName && pass == m.Config.Master.DashboardPassword {
+		} else if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
+			if name != m.Config.Master.DashboardUserName || pass != m.Config.Master.DashboardPassword {
+				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
+				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
+				return
+			}
 			value := map[string]string{
 				"user_name": name,
 				"password":  pass,
@@ -380,9 +385,8 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 				return
 			}
 		} else {
-			http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
-			log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
-			return
+			http.Redirect(response, request, "/", http.StatusFound)
+			log.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
 		}
 	default:
 		server.BadRequest(restful.NewResponse(response), errors.New("unsupported method"))
@@ -404,35 +408,41 @@ func (m *Master) logout(response http.ResponseWriter, request *http.Request) {
 func (m *Master) LoginFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	if m.checkLogin(req.Request) {
 		req.Request.Header.Set("X-API-Key", m.Config.Server.APIKey)
+		chain.ProcessFilter(req, resp)
+	} else {
+		if err := resp.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
+			log.ResponseLogger(resp).Error("failed to write error", zap.Error(err))
+		}
 	}
-	chain.ProcessFilter(req, resp)
 }
 
 func (m *Master) checkLogin(request *http.Request) bool {
-	if m.Config.Master.DashboardUserName == "" || m.Config.Master.DashboardPassword == "" {
-		return true
-	}
-	if tokenCookie, err := request.Cookie("token"); err != nil {
-		var token string
-		if err = cookieHandler.Decode("token", tokenCookie.Value, &token); err != nil {
-			if isValid, err := m.checkToken(token); err != nil {
-				log.Logger().Error("failed to check access token", zap.Error(err))
-			} else if isValid {
-				return true
+	if m.Config.Master.DashboardAuthServer != "" {
+		if tokenCookie, err := request.Cookie("token"); err == nil {
+			var token string
+			if err = cookieHandler.Decode("token", tokenCookie.Value, &token); err == nil {
+				if isValid, err := m.checkToken(token); err != nil {
+					log.Logger().Error("failed to check access token", zap.Error(err))
+				} else if isValid {
+					return true
+				}
 			}
 		}
-	}
-	if sessionCookie, err := request.Cookie("session"); err == nil {
-		cookieValue := make(map[string]string)
-		if err = cookieHandler.Decode("session", sessionCookie.Value, &cookieValue); err == nil {
-			userName := cookieValue["user_name"]
-			password := cookieValue["password"]
-			if userName == m.Config.Master.DashboardUserName && password == m.Config.Master.DashboardPassword {
-				return true
+		return false
+	} else if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
+		if sessionCookie, err := request.Cookie("session"); err == nil {
+			cookieValue := make(map[string]string)
+			if err = cookieHandler.Decode("session", sessionCookie.Value, &cookieValue); err == nil {
+				userName := cookieValue["user_name"]
+				password := cookieValue["password"]
+				if userName == m.Config.Master.DashboardUserName && password == m.Config.Master.DashboardPassword {
+					return true
+				}
 			}
 		}
+		return false
 	}
-	return false
+	return true
 }
 
 func (m *Master) getCategories(request *restful.Request, response *restful.Response) {
