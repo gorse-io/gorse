@@ -71,17 +71,18 @@ type DatabaseConfig struct {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port              int           `mapstructure:"port" validate:"gte=0"`        // master port
-	Host              string        `mapstructure:"host"`                         // master host
-	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
-	HttpHost          string        `mapstructure:"http_host"`                    // HTTP host
-	HttpCorsDomains   []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
-	HttpCorsMethods   []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
-	NumJobs           int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
-	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
-	DashboardUserName string        `mapstructure:"dashboard_user_name"`          // dashboard user name
-	DashboardPassword string        `mapstructure:"dashboard_password"`           // dashboard password
-	AdminAPIKey       string        `mapstructure:"admin_api_key"`
+	Port                int           `mapstructure:"port" validate:"gte=0"`        // master port
+	Host                string        `mapstructure:"host"`                         // master host
+	HttpPort            int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
+	HttpHost            string        `mapstructure:"http_host"`                    // HTTP host
+	HttpCorsDomains     []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
+	HttpCorsMethods     []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
+	NumJobs             int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
+	MetaTimeout         time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
+	DashboardUserName   string        `mapstructure:"dashboard_user_name"`          // dashboard user name
+	DashboardPassword   string        `mapstructure:"dashboard_password"`           // dashboard password
+	DashboardAuthServer string        `mapstructure:"dashboard_auth_server"`        // dashboard auth server
+	AdminAPIKey         string        `mapstructure:"admin_api_key"`
 }
 
 // ServerConfig is the configuration for the server.
@@ -537,6 +538,7 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.n_jobs", "GORSE_MASTER_JOBS"},
 		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
 		{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
+		{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
 		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
 		{"server.api_key", "GORSE_SERVER_API_KEY"},
 	}
