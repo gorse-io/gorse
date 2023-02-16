@@ -110,10 +110,10 @@ type RecommendConfig struct {
 }
 
 type DataSourceConfig struct {
-	PositiveFeedbackTypes []string `mapstructure:"positive_feedback_types" validate:"min=1,dive,required"` // positive feedback type
-	ReadFeedbackTypes     []string `mapstructure:"read_feedback_types" validate:"min=1,dive,required"`     // feedback type for read event
-	PositiveFeedbackTTL   uint     `mapstructure:"positive_feedback_ttl" validate:"gte=0"`                 // time-to-live of positive feedbacks
-	ItemTTL               uint     `mapstructure:"item_ttl" validate:"gte=0"`                              // item-to-live of items
+	PositiveFeedbackTypes []string `mapstructure:"positive_feedback_types"`                // positive feedback type
+	ReadFeedbackTypes     []string `mapstructure:"read_feedback_types"`                    // feedback type for read event
+	PositiveFeedbackTTL   uint     `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
+	ItemTTL               uint     `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
 }
 
 type PopularConfig struct {
