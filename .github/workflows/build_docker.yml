@@ -33,6 +33,17 @@ jobs:
           file: cmd/${{ matrix.image }}/Dockerfile
           push: true
           tags: zhenghaoz/${{ matrix.image }}:nightly
+          
+      - name: Resolve Images on Description
+        run: |
+          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
+          
+      - name: Update DockerHub Description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: zhenghaoz/${{ matrix.image }}
 
   windows_images:
     name: windows images
