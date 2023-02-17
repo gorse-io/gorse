@@ -33,6 +33,13 @@ jobs:
           file: cmd/${{ matrix.image }}/Dockerfile
           push: true
           tags: zhenghaoz/${{ matrix.image }}:nightly
+          
+      - name: Update DockerHub Description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: zhenghaoz/${{ matrix.image }}
 
   windows_images:
     name: windows images
