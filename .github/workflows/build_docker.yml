@@ -34,6 +34,10 @@ jobs:
           push: true
           tags: zhenghaoz/${{ matrix.image }}:nightly
           
+      - name: Resolve Images on Description
+        run: |
+          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
+          
       - name: Update DockerHub Description
         uses: peter-evans/dockerhub-description@v3
         with:
