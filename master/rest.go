@@ -249,6 +249,12 @@ func init() {
 		log.Logger().Fatal("failed to load statik files", zap.Error(err))
 	}
 	staticFileServer = http.FileServer(&SinglePageAppFileSystem{staticFileSystem})
+
+	// Create temporary directory if not exist
+	tempDir := os.TempDir()
+	if err = os.MkdirAll(tempDir, 1777); err != nil {
+		log.Logger().Fatal("failed to create temporary directory", zap.String("directory", tempDir), zap.Error(err))
+	}
 }
 
 // Taken from https://github.com/mytrile/nocache
