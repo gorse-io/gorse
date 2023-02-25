@@ -829,16 +829,16 @@ func TestMaster_GetConfig(t *testing.T) {
 		Body(marshal(t, formatConfig(convertToMapStructure(t, s.Config)))).
 		End()
 
-	s.managedMode = true
-	managedConfig := formatConfig(convertToMapStructure(t, s.Config))
-	delete(managedConfig, "database")
+	s.Config.Master.DashboardRedacted = true
+	redactedConfig := formatConfig(convertToMapStructure(t, s.Config))
+	delete(redactedConfig, "database")
 	apitest.New().
 		Handler(s.handler).
 		Get("/api/dashboard/config").
 		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, managedConfig)).
+		Body(marshal(t, redactedConfig)).
 		End()
 }
 
