@@ -415,6 +415,8 @@ func (m *Master) LoginFilter(req *restful.Request, resp *restful.Response, chain
 	if m.checkLogin(req.Request) {
 		req.Request.Header.Set("X-API-Key", m.Config.Server.APIKey)
 		chain.ProcessFilter(req, resp)
+	} else if !strings.HasPrefix(req.SelectedRoutePath(), "/api/dashboard") {
+		chain.ProcessFilter(req, resp)
 	} else {
 		if err := resp.WriteError(http.StatusUnauthorized, fmt.Errorf("unauthorized")); err != nil {
 			log.ResponseLogger(resp).Error("failed to write error", zap.Error(err))
@@ -423,6 +425,9 @@ func (m *Master) LoginFilter(req *restful.Request, resp *restful.Response, chain
 }
 
 func (m *Master) checkLogin(request *http.Request) bool {
+	if m.Config.Master.AdminAPIKey != "" && m.Config.Master.AdminAPIKey == request.Header.Get("X-Api-Key") {
+		return true
+	}
 	if m.Config.Master.DashboardAuthServer != "" {
 		if tokenCookie, err := request.Cookie("token"); err == nil {
 			var token string
