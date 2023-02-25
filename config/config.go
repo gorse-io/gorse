@@ -19,6 +19,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -547,6 +548,11 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		if err != nil {
 			log.Logger().Fatal("failed to bind a Viper key to a ENV variable", zap.Error(err))
 		}
+	}
+
+	// check if file exist
+	if _, err := os.Stat(path); err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	// load config file
