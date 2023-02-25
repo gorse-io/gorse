@@ -512,7 +512,7 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 		server.InternalServerError(response, err)
 		return
 	}
-	if m.managedMode {
+	if m.Config.Master.DashboardRedacted {
 		delete(configMap, "database")
 	}
 	server.Ok(response, formatConfig(configMap))
