@@ -14,6 +14,8 @@
 
 package client
 
+import "time"
+
 type Feedback struct {
 	FeedbackType string `json:"FeedbackType"`
 	UserId       string `json:"UserId"`
@@ -43,6 +45,12 @@ type User struct {
 	Comment   string   `json:"Comment"`
 }
 
+type UserPatch struct {
+	Labels    []string
+	Subscribe []string
+	Comment   *string
+}
+
 type Item struct {
 	ItemId     string   `json:"ItemId"`
 	IsHidden   bool     `json:"IsHidden"`
@@ -50,4 +58,12 @@ type Item struct {
 	Categories []string `json:"Categories"`
 	Timestamp  string   `json:"Timestamp"`
 	Comment    string   `json:"Comment"`
+}
+
+type ItemPatch struct {
+	IsHidden   *bool
+	Categories []string
+	Timestamp  *time.Time
+	Labels     []string
+	Comment    *string
 }
