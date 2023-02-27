@@ -1,4 +1,4 @@
-# Gorse Recommender System Engine for LUNA
+# Gorse Recommender System Engine
 
 <img width=160 src="assets/gorse.png"/>
 

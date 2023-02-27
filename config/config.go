@@ -19,6 +19,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -82,6 +83,7 @@ type MasterConfig struct {
 	DashboardUserName   string        `mapstructure:"dashboard_user_name"`          // dashboard user name
 	DashboardPassword   string        `mapstructure:"dashboard_password"`           // dashboard password
 	DashboardAuthServer string        `mapstructure:"dashboard_auth_server"`        // dashboard auth server
+	DashboardRedacted   bool          `mapstructure:"dashboard_redacted"`
 	AdminAPIKey         string        `mapstructure:"admin_api_key"`
 }
 
@@ -539,6 +541,7 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
 		{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
 		{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
+		{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
 		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
 		{"server.api_key", "GORSE_SERVER_API_KEY"},
 	}
@@ -547,6 +550,11 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		if err != nil {
 			log.Logger().Fatal("failed to bind a Viper key to a ENV variable", zap.Error(err))
 		}
+	}
+
+	// check if file exist
+	if _, err := os.Stat(path); err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	// load config file

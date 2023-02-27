@@ -288,6 +288,10 @@ func (suite *GorseClientTestSuite) TestUsers() {
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
+	rowAffected, err = suite.client.UpdateUser(ctx, user, user.UserId)
+	suite.NoError(err)
+	suite.Equal(1, rowAffected.RowAffected)
+
 	userResp, err := suite.client.GetUser(ctx, "100")
 	suite.NoError(err)
 	suite.Equal(user, userResp)
@@ -312,6 +316,10 @@ func (suite *GorseClientTestSuite) TestItems() {
 		Comment:    "comment",
 	}
 	rowAffected, err := suite.client.InsertItem(ctx, item)
+	suite.NoError(err)
+	suite.Equal(1, rowAffected.RowAffected)
+
+	rowAffected, err = suite.client.UpdateItem(ctx, item, item.ItemId)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
