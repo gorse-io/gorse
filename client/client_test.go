@@ -292,7 +292,7 @@ func (suite *GorseClientTestSuite) TestUsers() {
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
-	rowAffected, err = suite.client.UpdateUser(ctx, userPatch, user.UserId)
+	rowAffected, err = suite.client.UpdateUser(ctx, user.UserId, userPatch)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
@@ -326,7 +326,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
-	rowAffected, err = suite.client.UpdateItem(ctx, itemPatch, item.ItemId)
+	rowAffected, err = suite.client.UpdateItem(ctx, item.ItemId, itemPatch)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
