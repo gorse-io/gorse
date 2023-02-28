@@ -63,6 +63,10 @@ func (c *GorseClient) InsertUser(ctx context.Context, user User) (RowAffected, e
 	return request[RowAffected](ctx, c, "POST", c.entryPoint+"/api/user", user)
 }
 
+func (c *GorseClient) UpdateUser(ctx context.Context, userId string, user UserPatch) (RowAffected, error) {
+	return request[RowAffected](ctx, c, "PATCH", fmt.Sprintf("%s/api/user/%s", c.entryPoint, userId), user)
+}
+
 func (c *GorseClient) GetUser(ctx context.Context, userId string) (User, error) {
 	return request[User, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/user/%s", userId), nil)
 }
@@ -73,6 +77,10 @@ func (c *GorseClient) DeleteUser(ctx context.Context, userId string) (RowAffecte
 
 func (c *GorseClient) InsertItem(ctx context.Context, item Item) (RowAffected, error) {
 	return request[RowAffected](ctx, c, "POST", c.entryPoint+"/api/item", item)
+}
+
+func (c *GorseClient) UpdateItem(ctx context.Context, itemId string, item ItemPatch) (RowAffected, error) {
+	return request[RowAffected](ctx, c, "PATCH", fmt.Sprintf("%s/api/item/%s", c.entryPoint, itemId), item)
 }
 
 func (c *GorseClient) GetItem(ctx context.Context, itemId string) (Item, error) {
