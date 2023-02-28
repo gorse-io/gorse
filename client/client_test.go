@@ -284,11 +284,15 @@ func (suite *GorseClientTestSuite) TestUsers() {
 		Subscribe: []string{"d", "e"},
 		Comment:   "comment",
 	}
+	userPatch := UserPatch{
+		Comment: &user.Comment,
+	}
+
 	rowAffected, err := suite.client.InsertUser(ctx, user)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
-	rowAffected, err = suite.client.UpdateUser(ctx, user, user.UserId)
+	rowAffected, err = suite.client.UpdateUser(ctx, user.UserId, userPatch)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
@@ -315,11 +319,14 @@ func (suite *GorseClientTestSuite) TestItems() {
 		Timestamp:  timestamp,
 		Comment:    "comment",
 	}
+	itemPatch := ItemPatch{
+		Comment: &item.Comment,
+	}
 	rowAffected, err := suite.client.InsertItem(ctx, item)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
-	rowAffected, err = suite.client.UpdateItem(ctx, item, item.ItemId)
+	rowAffected, err = suite.client.UpdateItem(ctx, item.ItemId, itemPatch)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
 
