@@ -20,8 +20,6 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -42,8 +40,7 @@ func newClickDataset() (*click.Dataset, *click.Dataset) {
 
 func TestLocalCache(t *testing.T) {
 	// delete test file if exists
-	path := filepath.Join(os.TempDir(), "TestLocalCache_Master")
-	_ = os.Remove(path)
+	path := t.TempDir()
 
 	// load non-existed file
 	cache, err := LoadLocalCache(path)
@@ -83,7 +80,4 @@ func TestLocalCache(t *testing.T) {
 	assert.NotNil(t, read.ClickModel)
 	assert.Equal(t, int64(456), read.ClickModelVersion)
 	assert.Equal(t, click.Score{Precision: 1, RMSE: 100, Task: click.FMClassification}, read.ClickModelScore)
-
-	// delete test file
-	assert.NoError(t, os.Remove(path))
 }
