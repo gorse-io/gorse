@@ -1,4 +1,4 @@
-// Copyright 2021 gorse Project Authors
+// Copyright 2022 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +14,17 @@
 
 package message
 
-import "go.mongodb.org/mongo-driver/mongo"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
-type MongoDB struct {
-	client *mongo.Client
-	dbName string
-}
-
-func (db MongoDB) Push(name string, message Message) error {
-	db.client.Database(db.dbName).Collection("message").InsertOne(nil, message)
-	return nil
-}
-
-func (db MongoDB) Pop(name string) (Message, error) {
-	return Message{}, nil
+func TestNoDatabase(t *testing.T) {
+	var database NoDatabase
+	err := database.Init()
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.Push("test", Message{})
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.Pop("test")
+	assert.ErrorIs(t, err, ErrNoDatabase)
 }

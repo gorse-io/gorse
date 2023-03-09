@@ -1,4 +1,4 @@
-// Copyright 2021 gorse Project Authors
+// Copyright 2022 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +14,20 @@
 
 package message
 
-import "go.mongodb.org/mongo-driver/mongo"
+import "github.com/juju/errors"
 
-type MongoDB struct {
-	client *mongo.Client
-	dbName string
+var ErrNoDatabase = errors.NotAssignedf("database")
+
+type NoDatabase struct{}
+
+func (NoDatabase) Init() error {
+	return ErrNoDatabase
 }
 
-func (db MongoDB) Push(name string, message Message) error {
-	db.client.Database(db.dbName).Collection("message").InsertOne(nil, message)
-	return nil
+func (NoDatabase) Push(_ string, _ Message) error {
+	return ErrNoDatabase
 }
 
-func (db MongoDB) Pop(name string) (Message, error) {
-	return Message{}, nil
+func (NoDatabase) Pop(_ string) (Message, error) {
+	return Message{}, ErrNoDatabase
 }
