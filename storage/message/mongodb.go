@@ -17,7 +17,7 @@ package message
 type MongoDB struct {
 }
 
-func (Message) Push(name, message Message) error {
+func (Message) Push(name string, message Message) error {
 	return nil
 }
 

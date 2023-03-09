@@ -14,7 +14,20 @@
 
 package message
 
-import "time"
+import (
+	"github.com/XSAM/otelsql"
+	"github.com/juju/errors"
+	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/storage"
+	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"moul.io/zapgorm2"
+	"strings"
+	"time"
+)
 
 type Message struct {
 	Data      string
@@ -22,10 +35,43 @@ type Message struct {
 }
 
 type Database interface {
-	Push(name, message Message) error
+	Init() error
+	Push(name string, message Message) error
 	Pop(name string) (Message, error)
 }
 
 func Open(path, prefix string) (Database, error) {
-	return nil, nil
+	var err error
+	if strings.HasPrefix(path, storage.SQLitePrefix) {
+		// append parameters
+		if path, err = storage.AppendURLParams(path, []lo.Tuple2[string, string]{
+			{"_pragma", "busy_timeout(10000)"},
+			{"_pragma", "journal_mode(wal)"},
+		}); err != nil {
+			return nil, errors.Trace(err)
+		}
+		// connect to database
+		name := path[len(storage.SQLitePrefix):]
+		database := new(SQLite)
+		if database.client, err = otelsql.Open("sqlite", name,
+			otelsql.WithAttributes(semconv.DBSystemSqlite),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
+			return nil, errors.Trace(err)
+		}
+		gormConfig := storage.NewGORMConfig(prefix)
+		gormConfig.Logger = &zapgorm2.Logger{
+			ZapLogger:                 log.Logger(),
+			LogLevel:                  logger.Warn,
+			SlowThreshold:             10 * time.Second,
+			SkipCallerLookup:          false,
+			IgnoreRecordNotFoundError: false,
+		}
+		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	}
+	return nil, errors.Errorf("Unknown database: %s", path)
 }

@@ -13,3 +13,26 @@
 // limitations under the License.
 
 package message
+
+import (
+	"github.com/stretchr/testify/suite"
+	"testing"
+)
+
+type SQLiteTestSuite struct {
+	baseTestSuite
+}
+
+func (suite *SQLiteTestSuite) SetupSuite() {
+	var err error
+	// create database
+	suite.Database, err = Open("sqlite://:memory:", "gorse_")
+	suite.NoError(err)
+	// create schema
+	err = suite.Database.Init()
+	suite.NoError(err)
+}
+
+func TestSQLite(t *testing.T) {
+	suite.Run(t, new(SQLiteTestSuite))
+}

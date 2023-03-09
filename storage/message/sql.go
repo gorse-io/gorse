@@ -14,13 +14,58 @@
 
 package message
 
+import (
+	"database/sql"
+	"github.com/google/uuid"
+	"github.com/juju/errors"
+	"gorm.io/gorm"
+	"io"
+	"time"
+)
+
+type Row struct {
+	Name      string
+	Data      string
+	Timestamp time.Time `gorm:"index:timestamp"`
+	Id        string    `gorm:"index:timestamp"`
+}
+
 type SQLite struct {
+	client *sql.DB
+	gormDB *gorm.DB
 }
 
-func (SQLite) Push(name, message Message) error {
-	return nil
+func (db SQLite) Init() error {
+	err := db.gormDB.AutoMigrate(&Row{})
+	return errors.Trace(err)
 }
 
-func (SQLite) Pop(name string) (Message, error) {
-	return Message{}, nil
+func (db SQLite) Push(name string, message Message) error {
+	return db.gormDB.Create(Row{
+		Name:      name,
+		Data:      message.Data,
+		Timestamp: message.Timestamp,
+		Id:        uuid.New().String(),
+	}).Error
+}
+
+func (db SQLite) Pop(name string) (message Message, err error) {
+	err = db.gormDB.Transaction(func(tx *gorm.DB) error {
+		var row Row
+		if err = tx.Where("name = ?", name).Order("timestamp").First(&row).Error; err != nil {
+			return err
+		}
+		if err = tx.Where("name = ? and id = ?", name, row.Id).Delete(&row).Error; err != nil {
+			return err
+		}
+		message = Message{
+			Data:      row.Data,
+			Timestamp: row.Timestamp,
+		}
+		return nil
+	})
+	if err == gorm.ErrRecordNotFound {
+		err = io.EOF
+	}
+	return
 }
