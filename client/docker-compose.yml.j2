@@ -114,7 +114,7 @@ services:
     command: >
       -c /etc/gorse/config.toml 
       --log-path /var/log/gorse/master.log 
-      --cache-path /var/lib/gorse/master_cache.data
+      --cache-path /var/lib/gorse
     volumes:
       - ./config/config.toml:/etc/gorse/config.toml
       - gorse_log:/var/log/gorse

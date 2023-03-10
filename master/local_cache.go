@@ -48,12 +48,12 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 	// check if file exists
 	if _, err := os.Stat(path); err != nil {
 		if std_errors.Is(err, os.ErrNotExist) {
-			return state, errors.NotFoundf("cache file %s", path)
+			return state, errors.NotFoundf("cache folder %s", path)
 		}
 		return state, errors.Trace(err)
 	}
 	// open file
-	f, err := os.Open(path)
+	f, err := os.Open(state.GetFilePath(ModelFile))
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -104,15 +104,14 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 // WriteLocalCache writes local cache to a file.
 func (c *LocalCache) WriteLocalCache() error {
 	// create parent folder if not exists
-	parent := filepath.Dir(c.path)
-	if _, err := os.Stat(parent); os.IsNotExist(err) {
-		err = os.MkdirAll(parent, os.ModePerm)
+	if _, err := os.Stat(c.path); os.IsNotExist(err) {
+		err = os.MkdirAll(c.path, os.ModePerm)
 		if err != nil {
 			return errors.Trace(err)
 		}
 	}
 	// create file
-	f, err := os.Create(c.path)
+	f, err := os.Create(c.GetFilePath(ModelFile))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -158,4 +157,12 @@ func (c *LocalCache) WriteLocalCache() error {
 		return errors.Trace(err)
 	}
 	return nil
+}
+
+const (
+	ModelFile = "model.bin"
+)
+
+func (c *LocalCache) GetFilePath(file string) string {
+	return filepath.Join(c.path, file)
 }
