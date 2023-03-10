@@ -112,7 +112,7 @@ item_ttl = 0
 [recommend.popular]
 
 # The time window of popular items. The default values is 4320h.
-popular_window = "4320"
+popular_window = "4320h"
 
 [recommend.user_neighbors]
 
