@@ -25,7 +25,6 @@ import (
 	_ "github.com/mailru/go-clickhouse/v2"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
-	_ "github.com/sijms/go-ora/v2"
 	"github.com/zhenghaoz/gorse/base/json"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
