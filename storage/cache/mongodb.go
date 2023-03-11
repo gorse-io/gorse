@@ -97,18 +97,18 @@ func (m MongoDB) Init() error {
 		return errors.Trace(err)
 	}
 	_, err = d.Collection(m.MessageTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.M{
-			"name":  1,
-			"value": 1,
+		Keys: bson.D{
+			{"name", 1},
+			{"value", 1},
 		},
 	})
 	if err != nil {
 		return errors.Trace(err)
 	}
 	_, err = d.Collection(m.MessageTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.M{
-			"name":      1,
-			"timestamp": 1,
+		Keys: bson.D{
+			{"name", 1},
+			{"timestamp", 1},
 		},
 	})
 	if err != nil {
