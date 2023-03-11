@@ -454,3 +454,11 @@ func (r *Redis) Pop(ctx context.Context, name string) (string, error) {
 func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
 	return r.client.ZCard(ctx, r.Key(name)).Result()
 }
+
+func (r *Redis) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+	return nil
+}
+
+func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	return nil, nil
+}

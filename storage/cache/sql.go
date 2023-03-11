@@ -422,3 +422,11 @@ func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, er
 	err = db.gormDB.WithContext(ctx).Model(&Message{}).Where("name = ?", name).Count(&count).Error
 	return
 }
+
+func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+	return nil
+}
+
+func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	return nil, nil
+}

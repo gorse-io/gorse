@@ -319,6 +319,38 @@ func (suite *baseTestSuite) TestPushPop() {
 	suite.ErrorIs(err, io.EOF)
 }
 
+func (suite *baseTestSuite) TestDocument() {
+	ctx := context.Background()
+	err := suite.AddDocuments(ctx, "a", Document{
+		Value:      "1",
+		Score:      1,
+		Categories: []string{"a", "b"},
+	})
+	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "a", Document{
+		Value:      "2",
+		Score:      2,
+		Categories: []string{"b", "c"},
+	})
+	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "a", Document{
+		Value:      "3",
+		Score:      3,
+		Categories: []string{"b"},
+	})
+	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "a", Document{
+		Value:      "4",
+		Score:      4,
+		Categories: []string{},
+	})
+	suite.NoError(err)
+
+	documents, err := suite.SearchDocuments(ctx, "a", []string{"b"}, 1, 3)
+	suite.NoError(err)
+	suite.Len(documents, 2)
+}
+
 func TestScored(t *testing.T) {
 	itemIds := []string{"2", "4", "6"}
 	scores := []float64{2, 4, 6}

@@ -17,6 +17,7 @@ package cache
 import (
 	"context"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -437,4 +438,39 @@ func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
 	return m.client.Database(m.dbName).Collection(m.MessageTable()).CountDocuments(ctx, bson.M{
 		"name": name,
 	})
+}
+
+func (m MongoDB) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).InsertMany(ctx, lo.Map(documents, func(v Document, _ int) interface{} {
+		return bson.M{
+			"name":       name,
+			"value":      v.Value,
+			"score":      v.Score,
+			"categories": v.Categories,
+		}
+	}))
+	return errors.Trace(err)
+}
+
+func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	opt := options.Find().SetSkip(int64(begin))
+	if end != -1 {
+		opt.SetLimit(int64(end - begin))
+	}
+	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{
+		"name":       name,
+		"categories": bson.M{"$all": query},
+	}, opt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	documents := make([]Document, 0)
+	for cur.Next(ctx) {
+		var document Document
+		if err = cur.Decode(&document); err != nil {
+			return nil, errors.Trace(err)
+		}
+		documents = append(documents, document)
+	}
+	return documents, nil
 }
