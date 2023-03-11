@@ -323,6 +323,12 @@ func (suite *baseTestSuite) TestDocument() {
 	ctx := context.Background()
 	err := suite.AddDocuments(ctx, "a", Document{
 		Value:      "1",
+		Score:      100,
+		Categories: []string{"a", "b"},
+	})
+	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "a", Document{
+		Value:      "1",
 		Score:      1,
 		Categories: []string{"a", "b"},
 	})
@@ -348,7 +354,10 @@ func (suite *baseTestSuite) TestDocument() {
 
 	documents, err := suite.SearchDocuments(ctx, "a", []string{"b"}, 1, 3)
 	suite.NoError(err)
-	suite.Len(documents, 2)
+	suite.Equal([]Document{
+		{Value: "2", Score: 2, Categories: []string{"b", "c"}},
+		{Value: "1", Score: 1, Categories: []string{"a", "b"}},
+	}, documents)
 }
 
 func TestScored(t *testing.T) {
