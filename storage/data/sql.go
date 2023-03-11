@@ -44,7 +44,6 @@ const (
 	Postgres
 	ClickHouse
 	SQLite
-	Oracle
 )
 
 type SQLItem struct {
@@ -220,33 +219,6 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-	case Oracle:
-		// create tables
-		type Items struct {
-			ItemId     string    `gorm:"column:ITEM_ID;type:varchar2(256);not null;primaryKey"`
-			IsHidden   bool      `gorm:"column:IS_HIDDEN;type:bool;not null"`
-			Categories []string  `gorm:"column:CATEGORIES;type:varchar2(4000);not null"`
-			Timestamp  time.Time `gorm:"column:TIME_STAMP;type:TIMESTAMP;not null"`
-			Labels     []string  `gorm:"column:LABELS;type:varchar2(4000);not null"`
-			Comment    string    `gorm:"column:\"COMMENT\";type:varchar2(4000)"`
-		}
-		type Users struct {
-			UserId    string   `gorm:"column:USER_ID;type:varchar2(256);not null;primaryKey"`
-			Labels    []string `gorm:"column:LABELS;type:varchar2(4000);not null"`
-			Subscribe []string `gorm:"column:SUBSCRIBE;type:varchar2(4000);not null"`
-			Comment   string   `gorm:"column:\"COMMENT\";type:varchar2(4000)"`
-		}
-		type Feedback struct {
-			FeedbackType string    `gorm:"column:FEEDBACK_TYPE;type:varchar2(256);not null;primaryKey"`
-			UserId       string    `gorm:"column:USER_ID;type:varchar2(256);not null;primaryKey;index:user_id_index"`
-			ItemId       string    `gorm:"column:ITEM_ID;type:varchar2(256);not null;primaryKey;index:item_id_index"`
-			Timestamp    time.Time `gorm:"column:TIME_STAMP;type:TIMESTAMP;not null"`
-			Comment      string    `gorm:"column:\"COMMENT\";type:varchar2(4000)"`
-		}
-		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
-		if err != nil {
-			return errors.Trace(err)
-		}
 	case ClickHouse:
 		// create tables
 		type Items struct {
@@ -341,7 +313,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 			if !memo.Has(item.ItemId) {
 				memo.Add(item.ItemId)
 				row := NewSQLItem(item)
-				if d.driver == SQLite || d.driver == Oracle {
+				if d.driver == SQLite {
 					row.Timestamp = row.Timestamp.In(time.UTC)
 				}
 				rows = append(rows, row)
@@ -451,7 +423,7 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 	}
 	if patch.Timestamp != nil {
 		switch d.driver {
-		case ClickHouse, SQLite, Oracle:
+		case ClickHouse, SQLite:
 			attributes["time_stamp"] = patch.Timestamp.In(time.UTC)
 		default:
 			attributes["time_stamp"] = patch.Timestamp
@@ -558,8 +530,6 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	switch d.driver {
 	case SQLite:
 		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
-	case Oracle:
-		tx.Where("time_stamp <= SYS_EXTRACT_UTC(SYSTIMESTAMP) AND item_id = ?", itemId)
 	default:
 		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
 	}
@@ -924,7 +894,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			if users.Has(f.UserId) && items.Has(f.ItemId) {
 				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
-					if d.driver == SQLite || d.driver == Oracle {
+					if d.driver == SQLite {
 						f.Timestamp = f.Timestamp.In(time.UTC)
 					}
 					rows = append(rows, f)
@@ -955,14 +925,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 		if err := json.Unmarshal(buf, &cursorKey); err != nil {
 			return "", nil, err
 		}
-		if d.driver == Oracle {
-			tx.Where("feedback_type > ? OR feedback_type = ? AND user_id > ? OR feedback_type = ? AND user_id = ? AND item_id >= ?",
-				cursorKey.FeedbackType,
-				cursorKey.FeedbackType, cursorKey.UserId,
-				cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
-		} else {
-			tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
-		}
+		tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -1092,7 +1055,7 @@ func (d *SQLDatabase) DeleteUserItemFeedback(ctx context.Context, userId, itemId
 
 func (d *SQLDatabase) convertTimeZone(timestamp *time.Time) time.Time {
 	switch d.driver {
-	case ClickHouse, SQLite, Oracle:
+	case ClickHouse, SQLite:
 		return timestamp.In(time.UTC)
 	default:
 		return *timestamp

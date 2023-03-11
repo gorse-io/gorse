@@ -40,7 +40,6 @@ const (
 	RedisPrefix        = "redis://"
 	RedissPrefix       = "rediss://"
 	RedisClusterPrefix = "redis+cluster://"
-	OraclePrefix       = "oracle://"
 )
 
 func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {

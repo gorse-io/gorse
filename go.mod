@@ -10,7 +10,6 @@ require (
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.10.1
-	github.com/dzwvip/oracle v1.2.4
 	github.com/emicklei/go-restful-openapi/v2 v2.9.0
 	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/go-playground/locales v0.14.0
@@ -168,7 +167,6 @@ require (
 )
 
 replace (
-	github.com/dzwvip/oracle v1.2.4 => github.com/gorse-io/oracle v1.2.2-0.20220717033501-725373bd8ae8
 	gorm.io/driver/clickhouse v0.4.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb
 	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
 )
