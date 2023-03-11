@@ -436,12 +436,12 @@ func (r *Redis) RemSorted(ctx context.Context, members ...SetMember) error {
 }
 
 func (r *Redis) Push(ctx context.Context, name string, message string) error {
-	_, err := r.client.ZAdd(ctx, name, redis.Z{Member: message, Score: float64(time.Now().UnixNano())}).Result()
+	_, err := r.client.ZAdd(ctx, r.Key(name), redis.Z{Member: message, Score: float64(time.Now().UnixNano())}).Result()
 	return err
 }
 
 func (r *Redis) Pop(ctx context.Context, name string) (string, error) {
-	z, err := r.client.ZPopMin(ctx, name, 1).Result()
+	z, err := r.client.ZPopMin(ctx, r.Key(name), 1).Result()
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -452,5 +452,5 @@ func (r *Redis) Pop(ctx context.Context, name string) (string, error) {
 }
 
 func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
-	return r.client.ZCard(ctx, name).Result()
+	return r.client.ZCard(ctx, r.Key(name)).Result()
 }

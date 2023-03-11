@@ -96,8 +96,20 @@ func (m MongoDB) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = d.Collection("message").Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.M{"timestamp": 1},
+	_, err = d.Collection(m.MessageTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.M{
+			"name":  1,
+			"value": 1,
+		},
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	_, err = d.Collection(m.MessageTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.M{
+			"name":      1,
+			"timestamp": 1,
+		},
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -399,7 +411,7 @@ func (m MongoDB) RemSorted(ctx context.Context, members ...SetMember) error {
 }
 
 func (m MongoDB) Push(ctx context.Context, name, value string) error {
-	_, err := m.client.Database(m.dbName).Collection("message").UpdateOne(ctx,
+	_, err := m.client.Database(m.dbName).Collection(m.MessageTable()).UpdateOne(ctx,
 		bson.M{"name": name, "value": value},
 		bson.M{"$set": bson.M{"name": name, "value": value, "timestamp": time.Now().UnixNano()}},
 		options.Update().SetUpsert(true))
@@ -407,7 +419,7 @@ func (m MongoDB) Push(ctx context.Context, name, value string) error {
 }
 
 func (m MongoDB) Pop(ctx context.Context, name string) (string, error) {
-	result := m.client.Database(m.dbName).Collection("message").FindOneAndDelete(ctx,
+	result := m.client.Database(m.dbName).Collection(m.MessageTable()).FindOneAndDelete(ctx,
 		bson.M{"name": name}, options.FindOneAndDelete().SetSort(bson.M{"timestamp": 1}))
 	if err := result.Err(); err == mongo.ErrNoDocuments {
 		return "", io.EOF
@@ -422,7 +434,7 @@ func (m MongoDB) Pop(ctx context.Context, name string) (string, error) {
 }
 
 func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
-	return m.client.Database(m.dbName).Collection("message").CountDocuments(ctx, bson.M{
+	return m.client.Database(m.dbName).Collection(m.MessageTable()).CountDocuments(ctx, bson.M{
 		"name": name,
 	})
 }

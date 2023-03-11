@@ -105,6 +105,10 @@ func (tp TablePrefix) SortedSetsTable() string {
 	return string(tp) + "sorted_sets"
 }
 
+func (tp TablePrefix) MessageTable() string {
+	return string(tp) + "message"
+}
+
 func (tp TablePrefix) UsersTable() string {
 	return string(tp) + "users"
 }

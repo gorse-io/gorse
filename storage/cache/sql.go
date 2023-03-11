@@ -58,9 +58,9 @@ type SQLSortedSet struct {
 }
 
 type Message struct {
-	Name      string `gorm:"primaryKey"`
+	Name      string `gorm:"primaryKey;index:timestamp"`
 	Value     string `gorm:"primaryKey"`
-	Timestamp int64
+	Timestamp int64  `gorm:"index:timestamp"`
 }
 
 type SQLDatabase struct {
