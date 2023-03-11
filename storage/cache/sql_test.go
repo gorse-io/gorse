@@ -110,16 +110,22 @@ func TestMySQL(t *testing.T) {
 
 type SQLiteTestSuite struct {
 	baseTestSuite
+	path string
 }
 
 func (suite *SQLiteTestSuite) SetupSuite() {
 	var err error
 	// create database
-	suite.Database, err = Open("sqlite://:memory:", "gorse_")
+	suite.path = fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())
+	suite.Database, err = Open(suite.path, "gorse_")
 	suite.NoError(err)
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
+}
+
+func (suite *SQLiteTestSuite) TearDownSuite() {
+	_ = os.Remove(suite.path)
 }
 
 func TestSQLite(t *testing.T) {

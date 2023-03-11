@@ -295,6 +295,10 @@ type Database interface {
 	RemSortedByScore(ctx context.Context, key string, begin, end float64) error
 	SetSorted(ctx context.Context, key string, scores []Scored) error
 	RemSorted(ctx context.Context, members ...SetMember) error
+
+	Push(ctx context.Context, name, value string) error
+	Pop(ctx context.Context, name string) (string, error)
+	Remain(ctx context.Context, name string) (int64, error)
 }
 
 // Open a connection to a database.

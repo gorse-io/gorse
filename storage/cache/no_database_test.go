@@ -65,4 +65,11 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.RemSorted(ctx)
 	assert.ErrorIs(t, err, ErrNoDatabase)
+
+	err = database.Push(ctx, "", "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.Pop(ctx, "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.Remain(ctx, "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
 }

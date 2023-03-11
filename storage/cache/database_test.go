@@ -15,6 +15,7 @@ package cache
 
 import (
 	"context"
+	"io"
 	"math"
 	"testing"
 	"time"
@@ -277,6 +278,45 @@ func (suite *baseTestSuite) TestPurge() {
 	// purge empty dataset
 	err = suite.Database.Purge()
 	suite.NoError(err)
+}
+
+func (suite *baseTestSuite) TestPushPop() {
+	ctx := context.Background()
+	err := suite.Push(ctx, "a", "1")
+	suite.NoError(err)
+	err = suite.Push(ctx, "a", "2")
+	suite.NoError(err)
+	count, err := suite.Remain(ctx, "a")
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
+
+	err = suite.Push(ctx, "b", "1")
+	suite.NoError(err)
+	err = suite.Push(ctx, "b", "2")
+	suite.NoError(err)
+	err = suite.Push(ctx, "b", "1")
+	suite.NoError(err)
+	count, err = suite.Remain(ctx, "b")
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
+
+	value, err := suite.Pop(ctx, "a")
+	suite.NoError(err)
+	suite.Equal("1", value)
+	value, err = suite.Pop(ctx, "a")
+	suite.NoError(err)
+	suite.Equal("2", value)
+	_, err = suite.Pop(ctx, "a")
+	suite.ErrorIs(err, io.EOF)
+
+	value, err = suite.Pop(ctx, "b")
+	suite.NoError(err)
+	suite.Equal("2", value)
+	value, err = suite.Pop(ctx, "b")
+	suite.NoError(err)
+	suite.Equal("1", value)
+	_, err = suite.Pop(ctx, "b")
+	suite.ErrorIs(err, io.EOF)
 }
 
 func TestScored(t *testing.T) {
