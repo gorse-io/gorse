@@ -21,6 +21,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"io"
+	"time"
 )
 
 type MongoDB struct {
@@ -90,6 +92,12 @@ func (m MongoDB) Init() error {
 			{"name", 1},
 			{"score", 1},
 		},
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	_, err = d.Collection("message").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.M{"timestamp": 1},
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -388,4 +396,33 @@ func (m MongoDB) RemSorted(ctx context.Context, members ...SetMember) error {
 	}
 	_, err := c.BulkWrite(ctx, models)
 	return errors.Trace(err)
+}
+
+func (m MongoDB) Push(ctx context.Context, name, value string) error {
+	_, err := m.client.Database(m.dbName).Collection("message").UpdateOne(ctx,
+		bson.M{"name": name, "value": value},
+		bson.M{"$set": bson.M{"name": name, "value": value, "timestamp": time.Now().UnixNano()}},
+		options.Update().SetUpsert(true))
+	return err
+}
+
+func (m MongoDB) Pop(ctx context.Context, name string) (string, error) {
+	result := m.client.Database(m.dbName).Collection("message").FindOneAndDelete(ctx,
+		bson.M{"name": name}, options.FindOneAndDelete().SetSort(bson.M{"timestamp": 1}))
+	if err := result.Err(); err == mongo.ErrNoDocuments {
+		return "", io.EOF
+	} else if err != nil {
+		return "", errors.Trace(err)
+	}
+	var b bson.M
+	if err := result.Decode(&b); err != nil {
+		return "", errors.Trace(err)
+	}
+	return b["value"].(string), nil
+}
+
+func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
+	return m.client.Database(m.dbName).Collection("message").CountDocuments(ctx, bson.M{
+		"name": name,
+	})
 }

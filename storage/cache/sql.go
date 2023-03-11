@@ -27,8 +27,10 @@ import (
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"io"
 	"math"
 	_ "modernc.org/sqlite"
+	"time"
 )
 
 type SQLDriver int
@@ -55,6 +57,12 @@ type SQLSortedSet struct {
 	Score  float64 `gorm:"type:double precision;not null;index:name"`
 }
 
+type Message struct {
+	Name      string `gorm:"primaryKey"`
+	Value     string `gorm:"primaryKey"`
+	Timestamp int64
+}
+
 type SQLDatabase struct {
 	storage.TablePrefix
 	gormDB *gorm.DB
@@ -71,7 +79,7 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{})
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{})
 	return errors.Trace(err)
 }
 
@@ -380,4 +388,37 @@ func (db *SQLDatabase) RemSorted(ctx context.Context, members ...SetMember) erro
 	})
 	err := db.gormDB.WithContext(ctx).Delete(rows).Error
 	return errors.Trace(err)
+}
+
+func (db *SQLDatabase) Push(ctx context.Context, name, value string) error {
+	return db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
+		DoUpdates: clause.AssignmentColumns([]string{"timestamp"}),
+	}).Create(&Message{
+		Name:      name,
+		Value:     value,
+		Timestamp: time.Now().UnixNano(),
+	}).Error
+}
+
+func (db *SQLDatabase) Pop(ctx context.Context, name string) (string, error) {
+	var message Message
+	err := db.gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := db.gormDB.Order("timestamp").First(&message, "name = ?", name).Error; err != nil {
+			return err
+		}
+		if err := db.gormDB.Delete(&message).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err == gorm.ErrRecordNotFound {
+		return "", io.EOF
+	}
+	return message.Value, err
+}
+
+func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, err error) {
+	err = db.gormDB.WithContext(ctx).Model(&Message{}).Where("name = ?", name).Count(&count).Error
+	return
 }

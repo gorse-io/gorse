@@ -104,3 +104,15 @@ func (NoDatabase) SetSorted(_ context.Context, _ string, _ []Scored) error {
 func (NoDatabase) RemSorted(_ context.Context, _ ...SetMember) error {
 	return ErrNoDatabase
 }
+
+func (NoDatabase) Push(_ context.Context, _, _ string) error {
+	return ErrNoDatabase
+}
+
+func (NoDatabase) Pop(_ context.Context, _ string) (string, error) {
+	return "", ErrNoDatabase
+}
+
+func (NoDatabase) Remain(_ context.Context, _ string) (int64, error) {
+	return 0, ErrNoDatabase
+}
