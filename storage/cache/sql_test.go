@@ -17,7 +17,6 @@ package cache
 import (
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -30,7 +29,6 @@ import (
 var (
 	mySqlDSN    string
 	postgresDSN string
-	oracleDSN   string
 )
 
 func init() {
@@ -43,7 +41,6 @@ func init() {
 	}
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
-	oracleDSN = env("ORACLE_URI", "oracle://system:password@127.0.0.1:1521/XE")
 }
 
 type PostgresTestSuite struct {
@@ -109,45 +106,6 @@ func (suite *MySQLTestSuite) TestInit() {
 
 func TestMySQL(t *testing.T) {
 	suite.Run(t, new(MySQLTestSuite))
-}
-
-type OracleTestSuite struct {
-	baseTestSuite
-}
-
-func (suite *OracleTestSuite) SetupSuite() {
-	var err error
-	// create database
-	databaseComm, err := sql.Open("oracle", oracleDSN)
-	suite.NoError(err)
-	const dbName = "GORSE_CACHE_TEST"
-	rows, err := databaseComm.Query("select * from dba_users where username=:1", dbName)
-	suite.NoError(err)
-	if rows.Next() {
-		// drop user if exists
-		_, err = databaseComm.Exec(fmt.Sprintf("DROP USER %s CASCADE", dbName))
-		suite.NoError(err)
-	}
-	err = rows.Close()
-	suite.NoError(err)
-	_, err = databaseComm.Exec(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s", dbName, dbName))
-	suite.NoError(err)
-	_, err = databaseComm.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES TO %s", dbName))
-	suite.NoError(err)
-	err = databaseComm.Close()
-	suite.NoError(err)
-	// connect database
-	parsed, err := url.Parse(oracleDSN)
-	suite.NoError(err)
-	suite.Database, err = Open(fmt.Sprintf("oracle://%s:%s@%s/%s", dbName, dbName, parsed.Host, parsed.Path), "gorse_")
-	suite.NoError(err)
-	// create schema
-	err = suite.Database.Init()
-	suite.NoError(err)
-}
-
-func TestOracle(t *testing.T) {
-	suite.Run(t, new(OracleTestSuite))
 }
 
 type SQLiteTestSuite struct {

@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
-	"github.com/dzwvip/oracle"
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -274,21 +273,6 @@ func Open(path, tablePrefix string) (Database, error) {
 			panic("table prefix is not supported for redis")
 		}
 		log.Logger().Warn("redis is used for testing only")
-		return database, nil
-	} else if strings.HasPrefix(path, storage.OraclePrefix) {
-		database := new(SQLDatabase)
-		database.driver = Oracle
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("oracle", path,
-			otelsql.WithAttributes(semconv.DBSystemOracle),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
-			return nil, errors.Trace(err)
-		}
-		database.gormDB, err = gorm.Open(oracle.New(oracle.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)

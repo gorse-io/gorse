@@ -711,7 +711,7 @@ func (suite *baseTestSuite) TestTimezone() {
 			item, err = suite.Database.GetItem(ctx, "200")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
-		case ClickHouse, Oracle:
+		case ClickHouse:
 			item, err := suite.Database.GetItem(ctx, "100")
 			suite.NoError(err)
 			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)

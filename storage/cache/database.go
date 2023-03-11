@@ -23,7 +23,6 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/araddon/dateparse"
-	"github.com/dzwvip/oracle"
 	"github.com/go-redis/redis/extra/redisotel/v9"
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
@@ -415,21 +414,6 @@ func Open(path, tablePrefix string) (Database, error) {
 			IgnoreRecordNotFoundError: false,
 		}
 		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.OraclePrefix) {
-		database := new(SQLDatabase)
-		database.driver = Oracle
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("oracle", path,
-			otelsql.WithAttributes(semconv.DBSystemOracle),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
-			return nil, errors.Trace(err)
-		}
-		database.gormDB, err = gorm.Open(oracle.New(oracle.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

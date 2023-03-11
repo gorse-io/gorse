@@ -37,7 +37,6 @@ const (
 	MySQL SQLDriver = iota
 	Postgres
 	SQLite
-	Oracle
 )
 
 type SQLValue struct {
