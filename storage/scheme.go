@@ -110,7 +110,7 @@ func (tp TablePrefix) MessageTable() string {
 }
 
 func (tp TablePrefix) DocumentTable() string {
-	return string(tp) + "document"
+	return string(tp) + "documents"
 }
 
 func (tp TablePrefix) UsersTable() string {
@@ -147,6 +147,8 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 				"ClickhouseUser", "Users",
 				"ClickHouseItem", "Items",
 				"ClickHouseFeedback", "Feedback",
+				"PostgresDocument", "Documents",
+				"SQLiteDocument", "Documents",
 			),
 		},
 	}

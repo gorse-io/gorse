@@ -20,6 +20,7 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
@@ -62,6 +63,20 @@ type Message struct {
 	Timestamp int64  `gorm:"index:timestamp"`
 }
 
+type PostgresDocument struct {
+	Name       string         `gorm:"primaryKey"`
+	Value      string         `gorm:"primaryKey"`
+	Categories pq.StringArray `gorm:"type:text[]"`
+	Score      float64
+}
+
+type SQLiteDocument struct {
+	Name       string   `gorm:"primaryKey"`
+	Value      string   `gorm:"primaryKey"`
+	Categories []string `gorm:"type:text;serializer:json"`
+	Score      float64
+}
+
 type SQLDatabase struct {
 	storage.TablePrefix
 	gormDB *gorm.DB
@@ -79,6 +94,15 @@ func (db *SQLDatabase) Ping() error {
 
 func (db *SQLDatabase) Init() error {
 	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	switch db.driver {
+	case Postgres:
+		err = db.gormDB.AutoMigrate(&PostgresDocument{})
+	case SQLite:
+		err = db.gormDB.AutoMigrate(&SQLiteDocument{})
+	}
 	return errors.Trace(err)
 }
 
@@ -423,9 +447,75 @@ func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, er
 }
 
 func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+	var rows any
+	switch db.driver {
+	case Postgres:
+		rows = lo.Map(documents, func(document Document, _ int) PostgresDocument {
+			return PostgresDocument{
+				Name:       name,
+				Value:      document.Value,
+				Score:      document.Score,
+				Categories: document.Categories,
+			}
+		})
+	case SQLite:
+		rows = lo.Map(documents, func(document Document, _ int) SQLiteDocument {
+			return SQLiteDocument{
+				Name:       name,
+				Value:      document.Value,
+				Score:      document.Score,
+				Categories: document.Categories,
+			}
+		})
+	}
+	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
+		DoUpdates: clause.AssignmentColumns([]string{"score", "categories"}),
+	}).Create(rows)
 	return nil
 }
 
 func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
-	return nil, nil
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{})
+	switch db.driver {
+	case Postgres:
+		tx = tx.Select("value, score, categories").
+			Where("name = ? and categories @> ?", name, pq.StringArray(query))
+	case SQLite:
+		tx = tx.Raw("select gorse_documents.`value`, score, categories from gorse_documents, json_each(categories) where json_each.value in ? group by gorse_documents.`value` having count(1) = ?", query, len(query))
+	}
+	tx = tx.Order("score desc").Offset(begin)
+	if end == -1 {
+		tx = tx.Limit(end - begin)
+	}
+	rows, err := tx.Rows()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	documents := make([]Document, 0, 10)
+	for rows.Next() {
+		switch db.driver {
+		case Postgres:
+			var document PostgresDocument
+			if err = rows.Scan(&document.Value, &document.Score, &document.Categories); err != nil {
+				return nil, errors.Trace(err)
+			}
+			documents = append(documents, Document{
+				Value:      document.Value,
+				Score:      document.Score,
+				Categories: document.Categories,
+			})
+		case SQLite:
+			var document SQLiteDocument
+			if err = rows.Scan(&document.Value, &document.Score, &document.Categories); err != nil {
+				return nil, errors.Trace(err)
+			}
+			documents = append(documents, Document{
+				Value:      document.Value,
+				Score:      document.Score,
+				Categories: document.Categories,
+			})
+		}
+	}
+	return documents, nil
 }

@@ -56,7 +56,7 @@ jobs:
           - 8123
 
       redis:
-        image: redis:5.0
+        image: redis/redis-stack
         ports:
           - 6379
 

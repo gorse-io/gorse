@@ -200,7 +200,9 @@ func (r *Redis) Ping() error {
 
 // Init nothing.
 func (r *Redis) Init() error {
-	return nil
+	// create index
+	_, err := r.client.Do(context.TODO(), "FT.CREATE", "test", "ON", "HASH", "PREFIX", "1", "test:", "SCHEMA", "name", "TEXT").Result()
+	return errors.Trace(err)
 }
 
 func (r *Redis) Scan(work func(string) error) error {
