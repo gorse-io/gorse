@@ -351,10 +351,30 @@ func (suite *baseTestSuite) TestDocument() {
 		Categories: []string{},
 	})
 	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "a", Document{
+		Value:      "5",
+		Score:      5,
+		Categories: []string{"b"},
+	})
+	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "b", Document{
+		Value:      "6",
+		Score:      6,
+		Categories: []string{"b"},
+	})
+	suite.NoError(err)
 
 	documents, err := suite.SearchDocuments(ctx, "a", []string{"b"}, 1, 3)
 	suite.NoError(err)
 	suite.Equal([]Document{
+		{Value: "3", Score: 3, Categories: []string{"b"}},
+		{Value: "2", Score: 2, Categories: []string{"b", "c"}},
+	}, documents)
+	documents, err = suite.SearchDocuments(ctx, "a", []string{"b"}, 0, -1)
+	suite.NoError(err)
+	suite.Equal([]Document{
+		{Value: "5", Score: 5, Categories: []string{"b"}},
+		{Value: "3", Score: 3, Categories: []string{"b"}},
 		{Value: "2", Score: 2, Categories: []string{"b", "c"}},
 		{Value: "1", Score: 1, Categories: []string{"a", "b"}},
 	}, documents)

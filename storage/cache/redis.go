@@ -201,7 +201,13 @@ func (r *Redis) Ping() error {
 // Init nothing.
 func (r *Redis) Init() error {
 	// create index
-	_, err := r.client.Do(context.TODO(), "FT.CREATE", "test", "ON", "HASH", "PREFIX", "1", "test:", "SCHEMA", "name", "TEXT").Result()
+	_, err := r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
+		"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
+		"name", "TEXT", "NOSTEM",
+		"value", "TEXT",
+		"score", "NUMERIC", "SORTABLE",
+		"categories", "TAG", "SEPARATOR", ";").
+		Result()
 	return errors.Trace(err)
 }
 
@@ -458,9 +464,52 @@ func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
 }
 
 func (r *Redis) AddDocuments(ctx context.Context, name string, documents ...Document) error {
-	return nil
+	p := r.client.Pipeline()
+	for _, document := range documents {
+		p.Do(ctx, "HSET", r.DocumentTable()+":"+name+":"+document.Value,
+			"name", name,
+			"value", document.Value,
+			"score", document.Score,
+			"categories", strings.Join(document.Categories, ";"))
+	}
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
-	return nil, nil
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("@name:%s", "a"))
+	for _, q := range query {
+		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", q))
+	}
+	fmt.Println(builder.String())
+	args := []any{"FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", begin}
+	if end == -1 {
+		args = append(args, 10000)
+	} else {
+		args = append(args, end-begin)
+	}
+	result, err := r.client.Do(ctx, args...).Result()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	rows := result.([]any)
+	documents := make([]Document, 0)
+	fmt.Println(rows)
+	for i := 2; i < len(rows); i += 2 {
+		row := rows[i]
+		fields := make(map[string]any)
+		for j := 0; j < len(row.([]any)); j += 2 {
+			fields[row.([]any)[j].(string)] = row.([]any)[j+1]
+		}
+		var document Document
+		document.Value = fields["value"].(string)
+		document.Score, err = strconv.ParseFloat(fields["score"].(string), 64)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		document.Categories = strings.Split(fields["categories"].(string), ";")
+		documents = append(documents, document)
+	}
+	return documents, nil
 }
