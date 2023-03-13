@@ -17,14 +17,15 @@ package cache
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis/v9"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/storage"
 	"io"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-redis/redis/v9"
+	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/storage"
 )
 
 func ParseRedisClusterURL(redisURL string) (*redis.ClusterOptions, error) {
@@ -203,8 +204,8 @@ func (r *Redis) Init() error {
 	// create index
 	_, err := r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
 		"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
-		"name", "TEXT", "NOSTEM",
-		"value", "TEXT",
+		"name", "TAG",
+		"value", "TAG",
 		"score", "NUMERIC", "SORTABLE",
 		"categories", "TAG", "SEPARATOR", ";").
 		Result()
@@ -478,11 +479,10 @@ func (r *Redis) AddDocuments(ctx context.Context, name string, documents ...Docu
 
 func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@name:%s", "a"))
+	builder.WriteString(fmt.Sprintf("@name:{ %s }", name))
 	for _, q := range query {
 		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", q))
 	}
-	fmt.Println(builder.String())
 	args := []any{"FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", begin}
 	if end == -1 {
 		args = append(args, 10000)
@@ -495,7 +495,6 @@ func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string
 	}
 	rows := result.([]any)
 	documents := make([]Document, 0)
-	fmt.Println(rows)
 	for i := 2; i < len(rows); i += 2 {
 		row := rows[i]
 		fields := make(map[string]any)
