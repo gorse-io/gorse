@@ -18,6 +18,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"math"
+	"strings"
+	"time"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/lib/pq"
@@ -27,10 +32,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"io"
-	"math"
 	_ "modernc.org/sqlite"
-	"time"
 )
 
 type SQLDriver int
@@ -70,7 +72,7 @@ type PostgresDocument struct {
 	Score      float64
 }
 
-type SQLiteDocument struct {
+type SQLDocument struct {
 	Name       string   `gorm:"primaryKey"`
 	Value      string   `gorm:"primaryKey"`
 	Categories []string `gorm:"type:text;serializer:json"`
@@ -101,7 +103,7 @@ func (db *SQLDatabase) Init() error {
 	case Postgres:
 		err = db.gormDB.AutoMigrate(&PostgresDocument{})
 	case SQLite:
-		err = db.gormDB.AutoMigrate(&SQLiteDocument{})
+		err = db.gormDB.AutoMigrate(&SQLDocument{})
 	}
 	return errors.Trace(err)
 }
@@ -459,8 +461,8 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents 
 			}
 		})
 	case SQLite:
-		rows = lo.Map(documents, func(document Document, _ int) SQLiteDocument {
-			return SQLiteDocument{
+		rows = lo.Map(documents, func(document Document, _ int) SQLDocument {
+			return SQLDocument{
 				Name:       name,
 				Value:      document.Value,
 				Score:      document.Score,
@@ -482,7 +484,12 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 		tx = tx.Select("value, score, categories").
 			Where("name = ? and categories @> ?", name, pq.StringArray(query))
 	case SQLite:
-		tx = tx.Raw("select gorse_documents.`value`, score, categories from gorse_documents, json_each(categories) where json_each.value in ? group by gorse_documents.`value` having count(1) = ?", query, len(query))
+		var builder strings.Builder
+		builder.WriteString(fmt.Sprintf("select %s.value, score, categories from %s, json_each(categories) ", db.DocumentTable(), db.DocumentTable()))
+		builder.WriteString(fmt.Sprintf("where name = ? and json_each.value in ? group by %s.value ", db.DocumentTable()))
+		builder.WriteString("having count(1) = ? ")
+		builder.WriteString("order by score desc limit ? offset ?")
+		tx = tx.Raw(builder.String(), name, query, len(query), end-begin, begin)
 	}
 	tx = tx.Order("score desc").Offset(begin)
 	if end == -1 {
@@ -506,15 +513,11 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 				Categories: document.Categories,
 			})
 		case SQLite:
-			var document SQLiteDocument
-			if err = rows.Scan(&document.Value, &document.Score, &document.Categories); err != nil {
+			var document Document
+			if err = db.gormDB.ScanRows(rows, &document); err != nil {
 				return nil, errors.Trace(err)
 			}
-			documents = append(documents, Document{
-				Value:      document.Value,
-				Score:      document.Score,
-				Categories: document.Categories,
-			})
+			documents = append(documents, document)
 		}
 	}
 	return documents, nil

@@ -16,6 +16,9 @@ package storage
 
 import (
 	"database/sql"
+	"net/url"
+	"strings"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -23,8 +26,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 	"moul.io/zapgorm2"
-	"net/url"
-	"strings"
 )
 
 const (
@@ -144,11 +145,11 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 				"SQLUser", "Users",
 				"SQLItem", "Items",
 				"SQLFeedback", "Feedback",
+				"SQLDocument", "Documents",
 				"ClickhouseUser", "Users",
 				"ClickHouseItem", "Items",
 				"ClickHouseFeedback", "Feedback",
 				"PostgresDocument", "Documents",
-				"SQLiteDocument", "Documents",
 			),
 		},
 	}

@@ -275,7 +275,7 @@ func Member(name, member string) SetMember {
 type Document struct {
 	Value      string
 	Score      float64
-	Categories []string
+	Categories []string `gorm:"type:text;serializer:json"`
 }
 
 // Database is the common interface for cache store.
