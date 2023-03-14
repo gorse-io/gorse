@@ -17,90 +17,16 @@ package cache
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis/v9"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/storage"
 	"io"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-redis/redis/v9"
+	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/storage"
 )
-
-func ParseRedisClusterURL(redisURL string) (*redis.ClusterOptions, error) {
-	options := &redis.ClusterOptions{}
-	uri := redisURL
-
-	var err error
-	if strings.HasPrefix(redisURL, storage.RedisClusterPrefix) {
-		uri = uri[len(storage.RedisClusterPrefix):]
-	} else {
-		return nil, fmt.Errorf("scheme must be \"redis+cluster\"")
-	}
-
-	if idx := strings.Index(uri, "@"); idx != -1 {
-		userInfo := uri[:idx]
-		uri = uri[idx+1:]
-
-		username := userInfo
-		var password string
-
-		if idx := strings.Index(userInfo, ":"); idx != -1 {
-			username = userInfo[:idx]
-			password = userInfo[idx+1:]
-		}
-
-		// Validate and process the username.
-		if strings.Contains(username, "/") {
-			return nil, fmt.Errorf("unescaped slash in username")
-		}
-		options.Username, err = url.PathUnescape(username)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Errorf("invalid username"))
-		}
-
-		// Validate and process the password.
-		if strings.Contains(password, ":") {
-			return nil, fmt.Errorf("unescaped colon in password")
-		}
-		if strings.Contains(password, "/") {
-			return nil, fmt.Errorf("unescaped slash in password")
-		}
-		options.Password, err = url.PathUnescape(password)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Errorf("invalid password"))
-		}
-	}
-
-	// fetch the hosts field
-	hosts := uri
-	if idx := strings.IndexAny(uri, "/?@"); idx != -1 {
-		if uri[idx] == '@' {
-			return nil, fmt.Errorf("unescaped @ sign in user info")
-		}
-		hosts = uri[:idx]
-	}
-
-	options.Addrs = strings.Split(hosts, ",")
-	uri = uri[len(hosts):]
-	if len(uri) > 0 && uri[0] == '/' {
-		uri = uri[1:]
-	}
-
-	// grab connection arguments from URI
-	connectionArgsFromQueryString, err := extractQueryArgsFromURI(uri)
-	if err != nil {
-		return nil, err
-	}
-	for _, pair := range connectionArgsFromQueryString {
-		err = addOption(options, pair)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return options, nil
-}
 
 func extractQueryArgsFromURI(uri string) ([]string, error) {
 	if len(uri) == 0 {
