@@ -17,6 +17,7 @@ package cache
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -102,7 +103,7 @@ func (db *SQLDatabase) Init() error {
 	switch db.driver {
 	case Postgres:
 		err = db.gormDB.AutoMigrate(&PostgresDocument{})
-	case SQLite:
+	case SQLite, MySQL:
 		err = db.gormDB.AutoMigrate(&SQLDocument{})
 	}
 	return errors.Trace(err)
@@ -460,7 +461,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents 
 				Categories: document.Categories,
 			}
 		})
-	case SQLite:
+	case SQLite, MySQL:
 		rows = lo.Map(documents, func(document Document, _ int) SQLDocument {
 			return SQLDocument{
 				Name:       name,
@@ -490,10 +491,19 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 		builder.WriteString("having count(1) = ? ")
 		builder.WriteString("order by score desc limit ? offset ?")
 		tx = tx.Raw(builder.String(), name, query, len(query), end-begin, begin)
+	case MySQL:
+		q, err := json.Marshal(query)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		tx = tx.Select("value, score, categories").
+			Where("name = ? and JSON_OVERLAPS(categories,?)", name, string(q))
 	}
 	tx = tx.Order("score desc").Offset(begin)
-	if end == -1 {
+	if end != -1 {
 		tx = tx.Limit(end - begin)
+	} else {
+		tx = tx.Limit(math.MaxInt64)
 	}
 	rows, err := tx.Rows()
 	if err != nil {
@@ -512,7 +522,7 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 				Score:      document.Score,
 				Categories: document.Categories,
 			})
-		case SQLite:
+		case SQLite, MySQL:
 			var document Document
 			if err = db.gormDB.ScanRows(rows, &document); err != nil {
 				return nil, errors.Trace(err)
