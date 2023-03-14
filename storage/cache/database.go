@@ -317,19 +317,6 @@ func Open(path, tablePrefix string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, storage.RedisClusterPrefix) {
-		opt, err := ParseRedisClusterURL(path)
-		if err != nil {
-			return nil, err
-		}
-		database := new(Redis)
-		database.client = redis.NewClusterClient(opt)
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
-			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
-			return nil, errors.Trace(err)
-		}
-		return database, nil
 	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
 		// connect to database
 		database := new(MongoDB)
