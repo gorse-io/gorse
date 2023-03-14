@@ -16,98 +16,14 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/storage"
 )
-
-func extractQueryArgsFromURI(uri string) ([]string, error) {
-	if len(uri) == 0 {
-		return nil, nil
-	}
-
-	if uri[0] != '?' {
-		return nil, errors.New("must have a ? separator between path and query")
-	}
-
-	uri = uri[1:]
-	if len(uri) == 0 {
-		return nil, nil
-	}
-	return strings.FieldsFunc(uri, func(r rune) bool { return r == ';' || r == '&' }), nil
-}
-
-type optionHandler struct {
-	int      *int
-	bool     *bool
-	duration *time.Duration
-}
-
-func addOption(options *redis.ClusterOptions, pair string) error {
-	kv := strings.SplitN(pair, "=", 2)
-	if len(kv) != 2 || kv[0] == "" {
-		return fmt.Errorf("invalid option")
-	}
-
-	key, err := url.QueryUnescape(kv[0])
-	if err != nil {
-		return errors.Wrap(err, errors.Errorf("invalid option key %q", kv[0]))
-	}
-
-	value, err := url.QueryUnescape(kv[1])
-	if err != nil {
-		return errors.Wrap(err, errors.Errorf("invalid option value %q", kv[1]))
-	}
-
-	handlers := map[string]optionHandler{
-		"max_retries":        {int: &options.MaxRetries},
-		"min_retry_backoff":  {duration: &options.MinRetryBackoff},
-		"max_retry_backoff":  {duration: &options.MaxRetryBackoff},
-		"dial_timeout":       {duration: &options.DialTimeout},
-		"read_timeout":       {duration: &options.ReadTimeout},
-		"write_timeout":      {duration: &options.WriteTimeout},
-		"pool_fifo":          {bool: &options.PoolFIFO},
-		"pool_size":          {int: &options.PoolSize},
-		"pool_timeout":       {duration: &options.PoolTimeout},
-		"min_idle_conns":     {int: &options.MinIdleConns},
-		"max_idle_conns":     {int: &options.MaxIdleConns},
-		"conn_max_idle_time": {duration: &options.ConnMaxIdleTime},
-		"conn_max_lifetime":  {duration: &options.ConnMaxLifetime},
-	}
-
-	lowerKey := strings.ToLower(key)
-	if handler, ok := handlers[lowerKey]; ok {
-		if handler.int != nil {
-			*handler.int, err = strconv.Atoi(value)
-			if err != nil {
-				return errors.Wrap(err, fmt.Errorf("invalid '%s' value: %q", key, value))
-			}
-		} else if handler.duration != nil {
-			*handler.duration, err = time.ParseDuration(value)
-			if err != nil {
-				return errors.Wrap(err, fmt.Errorf("invalid '%s' value: %q", key, value))
-			}
-		} else if handler.bool != nil {
-			*handler.bool, err = strconv.ParseBool(value)
-			if err != nil {
-				return errors.Wrap(err, fmt.Errorf("invalid '%s' value: %q", key, value))
-			}
-		} else {
-			return fmt.Errorf("redis: unexpected option: %s", key)
-		}
-	} else {
-		return fmt.Errorf("redis: unexpected option: %s", key)
-	}
-
-	return nil
-}
 
 // Redis cache storage.
 type Redis struct {
@@ -131,13 +47,7 @@ func (r *Redis) Init() error {
 
 func (r *Redis) Scan(work func(string) error) error {
 	ctx := context.Background()
-	if clusterClient, isCluster := r.client.(*redis.ClusterClient); isCluster {
-		return clusterClient.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
-			return r.scan(ctx, client, work)
-		})
-	} else {
-		return r.scan(ctx, r.client, work)
-	}
+	return r.scan(ctx, r.client, work)
 }
 
 func (r *Redis) scan(ctx context.Context, client redis.UniversalClient, work func(string) error) error {
@@ -164,16 +74,10 @@ func (r *Redis) scan(ctx context.Context, client redis.UniversalClient, work fun
 
 func (r *Redis) Purge() error {
 	ctx := context.Background()
-	if clusterClient, isCluster := r.client.(*redis.ClusterClient); isCluster {
-		return clusterClient.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
-			return r.purge(ctx, client, isCluster)
-		})
-	} else {
-		return r.purge(ctx, r.client, isCluster)
-	}
+	return r.purge(ctx, r.client)
 }
 
-func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isCluster bool) error {
+func (r *Redis) purge(ctx context.Context, client redis.UniversalClient) error {
 	var (
 		result []string
 		cursor uint64
@@ -185,20 +89,8 @@ func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isClust
 			return errors.Trace(err)
 		}
 		if len(result) > 0 {
-			if isCluster {
-				p := client.Pipeline()
-				for _, key := range result {
-					if err = p.Del(ctx, key).Err(); err != nil {
-						return errors.Trace(err)
-					}
-				}
-				if _, err = p.Exec(ctx); err != nil {
-					return errors.Trace(err)
-				}
-			} else {
-				if err = client.Del(ctx, result...).Err(); err != nil {
-					return errors.Trace(err)
-				}
+			if err = client.Del(ctx, result...).Err(); err != nil {
+				return errors.Trace(err)
 			}
 		}
 		if cursor == 0 {
