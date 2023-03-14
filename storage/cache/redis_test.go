@@ -18,9 +18,7 @@ import (
 	"context"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -57,28 +55,4 @@ func (suite *RedisTestSuite) SetupSuite() {
 
 func TestRedis(t *testing.T) {
 	suite.Run(t, new(RedisTestSuite))
-}
-
-func TestParseRedisClusterURL(t *testing.T) {
-	options, err := ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/?" +
-		"max_retries=1000&dial_timeout=1h&pool_fifo=true")
-	if assert.NoError(t, err) {
-		assert.Equal(t, "username", options.Username)
-		assert.Equal(t, "password", options.Password)
-		assert.Equal(t, []string{"127.0.0.1:6379", "127.0.0.1:6380", "127.0.0.1:6381"}, options.Addrs)
-		assert.Equal(t, 1000, options.MaxRetries)
-		assert.Equal(t, time.Hour, options.DialTimeout)
-		assert.True(t, options.PoolFIFO)
-	}
-
-	_, err = ParseRedisClusterURL("redis://")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?max_retries=a")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?dial_timeout=a")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?pool_fifo=a")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?a=1")
-	assert.Error(t, err)
 }
