@@ -53,7 +53,7 @@ type Item struct {
 	IsHidden   bool
 	Categories []string `gorm:"serializer:json"`
 	Timestamp  time.Time
-	Labels     []string `gorm:"serializer:json"`
+	Labels     any `gorm:"serializer:json"`
 	Comment    string
 }
 
@@ -62,21 +62,21 @@ type ItemPatch struct {
 	IsHidden   *bool
 	Categories []string
 	Timestamp  *time.Time
-	Labels     []string
+	Labels     any
 	Comment    *string
 }
 
 // User stores meta data about user.
 type User struct {
 	UserId    string   `gorm:"primaryKey"`
-	Labels    []string `gorm:"serializer:json"`
+	Labels    any      `gorm:"serializer:json"`
 	Subscribe []string `gorm:"serializer:json"`
 	Comment   string
 }
 
 // UserPatch is the modification on a user.
 type UserPatch struct {
-	Labels    []string
+	Labels    any
 	Subscribe []string
 	Comment   *string
 }
