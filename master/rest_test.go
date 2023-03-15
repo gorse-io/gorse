@@ -227,9 +227,9 @@ func TestMaster_ImportUsers(t *testing.T) {
 	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.User{
-		{UserId: "1", Labels: []string{"a", "b"}},
-		{UserId: "2", Labels: []string{"b", "c"}},
-		{UserId: "3", Labels: []string{"c", "d"}},
+		{UserId: "1", Labels: []any{"a", "b"}},
+		{UserId: "2", Labels: []any{"b", "c"}},
+		{UserId: "3", Labels: []any{"c", "d"}},
 	}, items)
 }
 
@@ -260,9 +260,9 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.User{
-		{UserId: "1", Labels: []string{"a", "用例"}},
-		{UserId: "2", Labels: []string{"b", "乱码"}},
-		{UserId: "3", Labels: []string{"c", "测试"}},
+		{UserId: "1", Labels: []any{"a", "用例"}},
+		{UserId: "2", Labels: []any{"b", "乱码"}},
+		{UserId: "3", Labels: []any{"c", "测试"}},
 	}, items)
 }
 
@@ -301,9 +301,9 @@ func TestMaster_ImportItems(t *testing.T) {
 	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
-		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
-		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []string{"c", "d"}, "\"three\""},
+		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []any{"a", "b"}, "o,n,e"},
+		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []any{"b", "c"}, "t\r\nw\r\no"},
+		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []any{"c", "d"}, "\"three\""},
 	}, items)
 }
 
@@ -335,8 +335,8 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "one"},
-		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "two"},
+		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []any{"a", "b"}, "one"},
+		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []any{"b", "c"}, "two"},
 		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), nil, "three"},
 	}, items)
 }

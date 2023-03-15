@@ -18,19 +18,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"math"
+	"time"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
-	_ "github.com/sijms/go-ora/v2"
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"io"
-	"math"
 	_ "modernc.org/sqlite"
-	"time"
 )
 
 type SQLDriver int

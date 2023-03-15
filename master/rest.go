@@ -969,7 +969,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 		for users := range userChan {
 			for _, user := range users {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
-					base.Escape(user.UserId), base.Escape(strings.Join(user.Labels, "|"))))); err != nil {
+					base.Escape(user.UserId), base.Escape(strings.Join(data.FlattenLabels(user.Labels), "|"))))); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1025,8 +1025,9 @@ func (m *Master) importUsers(ctx context.Context, response http.ResponseWriter, 
 		user := data.User{UserId: splits[0]}
 		// 2. labels
 		if splits[1] != "" {
-			user.Labels = strings.Split(splits[1], labelSep)
-			for _, label := range user.Labels {
+			labels := strings.Split(splits[1], labelSep)
+			user.Labels = labels
+			for _, label := range labels {
 				if err = base.ValidateLabel(label); err != nil {
 					server.BadRequest(restful.NewResponse(response),
 						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
@@ -1096,7 +1097,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			for _, item := range items {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%t,%s,%v,%s,%s\r\n",
 					base.Escape(item.ItemId), item.IsHidden, base.Escape(strings.Join(item.Categories, "|")),
-					item.Timestamp, base.Escape(strings.Join(item.Labels, "|")), base.Escape(item.Comment)))); err != nil {
+					item.Timestamp, base.Escape(strings.Join(data.FlattenLabels(item.Labels), "|")), base.Escape(item.Comment)))); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1182,8 +1183,9 @@ func (m *Master) importItems(ctx context.Context, response http.ResponseWriter, 
 		}
 		// 5. labels
 		if splits[4] != "" {
-			item.Labels = strings.Split(splits[4], labelSep)
-			for _, label := range item.Labels {
+			labels := strings.Split(splits[4], labelSep)
+			item.Labels = labels
+			for _, label := range labels {
 				if err = base.ValidateLabel(label); err != nil {
 					server.BadRequest(restful.NewResponse(response),
 						fmt.Errorf("invalid label `%v` at line %d (%s)", label, lineNumber, err.Error()))

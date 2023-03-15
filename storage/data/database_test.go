@@ -168,7 +168,7 @@ func (suite *baseTestSuite) TestUsers() {
 	for i := 9; i >= 0; i-- {
 		insertedUsers = append(insertedUsers, User{
 			UserId:  strconv.Itoa(i),
-			Labels:  []string{strconv.Itoa(i + 100)},
+			Labels:  []any{strconv.Itoa(i + 100)},
 			Comment: fmt.Sprintf("comment %d", i),
 		})
 	}
@@ -179,7 +179,7 @@ func (suite *baseTestSuite) TestUsers() {
 	suite.Equal(10, len(users))
 	for i, user := range users {
 		suite.Equal(strconv.Itoa(i), user.UserId)
-		suite.Equal([]string{strconv.Itoa(i + 100)}, user.Labels)
+		suite.Equal([]any{strconv.Itoa(i + 100)}, user.Labels)
 		suite.Equal(fmt.Sprintf("comment %d", i), user.Comment)
 	}
 	// Get user stream
@@ -214,7 +214,7 @@ func (suite *baseTestSuite) TestUsers() {
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
 	suite.Equal("modify", user.Comment)
-	suite.Equal([]string{"a", "b", "c"}, user.Labels)
+	suite.Equal([]any{"a", "b", "c"}, user.Labels)
 	suite.Equal([]string{"d", "e", "f"}, user.Subscribe)
 
 	// test insert empty
@@ -306,11 +306,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check users that already exists
 	user, err := suite.Database.GetUser(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(User{"0", []string{"a"}, []string{"x"}, "comment"}, user)
+	suite.Equal(User{"0", []any{"a"}, []string{"x"}, "comment"}, user)
 	// check items that already exists
 	item, err := suite.Database.GetItem(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
+	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
@@ -401,14 +401,14 @@ func (suite *baseTestSuite) TestItem() {
 			IsHidden:   true,
 			Categories: []string{"a"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"a"},
+			Labels:     []any{"a"},
 			Comment:    "comment 0",
 		},
 		{
 			ItemId:     "2",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"a"},
+			Labels:     []any{"a"},
 			Comment:    "comment 2",
 		},
 		{
@@ -416,14 +416,14 @@ func (suite *baseTestSuite) TestItem() {
 			IsHidden:   true,
 			Categories: []string{"a"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"a", "b"},
+			Labels:     []any{"a", "b"},
 			Comment:    "comment 4",
 		},
 		{
 			ItemId:     "6",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"b"},
+			Labels:     []any{"b"},
 			Comment:    "comment 6",
 		},
 		{
@@ -431,7 +431,7 @@ func (suite *baseTestSuite) TestItem() {
 			IsHidden:   true,
 			Categories: []string{"a"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"b"},
+			Labels:     []any{"b"},
 			Comment:    "comment 8",
 		},
 	}
@@ -469,7 +469,7 @@ func (suite *baseTestSuite) TestItem() {
 	suite.NoError(err)
 	suite.False(item.IsHidden)
 	suite.Equal([]string{"b"}, item.Categories)
-	suite.Equal([]string{"o"}, item.Labels)
+	suite.Equal([]any{"o"}, item.Labels)
 	suite.Equal("override", item.Comment)
 
 	// test modify
@@ -491,7 +491,7 @@ func (suite *baseTestSuite) TestItem() {
 	suite.True(item.IsHidden)
 	suite.Equal([]string{"a"}, item.Categories)
 	suite.Equal("modify", item.Comment)
-	suite.Equal([]string{"a", "b", "c"}, item.Labels)
+	suite.Equal([]any{"a", "b", "c"}, item.Labels)
 	suite.Equal(timestamp, item.Timestamp)
 
 	// test insert empty
@@ -605,31 +605,31 @@ func (suite *baseTestSuite) TestTimeLimit() {
 		{
 			ItemId:    "0",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a"},
+			Labels:    []any{"a"},
 			Comment:   "comment 0",
 		},
 		{
 			ItemId:    "2",
 			Timestamp: time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a"},
+			Labels:    []any{"a"},
 			Comment:   "comment 2",
 		},
 		{
 			ItemId:    "4",
 			Timestamp: time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a", "b"},
+			Labels:    []any{"a", "b"},
 			Comment:   "comment 4",
 		},
 		{
 			ItemId:    "6",
 			Timestamp: time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"b"},
+			Labels:    []any{"b"},
 			Comment:   "comment 6",
 		},
 		{
 			ItemId:    "8",
 			Timestamp: time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"b"},
+			Labels:    []any{"b"},
 			Comment:   "comment 8",
 		},
 	}

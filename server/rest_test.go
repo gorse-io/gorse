@@ -178,6 +178,32 @@ func (suite *ServerTestSuite) TestUsers() {
 			Labels:  []string{"a", "b", "c"},
 		})).
 		End()
+
+	// malicious labels
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(data.User{UserId: "malicious", Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/users").
+		Header("X-API-Key", apiKey).
+		JSON([]data.User{{UserId: "malicious", Labels: map[string]any{"price": 100}}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/user/malicious").
+		Header("X-API-Key", apiKey).
+		JSON(data.UserPatch{Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
 }
 
 func (suite *ServerTestSuite) TestItems() {
@@ -612,6 +638,32 @@ func (suite *ServerTestSuite) TestItems() {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
+		End()
+
+	// malicious labels
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "malicious", Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/items").
+		Header("X-API-Key", apiKey).
+		JSON([]Item{{ItemId: "malicious", Labels: map[string]any{"price": 100}}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/item/malicious").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
 		End()
 }
 

@@ -25,6 +25,7 @@ import (
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -47,13 +48,54 @@ var (
 	ErrNoDatabase   = errors.NotAssignedf("database")
 )
 
+func ValidateLabels(o any) error {
+	if o == nil {
+		return nil
+	}
+	switch labels := o.(type) {
+	case []any:
+		labelSet := strset.New()
+		for _, label := range labels {
+			if s, ok := label.(string); !ok {
+				return errors.Errorf("labels must be an array of strings")
+			} else if labelSet.Has(s) {
+				return errors.Errorf("duplicate labels are not allowed")
+			} else {
+				labelSet.Add(s)
+			}
+		}
+		return nil
+	default:
+		return errors.Errorf("labels must be an array of strings")
+	}
+}
+
+func FlattenLabels(o any) []string {
+	if o == nil {
+		return nil
+	}
+	switch labels := o.(type) {
+	case []any:
+		flat := make([]string, len(labels))
+		for i, label := range labels {
+			var ok bool
+			if flat[i], ok = label.(string); !ok {
+				panic("labels must be an array of strings")
+			}
+		}
+		return flat
+	default:
+		panic("labels must be an array of strings")
+	}
+}
+
 // Item stores meta data about item.
 type Item struct {
 	ItemId     string `gorm:"primaryKey"`
 	IsHidden   bool
 	Categories []string `gorm:"serializer:json"`
 	Timestamp  time.Time
-	Labels     []string `gorm:"serializer:json"`
+	Labels     any `gorm:"serializer:json"`
 	Comment    string
 }
 
@@ -62,21 +104,21 @@ type ItemPatch struct {
 	IsHidden   *bool
 	Categories []string
 	Timestamp  *time.Time
-	Labels     []string
+	Labels     any
 	Comment    *string
 }
 
 // User stores meta data about user.
 type User struct {
 	UserId    string   `gorm:"primaryKey"`
-	Labels    []string `gorm:"serializer:json"`
+	Labels    any      `gorm:"serializer:json"`
 	Subscribe []string `gorm:"serializer:json"`
 	Comment   string
 }
 
 // UserPatch is the modification on a user.
 type UserPatch struct {
-	Labels    []string
+	Labels    any
 	Subscribe []string
 	Comment   *string
 }
