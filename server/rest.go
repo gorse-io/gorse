@@ -1201,6 +1201,11 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
+	// validate labels
+	if err := data.ValidateLabels(temp.Labels); err != nil {
+		BadRequest(response, err)
+		return
+	}
 	if err := s.DataClient.BatchInsertUsers(ctx, []data.User{temp}); err != nil {
 		InternalServerError(response, err)
 		return
@@ -1223,6 +1228,11 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 	// modify user
 	var patch data.UserPatch
 	if err := request.ReadEntity(&patch); err != nil {
+		BadRequest(response, err)
+		return
+	}
+	// validate labels
+	if err := data.ValidateLabels(patch.Labels); err != nil {
 		BadRequest(response, err)
 		return
 	}
@@ -1267,6 +1277,13 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 	if err := request.ReadEntity(&temp); err != nil {
 		BadRequest(response, err)
 		return
+	}
+	// validate labels
+	for _, user := range temp {
+		if err := data.ValidateLabels(user.Labels); err != nil {
+			BadRequest(response, err)
+			return
+		}
 	}
 	// range temp and achieve user
 	if err := s.DataClient.BatchInsertUsers(ctx, temp); err != nil {
@@ -1362,7 +1379,7 @@ type Item struct {
 	IsHidden   bool
 	Categories []string
 	Timestamp  string
-	Labels     []string
+	Labels     any
 	Comment    string
 }
 
@@ -1479,6 +1496,13 @@ func (s *RestServer) insertItems(request *restful.Request, response *restful.Res
 		BadRequest(response, err)
 		return
 	}
+	// validate labels
+	for _, user := range items {
+		if err := data.ValidateLabels(user.Labels); err != nil {
+			BadRequest(response, err)
+			return
+		}
+	}
 	// Insert items
 	s.batchInsertItems(ctx, response, items)
 }
@@ -1494,6 +1518,11 @@ func (s *RestServer) insertItem(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
+	// validate labels
+	if err := data.ValidateLabels(item.Labels); err != nil {
+		BadRequest(response, err)
+		return
+	}
 	s.batchInsertItems(ctx, response, []Item{item})
 }
 
@@ -1505,6 +1534,11 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	itemId := request.PathParameter("item-id")
 	var patch data.ItemPatch
 	if err := request.ReadEntity(&patch); err != nil {
+		BadRequest(response, err)
+		return
+	}
+	// validate labels
+	if err := data.ValidateLabels(patch.Labels); err != nil {
 		BadRequest(response, err)
 		return
 	}

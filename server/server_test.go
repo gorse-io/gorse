@@ -17,14 +17,15 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"testing"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"net"
-	"testing"
 )
 
 type mockMaster struct {

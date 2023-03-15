@@ -47,6 +47,23 @@ var (
 	ErrNoDatabase   = errors.NotAssignedf("database")
 )
 
+func ValidateLabels(o any) error {
+	if o == nil {
+		return nil
+	}
+	switch labels := o.(type) {
+	case []any:
+		for _, label := range labels {
+			if _, ok := label.(string); !ok {
+				return errors.Errorf("labels must be an array of strings")
+			}
+		}
+		return nil
+	default:
+		return errors.Errorf("labels must be an array of strings")
+	}
+}
+
 // Item stores meta data about item.
 type Item struct {
 	ItemId     string `gorm:"primaryKey"`
