@@ -25,6 +25,7 @@ import (
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
+	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -53,14 +54,38 @@ func ValidateLabels(o any) error {
 	}
 	switch labels := o.(type) {
 	case []any:
+		labelSet := strset.New()
 		for _, label := range labels {
-			if _, ok := label.(string); !ok {
+			if s, ok := label.(string); !ok {
 				return errors.Errorf("labels must be an array of strings")
+			} else if labelSet.Has(s) {
+				return errors.Errorf("duplicate labels are not allowed")
+			} else {
+				labelSet.Add(s)
 			}
 		}
 		return nil
 	default:
 		return errors.Errorf("labels must be an array of strings")
+	}
+}
+
+func FlattenLabels(o any) []string {
+	if o == nil {
+		return nil
+	}
+	switch labels := o.(type) {
+	case []any:
+		flat := make([]string, len(labels))
+		for i, label := range labels {
+			var ok bool
+			if flat[i], ok = label.(string); !ok {
+				panic("labels must be an array of strings")
+			}
+		}
+		return flat
+	default:
+		panic("labels must be an array of strings")
 	}
 }
 

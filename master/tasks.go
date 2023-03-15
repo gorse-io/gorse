@@ -1439,9 +1439,10 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if len(rankingDataset.UserLabels) == int(userIndex) {
 				rankingDataset.UserLabels = append(rankingDataset.UserLabels, nil)
 			}
-			rankingDataset.NumUserLabelUsed += len(user.Labels)
-			rankingDataset.UserLabels[userIndex] = make([]int32, 0, len(user.Labels))
-			for _, label := range user.Labels {
+			labels := data.FlattenLabels(user.Labels)
+			rankingDataset.NumUserLabelUsed += len(labels)
+			rankingDataset.UserLabels[userIndex] = make([]int32, 0, len(labels))
+			for _, label := range labels {
 				userLabelCount[label]++
 				// Memorize the first occurrence.
 				if userLabelCount[label] == 1 {
@@ -1487,9 +1488,10 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
 				rankingDataset.CategorySet.Add(item.Categories...)
 			}
-			rankingDataset.NumItemLabelUsed += len(item.Labels)
-			rankingDataset.ItemLabels[itemIndex] = make([]int32, 0, len(item.Labels))
-			for _, label := range item.Labels {
+			labels := data.FlattenLabels(item.Labels)
+			rankingDataset.NumItemLabelUsed += len(labels)
+			rankingDataset.ItemLabels[itemIndex] = make([]int32, 0, len(labels))
+			for _, label := range labels {
 				itemLabelCount[label]++
 				// Memorize the first occurrence.
 				if itemLabelCount[label] == 1 {
