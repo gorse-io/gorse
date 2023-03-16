@@ -790,3 +790,30 @@ func TestSortFeedbacks(t *testing.T) {
 		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, feedback)
 }
+
+func TestValidateLabels(t *testing.T) {
+	assert.NoError(t, ValidateLabels(nil))
+	assert.NoError(t, ValidateLabels("label"))
+	assert.NoError(t, ValidateLabels([]any{"1", "2", "3"}))
+	assert.NoError(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}}))
+	assert.NoError(t, ValidateLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}}))
+
+	assert.Error(t, ValidateLabels([]any{1, 2, 3}))
+	assert.Error(t, ValidateLabels([]any{"1", "2", "1"}))
+	assert.Error(t, ValidateLabels(map[string]any{"price": 100, "tags": []any{"1", "2", "3"}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{1, 2, 3}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "1"}}))
+}
+
+func TestFlattenLabels(t *testing.T) {
+	labels := FlattenLabels(nil)
+	assert.Nil(t, labels)
+	labels = FlattenLabels("label")
+	assert.Equal(t, []string{"label"}, labels)
+	labels = FlattenLabels([]any{"1", "2", "3"})
+	assert.Equal(t, []string{"1", "2", "3"}, labels)
+	labels = FlattenLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}})
+	assert.Equal(t, []string{"city.wenzhou", "tags.1", "tags.2", "tags.3"}, labels)
+	labels = FlattenLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}})
+	assert.Equal(t, []string{"address.province.zhejiang", "address.city.wenzhou"}, labels)
+}

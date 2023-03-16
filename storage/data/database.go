@@ -17,6 +17,7 @@ package data
 import (
 	"context"
 	"net/url"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -57,7 +58,7 @@ func ValidateLabels(o any) error {
 		labelSet := strset.New()
 		for _, label := range labels {
 			if s, ok := label.(string); !ok {
-				return errors.Errorf("labels must be an array of strings")
+				return errors.Errorf("elemnts in arrays must be strings")
 			} else if labelSet.Has(s) {
 				return errors.Errorf("duplicate labels are not allowed")
 			} else {
@@ -65,28 +66,48 @@ func ValidateLabels(o any) error {
 			}
 		}
 		return nil
+	case map[string]any:
+		for _, val := range labels {
+			if err := ValidateLabels(val); err != nil {
+				return err
+			}
+		}
+		return nil
+	case string:
+		return nil
 	default:
-		return errors.Errorf("labels must be an array of strings")
+		return errors.Errorf("unsupported type in labels: %v", reflect.TypeOf(labels))
 	}
 }
 
 func FlattenLabels(o any) []string {
+	labels := make([]string, 0)
+	return flattenLabels(labels, "", o)
+}
+
+func flattenLabels(result []string, prefix string, o any) []string {
 	if o == nil {
 		return nil
 	}
 	switch labels := o.(type) {
 	case []any:
-		flat := make([]string, len(labels))
-		for i, label := range labels {
-			var ok bool
-			if flat[i], ok = label.(string); !ok {
-				panic("labels must be an array of strings")
+		for _, label := range labels {
+			if s, ok := label.(string); !ok {
+				panic("elemnts in arrays must be strings")
+			} else {
+				result = append(result, prefix+s)
 			}
 		}
-		return flat
+	case map[string]any:
+		for key, val := range labels {
+			result = flattenLabels(result, prefix+key+".", val)
+		}
+	case string:
+		result = append(result, prefix+labels)
 	default:
-		panic("labels must be an array of strings")
+		panic("unsupported type in labels: " + reflect.TypeOf(labels).String())
 	}
+	return result
 }
 
 // Item stores meta data about item.
