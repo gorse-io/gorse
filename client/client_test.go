@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/go-redis/redis/v9"
 	"github.com/stretchr/testify/suite"
+	"github.com/thoas/go-funk"
 	"testing"
 	"time"
 )
@@ -329,6 +330,15 @@ func (suite *GorseClientTestSuite) TestItems() {
 	rowAffected, err = suite.client.UpdateItem(ctx, item.ItemId, itemPatch)
 	suite.NoError(err)
 	suite.Equal(1, rowAffected.RowAffected)
+
+	resp, err := suite.client.GetPopularItems(ctx, nil, nil, 10, 0)
+	suite.NoError(err)
+	funk.NotEmpty(resp)
+
+	category := "d"
+	resp, err = suite.client.GetPopularItems(ctx, nil, &category, 10, 0)
+	suite.NoError(err)
+	funk.NotEmpty(resp)
 
 	itemResp, err := suite.client.GetItem(ctx, "100")
 	suite.NoError(err)

@@ -51,6 +51,18 @@ func (c *GorseClient) GetRecommend(ctx context.Context, userId string, category 
 	return request[[]string, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s/%s?n=%d", userId, category, n), nil)
 }
 
+func (c *GorseClient) GetPopularItems(ctx context.Context, userId *string, category *string, n int, offset int) ([]Score, error) {
+	var categoryParameter, userIDParameter string
+	if category != nil {
+		categoryParameter = fmt.Sprintf("/%s", *category)
+	}
+	if userId != nil {
+		userIDParameter = fmt.Sprintf("&user-id=%s", *userId)
+	}
+	path := fmt.Sprintf("/api/popular%s?n=%d&offset=%d%s", categoryParameter, n, offset, userIDParameter)
+	return request[[]Score, any](ctx, c, "GET", c.entryPoint+path, nil)
+}
+
 func (c *GorseClient) SessionRecommend(ctx context.Context, feedbacks []Feedback, n int) ([]Score, error) {
 	return request[[]Score](ctx, c, "POST", c.entryPoint+fmt.Sprintf("/api/session/recommend?n=%d", n), feedbacks)
 }
