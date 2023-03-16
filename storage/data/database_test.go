@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaswdr/faker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -165,10 +166,16 @@ func (suite *baseTestSuite) TestUsers() {
 	ctx := context.Background()
 	// Insert users
 	var insertedUsers []User
+	fake := faker.New()
 	for i := 9; i >= 0; i-- {
 		insertedUsers = append(insertedUsers, User{
-			UserId:  strconv.Itoa(i),
-			Labels:  []any{strconv.Itoa(i + 100)},
+			UserId: strconv.Itoa(i),
+			Labels: map[string]any{
+				"color": fake.Color().ColorName(),
+				"company": lo.Map(lo.Range(3), func(_, _ int) any {
+					return fake.Genre().Name()
+				}),
+			},
 			Comment: fmt.Sprintf("comment %d", i),
 		})
 	}
@@ -178,9 +185,7 @@ func (suite *baseTestSuite) TestUsers() {
 	users := suite.getUsers(ctx, 3)
 	suite.Equal(10, len(users))
 	for i, user := range users {
-		suite.Equal(strconv.Itoa(i), user.UserId)
-		suite.Equal([]any{strconv.Itoa(i + 100)}, user.Labels)
-		suite.Equal(fmt.Sprintf("comment %d", i), user.Comment)
+		suite.Equal(insertedUsers[9-i], user)
 	}
 	// Get user stream
 	usersFromStream := suite.getUsersStream(ctx, 3)

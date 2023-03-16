@@ -23,6 +23,7 @@ require (
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorse-io/dashboard v0.0.0-20230224155550-e75876b93f90
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
+	github.com/jaswdr/faker v1.16.0
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v1.0.0
 	github.com/klauspost/asmfmt v1.3.2
