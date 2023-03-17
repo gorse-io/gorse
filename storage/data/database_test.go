@@ -136,14 +136,6 @@ func (suite *baseTestSuite) getFeedbackStream(ctx context.Context, batchSize int
 	return feedbacks
 }
 
-func (suite *baseTestSuite) isClickHouse() bool {
-	if sqlDB, isSQL := suite.Database.(*SQLDatabase); !isSQL {
-		return false
-	} else {
-		return sqlDB.driver == ClickHouse
-	}
-}
-
 func (suite *baseTestSuite) TearDownSuite() {
 	err := suite.Database.Close()
 	suite.NoError(err)
@@ -282,12 +274,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	for i, item := range items {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
-			if suite.isClickHouse() {
-				// ClickHouse returns 1970-01-01 as zero date.
-				suite.Zero(item.Timestamp.Unix())
-			} else {
-				suite.Zero(item.Timestamp)
-			}
+			suite.Zero(item.Timestamp)
 			suite.Empty(item.Labels)
 			suite.Empty(item.Comment)
 		}
@@ -579,20 +566,14 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 	// delete user-item feedback
 	deleteCount, err := suite.Database.DeleteUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(3, deleteCount)
-	}
+	suite.Equal(3, deleteCount)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)
 	feedbackType1 := "type1"
 	deleteCount, err = suite.Database.DeleteUserItemFeedback(ctx, "1", "3", feedbackType1)
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(1, deleteCount)
-	}
+	suite.Equal(1, deleteCount)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "1", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Empty(ret)
@@ -711,13 +692,6 @@ func (suite *baseTestSuite) TestTimezone() {
 			item, err = suite.Database.GetItem(ctx, "200")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
-		case ClickHouse:
-			item, err := suite.Database.GetItem(ctx, "100")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
-			item, err = suite.Database.GetItem(ctx, "200")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
 		case SQLite:
 			item, err := suite.Database.GetItem(ctx, "100")
 			suite.NoError(err)

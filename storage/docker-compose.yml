@@ -30,8 +30,3 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
-
-  clickhouse:
-    image: yandex/clickhouse-server:21.10
-    ports:
-      - 8123:8123
