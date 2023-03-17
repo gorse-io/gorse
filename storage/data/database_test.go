@@ -136,14 +136,6 @@ func (suite *baseTestSuite) getFeedbackStream(ctx context.Context, batchSize int
 	return feedbacks
 }
 
-func (suite *baseTestSuite) isClickHouse() bool {
-	if sqlDB, isSQL := suite.Database.(*SQLDatabase); !isSQL {
-		return false
-	} else {
-		return sqlDB.driver == ClickHouse
-	}
-}
-
 func (suite *baseTestSuite) TearDownSuite() {
 	err := suite.Database.Close()
 	suite.NoError(err)
@@ -197,8 +189,6 @@ func (suite *baseTestSuite) TestUsers() {
 	// test override
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
 	suite.Equal("override", user.Comment)
@@ -208,8 +198,6 @@ func (suite *baseTestSuite) TestUsers() {
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Subscribe: []string{"d", "e", "f"}})
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
@@ -275,19 +263,12 @@ func (suite *baseTestSuite) TestFeedback() {
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	suite.Empty(feedbackFromStream)
 	// Get items
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	items := suite.getItems(ctx, 3)
 	suite.Equal(5, len(items))
 	for i, item := range items {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
-			if suite.isClickHouse() {
-				// ClickHouse returns 1970-01-01 as zero date.
-				suite.Zero(item.Timestamp.Unix())
-			} else {
-				suite.Zero(item.Timestamp)
-			}
+			suite.Zero(item.Timestamp)
 			suite.Empty(item.Labels)
 			suite.Empty(item.Comment)
 		}
@@ -337,8 +318,6 @@ func (suite *baseTestSuite) TestFeedback() {
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
@@ -348,8 +327,6 @@ func (suite *baseTestSuite) TestFeedback() {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Comment:     "not_override",
 	}}, true, true, false)
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
@@ -463,8 +440,6 @@ func (suite *baseTestSuite) TestItem() {
 	// test override
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	item, err := suite.Database.GetItem(ctx, "4")
 	suite.NoError(err)
 	suite.False(item.IsHidden)
@@ -483,8 +458,6 @@ func (suite *baseTestSuite) TestItem() {
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Timestamp: &timestamp})
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	item, err = suite.Database.GetItem(ctx, "2")
 	suite.NoError(err)
@@ -579,20 +552,14 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 	// delete user-item feedback
 	deleteCount, err := suite.Database.DeleteUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(3, deleteCount)
-	}
+	suite.Equal(3, deleteCount)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)
 	feedbackType1 := "type1"
 	deleteCount, err = suite.Database.DeleteUserItemFeedback(ctx, "1", "3", feedbackType1)
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(1, deleteCount)
-	}
+	suite.Equal(1, deleteCount)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "1", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Empty(ret)
@@ -699,8 +666,6 @@ func (suite *baseTestSuite) TestTimezone() {
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "200", ItemPatch{Timestamp: &now})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	switch database := suite.Database.(type) {
 	case *SQLDatabase:
 		switch suite.Database.(*SQLDatabase).driver {
@@ -711,13 +676,6 @@ func (suite *baseTestSuite) TestTimezone() {
 			item, err = suite.Database.GetItem(ctx, "200")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
-		case ClickHouse:
-			item, err := suite.Database.GetItem(ctx, "100")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
-			item, err = suite.Database.GetItem(ctx, "200")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
 		case SQLite:
 			item, err := suite.Database.GetItem(ctx, "100")
 			suite.NoError(err)

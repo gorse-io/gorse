@@ -29,7 +29,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.1.0
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.10.6
-	github.com/mailru/go-clickhouse/v2 v2.0.1-0.20221121001540-b259988ad8e5
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.13.0
@@ -61,7 +60,6 @@ require (
 	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.4.0
-	gorm.io/driver/clickhouse v0.4.2
 	gorm.io/driver/mysql v1.3.4
 	gorm.io/driver/postgres v1.3.5
 	gorm.io/driver/sqlite v1.3.4
@@ -92,7 +90,6 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
-	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -165,7 +162,4 @@ require (
 	modernc.org/token v1.0.1 // indirect
 )
 
-replace (
-	gorm.io/driver/clickhouse v0.4.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb
-	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
-)
+replace gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
