@@ -91,9 +91,9 @@ func FlattenLabels(o any) []string {
 type Item struct {
 	ItemId     string `gorm:"primaryKey"`
 	IsHidden   bool
-	Categories []string `gorm:"serializer:json"`
-	Timestamp  time.Time
-	Labels     any `gorm:"serializer:json"`
+	Categories []string  `gorm:"serializer:json"`
+	Timestamp  time.Time `gorm:"column:time_stamp"`
+	Labels     any       `gorm:"serializer:json"`
 	Comment    string
 }
 
