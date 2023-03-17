@@ -50,6 +50,11 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      clickhouse:
+        image: yandex/clickhouse-server:21.10
+        ports:
+          - 8123
+
       redis:
         image: redis:5.0
         ports:
