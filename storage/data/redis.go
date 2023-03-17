@@ -17,13 +17,14 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -35,11 +36,6 @@ const (
 // Redis use Redis as data storage, but used for test only.
 type Redis struct {
 	client *redis.Client
-}
-
-// Optimize is used by ClickHouse only.
-func (r *Redis) Optimize() error {
-	return nil
 }
 
 // Init does nothing.

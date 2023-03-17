@@ -158,7 +158,6 @@ type Database interface {
 	Init() error
 	Ping() error
 	Close() error
-	Optimize() error
 	Purge() error
 	BatchInsertItems(ctx context.Context, items []Item) error
 	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)

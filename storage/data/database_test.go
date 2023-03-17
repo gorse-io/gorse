@@ -189,8 +189,6 @@ func (suite *baseTestSuite) TestUsers() {
 	// test override
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
 	suite.Equal("override", user.Comment)
@@ -200,8 +198,6 @@ func (suite *baseTestSuite) TestUsers() {
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Subscribe: []string{"d", "e", "f"}})
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
@@ -267,8 +263,6 @@ func (suite *baseTestSuite) TestFeedback() {
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	suite.Empty(feedbackFromStream)
 	// Get items
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	items := suite.getItems(ctx, 3)
 	suite.Equal(5, len(items))
 	for i, item := range items {
@@ -324,8 +318,6 @@ func (suite *baseTestSuite) TestFeedback() {
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
@@ -335,8 +327,6 @@ func (suite *baseTestSuite) TestFeedback() {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Comment:     "not_override",
 	}}, true, true, false)
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
@@ -450,8 +440,6 @@ func (suite *baseTestSuite) TestItem() {
 	// test override
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	item, err := suite.Database.GetItem(ctx, "4")
 	suite.NoError(err)
 	suite.False(item.IsHidden)
@@ -470,8 +458,6 @@ func (suite *baseTestSuite) TestItem() {
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Timestamp: &timestamp})
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	item, err = suite.Database.GetItem(ctx, "2")
 	suite.NoError(err)
@@ -679,8 +665,6 @@ func (suite *baseTestSuite) TestTimezone() {
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "100", Timestamp: now}, {ItemId: "200"}})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "200", ItemPatch{Timestamp: &now})
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	switch database := suite.Database.(type) {
 	case *SQLDatabase:

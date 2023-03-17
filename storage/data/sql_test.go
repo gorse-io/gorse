@@ -27,9 +27,8 @@ import (
 )
 
 var (
-	mySqlDSN      string
-	postgresDSN   string
-	clickhouseDSN string
+	mySqlDSN    string
+	postgresDSN string
 )
 
 func init() {
@@ -42,7 +41,6 @@ func init() {
 	}
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
-	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
 }
 
 type MySQLTestSuite struct {

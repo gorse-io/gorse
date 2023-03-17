@@ -22,11 +22,6 @@ import (
 // NoDatabase means that no database used.
 type NoDatabase struct{}
 
-// Optimize is used by ClickHouse only.
-func (NoDatabase) Optimize() error {
-	return ErrNoDatabase
-}
-
 // Init method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) Init() error {
 	return ErrNoDatabase

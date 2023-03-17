@@ -92,11 +92,6 @@ type SQLDatabase struct {
 	driver SQLDriver
 }
 
-// Optimize is used by ClickHouse only.
-func (d *SQLDatabase) Optimize() error {
-	return nil
-}
-
 // Init tables and indices in MySQL.
 func (d *SQLDatabase) Init() error {
 	switch d.driver {
