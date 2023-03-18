@@ -89,12 +89,12 @@ func FlattenLabels(o any) []string {
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId     string `gorm:"primaryKey"`
-	IsHidden   bool
-	Categories []string  `gorm:"serializer:json"`
-	Timestamp  time.Time `gorm:"column:time_stamp"`
-	Labels     any       `gorm:"serializer:json"`
-	Comment    string
+	ItemId     string    `gorm:"primaryKey" mapstructure:"item_id"`
+	IsHidden   bool      `mapstructure:"is_hidden"`
+	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
+	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
+	Labels     any       `gorm:"serializer:json" mapstructure:"labels"`
+	Comment    string    `mapsstructure:"comment"`
 }
 
 // ItemPatch is the modification on an item.

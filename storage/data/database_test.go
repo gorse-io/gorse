@@ -369,7 +369,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 }
 
-func (suite *baseTestSuite) TestItem() {
+func (suite *baseTestSuite) TestItems() {
 	ctx := context.Background()
 	// Items
 	items := []Item{

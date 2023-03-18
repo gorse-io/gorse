@@ -17,6 +17,7 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/samber/lo"
 	"reflect"
 	"strconv"
@@ -27,7 +28,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	"github.com/scylladb/go-set/strset"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/storage"
 )
 
@@ -53,15 +53,19 @@ func decodeMapStructure(input, output any) error {
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:           output,
 		WeaklyTypedInput: true,
-		DecodeHook: func(f reflect.Kind, t reflect.Kind, data any) (any, error) {
-			if f == reflect.String && t != reflect.String {
+		DecodeHook: func(f reflect.Type, t reflect.Type, data any) (any, error) {
+			if f == t || f.Kind() != reflect.String {
+				return data, nil
+			}
+			if t == reflect.TypeOf(time.Time{}) {
+				return time.Parse(time.RFC3339, data.(string))
+			} else {
 				var v any
 				if err := json.Unmarshal([]byte(data.(string)), &v); err != nil {
 					return nil, err
 				}
 				return v, nil
 			}
-			return data, nil
 		},
 	})
 	if err != nil {
@@ -205,60 +209,37 @@ func (r *Redis) Purge() error {
 	return nil
 }
 
-// insertItem inserts an item into Redis.
-func (r *Redis) insertItem(ctx context.Context, item Item) error {
-	// write item
-	data, err := json.Marshal(item)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if err = r.client.Set(ctx, prefixItem+item.ItemId, data, 0).Err(); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
 // BatchInsertItems inserts a batch of items into Redis.
 func (r *Redis) BatchInsertItems(ctx context.Context, items []Item) error {
+	p := r.client.Pipeline()
 	for _, item := range items {
-		if err := r.insertItem(ctx, item); err != nil {
-			return errors.Trace(err)
-		}
+		p.HSet(ctx, r.itemDocId(item.ItemId),
+			"item_id", item.ItemId,
+			"is_hidden", item.IsHidden,
+			"categories", JSON(item.Categories),
+			"labels", JSON(item.Labels),
+			"timestamp", item.Timestamp,
+			"comment", item.Comment)
 	}
-	return nil
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 func (r *Redis) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
-	var (
-		items  []Item
-		cursor uint64
-		err    error
-		keys   []string
-	)
-	for {
-		keys, cursor, err = r.client.Scan(ctx, cursor, prefixItem+"*", -1).Result()
-		if err != nil {
-			return nil, err
-		}
-		for _, key := range keys {
-			data, err := r.client.Get(ctx, key).Result()
-			if err != nil {
-				return nil, err
-			}
-			var item Item
-			err = json.Unmarshal([]byte(data), &item)
-			if err != nil {
-				return nil, err
-			}
-			if funk.ContainsString(itemIds, item.ItemId) {
-				items = append(items, item)
-			}
-		}
-		if cursor == 0 {
-			break
-		}
+	if len(itemIds) == 0 {
+		return nil, nil
 	}
-	return items, nil
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("@item_id:{ %s }", strings.Join(itemIds, " | ")))
+	result, err := r.client.Do(ctx, "FT.AGGREGATE", r.ItemsTable(), builder.String(),
+		"LOAD", "6", "item_id", "is_hidden", "categories", "labels", "timestamp", "comment",
+		"SORTBY", "1", "@item_id",
+		"WITHCURSOR").Result()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	_, items, err := parseAggregateResult[Item](result)
+	return items, err
 }
 
 func (r *Redis) ForFeedback(ctx context.Context, action func(key, thisFeedbackType, thisUserId, thisItemId string) error) error {
@@ -285,73 +266,41 @@ func (r *Redis) ForFeedback(ctx context.Context, action func(key, thisFeedbackTy
 
 // DeleteItem deletes a item from Redis.
 func (r *Redis) DeleteItem(ctx context.Context, itemId string) error {
-	// remove user
-	if err := r.client.Del(ctx, prefixItem+itemId).Err(); err != nil {
-		return errors.Trace(err)
-	}
-	// remove feedback
-	return r.ForFeedback(ctx, func(key, _, _, thisItemId string) error {
-		if thisItemId == itemId {
-			// remove feedbacks
-			return r.client.Del(ctx, key).Err()
-		}
-		return nil
-	})
+	return r.client.Del(ctx, r.itemDocId(itemId)).Err()
 }
 
 // GetItem get a item from Redis.
 func (r *Redis) GetItem(ctx context.Context, itemId string) (Item, error) {
-	data, err := r.client.Get(ctx, prefixItem+itemId).Result()
+	result, err := r.client.HGetAll(ctx, r.itemDocId(itemId)).Result()
 	if err != nil {
-		if err == redis.Nil {
-			return Item{}, errors.Annotate(ErrItemNotExist, itemId)
-		}
 		return Item{}, err
 	}
+	if len(result) == 0 {
+		return Item{}, errors.Annotate(ErrItemNotExist, itemId)
+	}
 	var item Item
-	err = json.Unmarshal([]byte(data), &item)
+	err = decodeMapStructure(result, &item)
 	return item, err
 }
 
 // GetItems returns items from Redis.
 func (r *Redis) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
-	var err error
-	cursorNum := uint64(0)
-	if len(cursor) > 0 {
-		cursorNum, err = strconv.ParseUint(cursor, 10, 64)
-		if err != nil {
-			return "", nil, err
-		}
-	}
-	items := make([]Item, 0)
-	// scan * from zero util cursor is zero
-	var keys []string
-	keys, cursorNum, err = r.client.Scan(ctx, cursorNum, prefixItem+"*", int64(n)).Result()
-	if err != nil {
-		return "", nil, err
-	}
-	for _, key := range keys {
-		data, err := r.client.Get(ctx, key).Result()
-		if err != nil {
-			return "", nil, err
-		}
-		var item Item
-		err = json.Unmarshal([]byte(data), &item)
-		if err != nil {
-			return "", nil, err
-		}
-		// compare timestamp
-		if timeLimit != nil && item.Timestamp.Unix() < timeLimit.Unix() {
-			continue
-		}
-		items = append(items, item)
-	}
-	if cursorNum == 0 {
-		cursor = ""
+	var (
+		result any
+		err    error
+	)
+	if cursor == "" {
+		result, err = r.client.Do(ctx, "FT.AGGREGATE", r.ItemsTable(), "*",
+			"LOAD", "6", "item_id", "is_hidden", "categories", "labels", "timestamp", "comment",
+			"SORTBY", "1", "@item_id",
+			"WITHCURSOR", "COUNT", n).Result()
 	} else {
-		cursor = strconv.Itoa(int(cursorNum))
+		result, err = r.client.Do(ctx, "FT.CURSOR", "READ", r.ItemsTable(), cursor, "COUNT", n).Result()
 	}
-	return cursor, items, nil
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+	return parseAggregateResult[Item](result)
 }
 
 // GetItemStream read items from Redis by stream.
@@ -362,44 +311,34 @@ func (r *Redis) GetItemStream(ctx context.Context, batchSize int, timeLimit *tim
 		defer close(itemChan)
 		defer close(errChan)
 		ctx := context.Background()
-		var cursor uint64
-		var keys []string
-		var err error
-		items := make([]Item, 0, batchSize)
+		var (
+			cursor string
+			result any
+			err    error
+			items  []Item
+		)
 		for {
-			keys, cursor, err = r.client.Scan(ctx, cursor, prefixItem+"*", int64(batchSize)).Result()
+			if cursor == "" {
+				result, err = r.client.Do(ctx, "FT.AGGREGATE", r.ItemsTable(), "*",
+					"LOAD", "6", "item_id", "is_hidden", "categories", "labels", "timestamp", "comment",
+					"SORTBY", "1", "@item_id",
+					"WITHCURSOR", "COUNT", batchSize).Result()
+			} else {
+				result, err = r.client.Do(ctx, "FT.CURSOR", "READ", r.ItemsTable(), cursor, "COUNT", batchSize).Result()
+			}
 			if err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}
-			for _, key := range keys {
-				data, err := r.client.Get(ctx, key).Result()
-				if err != nil {
-					errChan <- errors.Trace(err)
-					return
-				}
-				var item Item
-				err = json.Unmarshal([]byte(data), &item)
-				if err != nil {
-					errChan <- errors.Trace(err)
-					return
-				}
-				// compare timestamp
-				if timeLimit != nil && item.Timestamp.Unix() < timeLimit.Unix() {
-					continue
-				}
-				items = append(items, item)
-				if len(items) == batchSize {
-					itemChan <- items
-					items = make([]Item, 0, batchSize)
-				}
+			cursor, items, err = parseAggregateResult[Item](result)
+			if err != nil {
+				errChan <- errors.Trace(err)
+				return
 			}
-			if cursor == 0 {
+			itemChan <- items
+			if cursor == "" {
 				break
 			}
-		}
-		if len(items) > 0 {
-			itemChan <- items
 		}
 		errChan <- nil
 	}()
@@ -771,7 +710,7 @@ func (r *Redis) ModifyItem(ctx context.Context, itemId string, patch ItemPatch) 
 		p.HSet(ctx, r.itemDocId(itemId), "labels", JSON(patch.Labels))
 	}
 	if patch.Timestamp != nil {
-		p.HSet(ctx, r.itemDocId(itemId), "timestamp", patch.Timestamp)
+		p.HSet(ctx, r.itemDocId(itemId), "timestamp", *patch.Timestamp)
 	}
 	_, err := p.Exec(ctx)
 	return errors.Trace(err)
