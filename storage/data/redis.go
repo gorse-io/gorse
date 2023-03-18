@@ -17,14 +17,18 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"github.com/samber/lo"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
 	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
+	"github.com/zhenghaoz/gorse/storage"
 )
 
 const (
@@ -33,13 +37,152 @@ const (
 	prefixFeedback = "feedback/" // prefix for feedback
 )
 
+type JSONObject struct {
+	any
+}
+
+func JSON(v any) JSONObject {
+	return JSONObject{any: v}
+}
+
+func (j JSONObject) MarshalBinary() (data []byte, err error) {
+	return json.Marshal(j.any)
+}
+
+func decodeMapStructure(input, output any) error {
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:           output,
+		WeaklyTypedInput: true,
+		DecodeHook: func(f reflect.Kind, t reflect.Kind, data any) (any, error) {
+			if f == reflect.String && t != reflect.String {
+				var v any
+				if err := json.Unmarshal([]byte(data.(string)), &v); err != nil {
+					return nil, err
+				}
+				return v, nil
+			}
+			return data, nil
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return decoder.Decode(input)
+}
+
+func parseAggregateResult[T any](result any) (cursor string, a []T, _ error) {
+	// fetch cursor
+	resultAndCursor, ok := result.([]any)
+	if !ok {
+		return "", nil, errors.New("invalid FT.AGGREGATE result")
+	}
+	cursorId := resultAndCursor[len(resultAndCursor)-1].(int64)
+	if cursorId > 0 {
+		cursor = strconv.FormatInt(cursorId, 10)
+	}
+	// fetch rows
+	rows, ok := resultAndCursor[0].([]any)
+	if !ok {
+		return "", nil, errors.New("invalid FT.AGGREGATE result")
+	}
+	for _, row := range rows[1:] {
+		fields, ok := row.([]any)
+		if !ok {
+			return "", nil, errors.New("invalid FT.AGGREGATE result")
+		}
+		values := make(map[string]string)
+		for i := 0; i < len(fields); i += 2 {
+			key, ok := fields[i].(string)
+			if !ok {
+				return "", nil, errors.New("invalid FT.AGGREGATE result")
+			}
+			value, ok := fields[i+1].(string)
+			if !ok {
+				return "", nil, errors.New("invalid FT.AGGREGATE result")
+			}
+			values[key] = value
+		}
+		var e T
+		if err := decodeMapStructure(values, &e); err != nil {
+			return "", nil, errors.Trace(err)
+		}
+		a = append(a, e)
+	}
+	return
+}
+
 // Redis use Redis as data storage, but used for test only.
 type Redis struct {
+	storage.TablePrefix
 	client *redis.Client
+}
+
+func (r *Redis) userDocId(userId string) string {
+	return r.UsersTable() + ":" + userId
+}
+
+func (r *Redis) itemDocId(itemId string) string {
+	return r.ItemsTable() + ":" + itemId
+}
+
+func (r *Redis) feedbackDocId(key FeedbackKey) string {
+	return r.FeedbackTable() + ":" + key.FeedbackType + ":" + key.UserId + ":" + key.ItemId
 }
 
 // Init does nothing.
 func (r *Redis) Init() error {
+	result, err := r.client.Do(context.TODO(), "FT._LIST").Result()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	rows, ok := result.([]any)
+	if !ok {
+		return errors.New("invalid FT._LIST result")
+	}
+	indices, ok := lo.FromAnySlice[string](rows)
+	if !ok {
+		return errors.New("invalid FT._LIST result")
+	}
+	// create user index
+	if !lo.Contains(indices, r.UsersTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.UsersTable(),
+			"ON", "HASH", "PREFIX", "1", r.UsersTable()+":", "SCHEMA",
+			"user_id", "TAG",
+			"labels", "TEXT", "NOINDEX",
+			"subscribe", "TEXT", "NOINDEX",
+			"comment", "TEXT", "NOINDEX").
+			Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	// create item index
+	if !lo.Contains(indices, r.ItemsTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.ItemsTable(),
+			"ON", "HASH", "PREFIX", "1", r.ItemsTable()+":", "SCHEMA",
+			"item_id", "TAG",
+			"labels", "TEXT", "NOINDEX",
+			"comment", "TEXT", "NOINDEX").
+			Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	// create feedback index
+	if !lo.Contains(indices, r.FeedbackTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.FeedbackTable(),
+			"ON", "HASH", "PREFIX", "1", r.FeedbackTable()+":", "SCHEMA",
+			"feedback_id", "TAG",
+			"feedback_type", "TAG",
+			"user_id", "TAG",
+			"item_id", "TAG",
+			"labels", "TEXT", "NOINDEX",
+			"comment", "TEXT", "NOINDEX").
+			Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
 	return nil
 }
 
@@ -53,7 +196,13 @@ func (r *Redis) Close() error {
 }
 
 func (r *Redis) Purge() error {
-	return r.client.FlushDB(context.Background()).Err()
+	if err := r.client.FlushDB(context.Background()).Err(); err != nil {
+		return errors.Trace(err)
+	}
+	if err := r.Init(); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 // insertItem inserts an item into Redis.
@@ -276,91 +425,74 @@ func (r *Redis) GetItemFeedback(ctx context.Context, itemId string, feedbackType
 	return feedback, err
 }
 
-// insertUser inserts a user into Redis.
-func (r *Redis) insertUser(ctx context.Context, user User) error {
-	data, err := json.Marshal(user)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return r.client.Set(ctx, prefixUser+user.UserId, data, 0).Err()
-}
-
 // BatchInsertUsers inserts a batch pf user into Redis.
 func (r *Redis) BatchInsertUsers(ctx context.Context, users []User) error {
+	p := r.client.Pipeline()
 	for _, user := range users {
-		if err := r.insertUser(ctx, user); err != nil {
-			return err
-		}
+		p.HSet(ctx, r.userDocId(user.UserId),
+			"user_id", user.UserId,
+			"labels", JSON(user.Labels),
+			"subscribe", JSON(user.Subscribe),
+			"comment", user.Comment)
 	}
-	return nil
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 // DeleteUser deletes a user from Redis.
 func (r *Redis) DeleteUser(ctx context.Context, userId string) error {
-	// remove user
-	if err := r.client.Del(ctx, prefixUser+userId).Err(); err != nil {
-		return errors.Trace(err)
-	}
-	// remove feedback
-	return r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if thisUserId == userId {
-			return r.client.Del(ctx, key).Err()
-		}
-		return nil
-	})
+	return r.client.Del(ctx, r.userDocId(userId)).Err()
 }
 
 // GetUser returns a user from Redis.
 func (r *Redis) GetUser(ctx context.Context, userId string) (User, error) {
-	val, err := r.client.Get(ctx, prefixUser+userId).Result()
+	val, err := r.client.HGetAll(ctx, r.userDocId(userId)).Result()
 	if err != nil {
-		if err == redis.Nil {
-			return User{}, errors.Annotate(ErrUserNotExist, userId)
-		}
 		return User{}, err
+	}
+	if len(val) == 0 {
+		return User{}, errors.Annotate(ErrUserNotExist, userId)
 	}
 	var user User
-	err = json.Unmarshal([]byte(val), &user)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:           &user,
+		WeaklyTypedInput: true,
+		DecodeHook: func(f reflect.Kind, t reflect.Kind, data any) (any, error) {
+			if f == reflect.String && t != reflect.String {
+				var v any
+				if err := json.Unmarshal([]byte(data.(string)), &v); err != nil {
+					return nil, err
+				}
+				return v, nil
+			}
+			return data, nil
+		},
+	})
 	if err != nil {
 		return User{}, err
 	}
+	err = decoder.Decode(val)
 	return user, err
 }
 
 // GetUsers returns users from Redis.
 func (r *Redis) GetUsers(ctx context.Context, cursor string, n int) (string, []User, error) {
-	var err error
-	cursorNum := uint64(0)
-	if len(cursor) > 0 {
-		cursorNum, err = strconv.ParseUint(cursor, 10, 64)
-		if err != nil {
-			return "", nil, err
-		}
-	}
-	users := make([]User, 0)
-	var keys []string
-	keys, cursorNum, err = r.client.Scan(ctx, cursorNum, prefixUser+"*", int64(n)).Result()
-	if err != nil {
-		return "", nil, err
-	}
-	for _, key := range keys {
-		var user User
-		val, err := r.client.Get(ctx, key).Result()
-		if err != nil {
-			return "", nil, err
-		}
-		err = json.Unmarshal([]byte(val), &user)
-		if err != nil {
-			return "", nil, err
-		}
-		users = append(users, user)
-	}
-	if cursorNum == 0 {
-		cursor = ""
+	var (
+		result any
+		err    error
+	)
+	if cursor == "" {
+		result, err = r.client.Do(ctx, "FT.AGGREGATE", r.UsersTable(), "*",
+			"LOAD", "3", "user_id", "labels", "comment",
+			"SORTBY", "1", "@user_id",
+			"WITHCURSOR", "COUNT", n).Result()
 	} else {
-		cursor = strconv.Itoa(int(cursorNum))
+		result, err = r.client.Do(ctx, "FT.CURSOR", "READ", r.UsersTable(), cursor, "COUNT", n).Result()
 	}
-	return cursor, users, nil
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+	return parseAggregateResult[User](result)
 }
 
 // GetUserStream read users from Redis by stream.
@@ -370,41 +502,34 @@ func (r *Redis) GetUserStream(ctx context.Context, batchSize int) (chan []User, 
 	go func() {
 		defer close(userChan)
 		defer close(errChan)
-		ctx := context.Background()
-		var cursor uint64
-		var keys []string
-		var err error
-		users := make([]User, 0, batchSize)
+		var (
+			cursor string
+			users  []User
+			result any
+			err    error
+		)
 		for {
-			keys, cursor, err = r.client.Scan(ctx, cursor, prefixUser+"*", int64(batchSize)).Result()
+			if cursor == "" {
+				result, err = r.client.Do(ctx, "FT.AGGREGATE", r.UsersTable(), "*",
+					"LOAD", "3", "user_id", "labels", "comment",
+					"SORTBY", "1", "@user_id",
+					"WITHCURSOR", "COUNT", batchSize).Result()
+			} else {
+				result, err = r.client.Do(ctx, "FT.CURSOR", "READ", r.UsersTable(), cursor, "COUNT", batchSize).Result()
+			}
 			if err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}
-			for _, key := range keys {
-				var user User
-				val, err := r.client.Get(ctx, key).Result()
-				if err != nil {
-					errChan <- errors.Trace(err)
-					return
-				}
-				err = json.Unmarshal([]byte(val), &user)
-				if err != nil {
-					errChan <- errors.Trace(err)
-					return
-				}
-				users = append(users, user)
-				if len(users) == batchSize {
-					userChan <- users
-					users = make([]User, 0, batchSize)
-				}
+			cursor, users, err = parseAggregateResult[User](result)
+			if err != nil {
+				errChan <- errors.Trace(err)
+				return
 			}
-			if cursor == 0 {
+			userChan <- users
+			if cursor == "" {
 				break
 			}
-		}
-		if len(users) > 0 {
-			userChan <- users
 		}
 		errChan <- nil
 	}()
@@ -631,48 +756,39 @@ func (r *Redis) DeleteUserItemFeedback(ctx context.Context, userId, itemId strin
 
 // ModifyItem modify an item in Redis.
 func (r *Redis) ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error {
-	// read item
-	item, err := r.GetItem(ctx, itemId)
-	if err != nil {
-		return err
-	}
+	p := r.client.Pipeline()
 	// apply patch
 	if patch.IsHidden != nil {
-		item.IsHidden = *patch.IsHidden
+		p.HSet(ctx, r.itemDocId(itemId), "is_hidden", *patch.IsHidden)
 	}
 	if patch.Categories != nil {
-		item.Categories = patch.Categories
+		p.HSet(ctx, r.itemDocId(itemId), "categories", JSON(patch.Categories))
 	}
 	if patch.Comment != nil {
-		item.Comment = *patch.Comment
+		p.HSet(ctx, r.itemDocId(itemId), "comment", *patch.Comment)
 	}
 	if patch.Labels != nil {
-		item.Labels = patch.Labels
+		p.HSet(ctx, r.itemDocId(itemId), "labels", JSON(patch.Labels))
 	}
 	if patch.Timestamp != nil {
-		item.Timestamp = *patch.Timestamp
+		p.HSet(ctx, r.itemDocId(itemId), "timestamp", patch.Timestamp)
 	}
-	// write back
-	return r.insertItem(ctx, item)
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 // ModifyUser modify a user in Redis.
 func (r *Redis) ModifyUser(ctx context.Context, userId string, patch UserPatch) error {
-	// read user
-	user, err := r.GetUser(ctx, userId)
-	if err != nil {
-		return err
-	}
-	// apply patch
+	p := r.client.Pipeline()
 	if patch.Comment != nil {
-		user.Comment = *patch.Comment
+		p.HSet(ctx, r.userDocId(userId), "comment", *patch.Comment)
 	}
 	if patch.Labels != nil {
-		user.Labels = patch.Labels
+		p.HSet(ctx, r.userDocId(userId), "labels", JSON(patch.Labels))
 	}
 	if patch.Subscribe != nil {
-		user.Subscribe = patch.Subscribe
+		p.HSet(ctx, r.userDocId(userId), "subscribe", JSON(patch.Subscribe))
 	}
-	// write back
-	return r.insertUser(ctx, user)
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }

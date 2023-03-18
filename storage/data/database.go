@@ -108,10 +108,10 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string   `gorm:"primaryKey"`
-	Labels    any      `gorm:"serializer:json"`
-	Subscribe []string `gorm:"serializer:json"`
-	Comment   string
+	UserId    string   `gorm:"primaryKey" mapstructure:"user_id"`
+	Labels    any      `gorm:"serializer:json" mapstructure:"labels"`
+	Subscribe []string `gorm:"serializer:json" mapstructure:"subscribe"`
+	Comment   string   `mapstructure:"comment"`
 }
 
 // UserPatch is the modification on a user.
@@ -282,10 +282,7 @@ func Open(path, tablePrefix string) (Database, error) {
 		addr := path[len(storage.RedisPrefix):]
 		database := new(Redis)
 		database.client = redis.NewClient(&redis.Options{Addr: addr})
-		if tablePrefix != "" {
-			panic("table prefix is not supported for redis")
-		}
-		log.Logger().Warn("redis is used for testing only")
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)

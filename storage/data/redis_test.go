@@ -14,30 +14,35 @@
 package data
 
 import (
+	"os"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/storage"
 )
+
+var redisDSN string
+
+func init() {
+	// get environment variables
+	env := func(key, defaultValue string) string {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+		return defaultValue
+	}
+	redisDSN = env("REDIS_URI", "redis://127.0.0.1:6379")
+}
 
 type RedisTestSuite struct {
 	baseTestSuite
-	server *miniredis.Miniredis
 }
 
 func (suite *RedisTestSuite) SetupSuite() {
 	var err error
-	suite.server, err = miniredis.Run()
+	suite.Database, err = Open(redisDSN, "gorse_")
 	suite.NoError(err)
-	suite.Database, err = Open(storage.RedisPrefix+suite.server.Addr(), "")
+	err = suite.Database.Init()
 	suite.NoError(err)
-}
-
-func (suite *RedisTestSuite) TearDownSuite() {
-	err := suite.Database.Close()
-	suite.NoError(err)
-	suite.server.Close()
 }
 
 func TestRedis(t *testing.T) {
