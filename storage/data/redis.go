@@ -85,34 +85,39 @@ func decodeMapStructure(input, output any) error {
 	return decoder.Decode(input)
 }
 
-func parseSearchResult[T any](result any) (a []T, _ error) {
+func parseSearchResult[T any](result any) (keys []string, docs []T, _ error) {
 	// fetch rows
 	rows, ok := result.([]any)
 	if !ok {
-		return nil, errors.New("invalid FT.SEARCH result")
+		return nil, nil, errors.New("invalid FT.SEARCH result")
 	}
-	for i := 2; i < len(rows); i += 2 {
-		fields, ok := rows[i].([]any)
+	for i := 1; i < len(rows); i += 2 {
+		key, ok := rows[i].(string)
 		if !ok {
-			return nil, errors.New("invalid FT.SEARCH result")
+			return nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		keys = append(keys, key)
+		fields, ok := rows[i+1].([]any)
+		if !ok {
+			return nil, nil, errors.New("invalid FT.SEARCH result")
 		}
 		values := make(map[string]string)
 		for i := 0; i < len(fields); i += 2 {
 			key, ok := fields[i].(string)
 			if !ok {
-				return nil, errors.New("invalid FT.SEARCH result")
+				return nil, nil, errors.New("invalid FT.SEARCH result")
 			}
 			value, ok := fields[i+1].(string)
 			if !ok {
-				return nil, errors.New("invalid FT.SEARCH result")
+				return nil, nil, errors.New("invalid FT.SEARCH result")
 			}
 			values[key] = value
 		}
 		var e T
 		if err := decodeMapStructure(values, &e); err != nil {
-			return nil, errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
-		a = append(a, e)
+		docs = append(docs, e)
 	}
 	return
 }
@@ -399,7 +404,8 @@ func (r *Redis) GetItemFeedback(ctx context.Context, itemId string, feedbackType
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return parseSearchResult[Feedback](result)
+	_, rows, err := parseSearchResult[Feedback](result)
+	return rows, errors.Trace(err)
 }
 
 // BatchInsertUsers inserts a batch pf user into Redis.
@@ -531,7 +537,8 @@ func (r *Redis) GetUserFeedback(ctx context.Context, userId string, endTime *tim
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return parseSearchResult[Feedback](result)
+	_, rows, err := parseSearchResult[Feedback](result)
+	return rows, errors.Trace(err)
 }
 
 func (r *Redis) getFeedbackInternal(key string) (Feedback, error) {
@@ -715,7 +722,8 @@ func (r *Redis) GetUserItemFeedback(ctx context.Context, userId, itemId string, 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return parseAggregateResult[Feedback](result)
+	_, rows, err := parseSearchResult[Feedback](result)
+	return rows, errors.Trace(err)
 }
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from Redis.
