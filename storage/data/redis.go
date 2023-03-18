@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/samber/lo"
 	"reflect"
 	"strconv"
 	"strings"
@@ -27,12 +26,9 @@ import (
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
+	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/storage"
-)
-
-const (
-	prefixFeedback = "feedback/" // prefix for feedback
 )
 
 type JSONObject struct {
@@ -186,22 +182,30 @@ func (r *Redis) feedbackDocId(key FeedbackKey) string {
 	return r.FeedbackTable() + ":" + key.FeedbackType + ":" + key.UserId + ":" + key.ItemId
 }
 
-// Init does nothing.
-func (r *Redis) Init() error {
+func (r *Redis) ftList() (*strset.Set, error) {
 	result, err := r.client.Do(context.TODO(), "FT._LIST").Result()
 	if err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	rows, ok := result.([]any)
 	if !ok {
-		return errors.New("invalid FT._LIST result")
+		return nil, errors.New("invalid FT._LIST result")
 	}
 	indices, ok := lo.FromAnySlice[string](rows)
 	if !ok {
-		return errors.New("invalid FT._LIST result")
+		return nil, errors.New("invalid FT._LIST result")
+	}
+	return strset.New(indices...), nil
+}
+
+// Init does nothing.
+func (r *Redis) Init() error {
+	indices, err := r.ftList()
+	if err != nil {
+		return errors.Trace(err)
 	}
 	// create user index
-	if !lo.Contains(indices, r.UsersTable()) {
+	if !indices.Has(r.UsersTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.UsersTable(),
 			"ON", "HASH", "PREFIX", "1", r.UsersTable()+":", "SCHEMA", "user_id", "TAG").
 			Result()
@@ -210,7 +214,7 @@ func (r *Redis) Init() error {
 		}
 	}
 	// create item index
-	if !lo.Contains(indices, r.ItemsTable()) {
+	if !indices.Has(r.ItemsTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.ItemsTable(),
 			"ON", "HASH", "PREFIX", "1", r.ItemsTable()+":", "SCHEMA", "item_id", "TAG").
 			Result()
@@ -219,7 +223,7 @@ func (r *Redis) Init() error {
 		}
 	}
 	// create feedback index
-	if !lo.Contains(indices, r.FeedbackTable()) {
+	if !indices.Has(r.FeedbackTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.FeedbackTable(),
 			"ON", "HASH", "PREFIX", "1", r.FeedbackTable()+":", "SCHEMA",
 			"feedback_type", "TAG",
@@ -244,9 +248,19 @@ func (r *Redis) Close() error {
 }
 
 func (r *Redis) Purge() error {
-	if err := r.client.FlushDB(context.Background()).Err(); err != nil {
+	// drop index
+	indices, err := r.ftList()
+	if err != nil {
 		return errors.Trace(err)
 	}
+	for _, index := range []string{r.UsersTable(), r.ItemsTable(), r.FeedbackTable()} {
+		if indices.Has(index) {
+			if err = r.client.Do(context.Background(), "FT.DROPINDEX", index).Err(); err != nil {
+				return errors.Trace(err)
+			}
+		}
+	}
+	// recreate index
 	if err := r.Init(); err != nil {
 		return errors.Trace(err)
 	}
@@ -275,42 +289,39 @@ func (r *Redis) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, er
 	}
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("@item_id:{ %s }", strings.Join(itemIds, " | ")))
-	result, err := r.client.Do(ctx, "FT.AGGREGATE", r.ItemsTable(), builder.String(),
-		"LOAD", "6", "item_id", "is_hidden", "categories", "labels", "timestamp", "comment",
-		"SORTBY", "1", "@item_id",
-		"WITHCURSOR").Result()
+	result, err := r.client.Do(ctx, "FT.SEARCH", r.ItemsTable(), builder.String(), "LIMIT", 0, len(itemIds)).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	_, items, err := parseAggregateResultWithCursor[Item](result)
+	_, items, err := parseSearchResult[Item](result)
 	return items, err
-}
-
-func (r *Redis) ForFeedback(ctx context.Context, action func(key, thisFeedbackType, thisUserId, thisItemId string) error) error {
-	cursor := uint64(0)
-	var err error
-	var keys []string
-	for {
-		keys, cursor, err = r.client.Scan(ctx, cursor, prefixFeedback+"*", 0).Result()
-		if err != nil {
-			return errors.Trace(err)
-		}
-		for _, key := range keys {
-			thisFeedbackType, thisUserId, thisItemId := parseFeedbackKey(key)
-			if err = action(key, thisFeedbackType, thisUserId, thisItemId); err != nil {
-				return errors.Trace(err)
-			}
-		}
-		if cursor == 0 {
-			break
-		}
-	}
-	return nil
 }
 
 // DeleteItem deletes a item from Redis.
 func (r *Redis) DeleteItem(ctx context.Context, itemId string) error {
-	return r.client.Del(ctx, r.itemDocId(itemId)).Err()
+	if err := r.client.Del(ctx, r.itemDocId(itemId)).Err(); err != nil {
+		return errors.Trace(err)
+	}
+	var (
+		builder strings.Builder
+		result  any
+		err     error
+	)
+	builder.WriteString(fmt.Sprintf("@item_id:{ %s }", itemId))
+	result, err = r.client.Do(ctx, "FT.SEARCH", r.FeedbackTable(), builder.String()).Result()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	keys, _, err := parseSearchResult[Feedback](result)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	p := r.client.Pipeline()
+	for _, key := range keys {
+		p.Del(ctx, key)
+	}
+	_, err = p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 // GetItem get a item from Redis.
@@ -337,7 +348,8 @@ func (r *Redis) GetItems(ctx context.Context, cursor string, n int, timeLimit *t
 		result, err = r.client.Do(ctx, "FT.AGGREGATE", r.ItemsTable(), "*",
 			"LOAD", "6", "item_id", "is_hidden", "categories", "labels", "timestamp", "comment",
 			"SORTBY", "1", "@item_id",
-			"WITHCURSOR", "COUNT", n).Result()
+			"LIMIT", 0, n,
+			"WITHCURSOR").Result()
 	} else {
 		result, err = r.client.Do(ctx, "FT.CURSOR", "READ", r.ItemsTable(), cursor, "COUNT", n).Result()
 	}
@@ -424,7 +436,29 @@ func (r *Redis) BatchInsertUsers(ctx context.Context, users []User) error {
 
 // DeleteUser deletes a user from Redis.
 func (r *Redis) DeleteUser(ctx context.Context, userId string) error {
-	return r.client.Del(ctx, r.userDocId(userId)).Err()
+	if err := r.client.Del(ctx, r.userDocId(userId)).Err(); err != nil {
+		return errors.Trace(err)
+	}
+	var (
+		builder strings.Builder
+		result  any
+		err     error
+	)
+	builder.WriteString(fmt.Sprintf("@user_id:{ %s }", userId))
+	result, err = r.client.Do(ctx, "FT.SEARCH", r.FeedbackTable(), builder.String()).Result()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	keys, _, err := parseSearchResult[Feedback](result)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	p := r.client.Pipeline()
+	for _, key := range keys {
+		p.Del(ctx, key)
+	}
+	_, err = p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 // GetUser returns a user from Redis.
@@ -556,14 +590,9 @@ func (r *Redis) getFeedbackInternal(key string) (Feedback, error) {
 	return feedback, err
 }
 
-func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
-	fields := strings.Split(key, "/")
-	return fields[1], fields[2], fields[3]
-}
-
 // insertFeedback insert a feedback into Redis.
-// If insertUser set, a new user will be insert to user table.
-// If insertItem set, a new item will be insert to item table.
+// If insertUser set, a new user will be inserted to user table.
+// If insertItem set, a new item will be inserted to item table.
 func (r *Redis) insertFeedback(ctx context.Context, feedback Feedback, insertUser, insertItem, overwrite bool) error {
 	p := r.client.Pipeline()
 	// locate user
@@ -609,8 +638,8 @@ func (r *Redis) insertFeedback(ctx context.Context, feedback Feedback, insertUse
 }
 
 // BatchInsertFeedback insert a batch feedback into Redis.
-// If insertUser set, new users will be insert to user table.
-// If insertItem set, new items will be insert to item table.
+// If insertUser set, new users will be inserted to user table.
+// If insertItem set, new items will be inserted to item table.
 func (r *Redis) BatchInsertFeedback(ctx context.Context, feedback []Feedback, insertUser, insertItem, overwrite bool) error {
 	for _, temp := range feedback {
 		if err := r.insertFeedback(ctx, temp, insertUser, insertItem, overwrite); err != nil {
@@ -728,16 +757,29 @@ func (r *Redis) GetUserItemFeedback(ctx context.Context, userId, itemId string, 
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from Redis.
 func (r *Redis) DeleteUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) (int, error) {
-	feedbackTypeSet := strset.New(feedbackTypes...)
-	deleteCount := 0
-	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if thisUserId == userId && thisItemId == itemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			r.client.Del(ctx, key)
-			deleteCount++
-		}
-		return nil
-	})
-	return deleteCount, err
+	var (
+		builder strings.Builder
+		result  any
+		err     error
+	)
+	builder.WriteString(fmt.Sprintf("@item_id:{ %s } @user_id:{ %s }", itemId, userId))
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(fmt.Sprintf(" @feedback_type:{ %s }", strings.Join(feedbackTypes, "|")))
+	}
+	result, err = r.client.Do(ctx, "FT.SEARCH", r.FeedbackTable(), builder.String()).Result()
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	keys, _, err := parseSearchResult[Feedback](result)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	p := r.client.Pipeline()
+	for _, key := range keys {
+		p.Del(ctx, key)
+	}
+	_, err = p.Exec(ctx)
+	return len(keys), errors.Trace(err)
 }
 
 // ModifyItem modify an item in Redis.
