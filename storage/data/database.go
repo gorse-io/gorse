@@ -123,16 +123,16 @@ type UserPatch struct {
 
 // FeedbackKey identifies feedback.
 type FeedbackKey struct {
-	FeedbackType string `gorm:"column:feedback_type"`
-	UserId       string `gorm:"column:user_id"`
-	ItemId       string `gorm:"column:item_id"`
+	FeedbackType string `gorm:"column:feedback_type" mapstructure:"feedback_type"`
+	UserId       string `gorm:"column:user_id" mapstructure:"user_id"`
+	ItemId       string `gorm:"column:item_id" mapstructure:"item_id"`
 }
 
 // Feedback stores feedback.
 type Feedback struct {
-	FeedbackKey `gorm:"embedded"`
-	Timestamp   time.Time `gorm:"column:time_stamp"`
-	Comment     string    `gorm:"column:comment"`
+	FeedbackKey `gorm:"embedded" mapstructure:",squash"`
+	Timestamp   time.Time `gorm:"column:time_stamp" mapsstructure:"timestamp"`
+	Comment     string    `gorm:"column:comment" mapsstructure:"comment"`
 }
 
 // SortFeedbacks sorts feedback from latest to oldest.

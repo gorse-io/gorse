@@ -32,8 +32,6 @@ import (
 )
 
 const (
-	prefixItem     = "item/"     // prefix for items
-	prefixUser     = "user/"     // prefix for users
 	prefixFeedback = "feedback/" // prefix for feedback
 )
 
@@ -51,21 +49,34 @@ func (j JSONObject) MarshalBinary() (data []byte, err error) {
 
 func decodeMapStructure(input, output any) error {
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result:           output,
-		WeaklyTypedInput: true,
+		Result: output,
+		Squash: true,
 		DecodeHook: func(f reflect.Type, t reflect.Type, data any) (any, error) {
-			if f == t || f.Kind() != reflect.String {
-				return data, nil
-			}
-			if t == reflect.TypeOf(time.Time{}) {
-				return time.Parse(time.RFC3339, data.(string))
-			} else {
+			if f.Kind() == reflect.String && t.Kind() == reflect.Bool {
+				return strconv.ParseBool(data.(string))
+			} else if f.Kind() == reflect.String && t == reflect.TypeOf(time.Time{}) {
+				nanos, err := strconv.ParseInt(data.(string), 10, 64)
+				if err != nil {
+					return nil, err
+				}
+				return time.Unix(0, nanos).In(time.UTC), nil
+			} else if f.Kind() == reflect.String && t.Kind() == reflect.Interface {
 				var v any
 				if err := json.Unmarshal([]byte(data.(string)), &v); err != nil {
 					return nil, err
 				}
 				return v, nil
+			} else if f.Kind() == reflect.String && t.Kind() == reflect.Slice {
+				var v any
+				if err := json.Unmarshal([]byte(data.(string)), &v); err != nil {
+					return nil, err
+				}
+				if v == nil {
+					return reflect.New(t).Interface(), nil
+				}
+				return v, nil
 			}
+			return data, nil
 		},
 	})
 	if err != nil {
@@ -74,7 +85,71 @@ func decodeMapStructure(input, output any) error {
 	return decoder.Decode(input)
 }
 
-func parseAggregateResult[T any](result any) (cursor string, a []T, _ error) {
+func parseSearchResult[T any](result any) (a []T, _ error) {
+	// fetch rows
+	rows, ok := result.([]any)
+	if !ok {
+		return nil, errors.New("invalid FT.SEARCH result")
+	}
+	for i := 2; i < len(rows); i += 2 {
+		fields, ok := rows[i].([]any)
+		if !ok {
+			return nil, errors.New("invalid FT.SEARCH result")
+		}
+		values := make(map[string]string)
+		for i := 0; i < len(fields); i += 2 {
+			key, ok := fields[i].(string)
+			if !ok {
+				return nil, errors.New("invalid FT.SEARCH result")
+			}
+			value, ok := fields[i+1].(string)
+			if !ok {
+				return nil, errors.New("invalid FT.SEARCH result")
+			}
+			values[key] = value
+		}
+		var e T
+		if err := decodeMapStructure(values, &e); err != nil {
+			return nil, errors.Trace(err)
+		}
+		a = append(a, e)
+	}
+	return
+}
+
+func parseAggregateResult[T any](result any) (a []T, _ error) {
+	// fetch rows
+	rows, ok := result.([]any)
+	if !ok {
+		return nil, errors.New("invalid FT.AGGREGATE result")
+	}
+	for _, row := range rows[1:] {
+		fields, ok := row.([]any)
+		if !ok {
+			return nil, errors.New("invalid FT.AGGREGATE result")
+		}
+		values := make(map[string]string)
+		for i := 0; i < len(fields); i += 2 {
+			key, ok := fields[i].(string)
+			if !ok {
+				return nil, errors.New("invalid FT.AGGREGATE result")
+			}
+			value, ok := fields[i+1].(string)
+			if !ok {
+				return nil, errors.New("invalid FT.AGGREGATE result")
+			}
+			values[key] = value
+		}
+		var e T
+		if err := decodeMapStructure(values, &e); err != nil {
+			return nil, errors.Trace(err)
+		}
+		a = append(a, e)
+	}
+	return
+}
+
+func parseAggregateResultWithCursor[T any](result any) (cursor string, a []T, err error) {
 	// fetch cursor
 	resultAndCursor, ok := result.([]any)
 	if !ok {
@@ -84,34 +159,7 @@ func parseAggregateResult[T any](result any) (cursor string, a []T, _ error) {
 	if cursorId > 0 {
 		cursor = strconv.FormatInt(cursorId, 10)
 	}
-	// fetch rows
-	rows, ok := resultAndCursor[0].([]any)
-	if !ok {
-		return "", nil, errors.New("invalid FT.AGGREGATE result")
-	}
-	for _, row := range rows[1:] {
-		fields, ok := row.([]any)
-		if !ok {
-			return "", nil, errors.New("invalid FT.AGGREGATE result")
-		}
-		values := make(map[string]string)
-		for i := 0; i < len(fields); i += 2 {
-			key, ok := fields[i].(string)
-			if !ok {
-				return "", nil, errors.New("invalid FT.AGGREGATE result")
-			}
-			value, ok := fields[i+1].(string)
-			if !ok {
-				return "", nil, errors.New("invalid FT.AGGREGATE result")
-			}
-			values[key] = value
-		}
-		var e T
-		if err := decodeMapStructure(values, &e); err != nil {
-			return "", nil, errors.Trace(err)
-		}
-		a = append(a, e)
-	}
+	a, err = parseAggregateResult[T](resultAndCursor[0])
 	return
 }
 
@@ -150,11 +198,7 @@ func (r *Redis) Init() error {
 	// create user index
 	if !lo.Contains(indices, r.UsersTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.UsersTable(),
-			"ON", "HASH", "PREFIX", "1", r.UsersTable()+":", "SCHEMA",
-			"user_id", "TAG",
-			"labels", "TEXT", "NOINDEX",
-			"subscribe", "TEXT", "NOINDEX",
-			"comment", "TEXT", "NOINDEX").
+			"ON", "HASH", "PREFIX", "1", r.UsersTable()+":", "SCHEMA", "user_id", "TAG").
 			Result()
 		if err != nil {
 			return errors.Trace(err)
@@ -163,10 +207,7 @@ func (r *Redis) Init() error {
 	// create item index
 	if !lo.Contains(indices, r.ItemsTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.ItemsTable(),
-			"ON", "HASH", "PREFIX", "1", r.ItemsTable()+":", "SCHEMA",
-			"item_id", "TAG",
-			"labels", "TEXT", "NOINDEX",
-			"comment", "TEXT", "NOINDEX").
+			"ON", "HASH", "PREFIX", "1", r.ItemsTable()+":", "SCHEMA", "item_id", "TAG").
 			Result()
 		if err != nil {
 			return errors.Trace(err)
@@ -176,12 +217,10 @@ func (r *Redis) Init() error {
 	if !lo.Contains(indices, r.FeedbackTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.FeedbackTable(),
 			"ON", "HASH", "PREFIX", "1", r.FeedbackTable()+":", "SCHEMA",
-			"feedback_id", "TAG",
 			"feedback_type", "TAG",
 			"user_id", "TAG",
 			"item_id", "TAG",
-			"labels", "TEXT", "NOINDEX",
-			"comment", "TEXT", "NOINDEX").
+			"timestamp", "NUMERIC").
 			Result()
 		if err != nil {
 			return errors.Trace(err)
@@ -218,7 +257,7 @@ func (r *Redis) BatchInsertItems(ctx context.Context, items []Item) error {
 			"is_hidden", item.IsHidden,
 			"categories", JSON(item.Categories),
 			"labels", JSON(item.Labels),
-			"timestamp", item.Timestamp,
+			"timestamp", item.Timestamp.UnixNano(),
 			"comment", item.Comment)
 	}
 	_, err := p.Exec(ctx)
@@ -238,7 +277,7 @@ func (r *Redis) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, er
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	_, items, err := parseAggregateResult[Item](result)
+	_, items, err := parseAggregateResultWithCursor[Item](result)
 	return items, err
 }
 
@@ -280,7 +319,7 @@ func (r *Redis) GetItem(ctx context.Context, itemId string) (Item, error) {
 	}
 	var item Item
 	err = decodeMapStructure(result, &item)
-	return item, err
+	return item, errors.Trace(err)
 }
 
 // GetItems returns items from Redis.
@@ -300,7 +339,7 @@ func (r *Redis) GetItems(ctx context.Context, cursor string, n int, timeLimit *t
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	return parseAggregateResult[Item](result)
+	return parseAggregateResultWithCursor[Item](result)
 }
 
 // GetItemStream read items from Redis by stream.
@@ -330,7 +369,7 @@ func (r *Redis) GetItemStream(ctx context.Context, batchSize int, timeLimit *tim
 				errChan <- errors.Trace(err)
 				return
 			}
-			cursor, items, err = parseAggregateResult[Item](result)
+			cursor, items, err = parseAggregateResultWithCursor[Item](result)
 			if err != nil {
 				errChan <- errors.Trace(err)
 				return
@@ -347,21 +386,20 @@ func (r *Redis) GetItemStream(ctx context.Context, batchSize int, timeLimit *tim
 
 // GetItemFeedback returns feedback of an item from Redis.
 func (r *Redis) GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	feedback := make([]Feedback, 0)
-	feedbackTypeSet := strset.New(feedbackTypes...)
-	err := r.ForFeedback(ctx, func(key, thisFeedbackType, _, thisItemId string) error {
-		if itemId == thisItemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedbackInternal(key)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if val.Timestamp.Before(time.Now()) {
-				feedback = append(feedback, val)
-			}
-		}
-		return nil
-	})
-	return feedback, err
+	var (
+		builder strings.Builder
+		result  any
+		err     error
+	)
+	builder.WriteString(fmt.Sprintf("@item_id:{ %s } @timestamp:[-inf %d]", itemId, time.Now().UnixNano()))
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(fmt.Sprintf(" @feedback_type:{ %s }", strings.Join(feedbackTypes, "|")))
+	}
+	result, err = r.client.Do(ctx, "FT.SEARCH", r.FeedbackTable(), builder.String()).Result()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return parseSearchResult[Feedback](result)
 }
 
 // BatchInsertUsers inserts a batch pf user into Redis.
@@ -431,7 +469,7 @@ func (r *Redis) GetUsers(ctx context.Context, cursor string, n int) (string, []U
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	return parseAggregateResult[User](result)
+	return parseAggregateResultWithCursor[User](result)
 }
 
 // GetUserStream read users from Redis by stream.
@@ -460,7 +498,7 @@ func (r *Redis) GetUserStream(ctx context.Context, batchSize int) (chan []User, 
 				errChan <- errors.Trace(err)
 				return
 			}
-			cursor, users, err = parseAggregateResult[User](result)
+			cursor, users, err = parseAggregateResultWithCursor[User](result)
 			if err != nil {
 				errChan <- errors.Trace(err)
 				return
@@ -477,22 +515,23 @@ func (r *Redis) GetUserStream(ctx context.Context, batchSize int) (chan []User, 
 
 // GetUserFeedback returns feedback of a user from Redis.
 func (r *Redis) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
-	feedback := make([]Feedback, 0)
-	feedbackTypeSet := strset.New(feedbackTypes...)
-	// get itemId list by userId
-	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if thisUserId == userId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedbackInternal(key)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if endTime == nil || val.Timestamp.Before(*endTime) {
-				feedback = append(feedback, val)
-			}
-		}
-		return nil
-	})
-	return feedback, err
+	var (
+		builder strings.Builder
+		result  any
+		err     error
+	)
+	builder.WriteString(fmt.Sprintf("@user_id:{ %s }", userId))
+	if endTime != nil {
+		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf %d]", endTime.UnixNano()))
+	}
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(fmt.Sprintf(" @feedback_type:{ %s }", strings.Join(feedbackTypes, "|")))
+	}
+	result, err = r.client.Do(ctx, "FT.SEARCH", r.FeedbackTable(), builder.String()).Result()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return parseSearchResult[Feedback](result)
 }
 
 func (r *Redis) getFeedbackInternal(key string) (Feedback, error) {
@@ -510,10 +549,6 @@ func (r *Redis) getFeedbackInternal(key string) (Feedback, error) {
 	return feedback, err
 }
 
-func createFeedbackKey(key FeedbackKey) string {
-	return prefixFeedback + key.FeedbackType + "/" + key.UserId + "/" + key.ItemId
-}
-
 func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
 	fields := strings.Split(key, "/")
 	return fields[1], fields[2], fields[3]
@@ -523,6 +558,7 @@ func parseFeedbackKey(key string) (feedbackType, userId, itemId string) {
 // If insertUser set, a new user will be insert to user table.
 // If insertItem set, a new item will be insert to item table.
 func (r *Redis) insertFeedback(ctx context.Context, feedback Feedback, insertUser, insertItem, overwrite bool) error {
+	p := r.client.Pipeline()
 	// locate user
 	_, err := r.GetUser(ctx, feedback.UserId)
 	if errors.Is(err, errors.NotFound) {
@@ -530,7 +566,7 @@ func (r *Redis) insertFeedback(ctx context.Context, feedback Feedback, insertUse
 			return nil
 		}
 	} else if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	// locate item
 	_, err = r.GetItem(ctx, feedback.ItemId)
@@ -539,54 +575,30 @@ func (r *Redis) insertFeedback(ctx context.Context, feedback Feedback, insertUse
 			return nil
 		}
 	} else if err != nil {
-		return err
-	}
-	val, err := json.Marshal(feedback)
-	if err != nil {
 		return errors.Trace(err)
 	}
 	// insert feedback
-	feedbackKey := createFeedbackKey(feedback.FeedbackKey)
-	if exists, err := r.client.Exists(ctx, feedbackKey).Result(); err != nil {
+	if exists, err := r.client.Exists(ctx, r.feedbackDocId(feedback.FeedbackKey)).Result(); err != nil {
 		return errors.Trace(err)
 	} else if exists > 0 && !overwrite {
 		return nil
 	}
-	err = r.client.Set(ctx, feedbackKey, val, 0).Err()
-	if err != nil {
-		return errors.Trace(err)
-	}
+	p.HSet(ctx, r.feedbackDocId(feedback.FeedbackKey),
+		"feedback_type", feedback.FeedbackType,
+		"user_id", feedback.UserId,
+		"item_id", feedback.ItemId,
+		"timestamp", feedback.Timestamp.UnixNano(),
+		"comment", feedback.Comment)
 	// insert user
 	if insertUser {
-		if exist, err := r.client.Exists(ctx, prefixUser+feedback.UserId).Result(); err != nil {
-			return errors.Trace(err)
-		} else if exist == 0 {
-			user := User{UserId: feedback.UserId}
-			data, err := json.Marshal(user)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err = r.client.Set(ctx, prefixUser+feedback.UserId, data, 0).Err(); err != nil {
-				return errors.Trace(err)
-			}
-		}
+		p.HSet(ctx, r.userDocId(feedback.UserId), "user_id", feedback.UserId)
 	}
 	// Insert item
 	if insertItem {
-		if exist, err := r.client.Exists(ctx, prefixItem+feedback.ItemId).Result(); err != nil {
-			return errors.Trace(err)
-		} else if exist == 0 {
-			item := Item{ItemId: feedback.ItemId}
-			data, err := json.Marshal(item)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err = r.client.Set(ctx, prefixItem+feedback.ItemId, data, 0).Err(); err != nil {
-				return errors.Trace(err)
-			}
-		}
+		p.HSet(ctx, r.itemDocId(feedback.ItemId), "item_id", feedback.ItemId)
 	}
-	return nil
+	_, err = p.Exec(ctx)
+	return err
 }
 
 // BatchInsertFeedback insert a batch feedback into Redis.
@@ -602,81 +614,108 @@ func (r *Redis) BatchInsertFeedback(ctx context.Context, feedback []Feedback, in
 }
 
 // GetFeedback returns feedback from Redis.
-func (r *Redis) GetFeedback(ctx context.Context, _ string, _ int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
-	feedback := make([]Feedback, 0)
-	feedbackTypeSet := strset.New(feedbackTypes...)
-	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType) {
-			val, err := r.getFeedbackInternal(key)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if beginTime != nil && val.Timestamp.Before(*beginTime) {
-				return nil
-			}
-			if endTime != nil && val.Timestamp.After(*endTime) {
-				return nil
-			}
-			feedback = append(feedback, val)
-		}
-		return nil
-	})
-	return "", feedback, err
+func (r *Redis) GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
+	var (
+		builder strings.Builder
+		result  any
+		err     error
+	)
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(fmt.Sprintf(" @feedback_type:{ %s }", strings.Join(feedbackTypes, "|")))
+	}
+	if beginTime != nil {
+		builder.WriteString(fmt.Sprintf(" @timestamp:[ %d +inf ]", beginTime.UnixNano()))
+	}
+	if endTime != nil {
+		builder.WriteString(fmt.Sprintf(" @timestamp:[ -inf %d ]", endTime.UnixNano()))
+	}
+	if builder.Len() == 0 {
+		builder.WriteString("*")
+	}
+	if cursor == "" {
+		result, err = r.client.Do(ctx, "FT.AGGREGATE", r.FeedbackTable(), builder.String(),
+			"LOAD", "5", "feedback_type", "user_id", "item_id", "timestamp", "comment",
+			"SORTBY", "2", "@user_id", "@item_id",
+			"WITHCURSOR", "COUNT", n).Result()
+	} else {
+		result, err = r.client.Do(ctx, "FT.CURSOR", "READ", r.FeedbackTable(), cursor, "COUNT", n).Result()
+	}
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+	return parseAggregateResultWithCursor[Feedback](result)
 }
 
 // GetFeedbackStream reads feedback by stream.
 func (r *Redis) GetFeedbackStream(ctx context.Context, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
+	var (
+		builder  strings.Builder
+		feedback []Feedback
+		cursor   string
+		result   any
+		err      error
+	)
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(fmt.Sprintf(" @feedback_type:{ %s }", strings.Join(feedbackTypes, "|")))
+	}
+	if beginTime != nil {
+		builder.WriteString(fmt.Sprintf(" @timestamp:[ %d +inf ]", beginTime.UnixNano()))
+	}
+	if endTime != nil {
+		builder.WriteString(fmt.Sprintf(" @timestamp:[ -inf %d ]", endTime.UnixNano()))
+	}
+	if builder.Len() == 0 {
+		builder.WriteString("*")
+	}
 	go func() {
 		defer close(feedbackChan)
 		defer close(errChan)
-		feedbackTypeSet := strset.New(feedbackTypes...)
-		ctx := context.Background()
-		feedback := make([]Feedback, 0, batchSize)
-		err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-			if feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType) {
-				val, err := r.getFeedbackInternal(key)
-				if err != nil {
-					return errors.Trace(err)
-				}
-				if beginTime != nil && val.Timestamp.Before(*beginTime) {
-					return nil
-				}
-				if endTime != nil && val.Timestamp.After(*endTime) {
-					return nil
-				}
-				feedback = append(feedback, val)
-				if len(feedback) == batchSize {
-					feedbackChan <- feedback
-					feedback = make([]Feedback, 0, batchSize)
-				}
+		for {
+			if cursor == "" {
+				result, err = r.client.Do(ctx, "FT.AGGREGATE", r.FeedbackTable(), builder.String(),
+					"LOAD", "5", "feedback_type", "user_id", "item_id", "timestamp", "comment",
+					"SORTBY", "2", "@user_id", "@item_id",
+					"WITHCURSOR", "COUNT", batchSize).Result()
+			} else {
+				result, err = r.client.Do(ctx, "FT.CURSOR", "READ", r.FeedbackTable(), cursor, "COUNT", batchSize).Result()
 			}
-			return nil
-		})
-		if len(feedback) > 0 {
+			if err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			cursor, feedback, err = parseAggregateResultWithCursor[Feedback](result)
+			if err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
 			feedbackChan <- feedback
+			if cursor == "" {
+				break
+			}
 		}
-		errChan <- errors.Trace(err)
+		errChan <- nil
 	}()
 	return feedbackChan, errChan
 }
 
 // GetUserItemFeedback gets a feedback by user id and item id from Redis.
 func (r *Redis) GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	feedback := make([]Feedback, 0)
-	feedbackTypeSet := strset.New(feedbackTypes...)
-	err := r.ForFeedback(ctx, func(key, thisFeedbackType, thisUserId, thisItemId string) error {
-		if thisUserId == userId && thisItemId == itemId && (feedbackTypeSet.IsEmpty() || feedbackTypeSet.Has(thisFeedbackType)) {
-			val, err := r.getFeedbackInternal(key)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			feedback = append(feedback, val)
-		}
-		return nil
-	})
-	return feedback, err
+	var (
+		builder strings.Builder
+		result  any
+		err     error
+	)
+	builder.WriteString(fmt.Sprintf("@item_id:{ %s } @user_id:{ %s } @timestamp:[-inf %d]", itemId, userId, time.Now().UnixNano()))
+	if len(feedbackTypes) > 0 {
+		builder.WriteString(fmt.Sprintf(" @feedback_type:{ %s }", strings.Join(feedbackTypes, "|")))
+	}
+	result, err = r.client.Do(ctx, "FT.SEARCH", r.FeedbackTable(), builder.String()).Result()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return parseAggregateResult[Feedback](result)
 }
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from Redis.
@@ -710,7 +749,7 @@ func (r *Redis) ModifyItem(ctx context.Context, itemId string, patch ItemPatch) 
 		p.HSet(ctx, r.itemDocId(itemId), "labels", JSON(patch.Labels))
 	}
 	if patch.Timestamp != nil {
-		p.HSet(ctx, r.itemDocId(itemId), "timestamp", *patch.Timestamp)
+		p.HSet(ctx, r.itemDocId(itemId), "timestamp", patch.Timestamp.UnixNano())
 	}
 	_, err := p.Exec(ctx)
 	return errors.Trace(err)
