@@ -161,8 +161,8 @@ func (d *SQLDatabase) Init() error {
 		}
 		type Users struct {
 			UserId    string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    string `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
+			Labels    string `gorm:"column:labels;type:json;not null;default:'null'"`
+			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'null'"`
 			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
@@ -238,15 +238,8 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string) ([]It
 	var items []Item
 	for result.Next() {
 		var item Item
-		var labels, categories string
-		if err = result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &item.Comment); err != nil {
+		if err = d.gormDB.ScanRows(result, &item); err != nil {
 			return nil, errors.Trace(err)
-		}
-		if err = json.Unmarshal([]byte(labels), &item.Labels); err != nil {
-			return nil, err
-		}
-		if err = json.Unmarshal([]byte(categories), &item.Categories); err != nil {
-			return nil, err
 		}
 		items = append(items, item)
 	}
@@ -275,18 +268,9 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 	defer result.Close()
 	if result.Next() {
 		var item Item
-		var labels, categories string
-		var comment sql.NullString
-		if err := result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &comment); err != nil {
+		if err = d.gormDB.ScanRows(result, &item); err != nil {
 			return Item{}, errors.Trace(err)
 		}
-		if err := json.Unmarshal([]byte(labels), &item.Labels); err != nil {
-			return Item{}, err
-		}
-		if err := json.Unmarshal([]byte(categories), &item.Categories); err != nil {
-			return Item{}, err
-		}
-		item.Comment = comment.String
 		return item, nil
 	}
 	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
@@ -352,18 +336,9 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 	defer result.Close()
 	for result.Next() {
 		var item Item
-		var labels, categories string
-		var comment sql.NullString
-		if err = result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &comment); err != nil {
+		if err = d.gormDB.ScanRows(result, &item); err != nil {
 			return "", nil, errors.Trace(err)
 		}
-		if err = json.Unmarshal([]byte(labels), &item.Labels); err != nil {
-			return "", nil, errors.Trace(err)
-		}
-		if err = json.Unmarshal([]byte(categories), &item.Categories); err != nil {
-			return "", nil, errors.Trace(err)
-		}
-		item.Comment = comment.String
 		items = append(items, item)
 	}
 	if len(items) == n+1 {
@@ -394,16 +369,7 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		defer result.Close()
 		for result.Next() {
 			var item Item
-			var labels, categories string
-			if err = result.Scan(&item.ItemId, &item.IsHidden, &categories, &item.Timestamp, &labels, &item.Comment); err != nil {
-				errChan <- errors.Trace(err)
-				return
-			}
-			if err = json.Unmarshal([]byte(labels), &item.Labels); err != nil {
-				errChan <- errors.Trace(err)
-				return
-			}
-			if err = json.Unmarshal([]byte(categories), &item.Categories); err != nil {
+			if err = d.gormDB.ScanRows(result, &item); err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}
@@ -441,7 +407,7 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
-		if err = result.Scan(&feedback.UserId, &feedback.ItemId, &feedback.FeedbackType, &feedback.Timestamp); err != nil {
+		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
 			return nil, errors.Trace(err)
 		}
 		feedbacks = append(feedbacks, feedback)
@@ -493,15 +459,7 @@ func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) 
 	defer result.Close()
 	if result.Next() {
 		var user User
-		var labels string
-		var subscribe string
-		if err = result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
-			return User{}, errors.Trace(err)
-		}
-		if err = json.Unmarshal([]byte(labels), &user.Labels); err != nil {
-			return User{}, errors.Trace(err)
-		}
-		if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
+		if err = d.gormDB.ScanRows(result, &user); err != nil {
 			return User{}, errors.Trace(err)
 		}
 		return user, nil
@@ -551,18 +509,9 @@ func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (strin
 	defer result.Close()
 	for result.Next() {
 		var user User
-		var labels, subscribe string
-		var comment sql.NullString
-		if err = result.Scan(&user.UserId, &labels, &subscribe, &comment); err != nil {
+		if err = d.gormDB.ScanRows(result, &user); err != nil {
 			return "", nil, errors.Trace(err)
 		}
-		if err = json.Unmarshal([]byte(labels), &user.Labels); err != nil {
-			return "", nil, errors.Trace(err)
-		}
-		if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
-			return "", nil, errors.Trace(err)
-		}
-		user.Comment = comment.String
 		users = append(users, user)
 	}
 	if len(users) == n+1 {
@@ -589,17 +538,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 		defer result.Close()
 		for result.Next() {
 			var user User
-			var labels string
-			var subscribe string
-			if err = result.Scan(&user.UserId, &labels, &subscribe, &user.Comment); err != nil {
-				errChan <- errors.Trace(err)
-				return
-			}
-			if err = json.Unmarshal([]byte(labels), &user.Labels); err != nil {
-				errChan <- errors.Trace(err)
-				return
-			}
-			if err = json.Unmarshal([]byte(subscribe), &user.Subscribe); err != nil {
+			if err = d.gormDB.ScanRows(result, &user); err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}
@@ -636,11 +575,9 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
-		var comment sql.NullString
-		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
+		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
 			return nil, errors.Trace(err)
 		}
-		feedback.Comment = comment.String
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil
@@ -671,8 +608,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
 			return SQLUser{
 				UserId:    userId,
-				Labels:    "[]",
-				Subscribe: "[]",
+				Labels:    "null",
+				Subscribe: "null",
 			}
 		})).Error
 		if err != nil {
@@ -700,8 +637,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
 			return SQLItem{
 				ItemId:     itemId,
-				Labels:     "[]",
-				Categories: "[]",
+				Labels:     "null",
+				Categories: "null",
 			}
 		})).Error
 		if err != nil {
@@ -777,11 +714,9 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
-		var comment sql.NullString
-		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
+		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
 			return "", nil, errors.Trace(err)
 		}
-		feedback.Comment = comment.String
 		feedbacks = append(feedbacks, feedback)
 	}
 	if len(feedbacks) == n+1 {
@@ -803,7 +738,9 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, begi
 		defer close(feedbackChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
+		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
+			Select("feedback_type, user_id, item_id, time_stamp, comment").
+			Order("feedback_type, user_id, item_id")
 		if len(feedbackTypes) > 0 {
 			tx.Where("feedback_type IN ?", feedbackTypes)
 		}
@@ -823,12 +760,10 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, begi
 		defer result.Close()
 		for result.Next() {
 			var feedback Feedback
-			var comment sql.NullString
-			if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
+			if err = d.gormDB.ScanRows(result, &feedback); err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}
-			feedback.Comment = comment.String
 			feedbacks = append(feedbacks, feedback)
 			if len(feedbacks) == batchSize {
 				feedbackChan <- feedbacks
@@ -859,11 +794,9 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
-		var comment sql.NullString
-		if err = result.Scan(&feedback.FeedbackType, &feedback.UserId, &feedback.ItemId, &feedback.Timestamp, &comment); err != nil {
+		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
 			return nil, errors.Trace(err)
 		}
-		feedback.Comment = comment.String
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil

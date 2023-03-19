@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -27,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/bits-and-blooms/bitset"
 	"github.com/scylladb/go-set/strset"
 	"github.com/stretchr/testify/assert"
@@ -49,22 +49,20 @@ import (
 type WorkerTestSuite struct {
 	suite.Suite
 	Worker
-	dataStoreServer  *miniredis.Miniredis
-	cacheStoreServer *miniredis.Miniredis
 }
 
 func (suite *WorkerTestSuite) SetupSuite() {
-	// create mock redis server
-	var err error
-	suite.dataStoreServer, err = miniredis.Run()
-	suite.NoError(err)
-	suite.cacheStoreServer, err = miniredis.Run()
-	suite.NoError(err)
 	// open database
+	var err error
 	suite.Settings = config.NewSettings()
-	suite.DataClient, err = data.Open("redis://"+suite.dataStoreServer.Addr(), "")
+	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
-	suite.CacheClient, err = cache.Open("redis://"+suite.cacheStoreServer.Addr(), "")
+	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
+	suite.NoError(err)
+	// init database
+	err = suite.DataClient.Init()
+	suite.NoError(err)
+	err = suite.CacheClient.Init()
 	suite.NoError(err)
 }
 
@@ -73,8 +71,6 @@ func (suite *WorkerTestSuite) TearDownSuite() {
 	suite.NoError(err)
 	err = suite.CacheClient.Close()
 	suite.NoError(err)
-	suite.dataStoreServer.Close()
-	suite.cacheStoreServer.Close()
 }
 
 func (suite *WorkerTestSuite) SetupTest() {
@@ -601,31 +597,27 @@ func newClickDataset() (*click.Dataset, *click.Dataset) {
 
 type mockMaster struct {
 	protocol.UnimplementedMasterServer
-	addr         chan string
-	grpcServer   *grpc.Server
-	cacheStore   *miniredis.Miniredis
-	dataStore    *miniredis.Miniredis
-	meta         *protocol.Meta
-	rankingModel []byte
-	clickModel   []byte
-	userIndex    []byte
+	addr          chan string
+	grpcServer    *grpc.Server
+	cacheFilePath string
+	dataFilePath  string
+	meta          *protocol.Meta
+	rankingModel  []byte
+	clickModel    []byte
+	userIndex     []byte
 }
 
 func newMockMaster(t *testing.T) *mockMaster {
-	cacheStore, err := miniredis.Run()
-	assert.NoError(t, err)
-	dataStore, err := miniredis.Run()
-	assert.NoError(t, err)
 	cfg := config.GetDefaultConfig()
-	cfg.Database.DataStore = "redis://" + dataStore.Addr()
-	cfg.Database.CacheStore = "redis://" + cacheStore.Addr()
+	cfg.Database.DataStore = fmt.Sprintf("sqlite://%s/data.db", t.TempDir())
+	cfg.Database.CacheStore = fmt.Sprintf("sqlite://%s/cache.db", t.TempDir())
 
 	// create click model
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
 	fm.Fit(train, test, nil)
 	clickModelBuffer := bytes.NewBuffer(nil)
-	err = click.MarshalModel(clickModelBuffer, fm)
+	err := click.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
 
 	// create ranking model
@@ -648,11 +640,11 @@ func newMockMaster(t *testing.T) *mockMaster {
 			ClickModelVersion:   1,
 			RankingModelVersion: 2,
 		},
-		cacheStore:   cacheStore,
-		dataStore:    dataStore,
-		userIndex:    userIndexBuffer.Bytes(),
-		clickModel:   clickModelBuffer.Bytes(),
-		rankingModel: rankingModelBuffer.Bytes(),
+		cacheFilePath: cfg.Database.CacheStore,
+		dataFilePath:  cfg.Database.DataStore,
+		userIndex:     userIndexBuffer.Bytes(),
+		clickModel:    clickModelBuffer.Bytes(),
+		rankingModel:  rankingModelBuffer.Bytes(),
 	}
 }
 
@@ -681,8 +673,6 @@ func (m *mockMaster) Start(t *testing.T) {
 
 func (m *mockMaster) Stop() {
 	m.grpcServer.Stop()
-	m.dataStore.Close()
-	m.cacheStore.Close()
 }
 
 func TestWorker_Sync(t *testing.T) {
@@ -714,8 +704,8 @@ func TestWorker_Sync(t *testing.T) {
 	}()
 
 	serv.Sync()
-	assert.Equal(t, "redis://"+master.dataStore.Addr(), serv.dataPath)
-	assert.Equal(t, "redis://"+master.cacheStore.Addr(), serv.cachePath)
+	assert.Equal(t, master.dataFilePath, serv.dataPath)
+	assert.Equal(t, master.cacheFilePath, serv.cachePath)
 	assert.Equal(t, int64(1), serv.latestClickModelVersion)
 	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
 	assert.Zero(t, serv.ClickModelVersion)
