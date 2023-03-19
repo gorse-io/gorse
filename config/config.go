@@ -593,9 +593,6 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.MySQLPrefix,
 			storage.PostgresPrefix,
 			storage.PostgreSQLPrefix,
-			storage.ClickhousePrefix,
-			storage.CHHTTPPrefix,
-			storage.CHHTTPSPrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)

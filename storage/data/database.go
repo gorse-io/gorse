@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
-	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
@@ -34,7 +33,6 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
-	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -112,12 +110,12 @@ func flattenLabels(result []string, prefix string, o any) []string {
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId     string `gorm:"primaryKey"`
-	IsHidden   bool
-	Categories []string `gorm:"serializer:json"`
-	Timestamp  time.Time
-	Labels     any `gorm:"serializer:json"`
-	Comment    string
+	ItemId     string    `gorm:"primaryKey" mapstructure:"item_id"`
+	IsHidden   bool      `mapstructure:"is_hidden"`
+	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
+	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
+	Labels     any       `gorm:"serializer:json" mapstructure:"labels"`
+	Comment    string    `mapsstructure:"comment"`
 }
 
 // ItemPatch is the modification on an item.
@@ -131,10 +129,10 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string   `gorm:"primaryKey"`
-	Labels    any      `gorm:"serializer:json"`
-	Subscribe []string `gorm:"serializer:json"`
-	Comment   string
+	UserId    string   `gorm:"primaryKey" mapstructure:"user_id"`
+	Labels    any      `gorm:"serializer:json" mapstructure:"labels"`
+	Subscribe []string `gorm:"serializer:json" mapstructure:"subscribe"`
+	Comment   string   `mapstructure:"comment"`
 }
 
 // UserPatch is the modification on a user.
@@ -146,16 +144,16 @@ type UserPatch struct {
 
 // FeedbackKey identifies feedback.
 type FeedbackKey struct {
-	FeedbackType string `gorm:"column:feedback_type"`
-	UserId       string `gorm:"column:user_id"`
-	ItemId       string `gorm:"column:item_id"`
+	FeedbackType string `gorm:"column:feedback_type" mapstructure:"feedback_type"`
+	UserId       string `gorm:"column:user_id" mapstructure:"user_id"`
+	ItemId       string `gorm:"column:item_id" mapstructure:"item_id"`
 }
 
 // Feedback stores feedback.
 type Feedback struct {
-	FeedbackKey `gorm:"embedded"`
-	Timestamp   time.Time `gorm:"column:time_stamp"`
-	Comment     string    `gorm:"column:comment"`
+	FeedbackKey `gorm:"embedded" mapstructure:",squash"`
+	Timestamp   time.Time `gorm:"column:time_stamp" mapsstructure:"timestamp"`
+	Comment     string    `gorm:"column:comment" mapsstructure:"comment"`
 }
 
 // SortFeedbacks sorts feedback from latest to oldest.
@@ -181,7 +179,6 @@ type Database interface {
 	Init() error
 	Ping() error
 	Close() error
-	Optimize() error
 	Purge() error
 	BatchInsertItems(ctx context.Context, items []Item) error
 	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)
@@ -253,32 +250,6 @@ func Open(path, tablePrefix string) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, storage.ClickhousePrefix) || strings.HasPrefix(path, storage.CHHTTPPrefix) || strings.HasPrefix(path, storage.CHHTTPSPrefix) {
-		// replace schema
-		parsed, err := url.Parse(path)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if strings.HasPrefix(path, storage.CHHTTPSPrefix) {
-			parsed.Scheme = "https"
-		} else {
-			parsed.Scheme = "http"
-		}
-		uri := parsed.String()
-		database := new(SQLDatabase)
-		database.driver = ClickHouse
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("chhttp", uri,
-			otelsql.WithAttributes(semconv.DBSystemKey.String("clickhouse")),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
-			return nil, errors.Trace(err)
-		}
-		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return database, nil
 	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
 		// connect to database
 		database := new(MongoDB)
@@ -327,15 +298,6 @@ func Open(path, tablePrefix string) (Database, error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.RedisPrefix) {
-		addr := path[len(storage.RedisPrefix):]
-		database := new(Redis)
-		database.client = redis.NewClient(&redis.Options{Addr: addr})
-		if tablePrefix != "" {
-			panic("table prefix is not supported for redis")
-		}
-		log.Logger().Warn("redis is used for testing only")
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)

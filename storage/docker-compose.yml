@@ -1,7 +1,7 @@
 version: "3"
 services:
   redis:
-    image: redis:5.0
+    image: redis/redis-stack
     ports:
       - 6379:6379
 
@@ -30,8 +30,3 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
-
-  clickhouse:
-    image: yandex/clickhouse-server:21.10
-    ports:
-      - 8123:8123
