@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/XSAM/otelsql v0.17.0
-	github.com/alicebob/miniredis/v2 v2.23.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
@@ -72,7 +71,6 @@ require (
 )
 
 require (
-	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -137,7 +135,6 @@ require (
 	github.com/xdg-go/scram v1.1.1 // indirect
 	github.com/xdg-go/stringprep v1.0.3 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
-	github.com/yuin/gopher-lua v0.0.0-20220504180219-658193537a64 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.11.1 // indirect
 	go.opentelemetry.io/otel/metric v0.33.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect

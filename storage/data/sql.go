@@ -161,8 +161,8 @@ func (d *SQLDatabase) Init() error {
 		}
 		type Users struct {
 			UserId    string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    string `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
+			Labels    string `gorm:"column:labels;type:json;not null;default:'null'"`
+			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'null'"`
 			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
@@ -608,8 +608,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
 			return SQLUser{
 				UserId:    userId,
-				Labels:    "[]",
-				Subscribe: "[]",
+				Labels:    "null",
+				Subscribe: "null",
 			}
 		})).Error
 		if err != nil {
@@ -637,8 +637,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
 			return SQLItem{
 				ItemId:     itemId,
-				Labels:     "[]",
-				Categories: "[]",
+				Labels:     "null",
+				Categories: "null",
 			}
 		})).Error
 		if err != nil {
@@ -738,7 +738,9 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, begi
 		defer close(feedbackChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
+		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
+			Select("feedback_type, user_id, item_id, time_stamp, comment").
+			Order("feedback_type, user_id, item_id")
 		if len(feedbackTypes) > 0 {
 			tx.Where("feedback_type IN ?", feedbackTypes)
 		}

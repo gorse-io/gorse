@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
@@ -49,25 +48,23 @@ const (
 )
 
 type mockServer struct {
-	dataStoreServer  *miniredis.Miniredis
-	cacheStoreServer *miniredis.Miniredis
-	handler          *restful.Container
+	handler *restful.Container
 	Master
 }
 
 func newMockServer(t *testing.T) (*mockServer, string) {
 	s := new(mockServer)
-	// create mock redis server
-	var err error
-	s.dataStoreServer, err = miniredis.Run()
-	assert.NoError(t, err)
-	s.cacheStoreServer, err = miniredis.Run()
-	assert.NoError(t, err)
 	// open database
+	var err error
 	s.Settings = config.NewSettings()
-	s.DataClient, err = data.Open("redis://"+s.dataStoreServer.Addr(), "")
+	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", t.TempDir()), "")
 	assert.NoError(t, err)
-	s.CacheClient, err = cache.Open("redis://"+s.cacheStoreServer.Addr(), "")
+	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", t.TempDir()), "")
+	assert.NoError(t, err)
+	// init database
+	err = s.DataClient.Init()
+	assert.NoError(t, err)
+	err = s.CacheClient.Init()
 	assert.NoError(t, err)
 	// create server
 	s.Config = config.GetDefaultConfig()
@@ -96,8 +93,6 @@ func (s *mockServer) Close(t *testing.T) {
 	assert.NoError(t, err)
 	err = s.CacheClient.Close()
 	assert.NoError(t, err)
-	s.dataStoreServer.Close()
-	s.cacheStoreServer.Close()
 }
 
 func marshal(t *testing.T, v interface{}) string {

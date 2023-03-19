@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
-	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/scylladb/go-set/strset"
@@ -277,12 +276,6 @@ func Open(path, tablePrefix string) (Database, error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.RedisPrefix) {
-		addr := path[len(storage.RedisPrefix):]
-		database := new(Redis)
-		database.client = redis.NewClient(&redis.Options{Addr: addr})
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)

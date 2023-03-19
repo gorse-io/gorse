@@ -50,14 +50,10 @@ func (suite *baseTestSuite) getUsers(ctx context.Context, batchSize int) []User 
 		suite.NoError(err)
 		users = append(users, data...)
 		if cursor == "" {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.LessOrEqual(len(data), batchSize)
-			}
+			suite.LessOrEqual(len(data), batchSize)
 			return users
 		} else {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.Equal(batchSize, len(data))
-			}
+			suite.Equal(batchSize, len(data))
 		}
 	}
 }
@@ -82,14 +78,10 @@ func (suite *baseTestSuite) getItems(ctx context.Context, batchSize int) []Item 
 		suite.NoError(err)
 		items = append(items, data...)
 		if cursor == "" {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.LessOrEqual(len(data), batchSize)
-			}
+			suite.LessOrEqual(len(data), batchSize)
 			return items
 		} else {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.Equal(batchSize, len(data))
-			}
+			suite.Equal(batchSize, len(data))
 		}
 	}
 }
@@ -114,14 +106,10 @@ func (suite *baseTestSuite) getFeedback(ctx context.Context, batchSize int, begi
 		suite.NoError(err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.LessOrEqual(len(data), batchSize)
-			}
+			suite.LessOrEqual(len(data), batchSize)
 			return feedback
 		} else {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.Equal(batchSize, len(data))
-			}
+			suite.Equal(batchSize, len(data))
 		}
 	}
 }
