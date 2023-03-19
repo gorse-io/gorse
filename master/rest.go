@@ -968,8 +968,13 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 		userChan, errChan := m.DataClient.GetUserStream(ctx, batchSize)
 		for users := range userChan {
 			for _, user := range users {
+				labels, err := json.Marshal(user.Labels)
+				if err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
-					base.Escape(user.UserId), base.Escape(strings.Join(data.FlattenLabels(user.Labels), "|"))))); err != nil {
+					base.Escape(user.UserId), base.Escape(string(labels))))); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1025,15 +1030,13 @@ func (m *Master) importUsers(ctx context.Context, response http.ResponseWriter, 
 		user := data.User{UserId: splits[0]}
 		// 2. labels
 		if splits[1] != "" {
-			labels := strings.Split(splits[1], labelSep)
-			user.Labels = labels
-			for _, label := range labels {
-				if err = base.ValidateLabel(label); err != nil {
-					server.BadRequest(restful.NewResponse(response),
-						fmt.Errorf("invalid label `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
-					return false
-				}
+			var labels any
+			if err = json.Unmarshal([]byte(splits[1]), &labels); err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("invalid labels `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
+				return false
 			}
+			user.Labels = labels
 		}
 		users = append(users, user)
 		// batch insert
@@ -1095,9 +1098,14 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		itemChan, errChan := m.DataClient.GetItemStream(ctx, batchSize, nil)
 		for items := range itemChan {
 			for _, item := range items {
+				labels, err := json.Marshal(item.Labels)
+				if err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%t,%s,%v,%s,%s\r\n",
 					base.Escape(item.ItemId), item.IsHidden, base.Escape(strings.Join(item.Categories, "|")),
-					item.Timestamp, base.Escape(strings.Join(data.FlattenLabels(item.Labels), "|")), base.Escape(item.Comment)))); err != nil {
+					item.Timestamp, base.Escape(string(labels)), base.Escape(item.Comment)))); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1183,15 +1191,13 @@ func (m *Master) importItems(ctx context.Context, response http.ResponseWriter, 
 		}
 		// 5. labels
 		if splits[4] != "" {
-			labels := strings.Split(splits[4], labelSep)
-			item.Labels = labels
-			for _, label := range labels {
-				if err = base.ValidateLabel(label); err != nil {
-					server.BadRequest(restful.NewResponse(response),
-						fmt.Errorf("invalid label `%v` at line %d (%s)", label, lineNumber, err.Error()))
-					return false
-				}
+			var labels any
+			if err = json.Unmarshal([]byte(splits[4]), &labels); err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("failed to parse labels `%v` at line %v", splits[4], lineNumber))
+				return false
 			}
+			item.Labels = labels
 		}
 		// 6. comment
 		item.Comment = splits[5]

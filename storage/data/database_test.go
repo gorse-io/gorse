@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaswdr/faker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -145,10 +146,16 @@ func (suite *baseTestSuite) TestUsers() {
 	ctx := context.Background()
 	// Insert users
 	var insertedUsers []User
+	fake := faker.New()
 	for i := 9; i >= 0; i-- {
 		insertedUsers = append(insertedUsers, User{
-			UserId:  strconv.Itoa(i),
-			Labels:  []any{strconv.Itoa(i + 100)},
+			UserId: strconv.Itoa(i),
+			Labels: map[string]any{
+				"color": fake.Color().ColorName(),
+				"company": lo.Map(lo.Range(3), func(_, _ int) any {
+					return fake.Genre().Name()
+				}),
+			},
 			Comment: fmt.Sprintf("comment %d", i),
 		})
 	}
@@ -158,9 +165,7 @@ func (suite *baseTestSuite) TestUsers() {
 	users := suite.getUsers(ctx, 3)
 	suite.Equal(10, len(users))
 	for i, user := range users {
-		suite.Equal(strconv.Itoa(i), user.UserId)
-		suite.Equal([]any{strconv.Itoa(i + 100)}, user.Labels)
-		suite.Equal(fmt.Sprintf("comment %d", i), user.Comment)
+		suite.Equal(insertedUsers[9-i], user)
 	}
 	// Get user stream
 	usersFromStream := suite.getUsersStream(ctx, 3)
@@ -735,4 +740,31 @@ func TestSortFeedbacks(t *testing.T) {
 		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, feedback)
+}
+
+func TestValidateLabels(t *testing.T) {
+	assert.NoError(t, ValidateLabels(nil))
+	assert.NoError(t, ValidateLabels("label"))
+	assert.NoError(t, ValidateLabels([]any{"1", "2", "3"}))
+	assert.NoError(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}}))
+	assert.NoError(t, ValidateLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}}))
+
+	assert.Error(t, ValidateLabels([]any{1, 2, 3}))
+	assert.Error(t, ValidateLabels([]any{"1", "2", "1"}))
+	assert.Error(t, ValidateLabels(map[string]any{"price": 100, "tags": []any{"1", "2", "3"}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{1, 2, 3}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "1"}}))
+}
+
+func TestFlattenLabels(t *testing.T) {
+	labels := FlattenLabels(nil)
+	assert.Nil(t, labels)
+	labels = FlattenLabels("label")
+	assert.ElementsMatch(t, []string{"label"}, labels)
+	labels = FlattenLabels([]any{"1", "2", "3"})
+	assert.ElementsMatch(t, []string{"1", "2", "3"}, labels)
+	labels = FlattenLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}})
+	assert.ElementsMatch(t, []string{"city.wenzhou", "tags.1", "tags.2", "tags.3"}, labels)
+	labels = FlattenLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}})
+	assert.ElementsMatch(t, []string{"address.province.zhejiang", "address.city.wenzhou"}, labels)
 }

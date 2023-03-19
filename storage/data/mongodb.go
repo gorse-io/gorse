@@ -47,6 +47,12 @@ func unpack(o any) any {
 	switch p := o.(type) {
 	case primitive.A:
 		return []any(p)
+	case primitive.D:
+		m := make(map[string]any)
+		for _, e := range p {
+			m[e.Key] = unpack(e.Value)
+		}
+		return m
 	default:
 		return p
 	}
