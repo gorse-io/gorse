@@ -114,9 +114,9 @@ func TestMaster_ExportUsers(t *testing.T) {
 	ctx := context.Background()
 	// insert users
 	users := []data.User{
-		{UserId: "1", Labels: []string{"a", "b"}},
-		{UserId: "2", Labels: []string{"b", "c"}},
-		{UserId: "3", Labels: []string{"c", "d"}},
+		{UserId: "1", Labels: map[string]any{"gender": "male", "job": "engineer"}},
+		{UserId: "2", Labels: map[string]any{"gender": "male", "job": "lawyer"}},
+		{UserId: "3", Labels: map[string]any{"gender": "female", "job": "teacher"}},
 	}
 	err := s.DataClient.BatchInsertUsers(ctx, users)
 	assert.NoError(t, err)
@@ -129,9 +129,9 @@ func TestMaster_ExportUsers(t *testing.T) {
 	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment;filename=users.csv", w.Header().Get("Content-Disposition"))
 	assert.Equal(t, "user_id,labels\r\n"+
-		"1,a|b\r\n"+
-		"2,b|c\r\n"+
-		"3,c|d\r\n", w.Body.String())
+		"1,\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"engineer\"\"}\"\r\n"+
+		"2,\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"lawyer\"\"}\"\r\n"+
+		"3,\"{\"\"gender\"\":\"\"female\"\",\"\"job\"\":\"\"teacher\"\"}\"\r\n", w.Body.String())
 }
 
 func TestMaster_ExportItems(t *testing.T) {
@@ -140,9 +140,30 @@ func TestMaster_ExportItems(t *testing.T) {
 	ctx := context.Background()
 	// insert items
 	items := []data.Item{
-		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []string{"a", "b"}, "o,n,e"},
-		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []string{"b", "c"}, "t\r\nw\r\no"},
-		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), nil, "\"three\""},
+		{
+			ItemId:     "1",
+			IsHidden:   false,
+			Categories: []string{"x"},
+			Timestamp:  time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     map[string]any{"genre": []string{"comedy", "sci-fi"}},
+			Comment:    "o,n,e",
+		},
+		{
+			ItemId:     "2",
+			IsHidden:   false,
+			Categories: []string{"x", "y"},
+			Timestamp:  time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     map[string]any{"genre": []string{"documentary", "sci-fi"}},
+			Comment:    "t\r\nw\r\no",
+		},
+		{
+			ItemId:     "3",
+			IsHidden:   true,
+			Categories: nil,
+			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     nil,
+			Comment:    "\"three\"",
+		},
 	}
 	err := s.DataClient.BatchInsertItems(ctx, items)
 	assert.NoError(t, err)
@@ -155,9 +176,9 @@ func TestMaster_ExportItems(t *testing.T) {
 	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 	assert.Equal(t, "attachment;filename=items.csv", w.Header().Get("Content-Disposition"))
 	assert.Equal(t, "item_id,is_hidden,categories,time_stamp,labels,description\r\n"+
-		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,\"o,n,e\"\r\n"+
-		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,\"t\r\nw\r\no\"\r\n"+
-		"3,true,,2022-01-01 01:01:01.000000001 +0000 UTC,,\"\"\"three\"\"\"\r\n", w.Body.String())
+		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"genre\"\":[\"\"comedy\"\",\"\"sci-fi\"\"]}\",\"o,n,e\"\r\n"+
+		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"genre\"\":[\"\"documentary\"\",\"\"sci-fi\"\"]}\",\"t\r\nw\r\no\"\r\n"+
+		"3,true,,2022-01-01 01:01:01.000000001 +0000 UTC,null,\"\"\"three\"\"\"\r\n", w.Body.String())
 }
 
 func TestMaster_ExportFeedback(t *testing.T) {
@@ -205,9 +226,9 @@ func TestMaster_ImportUsers(t *testing.T) {
 	assert.NoError(t, err)
 	file, err := writer.CreateFormFile("file", "users.csv")
 	assert.NoError(t, err)
-	_, err = file.Write([]byte("a::b\t1\n" +
-		"b::c\t2\n" +
-		"\"c::d\"\t\"3\"\n"))
+	_, err = file.Write([]byte("\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"engineer\"\"}\"\t1\n" +
+		"\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"lawyer\"\"}\"\t2\n" +
+		"\"{\"\"gender\"\":\"\"female\"\",\"\"job\"\":\"\"teacher\"\"}\"\t\"3\"\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -222,9 +243,9 @@ func TestMaster_ImportUsers(t *testing.T) {
 	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.User{
-		{UserId: "1", Labels: []any{"a", "b"}},
-		{UserId: "2", Labels: []any{"b", "c"}},
-		{UserId: "3", Labels: []any{"c", "d"}},
+		{UserId: "1", Labels: map[string]any{"gender": "male", "job": "engineer"}},
+		{UserId: "2", Labels: map[string]any{"gender": "male", "job": "lawyer"}},
+		{UserId: "3", Labels: map[string]any{"gender": "female", "job": "teacher"}},
 	}, items)
 }
 
@@ -238,9 +259,9 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	file, err := writer.CreateFormFile("file", "users.csv")
 	assert.NoError(t, err)
 	_, err = file.Write([]byte("user_id,labels\r\n" +
-		"1,a|用例\r\n" +
-		"2,b|乱码\r\n" +
-		"\"3\",\"c|测试\"\r\n"))
+		"1,\"{\"\"性别\"\":\"\"男\"\",\"\"职业\"\":\"\"工程师\"\"}\"\r\n" +
+		"2,\"{\"\"性别\"\":\"\"男\"\",\"\"职业\"\":\"\"律师\"\"}\"\r\n" +
+		"\"3\",\"{\"\"性别\"\":\"\"女\"\",\"\"职业\"\":\"\"教师\"\"}\"\r\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -255,9 +276,9 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.User{
-		{UserId: "1", Labels: []any{"a", "用例"}},
-		{UserId: "2", Labels: []any{"b", "乱码"}},
-		{UserId: "3", Labels: []any{"c", "测试"}},
+		{UserId: "1", Labels: map[string]any{"性别": "男", "职业": "工程师"}},
+		{UserId: "2", Labels: map[string]any{"性别": "男", "职业": "律师"}},
+		{UserId: "3", Labels: map[string]any{"性别": "女", "职业": "教师"}},
 	}, items)
 }
 
@@ -279,9 +300,9 @@ func TestMaster_ImportItems(t *testing.T) {
 	assert.NoError(t, err)
 	file, err := writer.CreateFormFile("file", "items.csv")
 	assert.NoError(t, err)
-	_, err = file.Write([]byte("1\ta::b\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\tx\t0\n" +
-		"2\tb::c\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\tx::y\t0\n" +
-		"\"3\"\t\"c::d\"\t\"\"\"three\"\"\"\t\"2022-01-01 01:01:01.000000001 +0000 UTC\"\t\t\"1\"\n"))
+	_, err = file.Write([]byte("1\t\"{\"\"genre\"\":[\"\"comedy\"\",\"\"sci-fi\"\"]}\"\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\tx\t0\n" +
+		"2\t\"{\"\"genre\"\":[\"\"documentary\"\",\"\"sci-fi\"\"]}\"\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\tx::y\t0\n" +
+		"\"3\"\t\"\"\t\"\"\"three\"\"\"\t\"2022-01-01 01:01:01.000000001 +0000 UTC\"\t\t\"1\"\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -296,9 +317,30 @@ func TestMaster_ImportItems(t *testing.T) {
 	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []any{"a", "b"}, "o,n,e"},
-		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []any{"b", "c"}, "t\r\nw\r\no"},
-		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), []any{"c", "d"}, "\"three\""},
+		{
+			ItemId:     "1",
+			IsHidden:   false,
+			Categories: []string{"x"},
+			Timestamp:  time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     map[string]any{"genre": []any{"comedy", "sci-fi"}},
+			Comment:    "o,n,e",
+		},
+		{
+			ItemId:     "2",
+			IsHidden:   false,
+			Categories: []string{"x", "y"},
+			Timestamp:  time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     map[string]any{"genre": []any{"documentary", "sci-fi"}},
+			Comment:    "t\r\nw\r\no",
+		},
+		{
+			ItemId:     "3",
+			IsHidden:   true,
+			Categories: nil,
+			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     nil,
+			Comment:    "\"three\"",
+		},
 	}, items)
 }
 
@@ -313,8 +355,8 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	file, err := writer.CreateFormFile("file", "items.csv")
 	assert.NoError(t, err)
 	_, err = file.Write([]byte("item_id,is_hidden,categories,time_stamp,labels,description\r\n" +
-		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,a|b,one\r\n" +
-		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,b|c,two\r\n" +
+		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"类型\"\":[\"\"喜剧\"\",\"\"科幻\"\"]}\",one\r\n" +
+		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"类型\"\":[\"\"卡通\"\",\"\"科幻\"\"]}\",two\r\n" +
 		"\"3\",\"true\",,\"2022-01-01 01:01:01.000000001 +0000 UTC\",,\"three\"\r\n"))
 	assert.NoError(t, err)
 	err = writer.Close()
@@ -330,9 +372,29 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []data.Item{
-		{"1", false, []string{"x"}, time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC), []any{"a", "b"}, "one"},
-		{"2", false, []string{"x", "y"}, time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC), []any{"b", "c"}, "two"},
-		{"3", true, nil, time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC), nil, "three"},
+		{
+			ItemId:     "1",
+			IsHidden:   false,
+			Categories: []string{"x"},
+			Timestamp:  time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     map[string]any{"类型": []any{"喜剧", "科幻"}},
+			Comment:    "one"},
+		{
+			ItemId:     "2",
+			IsHidden:   false,
+			Categories: []string{"x", "y"},
+			Timestamp:  time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     map[string]any{"类型": []any{"卡通", "科幻"}},
+			Comment:    "two",
+		},
+		{
+			ItemId:     "3",
+			IsHidden:   true,
+			Categories: nil,
+			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
+			Labels:     nil,
+			Comment:    "three",
+		},
 	}, items)
 }
 
