@@ -17,11 +17,10 @@ package cache
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 	"io"
 	"math"
-	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -33,8 +32,45 @@ import (
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 )
+
+func init() {
+	sqlite.MustRegisterDeterministicScalarFunction("json_contains", 2, func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+		parse := func(arg driver.Value) (j []any, err error) {
+			var data []byte
+			switch argTyped := arg.(type) {
+			case string:
+				data = []byte(argTyped)
+			case []byte:
+				data = argTyped
+			default:
+				return nil, errors.Errorf("unsupported type %T", arg)
+			}
+			err = json.Unmarshal(data, &j)
+			return
+		}
+		j1, err := parse(args[0])
+		if err != nil {
+			return nil, err
+		}
+		j2, err := parse(args[1])
+		if err != nil {
+			return nil, err
+		}
+		elements := make(map[any]struct{}, len(j1))
+		for _, e := range j1 {
+			elements[e] = struct{}{}
+		}
+		for _, e := range j2 {
+			if _, ok := elements[e]; !ok {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+}
 
 type SQLDriver int
 
@@ -484,14 +520,7 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 	case Postgres:
 		tx = tx.Select("value, score, categories").
 			Where("name = ? and categories @> ?", name, pq.StringArray(query))
-	case SQLite:
-		var builder strings.Builder
-		builder.WriteString(fmt.Sprintf("select %s.value, score, categories from %s, json_each(categories) ", db.DocumentTable(), db.DocumentTable()))
-		builder.WriteString(fmt.Sprintf("where name = ? and json_each.value in ? group by %s.value ", db.DocumentTable()))
-		builder.WriteString("having count(1) = ? ")
-		builder.WriteString("order by score desc limit ? offset ?")
-		tx = tx.Raw(builder.String(), name, query, len(query), end-begin, begin)
-	case MySQL:
+	case SQLite, MySQL:
 		q, err := json.Marshal(query)
 		if err != nil {
 			return nil, errors.Trace(err)
