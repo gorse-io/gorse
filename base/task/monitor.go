@@ -15,11 +15,12 @@
 package task
 
 import (
-	"github.com/scylladb/go-set/strset"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	mapset "github.com/deckarep/golang-set/v2"
 )
 
 type Status string
@@ -199,14 +200,14 @@ func (tm *Monitor) Fail(name, err string) {
 func (tm *Monitor) List(workers ...string) []Task {
 	tm.TaskLock.Lock()
 	defer tm.TaskLock.Unlock()
-	workerSet := strset.New(workers...)
+	workerSet := mapset.NewSet(workers...)
 	var task []Task
 	for name, t := range tm.Tasks {
 		// remove tasks from disconnected workers
 		if strings.Contains(name, "[") && strings.Contains(name, "]") {
 			begin := strings.Index(name, "[") + 1
 			end := strings.Index(name, "]")
-			if !workerSet.Has(name[begin:end]) {
+			if !workerSet.Contains(name[begin:end]) {
 				delete(tm.Tasks, name)
 				continue
 			}

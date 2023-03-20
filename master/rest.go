@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/araddon/dateparse"
+	mapset "github.com/deckarep/golang-set/v2"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorilla/securecookie"
@@ -36,7 +37,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -1414,7 +1414,7 @@ func (m *Master) importFeedback(ctx context.Context, response http.ResponseWrite
 	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
-var checkList = strset.New("delete_users", "delete_items", "delete_feedback", "delete_cache")
+var checkList = mapset.NewSet("delete_users", "delete_items", "delete_feedback", "delete_cache")
 
 func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 	// check method
@@ -1443,7 +1443,7 @@ func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	checkedList := strings.Split(request.Form.Get("check_list"), ",")
-	if !checkList.IsEqual(strset.New(checkedList...)) {
+	if !checkList.Equal(mapset.NewSet(checkedList...)) {
 		writeError(response, http.StatusUnauthorized, "please confirm by checking all")
 		return
 	}
