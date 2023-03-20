@@ -18,13 +18,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"time"
 )
 
 func feedbackKeyFromString(s string) (*FeedbackKey, error) {
@@ -38,16 +40,29 @@ func (k *FeedbackKey) toString() (string, error) {
 	return string(b), err
 }
 
+func unpack(o any) any {
+	if o == nil {
+		return nil
+	}
+	switch p := o.(type) {
+	case primitive.A:
+		return []any(p)
+	case primitive.D:
+		m := make(map[string]any)
+		for _, e := range p {
+			m[e.Key] = unpack(e.Value)
+		}
+		return m
+	default:
+		return p
+	}
+}
+
 // MongoDB is the data storage based on MongoDB.
 type MongoDB struct {
 	storage.TablePrefix
 	client *mongo.Client
 	dbName string
-}
-
-// Optimize is used by ClickHouse only.
-func (db *MongoDB) Optimize() error {
-	return nil
 }
 
 // Init collections and indices in MongoDB.
@@ -187,6 +202,7 @@ func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string) ([]Item,
 		if err = r.Decode(&item); err != nil {
 			return nil, errors.Trace(err)
 		}
+		item.Labels = unpack(item.Labels)
 		items = append(items, item)
 	}
 	return items, nil
@@ -240,6 +256,7 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 		return
 	}
 	err = r.Decode(&item)
+	item.Labels = unpack(item.Labels)
 	return
 }
 
@@ -269,6 +286,7 @@ func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit
 		if err = r.Decode(&item); err != nil {
 			return "", nil, err
 		}
+		item.Labels = unpack(item.Labels)
 		items = append(items, item)
 	}
 	if len(items) == n {
@@ -308,6 +326,7 @@ func (db *MongoDB) GetItemStream(ctx context.Context, batchSize int, timeLimit *
 				errChan <- errors.Trace(err)
 				return
 			}
+			item.Labels = unpack(item.Labels)
 			items = append(items, item)
 			if len(items) == batchSize {
 				itemChan <- items
@@ -409,6 +428,7 @@ func (db *MongoDB) GetUser(ctx context.Context, userId string) (user User, err e
 		return
 	}
 	err = r.Decode(&user)
+	user.Labels = unpack(user.Labels)
 	return
 }
 
@@ -434,6 +454,7 @@ func (db *MongoDB) GetUsers(ctx context.Context, cursor string, n int) (string, 
 		if err = r.Decode(&user); err != nil {
 			return "", nil, err
 		}
+		user.Labels = unpack(user.Labels)
 		users = append(users, user)
 	}
 	if len(users) == n {
@@ -468,6 +489,7 @@ func (db *MongoDB) GetUserStream(ctx context.Context, batchSize int) (chan []Use
 				errChan <- errors.Trace(err)
 				return
 			}
+			user.Labels = unpack(user.Labels)
 			users = append(users, user)
 			if len(users) == batchSize {
 				userChan <- users

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaswdr/faker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -50,14 +51,10 @@ func (suite *baseTestSuite) getUsers(ctx context.Context, batchSize int) []User 
 		suite.NoError(err)
 		users = append(users, data...)
 		if cursor == "" {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.LessOrEqual(len(data), batchSize)
-			}
+			suite.LessOrEqual(len(data), batchSize)
 			return users
 		} else {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.Equal(batchSize, len(data))
-			}
+			suite.Equal(batchSize, len(data))
 		}
 	}
 }
@@ -82,14 +79,10 @@ func (suite *baseTestSuite) getItems(ctx context.Context, batchSize int) []Item 
 		suite.NoError(err)
 		items = append(items, data...)
 		if cursor == "" {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.LessOrEqual(len(data), batchSize)
-			}
+			suite.LessOrEqual(len(data), batchSize)
 			return items
 		} else {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.Equal(batchSize, len(data))
-			}
+			suite.Equal(batchSize, len(data))
 		}
 	}
 }
@@ -114,14 +107,10 @@ func (suite *baseTestSuite) getFeedback(ctx context.Context, batchSize int, begi
 		suite.NoError(err)
 		feedback = append(feedback, data...)
 		if cursor == "" {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.LessOrEqual(len(data), batchSize)
-			}
+			suite.LessOrEqual(len(data), batchSize)
 			return feedback
 		} else {
-			if _, ok := suite.Database.(*Redis); !ok {
-				suite.Equal(batchSize, len(data))
-			}
+			suite.Equal(batchSize, len(data))
 		}
 	}
 }
@@ -134,14 +123,6 @@ func (suite *baseTestSuite) getFeedbackStream(ctx context.Context, batchSize int
 	}
 	suite.NoError(<-errChan)
 	return feedbacks
-}
-
-func (suite *baseTestSuite) isClickHouse() bool {
-	if sqlDB, isSQL := suite.Database.(*SQLDatabase); !isSQL {
-		return false
-	} else {
-		return sqlDB.driver == ClickHouse
-	}
 }
 
 func (suite *baseTestSuite) TearDownSuite() {
@@ -165,10 +146,16 @@ func (suite *baseTestSuite) TestUsers() {
 	ctx := context.Background()
 	// Insert users
 	var insertedUsers []User
+	fake := faker.New()
 	for i := 9; i >= 0; i-- {
 		insertedUsers = append(insertedUsers, User{
-			UserId:  strconv.Itoa(i),
-			Labels:  []string{strconv.Itoa(i + 100)},
+			UserId: strconv.Itoa(i),
+			Labels: map[string]any{
+				"color": fake.Color().ColorName(),
+				"company": lo.Map(lo.Range(3), func(_, _ int) any {
+					return fake.Genre().Name()
+				}),
+			},
 			Comment: fmt.Sprintf("comment %d", i),
 		})
 	}
@@ -178,9 +165,7 @@ func (suite *baseTestSuite) TestUsers() {
 	users := suite.getUsers(ctx, 3)
 	suite.Equal(10, len(users))
 	for i, user := range users {
-		suite.Equal(strconv.Itoa(i), user.UserId)
-		suite.Equal([]string{strconv.Itoa(i + 100)}, user.Labels)
-		suite.Equal(fmt.Sprintf("comment %d", i), user.Comment)
+		suite.Equal(insertedUsers[9-i], user)
 	}
 	// Get user stream
 	usersFromStream := suite.getUsersStream(ctx, 3)
@@ -197,8 +182,6 @@ func (suite *baseTestSuite) TestUsers() {
 	// test override
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
 	suite.Equal("override", user.Comment)
@@ -209,12 +192,10 @@ func (suite *baseTestSuite) TestUsers() {
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Subscribe: []string{"d", "e", "f"}})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
 	suite.Equal("modify", user.Comment)
-	suite.Equal([]string{"a", "b", "c"}, user.Labels)
+	suite.Equal([]any{"a", "b", "c"}, user.Labels)
 	suite.Equal([]string{"d", "e", "f"}, user.Subscribe)
 
 	// test insert empty
@@ -275,19 +256,12 @@ func (suite *baseTestSuite) TestFeedback() {
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	suite.Empty(feedbackFromStream)
 	// Get items
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	items := suite.getItems(ctx, 3)
 	suite.Equal(5, len(items))
 	for i, item := range items {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
-			if suite.isClickHouse() {
-				// ClickHouse returns 1970-01-01 as zero date.
-				suite.Zero(item.Timestamp.Unix())
-			} else {
-				suite.Zero(item.Timestamp)
-			}
+			suite.Zero(item.Timestamp)
 			suite.Empty(item.Labels)
 			suite.Empty(item.Comment)
 		}
@@ -306,11 +280,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check users that already exists
 	user, err := suite.Database.GetUser(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(User{"0", []string{"a"}, []string{"x"}, "comment"}, user)
+	suite.Equal(User{"0", []any{"a"}, []string{"x"}, "comment"}, user)
 	// check items that already exists
 	item, err := suite.Database.GetItem(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(Item{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
+	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
@@ -337,8 +311,6 @@ func (suite *baseTestSuite) TestFeedback() {
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
@@ -348,8 +320,6 @@ func (suite *baseTestSuite) TestFeedback() {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Comment:     "not_override",
 	}}, true, true, false)
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
@@ -392,7 +362,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 }
 
-func (suite *baseTestSuite) TestItem() {
+func (suite *baseTestSuite) TestItems() {
 	ctx := context.Background()
 	// Items
 	items := []Item{
@@ -401,14 +371,14 @@ func (suite *baseTestSuite) TestItem() {
 			IsHidden:   true,
 			Categories: []string{"a"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"a"},
+			Labels:     []any{"a"},
 			Comment:    "comment 0",
 		},
 		{
 			ItemId:     "2",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"a"},
+			Labels:     []any{"a"},
 			Comment:    "comment 2",
 		},
 		{
@@ -416,14 +386,14 @@ func (suite *baseTestSuite) TestItem() {
 			IsHidden:   true,
 			Categories: []string{"a"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"a", "b"},
+			Labels:     []any{"a", "b"},
 			Comment:    "comment 4",
 		},
 		{
 			ItemId:     "6",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"b"},
+			Labels:     []any{"b"},
 			Comment:    "comment 6",
 		},
 		{
@@ -431,7 +401,7 @@ func (suite *baseTestSuite) TestItem() {
 			IsHidden:   true,
 			Categories: []string{"a"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []string{"b"},
+			Labels:     []any{"b"},
 			Comment:    "comment 8",
 		},
 	}
@@ -463,13 +433,11 @@ func (suite *baseTestSuite) TestItem() {
 	// test override
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	item, err := suite.Database.GetItem(ctx, "4")
 	suite.NoError(err)
 	suite.False(item.IsHidden)
 	suite.Equal([]string{"b"}, item.Categories)
-	suite.Equal([]string{"o"}, item.Labels)
+	suite.Equal([]any{"o"}, item.Labels)
 	suite.Equal("override", item.Comment)
 
 	// test modify
@@ -484,14 +452,12 @@ func (suite *baseTestSuite) TestItem() {
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Timestamp: &timestamp})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	item, err = suite.Database.GetItem(ctx, "2")
 	suite.NoError(err)
 	suite.True(item.IsHidden)
 	suite.Equal([]string{"a"}, item.Categories)
 	suite.Equal("modify", item.Comment)
-	suite.Equal([]string{"a", "b", "c"}, item.Labels)
+	suite.Equal([]any{"a", "b", "c"}, item.Labels)
 	suite.Equal(timestamp, item.Timestamp)
 
 	// test insert empty
@@ -579,20 +545,14 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 	// delete user-item feedback
 	deleteCount, err := suite.Database.DeleteUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(3, deleteCount)
-	}
+	suite.Equal(3, deleteCount)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)
 	feedbackType1 := "type1"
 	deleteCount, err = suite.Database.DeleteUserItemFeedback(ctx, "1", "3", feedbackType1)
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(1, deleteCount)
-	}
+	suite.Equal(1, deleteCount)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "1", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Empty(ret)
@@ -605,31 +565,31 @@ func (suite *baseTestSuite) TestTimeLimit() {
 		{
 			ItemId:    "0",
 			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a"},
+			Labels:    []any{"a"},
 			Comment:   "comment 0",
 		},
 		{
 			ItemId:    "2",
 			Timestamp: time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a"},
+			Labels:    []any{"a"},
 			Comment:   "comment 2",
 		},
 		{
 			ItemId:    "4",
 			Timestamp: time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"a", "b"},
+			Labels:    []any{"a", "b"},
 			Comment:   "comment 4",
 		},
 		{
 			ItemId:    "6",
 			Timestamp: time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"b"},
+			Labels:    []any{"b"},
 			Comment:   "comment 6",
 		},
 		{
 			ItemId:    "8",
 			Timestamp: time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []string{"b"},
+			Labels:    []any{"b"},
 			Comment:   "comment 8",
 		},
 	}
@@ -699,8 +659,6 @@ func (suite *baseTestSuite) TestTimezone() {
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "200", ItemPatch{Timestamp: &now})
 	suite.NoError(err)
-	err = suite.Database.Optimize()
-	suite.NoError(err)
 	switch database := suite.Database.(type) {
 	case *SQLDatabase:
 		switch suite.Database.(*SQLDatabase).driver {
@@ -711,13 +669,6 @@ func (suite *baseTestSuite) TestTimezone() {
 			item, err = suite.Database.GetItem(ctx, "200")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
-		case ClickHouse:
-			item, err := suite.Database.GetItem(ctx, "100")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
-			item, err = suite.Database.GetItem(ctx, "200")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
 		case SQLite:
 			item, err := suite.Database.GetItem(ctx, "100")
 			suite.NoError(err)
@@ -789,4 +740,31 @@ func TestSortFeedbacks(t *testing.T) {
 		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
 		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, feedback)
+}
+
+func TestValidateLabels(t *testing.T) {
+	assert.NoError(t, ValidateLabels(nil))
+	assert.NoError(t, ValidateLabels("label"))
+	assert.NoError(t, ValidateLabels([]any{"1", "2", "3"}))
+	assert.NoError(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}}))
+	assert.NoError(t, ValidateLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}}))
+
+	assert.Error(t, ValidateLabels([]any{1, 2, 3}))
+	assert.Error(t, ValidateLabels([]any{"1", "2", "1"}))
+	assert.Error(t, ValidateLabels(map[string]any{"price": 100, "tags": []any{"1", "2", "3"}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{1, 2, 3}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "1"}}))
+}
+
+func TestFlattenLabels(t *testing.T) {
+	labels := FlattenLabels(nil)
+	assert.Nil(t, labels)
+	labels = FlattenLabels("label")
+	assert.ElementsMatch(t, []string{"label"}, labels)
+	labels = FlattenLabels([]any{"1", "2", "3"})
+	assert.ElementsMatch(t, []string{"1", "2", "3"}, labels)
+	labels = FlattenLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}})
+	assert.ElementsMatch(t, []string{"city.wenzhou", "tags.1", "tags.2", "tags.3"}, labels)
+	labels = FlattenLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}})
+	assert.ElementsMatch(t, []string{"address.province.zhejiang", "address.city.wenzhou"}, labels)
 }

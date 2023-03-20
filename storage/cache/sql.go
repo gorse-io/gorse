@@ -22,6 +22,8 @@ import (
 	"io"
 	"math"
 	"strings"
+	"io"
+	"math"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -176,9 +178,9 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []string{db.ValuesTable(), db.SortedSetsTable(), db.SetsTable()}
-	for _, tableName := range tables {
-		err := db.gormDB.Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}}
+	for _, table := range tables {
+		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
 			return errors.Trace(err)
 		}

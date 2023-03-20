@@ -16,12 +16,12 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
@@ -38,23 +38,22 @@ const apiKey = "test_api_key"
 type ServerTestSuite struct {
 	suite.Suite
 	RestServer
-	dataStoreServer  *miniredis.Miniredis
-	cacheStoreServer *miniredis.Miniredis
-	handler          *restful.Container
+	handler *restful.Container
 }
 
 func (suite *ServerTestSuite) SetupSuite() {
 	// create mock redis server
 	var err error
-	suite.dataStoreServer, err = miniredis.Run()
-	suite.NoError(err)
-	suite.cacheStoreServer, err = miniredis.Run()
-	suite.NoError(err)
 	// open database
 	suite.Settings = config.NewSettings()
-	suite.DataClient, err = data.Open("redis://"+suite.dataStoreServer.Addr(), "")
+	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
-	suite.CacheClient, err = cache.Open("redis://"+suite.cacheStoreServer.Addr(), "")
+	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
+	suite.NoError(err)
+	// init database
+	err = suite.DataClient.Init()
+	suite.NoError(err)
+	err = suite.CacheClient.Init()
 	suite.NoError(err)
 
 	suite.PopularItemsCache = newPopularItemsCacheForTest(&suite.RestServer)
@@ -71,8 +70,6 @@ func (suite *ServerTestSuite) TearDownSuite() {
 	suite.NoError(err)
 	err = suite.CacheClient.Close()
 	suite.NoError(err)
-	suite.dataStoreServer.Close()
-	suite.cacheStoreServer.Close()
 }
 
 func (suite *ServerTestSuite) SetupTest() {
@@ -177,6 +174,32 @@ func (suite *ServerTestSuite) TestUsers() {
 			Comment: "modified",
 			Labels:  []string{"a", "b", "c"},
 		})).
+		End()
+
+	// malicious labels
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(data.User{UserId: "malicious", Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/users").
+		Header("X-API-Key", apiKey).
+		JSON([]data.User{{UserId: "malicious", Labels: map[string]any{"price": 100}}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/user/malicious").
+		Header("X-API-Key", apiKey).
+		JSON(data.UserPatch{Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
 		End()
 }
 
@@ -612,6 +635,32 @@ func (suite *ServerTestSuite) TestItems() {
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
+		End()
+
+	// malicious labels
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "malicious", Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/items").
+		Header("X-API-Key", apiKey).
+		JSON([]Item{{ItemId: "malicious", Labels: map[string]any{"price": 100}}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/item/malicious").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Labels: map[string]any{"price": 100}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
 		End()
 }
 

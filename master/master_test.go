@@ -14,9 +14,9 @@
 package master
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
@@ -26,29 +26,25 @@ import (
 
 type mockMaster struct {
 	Master
-	dataStoreServer  *miniredis.Miniredis
-	cacheStoreServer *miniredis.Miniredis
 }
 
 func (m *mockMaster) Close() {
-	m.dataStoreServer.Close()
-	m.cacheStoreServer.Close()
 }
 
 func newMockMaster(t *testing.T) *mockMaster {
 	s := new(mockMaster)
 	s.taskMonitor = task.NewTaskMonitor()
-	// create mock database
-	var err error
-	s.dataStoreServer, err = miniredis.Run()
-	assert.NoError(t, err)
-	s.cacheStoreServer, err = miniredis.Run()
-	assert.NoError(t, err)
 	// open database
+	var err error
 	s.Settings = config.NewSettings()
-	s.DataClient, err = data.Open("redis://"+s.dataStoreServer.Addr(), "")
+	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", t.TempDir()), "")
 	assert.NoError(t, err)
-	s.CacheClient, err = cache.Open("redis://"+s.cacheStoreServer.Addr(), "")
+	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", t.TempDir()), "")
+	assert.NoError(t, err)
+	// init database
+	err = s.DataClient.Init()
+	assert.NoError(t, err)
+	err = s.CacheClient.Init()
 	assert.NoError(t, err)
 	return s
 }
