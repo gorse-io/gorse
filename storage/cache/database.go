@@ -272,6 +272,12 @@ func Member(name, member string) SetMember {
 	return SetMember{name: name, member: member}
 }
 
+type Document struct {
+	Value      string
+	Score      float64
+	Categories []string `gorm:"type:text;serializer:json"`
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
@@ -299,6 +305,9 @@ type Database interface {
 	Push(ctx context.Context, name, value string) error
 	Pop(ctx context.Context, name string) (string, error)
 	Remain(ctx context.Context, name string) (int64, error)
+
+	AddDocuments(ctx context.Context, name string, documents ...Document) error
+	SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error)
 }
 
 // Open a connection to a database.

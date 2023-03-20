@@ -16,13 +16,14 @@ package cache
 
 import (
 	"context"
+	"io"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"io"
-	"time"
 )
 
 type MongoDB struct {
@@ -96,25 +97,43 @@ func (m MongoDB) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = d.Collection(m.MessageTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{"name", 1},
-			{"value", 1},
+	_, err = d.Collection(m.MessageTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			// update set ... where name = ? and value = ?
+			Keys: bson.D{
+				{"name", 1},
+				{"value", 1},
+			},
+		},
+		{
+			// select * from messages where name = ? order by timestamp asc limit 1
+			Keys: bson.D{
+				{"name", 1},
+				{"timestamp", 1},
+			},
 		},
 	})
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = d.Collection(m.MessageTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{"name", 1},
-			{"timestamp", 1},
+	_, err = d.Collection(m.DocumentTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			// update set ... where name = ? and value = ?
+			Keys: bson.D{
+				{"name", 1},
+				{"value", 1},
+			},
+		},
+		{
+			// select * from documents where name = ? and ? <@ categories order by score asc
+			Keys: bson.D{
+				{"name", 1},
+				{"categories", 1},
+				{"score", -1},
+			},
 		},
 	})
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
+	return errors.Trace(err)
 }
 
 func (m MongoDB) Close() error {
@@ -437,4 +456,45 @@ func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
 	return m.client.Database(m.dbName).Collection(m.MessageTable()).CountDocuments(ctx, bson.M{
 		"name": name,
 	})
+}
+
+func (m MongoDB) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+	var models []mongo.WriteModel
+	for _, document := range documents {
+		models = append(models, mongo.NewUpdateOneModel().
+			SetUpsert(true).
+			SetFilter(bson.M{
+				"name":  name,
+				"value": document.Value,
+			}).
+			SetUpdate(bson.M{"$set": bson.M{
+				"score":      document.Score,
+				"categories": document.Categories,
+			}}))
+	}
+	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).BulkWrite(ctx, models)
+	return errors.Trace(err)
+}
+
+func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	opt := options.Find().SetSkip(int64(begin)).SetSort(bson.M{"score": -1})
+	if end != -1 {
+		opt.SetLimit(int64(end - begin))
+	}
+	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{
+		"name":       name,
+		"categories": bson.M{"$all": query},
+	}, opt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	documents := make([]Document, 0)
+	for cur.Next(ctx) {
+		var document Document
+		if err = cur.Decode(&document); err != nil {
+			return nil, errors.Trace(err)
+		}
+		documents = append(documents, document)
+	}
+	return documents, nil
 }

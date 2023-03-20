@@ -25,14 +25,13 @@ import (
 	"time"
 
 	"github.com/araddon/dateparse"
+	mapset "github.com/deckarep/golang-set/v2"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set"
-	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -601,13 +600,13 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 			InternalServerError(response, err)
 			return
 		}
-		readItems := strset.New()
+		readItems := mapset.NewSet[string]()
 		for _, f := range feedback {
 			readItems.Add(f.ItemId)
 		}
 		prunedItems := make([]cache.Scored, 0, len(items))
 		for _, item := range items {
-			if !readItems.Has(item.Id) {
+			if !readItems.Contains(item.Id) {
 				prunedItems = append(prunedItems, item)
 			}
 		}
@@ -739,7 +738,7 @@ type recommendContext struct {
 	userFeedback []data.Feedback
 	n            int
 	results      []string
-	excludeSet   *strset.Set
+	excludeSet   mapset.Set[string]
 
 	numPrevStage         int
 	numFromLatest        int
@@ -765,7 +764,7 @@ func (s *RestServer) createRecommendContext(ctx context.Context, userId, categor
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	excludeSet := strset.New()
+	excludeSet := mapset.NewSet[string]()
 	for _, item := range ignoreItems {
 		excludeSet.Add(item.Id)
 	}
@@ -839,7 +838,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 		}
 		recommendation = s.FilterOutHiddenScores(ctx.response, recommendation, ctx.category)
 		for _, item := range recommendation {
-			if !ctx.excludeSet.Has(item.Id) {
+			if !ctx.excludeSet.Contains(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
 				ctx.excludeSet.Add(item.Id)
 			}
@@ -860,7 +859,7 @@ func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 		}
 		collaborativeRecommendation = s.FilterOutHiddenScores(ctx.response, collaborativeRecommendation, ctx.category)
 		for _, item := range collaborativeRecommendation {
-			if !ctx.excludeSet.Has(item.Id) {
+			if !ctx.excludeSet.Contains(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
 				ctx.excludeSet.Add(item.Id)
 			}
@@ -894,7 +893,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			feedbacks = s.filterOutHiddenFeedback(ctx.response, feedbacks)
 			// add unseen items
 			for _, feedback := range feedbacks {
-				if !ctx.excludeSet.Has(feedback.ItemId) {
+				if !ctx.excludeSet.Contains(feedback.ItemId) {
 					item, err := s.DataClient.GetItem(ctx.context, feedback.ItemId)
 					if err != nil {
 						return errors.Trace(err)
@@ -913,7 +912,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		}
 		ids, _ := filter.PopAll()
 		ctx.results = append(ctx.results, ids...)
-		ctx.excludeSet.Add(ids...)
+		ctx.excludeSet.Append(ids...)
 		ctx.userBasedTime = time.Since(start)
 		ctx.numFromUserBased = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
@@ -950,7 +949,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 			// add unseen items
 			similarItems = s.FilterOutHiddenScores(ctx.response, similarItems, ctx.category)
 			for _, item := range similarItems {
-				if !ctx.excludeSet.Has(item.Id) {
+				if !ctx.excludeSet.Contains(item.Id) {
 					candidates[item.Id] += item.Score
 				}
 			}
@@ -963,7 +962,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		}
 		ids, _ := filter.PopAll()
 		ctx.results = append(ctx.results, ids...)
-		ctx.excludeSet.Add(ids...)
+		ctx.excludeSet.Append(ids...)
 		ctx.itemBasedTime = time.Since(start)
 		ctx.numFromItemBased = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
@@ -984,7 +983,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 		}
 		items = s.FilterOutHiddenScores(ctx.response, items, ctx.category)
 		for _, item := range items {
-			if !ctx.excludeSet.Has(item.Id) {
+			if !ctx.excludeSet.Contains(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
 				ctx.excludeSet.Add(item.Id)
 			}
@@ -1009,7 +1008,7 @@ func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 		}
 		items = s.FilterOutHiddenScores(ctx.response, items, ctx.category)
 		for _, item := range items {
-			if !ctx.excludeSet.Has(item.Id) {
+			if !ctx.excludeSet.Contains(item.Id) {
 				ctx.results = append(ctx.results, item.Id)
 				ctx.excludeSet.Add(item.Id)
 			}
@@ -1136,7 +1135,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	data.SortFeedbacks(dataFeedback)
 
 	// item-based recommendation
-	var excludeSet = strset.New()
+	var excludeSet = mapset.NewSet[string]()
 	var userFeedback []data.Feedback
 	for _, feedback := range dataFeedback {
 		excludeSet.Add(feedback.ItemId)
@@ -1157,7 +1156,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		// add unseen items
 		similarItems = s.FilterOutHiddenScores(response, similarItems, "")
 		for _, item := range similarItems {
-			if !excludeSet.Has(item.Id) {
+			if !excludeSet.Contains(item.Id) {
 				candidates[item.Id] += item.Score
 			}
 		}
@@ -1457,18 +1456,18 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 
 	// insert modify timestamp
 	start = time.Now()
-	categories := strset.New()
+	categories := mapset.NewSet[string]()
 	values := make([]cache.Value, len(items))
 	for i, item := range items {
 		values[i] = cache.Time(cache.Key(cache.LastModifyItemTime, item.ItemId), time.Now())
-		categories.Add(item.Categories...)
+		categories.Append(item.Categories...)
 	}
 	if err = s.CacheClient.Set(ctx, values...); err != nil {
 		InternalServerError(response, err)
 		return
 	}
 	// insert categories
-	if err = s.CacheClient.AddSet(ctx, cache.ItemCategories, categories.List()...); err != nil {
+	if err = s.CacheClient.AddSet(ctx, cache.ItemCategories, categories.ToSlice()...); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1748,8 +1747,8 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 		// parse datetime
 		var err error
 		feedback := make([]data.Feedback, len(feedbackLiterTime))
-		users := set.NewStringSet()
-		items := set.NewStringSet()
+		users := mapset.NewSet[string]()
+		items := mapset.NewSet[string]()
 		for i := range feedback {
 			users.Add(feedbackLiterTime[i].UserId)
 			items.Add(feedbackLiterTime[i].ItemId)
@@ -1772,11 +1771,11 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 			InternalServerError(response, err)
 			return
 		}
-		values := make([]cache.Value, 0, users.Size()+items.Size())
-		for _, userId := range users.List() {
+		values := make([]cache.Value, 0, users.Cardinality()+items.Cardinality())
+		for _, userId := range users.ToSlice() {
 			values = append(values, cache.Time(cache.Key(cache.LastModifyUserTime, userId), time.Now()))
 		}
-		for _, itemId := range items.List() {
+		for _, itemId := range items.ToSlice() {
 			values = append(values, cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now()))
 		}
 		if err = s.CacheClient.Set(ctx, values...); err != nil {

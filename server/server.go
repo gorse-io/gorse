@@ -18,10 +18,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
+	"sync"
+	"time"
+
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
@@ -34,10 +39,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"math"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 // Server manages states of a server node.
@@ -253,8 +254,8 @@ func (sc *PopularItemsCache) GetSortedScore(member string) float64 {
 type HiddenItemsManager struct {
 	server                  *RestServer
 	mu                      sync.RWMutex
-	hiddenItems             *strset.Set // global hidden items
-	hiddenItemsInCategories sync.Map    // categorized hidden items
+	hiddenItems             mapset.Set[string]
+	hiddenItemsInCategories sync.Map // categorized hidden items
 	updateTime              time.Time
 	test                    bool
 }
@@ -262,7 +263,7 @@ type HiddenItemsManager struct {
 func NewHiddenItemsManager(s *RestServer) *HiddenItemsManager {
 	hc := &HiddenItemsManager{
 		server:      s,
-		hiddenItems: strset.New(),
+		hiddenItems: mapset.NewSet[string](),
 	}
 	go func() {
 		for {
@@ -277,7 +278,7 @@ func NewHiddenItemsManager(s *RestServer) *HiddenItemsManager {
 func newHiddenItemsManagerForTest(s *RestServer) *HiddenItemsManager {
 	hc := &HiddenItemsManager{
 		server:      s,
-		hiddenItems: strset.New(),
+		hiddenItems: mapset.NewSet[string](),
 		test:        true,
 	}
 	return hc
@@ -302,7 +303,7 @@ func (hc *HiddenItemsManager) sync() {
 		}
 		return
 	}
-	hiddenItems := strset.New(cache.RemoveScores(score)...)
+	hiddenItems := mapset.NewSet(cache.RemoveScores(score)...)
 	// load hidden items in categories
 	for _, category := range categories {
 		score, err = hc.server.CacheClient.GetSortedByScore(ctx, cache.Key(cache.HiddenItemsV2, category), math.Inf(-1), float64(ts.Unix()))
@@ -312,7 +313,7 @@ func (hc *HiddenItemsManager) sync() {
 			}
 			return
 		}
-		hc.hiddenItemsInCategories.Store(category, strset.New(cache.RemoveScores(score)...))
+		hc.hiddenItemsInCategories.Store(category, mapset.NewSet(cache.RemoveScores(score)...))
 	}
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -331,10 +332,10 @@ func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]boo
 	updateTime := hc.updateTime
 	hc.mu.RUnlock()
 	// load hidden items in category
-	hiddenItemsInCategory := strset.New()
+	hiddenItemsInCategory := mapset.NewSet[string]()
 	if category != "" {
 		if temp, exist := hc.hiddenItemsInCategories.Load(category); exist {
-			hiddenItemsInCategory = temp.(*strset.Set)
+			hiddenItemsInCategory = temp.(mapset.Set[string])
 		}
 	}
 	// load delta hidden items
@@ -342,18 +343,18 @@ func (hc *HiddenItemsManager) IsHidden(members []string, category string) ([]boo
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	deltaHiddenItems := strset.New(cache.RemoveScores(score)...)
+	deltaHiddenItems := mapset.NewSet(cache.RemoveScores(score)...)
 	// load delta hidden items in category
-	deltaHiddenItemsInCategory := strset.New()
+	deltaHiddenItemsInCategory := mapset.NewSet[string]()
 	if category != "" {
 		score, err = hc.server.CacheClient.GetSortedByScore(ctx, cache.Key(cache.HiddenItemsV2, category), float64(updateTime.Unix()), float64(time.Now().Unix()))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		deltaHiddenItemsInCategory = strset.New(cache.RemoveScores(score)...)
+		deltaHiddenItemsInCategory = mapset.NewSet(cache.RemoveScores(score)...)
 	}
 	return lo.Map(members, func(t string, i int) bool {
-		return hiddenItems.Has(t) || deltaHiddenItems.Has(t) || hiddenItemsInCategory.Has(t) || deltaHiddenItemsInCategory.Has(t)
+		return hiddenItems.Contains(t) || deltaHiddenItems.Contains(t) || hiddenItemsInCategory.Contains(t) || deltaHiddenItemsInCategory.Contains(t)
 	}), nil
 }
 
@@ -366,13 +367,13 @@ func (hc *HiddenItemsManager) IsHiddenInCache(member string, category string) bo
 	hiddenItems := hc.hiddenItems
 	hc.mu.RUnlock()
 	// load hidden items in category
-	hiddenItemsInCategory := strset.New()
+	hiddenItemsInCategory := mapset.NewSet[string]()
 	if category != "" {
 		if temp, exist := hc.hiddenItemsInCategories.Load(category); exist {
-			hiddenItemsInCategory = temp.(*strset.Set)
+			hiddenItemsInCategory = temp.(mapset.Set[string])
 		}
 	}
-	return hiddenItems.Has(member) || hiddenItemsInCategory.Has(member)
+	return hiddenItems.Contains(member) || hiddenItemsInCategory.Contains(member)
 }
 
 type CacheModification struct {
@@ -410,8 +411,8 @@ func (cm *CacheModification) addItemCategory(itemId, category string, latest, po
 }
 
 func (cm *CacheModification) modifyItem(itemId string, prevCategories, categories []string, latest, popular float64) *CacheModification {
-	prevCategoriesSet := strset.New(prevCategories...)
-	categoriesSet := strset.New(categories...)
+	prevCategoriesSet := mapset.NewSet(prevCategories...)
+	categoriesSet := mapset.NewSet(categories...)
 	// 2. insert item to category latest and popular
 	if latest > 0 {
 		cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.LatestItems), []cache.Scored{{itemId, latest}}))
@@ -428,13 +429,13 @@ func (cm *CacheModification) modifyItem(itemId string, prevCategories, categorie
 			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.PopularItems, category), []cache.Scored{{itemId, popular}}))
 		}
 		// 3. remove delete mark
-		if !prevCategoriesSet.Has(category) && cm.hiddenItemsManager.IsHiddenInCache(itemId, category) {
+		if !prevCategoriesSet.Contains(category) && cm.hiddenItemsManager.IsHiddenInCache(itemId, category) {
 			cm.deletion = append(cm.deletion, cache.Member(cache.Key(cache.HiddenItemsV2, category), itemId))
 		}
 	}
 	// 4. insert category delete mark
 	for _, category := range prevCategories {
-		if !categoriesSet.Has(category) {
+		if !categoriesSet.Contains(category) {
 			cm.insertion = append(cm.insertion, cache.Sorted(cache.Key(cache.HiddenItemsV2, category), []cache.Scored{{itemId, float64(time.Now().Unix())}}))
 		}
 	}

@@ -16,14 +16,15 @@ package click
 
 import (
 	"bufio"
-	"github.com/juju/errors"
-	"github.com/scylladb/go-set"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model"
-	"modernc.org/mathutil"
 	"os"
 	"strconv"
 	"strings"
+
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/model"
+	"modernc.org/mathutil"
 )
 
 // Dataset for click-through-rate models.
@@ -213,9 +214,9 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	// split by random
 	numTestSize := int(float32(dataset.Count()) * ratio)
 	rng := base.NewRandomGenerator(seed)
-	sampledIndex := set.NewIntSet(rng.Sample(0, dataset.Count(), numTestSize)...)
+	sampledIndex := mapset.NewSet(rng.Sample(0, dataset.Count(), numTestSize)...)
 	for i := 0; i < dataset.Target.Len(); i++ {
-		if sampledIndex.Has(i) {
+		if sampledIndex.Contains(i) {
 			// add samples into test set
 			testSet.Users.Append(dataset.Users.Get(i))
 			testSet.Items.Append(dataset.Items.Get(i))

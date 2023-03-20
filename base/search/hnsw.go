@@ -15,19 +15,20 @@
 package search
 
 import (
+	"math/rand"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/chewxy/math32"
-	"github.com/scylladb/go-set/i32set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/task"
 	"go.uber.org/zap"
-	"math/rand"
 	"modernc.org/mathutil"
-	"runtime"
-	"sync"
-	"time"
 )
 
 var _ VectorIndex = &HNSW{}
@@ -231,9 +232,9 @@ func (h *HNSW) insert(q int32) {
 
 func (h *HNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue, ef, currentLayer int) *heap.PriorityQueue {
 	var (
-		v          = i32set.New(enterPoints.Values()...) // set of visited elements
-		candidates = enterPoints.Clone()                 // set of candidates
-		w          = enterPoints.Reverse()               // dynamic list of found nearest upperNeighbors
+		v          = mapset.NewSet(enterPoints.Values()...) // set of visited elements
+		candidates = enterPoints.Clone()                    // set of candidates
+		w          = enterPoints.Reverse()                  // dynamic list of found nearest upperNeighbors
 	)
 	for candidates.Len() > 0 {
 		// extract nearest element from candidates to q
@@ -250,7 +251,7 @@ func (h *HNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue, ef, curren
 		neighbors := h.getNeighbourhood(c, currentLayer).Values()
 		h.nodeMutexes[c].RUnlock()
 		for _, e := range neighbors {
-			if !v.Has(e) {
+			if !v.Contains(e) {
 				v.Add(e)
 				// get the furthest element from w to q
 				_, fq = w.Peek()
@@ -325,9 +326,9 @@ func NewHNSWBuilder(data []Vector, k, numJobs int) *HNSWBuilder {
 
 func recall(expected, actual []int32) float32 {
 	var result float32
-	truth := i32set.New(expected...)
+	truth := mapset.NewSet(expected...)
 	for _, v := range actual {
-		if truth.Has(v) {
+		if truth.Contains(v) {
 			result++
 		}
 	}

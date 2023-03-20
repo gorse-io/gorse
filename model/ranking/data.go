@@ -17,18 +17,17 @@ package ranking
 import (
 	"bufio"
 	"fmt"
+	"os"
+	"reflect"
+	"strings"
+
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
-	"github.com/scylladb/go-set"
-	"github.com/scylladb/go-set/i32set"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
-	"os"
-	"reflect"
-	"strings"
 )
 
 // DataSet contains preprocessed data structures for recommendation models.
@@ -44,7 +43,7 @@ type DataSet struct {
 	UserLabels     [][]int32
 	HiddenItems    []bool
 	ItemCategories [][]string
-	CategorySet    *strset.Set
+	CategorySet    mapset.Set[string]
 	// statistics
 	NumItemLabels    int32
 	NumUserLabels    int32
@@ -55,7 +54,7 @@ type DataSet struct {
 // NewMapIndexDataset creates a data set.
 func NewMapIndexDataset() *DataSet {
 	s := new(DataSet)
-	s.CategorySet = strset.New()
+	s.CategorySet = mapset.NewSet[string]()
 	// Create index
 	s.UserIndex = base.NewMapIndex()
 	s.ItemIndex = base.NewMapIndex()
@@ -183,8 +182,8 @@ func (dataset *DataSet) NegativeSample(excludeSet *DataSet, numCandidates int) [
 		rng := base.NewRandomGenerator(0)
 		dataset.Negatives = make([][]int32, dataset.UserCount())
 		for userIndex := 0; userIndex < dataset.UserCount(); userIndex++ {
-			s1 := set.NewInt32Set(dataset.UserFeedback[userIndex]...)
-			s2 := set.NewInt32Set(excludeSet.UserFeedback[userIndex]...)
+			s1 := mapset.NewSet(dataset.UserFeedback[userIndex]...)
+			s2 := mapset.NewSet(excludeSet.UserFeedback[userIndex]...)
 			dataset.Negatives[userIndex] = rng.SampleInt32(0, int32(dataset.ItemCount()), numCandidates, s1, s2)
 		}
 	}
@@ -247,9 +246,9 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 				}
 			}
 		}
-		testUserSet := i32set.New(testUsers...)
+		testUserSet := mapset.NewSet(testUsers...)
 		for userIndex := int32(0); userIndex < int32(dataset.UserCount()); userIndex++ {
-			if !testUserSet.Has(userIndex) {
+			if !testUserSet.Contains(userIndex) {
 				for _, itemIndex := range dataset.UserFeedback[userIndex] {
 					trainSet.FeedbackUsers.Append(userIndex)
 					trainSet.FeedbackItems.Append(itemIndex)

@@ -116,3 +116,11 @@ func (NoDatabase) Pop(_ context.Context, _ string) (string, error) {
 func (NoDatabase) Remain(_ context.Context, _ string) (int64, error) {
 	return 0, ErrNoDatabase
 }
+
+func (NoDatabase) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+	return ErrNoDatabase
+}
+
+func (NoDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	return nil, ErrNoDatabase
+}

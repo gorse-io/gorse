@@ -23,12 +23,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/scylladb/go-set/strset"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/spf13/cobra"
 	"modernc.org/cc/v3"
 )
 
-var supportedTypes = strset.New("int64_t", "long")
+var supportedTypes = mapset.NewSet("int64_t", "long")
 
 type TranslateUnit struct {
 	Source     string
@@ -248,7 +248,7 @@ func (t *TranslateUnit) convertFunctionParameters(params *cc.ParameterList) ([]s
 	paramName := declaration.Declarator.DirectDeclarator.Token.Value
 	paramType := declaration.DeclarationSpecifiers.TypeSpecifier.Token.Value
 	isPointer := declaration.Declarator.Pointer != nil
-	if !isPointer && !supportedTypes.Has(paramType.String()) {
+	if !isPointer && !supportedTypes.Contains(paramType.String()) {
 		position := declaration.Position()
 		return nil, fmt.Errorf("%v:%v:%v: error: unsupported type: %v\n",
 			position.Filename, position.Line+t.Offset, position.Column, paramType)

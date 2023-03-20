@@ -9,6 +9,7 @@ require (
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.10.1
+	github.com/deckarep/golang-set/v2 v2.3.0
 	github.com/emicklei/go-restful-openapi/v2 v2.9.0
 	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/go-playground/locales v0.14.0
@@ -36,7 +37,6 @@ require (
 	github.com/samber/lo v1.33.0
 	github.com/schollz/progressbar/v3 v3.9.0
 	github.com/sclevine/yj v0.0.0-20210612025309-737bdf40a5d1
-	github.com/scylladb/go-set v1.0.2
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
 	github.com/steinfletcher/apitest v1.5.14

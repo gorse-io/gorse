@@ -72,4 +72,9 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.Remain(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
+
+	err = database.AddDocuments(ctx, "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.SearchDocuments(ctx, "", nil, 0, 0)
+	assert.ErrorIs(t, err, ErrNoDatabase)
 }

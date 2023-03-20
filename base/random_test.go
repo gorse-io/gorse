@@ -17,7 +17,7 @@ import (
 	"testing"
 
 	"github.com/chewxy/math32"
-	"github.com/scylladb/go-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/thoas/go-funk"
 )
@@ -39,23 +39,23 @@ func TestRandomGenerator_MakeUniformMatrix(t *testing.T) {
 }
 
 func TestRandomGenerator_Sample(t *testing.T) {
-	excludeSet := set.NewIntSet(0, 1, 2, 3, 4)
+	excludeSet := mapset.NewSet(0, 1, 2, 3, 4)
 	rng := NewRandomGenerator(0)
 	for i := 1; i <= 10; i++ {
 		sampled := rng.Sample(0, 10, i, excludeSet)
 		for j := range sampled {
-			assert.False(t, excludeSet.Has(sampled[j]))
+			assert.False(t, excludeSet.Contains(sampled[j]))
 		}
 	}
 }
 
 func TestRandomGenerator_SampleInt32(t *testing.T) {
-	excludeSet := set.NewInt32Set(0, 1, 2, 3, 4)
+	excludeSet := mapset.NewSet[int32](0, 1, 2, 3, 4)
 	rng := NewRandomGenerator(0)
 	for i := 1; i <= 10; i++ {
 		sampled := rng.SampleInt32(0, 10, i, excludeSet)
 		for j := range sampled {
-			assert.False(t, excludeSet.Has(sampled[j]))
+			assert.False(t, excludeSet.Contains(sampled[j]))
 		}
 	}
 }

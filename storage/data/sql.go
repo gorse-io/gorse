@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base/json"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
@@ -206,9 +206,9 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 		return nil
 	}
 	rows := make([]SQLItem, 0, len(items))
-	memo := strset.New()
+	memo := mapset.NewSet[string]()
 	for _, item := range items {
-		if !memo.Has(item.ItemId) {
+		if !memo.Contains(item.ItemId) {
 			memo.Add(item.ItemId)
 			row := NewSQLItem(item)
 			if d.driver == SQLite {
@@ -421,9 +421,9 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 		return nil
 	}
 	rows := make([]SQLUser, 0, len(users))
-	memo := strset.New()
+	memo := mapset.NewSet[string]()
 	for _, user := range users {
-		if !memo.Has(user.UserId) {
+		if !memo.Contains(user.UserId) {
 			memo.Add(user.UserId)
 			rows = append(rows, NewSQLUser(user))
 		}
@@ -593,15 +593,15 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		return nil
 	}
 	// collect users and items
-	users := strset.New()
-	items := strset.New()
+	users := mapset.NewSet[string]()
+	items := mapset.NewSet[string]()
 	for _, v := range feedback {
 		users.Add(v.UserId)
 		items.Add(v.ItemId)
 	}
 	// insert users
 	if insertUser {
-		userList := users.List()
+		userList := users.ToSlice()
 		err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "user_id"}},
 			DoNothing: true,
@@ -616,7 +616,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			return errors.Trace(err)
 		}
 	} else {
-		for _, user := range users.List() {
+		for _, user := range users.ToSlice() {
 			rs, err := tx.Table(d.UsersTable()).Select("user_id").Where("user_id = ?", user).Rows()
 			if err != nil {
 				return errors.Trace(err)
@@ -630,7 +630,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	}
 	// insert items
 	if insertItem {
-		itemList := items.List()
+		itemList := items.ToSlice()
 		err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "item_id"}},
 			DoNothing: true,
@@ -645,7 +645,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			return errors.Trace(err)
 		}
 	} else {
-		for _, item := range items.List() {
+		for _, item := range items.ToSlice() {
 			rs, err := tx.Table(d.ItemsTable()).Select("item_id").Where("item_id = ?", item).Rows()
 			if err != nil {
 				return errors.Trace(err)
@@ -661,7 +661,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	rows := make([]Feedback, 0, len(feedback))
 	memo := make(map[lo.Tuple3[string, string, string]]struct{})
 	for _, f := range feedback {
-		if users.Has(f.UserId) && items.Has(f.ItemId) {
+		if users.Contains(f.UserId) && items.Contains(f.ItemId) {
 			if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 				memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
 				if d.driver == SQLite {

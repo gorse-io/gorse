@@ -17,20 +17,60 @@ package cache
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
 	"io"
 	"math"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 )
+
+func init() {
+	sqlite.MustRegisterDeterministicScalarFunction("json_contains", 2, func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+		parse := func(arg driver.Value) (j []any, err error) {
+			var data []byte
+			switch argTyped := arg.(type) {
+			case string:
+				data = []byte(argTyped)
+			case []byte:
+				data = argTyped
+			default:
+				return nil, errors.Errorf("unsupported type %T", arg)
+			}
+			err = json.Unmarshal(data, &j)
+			return
+		}
+		j1, err := parse(args[0])
+		if err != nil {
+			return nil, err
+		}
+		j2, err := parse(args[1])
+		if err != nil {
+			return nil, err
+		}
+		elements := make(map[any]struct{}, len(j1))
+		for _, e := range j1 {
+			elements[e] = struct{}{}
+		}
+		for _, e := range j2 {
+			if _, ok := elements[e]; !ok {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+}
 
 type SQLDriver int
 
@@ -62,6 +102,20 @@ type Message struct {
 	Timestamp int64  `gorm:"index:timestamp"`
 }
 
+type PostgresDocument struct {
+	Name       string         `gorm:"primaryKey"`
+	Value      string         `gorm:"primaryKey"`
+	Categories pq.StringArray `gorm:"type:text[]"`
+	Score      float64
+}
+
+type SQLDocument struct {
+	Name       string   `gorm:"primaryKey"`
+	Value      string   `gorm:"primaryKey"`
+	Categories []string `gorm:"type:text;serializer:json"`
+	Score      float64
+}
+
 type SQLDatabase struct {
 	storage.TablePrefix
 	gormDB *gorm.DB
@@ -79,6 +133,15 @@ func (db *SQLDatabase) Ping() error {
 
 func (db *SQLDatabase) Init() error {
 	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	switch db.driver {
+	case Postgres:
+		err = db.gormDB.AutoMigrate(&PostgresDocument{})
+	case SQLite, MySQL:
+		err = db.gormDB.AutoMigrate(&SQLDocument{})
+	}
 	return errors.Trace(err)
 }
 
@@ -163,10 +226,10 @@ func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil
 	}
-	valueSet := strset.New()
+	valueSet := mapset.NewSet[string]()
 	rows := make([]SQLValue, 0, len(values))
 	for _, value := range values {
-		if !valueSet.Has(value.name) {
+		if !valueSet.Contains(value.name) {
 			rows = append(rows, SQLValue{
 				Name:  value.name,
 				Value: value.value,
@@ -420,4 +483,81 @@ func (db *SQLDatabase) Pop(ctx context.Context, name string) (string, error) {
 func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, err error) {
 	err = db.gormDB.WithContext(ctx).Model(&Message{}).Where("name = ?", name).Count(&count).Error
 	return
+}
+
+func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+	var rows any
+	switch db.driver {
+	case Postgres:
+		rows = lo.Map(documents, func(document Document, _ int) PostgresDocument {
+			return PostgresDocument{
+				Name:       name,
+				Value:      document.Value,
+				Score:      document.Score,
+				Categories: document.Categories,
+			}
+		})
+	case SQLite, MySQL:
+		rows = lo.Map(documents, func(document Document, _ int) SQLDocument {
+			return SQLDocument{
+				Name:       name,
+				Value:      document.Value,
+				Score:      document.Score,
+				Categories: document.Categories,
+			}
+		})
+	}
+	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
+		DoUpdates: clause.AssignmentColumns([]string{"score", "categories"}),
+	}).Create(rows)
+	return nil
+}
+
+func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{})
+	switch db.driver {
+	case Postgres:
+		tx = tx.Select("value, score, categories").
+			Where("name = ? and categories @> ?", name, pq.StringArray(query))
+	case SQLite, MySQL:
+		q, err := json.Marshal(query)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		tx = tx.Select("value, score, categories").
+			Where("name = ? and JSON_CONTAINS(categories,?)", name, string(q))
+	}
+	tx = tx.Order("score desc").Offset(begin)
+	if end != -1 {
+		tx = tx.Limit(end - begin)
+	} else {
+		tx = tx.Limit(math.MaxInt64)
+	}
+	rows, err := tx.Rows()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	documents := make([]Document, 0, 10)
+	for rows.Next() {
+		switch db.driver {
+		case Postgres:
+			var document PostgresDocument
+			if err = rows.Scan(&document.Value, &document.Score, &document.Categories); err != nil {
+				return nil, errors.Trace(err)
+			}
+			documents = append(documents, Document{
+				Value:      document.Value,
+				Score:      document.Score,
+				Categories: document.Categories,
+			})
+		case SQLite, MySQL:
+			var document Document
+			if err = db.gormDB.ScanRows(rows, &document); err != nil {
+				return nil, errors.Trace(err)
+			}
+			documents = append(documents, document)
+		}
+	}
+	return documents, nil
 }

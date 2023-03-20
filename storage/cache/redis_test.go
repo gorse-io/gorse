@@ -15,6 +15,7 @@
 package cache
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -43,6 +44,12 @@ type RedisTestSuite struct {
 func (suite *RedisTestSuite) SetupSuite() {
 	var err error
 	suite.Database, err = Open(redisDSN, "gorse_")
+	suite.NoError(err)
+	// flush db
+	err = suite.Database.(*Redis).client.FlushDB(context.TODO()).Err()
+	suite.NoError(err)
+	// create schema
+	err = suite.Database.Init()
 	suite.NoError(err)
 }
 

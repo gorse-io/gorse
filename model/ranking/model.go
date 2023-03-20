@@ -22,9 +22,9 @@ import (
 
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/encoding"
@@ -412,9 +412,9 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		rng[i] = base.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
 	}
 	// Convert array to hashmap
-	userFeedback := make([]*i32set.Set, trainSet.UserCount())
+	userFeedback := make([]mapset.Set[int32], trainSet.UserCount())
 	for u := range userFeedback {
-		userFeedback[u] = i32set.New()
+		userFeedback[u] = mapset.NewSet[int32]()
 		for _, i := range trainSet.UserFeedback[u] {
 			userFeedback[u].Add(i)
 		}
@@ -451,7 +451,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 			negIndex := int32(-1)
 			for {
 				temp := rng[workerId].Int31n(int32(trainSet.ItemCount()))
-				if !userFeedback[userIndex].Has(temp) {
+				if !userFeedback[userIndex].Contains(temp) {
 					negIndex = temp
 					break
 				}

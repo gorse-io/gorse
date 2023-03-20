@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -52,11 +52,11 @@ func ValidateLabels(o any) error {
 	}
 	switch labels := o.(type) {
 	case []any:
-		labelSet := strset.New()
+		labelSet := mapset.NewSet[string]()
 		for _, label := range labels {
 			if s, ok := label.(string); !ok {
 				return errors.Errorf("elemnts in arrays must be strings")
-			} else if labelSet.Has(s) {
+			} else if labelSet.Contains(s) {
 				return errors.Errorf("duplicate labels are not allowed")
 			} else {
 				labelSet.Add(s)
