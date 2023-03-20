@@ -22,16 +22,14 @@ import (
 	"io"
 	"math"
 	"strings"
-	"io"
-	"math"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -192,10 +190,10 @@ func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil
 	}
-	valueSet := strset.New()
+	valueSet := mapset.NewSet[string]()
 	rows := make([]SQLValue, 0, len(values))
 	for _, value := range values {
-		if !valueSet.Has(value.name) {
+		if !valueSet.Contains(value.name) {
 			rows = append(rows, SQLValue{
 				Name:  value.name,
 				Value: value.value,
@@ -499,7 +497,7 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 			return nil, errors.Trace(err)
 		}
 		tx = tx.Select("value, score, categories").
-			Where("name = ? and JSON_OVERLAPS(categories,?)", name, string(q))
+			Where("name = ? and JSON_CONTAINS(categories,?)", name, string(q))
 	}
 	tx = tx.Order("score desc").Offset(begin)
 	if end != -1 {
