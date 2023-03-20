@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/scylladb/go-set/i32set"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
@@ -171,7 +171,7 @@ func (m *Master) runLoadDatasetTask() error {
 	InactiveItemsTotal.Set(float64(inactiveItems))
 
 	// write categories to cache
-	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, rankingDataset.CategorySet.List()...); err != nil {
+	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, rankingDataset.CategorySet.ToSlice()...); err != nil {
 		log.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 
@@ -375,14 +375,14 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			completed <- struct{}{}
 		}()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
-		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.List()) {
+		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
 			return nil
 		}
 		updateItemCount.Add(1)
 		startTime := time.Now()
 		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float32])
 		nearItemsFilters[""] = heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
-		for _, category := range dataset.CategorySet.List() {
+		for _, category := range dataset.CategorySet.ToSlice() {
 			nearItemsFilters[category] = heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
 		}
 
@@ -476,7 +476,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 			completed <- struct{}{}
 		}()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
-		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.List()) {
+		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
 			return nil
 		}
 		updateItemCount.Add(1)
@@ -485,12 +485,12 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		var scores map[string][]float32
 		if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
 			m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.List(),
+			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.ToSlice(),
 				m.Config.Recommend.CacheSize, true)
 		}
 		if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
 			m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto && len(neighbors[""]) == 0 {
-			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.List(),
+			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.ToSlice(),
 				m.Config.Recommend.CacheSize, true)
 		}
 		for category := range neighbors {
@@ -1486,7 +1486,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
 				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
 				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
-				rankingDataset.CategorySet.Add(item.Categories...)
+				rankingDataset.CategorySet.Append(item.Categories...)
 			}
 			labels := data.FlattenLabels(item.Labels)
 			rankingDataset.NumItemLabelUsed += len(labels)
@@ -1534,9 +1534,9 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 
 	// create positive set
 	popularCount := make([]int32, rankingDataset.ItemCount())
-	positiveSet := make([]*i32set.Set, rankingDataset.UserCount())
+	positiveSet := make([]mapset.Set[int32], rankingDataset.UserCount())
 	for i := range positiveSet {
-		positiveSet[i] = i32set.New()
+		positiveSet[i] = mapset.NewSet[int32]()
 	}
 
 	// STEP 3: pull positive feedback
@@ -1574,9 +1574,9 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	LoadDatasetStepSecondsVec.WithLabelValues("load_positive_feedback").Set(time.Since(start).Seconds())
 
 	// create negative set
-	negativeSet := make([]*i32set.Set, rankingDataset.UserCount())
+	negativeSet := make([]mapset.Set[int32], rankingDataset.UserCount())
 	for i := range negativeSet {
-		negativeSet[i] = i32set.New()
+		negativeSet[i] = mapset.NewSet[int32]()
 	}
 
 	// STEP 4: pull negative feedback
@@ -1593,7 +1593,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			if itemIndex == base.NotId {
 				continue
 			}
-			if !positiveSet[userIndex].Has(itemIndex) {
+			if !positiveSet[userIndex].Contains(itemIndex) {
 				negativeSet[userIndex].Add(itemIndex)
 			}
 			evaluator.Read(userIndex, itemIndex, f.Timestamp)
@@ -1621,14 +1621,14 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		ItemFeatures: rankingDataset.ItemLabels,
 	}
 	for userIndex := range positiveSet {
-		if positiveSet[userIndex].IsEmpty() || negativeSet[userIndex].IsEmpty() {
+		if positiveSet[userIndex].Cardinality() == 0 || negativeSet[userIndex].Cardinality() == 0 {
 			// release positive set and negative set
 			positiveSet[userIndex] = nil
 			negativeSet[userIndex] = nil
 			continue
 		}
 		// insert positive feedback
-		for _, itemIndex := range positiveSet[userIndex].List() {
+		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
 			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
@@ -1636,7 +1636,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			clickDataset.PositiveCount++
 		}
 		// insert negative feedback
-		for _, itemIndex := range negativeSet[userIndex].List() {
+		for _, itemIndex := range negativeSet[userIndex].ToSlice() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
 			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))

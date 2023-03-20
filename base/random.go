@@ -17,8 +17,7 @@ package base
 import (
 	"math/rand"
 
-	"github.com/scylladb/go-set/i32set"
-	"github.com/scylladb/go-set/iset"
+	mapset "github.com/deckarep/golang-set/v2"
 )
 
 // RandomGenerator is the random generator for gorse.
@@ -78,13 +77,16 @@ func (rng RandomGenerator) NormalVector64(size int, mean, stdDev float64) []floa
 }
 
 // Sample n values between low and high, but not in exclude.
-func (rng RandomGenerator) Sample(low, high, n int, exclude ...*iset.Set) []int {
+func (rng RandomGenerator) Sample(low, high, n int, exclude ...mapset.Set[int]) []int {
 	intervalLength := high - low
-	excludeSet := iset.Union(exclude...)
+	excludeSet := mapset.NewSet[int]()
+	for _, set := range exclude {
+		excludeSet = excludeSet.Union(set)
+	}
 	sampled := make([]int, 0, n)
-	if n >= intervalLength-excludeSet.Size() {
+	if n >= intervalLength-excludeSet.Cardinality() {
 		for i := low; i < high; i++ {
-			if !excludeSet.Has(i) {
+			if !excludeSet.Contains(i) {
 				sampled = append(sampled, i)
 				excludeSet.Add(i)
 			}
@@ -92,7 +94,7 @@ func (rng RandomGenerator) Sample(low, high, n int, exclude ...*iset.Set) []int 
 	} else {
 		for len(sampled) < n {
 			v := rng.Intn(intervalLength) + low
-			if !excludeSet.Has(v) {
+			if !excludeSet.Contains(v) {
 				sampled = append(sampled, v)
 				excludeSet.Add(v)
 			}
@@ -102,13 +104,16 @@ func (rng RandomGenerator) Sample(low, high, n int, exclude ...*iset.Set) []int 
 }
 
 // SampleInt32 n 32bit values between low and high, but not in exclude.
-func (rng RandomGenerator) SampleInt32(low, high int32, n int, exclude ...*i32set.Set) []int32 {
+func (rng RandomGenerator) SampleInt32(low, high int32, n int, exclude ...mapset.Set[int32]) []int32 {
 	intervalLength := high - low
-	excludeSet := i32set.Union(exclude...)
+	excludeSet := mapset.NewSet[int32]()
+	for _, set := range exclude {
+		excludeSet = excludeSet.Union(set)
+	}
 	sampled := make([]int32, 0, n)
-	if n >= int(intervalLength)-excludeSet.Size() {
+	if n >= int(intervalLength)-excludeSet.Cardinality() {
 		for i := low; i < high; i++ {
-			if !excludeSet.Has(i) {
+			if !excludeSet.Contains(i) {
 				sampled = append(sampled, i)
 				excludeSet.Add(i)
 			}
@@ -116,7 +121,7 @@ func (rng RandomGenerator) SampleInt32(low, high int32, n int, exclude ...*i32se
 	} else {
 		for len(sampled) < n {
 			v := rng.Int31n(intervalLength) + low
-			if !excludeSet.Has(v) {
+			if !excludeSet.Contains(v) {
 				sampled = append(sampled, v)
 				excludeSet.Add(v)
 			}

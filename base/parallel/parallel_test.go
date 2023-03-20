@@ -15,12 +15,13 @@ package parallel
 
 import (
 	"fmt"
-	"github.com/scylladb/go-set"
+	"testing"
+	"time"
+
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/task"
-	"testing"
-	"time"
 )
 
 func TestParallel(t *testing.T) {
@@ -34,19 +35,19 @@ func TestParallel(t *testing.T) {
 		time.Sleep(time.Microsecond)
 		return nil
 	})
-	workersSet := set.NewIntSet(workerIds...)
+	workersSet := mapset.NewSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.GreaterOrEqual(t, 4, workersSet.Size())
-	assert.Less(t, 1, workersSet.Size())
+	assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
+	assert.Less(t, 1, workersSet.Cardinality())
 	// single thread
 	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
 		b[jobId] = a[jobId]
 		workerIds[jobId] = workerId
 		return nil
 	})
-	workersSet = set.NewIntSet(workerIds...)
+	workersSet = mapset.NewSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.Equal(t, 1, workersSet.Size())
+	assert.Equal(t, 1, workersSet.Cardinality())
 }
 
 func TestDynamicParallel(t *testing.T) {
@@ -59,10 +60,10 @@ func TestDynamicParallel(t *testing.T) {
 		time.Sleep(time.Microsecond)
 		return nil
 	})
-	workersSet := set.NewIntSet(workerIds...)
+	workersSet := mapset.NewSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.GreaterOrEqual(t, 4, workersSet.Size())
-	assert.Less(t, 1, workersSet.Size())
+	assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
+	assert.Less(t, 1, workersSet.Cardinality())
 }
 
 func TestBatchParallel(t *testing.T) {
@@ -78,19 +79,19 @@ func TestBatchParallel(t *testing.T) {
 		time.Sleep(time.Microsecond)
 		return nil
 	})
-	workersSet := set.NewIntSet(workerIds...)
+	workersSet := mapset.NewSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.GreaterOrEqual(t, 4, workersSet.Size())
-	assert.Less(t, 1, workersSet.Size())
+	assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
+	assert.Less(t, 1, workersSet.Cardinality())
 	// single thread
 	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
 		b[jobId] = a[jobId]
 		workerIds[jobId] = workerId
 		return nil
 	})
-	workersSet = set.NewIntSet(workerIds...)
+	workersSet = mapset.NewSet(workerIds...)
 	assert.Equal(t, a, b)
-	assert.Equal(t, 1, workersSet.Size())
+	assert.Equal(t, 1, workersSet.Cardinality())
 }
 
 func TestParallelFail(t *testing.T) {

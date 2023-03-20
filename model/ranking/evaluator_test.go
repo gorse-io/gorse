@@ -14,12 +14,11 @@
 package ranking
 
 import (
-	"github.com/scylladb/go-set/i32set"
 	"io"
 	"strconv"
 	"testing"
 
-	"github.com/scylladb/go-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/model"
@@ -28,45 +27,45 @@ import (
 const evalEpsilon = 0.00001
 
 func TestNDCG(t *testing.T) {
-	targetSet := set.NewInt32Set(1, 3, 5, 7)
+	targetSet := mapset.NewSet[int32](1, 3, 5, 7)
 	rankList := []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	assert.InDelta(t, 0.6766372989, NDCG(targetSet, rankList), evalEpsilon)
 }
 
 func TestPrecision(t *testing.T) {
-	targetSet := set.NewInt32Set(1, 3, 5, 7)
+	targetSet := mapset.NewSet[int32](1, 3, 5, 7)
 	rankList := []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	assert.InDelta(t, 0.4, Precision(targetSet, rankList), evalEpsilon)
 }
 
 func TestRecall(t *testing.T) {
-	targetSet := set.NewInt32Set(1, 3, 15, 17, 19)
+	targetSet := mapset.NewSet[int32](1, 3, 15, 17, 19)
 	rankList := []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	assert.InDelta(t, 0.4, Recall(targetSet, rankList), evalEpsilon)
 }
 
 func TestAP(t *testing.T) {
-	targetSet := set.NewInt32Set(1, 3, 7, 9)
+	targetSet := mapset.NewSet[int32](1, 3, 7, 9)
 	rankList := []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	assert.InDelta(t, 0.44375, MAP(targetSet, rankList), evalEpsilon)
 }
 
 func TestRR(t *testing.T) {
-	targetSet := set.NewInt32Set(3)
+	targetSet := mapset.NewSet[int32](3)
 	rankList := []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	assert.InDelta(t, 0.25, MRR(targetSet, rankList), evalEpsilon)
 }
 
 func TestHR(t *testing.T) {
 	rankList := []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	assert.InDelta(t, 1, HR(set.NewInt32Set(3), rankList), evalEpsilon)
-	assert.InDelta(t, 0, HR(set.NewInt32Set(30), rankList), evalEpsilon)
+	assert.InDelta(t, 1, HR(mapset.NewSet[int32](3), rankList), evalEpsilon)
+	assert.InDelta(t, 0, HR(mapset.NewSet[int32](30), rankList), evalEpsilon)
 }
 
 type mockMatrixFactorizationForEval struct {
 	model.BaseModel
-	positive []*i32set.Set
-	negative []*i32set.Set
+	positive []mapset.Set[int32]
+	negative []mapset.Set[int32]
 }
 
 func (m *mockMatrixFactorizationForEval) Complexity() int {
@@ -122,10 +121,10 @@ func (m *mockMatrixFactorizationForEval) Predict(_, _ string) float32 {
 }
 
 func (m *mockMatrixFactorizationForEval) InternalPredict(userId, itemId int32) float32 {
-	if m.positive[userId].Has(itemId) {
+	if m.positive[userId].Contains(itemId) {
 		return 1
 	}
-	if m.negative[userId].Has(itemId) {
+	if m.negative[userId].Contains(itemId) {
 		return -1
 	}
 	return 0
@@ -151,17 +150,17 @@ func TestEvaluate(t *testing.T) {
 	assert.Equal(t, 16, test.ItemCount())
 	// create model
 	m := &mockMatrixFactorizationForEval{
-		positive: []*i32set.Set{
-			set.NewInt32Set(0, 1, 2, 3),
-			set.NewInt32Set(4, 5, 6),
-			set.NewInt32Set(8, 9),
-			set.NewInt32Set(12),
+		positive: []mapset.Set[int32]{
+			mapset.NewSet[int32](0, 1, 2, 3),
+			mapset.NewSet[int32](4, 5, 6),
+			mapset.NewSet[int32](8, 9),
+			mapset.NewSet[int32](12),
 		},
-		negative: []*i32set.Set{
-			set.NewInt32Set(),
-			set.NewInt32Set(7),
-			set.NewInt32Set(10, 11),
-			set.NewInt32Set(13, 14, 15),
+		negative: []mapset.Set[int32]{
+			mapset.NewSet[int32](),
+			mapset.NewSet[int32](7),
+			mapset.NewSet[int32](10, 11),
+			mapset.NewSet[int32](13, 14, 15),
 		},
 	}
 	// evaluate model

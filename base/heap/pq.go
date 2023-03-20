@@ -16,8 +16,9 @@ package heap
 
 import (
 	"container/heap"
+
 	"github.com/chewxy/math32"
-	"github.com/scylladb/go-set/i32set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"golang.org/x/exp/constraints"
 )
 
@@ -62,14 +63,14 @@ func (e *_heap[T, W]) Pop() interface{} {
 // PriorityQueue represents the priority queue.
 type PriorityQueue struct {
 	_heap[int32, float32]
-	lookup *i32set.Set
+	lookup mapset.Set[int32]
 }
 
 // NewPriorityQueue initializes an empty priority queue.
 func NewPriorityQueue(desc bool) *PriorityQueue {
 	return &PriorityQueue{
 		_heap:  _heap[int32, float32]{desc: desc},
-		lookup: i32set.New(),
+		lookup: mapset.NewSet[int32](),
 	}
 }
 
@@ -77,7 +78,7 @@ func NewPriorityQueue(desc bool) *PriorityQueue {
 func (p *PriorityQueue) Push(v int32, weight float32) {
 	if math32.IsNaN(weight) {
 		panic("NaN weight is forbidden")
-	} else if !p.lookup.Has(v) {
+	} else if !p.lookup.Contains(v) {
 		newItem := Elem[int32, float32]{
 			Value:  v,
 			Weight: weight,
