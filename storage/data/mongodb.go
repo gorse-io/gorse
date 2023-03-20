@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
-	"github.com/scylladb/go-set/strset"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -541,14 +541,14 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		return nil
 	}
 	// collect users and items
-	users := strset.New()
-	items := strset.New()
+	users := mapset.NewSet[string]()
+	items := mapset.NewSet[string]()
 	for _, v := range feedback {
 		users.Add(v.UserId)
 		items.Add(v.ItemId)
 	}
 	// insert users
-	userList := users.List()
+	userList := users.ToSlice()
 	if insertUser {
 		var models []mongo.WriteModel
 		for _, userId := range userList {
@@ -575,7 +575,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		}
 	}
 	// insert items
-	itemList := items.List()
+	itemList := items.ToSlice()
 	if insertItem {
 		var models []mongo.WriteModel
 		for _, itemId := range itemList {
@@ -605,7 +605,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var models []mongo.WriteModel
 	for _, f := range feedback {
-		if users.Has(f.UserId) && items.Has(f.ItemId) {
+		if users.Contains(f.UserId) && items.Contains(f.ItemId) {
 			model := mongo.NewUpdateOneModel().
 				SetUpsert(true).
 				SetFilter(bson.M{

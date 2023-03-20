@@ -25,12 +25,11 @@ import (
 	"strings"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/lafikl/consistent"
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/scylladb/go-set"
-	"github.com/scylladb/go-set/strset"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
@@ -557,7 +556,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// load historical items
 		historyItems, feedbacks, err := w.loadUserHistoricalItems(w.DataClient, userId)
-		excludeSet := set.NewStringSet(historyItems...)
+		excludeSet := mapset.NewSet(historyItems...)
 		if err != nil {
 			log.Logger().Error("failed to pull user feedback",
 				zap.String("user_id", userId), zap.Error(err))
@@ -612,7 +611,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #2: item-based.
-		itemNeighborDigests := strset.New()
+		itemNeighborDigests := mapset.NewSet[string]()
 		if w.Config.Recommend.Offline.EnableItemBasedRecommend {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
@@ -627,7 +626,7 @@ func (w *Worker) Recommend(users []data.User) {
 					}
 					// add unseen items
 					for _, item := range similarItems {
-						if !excludeSet.Has(item.Id) && itemCache.IsAvailable(item.Id) {
+						if !excludeSet.Contains(item.Id) && itemCache.IsAvailable(item.Id) {
 							scores[item.Id] += item.Score
 						}
 					}
@@ -653,7 +652,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #3: insert user-based items
-		userNeighborDigests := strset.New()
+		userNeighborDigests := mapset.NewSet[string]()
 		if w.Config.Recommend.Offline.EnableUserBasedRecommend {
 			localStartTime := time.Now()
 			scores := make(map[string]float64)
@@ -674,7 +673,7 @@ func (w *Worker) Recommend(users []data.User) {
 				MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(userFeedbackCache.Bytes()))
 				// add unseen items
 				for _, itemId := range similarUserPositiveItems {
-					if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
+					if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) {
 						scores[itemId] += user.Score
 					}
 				}
@@ -718,7 +717,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				var recommend []string
 				for _, latestItem := range latestItems {
-					if !excludeSet.Has(latestItem.Id) && itemCache.IsAvailable(latestItem.Id) {
+					if !excludeSet.Contains(latestItem.Id) && itemCache.IsAvailable(latestItem.Id) {
 						recommend = append(recommend, latestItem.Id)
 					}
 				}
@@ -738,7 +737,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				var recommend []string
 				for _, popularItem := range popularItems {
-					if !excludeSet.Has(popularItem.Id) && itemCache.IsAvailable(popularItem.Id) {
+					if !excludeSet.Contains(popularItem.Id) && itemCache.IsAvailable(popularItem.Id) {
 						recommend = append(recommend, popularItem.Id)
 					}
 				}
@@ -801,8 +800,8 @@ func (w *Worker) Recommend(users []data.User) {
 			cache.String(cache.Key(cache.OfflineRecommendDigest, userId), w.Config.OfflineRecommendDigest(
 				config.WithCollaborative(collaborativeUsed),
 				config.WithRanking(ctrUsed),
-				config.WithItemNeighborDigest(strings.Join(itemNeighborDigests.List(), "-")),
-				config.WithUserNeighborDigest(strings.Join(userNeighborDigests.List(), "-")),
+				config.WithItemNeighborDigest(strings.Join(itemNeighborDigests.ToSlice(), "-")),
+				config.WithUserNeighborDigest(strings.Join(userNeighborDigests.ToSlice(), "-")),
 			))); err != nil {
 			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
@@ -837,7 +836,7 @@ func (w *Worker) Recommend(users []data.User) {
 	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
 }
 
-func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet *strset.Set, itemCache *ItemCache) (map[string][]string, time.Duration, error) {
+func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories []string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	ctx := context.Background()
 	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
 	itemIds := w.RankingModel.GetItemIndex().GetNames()
@@ -848,7 +847,7 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 		recItemsFilters[category] = heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
 	}
 	for itemIndex, itemId := range itemIds {
-		if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) && w.RankingModel.IsItemPredictable(int32(itemIndex)) {
+		if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) && w.RankingModel.IsItemPredictable(int32(itemIndex)) {
 			prediction := w.RankingModel.InternalPredict(userIndex, int32(itemIndex))
 			recItemsFilters[""].Push(itemId, float64(prediction))
 			for _, category := range itemCache.GetCategory(itemId) {
@@ -869,12 +868,12 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	return recommend, time.Since(localStartTime), nil
 }
 
-func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId string, itemCategories []string, excludeSet *strset.Set, itemCache *ItemCache) (map[string][]string, time.Duration, error) {
+func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId string, itemCategories []string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	ctx := context.Background()
 	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
 	localStartTime := time.Now()
 	values, scores := rankingIndex.MultiSearch(search.NewDenseVector(w.RankingModel.GetUserFactor(userIndex), nil, false),
-		itemCategories, w.Config.Recommend.CacheSize+excludeSet.Size(), false)
+		itemCategories, w.Config.Recommend.CacheSize+excludeSet.Cardinality(), false)
 	// save result
 	recommend := make(map[string][]string)
 	for category, catValues := range values {
@@ -882,7 +881,7 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId st
 		recommendScores := make([]float64, 0, len(catValues))
 		for i := range catValues {
 			itemId := w.RankingModel.GetItemIndex().ToName(catValues[i])
-			if !excludeSet.Has(itemId) && itemCache.IsAvailable(itemId) {
+			if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) {
 				recommendItems = append(recommendItems, itemId)
 				recommendScores = append(recommendScores, float64(scores[category][i]))
 			}
@@ -899,11 +898,11 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId st
 
 func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]string) ([]cache.Scored, error) {
 	// concat candidates
-	memo := strset.New()
+	memo := mapset.NewSet[string]()
 	var itemIds []string
 	for _, v := range candidates {
 		for _, itemId := range v {
-			if !memo.Has(itemId) {
+			if !memo.Contains(itemId) {
 				memo.Add(itemId)
 				itemIds = append(itemIds, itemId)
 			}
@@ -924,11 +923,11 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 // rankByClickTroughRate ranks items by predicted click-through-rate.
 func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache) ([]cache.Scored, error) {
 	// concat candidates
-	memo := strset.New()
+	memo := mapset.NewSet[string]()
 	var itemIds []string
 	for _, v := range candidates {
 		for _, itemId := range v {
-			if !memo.Has(itemId) {
+			if !memo.Contains(itemId) {
 				memo.Add(itemId)
 				itemIds = append(itemIds, itemId)
 			}
@@ -956,7 +955,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 }
 
 func (w *Worker) mergeAndShuffle(candidates [][]string) []cache.Scored {
-	memo := strset.New()
+	memo := mapset.NewSet[string]()
 	pos := make([]int, len(candidates))
 	var recommend []cache.Scored
 	for {
@@ -974,7 +973,7 @@ func (w *Worker) mergeAndShuffle(candidates [][]string) []cache.Scored {
 		j := src[w.randGenerator.Intn(len(src))]
 		candidateId := candidates[j][pos[j]]
 		pos[j]++
-		if !memo.Has(candidateId) {
+		if !memo.Contains(candidateId) {
 			memo.Add(candidateId)
 			recommend = append(recommend, cache.Scored{Score: math.Exp(float64(-len(recommend))), Id: candidateId})
 		}
@@ -982,13 +981,13 @@ func (w *Worker) mergeAndShuffle(candidates [][]string) []cache.Scored {
 	return recommend
 }
 
-func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *strset.Set, category string) ([]cache.Scored, error) {
-	var localExcludeSet *strset.Set
+func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet mapset.Set[string], category string) ([]cache.Scored, error) {
+	var localExcludeSet mapset.Set[string]
 	ctx := context.Background()
 	if w.Config.Recommend.Replacement.EnableReplacement {
-		localExcludeSet = strset.New()
+		localExcludeSet = mapset.NewSet[string]()
 	} else {
-		localExcludeSet = excludeSet.Copy()
+		localExcludeSet = excludeSet.Clone()
 	}
 	// create thresholds
 	explorePopularThreshold := 0.0
@@ -1035,7 +1034,7 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Scored, excludeSet *s
 		} else {
 			break
 		}
-		if !localExcludeSet.Has(recommendItem.Id) {
+		if !localExcludeSet.Contains(recommendItem.Id) {
 			localExcludeSet.Add(recommendItem.Id)
 			exploreRecommend = append(exploreRecommend, recommendItem)
 		}
@@ -1149,18 +1148,18 @@ func (w *Worker) refreshCache(ctx context.Context, userId string, recommendTime 
 func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
 	// pull items from database
 	itemCache := NewItemCache()
-	itemCategories := strset.New()
+	itemCategories := mapset.NewSet[string]()
 	itemChan, errChan := w.DataClient.GetItemStream(ctx, batchSize, nil)
 	for batchItems := range itemChan {
 		for _, item := range batchItems {
 			itemCache.Set(item.ItemId, item)
-			itemCategories.Add(item.Categories...)
+			itemCategories.Append(item.Categories...)
 		}
 	}
 	if err := <-errChan; err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	return itemCache, itemCategories.List(), nil
+	return itemCache, itemCategories.ToSlice(), nil
 }
 
 func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
@@ -1214,8 +1213,8 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 	}
 
 	// remove duplicates
-	positiveItems := strset.New()
-	distinctItems := strset.New()
+	positiveItems := mapset.NewSet[string]()
+	distinctItems := mapset.NewSet[string]()
 	for _, feedback := range feedbacks {
 		if funk.ContainsString(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
 			positiveItems.Add(feedback.ItemId)
@@ -1225,7 +1224,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 		}
 	}
 
-	for _, itemId := range distinctItems.List() {
+	for _, itemId := range distinctItems.ToSlice() {
 		if item, exist := itemCache.Get(itemId); exist {
 			// scoring item
 			// 1. If click-through rate prediction model is available, use it.
@@ -1254,7 +1253,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Scored, user *data.Use
 					score -= lowerBound
 					if score < 0 {
 						continue
-					} else if positiveItems.Has(itemId) {
+					} else if positiveItems.Contains(itemId) {
 						score *= w.Config.Recommend.Replacement.PositiveReplacementDecay
 					} else {
 						score *= w.Config.Recommend.Replacement.ReadReplacementDecay

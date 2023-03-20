@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
-	"github.com/scylladb/go-set/strset"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/thoas/go-funk"
@@ -560,7 +560,7 @@ func (suite *WorkerTestSuite) TestExploreRecommend() {
 
 	recommend, err := suite.exploreRecommend(cache.CreateScoredItems(
 		funk.ReverseStrings([]string{"1", "2", "3", "4", "5", "6", "7", "8"}),
-		funk.ReverseFloat64([]float64{1, 2, 3, 4, 5, 6, 7, 8})), strset.New(), "")
+		funk.ReverseFloat64([]float64{1, 2, 3, 4, 5, 6, 7, 8})), mapset.NewSet[string](), "")
 	suite.NoError(err)
 	items := cache.RemoveScores(recommend)
 	suite.Contains(items, "latest")
