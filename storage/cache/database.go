@@ -276,6 +276,57 @@ type Document struct {
 	Value      string
 	Score      float64
 	Categories []string `gorm:"type:text;serializer:json"`
+	Timestamp  time.Time
+}
+
+type DocumentAggregator struct {
+	Documents map[string]*Document
+	Timestamp time.Time
+}
+
+func NewDocumentAggregator(timestamp time.Time) *DocumentAggregator {
+	return &DocumentAggregator{
+		Documents: make(map[string]*Document),
+		Timestamp: timestamp,
+	}
+}
+
+func (aggregator *DocumentAggregator) Add(category string, values []string, scores []float64) {
+	for i, value := range values {
+		if _, ok := aggregator.Documents[value]; !ok {
+			aggregator.Documents[value] = &Document{
+				Value:      value,
+				Score:      scores[i],
+				Categories: []string{category},
+				Timestamp:  aggregator.Timestamp,
+			}
+		} else {
+			if aggregator.Documents[value].Score != scores[i] {
+				panic("score should be the same")
+			}
+			aggregator.Documents[value].Categories = append(aggregator.Documents[value].Categories, category)
+		}
+	}
+}
+
+func (aggregator *DocumentAggregator) ToSlice() []Document {
+	documents := make([]Document, 0, len(aggregator.Documents))
+	for _, document := range aggregator.Documents {
+		documents = append(documents, *document)
+	}
+	return documents
+}
+
+type DocumentCondition struct {
+	Value  *string
+	Before *time.Time
+}
+
+func (condition *DocumentCondition) Check() error {
+	if condition.Value == nil && condition.Before == nil {
+		return errors.NotValidf("document condition")
+	}
+	return nil
 }
 
 // Database is the common interface for cache store.
@@ -308,6 +359,7 @@ type Database interface {
 
 	AddDocuments(ctx context.Context, name string, documents ...Document) error
 	SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error)
+	DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error
 }
 
 // Open a connection to a database.

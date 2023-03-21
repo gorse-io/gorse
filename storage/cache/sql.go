@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"io"
 	"math"
+	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -58,6 +59,9 @@ func init() {
 		j2, err := parse(args[1])
 		if err != nil {
 			return nil, err
+		}
+		if j2 == nil {
+			return false, nil
 		}
 		elements := make(map[any]struct{}, len(j1))
 		for _, e := range j1 {
@@ -107,6 +111,7 @@ type PostgresDocument struct {
 	Value      string         `gorm:"primaryKey"`
 	Categories pq.StringArray `gorm:"type:text[]"`
 	Score      float64
+	Timestamp  time.Time
 }
 
 type SQLDocument struct {
@@ -114,6 +119,7 @@ type SQLDocument struct {
 	Value      string   `gorm:"primaryKey"`
 	Categories []string `gorm:"type:text;serializer:json"`
 	Score      float64
+	Timestamp  time.Time
 }
 
 type SQLDatabase struct {
@@ -495,6 +501,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents 
 				Value:      document.Value,
 				Score:      document.Score,
 				Categories: document.Categories,
+				Timestamp:  document.Timestamp,
 			}
 		})
 	case SQLite, MySQL:
@@ -504,29 +511,28 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents 
 				Value:      document.Value,
 				Score:      document.Score,
 				Categories: document.Categories,
+				Timestamp:  document.Timestamp,
 			}
 		})
 	}
 	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
-		DoUpdates: clause.AssignmentColumns([]string{"score", "categories"}),
+		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
 	}).Create(rows)
 	return nil
 }
 
 func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{})
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("value, score, categories, timestamp")
 	switch db.driver {
 	case Postgres:
-		tx = tx.Select("value, score, categories").
-			Where("name = ? and categories @> ?", name, pq.StringArray(query))
+		tx = tx.Where("name = ? and categories @> ?", name, pq.StringArray(query))
 	case SQLite, MySQL:
 		q, err := json.Marshal(query)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		tx = tx.Select("value, score, categories").
-			Where("name = ? and JSON_CONTAINS(categories,?)", name, string(q))
+		tx = tx.Where("name = ? and JSON_CONTAINS(categories,?)", name, string(q))
 	}
 	tx = tx.Order("score desc").Offset(begin)
 	if end != -1 {
@@ -543,13 +549,14 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 		switch db.driver {
 		case Postgres:
 			var document PostgresDocument
-			if err = rows.Scan(&document.Value, &document.Score, &document.Categories); err != nil {
+			if err = rows.Scan(&document.Value, &document.Score, &document.Categories, &document.Timestamp); err != nil {
 				return nil, errors.Trace(err)
 			}
 			documents = append(documents, Document{
 				Value:      document.Value,
 				Score:      document.Score,
 				Categories: document.Categories,
+				Timestamp:  document.Timestamp,
 			})
 		case SQLite, MySQL:
 			var document Document
@@ -560,4 +567,23 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 		}
 	}
 	return documents, nil
+}
+
+func (db *SQLDatabase) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
+	if err := condition.Check(); err != nil {
+		return errors.Trace(err)
+	}
+	var builder strings.Builder
+	builder.WriteString("name = ?")
+	var args []any
+	args = append(args, name)
+	if condition.Value != nil {
+		builder.WriteString(" and value = ?")
+		args = append(args, *condition.Value)
+	}
+	if condition.Before != nil {
+		builder.WriteString(" and timestamp < ?")
+		args = append(args, *condition.Before)
+	}
+	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }

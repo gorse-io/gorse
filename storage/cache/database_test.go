@@ -21,8 +21,10 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/protobuf/proto"
 )
 
 type baseTestSuite struct {
@@ -325,64 +327,89 @@ func (suite *baseTestSuite) TestPushPop() {
 }
 
 func (suite *baseTestSuite) TestDocument() {
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
 	err := suite.AddDocuments(ctx, "a", Document{
 		Value:      "1",
 		Score:      100,
 		Categories: []string{"a", "b"},
+		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", Document{
 		Value:      "1",
 		Score:      1,
 		Categories: []string{"a", "b"},
+		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", Document{
 		Value:      "2",
 		Score:      2,
 		Categories: []string{"b", "c"},
+		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", Document{
 		Value:      "3",
 		Score:      3,
 		Categories: []string{"b"},
+		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", Document{
 		Value:      "4",
 		Score:      4,
 		Categories: []string{},
+		Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", Document{
 		Value:      "5",
 		Score:      5,
 		Categories: []string{"b"},
+		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "b", Document{
 		Value:      "6",
 		Score:      6,
 		Categories: []string{"b"},
+		Timestamp:  ts,
 	})
 	suite.NoError(err)
 
 	documents, err := suite.SearchDocuments(ctx, "a", []string{"b"}, 1, 3)
 	suite.NoError(err)
 	suite.Equal([]Document{
-		{Value: "3", Score: 3, Categories: []string{"b"}},
-		{Value: "2", Score: 2, Categories: []string{"b", "c"}},
+		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: ts},
+		{Value: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
 	}, documents)
 	documents, err = suite.SearchDocuments(ctx, "a", []string{"b"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]Document{
-		{Value: "5", Score: 5, Categories: []string{"b"}},
-		{Value: "3", Score: 3, Categories: []string{"b"}},
-		{Value: "2", Score: 2, Categories: []string{"b", "c"}},
-		{Value: "1", Score: 1, Categories: []string{"a", "b"}},
+		{Value: "5", Score: 5, Categories: []string{"b"}, Timestamp: ts},
+		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: ts},
+		{Value: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
+		{Value: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
 	}, documents)
+
+	err = suite.DeleteDocuments(ctx, "a", DocumentCondition{})
+	suite.ErrorIs(err, errors.NotValid)
+	// delete by value
+	err = suite.DeleteDocuments(ctx, "a", DocumentCondition{Value: proto.String("5")})
+	suite.NoError(err)
+	documents, err = suite.SearchDocuments(ctx, "a", nil, 0, 1)
+	suite.NoError(err)
+	suite.Len(documents, 1)
+	suite.Equal("4", documents[0].Value)
+	// delete by timestamp
+	err = suite.DeleteDocuments(ctx, "a", DocumentCondition{Before: lo.ToPtr(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC))})
+	suite.NoError(err)
+	documents, err = suite.SearchDocuments(ctx, "a", nil, 0, 1)
+	suite.NoError(err)
+	suite.Len(documents, 1)
+	suite.Equal("3", documents[0].Value)
 }
 
 func TestScored(t *testing.T) {
