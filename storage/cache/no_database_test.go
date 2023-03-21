@@ -16,8 +16,9 @@ package cache
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNoDatabase(t *testing.T) {
@@ -76,5 +77,7 @@ func TestNoDatabase(t *testing.T) {
 	err = database.AddDocuments(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.SearchDocuments(ctx, "", nil, 0, 0)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.DeleteDocuments(ctx, "", DocumentCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

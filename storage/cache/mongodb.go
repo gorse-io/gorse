@@ -470,6 +470,7 @@ func (m MongoDB) AddDocuments(ctx context.Context, name string, documents ...Doc
 			SetUpdate(bson.M{"$set": bson.M{
 				"score":      document.Score,
 				"categories": document.Categories,
+				"timestamp":  document.Timestamp,
 			}}))
 	}
 	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).BulkWrite(ctx, models)
@@ -497,4 +498,19 @@ func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []strin
 		documents = append(documents, document)
 	}
 	return documents, nil
+}
+
+func (m MongoDB) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
+	if err := condition.Check(); err != nil {
+		return errors.Trace(err)
+	}
+	filter := bson.M{"name": name}
+	if condition.Value != nil {
+		filter["value"] = condition.Value
+	}
+	if condition.Before != nil {
+		filter["timestamp"] = bson.M{"$lt": condition.Before}
+	}
+	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).DeleteMany(ctx, filter)
+	return errors.Trace(err)
 }

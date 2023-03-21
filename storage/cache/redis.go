@@ -312,22 +312,91 @@ func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	rows := result.([]any)
-	documents := make([]Document, 0)
-	for i := 2; i < len(rows); i += 2 {
-		row := rows[i]
-		fields := make(map[string]any)
-		for j := 0; j < len(row.([]any)); j += 2 {
-			fields[row.([]any)[j].(string)] = row.([]any)[j+1]
-		}
-		var document Document
-		document.Value = fields["value"].(string)
-		document.Score, err = strconv.ParseFloat(fields["score"].(string), 64)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		document.Categories = strings.Split(fields["categories"].(string), ";")
-		documents = append(documents, document)
+	_, _, documents, err := parseSearchResult(result)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 	return documents, nil
+}
+
+func (r *Redis) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
+	if err := condition.Check(); err != nil {
+		return errors.Trace(err)
+	}
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("@name:{ %s }", name))
+	if condition.Value != nil {
+		builder.WriteString(fmt.Sprintf(" @value:{ %s }", *condition.Value))
+	}
+	for {
+		// search documents
+		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		count, keys, _, err := parseSearchResult(result)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// delete documents
+		p := r.client.Pipeline()
+		for _, key := range keys {
+			p.Del(ctx, key)
+		}
+		_, err = p.Exec(ctx)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// break if no more documents
+		if count == int64(len(keys)) {
+			break
+		}
+	}
+	return nil
+}
+
+func parseSearchResult(result any) (count int64, keys []string, documents []Document, err error) {
+	rows, ok := result.([]any)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	count, ok = rows[0].(int64)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	for i := 1; i < len(rows); i += 2 {
+		key, ok := rows[i].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		keys = append(keys, key)
+		row, ok := rows[i+1].([]any)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		fields := make(map[string]any)
+		for j := 0; j < len(row); j += 2 {
+			fields[row[j].(string)] = row[j+1]
+		}
+		var document Document
+		document.Value, ok = fields["value"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		score, ok := fields["score"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		document.Score, err = strconv.ParseFloat(score, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		categories, ok := fields["categories"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		document.Categories = strings.Split(categories, ";")
+		documents = append(documents, document)
+	}
+	return
 }
