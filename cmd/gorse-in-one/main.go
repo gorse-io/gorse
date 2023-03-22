@@ -58,17 +58,8 @@ var oneCommand = &cobra.Command{
 		}
 
 		// setup logger
-		var outputPaths []string
-		if cmd.PersistentFlags().Changed("log-path") {
-			outputPath, _ := cmd.PersistentFlags().GetString("log-path")
-			outputPaths = append(outputPaths, outputPath)
-		}
-		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
-		if debugMode {
-			log.SetDevelopmentLogger(outputPaths...)
-		} else {
-			log.SetProductionLogger(outputPaths...)
-		}
+		debug, _ := cmd.PersistentFlags().GetBool("debug")
+		log.SetLogger(cmd.PersistentFlags(), debug)
 
 		// load config
 		var conf *config.Config
@@ -135,10 +126,10 @@ var oneCommand = &cobra.Command{
 }
 
 func init() {
+	log.AddFlags(oneCommand.PersistentFlags())
 	oneCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	oneCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	oneCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
-	oneCommand.PersistentFlags().String("log-path", "", "path of log file")
 	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
 	oneCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	oneCommand.PersistentFlags().String("cache-path", "one_cache.data", "path of cache file")
