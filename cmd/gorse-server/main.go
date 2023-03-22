@@ -37,17 +37,8 @@ var serverCommand = &cobra.Command{
 		}
 
 		// setup logger
-		var outputPaths []string
-		if cmd.PersistentFlags().Changed("log-path") {
-			outputPath, _ := cmd.PersistentFlags().GetString("log-path")
-			outputPaths = append(outputPaths, outputPath)
-		}
-		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
-		if debugMode {
-			log.SetDevelopmentLogger(outputPaths...)
-		} else {
-			log.SetProductionLogger(outputPaths...)
-		}
+		debug, _ := cmd.PersistentFlags().GetBool("debug")
+		log.SetLogger(cmd.PersistentFlags(), debug)
 
 		// create server
 		masterPort, _ := cmd.PersistentFlags().GetInt("master-port")
@@ -75,13 +66,13 @@ var serverCommand = &cobra.Command{
 }
 
 func init() {
+	log.AddFlags(serverCommand.PersistentFlags())
 	serverCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	serverCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
 	serverCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
 	serverCommand.PersistentFlags().Int("http-port", 8087, "host for RESTful APIs and Prometheus metrics export")
 	serverCommand.PersistentFlags().String("http-host", "127.0.0.1", "port for RESTful APIs and Prometheus metrics export")
 	serverCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
-	serverCommand.PersistentFlags().String("log-path", "", "path of log file")
 	serverCommand.PersistentFlags().String("cache-path", "server_cache.data", "path of cache file")
 }
 
