@@ -17,22 +17,27 @@ package log
 import (
 	"net/url"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-sql-driver/mysql"
-	"github.com/samber/lo"
+	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var logger *zap.Logger
 
 func init() {
 	// setup default logger
-	SetProductionLogger()
+	var err error
+	logger, err = zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
 	// Windows file sink support: https://github.com/uber-go/zap/issues/621
 	if runtime.GOOS == "windows" {
 		if err := zap.RegisterSink("windows", func(u *url.URL) (zap.Sink, error) {
@@ -53,46 +58,6 @@ func ResponseLogger(resp *restful.Response) *zap.Logger {
 	return logger.With(zap.String("request_id", resp.Header().Get("X-Request-ID")))
 }
 
-// SetProductionLogger set current logger in production mode.
-func SetProductionLogger(outputPaths ...string) {
-	for _, outputPath := range outputPaths {
-		err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
-		if err != nil {
-			panic(err)
-		}
-	}
-	cfg := zap.NewProductionConfig()
-	if runtime.GOOS == "windows" {
-		cfg.OutputPaths = append(cfg.OutputPaths, lo.Map(outputPaths, func(path string, _ int) string {
-			return "windows:///" + path
-		})...)
-	} else {
-		cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
-	}
-	var err error
-	logger, err = cfg.Build()
-	if err != nil {
-		panic(err)
-	}
-}
-
-// SetDevelopmentLogger set current logger in development mode.
-func SetDevelopmentLogger(outputPaths ...string) {
-	for _, outputPath := range outputPaths {
-		err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
-		if err != nil {
-			panic(err)
-		}
-	}
-	cfg := zap.NewDevelopmentConfig()
-	cfg.OutputPaths = append(cfg.OutputPaths, outputPaths...)
-	var err error
-	logger, err = cfg.Build()
-	if err != nil {
-		panic(err)
-	}
-}
-
 func CloseLogger() {
 	cfg := zap.NewProductionConfig()
 	cfg.Level = zap.NewAtomicLevelAt(zap.FatalLevel)
@@ -101,6 +66,46 @@ func CloseLogger() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func AddFlags(flagSet *pflag.FlagSet) {
+	flagSet.String("log-path", "", "path of log file")
+	flagSet.Int("log-max-size", 100, "maximum size in megabytes of the log file")
+	flagSet.Int("log-max-age", 0, "maximum number of days to retain old log files")
+	flagSet.Int("log-max-backups", 0, "maximum number of old log files to retain")
+}
+
+func SetLogger(flagSet *pflag.FlagSet, debug bool) {
+	// enable or disable debug mode
+	var (
+		encoder zapcore.Encoder
+		level   zapcore.LevelEnabler
+	)
+	if debug {
+		encoder = zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+		level = zap.DebugLevel
+	} else {
+		encoder = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+		level = zap.InfoLevel
+	}
+	// create lumberjack logger
+	writers := []zapcore.WriteSyncer{zapcore.AddSync(os.Stdout)}
+	if flagSet.Changed("log-path") {
+		path, _ := flagSet.GetString("log-path")
+		maxSize, _ := flagSet.GetInt("log-max-size")
+		maxAge, _ := flagSet.GetInt("log-max-age")
+		maxBackups, _ := flagSet.GetInt("log-max-backups")
+		writers = append(writers, zapcore.AddSync(&lumberjack.Logger{
+			Filename:   path,
+			MaxSize:    maxSize,
+			MaxBackups: maxBackups,
+			MaxAge:     maxAge,
+			Compress:   false,
+		}))
+	}
+	// create zap logger
+	core := zapcore.NewCore(encoder, zap.CombineWriteSyncers(writers...), level)
+	logger = zap.New(core)
 }
 
 const mysqlPrefix = "mysql://"
