@@ -34,7 +34,7 @@ var logger *zap.Logger
 func init() {
 	// setup default logger
 	var err error
-	logger, err = zap.NewDevelopment()
+	logger, err = zap.NewProduction()
 	if err != nil {
 		panic(err)
 	}
