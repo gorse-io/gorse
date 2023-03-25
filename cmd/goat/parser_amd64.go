@@ -16,11 +16,12 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/klauspost/asmfmt"
 	"os"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/klauspost/asmfmt"
 )
 
 const buildTags = "//go:build !noasm && amd64\n"
@@ -34,7 +35,7 @@ var (
 	symbolLine = regexp.MustCompile(`^\w+\s+<\w+>:$`)
 	dataLine   = regexp.MustCompile(`^\w+:\s+\w+\s+.+$`)
 
-	registers = []string{"DI", "SI", "DX", "CX"}
+	registers = []string{"DI", "SI", "DX", "CX", "R8", "R9"}
 )
 
 type Line struct {
