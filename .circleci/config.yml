@@ -2,7 +2,9 @@ version: 2.1
 
 jobs:
   unit_test:
-    resource_class: arm.large
+    machine:
+      image: ubuntu-2004:current
+    resource_class: arm.medium
     working_directory: ~/repo
     docker:
       - image: cimg/go:1.20
