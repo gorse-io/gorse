@@ -60,5 +60,5 @@ workflows:
             branches:
               only:
                 - master
-                - /^release-.*$/
-                - /^pull\/.*$/
+                - /^release-.*/
+                - /^pull\/.*/
