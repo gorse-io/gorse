@@ -2,7 +2,7 @@ version: 2.1
 
 jobs:
   unit_test:
-    resource_class: arm.2xlarge
+    resource_class: arm.large
     working_directory: ~/repo
     docker:
       - image: cimg/go:1.20
