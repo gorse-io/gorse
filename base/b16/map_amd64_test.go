@@ -25,7 +25,7 @@ type SSE2MapTestSuite struct {
 }
 
 func (s *SSE2MapTestSuite) SetupTest() {
-	s.Map = NewSSE2Map(100)
+	s.Map = newB16Map(100)
 }
 
 func TestSSE2Map(t *testing.T) {
@@ -33,7 +33,7 @@ func TestSSE2Map(t *testing.T) {
 }
 
 func BenchmarkSSE2MapPut(b *testing.B) {
-	m := NewSSE2Map(100)
+	m := newB16Map(100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m.Put(int32(i%100), float32(i))
@@ -41,7 +41,7 @@ func BenchmarkSSE2MapPut(b *testing.B) {
 }
 
 func BenchmarkSSE2MapGetHit100(b *testing.B) {
-	m := NewSSE2Map(100)
+	m := newB16Map(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}
@@ -53,7 +53,7 @@ func BenchmarkSSE2MapGetHit100(b *testing.B) {
 }
 
 func BenchmarkSSE2MapGetHit10(b *testing.B) {
-	m := NewSSE2Map(100)
+	m := newB16Map(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}
@@ -65,7 +65,7 @@ func BenchmarkSSE2MapGetHit10(b *testing.B) {
 }
 
 func BenchmarkSSE2MapGetHit1(b *testing.B) {
-	m := NewSSE2Map(100)
+	m := newB16Map(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}

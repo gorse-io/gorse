@@ -46,7 +46,7 @@ type StdMapTestSuite struct {
 }
 
 func (s *StdMapTestSuite) SetupTest() {
-	s.Map = NewStdMap(100)
+	s.Map = newStdMap(100)
 }
 
 func TestStdMap(t *testing.T) {
@@ -54,7 +54,7 @@ func TestStdMap(t *testing.T) {
 }
 
 func BenchmarkStdMapPut(b *testing.B) {
-	m := NewStdMap(100)
+	m := newStdMap(100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m.Put(int32(i%100), float32(i))
@@ -62,7 +62,7 @@ func BenchmarkStdMapPut(b *testing.B) {
 }
 
 func BenchmarkStdMapGetHit100(b *testing.B) {
-	m := NewStdMap(100)
+	m := newStdMap(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}
@@ -74,7 +74,7 @@ func BenchmarkStdMapGetHit100(b *testing.B) {
 }
 
 func BenchmarkStdMapGetHit10(b *testing.B) {
-	m := NewStdMap(100)
+	m := newStdMap(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}
@@ -86,7 +86,7 @@ func BenchmarkStdMapGetHit10(b *testing.B) {
 }
 
 func BenchmarkStdMapGetHit1(b *testing.B) {
-	m := NewStdMap(100)
+	m := newStdMap(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}

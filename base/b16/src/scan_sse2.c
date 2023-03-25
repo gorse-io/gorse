@@ -15,7 +15,7 @@
 #include <immintrin.h>
 #include <stdint.h>
 
-void _mm_scan(uint8_t *a, int64_t b, int64_t n, int64_t *ret, int64_t *n_ret)
+void _scan(uint8_t *a, int64_t b, int64_t n, int64_t *ret, int64_t *n_ret)
 {
     const __m128i v1 = _mm_loadu_si128(a);
     const __m128i v2 = _mm_set1_epi8(b);

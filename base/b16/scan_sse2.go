@@ -7,4 +7,4 @@ package b16
 import "unsafe"
 
 //go:noescape
-func _mm_scan(a, b, n, ret, n_ret unsafe.Pointer)
+func _scan(a, b, n, ret, n_ret unsafe.Pointer)
