@@ -5,7 +5,7 @@ jobs:
     working_directory: ~/repo
     machine:
       image: ubuntu-2004:current
-    resource_class: arm.2xlarge
+    resource_class: arm.large
     steps:
       - checkout
       - run:
