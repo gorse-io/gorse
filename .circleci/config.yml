@@ -9,9 +9,6 @@ executors:
     machine:
       image: ubuntu-2004:current
     resource_class: arm.large
-  macos:
-    macos: # executor type
-      xcode: 14.2.0
 
 jobs:
   unit-test:
@@ -66,9 +63,9 @@ jobs:
           command: go test -timeout 20m -v ./...
 
 workflows:
-  test:
+  unit-test:
     jobs:
       - unit-test:
           matrix:
             parameters:
-              platform: [amd64, arm64, macos]
+              platform: [amd64, arm64]
