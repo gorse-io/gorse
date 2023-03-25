@@ -55,7 +55,7 @@ workflows:
   test:
     jobs:
       - unit_test:
-          name: unit test (arm)
+          name: unit test (arm64)
           filters:
             branches:
               only:
