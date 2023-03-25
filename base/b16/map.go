@@ -115,3 +115,11 @@ func (m *b16Map) Put(key int32, value float32) {
 		}
 	}
 }
+
+func NewMapFromStdMap(m map[int32]float32) Map {
+	b16map := NewMap(len(m))
+	for k, v := range m {
+		b16map.Put(k, v)
+	}
+	return b16map
+}

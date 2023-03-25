@@ -18,6 +18,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -159,5 +160,21 @@ func BenchmarkB16MapGetHit1(b *testing.B) {
 	b.ResetTimer()
 	for _, num := range nums {
 		m.Get(num)
+	}
+}
+
+func TestNewMapFromStdMap(t *testing.T) {
+	r := rand.New(rand.NewSource(0))
+	m := make(map[int32]float32)
+	for i := 0; i < 100; i++ {
+		m[r.Int31n(1000)] = float32(r.Int31n(1000))
+	}
+	b16map := NewMapFromStdMap(m)
+	for i := 0; i < 1000; i++ {
+		key := r.Int31n(1000)
+		value1, ok1 := b16map.Get(key)
+		value2, ok2 := m[key]
+		assert.Equal(t, ok1, ok2)
+		assert.Equal(t, value1, value2)
 	}
 }
