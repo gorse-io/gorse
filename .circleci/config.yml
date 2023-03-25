@@ -11,7 +11,7 @@ executors:
     resource_class: arm.large
 
 jobs:
-  unit_test:
+  unit-test:
     parameters:
       arch:
         type: executor
@@ -65,8 +65,7 @@ jobs:
 workflows:
   test:
     jobs:
-      - unit_test:
-          name: unit test
+      - unit-test:
           matrix:
             parameters:
               arch: [amd64, arm64]
