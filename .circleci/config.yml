@@ -2,26 +2,16 @@ version: 2.1
 
 jobs:
   unit_test:
+    working_directory: ~/repo
     machine:
       image: ubuntu-2004:current
     resource_class: arm.medium
-    working_directory: ~/repo
-    docker:
-      - image: cimg/go:1.20
-      - image: mysql:8.0
-        environment:
-          MYSQL_ROOT_PASSWORD: password
-      - image: postgres:10.0
-        environment:
-          POSTGRES_USER: gorse
-          POSTGRES_PASSWORD: gorse_pass
-      - image: mongo:4.0
-        environment:
-          MONGO_INITDB_ROOT_USERNAME: root
-          MONGO_INITDB_ROOT_PASSWORD: password
-      - image: redis/redis-stack
     steps:
       - checkout
+      - run:
+          name: Set up databases
+          command: docker-compoose up -d
+          working_directory: ./storage
       - run:
           name: Set up dataset
           command: |
