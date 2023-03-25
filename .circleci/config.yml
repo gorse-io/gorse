@@ -61,4 +61,4 @@ workflows:
               only:
                 - master
                 - /^release-.*$/
-                - /^pull\/\d+\/head$/
+                - /^pull\/.*$/
