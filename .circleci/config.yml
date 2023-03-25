@@ -56,3 +56,9 @@ workflows:
     jobs:
       - unit_test:
           name: unit test (arm)
+          filters:
+            branches:
+              only:
+                - master
+                - /^release-.*/
+                - /^pull.*/
