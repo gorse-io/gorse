@@ -9,13 +9,16 @@ executors:
     machine:
       image: ubuntu-2004:current
     resource_class: arm.large
+  macos:
+    macos: # executor type
+      xcode: 14.2.0
 
 jobs:
   unit-test:
     parameters:
-      arch:
+      platform:
         type: executor
-    executor: << parameters.arch >>
+    executor: << parameters.platform >>
     working_directory: ~/repo
     steps:
       - checkout
@@ -68,4 +71,4 @@ workflows:
       - unit-test:
           matrix:
             parameters:
-              arch: [amd64, arm64]
+              platform: [amd64, arm64, macos]
