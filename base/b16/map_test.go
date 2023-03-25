@@ -105,3 +105,59 @@ func randomIntegers(size int, n int32) []int32 {
 	}
 	return integers
 }
+
+type B16MapTestSuite struct {
+	baseTestSuite
+}
+
+func (s *B16MapTestSuite) SetupTest() {
+	s.Map = newB16Map(100)
+}
+
+func TestB16Map(t *testing.T) {
+	suite.Run(t, new(B16MapTestSuite))
+}
+
+func BenchmarkB16MapPut(b *testing.B) {
+	m := newB16Map(100)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Put(int32(i%100), float32(i))
+	}
+}
+
+func BenchmarkB16MapGetHit100(b *testing.B) {
+	m := newB16Map(100)
+	for i := 0; i < 100; i++ {
+		m.Put(int32(i), float32(i))
+	}
+	nums := randomIntegers(b.N, 100)
+	b.ResetTimer()
+	for _, num := range nums {
+		m.Get(num)
+	}
+}
+
+func BenchmarkB16MapGetHit10(b *testing.B) {
+	m := newB16Map(100)
+	for i := 0; i < 100; i++ {
+		m.Put(int32(i), float32(i))
+	}
+	nums := randomIntegers(b.N, 1000)
+	b.ResetTimer()
+	for _, num := range nums {
+		m.Get(num)
+	}
+}
+
+func BenchmarkB16MapGetHit1(b *testing.B) {
+	m := newB16Map(100)
+	for i := 0; i < 100; i++ {
+		m.Put(int32(i), float32(i))
+	}
+	nums := randomIntegers(b.N, 10000)
+	b.ResetTimer()
+	for _, num := range nums {
+		m.Get(num)
+	}
+}

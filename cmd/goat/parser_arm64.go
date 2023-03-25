@@ -35,7 +35,7 @@ var (
 	symbolLine = regexp.MustCompile(`^\w+\s+<\w+>:$`)
 	dataLine   = regexp.MustCompile(`^\w+:\s+\w+\s+.+$`)
 
-	registers = []string{"R0", "R1", "R2", "R3"}
+	registers = []string{"R0", "R1", "R2", "R3", "R4", "R5"}
 )
 
 type Line struct {
