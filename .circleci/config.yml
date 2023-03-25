@@ -10,7 +10,7 @@ jobs:
       - checkout
       - run:
           name: Set up databases
-          command: docker-compoose up -d
+          command: docker ps
           working_directory: ./storage
       - run:
           name: Set up dataset
