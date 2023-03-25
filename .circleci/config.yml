@@ -5,12 +5,20 @@ jobs:
     working_directory: ~/repo
     machine:
       image: ubuntu-2004:current
-    resource_class: arm.medium
+    resource_class: arm.2xlarge
     steps:
       - checkout
       - run:
+          name: Install Docker Compose
+          environment:
+            COMPOSE_VERSION: '1.29.2'
+          command: |
+            curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o ~/docker-compose
+            chmod +x ~/docker-compose
+            sudo mv ~/docker-compose /usr/local/bin/docker-compose
+      - run:
           name: Set up databases
-          command: docker ps
+          command: docker-compose up -d
           working_directory: ./storage
       - run:
           name: Set up dataset
