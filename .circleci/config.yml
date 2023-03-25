@@ -1,12 +1,10 @@
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
   unit_test:
     working_directory: ~/repo
     docker:
-      - image: circleci/golang:1.20
+      - image: cimg/go:1.20
     steps:
       - checkout
       - restore_cache:
