@@ -5,8 +5,48 @@ jobs:
     working_directory: ~/repo
     docker:
       - image: cimg/go:1.20
+      - image: mysql:8.0
+        environment:
+          MYSQL_ROOT_PASSWORD: password
+        command: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+      - image: postgres:10.0
+        environment:
+          POSTGRES_USER: gorse
+          POSTGRES_PASSWORD: gorse_pass
+        command: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      - image: mongo:4.0
+        environment:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+        command: >-
+          --health-cmd mongo
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      - image: redis/redis-stack
     steps:
       - checkout
+      - run:
+          name: Set up dataset
+          command: |
+            mkdir -p ~/.gorse/dataset
+            mkdir -p ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/ml-100k.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/ml-1m.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
+            unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
@@ -19,9 +59,7 @@ jobs:
             - "/go/pkg/mod"
       - run:
           name: Run tests
-          command: |
-            mkdir -p /tmp/test-reports
-            gotestsum --junitfile /tmp/test-reports/unit-tests.xml
+          command: go test -timeout 20m -v ./...
 
 workflows:
   test:
