@@ -14,17 +14,4 @@
 
 package b16
 
-import (
-	"github.com/klauspost/cpuid/v2"
-)
-
 //go:generate go run ../../cmd/goat src/scan_sse2.c -O3
-
-var hasSSE2 = cpuid.CPU.Supports(cpuid.SSE2)
-
-func NewMap(n int) Map {
-	if hasSSE2 {
-		return newB16Map(n)
-	}
-	return newStdMap(n)
-}

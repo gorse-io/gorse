@@ -17,5 +17,5 @@ package b16
 //go:generate go run ../../cmd/goat src/scan_neon.c -O3
 
 func NewMap(n int) Map {
-	return newB16Map(n)
+	return NewMap(n)
 }

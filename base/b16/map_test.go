@@ -22,12 +22,65 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type baseTestSuite struct {
-	suite.Suite
-	Map
+func BenchmarkStdMapPut(b *testing.B) {
+	m := make(map[int32]float32)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m[int32(i%100)] = float32(i)
+	}
 }
 
-func (s *baseTestSuite) TestPutAndGet() {
+func BenchmarkStdMapGetHit100(b *testing.B) {
+	m := make(map[int32]float32)
+	for i := 0; i < 100; i++ {
+		m[int32(i%100)] = float32(i)
+	}
+	nums := randomIntegers(b.N, 100)
+	b.ResetTimer()
+	for _, num := range nums {
+		_ = m[num]
+	}
+}
+
+func BenchmarkStdMapGetHit10(b *testing.B) {
+	m := make(map[int32]float32)
+	for i := 0; i < 100; i++ {
+		m[int32(i%100)] = float32(i)
+	}
+	nums := randomIntegers(b.N, 1000)
+	b.ResetTimer()
+	for _, num := range nums {
+		_ = m[num]
+	}
+}
+
+func BenchmarkStdMapGetHit1(b *testing.B) {
+	m := make(map[int32]float32)
+	for i := 0; i < 100; i++ {
+		m[int32(i%100)] = float32(i)
+	}
+	nums := randomIntegers(b.N, 10000)
+	b.ResetTimer()
+	for _, num := range nums {
+		_ = m[num]
+	}
+}
+
+func randomIntegers(size int, n int32) []int32 {
+	r := rand.New(rand.NewSource(0))
+	integers := make([]int32, size)
+	for i := 0; i < size; i++ {
+		integers[i] = r.Int31n(int32(n))
+	}
+	return integers
+}
+
+type B16MapTestSuite struct {
+	suite.Suite
+	*Map
+}
+
+func (s *B16MapTestSuite) TestPutAndGet() {
 	for i := 0; i < 100; i++ {
 		s.Map.Put(int32(i), float32(i))
 	}
@@ -42,77 +95,8 @@ func (s *baseTestSuite) TestPutAndGet() {
 	}
 }
 
-type StdMapTestSuite struct {
-	baseTestSuite
-}
-
-func (s *StdMapTestSuite) SetupTest() {
-	s.Map = newStdMap(100)
-}
-
-func TestStdMap(t *testing.T) {
-	suite.Run(t, new(StdMapTestSuite))
-}
-
-func BenchmarkStdMapPut(b *testing.B) {
-	m := newStdMap(100)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		m.Put(int32(i%100), float32(i))
-	}
-}
-
-func BenchmarkStdMapGetHit100(b *testing.B) {
-	m := newStdMap(100)
-	for i := 0; i < 100; i++ {
-		m.Put(int32(i), float32(i))
-	}
-	nums := randomIntegers(b.N, 100)
-	b.ResetTimer()
-	for _, num := range nums {
-		m.Get(num)
-	}
-}
-
-func BenchmarkStdMapGetHit10(b *testing.B) {
-	m := newStdMap(100)
-	for i := 0; i < 100; i++ {
-		m.Put(int32(i), float32(i))
-	}
-	nums := randomIntegers(b.N, 1000)
-	b.ResetTimer()
-	for _, num := range nums {
-		m.Get(num)
-	}
-}
-
-func BenchmarkStdMapGetHit1(b *testing.B) {
-	m := newStdMap(100)
-	for i := 0; i < 100; i++ {
-		m.Put(int32(i), float32(i))
-	}
-	nums := randomIntegers(b.N, 10000)
-	b.ResetTimer()
-	for _, num := range nums {
-		m.Get(num)
-	}
-}
-
-func randomIntegers(size int, n int32) []int32 {
-	r := rand.New(rand.NewSource(0))
-	integers := make([]int32, size)
-	for i := 0; i < size; i++ {
-		integers[i] = r.Int31n(int32(n))
-	}
-	return integers
-}
-
-type B16MapTestSuite struct {
-	baseTestSuite
-}
-
 func (s *B16MapTestSuite) SetupTest() {
-	s.Map = newB16Map(100)
+	s.Map = NewMap(100)
 }
 
 func TestB16Map(t *testing.T) {
@@ -120,7 +104,7 @@ func TestB16Map(t *testing.T) {
 }
 
 func BenchmarkB16MapPut(b *testing.B) {
-	m := newB16Map(100)
+	m := NewMap(100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m.Put(int32(i%100), float32(i))
@@ -128,7 +112,7 @@ func BenchmarkB16MapPut(b *testing.B) {
 }
 
 func BenchmarkB16MapGetHit100(b *testing.B) {
-	m := newB16Map(100)
+	m := NewMap(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}
@@ -140,7 +124,7 @@ func BenchmarkB16MapGetHit100(b *testing.B) {
 }
 
 func BenchmarkB16MapGetHit10(b *testing.B) {
-	m := newB16Map(100)
+	m := NewMap(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}
@@ -152,7 +136,7 @@ func BenchmarkB16MapGetHit10(b *testing.B) {
 }
 
 func BenchmarkB16MapGetHit1(b *testing.B) {
-	m := newB16Map(100)
+	m := NewMap(100)
 	for i := 0; i < 100; i++ {
 		m.Put(int32(i), float32(i))
 	}
