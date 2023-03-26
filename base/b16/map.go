@@ -15,8 +15,9 @@
 package b16
 
 import (
-	"modernc.org/mathutil"
 	"unsafe"
+
+	"modernc.org/mathutil"
 )
 
 const loadFactor = 0.75
@@ -54,18 +55,14 @@ func (m *Map) Get(key int32) (float32, bool) {
 	if len(m.buckets) == 0 {
 		return 0, false
 	}
-	var (
-		result [16]int64
-		count  int64
-	)
+	var index int64
 	h1, h2 := m.hash(key)
 	for b := &m.buckets[h1]; b != nil; b = b.overflow {
-		_scan(unsafe.Pointer(&b.h2[0]), unsafe.Pointer(uintptr(h2)), unsafe.Pointer(uintptr(b.size)),
-			unsafe.Pointer(&result[0]), unsafe.Pointer(&count))
-		for i := 0; i < int(count); i++ {
-			if b.keys[result[i]] == key {
-				return b.values[result[i]], true
-			}
+		_scan_int32(unsafe.Pointer(&b.h2[0]), unsafe.Pointer(uintptr(h2)),
+			unsafe.Pointer(&b.keys[0]), unsafe.Pointer(uintptr(key)),
+			unsafe.Pointer(uintptr(b.size)), unsafe.Pointer(&index))
+		if index >= 0 {
+			return b.values[index], true
 		}
 	}
 	return 0, false
@@ -74,17 +71,13 @@ func (m *Map) Get(key int32) (float32, bool) {
 func (m *Map) Put(key int32, value float32) {
 	h1, h2 := m.hash(key)
 	for b := &m.buckets[h1]; b != nil; b = b.overflow {
-		var (
-			result [16]int64
-			count  int64
-		)
-		_scan(unsafe.Pointer(&b.h2[0]), unsafe.Pointer(uintptr(h2)), unsafe.Pointer(uintptr(b.size)),
-			unsafe.Pointer(&result[0]), unsafe.Pointer(&count))
-		for i := 0; i < int(count); i++ {
-			if b.keys[result[i]] == key {
-				b.values[result[i]] = value
-				return
-			}
+		var index int64
+		_scan_int32(unsafe.Pointer(&b.h2[0]), unsafe.Pointer(uintptr(h2)),
+			unsafe.Pointer(&b.keys[0]), unsafe.Pointer(uintptr(key)),
+			unsafe.Pointer(uintptr(b.size)), unsafe.Pointer(&index))
+		if index >= 0 {
+			b.values[index] = value
+			return
 		}
 		if b.size < 16 {
 			b.h2[b.size] = h2

@@ -16,13 +16,15 @@ package search
 
 import (
 	"fmt"
+	"reflect"
+	"sort"
+
 	"github.com/chewxy/math32"
+	"github.com/zhenghaoz/gorse/base/b16"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 	"modernc.org/sortutil"
-	"reflect"
-	"sort"
 )
 
 type Vector interface {
@@ -137,7 +139,7 @@ type CentroidVector interface {
 }
 
 type DictionaryCentroidVector struct {
-	data map[int32]float32
+	data *b16.Map
 	norm float32
 }
 
@@ -161,7 +163,7 @@ func (v DictionaryVector) Centroid(vectors []Vector, indices []int32) CentroidVe
 		data[i] /= norm
 	}
 	return &DictionaryCentroidVector{
-		data: data,
+		data: b16.NewMapFromStdMap(data),
 		norm: norm,
 	}
 }
@@ -172,8 +174,8 @@ func (v *DictionaryCentroidVector) Distance(vector Vector) float32 {
 		panic(fmt.Sprintf("unexpected vector type: %v", reflect.TypeOf(vector)))
 	} else {
 		for _, i := range dictVector.indices {
-			if val, exist := v.data[i]; exist {
-				sum += val * math32.Sqrt(v.data[i])
+			if val, exist := v.data.Get(i); exist {
+				sum += val * math32.Sqrt(val)
 				common++
 			}
 		}
