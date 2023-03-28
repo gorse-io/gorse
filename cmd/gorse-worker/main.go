@@ -41,17 +41,8 @@ var workerCommand = &cobra.Command{
 		workingJobs, _ := cmd.PersistentFlags().GetInt("jobs")
 		managedModel, _ := cmd.PersistentFlags().GetBool("managed")
 		// setup logger
-		var outputPaths []string
-		if cmd.PersistentFlags().Changed("log-path") {
-			outputPath, _ := cmd.PersistentFlags().GetString("log-path")
-			outputPaths = append(outputPaths, outputPath)
-		}
-		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
-		if debugMode {
-			log.SetDevelopmentLogger(outputPaths...)
-		} else {
-			log.SetProductionLogger(outputPaths...)
-		}
+		debug, _ := cmd.PersistentFlags().GetBool("debug")
+		log.SetLogger(cmd.PersistentFlags(), debug)
 		// create worker
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
 		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, managedModel)
@@ -60,6 +51,7 @@ var workerCommand = &cobra.Command{
 }
 
 func init() {
+	log.AddFlags(workerCommand.PersistentFlags())
 	workerCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	workerCommand.PersistentFlags().String("master-host", "127.0.0.1", "host of master node")
 	workerCommand.PersistentFlags().Int("master-port", 8086, "port of master node")
@@ -68,7 +60,6 @@ func init() {
 	workerCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	workerCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
-	workerCommand.PersistentFlags().String("log-path", "", "path of log file")
 	workerCommand.PersistentFlags().String("cache-path", "worker_cache.data", "path of cache file")
 }
 

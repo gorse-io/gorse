@@ -37,17 +37,9 @@ var masterCommand = &cobra.Command{
 			return
 		}
 		// setup logger
-		var outputPaths []string
-		if cmd.PersistentFlags().Changed("log-path") {
-			outputPath, _ := cmd.PersistentFlags().GetString("log-path")
-			outputPaths = append(outputPaths, outputPath)
-		}
-		debugMode, _ := cmd.PersistentFlags().GetBool("debug")
-		if debugMode {
-			log.SetDevelopmentLogger(outputPaths...)
-		} else {
-			log.SetProductionLogger(outputPaths...)
-		}
+		debug, _ := cmd.PersistentFlags().GetBool("debug")
+		log.SetLogger(cmd.PersistentFlags(), debug)
+
 		// Create master
 		configPath, _ := cmd.PersistentFlags().GetString("config")
 		log.Logger().Info("load config", zap.String("config", configPath))
@@ -75,11 +67,11 @@ var masterCommand = &cobra.Command{
 }
 
 func init() {
+	log.AddFlags(masterCommand.PersistentFlags())
 	masterCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	masterCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	masterCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	masterCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
-	masterCommand.PersistentFlags().String("log-path", "", "path of log file")
 	masterCommand.PersistentFlags().String("cache-path", "master_cache.data", "path of cache file")
 }
 

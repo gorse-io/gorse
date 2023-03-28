@@ -15,56 +15,46 @@
 package log
 
 import (
-	"github.com/stretchr/testify/assert"
-	"os"
-	"runtime"
 	"testing"
+
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSetDevelopmentLogger(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-	temp, err := os.MkdirTemp("", "test_gorse")
-	assert.NoError(t, err)
+	temp := t.TempDir()
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	AddFlags(flagSet)
 	// set existed path
-	SetDevelopmentLogger(temp + "/gorse.log")
-	_, err = os.Stat(temp + "/gorse.log")
+	err := flagSet.Set("log-path", temp+"/gorse.log")
 	assert.NoError(t, err)
+	SetLogger(flagSet, true)
+	Logger().Debug("test")
+	assert.FileExists(t, temp+"/gorse.log")
 	// set non-existed path
-	SetDevelopmentLogger(temp + "/gorse/gorse.log")
-	_, err = os.Stat(temp + "/gorse/gorse.log")
+	err = flagSet.Set("log-path", temp+"/gorse/gorse.log")
 	assert.NoError(t, err)
-	// permission denied
-	assert.Panics(t, func() {
-		SetDevelopmentLogger("/gorse.log")
-	})
-	assert.Panics(t, func() {
-		SetDevelopmentLogger("/gorse/gorse.log")
-	})
+	SetLogger(flagSet, true)
+	Logger().Debug("test")
+	assert.FileExists(t, temp+"/gorse/gorse.log")
 }
 
 func TestSetProductionLogger(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-	temp, err := os.MkdirTemp("", "test_gorse")
-	assert.NoError(t, err)
+	temp := t.TempDir()
+	flagSet := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	AddFlags(flagSet)
 	// set existed path
-	SetProductionLogger(temp + "/gorse.log")
-	_, err = os.Stat(temp + "/gorse.log")
+	err := flagSet.Set("log-path", temp+"/gorse.log")
 	assert.NoError(t, err)
+	SetLogger(flagSet, false)
+	Logger().Info("test")
+	assert.FileExists(t, temp+"/gorse.log")
 	// set non-existed path
-	SetProductionLogger(temp + "/gorse/gorse.log")
-	_, err = os.Stat(temp + "/gorse/gorse.log")
+	err = flagSet.Set("log-path", temp+"/gorse/gorse.log")
 	assert.NoError(t, err)
-	// permission denied
-	assert.Panics(t, func() {
-		SetProductionLogger("/gorse.log")
-	})
-	assert.Panics(t, func() {
-		SetProductionLogger("/gorse/gorse.log")
-	})
+	SetLogger(flagSet, false)
+	Logger().Info("test")
+	assert.FileExists(t, temp+"/gorse/gorse.log")
 }
 
 func TestRedactDBURL(t *testing.T) {

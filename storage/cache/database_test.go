@@ -49,6 +49,11 @@ func (suite *baseTestSuite) TearDownTest() {
 	suite.NoError(err)
 }
 
+func (suite *baseTestSuite) TestInit() {
+	err := suite.Database.Init()
+	suite.NoError(err)
+}
+
 func (suite *baseTestSuite) TestMeta() {
 	ctx := context.Background()
 	// Set meta string

@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/storage"
 )
 
@@ -44,15 +45,28 @@ func (r *Redis) Ping() error {
 
 // Init nothing.
 func (r *Redis) Init() error {
+	// list index
+	result, err := r.client.Do(context.TODO(), "FT._LIST").Result()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	indices := lo.Map(result.([]any), func(s any, _ int) string {
+		return s.(string)
+	})
 	// create index
-	_, err := r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
-		"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
-		"name", "TAG",
-		"value", "TAG",
-		"score", "NUMERIC", "SORTABLE",
-		"categories", "TAG", "SEPARATOR", ";").
-		Result()
-	return errors.Trace(err)
+	if !lo.Contains(indices, r.DocumentTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
+			"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
+			"name", "TAG",
+			"value", "TAG",
+			"score", "NUMERIC", "SORTABLE",
+			"categories", "TAG", "SEPARATOR", ";").
+			Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }
 
 func (r *Redis) Scan(work func(string) error) error {
