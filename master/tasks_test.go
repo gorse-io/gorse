@@ -613,30 +613,30 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	assert.Equal(t, 45, m.clickTrainSet.NegativeCount+m.clickTestSet.NegativeCount)
 
 	// check latest items
-	latest, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.LatestItems, ""), 0, 100)
+	latest, err := m.CacheClient.SearchDocuments(ctx, cache.LatestItems, []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{
-		{items[8].ItemId, float64(items[8].Timestamp.Unix())},
-		{items[7].ItemId, float64(items[7].Timestamp.Unix())},
-		{items[6].ItemId, float64(items[6].Timestamp.Unix())},
+	assert.Equal(t, []cache.Document{
+		{Value: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
+		{Value: items[7].ItemId, Score: float64(items[7].Timestamp.Unix())},
+		{Value: items[6].ItemId, Score: float64(items[6].Timestamp.Unix())},
 	}, latest)
-	latest, err = m.CacheClient.GetSorted(ctx, cache.Key(cache.LatestItems, "2"), 0, 100)
+	latest, err = m.CacheClient.SearchDocuments(ctx, cache.LatestItems, []string{"2"}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Scored{
-		{items[8].ItemId, float64(items[8].Timestamp.Unix())},
-		{items[5].ItemId, float64(items[5].Timestamp.Unix())},
-		{items[2].ItemId, float64(items[2].Timestamp.Unix())},
+	assert.Equal(t, []cache.Document{
+		{Value: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
+		{Value: items[5].ItemId, Score: float64(items[5].Timestamp.Unix())},
+		{Value: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
 	}, latest)
 
 	// check popular items
-	popular, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.PopularItems, ""), 0, 2)
+	popular, err := m.CacheClient.SearchDocuments(ctx, cache.PopularItems, []string{""}, 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
 		{Id: items[6].ItemId, Score: 7},
 	}, popular)
-	popular, err = m.CacheClient.GetSorted(ctx, cache.Key(cache.PopularItems, "2"), 0, 2)
+	popular, err = m.CacheClient.SearchDocuments(ctx, cache.PopularItems, []string{"2"}, 0, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: 9},

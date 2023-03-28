@@ -86,27 +86,22 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save popular items to cache
-	for category, items := range popularItems {
-		if err = m.CacheClient.SetSorted(ctx, cache.Key(cache.PopularItems, category), items); err != nil {
-			log.Logger().Error("failed to cache popular items", zap.Error(err))
-		}
+	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, popularItems.ToSlice()...); err != nil {
+		log.Logger().Error("failed to cache popular items", zap.Error(err))
+	}
+	if err = m.CacheClient.DeleteDocuments(ctx, cache.PopularItems, cache.DocumentCondition{Before: &popularItems.Timestamp}); err != nil {
+		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write latest update popular items time", zap.Error(err))
 	}
 
 	// save the latest items to cache
-	for category, items := range latestItems {
-		if err = m.CacheClient.AddSorted(ctx, cache.Sorted(cache.Key(cache.LatestItems, category), items)); err != nil {
-			log.Logger().Error("failed to cache latest items", zap.Error(err))
-		}
-		// reclaim outdated items
-		if len(items) > 0 {
-			threshold := items[len(items)-1].Score - 1
-			if err = m.CacheClient.RemSortedByScore(ctx, cache.Key(cache.LatestItems, category), math.Inf(-1), threshold); err != nil {
-				log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
-			}
-		}
+	if err = m.CacheClient.AddDocuments(ctx, cache.LatestItems, latestItems.ToSlice()...); err != nil {
+		log.Logger().Error("failed to cache latest items", zap.Error(err))
+	}
+	if err = m.CacheClient.DeleteDocuments(ctx, cache.LatestItems, cache.DocumentCondition{Before: &latestItems.Timestamp}); err != nil {
+		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write latest update latest items time", zap.Error(err))
@@ -1403,7 +1398,8 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 
 // LoadDataFromDatabase loads dataset from data store.
 func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
-	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems map[string][]cache.Scored, popularItems map[string][]cache.Scored, err error) {
+	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems *cache.DocumentAggregator, popularItems *cache.DocumentAggregator, err error) {
+	startLoadTime := time.Now()
 	m.taskMonitor.Start(TaskLoadDataset, 5)
 	ctx := context.Background()
 	// setup time limit
@@ -1655,10 +1651,10 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
 
 	// collect latest items
-	latestItems = make(map[string][]cache.Scored)
+	latestItems = cache.NewDocumentAggregator(startLoadTime)
 	for category, latestItemsFilter := range latestItemsFilters {
 		items, scores := latestItemsFilter.PopAll()
-		latestItems[category] = cache.CreateScoredItems(items, scores)
+		latestItems.Add(category, items, scores)
 	}
 
 	// collect popular items
@@ -1674,10 +1670,10 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			popularItemFilters[category].Push(itemId, float64(val))
 		}
 	}
-	popularItems = make(map[string][]cache.Scored)
+	popularItems = cache.NewDocumentAggregator(startLoadTime)
 	for category, popularItemFilter := range popularItemFilters {
 		items, scores := popularItemFilter.PopAll()
-		popularItems[category] = cache.CreateScoredItems(items, scores)
+		popularItems.Add(category, items, scores)
 	}
 
 	m.taskMonitor.Finish(TaskLoadDataset)
