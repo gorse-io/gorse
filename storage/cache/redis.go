@@ -60,7 +60,8 @@ func (r *Redis) Init() error {
 			"name", "TAG",
 			"value", "TAG",
 			"score", "NUMERIC", "SORTABLE",
-			"categories", "TAG", "SEPARATOR", ";").
+			"categories", "TAG", "SEPARATOR", ";",
+			"timestamp", "NUMERIC", "SORTABLE").
 			Result()
 		if err != nil {
 			return errors.Trace(err)
@@ -304,13 +305,17 @@ func (r *Redis) AddDocuments(ctx context.Context, name string, documents ...Docu
 			"name", name,
 			"value", document.Value,
 			"score", document.Score,
-			"categories", strings.Join(document.Categories, ";"))
+			"categories", strings.Join(document.Categories, ";"),
+			"timestamp", document.Timestamp.UnixMicro())
 	}
 	_, err := p.Exec(ctx)
 	return errors.Trace(err)
 }
 
 func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	if len(query) == 0 {
+		return nil, nil
+	}
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("@name:{ %s }", name))
 	for _, q := range query {
@@ -341,6 +346,9 @@ func (r *Redis) DeleteDocuments(ctx context.Context, name string, condition Docu
 	builder.WriteString(fmt.Sprintf("@name:{ %s }", name))
 	if condition.Value != nil {
 		builder.WriteString(fmt.Sprintf(" @value:{ %s }", *condition.Value))
+	}
+	if condition.Before != nil {
+		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf,%d]", condition.Before.UnixMicro()))
 	}
 	for {
 		// search documents
@@ -410,6 +418,15 @@ func parseSearchResult(result any) (count int64, keys []string, documents []Docu
 			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
 		}
 		document.Categories = strings.Split(categories, ";")
+		timestamp, ok := fields["timestamp"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		timestampMicros, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		document.Timestamp = time.UnixMicro(timestampMicros).In(time.UTC)
 		documents = append(documents, document)
 	}
 	return

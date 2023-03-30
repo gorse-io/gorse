@@ -354,14 +354,14 @@ func (suite *baseTestSuite) TestDocument() {
 		Value:      "3",
 		Score:      3,
 		Categories: []string{"b"},
-		Timestamp:  ts,
+		Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", Document{
 		Value:      "4",
 		Score:      4,
 		Categories: []string{},
-		Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", Document{
@@ -382,14 +382,14 @@ func (suite *baseTestSuite) TestDocument() {
 	documents, err := suite.SearchDocuments(ctx, "a", []string{"b"}, 1, 3)
 	suite.NoError(err)
 	suite.Equal([]Document{
-		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: ts},
+		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{Value: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
 	}, documents)
 	documents, err = suite.SearchDocuments(ctx, "a", []string{"b"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]Document{
 		{Value: "5", Score: 5, Categories: []string{"b"}, Timestamp: ts},
-		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: ts},
+		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{Value: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
 		{Value: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
 	}, documents)
@@ -399,17 +399,17 @@ func (suite *baseTestSuite) TestDocument() {
 	// delete by value
 	err = suite.DeleteDocuments(ctx, "a", DocumentCondition{Value: proto.String("5")})
 	suite.NoError(err)
-	documents, err = suite.SearchDocuments(ctx, "a", nil, 0, 1)
-	suite.NoError(err)
-	suite.Len(documents, 1)
-	suite.Equal("4", documents[0].Value)
-	// delete by timestamp
-	err = suite.DeleteDocuments(ctx, "a", DocumentCondition{Before: lo.ToPtr(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC))})
-	suite.NoError(err)
-	documents, err = suite.SearchDocuments(ctx, "a", nil, 0, 1)
+	documents, err = suite.SearchDocuments(ctx, "a", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
 	suite.Equal("3", documents[0].Value)
+	// delete by timestamp
+	err = suite.DeleteDocuments(ctx, "a", DocumentCondition{Before: lo.ToPtr(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC))})
+	suite.NoError(err)
+	documents, err = suite.SearchDocuments(ctx, "a", []string{"b"}, 0, 1)
+	suite.NoError(err)
+	suite.Len(documents, 1)
+	suite.Equal("2", documents[0].Value)
 }
 
 func TestScored(t *testing.T) {

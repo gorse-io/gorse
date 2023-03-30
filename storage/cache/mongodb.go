@@ -478,6 +478,9 @@ func (m MongoDB) AddDocuments(ctx context.Context, name string, documents ...Doc
 }
 
 func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	if len(query) == 0 {
+		return nil, nil
+	}
 	opt := options.Find().SetSkip(int64(begin)).SetSort(bson.M{"score": -1})
 	if end != -1 {
 		opt.SetLimit(int64(end - begin))

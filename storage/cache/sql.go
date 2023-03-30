@@ -523,6 +523,9 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents 
 }
 
 func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+	if len(query) == 0 {
+		return nil, nil
+	}
 	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("value, score, categories, timestamp")
 	switch db.driver {
 	case Postgres:

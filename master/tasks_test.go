@@ -615,34 +615,34 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 	// check latest items
 	latest, err := m.CacheClient.SearchDocuments(ctx, cache.LatestItems, []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Document{
-		{Value: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
-		{Value: items[7].ItemId, Score: float64(items[7].Timestamp.Unix())},
-		{Value: items[6].ItemId, Score: float64(items[6].Timestamp.Unix())},
-	}, latest)
+	assert.Equal(t, []cache.Scored{
+		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
+		{Id: items[7].ItemId, Score: float64(items[7].Timestamp.Unix())},
+		{Id: items[6].ItemId, Score: float64(items[6].Timestamp.Unix())},
+	}, cache.ConertDocumentsToScores(latest))
 	latest, err = m.CacheClient.SearchDocuments(ctx, cache.LatestItems, []string{"2"}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []cache.Document{
-		{Value: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
-		{Value: items[5].ItemId, Score: float64(items[5].Timestamp.Unix())},
-		{Value: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
-	}, latest)
+	assert.Equal(t, []cache.Scored{
+		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
+		{Id: items[5].ItemId, Score: float64(items[5].Timestamp.Unix())},
+		{Id: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
+	}, cache.ConertDocumentsToScores(latest))
 
 	// check popular items
-	popular, err := m.CacheClient.SearchDocuments(ctx, cache.PopularItems, []string{""}, 0, 2)
+	popular, err := m.CacheClient.SearchDocuments(ctx, cache.PopularItems, []string{""}, 0, 3)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
 		{Id: items[6].ItemId, Score: 7},
-	}, popular)
-	popular, err = m.CacheClient.SearchDocuments(ctx, cache.PopularItems, []string{"2"}, 0, 2)
+	}, cache.ConertDocumentsToScores(popular))
+	popular, err = m.CacheClient.SearchDocuments(ctx, cache.PopularItems, []string{"2"}, 0, 3)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[5].ItemId, Score: 6},
 		{Id: items[2].ItemId, Score: 3},
-	}, popular)
+	}, cache.ConertDocumentsToScores(popular))
 
 	// check categories
 	categories, err := m.CacheClient.GetSet(ctx, cache.ItemCategories)

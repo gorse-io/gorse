@@ -279,6 +279,15 @@ type Document struct {
 	Timestamp  time.Time
 }
 
+func ConertDocumentsToScores(documents []Document) []Scored {
+	scores := make([]Scored, len(documents))
+	for i := range scores {
+		scores[i].Id = documents[i].Value
+		scores[i].Score = documents[i].Score
+	}
+	return scores
+}
+
 type DocumentAggregator struct {
 	Documents map[string]*Document
 	Timestamp time.Time
