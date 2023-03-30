@@ -379,6 +379,7 @@ func (suite *baseTestSuite) TestDocument() {
 	})
 	suite.NoError(err)
 
+	// search documents
 	documents, err := suite.SearchDocuments(ctx, "a", []string{"b"}, 1, 3)
 	suite.NoError(err)
 	suite.Equal([]Document{
@@ -394,6 +395,7 @@ func (suite *baseTestSuite) TestDocument() {
 		{Value: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
 	}, documents)
 
+	// delete nothing
 	err = suite.DeleteDocuments(ctx, "a", DocumentCondition{})
 	suite.ErrorIs(err, errors.NotValid)
 	// delete by value
@@ -410,6 +412,19 @@ func (suite *baseTestSuite) TestDocument() {
 	suite.NoError(err)
 	suite.Len(documents, 1)
 	suite.Equal("2", documents[0].Value)
+
+	// update categories
+	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", []string{"c", "s"})
+	suite.NoError(err)
+	documents, err = suite.SearchDocuments(ctx, "a", []string{"s"}, 0, 1)
+	suite.NoError(err)
+	suite.Len(documents, 1)
+	suite.Equal("2", documents[0].Value)
+	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", []string{"c"})
+	suite.NoError(err)
+	documents, err = suite.SearchDocuments(ctx, "a", []string{"s"}, 0, 1)
+	suite.NoError(err)
+	suite.Empty(documents)
 }
 
 func TestScored(t *testing.T) {

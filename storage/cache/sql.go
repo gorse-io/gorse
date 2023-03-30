@@ -572,6 +572,24 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 	return documents, nil
 }
 
+func (db *SQLDatabase) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("name in (?) and value = ?", names, value)
+	switch db.driver {
+	case Postgres:
+		tx = tx.Update("categories", pq.StringArray(categories))
+	case SQLite, MySQL:
+		q, err := json.Marshal(categories)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		tx = tx.Update("categories", string(q))
+	}
+	return tx.Error
+}
+
 func (db *SQLDatabase) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)

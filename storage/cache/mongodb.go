@@ -503,6 +503,19 @@ func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []strin
 	return documents, nil
 }
 
+func (m MongoDB) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, bson.M{
+		"name":  bson.M{"$in": names},
+		"value": value,
+	}, bson.M{"$set": bson.M{
+		"categories": categories,
+	}})
+	return errors.Trace(err)
+}
+
 func (m MongoDB) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)

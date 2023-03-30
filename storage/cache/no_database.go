@@ -125,6 +125,10 @@ func (NoDatabase) SearchDocuments(ctx context.Context, name string, query []stri
 	return nil, ErrNoDatabase
 }
 
+func (NoDatabase) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
+	return ErrNoDatabase
+}
+
 func (NoDatabase) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
 	return ErrNoDatabase
 }

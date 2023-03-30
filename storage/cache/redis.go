@@ -338,6 +338,21 @@ func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string
 	return documents, nil
 }
 
+func (r *Redis) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	p := r.client.Pipeline()
+	for _, name := range names {
+		p.Do(ctx, "HSET", r.DocumentTable()+":"+name+":"+value,
+			"name", name,
+			"value", value,
+			"categories", strings.Join(categories, ";"))
+	}
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
+}
+
 func (r *Redis) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)

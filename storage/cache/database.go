@@ -377,6 +377,7 @@ type Database interface {
 	AddDocuments(ctx context.Context, name string, documents ...Document) error
 	SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error)
 	DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error
+	UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error
 }
 
 // Open a connection to a database.
