@@ -229,20 +229,20 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationBruteForce() {
 	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 12)
 	suite.Recommend([]data.User{{UserId: "0"}})
 
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, -1)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Scored{
 		{"3", 3},
 		{"2", 2},
 		{"1", 1},
 		{"0", 0},
-	}, recommends)
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"), 0, -1)
+	}, cache.ConertDocumentsToScoredValues(recommends))
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{"*"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Scored{
 		{"3", 3},
 		{"1", 1},
-	}, recommends)
+	}, cache.ConertDocumentsToScoredValues(recommends))
 
 	readCache, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
@@ -286,14 +286,14 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationHNSW() {
 	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 12)
 	suite.Recommend([]data.User{{UserId: "0"}})
 
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, -1)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Scored{
 		{"3", 3},
 		{"2", 2},
 		{"1", 1},
 		{"0", 0},
-	}, recommends)
+	}, cache.ConertDocumentsToScoredValues(recommends))
 
 	readCache, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
@@ -381,12 +381,12 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	suite.NoError(err)
 	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, 2)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"29", 29}, {"28", 28}, {"27", 27}}, recommends)
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"), 0, 2)
+	suite.Equal([]cache.Scored{{"29", 29}, {"28", 28}, {"27", 27}}, cache.ConertDocumentsToScoredValues(recommends))
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{"*"}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"28", 28}, {"26", 26}}, recommends)
+	suite.Equal([]cache.Scored{{"28", 28}, {"26", 26}}, cache.ConertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendUserBased() {
@@ -429,12 +429,12 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 	suite.NoError(err)
 	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, 2)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"48", 48}, {"13", 13}, {"12", 12}}, recommends)
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"), 0, 2)
+	suite.Equal([]cache.Scored{{"48", 48}, {"13", 13}, {"12", 12}}, cache.ConertDocumentsToScoredValues(recommends))
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{"*"}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"48", 48}, {"12", 12}}, recommends)
+	suite.Equal([]cache.Scored{{"48", 48}, {"12", 12}}, cache.ConertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendPopular() {
@@ -460,12 +460,12 @@ func (suite *WorkerTestSuite) TestRecommendPopular() {
 	suite.NoError(err)
 	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, -1)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, recommends)
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"), 0, -1)
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, cache.ConertDocumentsToScoredValues(recommends))
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, recommends)
+	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, cache.ConertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendLatest() {
@@ -492,12 +492,12 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	suite.NoError(err)
 	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, -1)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, recommends)
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"), 0, -1)
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, cache.ConertDocumentsToScoredValues(recommends))
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, recommends)
+	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, cache.ConertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendColdStart() {
@@ -525,22 +525,22 @@ func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	// ranking model not exist
 	m := newMockMatrixFactorizationForRecommend(10, 100)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, -1)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(recommends))
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"), 0, -1)
+	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(recommends))
+	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
 
 	// user not predictable
 	suite.RankingModel = m
 	suite.Recommend([]data.User{{UserId: "100"}})
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "100"), 0, -1)
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "100"), []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(recommends))
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "100", "*"), 0, -1)
+	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "100"), []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(recommends))
+	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
 }
 
 func (suite *WorkerTestSuite) TestMergeAndShuffle() {
@@ -821,9 +821,9 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 	suite.NoError(err)
 	suite.ClickModel = new(mockFactorizationMachine)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, 2)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, recommends)
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, cache.ConertDocumentsToScoredValues(recommends))
 
 	// 2. Insert historical items into non-empty recommendation.
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
@@ -839,9 +839,9 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 	}, true, false, true)
 	suite.NoError(err)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, 2)
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, recommends)
+	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, cache.ConertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
@@ -867,9 +867,9 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	suite.NoError(err)
 	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 10)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, 2)
+	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, recommends)
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, cache.ConertDocumentsToScoredValues(recommends))
 
 	// 2. Insert historical items into non-empty recommendation.
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
@@ -885,9 +885,9 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	}, true, false, true)
 	suite.NoError(err)
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err = suite.CacheClient.GetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), 0, 2)
+	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.Key(cache.OfflineRecommend, "0"), []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, recommends)
+	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, cache.ConertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestHealth() {

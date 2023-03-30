@@ -546,6 +546,7 @@ func (w *Worker) Recommend(users []data.User) {
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startRecommendTime := time.Now()
 		user := users[jobId]
 		userId := user.UserId
 		// skip inactive users before max recommend period
@@ -781,17 +782,18 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// explore latest and popular
+		aggregator := cache.NewDocumentAggregator(startRecommendTime)
 		for category, result := range results {
-			results[category], err = w.exploreRecommend(result, excludeSet, category)
+			scores, err := w.exploreRecommend(result, excludeSet, category)
 			if err != nil {
 				log.Logger().Error("failed to explore latest and popular items", zap.Error(err))
 				return errors.Trace(err)
 			}
-
-			if err = w.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, userId, category), results[category]); err != nil {
-				log.Logger().Error("failed to cache recommendation", zap.Error(err))
-				return errors.Trace(err)
-			}
+			aggregator.Add(category, cache.RemoveScores(scores), cache.GetScores(scores))
+		}
+		if err = w.CacheClient.AddDocuments(ctx, cache.Key(cache.OfflineRecommend, userId), aggregator.ToSlice()...); err != nil {
+			log.Logger().Error("failed to cache recommendation", zap.Error(err))
+			return errors.Trace(err)
 		}
 		recommendTime := time.Now()
 		if err = w.CacheClient.Set(

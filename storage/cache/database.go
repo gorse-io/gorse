@@ -279,7 +279,15 @@ type Document struct {
 	Timestamp  time.Time
 }
 
-func ConertDocumentsToScores(documents []Document) []Scored {
+func ConvertDocumemysToValues(documents []Document) []string {
+	values := make([]string, len(documents))
+	for i := range values {
+		values[i] = documents[i].Value
+	}
+	return values
+}
+
+func ConertDocumentsToScoredValues(documents []Document) []Scored {
 	scores := make([]Scored, len(documents))
 	for i := range scores {
 		scores[i].Id = documents[i].Value
@@ -429,6 +437,7 @@ func Open(path, tablePrefix string) (Database, error) {
 		// append parameters
 		if name, err = storage.AppendMySQLParams(name, map[string]string{
 			isolationVarName: "'READ-UNCOMMITTED'",
+			"parseTime":      "true",
 		}); err != nil {
 			return nil, errors.Trace(err)
 		}

@@ -369,16 +369,17 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
 			return nil
 		}
 		updateItemCount.Add(1)
 		startTime := time.Now()
-		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float32])
-		nearItemsFilters[""] = heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
+		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float64])
+		nearItemsFilters[""] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
 		for _, category := range dataset.CategorySet.ToSlice() {
-			nearItemsFilters[category] = heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
+			nearItemsFilters[category] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
 		}
 
 		adjacencyItems := vector.Neighbors(itemIndex)
@@ -386,24 +387,28 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			if j != int32(itemIndex) && !dataset.HiddenItems[j] {
 				score := vector.Distance(itemIndex, int(j))
 				if score > 0 {
-					nearItemsFilters[""].Push(j, score)
+					nearItemsFilters[""].Push(j, float64(score))
 					for _, category := range dataset.ItemCategories[j] {
-						nearItemsFilters[category].Push(j, score)
+						nearItemsFilters[category].Push(j, float64(score))
 					}
 				}
 			}
 		}
 
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		for category, nearItemsFilter := range nearItemsFilters {
 			elem, scores := nearItemsFilter.PopAll()
 			recommends := make([]string, len(elem))
 			for i := range recommends {
 				recommends[i] = dataset.ItemIndex.ToName(elem[i])
 			}
-			if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, itemId, category),
-				cache.CreateScoredItems(recommends, scores)); err != nil {
-				return errors.Trace(err)
-			}
+			aggregator.Add(category, recommends, scores)
+		}
+		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), aggregator.ToSlice()...); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
+			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
 			ctx,
@@ -470,6 +475,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
 			return nil
@@ -488,17 +494,22 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.ToSlice(),
 				m.Config.Recommend.CacheSize, true)
 		}
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		for category := range neighbors {
 			if categoryNeighbors, exist := neighbors[category]; exist && len(categoryNeighbors) > 0 {
-				itemScores := make([]cache.Scored, len(neighbors[category]))
+				resultValues, resultScores := make([]string, len(neighbors[category])), make([]float64, len(neighbors[category]))
 				for i := range scores[category] {
-					itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[category][i])
-					itemScores[i].Score = float64(-scores[category][i])
+					resultValues[i] = dataset.ItemIndex.ToName(neighbors[category][i])
+					resultScores[i] = float64(-scores[category][i])
 				}
-				if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, itemId, category), itemScores); err != nil {
-					return errors.Trace(err)
-				}
+				aggregator.Add(category, resultValues, resultScores)
 			}
+		}
+		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), aggregator.ToSlice()...); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
+			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
 			ctx,
@@ -692,20 +703,21 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		userId := dataset.UserIndex.ToName(int32(userIndex))
 		if !m.checkUserNeighborCacheTimeout(userId) {
 			return nil
 		}
 		updateUserCount.Add(1)
 		startTime := time.Now()
-		nearUsers := heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
+		nearUsers := heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
 
 		adjacencyUsers := vectors.Neighbors(userIndex)
 		for _, j := range adjacencyUsers {
 			if j != int32(userIndex) {
 				score := vectors.Distance(userIndex, int(j))
 				if score > 0 {
-					nearUsers.Push(j, score)
+					nearUsers.Push(j, float64(score))
 				}
 			}
 		}
@@ -715,8 +727,12 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		for i := range recommends {
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.UserNeighbors, userId),
-			cache.CreateScoredItems(recommends, scores)); err != nil {
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
+		aggregator.Add("", recommends, scores)
+		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.UserNeighbors, userId), aggregator.ToSlice()...); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.UserNeighbors, userId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
@@ -785,6 +801,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		userId := dataset.UserIndex.ToName(int32(userIndex))
 		if !m.checkUserNeighborCacheTimeout(userId) {
 			return nil
@@ -794,12 +811,17 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		var neighbors []int32
 		var scores []float32
 		neighbors, scores = index.Search(vectors[userIndex], m.Config.Recommend.CacheSize, true)
-		itemScores := make([]cache.Scored, len(neighbors))
+		resultValues, resultScores := make([]string, len(neighbors)), make([]float64, len(neighbors))
 		for i := range scores {
-			itemScores[i].Id = dataset.UserIndex.ToName(neighbors[i])
-			itemScores[i].Score = float64(-scores[i])
+			resultValues[i] = dataset.UserIndex.ToName(neighbors[i])
+			resultScores[i] = float64(-scores[i])
 		}
-		if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.UserNeighbors, userId), itemScores); err != nil {
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
+		aggregator.Add("", resultValues, resultScores)
+		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.UserNeighbors, userId), aggregator.ToSlice()...); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.UserNeighbors, userId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
