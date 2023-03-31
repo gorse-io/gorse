@@ -74,12 +74,12 @@ func TestNoDatabase(t *testing.T) {
 	_, err = database.Remain(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	err = database.AddDocuments(ctx, "")
+	err = database.AddDocuments(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.SearchDocuments(ctx, "", nil, 0, 0)
+	_, err = database.SearchDocuments(ctx, "", "", nil, 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.UpdateDocuments(ctx, nil, "", nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.DeleteDocuments(ctx, "", DocumentCondition{})
+	err = database.DeleteDocuments(ctx, nil, DocumentCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

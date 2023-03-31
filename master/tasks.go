@@ -40,6 +40,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 	"modernc.org/sortutil"
 )
 
@@ -86,10 +87,10 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save popular items to cache
-	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, popularItems.ToSlice()...); err != nil {
+	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, "", popularItems.ToSlice()...); err != nil {
 		log.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
-	if err = m.CacheClient.DeleteDocuments(ctx, cache.PopularItems, cache.DocumentCondition{Before: &popularItems.Timestamp}); err != nil {
+	if err = m.CacheClient.DeleteDocuments(ctx, []string{cache.PopularItems}, cache.DocumentCondition{Before: &popularItems.Timestamp}); err != nil {
 		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), time.Now())); err != nil {
@@ -97,10 +98,10 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save the latest items to cache
-	if err = m.CacheClient.AddDocuments(ctx, cache.LatestItems, latestItems.ToSlice()...); err != nil {
+	if err = m.CacheClient.AddDocuments(ctx, cache.LatestItems, "", latestItems.ToSlice()...); err != nil {
 		log.Logger().Error("failed to cache latest items", zap.Error(err))
 	}
-	if err = m.CacheClient.DeleteDocuments(ctx, cache.LatestItems, cache.DocumentCondition{Before: &latestItems.Timestamp}); err != nil {
+	if err = m.CacheClient.DeleteDocuments(ctx, []string{cache.LatestItems}, cache.DocumentCondition{Before: &latestItems.Timestamp}); err != nil {
 		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime), time.Now())); err != nil {
@@ -404,10 +405,13 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 			aggregator.Add(category, recommends, scores)
 		}
-		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()...); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(itemId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
@@ -505,10 +509,13 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 				aggregator.Add(category, resultValues, resultScores)
 			}
 		}
-		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()...); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.ItemNeighbors, itemId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(itemId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
@@ -729,10 +736,13 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		}
 		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		aggregator.Add("", recommends, scores)
-		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.UserNeighbors, userId), aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()...); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.UserNeighbors, userId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(userId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
@@ -818,10 +828,13 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		}
 		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		aggregator.Add("", resultValues, resultScores)
-		if err := m.CacheClient.AddDocuments(ctx, cache.Key(cache.UserNeighbors, userId), aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()...); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.DeleteDocuments(ctx, cache.Key(cache.UserNeighbors, userId), cache.DocumentCondition{Before: &aggregator.Timestamp}); err != nil {
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(userId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(

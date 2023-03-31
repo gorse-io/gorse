@@ -107,7 +107,8 @@ type Message struct {
 }
 
 type PostgresDocument struct {
-	Name       string         `gorm:"primaryKey"`
+	Collection string         `gorm:"primaryKey"`
+	Subset     string         `gorm:"primaryKey"`
 	Value      string         `gorm:"primaryKey"`
 	Categories pq.StringArray `gorm:"type:text[]"`
 	Score      float64
@@ -115,7 +116,8 @@ type PostgresDocument struct {
 }
 
 type SQLDocument struct {
-	Name       string   `gorm:"primaryKey"`
+	Collection string   `gorm:"primaryKey"`
+	Subset     string   `gorm:"primaryKey"`
 	Value      string   `gorm:"primaryKey"`
 	Categories []string `gorm:"type:text;serializer:json"`
 	Score      float64
@@ -218,7 +220,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}}
+	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}, SQLDocument{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
@@ -491,13 +493,14 @@ func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, er
 	return
 }
 
-func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
 	var rows any
 	switch db.driver {
 	case Postgres:
 		rows = lo.Map(documents, func(document Document, _ int) PostgresDocument {
 			return PostgresDocument{
-				Name:       name,
+				Collection: collection,
+				Subset:     subset,
 				Value:      document.Value,
 				Score:      document.Score,
 				Categories: document.Categories,
@@ -507,7 +510,8 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents 
 	case SQLite, MySQL:
 		rows = lo.Map(documents, func(document Document, _ int) SQLDocument {
 			return SQLDocument{
-				Name:       name,
+				Collection: collection,
+				Subset:     subset,
 				Value:      document.Value,
 				Score:      document.Score,
 				Categories: document.Categories,
@@ -516,26 +520,26 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents 
 		})
 	}
 	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
+		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "value"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
 	}).Create(rows)
 	return nil
 }
 
-func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
 	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("value, score, categories, timestamp")
 	switch db.driver {
 	case Postgres:
-		tx = tx.Where("name = ? and categories @> ?", name, pq.StringArray(query))
+		tx = tx.Where("collection = ? and subset = ? and categories @> ?", collection, subset, pq.StringArray(query))
 	case SQLite, MySQL:
 		q, err := json.Marshal(query)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		tx = tx.Where("name = ? and JSON_CONTAINS(categories,?)", name, string(q))
+		tx = tx.Where("collection = ? and subset = ? and JSON_CONTAINS(categories,?)", collection, subset, string(q))
 	}
 	tx = tx.Order("score desc").Offset(begin)
 	if end != -1 {
@@ -572,11 +576,11 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 	return documents, nil
 }
 
-func (db *SQLDatabase) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
-	if len(names) == 0 {
+func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
+	if len(collections) == 0 {
 		return nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("name in (?) and value = ?", names, value)
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("collection in (?) and value = ?", collections, value)
 	switch db.driver {
 	case Postgres:
 		tx = tx.Update("categories", pq.StringArray(categories))
@@ -590,14 +594,18 @@ func (db *SQLDatabase) UpdateDocuments(ctx context.Context, names []string, valu
 	return tx.Error
 }
 
-func (db *SQLDatabase) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
+func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	builder.WriteString("name = ?")
+	builder.WriteString("collection in (?)")
 	var args []any
-	args = append(args, name)
+	args = append(args, collections)
+	if condition.Subset != nil {
+		builder.WriteString(" and subset = ?")
+		args = append(args, *condition.Subset)
+	}
 	if condition.Value != nil {
 		builder.WriteString(" and value = ?")
 		args = append(args, *condition.Value)

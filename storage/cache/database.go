@@ -296,6 +296,16 @@ func ConertDocumentsToScoredValues(documents []Document) []Scored {
 	return scores
 }
 
+func ConvertScoredValuesToDocuments(values []Scored) []Document {
+	documents := make([]Document, len(values))
+	for i := range documents {
+		documents[i].Value = values[i].Id
+		documents[i].Score = values[i].Score
+		documents[i].Timestamp = time.Now()
+	}
+	return documents
+}
+
 type DocumentAggregator struct {
 	Documents map[string]*Document
 	Timestamp time.Time
@@ -335,12 +345,13 @@ func (aggregator *DocumentAggregator) ToSlice() []Document {
 }
 
 type DocumentCondition struct {
+	Subset *string
 	Value  *string
 	Before *time.Time
 }
 
 func (condition *DocumentCondition) Check() error {
-	if condition.Value == nil && condition.Before == nil {
+	if condition.Value == nil && condition.Before == nil && condition.Subset == nil {
 		return errors.NotValidf("document condition")
 	}
 	return nil
@@ -374,10 +385,10 @@ type Database interface {
 	Pop(ctx context.Context, name string) (string, error)
 	Remain(ctx context.Context, name string) (int64, error)
 
-	AddDocuments(ctx context.Context, name string, documents ...Document) error
-	SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error)
-	DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error
-	UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error
+	AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error
+	SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error)
+	DeleteDocuments(ctx context.Context, collection []string, condition DocumentCondition) error
+	UpdateDocuments(ctx context.Context, collection []string, value string, categories []string) error
 }
 
 // Open a connection to a database.

@@ -57,7 +57,8 @@ func (r *Redis) Init() error {
 	if !lo.Contains(indices, r.DocumentTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
 			"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
-			"name", "TAG",
+			"collection", "TAG",
+			"subset", "TAG",
 			"value", "TAG",
 			"score", "NUMERIC", "SORTABLE",
 			"categories", "TAG", "SEPARATOR", ";",
@@ -298,11 +299,16 @@ func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
 	return r.client.ZCard(ctx, r.Key(name)).Result()
 }
 
-func (r *Redis) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+func (r *Redis) documentKey(collection, subset, value string) string {
+	return r.DocumentTable() + ":" + collection + ":" + subset + ":" + value
+}
+
+func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
 	p := r.client.Pipeline()
 	for _, document := range documents {
-		p.Do(ctx, "HSET", r.DocumentTable()+":"+name+":"+document.Value,
-			"name", name,
+		p.Do(ctx, "HSET", r.documentKey(collection, subset, document.Value),
+			"collection", collection,
+			"subset", subset,
 			"value", document.Value,
 			"score", document.Score,
 			"categories", strings.Join(document.Categories, ";"),
@@ -312,12 +318,15 @@ func (r *Redis) AddDocuments(ctx context.Context, name string, documents ...Docu
 	return errors.Trace(err)
 }
 
-func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@name:{ %s }", name))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", collection))
+	if subset != "" {
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", subset))
+	}
 	for _, q := range query {
 		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", q))
 	}
@@ -338,27 +347,49 @@ func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string
 	return documents, nil
 }
 
-func (r *Redis) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
-	if len(names) == 0 {
+func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
+	if len(collections) == 0 {
 		return nil
 	}
-	p := r.client.Pipeline()
-	for _, name := range names {
-		p.Do(ctx, "HSET", r.DocumentTable()+":"+name+":"+value,
-			"name", name,
-			"value", value,
-			"categories", strings.Join(categories, ";"))
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", strings.Join(collections, " | ")))
+	builder.WriteString(fmt.Sprintf(" @value:{ %s }", value))
+	for {
+		// search documents
+		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		count, keys, _, err := parseSearchResult(result)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// update documents
+		p := r.client.Pipeline()
+		for _, key := range keys {
+			p.Do(ctx, "HSET", key, "categories", strings.Join(categories, ";"))
+		}
+		_, err = p.Exec(ctx)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// break if no more documents
+		if count <= int64(len(keys)) {
+			break
+		}
 	}
-	_, err := p.Exec(ctx)
-	return errors.Trace(err)
+	return nil
 }
 
-func (r *Redis) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
+func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@name:{ %s }", name))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", strings.Join(collections, " | ")))
+	if condition.Subset != nil {
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", *condition.Subset))
+	}
 	if condition.Value != nil {
 		builder.WriteString(fmt.Sprintf(" @value:{ %s }", *condition.Value))
 	}

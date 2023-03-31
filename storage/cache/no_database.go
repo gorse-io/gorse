@@ -117,18 +117,18 @@ func (NoDatabase) Remain(_ context.Context, _ string) (int64, error) {
 	return 0, ErrNoDatabase
 }
 
-func (NoDatabase) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+func (NoDatabase) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+func (NoDatabase) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
 	return nil, ErrNoDatabase
 }
 
-func (NoDatabase) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
+func (NoDatabase) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
+func (NoDatabase) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
 	return ErrNoDatabase
 }

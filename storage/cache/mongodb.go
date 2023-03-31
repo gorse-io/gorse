@@ -211,7 +211,7 @@ func (m MongoDB) Scan(work func(string) error) error {
 }
 
 func (m MongoDB) Purge() error {
-	tables := []string{m.ValuesTable(), m.SortedSetsTable(), m.SetsTable()}
+	tables := []string{m.ValuesTable(), m.SortedSetsTable(), m.SetsTable(), m.DocumentTable()}
 	for _, tableName := range tables {
 		c := m.client.Database(m.dbName).Collection(tableName)
 		_, err := c.DeleteMany(context.Background(), bson.D{})
@@ -458,14 +458,15 @@ func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
 	})
 }
 
-func (m MongoDB) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
 	var models []mongo.WriteModel
 	for _, document := range documents {
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
 			SetFilter(bson.M{
-				"name":  name,
-				"value": document.Value,
+				"collection": collection,
+				"subset":     subset,
+				"value":      document.Value,
 			}).
 			SetUpdate(bson.M{"$set": bson.M{
 				"score":      document.Score,
@@ -477,7 +478,7 @@ func (m MongoDB) AddDocuments(ctx context.Context, name string, documents ...Doc
 	return errors.Trace(err)
 }
 
-func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+func (m MongoDB) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
@@ -486,7 +487,8 @@ func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []strin
 		opt.SetLimit(int64(end - begin))
 	}
 	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{
-		"name":       name,
+		"collection": collection,
+		"subset":     subset,
 		"categories": bson.M{"$all": query},
 	}, opt)
 	if err != nil {
@@ -503,24 +505,27 @@ func (m MongoDB) SearchDocuments(ctx context.Context, name string, query []strin
 	return documents, nil
 }
 
-func (m MongoDB) UpdateDocuments(ctx context.Context, names []string, value string, categories []string) error {
-	if len(names) == 0 {
+func (m MongoDB) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
+	if len(collections) == 0 {
 		return nil
 	}
 	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, bson.M{
-		"name":  bson.M{"$in": names},
-		"value": value,
+		"collection": bson.M{"$in": collections},
+		"value":      value,
 	}, bson.M{"$set": bson.M{
 		"categories": categories,
 	}})
 	return errors.Trace(err)
 }
 
-func (m MongoDB) DeleteDocuments(ctx context.Context, name string, condition DocumentCondition) error {
+func (m MongoDB) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}
-	filter := bson.M{"name": name}
+	filter := bson.M{"collection": bson.M{"$in": collections}}
+	if condition.Subset != nil {
+		filter["subset"] = condition.Subset
+	}
 	if condition.Value != nil {
 		filter["value"] = condition.Value
 	}
