@@ -73,6 +73,7 @@ jobs:
         uses: battila7/get-version-action@v2
 
       - name: Build docker image
+        if: ${{ github.event.release.prerelease }} == false
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -82,6 +83,17 @@ jobs:
           tags: |
             zhenghaoz/${{ matrix.image }}:latest
             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
+            zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
+
+      - name: Build prerelease docker image
+        if: ${{ github.event.release.prerelease }} == true
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          file: cmd/${{ matrix.image }}/Dockerfile
+          push: true
+          tags: |
             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
 
   build-windows-images:
@@ -98,11 +110,24 @@ jobs:
         uses: battila7/get-version-action@v2
 
       - name: Build docker image
+        if: ${{ github.event.release.prerelease }} == false
         run: |
           docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
             -t zhenghaoz/${{ matrix.image }}:windowsservercore `
             -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}-windowsservercore `
+            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
+          docker image push --all-tags zhenghaoz/${{ matrix.image }}
+          docker logout
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build prerelease docker image
+        if: ${{ github.event.release.prerelease }} == true
+        run: |
+          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
+          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
             -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
           docker image push --all-tags zhenghaoz/${{ matrix.image }}
           docker logout
