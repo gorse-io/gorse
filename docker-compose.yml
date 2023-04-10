@@ -1,7 +1,7 @@
 version: "3"
 services:
   redis:
-    image: redis
+    image: redis/redis-stack
     restart: unless-stopped
     ports:
       - 6379:6379
