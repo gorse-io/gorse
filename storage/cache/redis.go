@@ -372,15 +372,17 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value
 		// update documents
 		p := r.client.Pipeline()
 		for _, key := range keys {
+			values := make([]any, 0)
 			if patch.Score != nil {
-				p.Do(ctx, "HSET", key, "score", *patch.Score)
+				values = append(values, "score", *patch.Score)
 			}
 			if patch.IsHidden != nil {
-				p.Do(ctx, "HSET", key, "is_hidden", *patch.IsHidden)
+				values = append(values, "is_hidden", *patch.IsHidden)
 			}
 			if patch.Categories != nil {
-				p.Do(ctx, "HSET", key, "categories", strings.Join(patch.Categories, ";"))
+				values = append(values, "categories", strings.Join(patch.Categories, ";"))
 			}
+			p.HSet(ctx, key, values...)
 		}
 		_, err = p.Exec(ctx)
 		if err != nil {
