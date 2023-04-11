@@ -52,6 +52,9 @@ func init() {
 			err = json.Unmarshal(data, &j)
 			return
 		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
 		j1, err := parse(args[0])
 		if err != nil {
 			return nil, err
@@ -59,9 +62,6 @@ func init() {
 		j2, err := parse(args[1])
 		if err != nil {
 			return nil, err
-		}
-		if j2 == nil {
-			return false, nil
 		}
 		elements := make(map[any]struct{}, len(j1))
 		for _, e := range j1 {
