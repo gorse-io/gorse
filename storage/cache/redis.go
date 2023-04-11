@@ -61,6 +61,7 @@ func (r *Redis) Init() error {
 			"subset", "TAG",
 			"value", "TAG",
 			"score", "NUMERIC", "SORTABLE",
+			"is_hidden", "NUMERIC",
 			"categories", "TAG", "SEPARATOR", ";",
 			"timestamp", "NUMERIC", "SORTABLE").
 			Result()
@@ -311,6 +312,7 @@ func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, doc
 			"subset", subset,
 			"value", document.Value,
 			"score", document.Score,
+			"is_hidden", document.IsHidden,
 			"categories", strings.Join(document.Categories, ";"),
 			"timestamp", document.Timestamp.UnixMicro())
 	}
@@ -323,7 +325,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 		return nil, nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", collection))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", collection))
 	if subset != "" {
 		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", subset))
 	}
@@ -347,8 +349,11 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	return documents, nil
 }
 
-func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
+func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value string, patch DocumentPatch) error {
 	if len(collections) == 0 {
+		return nil
+	}
+	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
 	var builder strings.Builder
@@ -367,7 +372,15 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value
 		// update documents
 		p := r.client.Pipeline()
 		for _, key := range keys {
-			p.Do(ctx, "HSET", key, "categories", strings.Join(categories, ";"))
+			if patch.Score != nil {
+				p.Do(ctx, "HSET", key, "score", *patch.Score)
+			}
+			if patch.IsHidden != nil {
+				p.Do(ctx, "HSET", key, "is_hidden", *patch.IsHidden)
+			}
+			if patch.Categories != nil {
+				p.Do(ctx, "HSET", key, "categories", strings.Join(patch.Categories, ";"))
+			}
 		}
 		_, err = p.Exec(ctx)
 		if err != nil {

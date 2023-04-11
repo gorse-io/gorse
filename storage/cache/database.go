@@ -277,6 +277,7 @@ func Member(name, member string) SetMember {
 type Document struct {
 	Value      string
 	Score      float64
+	IsHidden   bool
 	Categories []string `gorm:"type:text;serializer:json"`
 	Timestamp  time.Time
 }
@@ -359,6 +360,12 @@ func (condition *DocumentCondition) Check() error {
 	return nil
 }
 
+type DocumentPatch struct {
+	IsHidden   *bool
+	Categories []string
+	Score      *float64
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
@@ -390,7 +397,7 @@ type Database interface {
 	AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error
 	SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error)
 	DeleteDocuments(ctx context.Context, collection []string, condition DocumentCondition) error
-	UpdateDocuments(ctx context.Context, collection []string, value string, categories []string) error
+	UpdateDocuments(ctx context.Context, collection []string, value string, patch DocumentPatch) error
 }
 
 // Open a connection to a database.

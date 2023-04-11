@@ -14,7 +14,9 @@
 
 package cache
 
-import "context"
+import (
+	"context"
+)
 
 // NoDatabase means no database used for cache.
 type NoDatabase struct{}
@@ -117,18 +119,18 @@ func (NoDatabase) Remain(_ context.Context, _ string) (int64, error) {
 	return 0, ErrNoDatabase
 }
 
-func (NoDatabase) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
+func (NoDatabase) AddDocuments(_ context.Context, _, _ string, _ ...Document) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+func (NoDatabase) SearchDocuments(_ context.Context, _, _ string, _ []string, _, _ int) ([]Document, error) {
 	return nil, ErrNoDatabase
 }
 
-func (NoDatabase) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
+func (NoDatabase) UpdateDocuments(_ context.Context, _ []string, _ string, _ DocumentPatch) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+func (NoDatabase) DeleteDocuments(_ context.Context, _ []string, _ DocumentCondition) error {
 	return ErrNoDatabase
 }

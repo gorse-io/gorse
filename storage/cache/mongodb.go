@@ -470,6 +470,7 @@ func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, do
 			}).
 			SetUpdate(bson.M{"$set": bson.M{
 				"score":      document.Score,
+				"is_hidden":  document.IsHidden,
 				"categories": document.Categories,
 				"timestamp":  document.Timestamp,
 			}}))
@@ -489,6 +490,7 @@ func (m MongoDB) SearchDocuments(ctx context.Context, collection, subset string,
 	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{
 		"collection": collection,
 		"subset":     subset,
+		"is_hidden":  false,
 		"categories": bson.M{"$all": query},
 	}, opt)
 	if err != nil {
@@ -505,16 +507,27 @@ func (m MongoDB) SearchDocuments(ctx context.Context, collection, subset string,
 	return documents, nil
 }
 
-func (m MongoDB) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
+func (m MongoDB) UpdateDocuments(ctx context.Context, collections []string, value string, patch DocumentPatch) error {
 	if len(collections) == 0 {
 		return nil
+	}
+	if patch.IsHidden == nil && patch.Categories == nil && patch.Score == nil {
+		return nil
+	}
+	update := bson.D{}
+	if patch.IsHidden != nil {
+		update = append(update, bson.E{Key: "$set", Value: bson.M{"is_hidden": *patch.IsHidden}})
+	}
+	if patch.Categories != nil {
+		update = append(update, bson.E{Key: "$set", Value: bson.M{"categories": patch.Categories}})
+	}
+	if patch.Score != nil {
+		update = append(update, bson.E{Key: "$set", Value: bson.M{"score": *patch.Score}})
 	}
 	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, bson.M{
 		"collection": bson.M{"$in": collections},
 		"value":      value,
-	}, bson.M{"$set": bson.M{
-		"categories": categories,
-	}})
+	}, update)
 	return errors.Trace(err)
 }
 

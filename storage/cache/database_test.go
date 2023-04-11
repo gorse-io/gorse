@@ -330,6 +330,14 @@ func (suite *baseTestSuite) TestDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
 	err := suite.AddDocuments(ctx, "a", "", Document{
+		Value:      "0",
+		Score:      math.MaxFloat64,
+		IsHidden:   true,
+		Categories: []string{"a", "b"},
+		Timestamp:  ts,
+	})
+	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "a", "", Document{
 		Value:      "1",
 		Score:      100,
 		Categories: []string{"a", "b"},
@@ -414,17 +422,25 @@ func (suite *baseTestSuite) TestDocument() {
 	suite.Equal("2", documents[0].Value)
 
 	// update categories
-	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", []string{"c", "s"})
+	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", DocumentPatch{Categories: []string{"c", "s"}})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"s"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
 	suite.Equal("2", documents[0].Value)
-	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", []string{"c"})
+	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", DocumentPatch{Categories: []string{"c"}})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"s"}, 0, 1)
 	suite.NoError(err)
 	suite.Empty(documents)
+
+	// update is hidden
+	err = suite.UpdateDocuments(ctx, []string{"a"}, "0", DocumentPatch{IsHidden: proto.Bool(false)})
+	suite.NoError(err)
+	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"b"}, 0, 1)
+	suite.NoError(err)
+	suite.Len(documents, 1)
+	suite.Equal("0", documents[0].Value)
 }
 
 func (suite *baseTestSuite) TestSubsetDocument() {
@@ -483,7 +499,7 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 	}, documents)
 
 	// update categories
-	err = suite.UpdateDocuments(ctx, []string{"a", "b"}, "2", []string{"b", "s"})
+	err = suite.UpdateDocuments(ctx, []string{"a", "b"}, "2", DocumentPatch{Categories: []string{"b", "s"}})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "a", []string{"s"}, 0, 1)
 	suite.NoError(err)

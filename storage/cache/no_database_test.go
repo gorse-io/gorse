@@ -78,7 +78,7 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.SearchDocuments(ctx, "", "", nil, 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.UpdateDocuments(ctx, nil, "", nil)
+	err = database.UpdateDocuments(ctx, nil, "", DocumentPatch{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.DeleteDocuments(ctx, nil, DocumentCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)

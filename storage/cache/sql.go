@@ -107,18 +107,20 @@ type Message struct {
 }
 
 type PostgresDocument struct {
-	Collection string         `gorm:"primaryKey"`
-	Subset     string         `gorm:"primaryKey"`
-	Value      string         `gorm:"primaryKey"`
+	Collection string `gorm:"primaryKey"`
+	Subset     string `gorm:"primaryKey"`
+	Value      string `gorm:"primaryKey"`
+	IsHidden   bool
 	Categories pq.StringArray `gorm:"type:text[]"`
 	Score      float64
 	Timestamp  time.Time
 }
 
 type SQLDocument struct {
-	Collection string   `gorm:"primaryKey"`
-	Subset     string   `gorm:"primaryKey"`
-	Value      string   `gorm:"primaryKey"`
+	Collection string `gorm:"primaryKey"`
+	Subset     string `gorm:"primaryKey"`
+	Value      string `gorm:"primaryKey"`
+	IsHidden   bool
 	Categories []string `gorm:"type:text;serializer:json"`
 	Score      float64
 	Timestamp  time.Time
@@ -503,6 +505,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset stri
 				Subset:     subset,
 				Value:      document.Value,
 				Score:      document.Score,
+				IsHidden:   document.IsHidden,
 				Categories: document.Categories,
 				Timestamp:  document.Timestamp,
 			}
@@ -514,6 +517,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset stri
 				Subset:     subset,
 				Value:      document.Value,
 				Score:      document.Score,
+				IsHidden:   document.IsHidden,
 				Categories: document.Categories,
 				Timestamp:  document.Timestamp,
 			}
@@ -533,13 +537,13 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("value, score, categories, timestamp")
 	switch db.driver {
 	case Postgres:
-		tx = tx.Where("collection = ? and subset = ? and categories @> ?", collection, subset, pq.StringArray(query))
+		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and categories @> ?", collection, subset, pq.StringArray(query))
 	case SQLite, MySQL:
 		q, err := json.Marshal(query)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		tx = tx.Where("collection = ? and subset = ? and JSON_CONTAINS(categories,?)", collection, subset, string(q))
+		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and JSON_CONTAINS(categories,?)", collection, subset, string(q))
 	}
 	tx = tx.Order("score desc").Offset(begin)
 	if end != -1 {
@@ -576,20 +580,31 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	return documents, nil
 }
 
-func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, value string, categories []string) error {
+func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, value string, patch DocumentPatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
+	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
+		return nil
+	}
 	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("collection in (?) and value = ?", collections, value)
-	switch db.driver {
-	case Postgres:
-		tx = tx.Update("categories", pq.StringArray(categories))
-	case SQLite, MySQL:
-		q, err := json.Marshal(categories)
-		if err != nil {
-			return errors.Trace(err)
+	if patch.Score != nil {
+		tx = tx.Update("score", *patch.Score)
+	}
+	if patch.IsHidden != nil {
+		tx = tx.Update("is_hidden", *patch.IsHidden)
+	}
+	if patch.Categories != nil {
+		switch db.driver {
+		case Postgres:
+			tx = tx.Update("categories", pq.StringArray(patch.Categories))
+		case SQLite, MySQL:
+			q, err := json.Marshal(patch.Categories)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			tx = tx.Update("categories", string(q))
 		}
-		tx = tx.Update("categories", string(q))
 	}
 	return tx.Error
 }
