@@ -96,13 +96,13 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindItemNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{"*"}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "1"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "1"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (common labels)
 	err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -112,13 +112,13 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindItemNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{"*"}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "6"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "6"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (auto)
 	err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -130,10 +130,10 @@ func TestMaster_FindItemNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindItemNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
@@ -209,13 +209,13 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindItemNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{"*"}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "1"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "1"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (common labels)
 	err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -225,13 +225,13 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindItemNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{"*"}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "6"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "6"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (auto)
 	err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -243,10 +243,10 @@ func TestMaster_FindItemNeighborsIVF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindItemNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
@@ -285,7 +285,7 @@ func TestMaster_FindItemNeighborsIVF_ZeroIDF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "0", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"1"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"1"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (common labels)
 	m.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
@@ -293,7 +293,7 @@ func TestMaster_FindItemNeighborsIVF_ZeroIDF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "0", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"1"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"1"}, cache.ConvertDocumentsToValues(similar))
 }
 
 func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
@@ -348,7 +348,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindUserNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -360,7 +360,7 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindUserNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -374,10 +374,10 @@ func TestMaster_FindUserNeighborsBruteForce(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindUserNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
@@ -437,7 +437,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindUserNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -449,7 +449,7 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindUserNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
@@ -463,10 +463,10 @@ func TestMaster_FindUserNeighborsIVF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	assert.Equal(t, m.estimateFindUserNeighborsComplexity(dataset), m.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
 	assert.Equal(t, task.StatusComplete, m.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
@@ -505,7 +505,7 @@ func TestMaster_FindUserNeighborsIVF_ZeroIDF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err := m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "0", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"1"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"1"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar users (common labels)
 	m.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
@@ -513,7 +513,7 @@ func TestMaster_FindUserNeighborsIVF_ZeroIDF(t *testing.T) {
 	assert.NoError(t, neighborTask.run(nil))
 	similar, err = m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "0", []string{""}, 0, 100)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"1"}, cache.ConvertDocumemysToValues(similar))
+	assert.Equal(t, []string{"1"}, cache.ConvertDocumentsToValues(similar))
 }
 
 func TestMaster_LoadDataFromDatabase(t *testing.T) {
@@ -619,14 +619,14 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
 		{Id: items[7].ItemId, Score: float64(items[7].Timestamp.Unix())},
 		{Id: items[6].ItemId, Score: float64(items[6].Timestamp.Unix())},
-	}, cache.ConertDocumentsToScoredValues(latest))
+	}, cache.ConvertDocumentsToScoredValues(latest))
 	latest, err = m.CacheClient.SearchDocuments(ctx, cache.LatestItems, "", []string{"2"}, 0, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
 		{Id: items[5].ItemId, Score: float64(items[5].Timestamp.Unix())},
 		{Id: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
-	}, cache.ConertDocumentsToScoredValues(latest))
+	}, cache.ConvertDocumentsToScoredValues(latest))
 
 	// check popular items
 	popular, err := m.CacheClient.SearchDocuments(ctx, cache.PopularItems, "", []string{""}, 0, 3)
@@ -635,14 +635,14 @@ func TestMaster_LoadDataFromDatabase(t *testing.T) {
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[7].ItemId, Score: 8},
 		{Id: items[6].ItemId, Score: 7},
-	}, cache.ConertDocumentsToScoredValues(popular))
+	}, cache.ConvertDocumentsToScoredValues(popular))
 	popular, err = m.CacheClient.SearchDocuments(ctx, cache.PopularItems, "", []string{"2"}, 0, 3)
 	assert.NoError(t, err)
 	assert.Equal(t, []cache.Scored{
 		{Id: items[8].ItemId, Score: 9},
 		{Id: items[5].ItemId, Score: 6},
 		{Id: items[2].ItemId, Score: 3},
-	}, cache.ConertDocumentsToScoredValues(popular))
+	}, cache.ConvertDocumentsToScoredValues(popular))
 
 	// check categories
 	categories, err := m.CacheClient.GetSet(ctx, cache.ItemCategories)

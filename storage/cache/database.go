@@ -127,6 +127,8 @@ const (
 	MatchingIndexRecall        = "matching_index_recall"
 )
 
+var ItemCache = []string{PopularItems, LatestItems, ItemNeighbors}
+
 var (
 	ErrObjectNotExist = errors.NotFoundf("object")
 	ErrNoDatabase     = errors.NotAssignedf("database")
@@ -279,7 +281,7 @@ type Document struct {
 	Timestamp  time.Time
 }
 
-func ConvertDocumemysToValues(documents []Document) []string {
+func ConvertDocumentsToValues(documents []Document) []string {
 	values := make([]string, len(documents))
 	for i := range values {
 		values[i] = documents[i].Value
@@ -287,7 +289,7 @@ func ConvertDocumemysToValues(documents []Document) []string {
 	return values
 }
 
-func ConertDocumentsToScoredValues(documents []Document) []Scored {
+func ConvertDocumentsToScoredValues(documents []Document) []Scored {
 	scores := make([]Scored, len(documents))
 	for i := range scores {
 		scores[i].Id = documents[i].Value

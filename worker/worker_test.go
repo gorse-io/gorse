@@ -237,13 +237,13 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationBruteForce() {
 		{"2", 2},
 		{"1", 1},
 		{"0", 0},
-	}, cache.ConertDocumentsToScoredValues(recommends))
+	}, cache.ConvertDocumentsToScoredValues(recommends))
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Scored{
 		{"3", 3},
 		{"1", 1},
-	}, cache.ConertDocumentsToScoredValues(recommends))
+	}, cache.ConvertDocumentsToScoredValues(recommends))
 
 	readCache, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
@@ -294,7 +294,7 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationHNSW() {
 		{"2", 2},
 		{"1", 1},
 		{"0", 0},
-	}, cache.ConertDocumentsToScoredValues(recommends))
+	}, cache.ConvertDocumentsToScoredValues(recommends))
 
 	readCache, err := suite.CacheClient.GetSorted(ctx, cache.Key(cache.IgnoreItems, "0"), 0, -1)
 	read := cache.RemoveScores(readCache)
@@ -364,10 +364,10 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"29", 29}, {"28", 28}, {"27", 27}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"29", 29}, {"28", 28}, {"27", 27}}, cache.ConvertDocumentsToScoredValues(recommends))
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"28", 28}, {"26", 26}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"28", 28}, {"26", 26}}, cache.ConvertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendUserBased() {
@@ -412,10 +412,10 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"48", 48}, {"13", 13}, {"12", 12}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"48", 48}, {"13", 13}, {"12", 12}}, cache.ConvertDocumentsToScoredValues(recommends))
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"48", 48}, {"12", 12}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"48", 48}, {"12", 12}}, cache.ConvertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendPopular() {
@@ -443,10 +443,10 @@ func (suite *WorkerTestSuite) TestRecommendPopular() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, cache.ConvertDocumentsToScoredValues(recommends))
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, cache.ConvertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendLatest() {
@@ -475,10 +475,10 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}, {"8", 8}}, cache.ConvertDocumentsToScoredValues(recommends))
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"20", 20}, {"19", 19}, {"18", 18}}, cache.ConvertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestRecommendColdStart() {
@@ -508,20 +508,20 @@ func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
+	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(cache.ConvertDocumentsToScoredValues(recommends)))
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
+	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(cache.ConvertDocumentsToScoredValues(recommends)))
 
 	// user not predictable
 	suite.RankingModel = m
 	suite.Recommend([]data.User{{UserId: "100"}})
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "100", []string{""}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
+	suite.Equal([]string{"10", "9", "8"}, cache.RemoveScores(cache.ConvertDocumentsToScoredValues(recommends)))
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "100", []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(cache.ConertDocumentsToScoredValues(recommends)))
+	suite.Equal([]string{"20", "19", "18"}, cache.RemoveScores(cache.ConvertDocumentsToScoredValues(recommends)))
 }
 
 func (suite *WorkerTestSuite) TestMergeAndShuffle() {
@@ -804,7 +804,7 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, cache.ConvertDocumentsToScoredValues(recommends))
 
 	// 2. Insert historical items into non-empty recommendation.
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
@@ -826,7 +826,7 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, cache.ConvertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
@@ -854,7 +854,7 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"10", 10}, {"9", 9}}, cache.ConvertDocumentsToScoredValues(recommends))
 
 	// 2. Insert historical items into non-empty recommendation.
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
@@ -875,7 +875,7 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
 	suite.NoError(err)
-	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, cache.ConertDocumentsToScoredValues(recommends))
+	suite.Equal([]cache.Scored{{"10", 9}, {"9", 7.4}, {"7", 7}}, cache.ConvertDocumentsToScoredValues(recommends))
 }
 
 func (suite *WorkerTestSuite) TestHealth() {
