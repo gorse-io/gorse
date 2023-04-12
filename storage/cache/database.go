@@ -383,13 +383,6 @@ type Database interface {
 	AddSet(ctx context.Context, key string, members ...string) error
 	RemSet(ctx context.Context, key string, members ...string) error
 
-	AddSorted(ctx context.Context, sortedSets ...SortedSet) error
-	GetSorted(ctx context.Context, key string, begin, end int) ([]Scored, error)
-	GetSortedByScore(ctx context.Context, key string, begin, end float64) ([]Scored, error)
-	RemSortedByScore(ctx context.Context, key string, begin, end float64) error
-	SetSorted(ctx context.Context, key string, scores []Scored) error
-	RemSorted(ctx context.Context, members ...SetMember) error
-
 	Push(ctx context.Context, name, value string) error
 	Pop(ctx context.Context, name string) (string, error)
 	Remain(ctx context.Context, name string) (int64, error)

@@ -137,107 +137,11 @@ func (suite *baseTestSuite) TestSet() {
 	suite.NoError(err)
 }
 
-func (suite *baseTestSuite) TestSort() {
-	ctx := context.Background()
-	// Put scores
-	scores := []Scored{
-		{"0", 0},
-		{"1", 1.1},
-		{"2", 1.2},
-		{"3", 1.3},
-		{"4", 1.4},
-	}
-	err := suite.Database.SetSorted(ctx, "sort", scores[:3])
-	suite.NoError(err)
-	err = suite.Database.AddSorted(ctx, SortedSet{"sort", scores[3:]})
-	suite.NoError(err)
-	// Get scores
-	totalItems, err := suite.Database.GetSorted(ctx, "sort", 0, -1)
-	suite.NoError(err)
-	suite.Equal([]Scored{
-		{"4", 1.4},
-		{"3", 1.3},
-		{"2", 1.2},
-		{"1", 1.1},
-		{"0", 0},
-	}, totalItems)
-	halfItems, err := suite.Database.GetSorted(ctx, "sort", 0, 2)
-	suite.NoError(err)
-	suite.Equal([]Scored{
-		{"4", 1.4},
-		{"3", 1.3},
-		{"2", 1.2},
-	}, halfItems)
-	halfItems, err = suite.Database.GetSorted(ctx, "sort", 1, 2)
-	suite.NoError(err)
-	suite.Equal([]Scored{
-		{"3", 1.3},
-		{"2", 1.2},
-	}, halfItems)
-	// get scores by score
-	partItems, err := suite.Database.GetSortedByScore(ctx, "sort", 1.1, 1.3)
-	suite.NoError(err)
-	suite.Equal([]Scored{
-		{"1", 1.1},
-		{"2", 1.2},
-		{"3", 1.3},
-	}, partItems)
-	// remove scores by score
-	err = suite.Database.AddSorted(ctx, SortedSet{"sort", []Scored{
-		{"5", -5},
-		{"6", -6},
-	}})
-	suite.NoError(err)
-	err = suite.Database.RemSortedByScore(ctx, "sort", math.Inf(-1), -1)
-	suite.NoError(err)
-	partItems, err = suite.Database.GetSortedByScore(ctx, "sort", math.Inf(-1), -1)
-	suite.NoError(err)
-	suite.Empty(partItems)
-	// Remove score
-	err = suite.Database.RemSorted(ctx, Member("sort", "0"))
-	suite.NoError(err)
-	totalItems, err = suite.Database.GetSorted(ctx, "sort", 0, -1)
-	suite.NoError(err)
-	suite.Equal([]Scored{
-		{"4", 1.4},
-		{"3", 1.3},
-		{"2", 1.2},
-		{"1", 1.1},
-	}, totalItems)
-
-	// test set empty
-	err = suite.Database.SetSorted(ctx, "sort", []Scored{})
-	suite.NoError(err)
-	// test set duplicate
-	err = suite.Database.SetSorted(ctx, "sort1000", []Scored{
-		{"100", 1},
-		{"100", 2},
-	})
-	suite.NoError(err)
-	// test add empty
-	err = suite.Database.AddSorted(ctx)
-	suite.NoError(err)
-	err = suite.Database.AddSorted(ctx, SortedSet{})
-	suite.NoError(err)
-	// test add duplicate
-	err = suite.Database.AddSorted(ctx, SortedSet{"sort1000", []Scored{{"100", 1}, {"100", 2}}})
-	suite.NoError(err)
-	// test get empty
-	scores, err = suite.Database.GetSorted(ctx, "sort", 0, -1)
-	suite.NoError(err)
-	suite.Empty(scores)
-	scores, err = suite.Database.GetSorted(ctx, "sort", 10, 5)
-	suite.NoError(err)
-	suite.Empty(scores)
-}
-
 func (suite *baseTestSuite) TestScan() {
 	ctx := context.Background()
 	err := suite.Database.Set(ctx, String("1", "1"))
 	suite.NoError(err)
 	err = suite.Database.SetSet(ctx, "2", "21", "22", "23")
-	suite.NoError(err)
-	err = suite.Database.SetSorted(ctx, "3", []Scored{{"1", 1}, {"2", 2}, {"3", 3}})
 	suite.NoError(err)
 
 	var keys []string
@@ -264,12 +168,6 @@ func (suite *baseTestSuite) TestPurge() {
 	suite.NoError(err)
 	suite.ElementsMatch([]string{"a", "b", "c"}, s)
 
-	err = suite.Database.AddSorted(ctx, Sorted("sorted", []Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}))
-	suite.NoError(err)
-	z, err := suite.Database.GetSorted(ctx, "sorted", 0, -1)
-	suite.NoError(err)
-	suite.ElementsMatch([]Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}, z)
-
 	// purge data
 	err = suite.Database.Purge()
 	suite.NoError(err)
@@ -278,9 +176,6 @@ func (suite *baseTestSuite) TestPurge() {
 	s, err = suite.Database.GetSet(ctx, "set")
 	suite.NoError(err)
 	suite.Empty(s)
-	z, err = suite.Database.GetSorted(ctx, "sorted", 0, -1)
-	suite.NoError(err)
-	suite.Empty(z)
 
 	// purge empty dataset
 	err = suite.Database.Purge()

@@ -77,36 +77,6 @@ func (NoDatabase) RemSet(_ context.Context, _ string, _ ...string) error {
 	return ErrNoDatabase
 }
 
-// GetSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSorted(_ context.Context, _ string, _, _ int) ([]Scored, error) {
-	return nil, ErrNoDatabase
-}
-
-// GetSortedByScore method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSortedByScore(_ context.Context, _ string, _, _ float64) ([]Scored, error) {
-	return nil, ErrNoDatabase
-}
-
-// RemSortedByScore method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSortedByScore(_ context.Context, _ string, _, _ float64) error {
-	return ErrNoDatabase
-}
-
-// AddSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AddSorted(_ context.Context, _ ...SortedSet) error {
-	return ErrNoDatabase
-}
-
-// SetSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetSorted(_ context.Context, _ string, _ []Scored) error {
-	return ErrNoDatabase
-}
-
-// RemSorted method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSorted(_ context.Context, _ ...SetMember) error {
-	return ErrNoDatabase
-}
-
 func (NoDatabase) Push(_ context.Context, _, _ string) error {
 	return ErrNoDatabase
 }
