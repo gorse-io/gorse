@@ -127,7 +127,7 @@ const (
 	MatchingIndexRecall        = "matching_index_recall"
 )
 
-var ItemCache = []string{PopularItems, LatestItems, ItemNeighbors}
+var ItemCache = []string{PopularItems, LatestItems, ItemNeighbors, OfflineRecommend}
 
 var (
 	ErrObjectNotExist = errors.NotFoundf("object")
