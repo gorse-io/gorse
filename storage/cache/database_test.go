@@ -150,7 +150,7 @@ func (suite *baseTestSuite) TestScan() {
 		return nil
 	})
 	suite.NoError(err)
-	suite.ElementsMatch([]string{"1", "2", "3"}, keys)
+	suite.ElementsMatch([]string{"1", "2"}, keys)
 }
 
 func (suite *baseTestSuite) TestPurge() {

@@ -289,7 +289,6 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value
 			return errors.Trace(err)
 		}
 		// update documents
-		p := r.client.Pipeline()
 		for _, key := range keys {
 			values := make([]any, 0)
 			if patch.Score != nil {
@@ -301,11 +300,16 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value
 			if patch.Categories != nil {
 				values = append(values, "categories", strings.Join(patch.Categories, ";"))
 			}
-			p.HSet(ctx, key, values...)
-		}
-		_, err = p.Exec(ctx)
-		if err != nil {
-			return errors.Trace(err)
+			if err = r.client.Watch(ctx, func(tx *redis.Tx) error {
+				if exist, err := tx.Exists(ctx, key).Result(); err != nil {
+					return err
+				} else if exist == 0 {
+					return nil
+				}
+				return tx.HSet(ctx, key, values...).Err()
+			}, key); err != nil {
+				return errors.Trace(err)
+			}
 		}
 		// break if no more documents
 		if count <= int64(len(keys)) {
