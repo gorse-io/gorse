@@ -16,7 +16,6 @@ package cache
 
 import (
 	"context"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -44,14 +43,6 @@ import (
 )
 
 const (
-	// Measurements are sorted set of measurements.
-	// 	Measurements - measurements/{name}
-	Measurements = "measurements"
-
-	// IgnoreItems is sorted set of ignored items for each user
-	//  Ignored items      - ignore_items/{user_id}
-	IgnoreItems = "ignore_items"
-
 	// HiddenItemsV2 is sorted set of hidden items.
 	//  Global hidden items 	- hidden_items_v2
 	//  Category hidden items   - hidden_items_v2/{category}
@@ -134,65 +125,6 @@ var (
 	ErrNoDatabase     = errors.NotAssignedf("database")
 )
 
-// Scored associate a id with a score.
-type Scored struct {
-	Id    string
-	Score float64
-}
-
-// CreateScoredItems from items and scores.
-func CreateScoredItems[T float64 | float32](itemIds []string, scores []T) []Scored {
-	if len(itemIds) != len(scores) {
-		panic("the length of itemIds and scores should be equal")
-	}
-	items := make([]Scored, len(itemIds))
-	for i := range items {
-		items[i].Id = itemIds[i]
-		items[i].Score = float64(scores[i])
-	}
-	return items
-}
-
-// RemoveScores resolve items for a slice of ScoredItems.
-func RemoveScores(items []Scored) []string {
-	ids := make([]string, len(items))
-	for i := range ids {
-		ids[i] = items[i].Id
-	}
-	return ids
-}
-
-// GetScores resolve scores for a slice of Scored.
-func GetScores(s []Scored) []float64 {
-	scores := make([]float64, len(s))
-	for i := range s {
-		scores[i] = s[i].Score
-	}
-	return scores
-}
-
-// SortScores sorts scores from high score to low score.
-func SortScores(scores []Scored) {
-	sort.Sort(scoresSorter(scores))
-}
-
-type scoresSorter []Scored
-
-// Len is the number of elements in the collection.
-func (s scoresSorter) Len() int {
-	return len(s)
-}
-
-// Less reports whether the element with index i
-func (s scoresSorter) Less(i, j int) bool {
-	return s[i].Score > s[j].Score
-}
-
-// Swap swaps the elements with indexes i and j.
-func (s scoresSorter) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
 // Key creates key for cache. Empty field will be ignored.
 func Key(keys ...string) string {
 	if len(keys) == 0 {
@@ -249,15 +181,6 @@ func (r *ReturnValue) Time() (time.Time, error) {
 	return dateparse.ParseAny(r.value)
 }
 
-type SortedSet struct {
-	name   string
-	scores []Scored
-}
-
-func Sorted(name string, scores []Scored) SortedSet {
-	return SortedSet{name: name, scores: scores}
-}
-
 type SetMember struct {
 	name   string
 	member string
@@ -277,15 +200,6 @@ func ConvertDocumentsToValues(documents []Document) []string {
 		values[i] = documents[i].Id
 	}
 	return values
-}
-
-func ConvertDocumentsToScoredValues(documents []Document) []Scored {
-	scores := make([]Scored, len(documents))
-	for i := range scores {
-		scores[i].Id = documents[i].Id
-		scores[i].Score = documents[i].Score
-	}
-	return scores
 }
 
 type DocumentAggregator struct {

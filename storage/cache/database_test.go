@@ -456,17 +456,6 @@ func (suite *baseTestSuite) TestTimeSeries() {
 	}, points)
 }
 
-func TestScored(t *testing.T) {
-	itemIds := []string{"2", "4", "6"}
-	scores := []float64{2, 4, 6}
-	scored := []Scored{{Id: "2", Score: 2}, {Id: "4", Score: 4}, {Id: "6", Score: 6}}
-	assert.Equal(t, scored, CreateScoredItems(itemIds, scores))
-	assert.Equal(t, itemIds, RemoveScores(scored))
-	assert.Equal(t, scores, GetScores(scored))
-	SortScores(scored)
-	assert.Equal(t, []Scored{{Id: "6", Score: 6}, {Id: "4", Score: 4}, {Id: "2", Score: 2}}, scored)
-}
-
 func TestKey(t *testing.T) {
 	assert.Empty(t, Key())
 	assert.Equal(t, "a", Key("a"))
