@@ -345,7 +345,7 @@ type DocumentPatch struct {
 	Score      *float64
 }
 
-type Point struct {
+type TimeSeriesPoint struct {
 	Name      string    `gorm:"primaryKey"`
 	Timestamp time.Time `gorm:"primaryKey"`
 	Value     float64
@@ -377,8 +377,8 @@ type Database interface {
 	DeleteDocuments(ctx context.Context, collection []string, condition DocumentCondition) error
 	UpdateDocuments(ctx context.Context, collection []string, id string, patch DocumentPatch) error
 
-	AddPoint(ctx context.Context, name string, value float64, timestamp time.Time) error
-	GetPoints(ctx context.Context, name string, begin, end time.Time) ([]Point, error)
+	AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error
+	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error)
 }
 
 // Open a connection to a database.

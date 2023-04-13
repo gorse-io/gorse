@@ -106,10 +106,10 @@ func (NoDatabase) DeleteDocuments(_ context.Context, _ []string, _ DocumentCondi
 	return ErrNoDatabase
 }
 
-func (NoDatabase) AddPoint(_ context.Context, _ string, _ float64, _ time.Time) error {
+func (NoDatabase) AddTimeSeriesPoint(_ context.Context, _ string, _ float64, _ time.Time) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) GetPoints(_ context.Context, _ string, _, _ time.Time) ([]Point, error) {
+func (NoDatabase) GetTimeSeriesPoints(_ context.Context, _ string, _, _ time.Time) ([]TimeSeriesPoint, error) {
 	return nil, ErrNoDatabase
 }

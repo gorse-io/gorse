@@ -71,8 +71,8 @@ func TestNoDatabase(t *testing.T) {
 	err = database.DeleteDocuments(ctx, nil, DocumentCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	err = database.AddPoint(nil, "", 0, time.Time{})
+	err = database.AddTimeSeriesPoint(nil, "", 0, time.Time{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.GetPoints(nil, "", time.Time{}, time.Time{})
+	_, err = database.GetTimeSeriesPoints(nil, "", time.Time{}, time.Time{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

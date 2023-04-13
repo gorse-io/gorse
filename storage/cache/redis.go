@@ -271,7 +271,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	_, _, documents, err := parseSearchResult(result)
+	_, _, documents, err := parseSearchDocumentsResult(result)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -294,7 +294,7 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 		if err != nil {
 			return errors.Trace(err)
 		}
-		count, keys, _, err := parseSearchResult(result)
+		count, keys, _, err := parseSearchDocumentsResult(result)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -350,7 +350,7 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 		if err != nil {
 			return errors.Trace(err)
 		}
-		count, keys, _, err := parseSearchResult(result)
+		count, keys, _, err := parseSearchDocumentsResult(result)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -371,7 +371,7 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 	return nil
 }
 
-func parseSearchResult(result any) (count int64, keys []string, documents []Document, err error) {
+func parseSearchDocumentsResult(result any) (count int64, keys []string, documents []Document, err error) {
 	rows, ok := result.([]any)
 	if !ok {
 		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
@@ -430,10 +430,70 @@ func (r *Redis) pointKey(name string, timestamp time.Time) string {
 	return fmt.Sprintf("%s:%s:%d", r.PointsTable(), name, timestamp.UnixMicro())
 }
 
-func (r *Redis) AddPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
-	return r.client.HSet(ctx, r.PointsTable(), r.pointKey(name, timestamp), "name", name, "value", value, "timestamp", timestamp.UnixMicro()).Err()
+func (r *Redis) AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
+	return r.client.HSet(ctx, r.pointKey(name, timestamp), "name", name, "value", value, "timestamp", timestamp.UnixMicro()).Err()
 }
 
-func (r *Redis) GetPoints(ctx context.Context, name string, begin, end time.Time) ([]Point, error) {
-	return nil, nil
+func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d %d]", name, begin.UnixMicro(), end.UnixMicro()),
+		"SORTBY", "timestamp").Result()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	_, _, points, err := parseGetTimeSeriesPointsResult(result)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return points, nil
+}
+
+func parseGetTimeSeriesPointsResult(result any) (count int64, keys []string, points []TimeSeriesPoint, err error) {
+	rows, ok := result.([]any)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	count, ok = rows[0].(int64)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	for i := 1; i < len(rows); i += 2 {
+		key, ok := rows[i].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		keys = append(keys, key)
+		row, ok := rows[i+1].([]any)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		fields := make(map[string]any)
+		for j := 0; j < len(row); j += 2 {
+			fields[row[j].(string)] = row[j+1]
+		}
+		var point TimeSeriesPoint
+		point.Name, ok = fields["name"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		value, ok := fields["value"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		point.Value, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		timestamp, ok := fields["timestamp"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		timestampMicros, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		point.Timestamp = time.UnixMicro(timestampMicros).In(time.UTC)
+		points = append(points, point)
+	}
+	return
 }

@@ -98,16 +98,16 @@ func (tp TablePrefix) SetsTable() string {
 	return string(tp) + "sets"
 }
 
-func (tp TablePrefix) SortedSetsTable() string {
-	return string(tp) + "sorted_sets"
-}
-
 func (tp TablePrefix) MessageTable() string {
 	return string(tp) + "message"
 }
 
 func (tp TablePrefix) DocumentTable() string {
 	return string(tp) + "documents"
+}
+
+func (tp TablePrefix) PointsTable() string {
+	return string(tp) + "time_series_points"
 }
 
 func (tp TablePrefix) UsersTable() string {
@@ -137,15 +137,12 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 			NameReplacer: strings.NewReplacer(
 				"SQLValue", "Values",
 				"SQLSet", "Sets",
-				"SQLSortedSet", "SortedSets",
 				"SQLUser", "Users",
 				"SQLItem", "Items",
 				"SQLFeedback", "Feedback",
 				"SQLDocument", "Documents",
-				"ClickhouseUser", "Users",
-				"ClickHouseItem", "Items",
-				"ClickHouseFeedback", "Feedback",
 				"PostgresDocument", "Documents",
+				"TimeSeriesPoint", "time_series_points",
 			),
 		},
 	}

@@ -142,7 +142,7 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{}, &Point{})
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{}, &TimeSeriesPoint{})
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -489,19 +489,19 @@ func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }
 
-func (db *SQLDatabase) AddPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
+func (db *SQLDatabase) AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
 	return db.gormDB.WithContext(ctx).Table(db.PointsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}, {Name: "timestamp"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),
-	}).Create(&Point{
+	}).Create(&TimeSeriesPoint{
 		Name:      name,
 		Value:     value,
 		Timestamp: timestamp,
 	}).Error
 }
 
-func (db *SQLDatabase) GetPoints(ctx context.Context, name string, begin, end time.Time) ([]Point, error) {
-	var points []Point
+func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+	var points []TimeSeriesPoint
 	if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
 		Where("name = ? and timestamp >= ? and timestamp < ?", name, begin, end).
 		Order("timestamp").Find(&points).Error; err != nil {

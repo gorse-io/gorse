@@ -407,26 +407,26 @@ func (m MongoDB) DeleteDocuments(ctx context.Context, collections []string, cond
 	return errors.Trace(err)
 }
 
-func (m MongoDB) AddPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
+func (m MongoDB) AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
 	_, err := m.client.Database(m.dbName).Collection(m.PointsTable()).InsertOne(ctx, bson.M{
 		"name":      name,
 		"value":     value,
-		"timestamp": timestamp.UnixNano(),
+		"timestamp": timestamp,
 	})
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetPoints(ctx context.Context, name string, begin, end time.Time) ([]Point, error) {
+func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
 	cur, err := m.client.Database(m.dbName).Collection(m.PointsTable()).Find(ctx, bson.M{
 		"name":      name,
-		"timestamp": bson.M{"$gte": begin.UnixNano(), "$lt": end.UnixNano()},
+		"timestamp": bson.M{"$gte": begin, "$lt": end},
 	}, options.Find().SetSort(bson.M{"timestamp": 1}))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	points := make([]Point, 0)
+	points := make([]TimeSeriesPoint, 0)
 	for cur.Next(ctx) {
-		var point Point
+		var point TimeSeriesPoint
 		if err = cur.Decode(&point); err != nil {
 			return nil, errors.Trace(err)
 		}

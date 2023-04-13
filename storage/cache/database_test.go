@@ -433,7 +433,27 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 	suite.Equal("2", documents[0].Id)
 }
 
-func (suite *baseTestSuite) TestTimeseries() {
+func (suite *baseTestSuite) TestTimeSeries() {
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := context.Background()
+	err := suite.AddTimeSeriesPoint(ctx, "a", 1, ts.Add(0*time.Second))
+	suite.NoError(err)
+	err = suite.AddTimeSeriesPoint(ctx, "a", 2, ts.Add(1*time.Second))
+	suite.NoError(err)
+	err = suite.AddTimeSeriesPoint(ctx, "a", 3, ts.Add(2*time.Second))
+	suite.NoError(err)
+	err = suite.AddTimeSeriesPoint(ctx, "a", 4, ts.Add(3*time.Second))
+	suite.NoError(err)
+	err = suite.AddTimeSeriesPoint(ctx, "a", 5, ts.Add(4*time.Second))
+	suite.NoError(err)
+
+	points, err := suite.GetTimeSeriesPoints(ctx, "a", ts.Add(2*time.Second), ts.Add(5*time.Second))
+	suite.NoError(err)
+	suite.Equal([]TimeSeriesPoint{
+		{Name: "a", Value: 3, Timestamp: ts.Add(2 * time.Second)},
+		{Name: "a", Value: 4, Timestamp: ts.Add(3 * time.Second)},
+		{Name: "a", Value: 5, Timestamp: ts.Add(4 * time.Second)},
+	}, points)
 }
 
 func TestScored(t *testing.T) {
