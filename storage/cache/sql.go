@@ -109,7 +109,7 @@ type Message struct {
 type PostgresDocument struct {
 	Collection string `gorm:"primaryKey"`
 	Subset     string `gorm:"primaryKey"`
-	Value      string `gorm:"primaryKey"`
+	Id         string `gorm:"primaryKey"`
 	IsHidden   bool
 	Categories pq.StringArray `gorm:"type:text[]"`
 	Score      float64
@@ -119,7 +119,7 @@ type PostgresDocument struct {
 type SQLDocument struct {
 	Collection string `gorm:"primaryKey"`
 	Subset     string `gorm:"primaryKey"`
-	Value      string `gorm:"primaryKey"`
+	Id         string `gorm:"primaryKey"`
 	IsHidden   bool
 	Categories []string `gorm:"type:text;serializer:json"`
 	Score      float64
@@ -142,7 +142,7 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{})
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{}, &Point{})
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -159,7 +159,6 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	var (
 		valuerRows *sql.Rows
 		setRows    *sql.Rows
-		sortedRows *sql.Rows
 		err        error
 	)
 
@@ -189,26 +188,6 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	for setRows.Next() {
 		var key string
 		if err = setRows.Scan(&key); err != nil {
-			return errors.Trace(err)
-		}
-		if key != prevKey {
-			if err = work(key); err != nil {
-				return errors.Trace(err)
-			}
-			prevKey = key
-		}
-	}
-
-	// scan sorted sets
-	sortedRows, err = db.gormDB.Table(db.SortedSetsTable()).Select("name").Rows()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer sortedRows.Close()
-	prevKey = ""
-	for sortedRows.Next() {
-		var key string
-		if err = sortedRows.Scan(&key); err != nil {
 			return errors.Trace(err)
 		}
 		if key != prevKey {
@@ -381,7 +360,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset stri
 			return PostgresDocument{
 				Collection: collection,
 				Subset:     subset,
-				Value:      document.Value,
+				Id:         document.Id,
 				Score:      document.Score,
 				IsHidden:   document.IsHidden,
 				Categories: document.Categories,
@@ -393,7 +372,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset stri
 			return SQLDocument{
 				Collection: collection,
 				Subset:     subset,
-				Value:      document.Value,
+				Id:         document.Id,
 				Score:      document.Score,
 				IsHidden:   document.IsHidden,
 				Categories: document.Categories,
@@ -402,7 +381,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset stri
 		})
 	}
 	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "value"}},
+		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
 	}).Create(rows)
 	return nil
@@ -412,7 +391,7 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	if len(query) == 0 {
 		return nil, nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("value, score, categories, timestamp")
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("id, score, categories, timestamp")
 	switch db.driver {
 	case Postgres:
 		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and categories @> ?", collection, subset, pq.StringArray(query))
@@ -438,11 +417,11 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 		switch db.driver {
 		case Postgres:
 			var document PostgresDocument
-			if err = rows.Scan(&document.Value, &document.Score, &document.Categories, &document.Timestamp); err != nil {
+			if err = rows.Scan(&document.Id, &document.Score, &document.Categories, &document.Timestamp); err != nil {
 				return nil, errors.Trace(err)
 			}
 			documents = append(documents, Document{
-				Value:      document.Value,
+				Id:         document.Id,
 				Score:      document.Score,
 				Categories: document.Categories,
 				Timestamp:  document.Timestamp,
@@ -458,14 +437,14 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	return documents, nil
 }
 
-func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, value string, patch DocumentPatch) error {
+func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
 	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("collection in (?) and value = ?", collections, value)
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("collection in (?) and id = ?", collections, id)
 	if patch.Score != nil {
 		tx = tx.Update("score", *patch.Score)
 	}
@@ -499,13 +478,34 @@ func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string
 		builder.WriteString(" and subset = ?")
 		args = append(args, *condition.Subset)
 	}
-	if condition.Value != nil {
-		builder.WriteString(" and value = ?")
-		args = append(args, *condition.Value)
+	if condition.Id != nil {
+		builder.WriteString(" and id = ?")
+		args = append(args, *condition.Id)
 	}
 	if condition.Before != nil {
 		builder.WriteString(" and timestamp < ?")
 		args = append(args, *condition.Before)
 	}
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
+}
+
+func (db *SQLDatabase) AddPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
+	return db.gormDB.WithContext(ctx).Table(db.PointsTable()).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}, {Name: "timestamp"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value"}),
+	}).Create(&Point{
+		Name:      name,
+		Value:     value,
+		Timestamp: timestamp,
+	}).Error
+}
+
+func (db *SQLDatabase) GetPoints(ctx context.Context, name string, begin, end time.Time) ([]Point, error) {
+	var points []Point
+	if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
+		Where("name = ? and timestamp >= ? and timestamp < ?", name, begin, end).
+		Order("timestamp").Find(&points).Error; err != nil {
+		return nil, errors.Trace(err)
+	}
+	return points, nil
 }

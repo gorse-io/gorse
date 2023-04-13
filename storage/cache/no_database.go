@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"time"
 )
 
 // NoDatabase means no database used for cache.
@@ -103,4 +104,12 @@ func (NoDatabase) UpdateDocuments(_ context.Context, _ []string, _ string, _ Doc
 
 func (NoDatabase) DeleteDocuments(_ context.Context, _ []string, _ DocumentCondition) error {
 	return ErrNoDatabase
+}
+
+func (NoDatabase) AddPoint(_ context.Context, _ string, _ float64, _ time.Time) error {
+	return ErrNoDatabase
+}
+
+func (NoDatabase) GetPoints(_ context.Context, _ string, _, _ time.Time) ([]Point, error) {
+	return nil, ErrNoDatabase
 }

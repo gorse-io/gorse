@@ -59,10 +59,20 @@ func (r *Redis) Init() error {
 			"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
 			"collection", "TAG",
 			"subset", "TAG",
-			"value", "TAG",
+			"id", "TAG",
 			"score", "NUMERIC", "SORTABLE",
 			"is_hidden", "NUMERIC",
 			"categories", "TAG", "SEPARATOR", ";",
+			"timestamp", "NUMERIC", "SORTABLE").
+			Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if !lo.Contains(indices, r.PointsTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.PointsTable(),
+			"ON", "HASH", "PREFIX", "1", r.PointsTable()+":", "SCHEMA",
+			"name", "TAG",
 			"timestamp", "NUMERIC", "SORTABLE").
 			Result()
 		if err != nil {
@@ -226,10 +236,10 @@ func (r *Redis) documentKey(collection, subset, value string) string {
 func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
 	p := r.client.Pipeline()
 	for _, document := range documents {
-		p.Do(ctx, "HSET", r.documentKey(collection, subset, document.Value),
+		p.HSet(ctx, r.documentKey(collection, subset, document.Id),
 			"collection", collection,
 			"subset", subset,
-			"value", document.Value,
+			"id", document.Id,
 			"score", document.Score,
 			"is_hidden", document.IsHidden,
 			"categories", strings.Join(document.Categories, ";"),
@@ -268,7 +278,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	return documents, nil
 }
 
-func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value string, patch DocumentPatch) error {
+func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
@@ -277,7 +287,7 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, value
 	}
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("@collection:{ %s }", strings.Join(collections, " | ")))
-	builder.WriteString(fmt.Sprintf(" @value:{ %s }", value))
+	builder.WriteString(fmt.Sprintf(" @id:{ %s }", id))
 	for {
 		// search documents
 		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
@@ -328,8 +338,8 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 	if condition.Subset != nil {
 		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", *condition.Subset))
 	}
-	if condition.Value != nil {
-		builder.WriteString(fmt.Sprintf(" @value:{ %s }", *condition.Value))
+	if condition.Id != nil {
+		builder.WriteString(fmt.Sprintf(" @id:{ %s }", *condition.Id))
 	}
 	if condition.Before != nil {
 		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf,%d]", condition.Before.UnixMicro()))
@@ -385,7 +395,7 @@ func parseSearchResult(result any) (count int64, keys []string, documents []Docu
 			fields[row[j].(string)] = row[j+1]
 		}
 		var document Document
-		document.Value, ok = fields["value"].(string)
+		document.Id, ok = fields["id"].(string)
 		if !ok {
 			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
 		}
@@ -414,4 +424,16 @@ func parseSearchResult(result any) (count int64, keys []string, documents []Docu
 		documents = append(documents, document)
 	}
 	return
+}
+
+func (r *Redis) pointKey(name string, timestamp time.Time) string {
+	return fmt.Sprintf("%s:%s:%d", r.PointsTable(), name, timestamp.UnixMicro())
+}
+
+func (r *Redis) AddPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
+	return r.client.HSet(ctx, r.PointsTable(), r.pointKey(name, timestamp), "name", name, "value", value, "timestamp", timestamp.UnixMicro()).Err()
+}
+
+func (r *Redis) GetPoints(ctx context.Context, name string, begin, end time.Time) ([]Point, error) {
+	return nil, nil
 }

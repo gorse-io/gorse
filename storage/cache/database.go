@@ -209,13 +209,6 @@ func Key(keys ...string) string {
 	return builder.String()
 }
 
-func BatchKey(prefix string, keys ...string) []string {
-	for i, key := range keys {
-		keys[i] = Key(prefix, key)
-	}
-	return keys
-}
-
 type Value struct {
 	name  string
 	value string
@@ -270,12 +263,8 @@ type SetMember struct {
 	member string
 }
 
-func Member(name, member string) SetMember {
-	return SetMember{name: name, member: member}
-}
-
 type Document struct {
-	Value      string
+	Id         string
 	Score      float64
 	IsHidden   bool
 	Categories []string `gorm:"type:text;serializer:json"`
@@ -285,7 +274,7 @@ type Document struct {
 func ConvertDocumentsToValues(documents []Document) []string {
 	values := make([]string, len(documents))
 	for i := range values {
-		values[i] = documents[i].Value
+		values[i] = documents[i].Id
 	}
 	return values
 }
@@ -293,20 +282,10 @@ func ConvertDocumentsToValues(documents []Document) []string {
 func ConvertDocumentsToScoredValues(documents []Document) []Scored {
 	scores := make([]Scored, len(documents))
 	for i := range scores {
-		scores[i].Id = documents[i].Value
+		scores[i].Id = documents[i].Id
 		scores[i].Score = documents[i].Score
 	}
 	return scores
-}
-
-func ConvertScoredValuesToDocuments(values []Scored) []Document {
-	documents := make([]Document, len(values))
-	for i := range documents {
-		documents[i].Value = values[i].Id
-		documents[i].Score = values[i].Score
-		documents[i].Timestamp = time.Now()
-	}
-	return documents
 }
 
 type DocumentAggregator struct {
@@ -325,7 +304,7 @@ func (aggregator *DocumentAggregator) Add(category string, values []string, scor
 	for i, value := range values {
 		if _, ok := aggregator.Documents[value]; !ok {
 			aggregator.Documents[value] = &Document{
-				Value:      value,
+				Id:         value,
 				Score:      scores[i],
 				Categories: []string{category},
 				Timestamp:  aggregator.Timestamp,
@@ -349,12 +328,12 @@ func (aggregator *DocumentAggregator) ToSlice() []Document {
 
 type DocumentCondition struct {
 	Subset *string
-	Value  *string
+	Id     *string
 	Before *time.Time
 }
 
 func (condition *DocumentCondition) Check() error {
-	if condition.Value == nil && condition.Before == nil && condition.Subset == nil {
+	if condition.Id == nil && condition.Before == nil && condition.Subset == nil {
 		return errors.NotValidf("document condition")
 	}
 	return nil
@@ -364,6 +343,12 @@ type DocumentPatch struct {
 	IsHidden   *bool
 	Categories []string
 	Score      *float64
+}
+
+type Point struct {
+	Name      string    `gorm:"primaryKey"`
+	Timestamp time.Time `gorm:"primaryKey"`
+	Value     float64
 }
 
 // Database is the common interface for cache store.
@@ -390,7 +375,10 @@ type Database interface {
 	AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error
 	SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error)
 	DeleteDocuments(ctx context.Context, collection []string, condition DocumentCondition) error
-	UpdateDocuments(ctx context.Context, collection []string, value string, patch DocumentPatch) error
+	UpdateDocuments(ctx context.Context, collection []string, id string, patch DocumentPatch) error
+
+	AddPoint(ctx context.Context, name string, value float64, timestamp time.Time) error
+	GetPoints(ctx context.Context, name string, begin, end time.Time) ([]Point, error)
 }
 
 // Open a connection to a database.

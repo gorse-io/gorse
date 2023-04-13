@@ -225,7 +225,7 @@ func (suite *baseTestSuite) TestDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
 	err := suite.AddDocuments(ctx, "a", "", Document{
-		Value:      "0",
+		Id:         "0",
 		Score:      math.MaxFloat64,
 		IsHidden:   true,
 		Categories: []string{"a", "b"},
@@ -233,49 +233,49 @@ func (suite *baseTestSuite) TestDocument() {
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "", Document{
-		Value:      "1",
+		Id:         "1",
 		Score:      100,
 		Categories: []string{"a", "b"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "", Document{
-		Value:      "1",
+		Id:         "1",
 		Score:      1,
 		Categories: []string{"a", "b"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "", Document{
-		Value:      "2",
+		Id:         "2",
 		Score:      2,
 		Categories: []string{"b", "c"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "", Document{
-		Value:      "3",
+		Id:         "3",
 		Score:      3,
 		Categories: []string{"b"},
 		Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "", Document{
-		Value:      "4",
+		Id:         "4",
 		Score:      4,
 		Categories: []string{},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "", Document{
-		Value:      "5",
+		Id:         "5",
 		Score:      5,
 		Categories: []string{"b"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "b", "", Document{
-		Value:      "6",
+		Id:         "6",
 		Score:      6,
 		Categories: []string{"b"},
 		Timestamp:  ts,
@@ -286,35 +286,35 @@ func (suite *baseTestSuite) TestDocument() {
 	documents, err := suite.SearchDocuments(ctx, "a", "", []string{"b"}, 1, 3)
 	suite.NoError(err)
 	suite.Equal([]Document{
-		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{Value: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
+		{Id: "3", Score: 3, Categories: []string{"b"}, Timestamp: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{Id: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
 	}, documents)
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"b"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]Document{
-		{Value: "5", Score: 5, Categories: []string{"b"}, Timestamp: ts},
-		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{Value: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
-		{Value: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
+		{Id: "5", Score: 5, Categories: []string{"b"}, Timestamp: ts},
+		{Id: "3", Score: 3, Categories: []string{"b"}, Timestamp: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{Id: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
+		{Id: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
 	}, documents)
 
 	// delete nothing
 	err = suite.DeleteDocuments(ctx, []string{"a"}, DocumentCondition{})
 	suite.ErrorIs(err, errors.NotValid)
 	// delete by value
-	err = suite.DeleteDocuments(ctx, []string{"a"}, DocumentCondition{Value: proto.String("5")})
+	err = suite.DeleteDocuments(ctx, []string{"a"}, DocumentCondition{Id: proto.String("5")})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("3", documents[0].Value)
+	suite.Equal("3", documents[0].Id)
 	// delete by timestamp
 	err = suite.DeleteDocuments(ctx, []string{"a"}, DocumentCondition{Before: lo.ToPtr(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC))})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("2", documents[0].Value)
+	suite.Equal("2", documents[0].Id)
 
 	// update categories
 	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", DocumentPatch{Categories: []string{"c", "s"}})
@@ -322,7 +322,7 @@ func (suite *baseTestSuite) TestDocument() {
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"s"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("2", documents[0].Value)
+	suite.Equal("2", documents[0].Id)
 	err = suite.UpdateDocuments(ctx, []string{"a"}, "2", DocumentPatch{Categories: []string{"c"}})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"s"}, 0, 1)
@@ -335,49 +335,49 @@ func (suite *baseTestSuite) TestDocument() {
 	documents, err = suite.SearchDocuments(ctx, "a", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("0", documents[0].Value)
+	suite.Equal("0", documents[0].Id)
 }
 
 func (suite *baseTestSuite) TestSubsetDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
 	err := suite.AddDocuments(ctx, "a", "a", Document{
-		Value:      "1",
+		Id:         "1",
 		Score:      1,
 		Categories: []string{"a", "b"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "a", Document{
-		Value:      "2",
+		Id:         "2",
 		Score:      2,
 		Categories: []string{"b", "c"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "a", "a", Document{
-		Value:      "3",
+		Id:         "3",
 		Score:      3,
 		Categories: []string{"b"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "b", "", Document{
-		Value:      "4",
+		Id:         "4",
 		Score:      4,
 		Categories: []string{},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "b", "", Document{
-		Value:      "3",
+		Id:         "3",
 		Score:      3,
 		Categories: []string{"b"},
 		Timestamp:  ts,
 	})
 	suite.NoError(err)
 	err = suite.AddDocuments(ctx, "b", "", Document{
-		Value:      "2",
+		Id:         "2",
 		Score:      2,
 		Categories: []string{"b"},
 		Timestamp:  ts,
@@ -388,9 +388,9 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 	documents, err := suite.SearchDocuments(ctx, "a", "a", []string{"b"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]Document{
-		{Value: "3", Score: 3, Categories: []string{"b"}, Timestamp: ts},
-		{Value: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
-		{Value: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
+		{Id: "3", Score: 3, Categories: []string{"b"}, Timestamp: ts},
+		{Id: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
+		{Id: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
 	}, documents)
 
 	// update categories
@@ -399,38 +399,41 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 	documents, err = suite.SearchDocuments(ctx, "a", "a", []string{"s"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("2", documents[0].Value)
+	suite.Equal("2", documents[0].Id)
 	documents, err = suite.SearchDocuments(ctx, "b", "", []string{"s"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("2", documents[0].Value)
+	suite.Equal("2", documents[0].Id)
 
 	// delete by value
-	err = suite.DeleteDocuments(ctx, []string{"a", "b"}, DocumentCondition{Value: proto.String("3")})
+	err = suite.DeleteDocuments(ctx, []string{"a", "b"}, DocumentCondition{Id: proto.String("3")})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "a", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("2", documents[0].Value)
+	suite.Equal("2", documents[0].Id)
 	documents, err = suite.SearchDocuments(ctx, "b", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("2", documents[0].Value)
+	suite.Equal("2", documents[0].Id)
 
 	// delete in subset
 	err = suite.DeleteDocuments(ctx, []string{"a", "b"}, DocumentCondition{
 		Subset: proto.String("a"),
-		Value:  proto.String("2"),
+		Id:     proto.String("2"),
 	})
 	suite.NoError(err)
 	documents, err = suite.SearchDocuments(ctx, "a", "a", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("1", documents[0].Value)
+	suite.Equal("1", documents[0].Id)
 	documents, err = suite.SearchDocuments(ctx, "b", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
-	suite.Equal("2", documents[0].Value)
+	suite.Equal("2", documents[0].Id)
+}
+
+func (suite *baseTestSuite) TestTimeseries() {
 }
 
 func TestScored(t *testing.T) {
