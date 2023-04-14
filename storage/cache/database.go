@@ -286,12 +286,12 @@ type Database interface {
 	Pop(ctx context.Context, name string) (string, error)
 	Remain(ctx context.Context, name string) (int64, error)
 
-	AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error
+	AddDocuments(ctx context.Context, collection, subset string, documents []Document) error
 	SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error)
 	DeleteDocuments(ctx context.Context, collection []string, condition DocumentCondition) error
 	UpdateDocuments(ctx context.Context, collection []string, id string, patch DocumentPatch) error
 
-	AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error
+	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
 	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error)
 }
 

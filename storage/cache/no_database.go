@@ -90,7 +90,7 @@ func (NoDatabase) Remain(_ context.Context, _ string) (int64, error) {
 	return 0, ErrNoDatabase
 }
 
-func (NoDatabase) AddDocuments(_ context.Context, _, _ string, _ ...Document) error {
+func (NoDatabase) AddDocuments(_ context.Context, _, _ string, _ []Document) error {
 	return ErrNoDatabase
 }
 
@@ -106,7 +106,7 @@ func (NoDatabase) DeleteDocuments(_ context.Context, _ []string, _ DocumentCondi
 	return ErrNoDatabase
 }
 
-func (NoDatabase) AddTimeSeriesPoint(_ context.Context, _ string, _ float64, _ time.Time) error {
+func (NoDatabase) AddTimeSeriesPoints(_ context.Context, _ []TimeSeriesPoint) error {
 	return ErrNoDatabase
 }
 

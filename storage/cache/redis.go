@@ -233,7 +233,7 @@ func (r *Redis) documentKey(collection, subset, value string) string {
 	return r.DocumentTable() + ":" + collection + ":" + subset + ":" + value
 }
 
-func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
+func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
 	p := r.client.Pipeline()
 	for _, document := range documents {
 		p.HSet(ctx, r.documentKey(collection, subset, document.Id),
@@ -430,13 +430,21 @@ func (r *Redis) pointKey(name string, timestamp time.Time) string {
 	return fmt.Sprintf("%s:%s:%d", r.PointsTable(), name, timestamp.UnixMicro())
 }
 
-func (r *Redis) AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
-	return r.client.HSet(ctx, r.pointKey(name, timestamp), "name", name, "value", value, "timestamp", timestamp.UnixMicro()).Err()
+func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	p := r.client.Pipeline()
+	for _, point := range points {
+		p.HSet(ctx, r.pointKey(point.Name, point.Timestamp),
+			"name", point.Name,
+			"value", point.Value,
+			"timestamp", point.Timestamp.UnixMicro())
+	}
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
 	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
-		fmt.Sprintf("@name:{ %s } @timestamp:[%d %d]", name, begin.UnixMicro(), end.UnixMicro()),
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d %d)", name, begin.UnixMicro(), end.UnixMicro()),
 		"SORTBY", "timestamp").Result()
 	if err != nil {
 		return nil, errors.Trace(err)

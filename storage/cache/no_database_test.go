@@ -62,7 +62,7 @@ func TestNoDatabase(t *testing.T) {
 	_, err = database.Remain(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	err = database.AddDocuments(ctx, "", "")
+	err = database.AddDocuments(ctx, "", "", nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.SearchDocuments(ctx, "", "", nil, 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
@@ -71,7 +71,7 @@ func TestNoDatabase(t *testing.T) {
 	err = database.DeleteDocuments(ctx, nil, DocumentCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	err = database.AddTimeSeriesPoint(nil, "", 0, time.Time{})
+	err = database.AddTimeSeriesPoints(nil, nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetTimeSeriesPoints(nil, "", time.Time{}, time.Time{})
 	assert.ErrorIs(t, err, ErrNoDatabase)

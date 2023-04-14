@@ -316,7 +316,7 @@ func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
 	})
 }
 
-func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
+func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
 	var models []mongo.WriteModel
 	for _, document := range documents {
 		models = append(models, mongo.NewUpdateOneModel().
@@ -407,12 +407,20 @@ func (m MongoDB) DeleteDocuments(ctx context.Context, collections []string, cond
 	return errors.Trace(err)
 }
 
-func (m MongoDB) AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
-	_, err := m.client.Database(m.dbName).Collection(m.PointsTable()).InsertOne(ctx, bson.M{
-		"name":      name,
-		"value":     value,
-		"timestamp": timestamp,
-	})
+func (m MongoDB) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	var models []mongo.WriteModel
+	for _, point := range points {
+		models = append(models, mongo.NewUpdateOneModel().
+			SetUpsert(true).
+			SetFilter(bson.M{
+				"name":      point.Name,
+				"timestamp": point.Timestamp,
+			}).
+			SetUpdate(bson.M{"$set": bson.M{
+				"value": point.Value,
+			}}))
+	}
+	_, err := m.client.Database(m.dbName).Collection(m.PointsTable()).BulkWrite(ctx, models)
 	return errors.Trace(err)
 }
 

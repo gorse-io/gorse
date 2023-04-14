@@ -352,7 +352,7 @@ func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, er
 	return
 }
 
-func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset string, documents ...Document) error {
+func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
 	var rows any
 	switch db.driver {
 	case Postgres:
@@ -489,15 +489,14 @@ func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }
 
-func (db *SQLDatabase) AddTimeSeriesPoint(ctx context.Context, name string, value float64, timestamp time.Time) error {
+func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	if len(points) == 0 {
+		return nil
+	}
 	return db.gormDB.WithContext(ctx).Table(db.PointsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}, {Name: "timestamp"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),
-	}).Create(&TimeSeriesPoint{
-		Name:      name,
-		Value:     value,
-		Timestamp: timestamp,
-	}).Error
+	}).Create(points).Error
 }
 
 func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {

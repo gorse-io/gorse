@@ -224,62 +224,60 @@ func (suite *baseTestSuite) TestPushPop() {
 func (suite *baseTestSuite) TestDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
-	err := suite.AddDocuments(ctx, "a", "", Document{
+	err := suite.AddDocuments(ctx, "a", "", []Document{{
 		Id:         "0",
 		Score:      math.MaxFloat64,
 		IsHidden:   true,
 		Categories: []string{"a", "b"},
 		Timestamp:  ts,
-	})
+	}})
 	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "", Document{
+	err = suite.AddDocuments(ctx, "a", "", []Document{{
 		Id:         "1",
 		Score:      100,
 		Categories: []string{"a", "b"},
 		Timestamp:  ts,
+	}})
+	suite.NoError(err)
+	err = suite.AddDocuments(ctx, "a", "", []Document{
+		{
+			Id:         "1",
+			Score:      1,
+			Categories: []string{"a", "b"},
+			Timestamp:  ts,
+		},
+		{
+			Id:         "2",
+			Score:      2,
+			Categories: []string{"b", "c"},
+			Timestamp:  ts,
+		},
+		{
+			Id:         "3",
+			Score:      3,
+			Categories: []string{"b"},
+			Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Id:         "4",
+			Score:      4,
+			Categories: []string{},
+			Timestamp:  ts,
+		},
+		{
+			Id:         "5",
+			Score:      5,
+			Categories: []string{"b"},
+			Timestamp:  ts,
+		},
 	})
 	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "", Document{
-		Id:         "1",
-		Score:      1,
-		Categories: []string{"a", "b"},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "", Document{
-		Id:         "2",
-		Score:      2,
-		Categories: []string{"b", "c"},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "", Document{
-		Id:         "3",
-		Score:      3,
-		Categories: []string{"b"},
-		Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "", Document{
-		Id:         "4",
-		Score:      4,
-		Categories: []string{},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "", Document{
-		Id:         "5",
-		Score:      5,
-		Categories: []string{"b"},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "b", "", Document{
+	err = suite.AddDocuments(ctx, "b", "", []Document{{
 		Id:         "6",
 		Score:      6,
 		Categories: []string{"b"},
 		Timestamp:  ts,
-	})
+	}})
 	suite.NoError(err)
 
 	// search documents
@@ -341,50 +339,50 @@ func (suite *baseTestSuite) TestDocument() {
 func (suite *baseTestSuite) TestSubsetDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
-	err := suite.AddDocuments(ctx, "a", "a", Document{
-		Id:         "1",
-		Score:      1,
-		Categories: []string{"a", "b"},
-		Timestamp:  ts,
+	err := suite.AddDocuments(ctx, "a", "a", []Document{
+		{
+			Id:         "1",
+			Score:      1,
+			Categories: []string{"a", "b"},
+			Timestamp:  ts,
+		},
+		{
+			Id:         "2",
+			Score:      2,
+			Categories: []string{"b", "c"},
+			Timestamp:  ts,
+		},
+		{
+			Id:         "3",
+			Score:      3,
+			Categories: []string{"b"},
+			Timestamp:  ts,
+		},
 	})
 	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "a", Document{
-		Id:         "2",
-		Score:      2,
-		Categories: []string{"b", "c"},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "a", "a", Document{
-		Id:         "3",
-		Score:      3,
-		Categories: []string{"b"},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "b", "", Document{
-		Id:         "4",
-		Score:      4,
-		Categories: []string{},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "b", "", Document{
-		Id:         "3",
-		Score:      3,
-		Categories: []string{"b"},
-		Timestamp:  ts,
-	})
-	suite.NoError(err)
-	err = suite.AddDocuments(ctx, "b", "", Document{
-		Id:         "2",
-		Score:      2,
-		Categories: []string{"b"},
-		Timestamp:  ts,
+	err = suite.AddDocuments(ctx, "b", "", []Document{
+		{
+			Id:         "4",
+			Score:      4,
+			Categories: []string{},
+			Timestamp:  ts,
+		},
+		{
+			Id:         "3",
+			Score:      3,
+			Categories: []string{"b"},
+			Timestamp:  ts,
+		},
+		{
+			Id:         "2",
+			Score:      2,
+			Categories: []string{"b"},
+			Timestamp:  ts,
+		},
 	})
 	suite.NoError(err)
 
-	// seach documents
+	// search documents
 	documents, err := suite.SearchDocuments(ctx, "a", "a", []string{"b"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]Document{
@@ -436,23 +434,20 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 func (suite *baseTestSuite) TestTimeSeries() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
-	err := suite.AddTimeSeriesPoint(ctx, "a", 1, ts.Add(0*time.Second))
-	suite.NoError(err)
-	err = suite.AddTimeSeriesPoint(ctx, "a", 2, ts.Add(1*time.Second))
-	suite.NoError(err)
-	err = suite.AddTimeSeriesPoint(ctx, "a", 3, ts.Add(2*time.Second))
-	suite.NoError(err)
-	err = suite.AddTimeSeriesPoint(ctx, "a", 4, ts.Add(3*time.Second))
-	suite.NoError(err)
-	err = suite.AddTimeSeriesPoint(ctx, "a", 5, ts.Add(4*time.Second))
+	err := suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
+		{Name: "a", Value: 1, Timestamp: ts.Add(1 * time.Second)},
+		{Name: "a", Value: 2, Timestamp: ts.Add(2 * time.Second)},
+		{Name: "a", Value: 3, Timestamp: ts.Add(3 * time.Second)},
+		{Name: "a", Value: 4, Timestamp: ts.Add(4 * time.Second)},
+		{Name: "a", Value: 5, Timestamp: ts.Add(5 * time.Second)}})
 	suite.NoError(err)
 
 	points, err := suite.GetTimeSeriesPoints(ctx, "a", ts.Add(2*time.Second), ts.Add(5*time.Second))
 	suite.NoError(err)
 	suite.Equal([]TimeSeriesPoint{
-		{Name: "a", Value: 3, Timestamp: ts.Add(2 * time.Second)},
-		{Name: "a", Value: 4, Timestamp: ts.Add(3 * time.Second)},
-		{Name: "a", Value: 5, Timestamp: ts.Add(4 * time.Second)},
+		{Name: "a", Value: 2, Timestamp: ts.Add(2 * time.Second)},
+		{Name: "a", Value: 3, Timestamp: ts.Add(3 * time.Second)},
+		{Name: "a", Value: 4, Timestamp: ts.Add(4 * time.Second)},
 	}, points)
 }
 
