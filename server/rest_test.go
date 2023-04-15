@@ -56,8 +56,6 @@ func (suite *ServerTestSuite) SetupSuite() {
 	err = suite.CacheClient.Init()
 	suite.NoError(err)
 
-	suite.PopularItemsCache = newPopularItemsCacheForTest(&suite.RestServer)
-	suite.HiddenItemsManager = newHiddenItemsManagerForTest(&suite.RestServer)
 	suite.WebService = new(restful.WebService)
 	suite.CreateWebService()
 	// create handler
@@ -245,7 +243,7 @@ func (suite *ServerTestSuite) TestItems() {
 		},
 	}
 	// insert popular scores
-	err := suite.CacheClient.SetSorted(ctx, cache.PopularItems, []cache.Scored{
+	err := suite.CacheClient.AddDocuments(ctx, cache.PopularItems, "", []cache.Document{
 		{Id: "0", Score: 10},
 		{Id: "2", Score: 12},
 		{Id: "4", Score: 14},
@@ -299,7 +297,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
@@ -313,7 +311,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
@@ -328,7 +326,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[3].ItemId, Score: 16},
 			{Id: items[1].ItemId, Score: 12},
 		})).
@@ -342,7 +340,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[3].ItemId, Score: 16},
 			{Id: items[1].ItemId, Score: 12},
 		})).
@@ -369,9 +367,6 @@ func (suite *ServerTestSuite) TestItems() {
 		Expect(t).
 		Status(http.StatusNotFound).
 		End()
-	isHidden, err := suite.HiddenItemsManager.IsHidden([]string{"6"}, "")
-	assert.NoError(t, err)
-	assert.True(t, isHidden[0])
 	// get latest items
 	apitest.New().
 		Handler(suite.handler).
@@ -382,7 +377,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
@@ -395,7 +390,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
@@ -409,7 +404,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[1].ItemId, Score: 12},
 		})).
 		End()
@@ -422,7 +417,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: items[1].ItemId, Score: 12},
 		})).
 		End()
@@ -459,9 +454,6 @@ func (suite *ServerTestSuite) TestItems() {
 			Timestamp:  timestamp,
 		})).
 		End()
-	isHidden, err = suite.HiddenItemsManager.IsHidden([]string{"2"}, "")
-	assert.NoError(t, err)
-	assert.True(t, isHidden[0])
 	apitest.New().
 		Handler(suite.handler).
 		Patch("/api/item/2").
@@ -483,7 +475,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: "2", Score: float64(timestamp.Unix())},
 		})).
 		End()
@@ -496,7 +488,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{})).
+		Body(suite.marshal([]cache.Document{})).
 		End()
 	// get popular items
 	apitest.New().
@@ -508,7 +500,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: "2", Score: 12},
 		})).
 		End()
@@ -521,7 +513,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{})).
+		Body(suite.marshal([]cache.Document{})).
 		End()
 
 	// insert category
@@ -558,7 +550,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: "2", Score: float64(timestamp.Unix())},
 		})).
 		End()
@@ -572,7 +564,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{
+		Body(suite.marshal([]cache.Document{
 			{Id: "2", Score: 12},
 		})).
 		End()
@@ -611,7 +603,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{})).
+		Body(suite.marshal([]cache.Document{})).
 		End()
 	// get popular items
 	apitest.New().
@@ -623,7 +615,7 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{})).
+		Body(suite.marshal([]cache.Document{})).
 		End()
 
 	// insert items without timestamp
@@ -816,41 +808,49 @@ func (suite *ServerTestSuite) TestFeedback() {
 		End()
 }
 
-func (suite *ServerTestSuite) TestSort() {
+func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 	ctx := context.Background()
 	type ListOperator struct {
-		Name string
-		Key  string
-		Get  string
+		Name       string
+		Collection string
+		Subset     string
+		Category   string
+		URL        string
 	}
 	operators := []ListOperator{
 		// TODO: Support hide users in the future.
-		//{"User Neighbors", cache.Key(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
-		{"Item Neighbors", cache.Key(cache.ItemNeighbors, "0"), "/api/item/0/neighbors"},
-		{"Item Neighbors in Category", cache.Key(cache.ItemNeighbors, "0", "0"), "/api/item/0/neighbors/0"},
-		{"Latest Items", cache.LatestItems, "/api/latest/"},
-		{"Latest Items in Category", cache.Key(cache.LatestItems, "0"), "/api/latest/0"},
-		{"Popular Items", cache.PopularItems, "/api/popular/"},
-		{"Popular Items in Category", cache.Key(cache.PopularItems, "0"), "/api/popular/0"},
-		{"Offline Recommend", cache.Key(cache.OfflineRecommend, "0"), "/api/intermediate/recommend/0"},
-		{"Offline Recommend in Category", cache.Key(cache.OfflineRecommend, "0", "0"), "/api/intermediate/recommend/0/0"},
+		//{"User Neighbors", cache.Collection(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
+		{"Item Neighbors", cache.ItemNeighbors, "0", "", "/api/item/0/neighbors"},
+		{"Item Neighbors in Category", cache.ItemNeighbors, "0", "0", "/api/item/0/neighbors/0"},
+		{"Latest Items", cache.LatestItems, "", "", "/api/latest/"},
+		{"Latest Items in Category", cache.LatestItems, "", "0", "/api/latest/0"},
+		{"Popular Items", cache.PopularItems, "", "", "/api/popular/"},
+		{"Popular Items in Category", cache.PopularItems, "", "0", "/api/popular/0"},
+		{"Offline Recommend", cache.OfflineRecommend, "0", "", "/api/intermediate/recommend/0"},
+		{"Offline Recommend in Category", cache.OfflineRecommend, "0", "0", "/api/intermediate/recommend/0/0"},
 	}
 
 	for i, operator := range operators {
 		suite.T().Run(operator.Name, func(t *testing.T) {
-			// insert scores
-			scores := []cache.Scored{
-				{strconv.Itoa(i) + "0", 100},
-				{strconv.Itoa(i) + "1", 99},
-				{strconv.Itoa(i) + "2", 98},
-				{strconv.Itoa(i) + "3", 97},
-				{strconv.Itoa(i) + "4", 96},
+			// insert documents
+			documents := []cache.Document{
+				{Id: strconv.Itoa(i) + "0", Score: 100, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "1", Score: 99, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "2", Score: 98, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "3", Score: 97, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "4", Score: 96, Categories: []string{operator.Category}},
 			}
-			err := suite.CacheClient.SetSorted(ctx, operator.Key, scores)
+			err := suite.CacheClient.AddDocuments(ctx, operator.Collection, operator.Subset, documents)
 			assert.NoError(t, err)
 			// hidden item
-			err = NewCacheModification(suite.CacheClient, suite.HiddenItemsManager).HideItem(strconv.Itoa(i) + "3").Exec()
-			assert.NoError(t, err)
+			apitest.New().
+				Handler(suite.handler).
+				Patch("/api/item/"+strconv.Itoa(i)+"3").
+				Header("X-API-Key", apiKey).
+				JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+				Expect(t).
+				Status(http.StatusOK).
+				End()
 			// insert read feedback
 			err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 				FeedbackKey: data.FeedbackKey{
@@ -864,48 +864,48 @@ func (suite *ServerTestSuite) TestSort() {
 
 			apitest.New().
 				Handler(suite.handler).
-				Get(operator.Get).
+				Get(operator.URL).
 				Header("X-API-Key", apiKey).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(suite.marshal([]cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
+				Body(suite.marshal(([]cache.Document{documents[0], documents[1], documents[2], documents[4]}))).
 				End()
 			apitest.New().
 				Handler(suite.handler).
-				Get(operator.Get).
+				Get(operator.URL).
 				Header("X-API-Key", apiKey).
 				QueryParams(map[string]string{
 					"offset": "0",
 					"n":      "3"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(suite.marshal([]cache.Scored{scores[0], scores[1], scores[2]})).
+				Body(suite.marshal(([]cache.Document{documents[0], documents[1], documents[2]}))).
 				End()
 			apitest.New().
 				Handler(suite.handler).
-				Get(operator.Get).
+				Get(operator.URL).
 				Header("X-API-Key", apiKey).
 				QueryParams(map[string]string{
 					"offset": "1",
 					"n":      "3"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(suite.marshal([]cache.Scored{scores[1], scores[2], scores[4]})).
+				Body(suite.marshal(([]cache.Document{documents[1], documents[2], documents[4]}))).
 				End()
 			apitest.New().
 				Handler(suite.handler).
-				Get(operator.Get).
+				Get(operator.URL).
 				Header("X-API-Key", apiKey).
 				QueryParams(map[string]string{
 					"offset": "0",
 					"n":      "0"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(suite.marshal([]cache.Scored{scores[0], scores[1], scores[2], scores[4]})).
+				Body(suite.marshal(([]cache.Document{documents[0], documents[1], documents[2], documents[4]}))).
 				End()
 			apitest.New().
 				Handler(suite.handler).
-				Get(operator.Get).
+				Get(operator.URL).
 				Header("X-API-Key", apiKey).
 				QueryParams(map[string]string{
 					"user-id": "0",
@@ -913,7 +913,7 @@ func (suite *ServerTestSuite) TestSort() {
 					"n":       "0"}).
 				Expect(t).
 				Status(http.StatusOK).
-				Body(suite.marshal([]cache.Scored{scores[0], scores[2], scores[4]})).
+				Body(suite.marshal(([]cache.Document{documents[0], documents[2], documents[4]}))).
 				End()
 		})
 	}
@@ -976,18 +976,19 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 		End()
 }
 
-func (suite *ServerTestSuite) TestMeasurement() {
+func (suite *ServerTestSuite) TestTimeSeries() {
 	ctx := context.Background()
 	t := suite.T()
-	measurements := []Measurement{
-		{"Test_NDCG", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 0},
-		{"Test_NDCG", time.Date(2001, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 1},
-		{"Test_NDCG", time.Date(2002, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 2},
-		{"Test_NDCG", time.Date(2003, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 3},
-		{"Test_NDCG", time.Date(2004, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 4},
-		{"Test_Recall", time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC).Local(), 1},
+	timestamp := time.Now().Add(24 * time.Hour * -2)
+	points := []cache.TimeSeriesPoint{
+		{"Test_NDCG", timestamp.Add(24 * time.Hour * 0), 0},
+		{"Test_NDCG", timestamp.Add(24 * time.Hour * 1), 1},
+		{"Test_NDCG", timestamp.Add(24 * time.Hour * 2), 2},
+		{"Test_NDCG", timestamp.Add(24 * time.Hour * 3), 3},
+		{"Test_NDCG", timestamp.Add(24 * time.Hour * 4), 4},
+		{"Test_Recall", timestamp, 1},
 	}
-	err := suite.InsertMeasurement(ctx, measurements...)
+	err := suite.CacheClient.AddTimeSeriesPoints(ctx, points)
 	assert.NoError(t, err)
 	apitest.New().
 		Handler(suite.handler).
@@ -996,10 +997,10 @@ func (suite *ServerTestSuite) TestMeasurement() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]Measurement{
-			measurements[4],
-			measurements[3],
-			measurements[2],
+		Body(suite.marshal([]cache.TimeSeriesPoint{
+			points[0],
+			points[1],
+			points[2],
 		})).
 		End()
 	// test auth fail
@@ -1016,20 +1017,39 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 	ctx := context.Background()
 	t := suite.T()
 	// insert hidden items
-	err := suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
+	err := suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{{Id: "0", Score: 100, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = NewCacheModification(suite.CacheClient, suite.HiddenItemsManager).HideItem("0").Exec()
+	// hide item
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/item/0").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	// insert items
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "1"},
+		{ItemId: "2"},
+		{ItemId: "3"},
+		{ItemId: "4"},
+		{ItemId: "5"},
+		{ItemId: "6"},
+		{ItemId: "7"},
+		{ItemId: "8"},
+	})
 	assert.NoError(t, err)
 	// insert recommendation
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{
-		{Id: "1", Score: 99},
-		{Id: "2", Score: 98},
-		{Id: "3", Score: 97},
-		{Id: "4", Score: 96},
-		{Id: "5", Score: 95},
-		{Id: "6", Score: 94},
-		{Id: "7", Score: 93},
-		{Id: "8", Score: 92},
+	err = suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{
+		{Id: "1", Score: 99, Categories: []string{""}},
+		{Id: "2", Score: 98, Categories: []string{""}},
+		{Id: "3", Score: 97, Categories: []string{""}},
+		{Id: "4", Score: 96, Categories: []string{""}},
+		{Id: "5", Score: 95, Categories: []string{""}},
+		{Id: "6", Score: 94, Categories: []string{""}},
+		{Id: "7", Score: 93, Categories: []string{""}},
+		{Id: "8", Score: 92, Categories: []string{""}},
 	})
 	assert.NoError(t, err)
 	// insert feedback
@@ -1124,23 +1144,28 @@ func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
 	ctx := context.Background()
 	t := suite.T()
 	suite.Config.Recommend.Replacement.EnableReplacement = true
-	// insert hidden items
-	err := suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{{"0", 100}})
-	assert.NoError(t, err)
-	err = NewCacheModification(suite.CacheClient, suite.HiddenItemsManager).HideItem("0").Exec()
-	assert.NoError(t, err)
 	// insert recommendation
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), []cache.Scored{
-		{Id: "1", Score: 99},
-		{Id: "2", Score: 98},
-		{Id: "3", Score: 97},
-		{Id: "4", Score: 96},
-		{Id: "5", Score: 95},
-		{Id: "6", Score: 94},
-		{Id: "7", Score: 93},
-		{Id: "8", Score: 92},
+	err := suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{
+		{Id: "0", Score: 100, Categories: []string{""}},
+		{Id: "1", Score: 99, Categories: []string{""}},
+		{Id: "2", Score: 98, Categories: []string{""}},
+		{Id: "3", Score: 97, Categories: []string{""}},
+		{Id: "4", Score: 96, Categories: []string{""}},
+		{Id: "5", Score: 95, Categories: []string{""}},
+		{Id: "6", Score: 94, Categories: []string{""}},
+		{Id: "7", Score: 93, Categories: []string{""}},
+		{Id: "8", Score: 92, Categories: []string{""}},
 	})
 	assert.NoError(t, err)
+	// hide item
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/item/0").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
@@ -1175,8 +1200,11 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 	suite.Config.Recommend.Online.NumFeedbackFallbackItemBased = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
 	// insert recommendation
-	err := suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"),
-		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
+	err := suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{
+		{Id: "1", Score: 99},
+		{Id: "2", Score: 98},
+		{Id: "3", Score: 97},
+		{Id: "4", Score: 96}})
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -1197,60 +1225,38 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		End()
 
 	// insert similar items
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "1"), []cache.Scored{
-		{"2", 100000},
-		{"9", 1},
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "1", []cache.Document{
+		{Id: "2", Score: 100000, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "2"), []cache.Scored{
-		{"3", 100000},
-		{"8", 1},
-		{"9", 1},
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "2", []cache.Document{
+		{Id: "3", Score: 100000, Categories: []string{"", "*"}},
+		{Id: "8", Score: 1, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "3"), []cache.Scored{
-		{"4", 100000},
-		{"7", 1},
-		{"8", 1},
-		{"9", 1},
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "3", []cache.Document{
+		{Id: "4", Score: 100000, Categories: []string{""}},
+		{Id: "7", Score: 1, Categories: []string{"", "*"}},
+		{Id: "8", Score: 1, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "4"), []cache.Scored{
-		{"1", 100000},
-		{"6", 1},
-		{"7", 1},
-		{"8", 1},
-		{"9", 1},
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "4", []cache.Document{
+		{Id: "1", Score: 100000, Categories: []string{"", "*"}},
+		{Id: "6", Score: 1, Categories: []string{""}},
+		{Id: "7", Score: 1, Categories: []string{"", "*"}},
+		{Id: "8", Score: 1, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "5"), []cache.Scored{
-		{"1", 1},
-		{"6", 1},
-		{"7", 100000},
-		{"8", 100},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-
-	// insert similar items of category *
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "1", "*"), []cache.Scored{
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "2", "*"), []cache.Scored{
-		{"3", 100000},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "3", "*"), []cache.Scored{
-		{"7", 1},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "4", "*"), []cache.Scored{
-		{"1", 100000},
-		{"7", 1},
-		{"9", 1},
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "5", []cache.Document{
+		{Id: "1", Score: 1, Categories: []string{""}},
+		{Id: "6", Score: 1, Categories: []string{""}},
+		{Id: "7", Score: 100000, Categories: []string{""}},
+		{Id: "8", Score: 100, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{""}},
 	})
 	assert.NoError(t, err)
 
@@ -1285,8 +1291,8 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 	ctx := context.Background()
 	t := suite.T()
 	// insert recommendation
-	err := suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"),
-		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
+	err := suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0",
+		[]cache.Document{{Id: "1", Score: 99}, {Id: "2", Score: 98}, {Id: "3", Score: 97}, {Id: "4", Score: 96}})
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -1305,10 +1311,10 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		Body(`{"RowAffected": 4}`).
 		End()
 	// insert similar users
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.UserNeighbors, "0"), []cache.Scored{
-		{"1", 2},
-		{"2", 1.5},
-		{"3", 1},
+	err = suite.CacheClient.AddDocuments(ctx, cache.UserNeighbors, "0", []cache.Document{
+		{Id: "1", Score: 2, Categories: []string{""}},
+		{Id: "2", Score: 1.5, Categories: []string{""}},
+		{Id: "3", Score: 1, Categories: []string{""}},
 	})
 	assert.NoError(t, err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -1361,32 +1367,56 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 	ctx := context.Background()
 	t := suite.T()
 	// insert offline recommendation
-	err := suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"),
-		[]cache.Scored{{"1", 99}, {"2", 98}, {"3", 97}, {"4", 96}})
+	err := suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{
+		{Id: "1", Score: 99, Categories: []string{""}},
+		{Id: "2", Score: 98, Categories: []string{""}},
+		{Id: "3", Score: 97, Categories: []string{""}},
+		{Id: "4", Score: 96, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0", "*"),
-		[]cache.Scored{{"101", 99}, {"102", 98}, {"103", 97}, {"104", 96}})
+	err = suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{
+		{Id: "101", Score: 99, Categories: []string{"*"}},
+		{Id: "102", Score: 98, Categories: []string{"*"}},
+		{Id: "103", Score: 97, Categories: []string{"*"}},
+		{Id: "104", Score: 96, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert latest
-	err = suite.CacheClient.SetSorted(ctx, cache.LatestItems,
-		[]cache.Scored{{"5", 95}, {"6", 94}, {"7", 93}, {"8", 92}})
+	err = suite.CacheClient.AddDocuments(ctx, cache.LatestItems, "", []cache.Document{
+		{Id: "5", Score: 95, Categories: []string{""}},
+		{Id: "6", Score: 94, Categories: []string{""}},
+		{Id: "7", Score: 93, Categories: []string{""}},
+		{Id: "8", Score: 92, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.LatestItems, "*"),
-		[]cache.Scored{{"105", 95}, {"106", 94}, {"107", 93}, {"108", 92}})
+	err = suite.CacheClient.AddDocuments(ctx, cache.LatestItems, "", []cache.Document{
+		{Id: "105", Score: 95, Categories: []string{"*"}},
+		{Id: "106", Score: 94, Categories: []string{"*"}},
+		{Id: "107", Score: 93, Categories: []string{"*"}},
+		{Id: "108", Score: 92, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert popular
-	err = suite.CacheClient.SetSorted(ctx, cache.PopularItems,
-		[]cache.Scored{{"9", 91}, {"10", 90}, {"11", 89}, {"12", 88}})
+	err = suite.CacheClient.AddDocuments(ctx, cache.PopularItems, "", []cache.Document{
+		{Id: "9", Score: 91, Categories: []string{""}},
+		{Id: "10", Score: 90, Categories: []string{""}},
+		{Id: "11", Score: 89, Categories: []string{""}},
+		{Id: "12", Score: 88, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.PopularItems, "*"),
-		[]cache.Scored{{"109", 91}, {"110", 90}, {"111", 89}, {"112", 88}})
+	err = suite.CacheClient.AddDocuments(ctx, cache.PopularItems, "", []cache.Document{
+		{Id: "109", Score: 91, Categories: []string{"*"}},
+		{Id: "110", Score: 90, Categories: []string{"*"}},
+		{Id: "111", Score: 89, Categories: []string{"*"}},
+		{Id: "112", Score: 88, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert collaborative filtering
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.CollaborativeRecommend, "0"),
-		[]cache.Scored{{"13", 79}, {"14", 78}, {"15", 77}, {"16", 76}})
+	err = suite.CacheClient.AddDocuments(ctx, cache.CollaborativeRecommend, "0", []cache.Document{
+		{Id: "13", Score: 79, Categories: []string{""}},
+		{Id: "14", Score: 78, Categories: []string{""}},
+		{Id: "15", Score: 77, Categories: []string{""}},
+		{Id: "16", Score: 76, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.CollaborativeRecommend, "0", "*"),
-		[]cache.Scored{{"113", 79}, {"114", 78}, {"115", 77}, {"116", 76}})
+	err = suite.CacheClient.AddDocuments(ctx, cache.CollaborativeRecommend, "0", []cache.Document{
+		{Id: "113", Score: 79, Categories: []string{"*"}},
+		{Id: "114", Score: 78, Categories: []string{"*"}},
+		{Id: "115", Score: 77, Categories: []string{"*"}},
+		{Id: "116", Score: 76, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// test popular fallback
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"popular"}
@@ -1480,7 +1510,44 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 	suite.Config.Recommend.Online.NumFeedbackFallbackItemBased = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
 
-	// insert hidden items
+	// insert similar items
+	err := suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "1", []cache.Document{
+		{Id: "2", Score: 100000, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
+		{Id: "100", Score: 100000, Categories: []string{""}},
+	})
+	assert.NoError(t, err)
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "2", []cache.Document{
+		{Id: "3", Score: 100000, Categories: []string{"", "*"}},
+		{Id: "8", Score: 1, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
+	})
+	assert.NoError(t, err)
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "3", []cache.Document{
+		{Id: "4", Score: 100000, Categories: []string{""}},
+		{Id: "7", Score: 1, Categories: []string{"", "*"}},
+		{Id: "8", Score: 1, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
+	})
+	assert.NoError(t, err)
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "4", []cache.Document{
+		{Id: "1", Score: 100000, Categories: []string{"", "*"}},
+		{Id: "6", Score: 1, Categories: []string{""}},
+		{Id: "7", Score: 1, Categories: []string{"", "*"}},
+		{Id: "8", Score: 1, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{"", "*"}},
+	})
+	assert.NoError(t, err)
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "5", []cache.Document{
+		{Id: "1", Score: 1, Categories: []string{""}},
+		{Id: "6", Score: 1, Categories: []string{""}},
+		{Id: "7", Score: 100000, Categories: []string{""}},
+		{Id: "8", Score: 100, Categories: []string{""}},
+		{Id: "9", Score: 1, Categories: []string{""}},
+	})
+	assert.NoError(t, err)
+
+	// hide items
 	apitest.New().
 		Handler(suite.handler).
 		Post("/api/item").
@@ -1490,65 +1557,6 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-
-	// insert similar items
-	err := suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "1"), []cache.Scored{
-		{"2", 100000},
-		{"9", 1},
-		{"100", 100000},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "2"), []cache.Scored{
-		{"3", 100000},
-		{"8", 1},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "3"), []cache.Scored{
-		{"4", 100000},
-		{"7", 1},
-		{"8", 1},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "4"), []cache.Scored{
-		{"1", 100000},
-		{"6", 1},
-		{"7", 1},
-		{"8", 1},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "5"), []cache.Scored{
-		{"1", 1},
-		{"6", 1},
-		{"7", 100000},
-		{"8", 100},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-
-	// insert similar items of category *
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "1", "*"), []cache.Scored{
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "2", "*"), []cache.Scored{
-		{"3", 100000},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "3", "*"), []cache.Scored{
-		{"7", 1},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "4", "*"), []cache.Scored{
-		{"1", 100000},
-		{"7", 1},
-		{"9", 1},
-	})
-	assert.NoError(t, err)
 
 	// test fallback
 	feedback := []data.Feedback{
@@ -1568,7 +1576,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{{"9", 4}, {"8", 3}, {"7", 2}})).
+		Body(suite.marshal([]cache.Document{{Id: "9", Score: 4}, {Id: "8", Score: 3}, {Id: "7", Score: 2}})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1580,7 +1588,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored(nil))).
+		Body(suite.marshal([]cache.Document(nil))).
 		End()
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
 	apitest.New().
@@ -1593,14 +1601,14 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Scored{{"9", 4}, {"7", 2}})).
+		Body(suite.marshal([]cache.Document{{Id: "9", Score: 4}, {Id: "7", Score: 2}})).
 		End()
 }
 
 func (suite *ServerTestSuite) TestVisibility() {
 	ctx := context.Background()
 	t := suite.T()
-	// insert items
+	// insert items: 0, 1, 2, 3, 4
 	var items []Item
 	for i := 0; i < 5; i++ {
 		items = append(items, Item{
@@ -1622,18 +1630,22 @@ func (suite *ServerTestSuite) TestVisibility() {
 		End()
 
 	// insert cache
-	var scores []cache.Scored
+	var documents []cache.Document
 	for i := range items {
-		scores = append(scores, cache.Scored{Id: strconv.Itoa(i), Score: float64(time.Date(1989, 6, i+1, 1, 1, 1, 1, time.UTC).Unix())})
+		documents = append(documents, cache.Document{
+			Id:         strconv.Itoa(i),
+			Score:      float64(time.Date(1989, 6, i+1, 1, 1, 1, 1, time.UTC).Unix()),
+			Categories: []string{"", "a"},
+		})
 	}
-	lo.Reverse(scores)
-	err := suite.CacheClient.SetSorted(ctx, cache.LatestItems, scores)
+	lo.Reverse(documents)
+	err := suite.CacheClient.AddDocuments(ctx, cache.LatestItems, "", documents)
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.PopularItems, scores)
+	err = suite.CacheClient.AddDocuments(ctx, cache.PopularItems, "", documents)
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "100"), scores)
+	err = suite.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, "100", documents)
 	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "100"), scores)
+	err = suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "100", documents)
 	assert.NoError(t, err)
 
 	// delete item
@@ -1672,7 +1684,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores[:2])).
+		Body(suite.marshal((documents[:2]))).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1681,7 +1693,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores[:2])).
+		Body(suite.marshal((documents[:2]))).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1690,7 +1702,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores[:2])).
+		Body(suite.marshal((documents[:2]))).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1699,7 +1711,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(cache.RemoveScores(scores[:2]))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents[:2]))).
 		End()
 
 	// insert item
@@ -1738,7 +1750,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores)).
+		Body(suite.marshal(documents[:len(documents)-1])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1747,7 +1759,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores)).
+		Body(suite.marshal(documents)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1756,7 +1768,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores)).
+		Body(suite.marshal(documents[:len(documents)-1])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1765,18 +1777,8 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(cache.RemoveScores(scores))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents))).
 		End()
-
-	// insert cache
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.LatestItems, "a"), scores)
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.PopularItems, "a"), scores)
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, "100", "a"), scores)
-	assert.NoError(t, err)
-	err = suite.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "100", "a"), scores)
-	assert.NoError(t, err)
 
 	// delete category
 	apitest.New().
@@ -1814,7 +1816,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores[:2])).
+		Body(suite.marshal(documents[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1823,7 +1825,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores[:2])).
+		Body(suite.marshal(documents[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1832,7 +1834,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores[:2])).
+		Body(suite.marshal(documents[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1841,7 +1843,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(cache.RemoveScores(scores[:2]))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents[:2]))).
 		End()
 
 	// delete category
@@ -1867,7 +1869,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Handler(suite.handler).
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
-		JSON(Item{ItemId: "2", Categories: []string{"a"}}).
+		JSON(Item{ItemId: "2", Categories: []string{"a"}, Timestamp: time.Date(1989, 6, 3, 1, 1, 1, 1, time.UTC).String()}).
 		Expect(t).
 		Status(http.StatusOK).
 		End()
@@ -1880,7 +1882,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores)).
+		Body(suite.marshal(documents[:len(documents)-1])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1889,7 +1891,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores)).
+		Body(suite.marshal(documents)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1898,7 +1900,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(scores)).
+		Body(suite.marshal(documents[:len(documents)-1])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1907,7 +1909,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(cache.RemoveScores(scores))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents))).
 		End()
 }
 

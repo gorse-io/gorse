@@ -140,8 +140,8 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// evaluate positive feedback rate
-	measurement := evaluator.Evaluate()
-	if err = m.RestServer.InsertMeasurement(ctx, measurement...); err != nil {
+	points := evaluator.Evaluate()
+	if err = m.RestServer.InsertMeasurement(ctx, points...); err != nil {
 		log.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
 

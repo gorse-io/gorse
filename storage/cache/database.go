@@ -190,9 +190,9 @@ type SetMember struct {
 type Document struct {
 	Id         string
 	Score      float64
-	IsHidden   bool
-	Categories []string `gorm:"type:text;serializer:json"`
-	Timestamp  time.Time
+	IsHidden   bool      `json:"-"`
+	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
+	Timestamp  time.Time `json:"-"`
 }
 
 func SortDocuments(documents []Document) {
