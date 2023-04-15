@@ -444,7 +444,7 @@ func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoin
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
 	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
-		fmt.Sprintf("@name:{ %s } @timestamp:[%d %d)", name, begin.UnixMicro(), end.UnixMicro()),
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", name, begin.UnixMicro(), end.UnixMicro()),
 		"SORTBY", "timestamp").Result()
 	if err != nil {
 		return nil, errors.Trace(err)

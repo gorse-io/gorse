@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -194,6 +195,12 @@ type Document struct {
 	Timestamp  time.Time
 }
 
+func SortDocuments(documents []Document) {
+	sort.Slice(documents, func(i, j int) bool {
+		return documents[i].Score > documents[j].Score
+	})
+}
+
 func ConvertDocumentsToValues(documents []Document) []string {
 	values := make([]string, len(documents))
 	for i := range values {
@@ -202,6 +209,9 @@ func ConvertDocumentsToValues(documents []Document) []string {
 	return values
 }
 
+// DocumentAggregator is used to keep the compatibility with the old recommender system and will be removed in the future.
+// In old recommender system, the recommendation is genereated per category.
+// In the new recommender system, the recommendation is generated globally.
 type DocumentAggregator struct {
 	Documents map[string]*Document
 	Timestamp time.Time
@@ -235,6 +245,7 @@ func (aggregator *DocumentAggregator) Add(category string, values []string, scor
 func (aggregator *DocumentAggregator) ToSlice() []Document {
 	documents := make([]Document, 0, len(aggregator.Documents))
 	for _, document := range aggregator.Documents {
+		sort.Strings(document.Categories)
 		documents = append(documents, *document)
 	}
 	return documents
