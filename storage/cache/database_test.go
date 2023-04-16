@@ -261,7 +261,7 @@ func (suite *baseTestSuite) TestDocument() {
 		{
 			Id:         "4",
 			Score:      4,
-			Categories: []string{},
+			Categories: []string{""},
 			Timestamp:  ts,
 		},
 		{
@@ -295,6 +295,11 @@ func (suite *baseTestSuite) TestDocument() {
 		{Id: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
 		{Id: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
 	}, documents)
+
+	// search documents with empty category
+	documents, err = suite.SearchDocuments(ctx, "a", "", []string{""}, 0, -1)
+	suite.NoError(err)
+	suite.Equal([]Document{{Id: "4", Score: 4, Categories: []string{""}, Timestamp: ts}}, documents)
 
 	// delete nothing
 	err = suite.DeleteDocuments(ctx, []string{"a"}, DocumentCondition{})

@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"strconv"
@@ -242,7 +243,7 @@ func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, doc
 			"id", document.Id,
 			"score", document.Score,
 			"is_hidden", document.IsHidden,
-			"categories", strings.Join(document.Categories, ";"),
+			"categories", encodeCategories(document.Categories),
 			"timestamp", document.Timestamp.UnixMicro())
 	}
 	_, err := p.Exec(ctx)
@@ -259,7 +260,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", subset))
 	}
 	for _, q := range query {
-		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", q))
+		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", encdodeCategory(q)))
 	}
 	args := []any{"FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", begin}
 	if end == -1 {
@@ -308,7 +309,7 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 				values = append(values, "is_hidden", *patch.IsHidden)
 			}
 			if patch.Categories != nil {
-				values = append(values, "categories", strings.Join(patch.Categories, ";"))
+				values = append(values, "categories", encodeCategories(patch.Categories))
 			}
 			if err = r.client.Watch(ctx, func(tx *redis.Tx) error {
 				if exist, err := tx.Exists(ctx, key).Result(); err != nil {
@@ -411,7 +412,10 @@ func parseSearchDocumentsResult(result any) (count int64, keys []string, documen
 		if !ok {
 			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
 		}
-		document.Categories = strings.Split(categories, ";")
+		document.Categories, err = decodeCategories(categories)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
 		timestamp, ok := fields["timestamp"].(string)
 		if !ok {
 			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
@@ -504,4 +508,39 @@ func parseGetTimeSeriesPointsResult(result any) (count int64, keys []string, poi
 		points = append(points, point)
 	}
 	return
+}
+
+func encdodeCategory(category string) string {
+	return base64.RawStdEncoding.EncodeToString([]byte("_" + category))
+}
+
+func decodeCategory(s string) (string, error) {
+	b, err := base64.RawStdEncoding.DecodeString(s)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return string(b[1:]), nil
+}
+
+func encodeCategories(categories []string) string {
+	var builder strings.Builder
+	for i, category := range categories {
+		if i > 0 {
+			builder.WriteByte(';')
+		}
+		builder.WriteString(encdodeCategory(category))
+	}
+	return builder.String()
+}
+
+func decodeCategories(s string) ([]string, error) {
+	var categories []string
+	for _, category := range strings.Split(s, ";") {
+		category, err := decodeCategory(category)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		categories = append(categories, category)
+	}
+	return categories, nil
 }
