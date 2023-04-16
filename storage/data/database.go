@@ -267,19 +267,19 @@ func Open(path, tablePrefix string) (Database, error) {
 		}
 		return database, nil
 	} else if strings.HasPrefix(path, storage.SQLitePrefix) {
+		dataSourceName := path[len(storage.SQLitePrefix):]
 		// append parameters
-		if path, err = storage.AppendURLParams(path, []lo.Tuple2[string, string]{
+		if dataSourceName, err = storage.AppendURLParams(dataSourceName, []lo.Tuple2[string, string]{
 			{"_pragma", "busy_timeout(10000)"},
 			{"_pragma", "journal_mode(wal)"},
 		}); err != nil {
 			return nil, errors.Trace(err)
 		}
 		// connect to database
-		name := path[len(storage.SQLitePrefix):]
 		database := new(SQLDatabase)
 		database.driver = SQLite
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("sqlite", name,
+		if database.client, err = otelsql.Open("sqlite", dataSourceName,
 			otelsql.WithAttributes(semconv.DBSystemSqlite),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
