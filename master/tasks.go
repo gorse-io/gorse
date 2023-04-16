@@ -17,7 +17,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -87,7 +86,7 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save popular items to cache
-	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, "", popularItems.ToSlice()...); err != nil {
+	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, "", popularItems.ToSlice()); err != nil {
 		log.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
 	if err = m.CacheClient.DeleteDocuments(ctx, []string{cache.PopularItems}, cache.DocumentCondition{Before: &popularItems.Timestamp}); err != nil {
@@ -98,7 +97,7 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save the latest items to cache
-	if err = m.CacheClient.AddDocuments(ctx, cache.LatestItems, "", latestItems.ToSlice()...); err != nil {
+	if err = m.CacheClient.AddDocuments(ctx, cache.LatestItems, "", latestItems.ToSlice()); err != nil {
 		log.Logger().Error("failed to cache latest items", zap.Error(err))
 	}
 	if err = m.CacheClient.DeleteDocuments(ctx, []string{cache.LatestItems}, cache.DocumentCondition{Before: &latestItems.Timestamp}); err != nil {
@@ -141,7 +140,7 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// evaluate positive feedback rate
 	points := evaluator.Evaluate()
-	if err = m.RestServer.InsertMeasurement(ctx, points...); err != nil {
+	if err = m.CacheClient.AddTimeSeriesPoints(ctx, points); err != nil {
 		log.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
 
@@ -405,7 +404,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 			aggregator.Add(category, recommends, scores)
 		}
-		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
@@ -509,7 +508,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 				aggregator.Add(category, resultValues, resultScores)
 			}
 		}
-		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
@@ -736,7 +735,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		}
 		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		aggregator.Add("", recommends, scores)
-		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
@@ -828,7 +827,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		}
 		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		aggregator.Add("", resultValues, resultScores)
-		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()...); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
@@ -892,7 +891,7 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 	)
 	ctx := context.Background()
 	// check cache
-	if items, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.UserNeighbors, userId), 0, -1); err != nil {
+	if items, err := m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, userId, []string{""}, 0, -1); err != nil {
 		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {
@@ -947,7 +946,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 
 	// check cache
 	for _, category := range append([]string{""}, categories...) {
-		items, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.ItemNeighbors, itemId, category), 0, -1)
+		items, err := m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, itemId, []string{category}, 0, -1)
 		if err != nil {
 			log.Logger().Error("failed to load item neighbors", zap.String("item_id", itemId), zap.Error(err))
 			return true
@@ -1364,7 +1363,7 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 		scanCount++
 		t.taskMonitor.Update(TaskCacheGarbageCollection, scanCount)
 		switch splits[0] {
-		case cache.UserNeighbors, cache.UserNeighborsDigest, cache.IgnoreItems,
+		case cache.UserNeighbors, cache.UserNeighborsDigest,
 			cache.OfflineRecommend, cache.OfflineRecommendDigest, cache.CollaborativeRecommend,
 			cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
 			userId := splits[1]
@@ -1382,8 +1381,6 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 			}
 			// delete user cache
 			switch splits[0] {
-			case cache.UserNeighbors, cache.IgnoreItems, cache.CollaborativeRecommend, cache.OfflineRecommend:
-				err = t.CacheClient.SetSorted(ctx, s, nil)
 			case cache.UserNeighborsDigest, cache.OfflineRecommendDigest,
 				cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
 				err = t.CacheClient.Delete(ctx, s)
@@ -1408,8 +1405,6 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 			}
 			// delete item cache
 			switch splits[0] {
-			case cache.ItemNeighbors:
-				err = t.CacheClient.SetSorted(ctx, s, nil)
 			case cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
 				err = t.CacheClient.Delete(ctx, s)
 			}
@@ -1420,10 +1415,6 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 		}
 		return nil
 	})
-	// remove stale hidden items
-	if err := t.CacheClient.RemSortedByScore(ctx, cache.HiddenItemsV2, math.Inf(-1), float64(time.Now().Add(-t.Config.Recommend.CacheExpire).Unix())); err != nil {
-		return errors.Trace(err)
-	}
 	t.taskMonitor.Finish(TaskCacheGarbageCollection)
 	CacheScannedTotal.Set(float64(scanCount))
 	CacheReclaimedTotal.Set(float64(reclaimCount))
