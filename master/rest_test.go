@@ -660,7 +660,6 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
 				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
-				fmt.Println(score.Id)
 				err = s.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: score.Id}})
 				assert.NoError(t, err)
 			}

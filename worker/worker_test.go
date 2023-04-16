@@ -750,6 +750,8 @@ func TestWorker_Sync(t *testing.T) {
 	serv.Sync()
 	assert.Equal(t, master.dataFilePath, serv.dataPath)
 	assert.Equal(t, master.cacheFilePath, serv.cachePath)
+	assert.NoError(t, serv.DataClient.Close())
+	assert.NoError(t, serv.CacheClient.Close())
 	assert.Equal(t, int64(1), serv.latestClickModelVersion)
 	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
 	assert.Zero(t, serv.ClickModelVersion)

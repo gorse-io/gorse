@@ -113,11 +113,16 @@ type SQLiteTestSuite struct {
 func (suite *SQLiteTestSuite) SetupSuite() {
 	var err error
 	// create database
-	suite.Database, err = Open("sqlite://:memory:", "gorse_")
+	path := fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())
+	suite.Database, err = Open(path, "gorse_")
 	suite.NoError(err)
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
+}
+
+func (suite *SQLiteTestSuite) TearDownSuite() {
+	suite.NoError(suite.Database.Close())
 }
 
 func TestSQLite(t *testing.T) {

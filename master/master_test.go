@@ -17,34 +17,39 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
-type mockMaster struct {
+type MasterTestSuite struct {
+	suite.Suite
 	Master
 }
 
-func (m *mockMaster) Close() {
-}
-
-func newMockMaster(t *testing.T) *mockMaster {
-	s := new(mockMaster)
+func (s *MasterTestSuite) SetupTest() {
 	s.taskMonitor = task.NewTaskMonitor()
 	// open database
 	var err error
 	s.Settings = config.NewSettings()
-	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", t.TempDir()), "")
-	assert.NoError(t, err)
-	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", t.TempDir()), "")
-	assert.NoError(t, err)
+	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", s.T().TempDir()), "")
+	s.NoError(err)
+	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", s.T().TempDir()), "")
+	s.NoError(err)
 	// init database
 	err = s.DataClient.Init()
-	assert.NoError(t, err)
+	s.NoError(err)
 	err = s.CacheClient.Init()
-	assert.NoError(t, err)
-	return s
+	s.NoError(err)
+}
+
+func (s *MasterTestSuite) TearDownTest() {
+	s.NoError(s.DataClient.Close())
+	s.NoError(s.CacheClient.Close())
+}
+
+func TestMaster(t *testing.T) {
+	suite.Run(t, new(MasterTestSuite))
 }
