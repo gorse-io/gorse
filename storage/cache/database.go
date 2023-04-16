@@ -177,11 +177,6 @@ func (r *ReturnValue) Time() (time.Time, error) {
 	return dateparse.ParseAny(r.value)
 }
 
-type SetMember struct {
-	name   string
-	member string
-}
-
 type Document struct {
 	Id         string
 	Score      float64

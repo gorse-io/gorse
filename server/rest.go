@@ -726,7 +726,6 @@ func (s *RestServer) Recommend(ctx context.Context, response *restful.Response, 
 
 type recommendContext struct {
 	context      context.Context
-	response     *restful.Response
 	userId       string
 	category     string
 	userFeedback []data.Feedback
