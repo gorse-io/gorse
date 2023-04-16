@@ -1468,7 +1468,6 @@ func (m *Master) scheduleAPIHandler(writer http.ResponseWriter, request *http.Re
 				m.scheduleState.SearchModel = searchModel
 			}
 		}
-		fmt.Println(m.scheduleState.SearchModel)
 		m.triggerChan.Signal()
 	default:
 		writeError(writer, http.StatusMethodNotAllowed, "method not allowed")

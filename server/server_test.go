@@ -94,5 +94,7 @@ func TestServer_Sync(t *testing.T) {
 	serv.Sync()
 	assert.Equal(t, master.dataTempFile, serv.dataPath)
 	assert.Equal(t, master.cacheTempFile, serv.cachePath)
+	assert.NoError(t, serv.DataClient.Close())
+	assert.NoError(t, serv.CacheClient.Close())
 	master.Stop()
 }
