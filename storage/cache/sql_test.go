@@ -125,7 +125,7 @@ func (suite *SQLiteTestSuite) SetupSuite() {
 }
 
 func (suite *SQLiteTestSuite) TearDownSuite() {
-	_ = os.Remove(suite.path)
+	suite.NoError(suite.Database.Close())
 }
 
 func TestSQLite(t *testing.T) {
