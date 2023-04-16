@@ -230,9 +230,6 @@ func (m *Master) Serve() {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
-	m.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&m.RestServer)
-	m.RestServer.PopularItemsCache = server.NewPopularItemsCache(&m.RestServer)
-
 	if m.managedMode {
 		go m.RunManagedTasksLoop()
 	} else {

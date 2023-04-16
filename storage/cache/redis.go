@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"strconv"
@@ -57,10 +58,23 @@ func (r *Redis) Init() error {
 	if !lo.Contains(indices, r.DocumentTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
 			"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
-			"name", "TAG",
-			"value", "TAG",
+			"collection", "TAG",
+			"subset", "TAG",
+			"id", "TAG",
 			"score", "NUMERIC", "SORTABLE",
-			"categories", "TAG", "SEPARATOR", ";").
+			"is_hidden", "NUMERIC",
+			"categories", "TAG", "SEPARATOR", ";",
+			"timestamp", "NUMERIC", "SORTABLE").
+			Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if !lo.Contains(indices, r.PointsTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.PointsTable(),
+			"ON", "HASH", "PREFIX", "1", r.PointsTable()+":", "SCHEMA",
+			"name", "TAG",
+			"timestamp", "NUMERIC", "SORTABLE").
 			Result()
 		if err != nil {
 			return errors.Trace(err)
@@ -196,87 +210,6 @@ func (r *Redis) RemSet(ctx context.Context, key string, members ...string) error
 	return r.client.SRem(ctx, r.Key(key), members).Err()
 }
 
-// GetSorted get scores from sorted set.
-func (r *Redis) GetSorted(ctx context.Context, key string, begin, end int) ([]Scored, error) {
-	members, err := r.client.ZRevRangeWithScores(ctx, r.Key(key), int64(begin), int64(end)).Result()
-	if err != nil {
-		return nil, err
-	}
-	results := make([]Scored, 0, len(members))
-	for _, member := range members {
-		results = append(results, Scored{Id: member.Member.(string), Score: member.Score})
-	}
-	return results, nil
-}
-
-func (r *Redis) GetSortedByScore(ctx context.Context, key string, begin, end float64) ([]Scored, error) {
-	members, err := r.client.ZRangeByScoreWithScores(ctx, r.Key(key), &redis.ZRangeBy{
-		Min:    strconv.FormatFloat(begin, 'g', -1, 64),
-		Max:    strconv.FormatFloat(end, 'g', -1, 64),
-		Offset: 0,
-		Count:  -1,
-	}).Result()
-	if err != nil {
-		return nil, err
-	}
-	results := make([]Scored, 0, len(members))
-	for _, member := range members {
-		results = append(results, Scored{Id: member.Member.(string), Score: member.Score})
-	}
-	return results, nil
-}
-
-func (r *Redis) RemSortedByScore(ctx context.Context, key string, begin, end float64) error {
-	return r.client.ZRemRangeByScore(ctx, r.Key(key),
-		strconv.FormatFloat(begin, 'g', -1, 64),
-		strconv.FormatFloat(end, 'g', -1, 64)).
-		Err()
-}
-
-// AddSorted add scores to sorted set.
-func (r *Redis) AddSorted(ctx context.Context, sortedSets ...SortedSet) error {
-	p := r.client.Pipeline()
-	for _, sorted := range sortedSets {
-		if len(sorted.scores) > 0 {
-			members := make([]redis.Z, 0, len(sorted.scores))
-			for _, score := range sorted.scores {
-				members = append(members, redis.Z{Member: score.Id, Score: score.Score})
-			}
-			p.ZAdd(ctx, r.Key(sorted.name), members...)
-		}
-	}
-	_, err := p.Exec(ctx)
-	return err
-}
-
-// SetSorted set scores in sorted set and clear previous scores.
-func (r *Redis) SetSorted(ctx context.Context, key string, scores []Scored) error {
-	members := make([]redis.Z, 0, len(scores))
-	for _, score := range scores {
-		members = append(members, redis.Z{Member: score.Id, Score: float64(score.Score)})
-	}
-	pipeline := r.client.Pipeline()
-	pipeline.Del(ctx, r.Key(key))
-	if len(scores) > 0 {
-		pipeline.ZAdd(ctx, r.Key(key), members...)
-	}
-	_, err := pipeline.Exec(ctx)
-	return err
-}
-
-// RemSorted method of NoDatabase returns ErrNoDatabase.
-func (r *Redis) RemSorted(ctx context.Context, members ...SetMember) error {
-	if len(members) == 0 {
-		return nil
-	}
-	pipe := r.client.Pipeline()
-	for _, member := range members {
-		pipe.ZRem(ctx, r.Key(member.name), member.member)
-	}
-	_, err := pipe.Exec(ctx)
-	return errors.Trace(err)
-}
-
 func (r *Redis) Push(ctx context.Context, name string, message string) error {
 	_, err := r.client.ZAdd(ctx, r.Key(name), redis.Z{Member: message, Score: float64(time.Now().UnixNano())}).Result()
 	return err
@@ -297,24 +230,37 @@ func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
 	return r.client.ZCard(ctx, r.Key(name)).Result()
 }
 
-func (r *Redis) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+func (r *Redis) documentKey(collection, subset, value string) string {
+	return r.DocumentTable() + ":" + collection + ":" + subset + ":" + value
+}
+
+func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
 	p := r.client.Pipeline()
 	for _, document := range documents {
-		p.Do(ctx, "HSET", r.DocumentTable()+":"+name+":"+document.Value,
-			"name", name,
-			"value", document.Value,
+		p.HSet(ctx, r.documentKey(collection, subset, document.Id),
+			"collection", collection,
+			"subset", subset,
+			"id", document.Id,
 			"score", document.Score,
-			"categories", strings.Join(document.Categories, ";"))
+			"is_hidden", document.IsHidden,
+			"categories", encodeCategories(document.Categories),
+			"timestamp", document.Timestamp.UnixMicro())
 	}
 	_, err := p.Exec(ctx)
 	return errors.Trace(err)
 }
 
-func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
+func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+	if len(query) == 0 {
+		return nil, nil
+	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@name:{ %s }", name))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", collection))
+	if subset != "" {
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", subset))
+	}
 	for _, q := range query {
-		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", q))
+		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", encdodeCategory(q)))
 	}
 	args := []any{"FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", begin}
 	if end == -1 {
@@ -326,22 +272,275 @@ func (r *Redis) SearchDocuments(ctx context.Context, name string, query []string
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	rows := result.([]any)
-	documents := make([]Document, 0)
-	for i := 2; i < len(rows); i += 2 {
-		row := rows[i]
+	_, _, documents, err := parseSearchDocumentsResult(result)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return documents, nil
+}
+
+func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
+	if len(collections) == 0 {
+		return nil
+	}
+	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
+		return nil
+	}
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", strings.Join(collections, " | ")))
+	builder.WriteString(fmt.Sprintf(" @id:{ %s }", id))
+	for {
+		// search documents
+		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		count, keys, _, err := parseSearchDocumentsResult(result)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// update documents
+		for _, key := range keys {
+			values := make([]any, 0)
+			if patch.Score != nil {
+				values = append(values, "score", *patch.Score)
+			}
+			if patch.IsHidden != nil {
+				values = append(values, "is_hidden", *patch.IsHidden)
+			}
+			if patch.Categories != nil {
+				values = append(values, "categories", encodeCategories(patch.Categories))
+			}
+			if err = r.client.Watch(ctx, func(tx *redis.Tx) error {
+				if exist, err := tx.Exists(ctx, key).Result(); err != nil {
+					return err
+				} else if exist == 0 {
+					return nil
+				}
+				return tx.HSet(ctx, key, values...).Err()
+			}, key); err != nil {
+				return errors.Trace(err)
+			}
+		}
+		// break if no more documents
+		if count <= int64(len(keys)) {
+			break
+		}
+	}
+	return nil
+}
+
+func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+	if err := condition.Check(); err != nil {
+		return errors.Trace(err)
+	}
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", strings.Join(collections, " | ")))
+	if condition.Subset != nil {
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", *condition.Subset))
+	}
+	if condition.Id != nil {
+		builder.WriteString(fmt.Sprintf(" @id:{ %s }", *condition.Id))
+	}
+	if condition.Before != nil {
+		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf,%d]", condition.Before.UnixMicro()))
+	}
+	for {
+		// search documents
+		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		count, keys, _, err := parseSearchDocumentsResult(result)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// delete documents
+		p := r.client.Pipeline()
+		for _, key := range keys {
+			p.Del(ctx, key)
+		}
+		_, err = p.Exec(ctx)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// break if no more documents
+		if count == int64(len(keys)) {
+			break
+		}
+	}
+	return nil
+}
+
+func parseSearchDocumentsResult(result any) (count int64, keys []string, documents []Document, err error) {
+	rows, ok := result.([]any)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	count, ok = rows[0].(int64)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	for i := 1; i < len(rows); i += 2 {
+		key, ok := rows[i].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		keys = append(keys, key)
+		row, ok := rows[i+1].([]any)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
 		fields := make(map[string]any)
-		for j := 0; j < len(row.([]any)); j += 2 {
-			fields[row.([]any)[j].(string)] = row.([]any)[j+1]
+		for j := 0; j < len(row); j += 2 {
+			fields[row[j].(string)] = row[j+1]
 		}
 		var document Document
-		document.Value = fields["value"].(string)
-		document.Score, err = strconv.ParseFloat(fields["score"].(string), 64)
+		document.Id, ok = fields["id"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		score, ok := fields["score"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		document.Score, err = strconv.ParseFloat(score, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		categories, ok := fields["categories"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		document.Categories, err = decodeCategories(categories)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		timestamp, ok := fields["timestamp"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		timestampMicros, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		document.Timestamp = time.UnixMicro(timestampMicros).In(time.UTC)
+		documents = append(documents, document)
+	}
+	return
+}
+
+func (r *Redis) pointKey(name string, timestamp time.Time) string {
+	return fmt.Sprintf("%s:%s:%d", r.PointsTable(), name, timestamp.UnixMicro())
+}
+
+func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	p := r.client.Pipeline()
+	for _, point := range points {
+		p.HSet(ctx, r.pointKey(point.Name, point.Timestamp),
+			"name", point.Name,
+			"value", point.Value,
+			"timestamp", point.Timestamp.UnixMicro())
+	}
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
+}
+
+func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", name, begin.UnixMicro(), end.UnixMicro()),
+		"SORTBY", "timestamp").Result()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	_, _, points, err := parseGetTimeSeriesPointsResult(result)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return points, nil
+}
+
+func parseGetTimeSeriesPointsResult(result any) (count int64, keys []string, points []TimeSeriesPoint, err error) {
+	rows, ok := result.([]any)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	count, ok = rows[0].(int64)
+	if !ok {
+		return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+	}
+	for i := 1; i < len(rows); i += 2 {
+		key, ok := rows[i].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		keys = append(keys, key)
+		row, ok := rows[i+1].([]any)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		fields := make(map[string]any)
+		for j := 0; j < len(row); j += 2 {
+			fields[row[j].(string)] = row[j+1]
+		}
+		var point TimeSeriesPoint
+		point.Name, ok = fields["name"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		value, ok := fields["value"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		point.Value, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		timestamp, ok := fields["timestamp"].(string)
+		if !ok {
+			return 0, nil, nil, errors.New("invalid FT.SEARCH result")
+		}
+		timestampMicros, err := strconv.ParseInt(timestamp, 10, 64)
+		if err != nil {
+			return 0, nil, nil, errors.Trace(err)
+		}
+		point.Timestamp = time.UnixMicro(timestampMicros).In(time.UTC)
+		points = append(points, point)
+	}
+	return
+}
+
+func encdodeCategory(category string) string {
+	return base64.RawStdEncoding.EncodeToString([]byte("_" + category))
+}
+
+func decodeCategory(s string) (string, error) {
+	b, err := base64.RawStdEncoding.DecodeString(s)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return string(b[1:]), nil
+}
+
+func encodeCategories(categories []string) string {
+	var builder strings.Builder
+	for i, category := range categories {
+		if i > 0 {
+			builder.WriteByte(';')
+		}
+		builder.WriteString(encdodeCategory(category))
+	}
+	return builder.String()
+}
+
+func decodeCategories(s string) ([]string, error) {
+	var categories []string
+	for _, category := range strings.Split(s, ";") {
+		category, err := decodeCategory(category)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		document.Categories = strings.Split(fields["categories"].(string), ";")
-		documents = append(documents, document)
+		categories = append(categories, category)
 	}
-	return documents, nil
+	return categories, nil
 }

@@ -40,6 +40,7 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -70,10 +71,9 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	s.Config = config.GetDefaultConfig()
 	s.Config.Master.DashboardUserName = mockMasterUsername
 	s.Config.Master.DashboardPassword = mockMasterPassword
-	s.RestServer.HiddenItemsManager = server.NewHiddenItemsManager(&s.RestServer)
-	s.RestServer.PopularItemsCache = server.NewPopularItemsCache(&s.RestServer)
 	s.WebService = new(restful.WebService)
 	s.CreateWebService()
+	s.RestServer.CreateWebService()
 	// create handler
 	s.handler = restful.NewContainer()
 	s.handler.Add(s.WebService)
@@ -533,19 +533,16 @@ func TestMaster_GetRates(t *testing.T) {
 	// write rates
 	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
 	// This first measurement should be overwritten.
-	err := s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
-	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
-	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
-	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
-	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)})
-	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)})
-	assert.NoError(t, err)
-	err = s.RestServer.InsertMeasurement(ctx, server.Measurement{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)})
+	baseTimestamp := time.Now()
+	err := s.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
+		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
+		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
+		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
+		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
+		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
+		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
+		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
+	})
 	assert.NoError(t, err)
 
 	// get rates
@@ -555,16 +552,16 @@ func TestMaster_GetRates(t *testing.T) {
 		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, map[string][]server.Measurement{
+		Body(marshal(t, map[string][]cache.TimeSeriesPoint{
 			"a": {
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)},
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)},
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
+				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
 			},
 			"b": {
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: time.Date(2000, 1, 3, 1, 1, 1, 0, time.UTC)},
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 2, 1, 1, 1, 0, time.UTC)},
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
+				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
 			},
 		})).
 		End()
@@ -629,44 +626,53 @@ func TestMaster_GetUsers(t *testing.T) {
 		End()
 }
 
-func TestServer_SortedItems(t *testing.T) {
+func TestServer_SearchDocumentsOfItems(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
-		Name   string
-		Prefix string
-		Label  string
-		Get    string
+		Name       string
+		Collection string
+		Subset     string
+		Category   string
+		Get        string
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{"Item Neighbors", cache.ItemNeighbors, "0", "/api/dashboard/item/0/neighbors"},
-		{"Item Neighbors in Category", cache.ItemNeighbors, "0/*", "/api/dashboard/item/0/neighbors/*"},
-		{"Latest Items", cache.LatestItems, "", "/api/dashboard/latest/"},
-		{"Popular Items", cache.PopularItems, "", "/api/dashboard/popular/"},
-		{"Latest Items in Category", cache.LatestItems, "*", "/api/dashboard/latest/*"},
-		{"Popular Items in Category", cache.PopularItems, "*", "/api/dashboard/popular/*"},
+		{"Item Neighbors", cache.ItemNeighbors, "0", "", "/api/dashboard/item/0/neighbors"},
+		{"Item Neighbors in Category", cache.ItemNeighbors, "0", "*", "/api/dashboard/item/0/neighbors/*"},
+		{"Latest Items", cache.LatestItems, "", "", "/api/dashboard/latest/"},
+		{"Popular Items", cache.PopularItems, "", "", "/api/dashboard/popular/"},
+		{"Latest Items in Category", cache.LatestItems, "", "*", "/api/dashboard/latest/*"},
+		{"Popular Items in Category", cache.PopularItems, "", "*", "/api/dashboard/popular/*"},
 	}
 	for i, operator := range operators {
 		t.Run(operator.Name, func(t *testing.T) {
 			// Put scores
-			scores := []cache.Scored{
-				{strconv.Itoa(i) + "0", 100},
-				{strconv.Itoa(i) + "1", 99},
-				{strconv.Itoa(i) + "2", 98},
-				{strconv.Itoa(i) + "3", 97},
-				{strconv.Itoa(i) + "4", 96},
+			scores := []cache.Document{
+				{Id: strconv.Itoa(i) + "0", Score: 100, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "1", Score: 99, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "2", Score: 98, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "3", Score: 97, Categories: []string{operator.Category}},
+				{Id: strconv.Itoa(i) + "4", Score: 96, Categories: []string{operator.Category}},
 			}
-			err := s.CacheClient.SetSorted(ctx, cache.Key(operator.Prefix, operator.Label), scores)
-			assert.NoError(t, err)
-			err = server.NewCacheModification(s.CacheClient, s.HiddenItemsManager).HideItem(strconv.Itoa(i) + "3").Exec()
+			err := s.CacheClient.AddDocuments(ctx, operator.Collection, operator.Subset, scores)
 			assert.NoError(t, err)
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
 				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
+				fmt.Println(score.Id)
 				err = s.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: score.Id}})
 				assert.NoError(t, err)
 			}
+			// hide item
+			apitest.New().
+				Handler(s.handler).
+				Patch("/api/item/"+strconv.Itoa(i)+"3").
+				Header("Cookie", cookie).
+				JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+				Expect(t).
+				Status(http.StatusOK).
+				End()
 			apitest.New().
 				Handler(s.handler).
 				Get(operator.Get).
@@ -679,7 +685,7 @@ func TestServer_SortedItems(t *testing.T) {
 	}
 }
 
-func TestServer_SortedUsers(t *testing.T) {
+func TestServer_SearchDocumentsOfUsers(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	type ListOperator struct {
@@ -694,14 +700,14 @@ func TestServer_SortedUsers(t *testing.T) {
 	for _, operator := range operators {
 		t.Logf("test RESTful API: %v", operator.Get)
 		// Put scores
-		scores := []cache.Scored{
-			{"0", 100},
-			{"1", 99},
-			{"2", 98},
-			{"3", 97},
-			{"4", 96},
+		scores := []cache.Document{
+			{Id: "0", Score: 100, Categories: []string{""}},
+			{Id: "1", Score: 99, Categories: []string{""}},
+			{Id: "2", Score: 98, Categories: []string{""}},
+			{Id: "3", Score: 97, Categories: []string{""}},
+			{Id: "4", Score: 96, Categories: []string{""}},
 		}
-		err := s.CacheClient.SetSorted(ctx, cache.Key(operator.Prefix, operator.Label), scores)
+		err := s.CacheClient.AddDocuments(ctx, operator.Prefix, operator.Label, scores)
 		assert.NoError(t, err)
 		users := make([]ScoreUser, 0)
 		for _, score := range scores {
@@ -753,25 +759,25 @@ func TestServer_GetRecommends(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// inset recommendation
-	itemIds := []cache.Scored{
-		{"1", 99},
-		{"2", 98},
-		{"3", 97},
-		{"4", 96},
-		{"5", 95},
-		{"6", 94},
-		{"7", 93},
-		{"8", 92},
+	itemIds := []cache.Document{
+		{Id: "1", Score: 99, Categories: []string{""}},
+		{Id: "2", Score: 98, Categories: []string{""}},
+		{Id: "3", Score: 97, Categories: []string{""}},
+		{Id: "4", Score: 96, Categories: []string{""}},
+		{Id: "5", Score: 95, Categories: []string{""}},
+		{Id: "6", Score: 94, Categories: []string{""}},
+		{Id: "7", Score: 93, Categories: []string{""}},
+		{Id: "8", Score: 92, Categories: []string{""}},
 	}
 	ctx := context.Background()
-	err := s.CacheClient.SetSorted(ctx, cache.Key(cache.OfflineRecommend, "0"), itemIds)
+	err := s.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}
-	err = s.RestServer.InsertFeedbackToCache(ctx, feedback)
+	err = s.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
 	assert.NoError(t, err)
 	// insert items
 	for _, item := range itemIds {
@@ -820,11 +826,17 @@ func TestMaster_Purge(t *testing.T) {
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, set)
 
-	err = s.CacheClient.AddSorted(ctx, cache.Sorted("sorted", []cache.Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}))
+	err = s.CacheClient.AddDocuments(ctx, "sorted", "", []cache.Document{
+		{Id: "a", Score: 1, Categories: []string{""}},
+		{Id: "b", Score: 2, Categories: []string{""}},
+		{Id: "c", Score: 3, Categories: []string{""}}})
 	assert.NoError(t, err)
-	z, err := s.CacheClient.GetSorted(ctx, "sorted", 0, -1)
+	z, err := s.CacheClient.SearchDocuments(ctx, "sorted", "", []string{""}, 0, -1)
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, []cache.Scored{{Id: "a", Score: 1}, {Id: "b", Score: 2}, {Id: "c", Score: 3}}, z)
+	assert.ElementsMatch(t, []cache.Document{
+		{Id: "a", Score: 1, Categories: []string{""}},
+		{Id: "b", Score: 2, Categories: []string{""}},
+		{Id: "c", Score: 3, Categories: []string{""}}}, z)
 
 	err = s.DataClient.BatchInsertFeedback(ctx, lo.Map(lo.Range(100), func(t int, i int) data.Feedback {
 		return data.Feedback{FeedbackKey: data.FeedbackKey{
@@ -858,7 +870,7 @@ func TestMaster_Purge(t *testing.T) {
 	set, err = s.CacheClient.GetSet(ctx, "set")
 	assert.NoError(t, err)
 	assert.Empty(t, set)
-	z, err = s.CacheClient.GetSorted(ctx, "sorted", 0, -1)
+	z, err = s.CacheClient.SearchDocuments(ctx, "sorted", "", []string{""}, 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, z)
 

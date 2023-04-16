@@ -21,7 +21,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 )
 
@@ -265,8 +264,8 @@ func (evaluator *OnlineEvaluator) Positive(feedbackType string, userIndex, itemI
 	evaluator.PositiveFeedbacks[feedbackType] = append(evaluator.PositiveFeedbacks[feedbackType], lo.Tuple3[int32, int32, time.Time]{userIndex, itemIndex, timestamp})
 }
 
-func (evaluator *OnlineEvaluator) Evaluate() []server.Measurement {
-	var measurements []server.Measurement
+func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
+	var measurements []cache.TimeSeriesPoint
 	for feedbackType, positiveFeedbacks := range evaluator.PositiveFeedbacks {
 		positiveFeedbackSets := make([]map[int32]mapset.Set[int32], evaluator.EvaluateDays)
 		for i := 0; i < evaluator.EvaluateDays; i++ {
@@ -286,17 +285,17 @@ func (evaluator *OnlineEvaluator) Evaluate() []server.Measurement {
 		}
 
 		for i := 0; i < evaluator.EvaluateDays; i++ {
-			var rate float32
+			var rate float64
 			if len(evaluator.ReadFeedbacks[i]) > 0 {
-				var sum float32
+				var sum float64
 				for userIndex, readSet := range evaluator.ReadFeedbacks[i] {
 					if positiveSet, exist := positiveFeedbackSets[i][userIndex]; exist {
-						sum += float32(positiveSet.Cardinality()) / float32(readSet.Cardinality())
+						sum += float64(positiveSet.Cardinality()) / float64(readSet.Cardinality())
 					}
 				}
-				rate = sum / float32(len(evaluator.ReadFeedbacks[i]))
+				rate = sum / float64(len(evaluator.ReadFeedbacks[i]))
 			}
-			measurements = append(measurements, server.Measurement{
+			measurements = append(measurements, cache.TimeSeriesPoint{
 				Name:      cache.Key(PositiveFeedbackRate, feedbackType),
 				Timestamp: evaluator.TruncatedDateToday.Add(-time.Hour * 24 * time.Duration(i)),
 				Value:     rate,

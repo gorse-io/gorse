@@ -88,8 +88,8 @@ func (m *Master) CreateWebService() {
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Returns(http.StatusOK, "OK", map[string][]server.Measurement{}).
-		Writes(map[string][]server.Measurement{}))
+		Returns(http.StatusOK, "OK", map[string][]cache.TimeSeriesPoint{}).
+		Writes(map[string][]cache.TimeSeriesPoint{}))
 	// Get a user
 	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
 		Doc("Get a user.").
@@ -663,9 +663,10 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 		server.BadRequest(response, err)
 		return
 	}
-	measurements := make(map[string][]server.Measurement, len(m.Config.Recommend.DataSource.PositiveFeedbackTypes))
+	measurements := make(map[string][]cache.TimeSeriesPoint, len(m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 	for _, feedbackType := range m.Config.Recommend.DataSource.PositiveFeedbackTypes {
-		measurements[feedbackType], err = m.RestServer.GetMeasurements(ctx, cache.Key(PositiveFeedbackRate, feedbackType), n)
+		measurements[feedbackType], err = m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(PositiveFeedbackRate, feedbackType),
+			time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now())
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -856,7 +857,7 @@ type ScoreUser struct {
 	Score float64
 }
 
-func (m *Master) getSort(key, category string, isItem bool, request *restful.Request, response *restful.Response, retType interface{}) {
+func (m *Master) searchDocuments(collection, subset, category string, request *restful.Request, response *restful.Response, retType interface{}) {
 	ctx := context.Background()
 	if request != nil && request.Request != nil {
 		ctx = request.Request.Context()
@@ -873,13 +874,10 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 		return
 	}
 	// Get the popular list
-	scores, err := m.CacheClient.GetSorted(ctx, cache.Key(key, category), offset, m.Config.Recommend.CacheSize)
+	scores, err := m.CacheClient.SearchDocuments(ctx, collection, subset, []string{category}, offset, m.Config.Recommend.CacheSize)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
-	}
-	if isItem {
-		scores = m.FilterOutHiddenScores(response, scores, category)
 	}
 	if n > 0 && len(scores) > n {
 		scores = scores[:n]
@@ -916,28 +914,28 @@ func (m *Master) getSort(key, category string, isItem bool, request *restful.Req
 // getPopular gets popular items from database.
 func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.getSort(cache.PopularItems, category, true, request, response, data.Item{})
+	m.searchDocuments(cache.PopularItems, "", category, request, response, data.Item{})
 }
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.getSort(cache.LatestItems, category, true, request, response, data.Item{})
+	m.searchDocuments(cache.LatestItems, "", category, request, response, data.Item{})
 }
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	m.getSort(cache.Key(cache.ItemNeighbors, itemId), "", true, request, response, data.Item{})
+	m.searchDocuments(cache.ItemNeighbors, itemId, "", request, response, data.Item{})
 }
 
 func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
-	m.getSort(cache.Key(cache.ItemNeighbors, itemId), category, true, request, response, data.Item{})
+	m.searchDocuments(cache.ItemNeighbors, itemId, category, request, response, data.Item{})
 }
 
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
-	m.getSort(cache.Key(cache.UserNeighbors, userId), "", false, request, response, data.User{})
+	m.searchDocuments(cache.UserNeighbors, userId, "", request, response, data.User{})
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
@@ -1374,12 +1372,6 @@ func (m *Master) importFeedback(ctx context.Context, response http.ResponseWrite
 				server.InternalServerError(restful.NewResponse(response), err)
 				return false
 			}
-			// batch insert to cache store
-			err = m.InsertFeedbackToCache(ctx, feedbacks)
-			if err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return false
-			}
 			feedbacks = nil
 		}
 		lineCount++
@@ -1395,12 +1387,6 @@ func (m *Master) importFeedback(ctx context.Context, response http.ResponseWrite
 		err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
 			m.Config.Server.AutoInsertUser,
 			m.Config.Server.AutoInsertItem, true)
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-		// insert to cache store
-		err = m.InsertFeedbackToCache(ctx, feedbacks)
 		if err != nil {
 			server.InternalServerError(restful.NewResponse(response), err)
 			return

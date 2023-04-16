@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"encoding/base64"
 	"github.com/go-redis/redis/v9"
 	"github.com/stretchr/testify/suite"
 	"testing"
@@ -94,21 +95,10 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 
 func (suite *GorseClientTestSuite) TestRecommend() {
 	ctx := context.TODO()
-	suite.redis.ZAddArgs(ctx, "offline_recommend/100", redis.ZAddArgs{
-		Members: []redis.Z{
-			{
-				Score:  1,
-				Member: "1",
-			},
-			{
-				Score:  2,
-				Member: "2",
-			},
-			{
-				Score:  3,
-				Member: "3",
-			},
-		},
+	suite.hSet("offline_recommend", "100", []Score{
+		{Id: "1", Score: 1},
+		{Id: "2", Score: 2},
+		{Id: "3", Score: 3},
 	})
 	resp, err := suite.client.GetRecommend(ctx, "100", "", 10)
 	suite.NoError(err)
@@ -117,77 +107,27 @@ func (suite *GorseClientTestSuite) TestRecommend() {
 
 func (suite *GorseClientTestSuite) TestSessionRecommend() {
 	ctx := context.Background()
-	suite.redis.ZAddArgs(ctx, "item_neighbors/1", redis.ZAddArgs{
-		Members: []redis.Z{
-			{
-				Score:  100000,
-				Member: "2",
-			},
-			{
-				Score:  1,
-				Member: "9",
-			},
-		},
+	suite.hSet("item_neighbors", "1", []Score{
+		{Id: "2", Score: 100000},
+		{Id: "9", Score: 1},
 	})
-	suite.redis.ZAddArgs(ctx, "item_neighbors/2", redis.ZAddArgs{
-		Members: []redis.Z{
-			{
-				Score:  100000,
-				Member: "3",
-			},
-			{
-				Score:  1,
-				Member: "8",
-			},
-			{
-				Score:  1,
-				Member: "9",
-			},
-		},
+	suite.hSet("item_neighbors", "2", []Score{
+		{Id: "3", Score: 100000},
+		{Id: "8", Score: 1},
+		{Id: "9", Score: 1},
 	})
-	suite.redis.ZAddArgs(ctx, "item_neighbors/3", redis.ZAddArgs{
-		Members: []redis.Z{
-			{
-				Score:  100000,
-				Member: "4",
-			},
-			{
-				Score:  1,
-				Member: "7",
-			},
-			{
-				Score:  1,
-				Member: "8",
-			},
-			{
-				Score:  1,
-				Member: "9",
-			},
-		},
+	suite.hSet("item_neighbors", "3", []Score{
+		{Id: "4", Score: 100000},
+		{Id: "7", Score: 1},
+		{Id: "8", Score: 1},
+		{Id: "9", Score: 1},
 	})
-	suite.redis.ZAddArgs(ctx, "item_neighbors/4", redis.ZAddArgs{
-		Members: []redis.Z{
-			{
-				Score:  100000,
-				Member: "1",
-			},
-			{
-				Score:  1,
-				Member: "6",
-			},
-			{
-				Score:  1,
-				Member: "7",
-			},
-			{
-				Score:  1,
-				Member: "8",
-			},
-			{
-				Score:  1,
-				Member: "9",
-			},
-		},
+	suite.hSet("item_neighbors", "4", []Score{
+		{Id: "1", Score: 100000},
+		{Id: "6", Score: 1},
+		{Id: "7", Score: 1},
+		{Id: "8", Score: 1},
+		{Id: "9", Score: 1},
 	})
 
 	feedbackType := "like"
@@ -237,26 +177,11 @@ func (suite *GorseClientTestSuite) TestSessionRecommend() {
 }
 
 func (suite *GorseClientTestSuite) TestNeighbors() {
-	r := redis.NewClient(&redis.Options{
-		Addr: "127.0.0.1:6379",
-		DB:   0,
-	})
 	ctx := context.Background()
-	r.ZAddArgs(ctx, "item_neighbors/100", redis.ZAddArgs{
-		Members: []redis.Z{
-			{
-				Score:  1,
-				Member: "1",
-			},
-			{
-				Score:  2,
-				Member: "2",
-			},
-			{
-				Score:  3,
-				Member: "3",
-			},
-		},
+	suite.hSet("item_neighbors", "100", []Score{
+		{Id: "1", Score: 1},
+		{Id: "2", Score: 2},
+		{Id: "3", Score: 3},
 	})
 
 	itemId := "100"
@@ -340,6 +265,21 @@ func (suite *GorseClientTestSuite) TestItems() {
 
 	_, err = suite.client.GetItem(ctx, "100")
 	suite.Equal("100: item not found", err.Error())
+}
+
+func (suite *GorseClientTestSuite) hSet(collection, subset string, scores []Score) {
+	for _, score := range scores {
+		err := suite.redis.HSet(context.TODO(), "documents:"+collection+":"+subset+":"+score.Id,
+			"collection", collection,
+			"subset", subset,
+			"id", score.Id,
+			"score", score.Score,
+			"is_hidden", 0,
+			"categories", base64.RawStdEncoding.EncodeToString([]byte("_")),
+			"timestamp", time.Now().UnixMicro(),
+		).Err()
+		suite.NoError(err)
+	}
 }
 
 func TestGorseClientTestSuite(t *testing.T) {

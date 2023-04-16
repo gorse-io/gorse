@@ -17,7 +17,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -40,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 	"modernc.org/sortutil"
 )
 
@@ -86,27 +86,22 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save popular items to cache
-	for category, items := range popularItems {
-		if err = m.CacheClient.SetSorted(ctx, cache.Key(cache.PopularItems, category), items); err != nil {
-			log.Logger().Error("failed to cache popular items", zap.Error(err))
-		}
+	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, "", popularItems.ToSlice()); err != nil {
+		log.Logger().Error("failed to cache popular items", zap.Error(err))
+	}
+	if err = m.CacheClient.DeleteDocuments(ctx, []string{cache.PopularItems}, cache.DocumentCondition{Before: &popularItems.Timestamp}); err != nil {
+		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write latest update popular items time", zap.Error(err))
 	}
 
 	// save the latest items to cache
-	for category, items := range latestItems {
-		if err = m.CacheClient.AddSorted(ctx, cache.Sorted(cache.Key(cache.LatestItems, category), items)); err != nil {
-			log.Logger().Error("failed to cache latest items", zap.Error(err))
-		}
-		// reclaim outdated items
-		if len(items) > 0 {
-			threshold := items[len(items)-1].Score - 1
-			if err = m.CacheClient.RemSortedByScore(ctx, cache.Key(cache.LatestItems, category), math.Inf(-1), threshold); err != nil {
-				log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
-			}
-		}
+	if err = m.CacheClient.AddDocuments(ctx, cache.LatestItems, "", latestItems.ToSlice()); err != nil {
+		log.Logger().Error("failed to cache latest items", zap.Error(err))
+	}
+	if err = m.CacheClient.DeleteDocuments(ctx, []string{cache.LatestItems}, cache.DocumentCondition{Before: &latestItems.Timestamp}); err != nil {
+		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write latest update latest items time", zap.Error(err))
@@ -144,8 +139,8 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// evaluate positive feedback rate
-	measurement := evaluator.Evaluate()
-	if err = m.RestServer.InsertMeasurement(ctx, measurement...); err != nil {
+	points := evaluator.Evaluate()
+	if err = m.CacheClient.AddTimeSeriesPoints(ctx, points); err != nil {
 		log.Logger().Error("failed to insert measurement", zap.Error(err))
 	}
 
@@ -374,16 +369,17 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
 			return nil
 		}
 		updateItemCount.Add(1)
 		startTime := time.Now()
-		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float32])
-		nearItemsFilters[""] = heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
+		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float64])
+		nearItemsFilters[""] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
 		for _, category := range dataset.CategorySet.ToSlice() {
-			nearItemsFilters[category] = heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
+			nearItemsFilters[category] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
 		}
 
 		adjacencyItems := vector.Neighbors(itemIndex)
@@ -391,24 +387,31 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			if j != int32(itemIndex) && !dataset.HiddenItems[j] {
 				score := vector.Distance(itemIndex, int(j))
 				if score > 0 {
-					nearItemsFilters[""].Push(j, score)
+					nearItemsFilters[""].Push(j, float64(score))
 					for _, category := range dataset.ItemCategories[j] {
-						nearItemsFilters[category].Push(j, score)
+						nearItemsFilters[category].Push(j, float64(score))
 					}
 				}
 			}
 		}
 
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		for category, nearItemsFilter := range nearItemsFilters {
 			elem, scores := nearItemsFilter.PopAll()
 			recommends := make([]string, len(elem))
 			for i := range recommends {
 				recommends[i] = dataset.ItemIndex.ToName(elem[i])
 			}
-			if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, itemId, category),
-				cache.CreateScoredItems(recommends, scores)); err != nil {
-				return errors.Trace(err)
-			}
+			aggregator.Add(category, recommends, scores)
+		}
+		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(itemId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
+			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
 			ctx,
@@ -475,6 +478,7 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
 			return nil
@@ -493,17 +497,25 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.ToSlice(),
 				m.Config.Recommend.CacheSize, true)
 		}
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		for category := range neighbors {
 			if categoryNeighbors, exist := neighbors[category]; exist && len(categoryNeighbors) > 0 {
-				itemScores := make([]cache.Scored, len(neighbors[category]))
+				resultValues, resultScores := make([]string, len(neighbors[category])), make([]float64, len(neighbors[category]))
 				for i := range scores[category] {
-					itemScores[i].Id = dataset.ItemIndex.ToName(neighbors[category][i])
-					itemScores[i].Score = float64(-scores[category][i])
+					resultValues[i] = dataset.ItemIndex.ToName(neighbors[category][i])
+					resultScores[i] = float64(-scores[category][i])
 				}
-				if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.ItemNeighbors, itemId, category), itemScores); err != nil {
-					return errors.Trace(err)
-				}
+				aggregator.Add(category, resultValues, resultScores)
 			}
+		}
+		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(itemId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
+			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
 			ctx,
@@ -697,20 +709,21 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		userId := dataset.UserIndex.ToName(int32(userIndex))
 		if !m.checkUserNeighborCacheTimeout(userId) {
 			return nil
 		}
 		updateUserCount.Add(1)
 		startTime := time.Now()
-		nearUsers := heap.NewTopKFilter[int32, float32](m.Config.Recommend.CacheSize)
+		nearUsers := heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
 
 		adjacencyUsers := vectors.Neighbors(userIndex)
 		for _, j := range adjacencyUsers {
 			if j != int32(userIndex) {
 				score := vectors.Distance(userIndex, int(j))
 				if score > 0 {
-					nearUsers.Push(j, score)
+					nearUsers.Push(j, float64(score))
 				}
 			}
 		}
@@ -720,8 +733,15 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		for i := range recommends {
 			recommends[i] = dataset.UserIndex.ToName(elem[i])
 		}
-		if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.UserNeighbors, userId),
-			cache.CreateScoredItems(recommends, scores)); err != nil {
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
+		aggregator.Add("", recommends, scores)
+		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(userId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
@@ -790,6 +810,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		defer func() {
 			completed <- struct{}{}
 		}()
+		startSearchTime := time.Now()
 		userId := dataset.UserIndex.ToName(int32(userIndex))
 		if !m.checkUserNeighborCacheTimeout(userId) {
 			return nil
@@ -799,12 +820,20 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		var neighbors []int32
 		var scores []float32
 		neighbors, scores = index.Search(vectors[userIndex], m.Config.Recommend.CacheSize, true)
-		itemScores := make([]cache.Scored, len(neighbors))
+		resultValues, resultScores := make([]string, len(neighbors)), make([]float64, len(neighbors))
 		for i := range scores {
-			itemScores[i].Id = dataset.UserIndex.ToName(neighbors[i])
-			itemScores[i].Score = float64(-scores[i])
+			resultValues[i] = dataset.UserIndex.ToName(neighbors[i])
+			resultScores[i] = float64(-scores[i])
 		}
-		if err := m.CacheClient.SetSorted(ctx, cache.Key(cache.UserNeighbors, userId), itemScores); err != nil {
+		aggregator := cache.NewDocumentAggregator(startSearchTime)
+		aggregator.Add("", resultValues, resultScores)
+		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()); err != nil {
+			return errors.Trace(err)
+		}
+		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
+			Subset: proto.String(userId),
+			Before: &aggregator.Timestamp,
+		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
@@ -862,7 +891,7 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 	)
 	ctx := context.Background()
 	// check cache
-	if items, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.UserNeighbors, userId), 0, -1); err != nil {
+	if items, err := m.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, userId, []string{""}, 0, -1); err != nil {
 		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {
@@ -917,7 +946,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 
 	// check cache
 	for _, category := range append([]string{""}, categories...) {
-		items, err := m.CacheClient.GetSorted(ctx, cache.Key(cache.ItemNeighbors, itemId, category), 0, -1)
+		items, err := m.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, itemId, []string{category}, 0, -1)
 		if err != nil {
 			log.Logger().Error("failed to load item neighbors", zap.String("item_id", itemId), zap.Error(err))
 			return true
@@ -1334,7 +1363,7 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 		scanCount++
 		t.taskMonitor.Update(TaskCacheGarbageCollection, scanCount)
 		switch splits[0] {
-		case cache.UserNeighbors, cache.UserNeighborsDigest, cache.IgnoreItems,
+		case cache.UserNeighbors, cache.UserNeighborsDigest,
 			cache.OfflineRecommend, cache.OfflineRecommendDigest, cache.CollaborativeRecommend,
 			cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
 			userId := splits[1]
@@ -1352,8 +1381,6 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 			}
 			// delete user cache
 			switch splits[0] {
-			case cache.UserNeighbors, cache.IgnoreItems, cache.CollaborativeRecommend, cache.OfflineRecommend:
-				err = t.CacheClient.SetSorted(ctx, s, nil)
 			case cache.UserNeighborsDigest, cache.OfflineRecommendDigest,
 				cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
 				err = t.CacheClient.Delete(ctx, s)
@@ -1378,8 +1405,6 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 			}
 			// delete item cache
 			switch splits[0] {
-			case cache.ItemNeighbors:
-				err = t.CacheClient.SetSorted(ctx, s, nil)
 			case cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
 				err = t.CacheClient.Delete(ctx, s)
 			}
@@ -1390,10 +1415,6 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 		}
 		return nil
 	})
-	// remove stale hidden items
-	if err := t.CacheClient.RemSortedByScore(ctx, cache.HiddenItemsV2, math.Inf(-1), float64(time.Now().Add(-t.Config.Recommend.CacheExpire).Unix())); err != nil {
-		return errors.Trace(err)
-	}
 	t.taskMonitor.Finish(TaskCacheGarbageCollection)
 	CacheScannedTotal.Set(float64(scanCount))
 	CacheReclaimedTotal.Set(float64(reclaimCount))
@@ -1403,7 +1424,8 @@ func (t *CacheGarbageCollectionTask) run(j *task.JobsAllocator) error {
 
 // LoadDataFromDatabase loads dataset from data store.
 func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
-	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems map[string][]cache.Scored, popularItems map[string][]cache.Scored, err error) {
+	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems *cache.DocumentAggregator, popularItems *cache.DocumentAggregator, err error) {
+	startLoadTime := time.Now()
 	m.taskMonitor.Start(TaskLoadDataset, 5)
 	ctx := context.Background()
 	// setup time limit
@@ -1655,10 +1677,10 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
 
 	// collect latest items
-	latestItems = make(map[string][]cache.Scored)
+	latestItems = cache.NewDocumentAggregator(startLoadTime)
 	for category, latestItemsFilter := range latestItemsFilters {
 		items, scores := latestItemsFilter.PopAll()
-		latestItems[category] = cache.CreateScoredItems(items, scores)
+		latestItems.Add(category, items, scores)
 	}
 
 	// collect popular items
@@ -1674,10 +1696,10 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 			popularItemFilters[category].Push(itemId, float64(val))
 		}
 	}
-	popularItems = make(map[string][]cache.Scored)
+	popularItems = cache.NewDocumentAggregator(startLoadTime)
 	for category, popularItemFilter := range popularItemFilters {
 		items, scores := popularItemFilter.PopAll()
-		popularItems[category] = cache.CreateScoredItems(items, scores)
+		popularItems.Add(category, items, scores)
 	}
 
 	m.taskMonitor.Finish(TaskLoadDataset)

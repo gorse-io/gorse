@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"io"
 	"math"
+	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -50,6 +51,9 @@ func init() {
 			}
 			err = json.Unmarshal(data, &j)
 			return
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
 		}
 		j1, err := parse(args[0])
 		if err != nil {
@@ -103,17 +107,23 @@ type Message struct {
 }
 
 type PostgresDocument struct {
-	Name       string         `gorm:"primaryKey"`
-	Value      string         `gorm:"primaryKey"`
+	Collection string `gorm:"primaryKey"`
+	Subset     string `gorm:"primaryKey"`
+	Id         string `gorm:"primaryKey"`
+	IsHidden   bool
 	Categories pq.StringArray `gorm:"type:text[]"`
 	Score      float64
+	Timestamp  time.Time
 }
 
 type SQLDocument struct {
-	Name       string   `gorm:"primaryKey"`
-	Value      string   `gorm:"primaryKey"`
+	Collection string `gorm:"primaryKey"`
+	Subset     string `gorm:"primaryKey"`
+	Id         string `gorm:"primaryKey"`
+	IsHidden   bool
 	Categories []string `gorm:"type:text;serializer:json"`
 	Score      float64
+	Timestamp  time.Time
 }
 
 type SQLDatabase struct {
@@ -132,7 +142,7 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{})
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{}, &TimeSeriesPoint{})
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -149,7 +159,6 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	var (
 		valuerRows *sql.Rows
 		setRows    *sql.Rows
-		sortedRows *sql.Rows
 		err        error
 	)
 
@@ -188,31 +197,11 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 			prevKey = key
 		}
 	}
-
-	// scan sorted sets
-	sortedRows, err = db.gormDB.Table(db.SortedSetsTable()).Select("name").Rows()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer sortedRows.Close()
-	prevKey = ""
-	for sortedRows.Next() {
-		var key string
-		if err = sortedRows.Scan(&key); err != nil {
-			return errors.Trace(err)
-		}
-		if key != prevKey {
-			if err = work(key); err != nil {
-				return errors.Trace(err)
-			}
-			prevKey = key
-		}
-	}
 	return nil
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}}
+	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}, SQLDocument{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
@@ -330,128 +319,6 @@ func (db *SQLDatabase) RemSet(ctx context.Context, key string, members ...string
 	return errors.Trace(err)
 }
 
-func (db *SQLDatabase) AddSorted(ctx context.Context, sortedSets ...SortedSet) error {
-	rows := make([]SQLSortedSet, 0, len(sortedSets))
-	memberSets := make(map[lo.Tuple2[string, string]]struct{})
-	for _, sortedSet := range sortedSets {
-		for _, member := range sortedSet.scores {
-			if _, exist := memberSets[lo.Tuple2[string, string]{sortedSet.name, member.Id}]; !exist {
-				rows = append(rows, SQLSortedSet{
-					Name:   sortedSet.name,
-					Member: member.Id,
-					Score:  member.Score,
-				})
-				memberSets[lo.Tuple2[string, string]{sortedSet.name, member.Id}] = struct{}{}
-			}
-		}
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-	if err := db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}, {Name: "member"}},
-		DoUpdates: clause.AssignmentColumns([]string{"score"}),
-	}).Create(rows).Error; err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-func (db *SQLDatabase) GetSorted(ctx context.Context, key string, begin, end int) ([]Scored, error) {
-	tx := db.gormDB.WithContext(ctx).Table(db.SortedSetsTable()).
-		Select("member, score").
-		Where("name = ?", key).
-		Order("score DESC")
-	if end < begin {
-		tx.Offset(begin).Limit(math.MaxInt64)
-	} else {
-		tx.Offset(begin).Limit(end - begin + 1)
-	}
-	rs, err := tx.Rows()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rs.Close()
-	var members []Scored
-	for rs.Next() {
-		var member Scored
-		if err = rs.Scan(&member.Id, &member.Score); err != nil {
-			return nil, errors.Trace(err)
-		}
-		members = append(members, member)
-	}
-	return members, nil
-}
-
-func (db *SQLDatabase) GetSortedByScore(ctx context.Context, key string, begin, end float64) ([]Scored, error) {
-	rs, err := db.gormDB.WithContext(ctx).Table(db.SortedSetsTable()).
-		Select("member, score").
-		Where("name = ? AND score >= ? AND score <= ?", key, begin, end).
-		Order("score").Rows()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rs.Close()
-	var members []Scored
-	for rs.Next() {
-		var member Scored
-		if err = rs.Scan(&member.Id, &member.Score); err != nil {
-			return nil, errors.Trace(err)
-		}
-		members = append(members, member)
-	}
-	return members, nil
-}
-
-func (db *SQLDatabase) RemSortedByScore(ctx context.Context, key string, begin, end float64) error {
-	err := db.gormDB.WithContext(ctx).Delete(&SQLSortedSet{}, "name = ? AND ? <= score AND score <= ?", key, begin, end).Error
-	return errors.Trace(err)
-}
-
-func (db *SQLDatabase) SetSorted(ctx context.Context, key string, scores []Scored) error {
-	tx := db.gormDB.WithContext(ctx)
-	err := tx.Delete(&SQLSortedSet{}, "name = ?", key).Error
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if len(scores) > 0 {
-		memberSets := make(map[lo.Tuple2[string, string]]struct{})
-		rows := make([]SQLSortedSet, 0, len(scores))
-		for _, member := range scores {
-			if _, exist := memberSets[lo.Tuple2[string, string]{key, member.Id}]; !exist {
-				rows = append(rows, SQLSortedSet{
-					Name:   key,
-					Member: member.Id,
-					Score:  member.Score,
-				})
-				memberSets[lo.Tuple2[string, string]{key, member.Id}] = struct{}{}
-			}
-		}
-		err = tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "name"}, {Name: "member"}},
-			DoUpdates: clause.AssignmentColumns([]string{"score"}),
-		}).Create(&rows).Error
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
-}
-
-func (db *SQLDatabase) RemSorted(ctx context.Context, members ...SetMember) error {
-	if len(members) == 0 {
-		return nil
-	}
-	rows := lo.Map(members, func(member SetMember, _ int) SQLSortedSet {
-		return SQLSortedSet{
-			Name:   member.name,
-			Member: member.member,
-		}
-	})
-	err := db.gormDB.WithContext(ctx).Delete(rows).Error
-	return errors.Trace(err)
-}
-
 func (db *SQLDatabase) Push(ctx context.Context, name, value string) error {
 	return db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
@@ -485,48 +352,55 @@ func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, er
 	return
 }
 
-func (db *SQLDatabase) AddDocuments(ctx context.Context, name string, documents ...Document) error {
+func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
 	var rows any
 	switch db.driver {
 	case Postgres:
 		rows = lo.Map(documents, func(document Document, _ int) PostgresDocument {
 			return PostgresDocument{
-				Name:       name,
-				Value:      document.Value,
+				Collection: collection,
+				Subset:     subset,
+				Id:         document.Id,
 				Score:      document.Score,
+				IsHidden:   document.IsHidden,
 				Categories: document.Categories,
+				Timestamp:  document.Timestamp,
 			}
 		})
 	case SQLite, MySQL:
 		rows = lo.Map(documents, func(document Document, _ int) SQLDocument {
 			return SQLDocument{
-				Name:       name,
-				Value:      document.Value,
+				Collection: collection,
+				Subset:     subset,
+				Id:         document.Id,
 				Score:      document.Score,
+				IsHidden:   document.IsHidden,
 				Categories: document.Categories,
+				Timestamp:  document.Timestamp,
 			}
 		})
 	}
 	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
-		DoUpdates: clause.AssignmentColumns([]string{"score", "categories"}),
+		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
 	}).Create(rows)
 	return nil
 }
 
-func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error) {
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{})
+func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+	if len(query) == 0 {
+		return nil, nil
+	}
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("id, score, categories, timestamp")
 	switch db.driver {
 	case Postgres:
-		tx = tx.Select("value, score, categories").
-			Where("name = ? and categories @> ?", name, pq.StringArray(query))
+		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and categories @> ?", collection, subset, pq.StringArray(query))
 	case SQLite, MySQL:
 		q, err := json.Marshal(query)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		tx = tx.Select("value, score, categories").
-			Where("name = ? and JSON_CONTAINS(categories,?)", name, string(q))
+		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and JSON_CONTAINS(categories,?)", collection, subset, string(q))
 	}
 	tx = tx.Order("score desc").Offset(begin)
 	if end != -1 {
@@ -543,21 +417,95 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, name string, query [
 		switch db.driver {
 		case Postgres:
 			var document PostgresDocument
-			if err = rows.Scan(&document.Value, &document.Score, &document.Categories); err != nil {
+			if err = rows.Scan(&document.Id, &document.Score, &document.Categories, &document.Timestamp); err != nil {
 				return nil, errors.Trace(err)
 			}
 			documents = append(documents, Document{
-				Value:      document.Value,
+				Id:         document.Id,
 				Score:      document.Score,
 				Categories: document.Categories,
+				Timestamp:  document.Timestamp,
 			})
 		case SQLite, MySQL:
 			var document Document
 			if err = db.gormDB.ScanRows(rows, &document); err != nil {
 				return nil, errors.Trace(err)
 			}
+			document.Timestamp = document.Timestamp.In(time.UTC)
 			documents = append(documents, document)
 		}
 	}
 	return documents, nil
+}
+
+func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
+	if len(collections) == 0 {
+		return nil
+	}
+	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
+		return nil
+	}
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("collection in (?) and id = ?", collections, id)
+	if patch.Score != nil {
+		tx = tx.Update("score", *patch.Score)
+	}
+	if patch.IsHidden != nil {
+		tx = tx.Update("is_hidden", *patch.IsHidden)
+	}
+	if patch.Categories != nil {
+		switch db.driver {
+		case Postgres:
+			tx = tx.Update("categories", pq.StringArray(patch.Categories))
+		case SQLite, MySQL:
+			q, err := json.Marshal(patch.Categories)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			tx = tx.Update("categories", string(q))
+		}
+	}
+	return tx.Error
+}
+
+func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+	if err := condition.Check(); err != nil {
+		return errors.Trace(err)
+	}
+	var builder strings.Builder
+	builder.WriteString("collection in (?)")
+	var args []any
+	args = append(args, collections)
+	if condition.Subset != nil {
+		builder.WriteString(" and subset = ?")
+		args = append(args, *condition.Subset)
+	}
+	if condition.Id != nil {
+		builder.WriteString(" and id = ?")
+		args = append(args, *condition.Id)
+	}
+	if condition.Before != nil {
+		builder.WriteString(" and timestamp < ?")
+		args = append(args, *condition.Before)
+	}
+	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
+}
+
+func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	if len(points) == 0 {
+		return nil
+	}
+	return db.gormDB.WithContext(ctx).Table(db.PointsTable()).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}, {Name: "timestamp"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value"}),
+	}).Create(points).Error
+}
+
+func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+	var points []TimeSeriesPoint
+	if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
+		Where("name = ? and timestamp >= ? and timestamp < ?", name, begin, end).
+		Order("timestamp").Find(&points).Error; err != nil {
+		return nil, errors.Trace(err)
+	}
+	return points, nil
 }

@@ -44,19 +44,6 @@ import (
 )
 
 const (
-	// Measurements are sorted set of measurements.
-	// 	Measurements - measurements/{name}
-	Measurements = "measurements"
-
-	// IgnoreItems is sorted set of ignored items for each user
-	//  Ignored items      - ignore_items/{user_id}
-	IgnoreItems = "ignore_items"
-
-	// HiddenItemsV2 is sorted set of hidden items.
-	//  Global hidden items 	- hidden_items_v2
-	//  Category hidden items   - hidden_items_v2/{category}
-	HiddenItemsV2 = "hidden_items_v2"
-
 	// ItemNeighbors is sorted set of neighbors for each item.
 	//  Global item neighbors      - item_neighbors/{item_id}
 	//  Categorized item neighbors - item_neighbors/{item_id}/{category}
@@ -127,69 +114,12 @@ const (
 	MatchingIndexRecall        = "matching_index_recall"
 )
 
+var ItemCache = []string{PopularItems, LatestItems, ItemNeighbors, OfflineRecommend}
+
 var (
 	ErrObjectNotExist = errors.NotFoundf("object")
 	ErrNoDatabase     = errors.NotAssignedf("database")
 )
-
-// Scored associate a id with a score.
-type Scored struct {
-	Id    string
-	Score float64
-}
-
-// CreateScoredItems from items and scores.
-func CreateScoredItems[T float64 | float32](itemIds []string, scores []T) []Scored {
-	if len(itemIds) != len(scores) {
-		panic("the length of itemIds and scores should be equal")
-	}
-	items := make([]Scored, len(itemIds))
-	for i := range items {
-		items[i].Id = itemIds[i]
-		items[i].Score = float64(scores[i])
-	}
-	return items
-}
-
-// RemoveScores resolve items for a slice of ScoredItems.
-func RemoveScores(items []Scored) []string {
-	ids := make([]string, len(items))
-	for i := range ids {
-		ids[i] = items[i].Id
-	}
-	return ids
-}
-
-// GetScores resolve scores for a slice of Scored.
-func GetScores(s []Scored) []float64 {
-	scores := make([]float64, len(s))
-	for i := range s {
-		scores[i] = s[i].Score
-	}
-	return scores
-}
-
-// SortScores sorts scores from high score to low score.
-func SortScores(scores []Scored) {
-	sort.Sort(scoresSorter(scores))
-}
-
-type scoresSorter []Scored
-
-// Len is the number of elements in the collection.
-func (s scoresSorter) Len() int {
-	return len(s)
-}
-
-// Less reports whether the element with index i
-func (s scoresSorter) Less(i, j int) bool {
-	return s[i].Score > s[j].Score
-}
-
-// Swap swaps the elements with indexes i and j.
-func (s scoresSorter) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
 
 // Key creates key for cache. Empty field will be ignored.
 func Key(keys ...string) string {
@@ -205,13 +135,6 @@ func Key(keys ...string) string {
 		}
 	}
 	return builder.String()
-}
-
-func BatchKey(prefix string, keys ...string) []string {
-	for i, key := range keys {
-		keys[i] = Key(prefix, key)
-	}
-	return keys
 }
 
 type Value struct {
@@ -251,31 +174,100 @@ func (r *ReturnValue) Time() (time.Time, error) {
 	if r.err != nil {
 		return time.Time{}, r.err
 	}
-	return dateparse.ParseAny(r.value)
-}
-
-type SortedSet struct {
-	name   string
-	scores []Scored
-}
-
-func Sorted(name string, scores []Scored) SortedSet {
-	return SortedSet{name: name, scores: scores}
-}
-
-type SetMember struct {
-	name   string
-	member string
-}
-
-func Member(name, member string) SetMember {
-	return SetMember{name: name, member: member}
+	t, err := dateparse.ParseAny(r.value)
+	if err != nil {
+		return time.Time{}, errors.Trace(err)
+	}
+	return t.In(time.UTC), nil
 }
 
 type Document struct {
-	Value      string
+	Id         string
 	Score      float64
-	Categories []string `gorm:"type:text;serializer:json"`
+	IsHidden   bool      `json:"-"`
+	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
+	Timestamp  time.Time `json:"-"`
+}
+
+func SortDocuments(documents []Document) {
+	sort.Slice(documents, func(i, j int) bool {
+		return documents[i].Score > documents[j].Score
+	})
+}
+
+func ConvertDocumentsToValues(documents []Document) []string {
+	values := make([]string, len(documents))
+	for i := range values {
+		values[i] = documents[i].Id
+	}
+	return values
+}
+
+// DocumentAggregator is used to keep the compatibility with the old recommender system and will be removed in the future.
+// In old recommender system, the recommendation is genereated per category.
+// In the new recommender system, the recommendation is generated globally.
+type DocumentAggregator struct {
+	Documents map[string]*Document
+	Timestamp time.Time
+}
+
+func NewDocumentAggregator(timestamp time.Time) *DocumentAggregator {
+	return &DocumentAggregator{
+		Documents: make(map[string]*Document),
+		Timestamp: timestamp,
+	}
+}
+
+func (aggregator *DocumentAggregator) Add(category string, values []string, scores []float64) {
+	for i, value := range values {
+		if _, ok := aggregator.Documents[value]; !ok {
+			aggregator.Documents[value] = &Document{
+				Id:         value,
+				Score:      scores[i],
+				Categories: []string{category},
+				Timestamp:  aggregator.Timestamp,
+			}
+		} else {
+			if aggregator.Documents[value].Score != scores[i] {
+				panic("score should be the same")
+			}
+			aggregator.Documents[value].Categories = append(aggregator.Documents[value].Categories, category)
+		}
+	}
+}
+
+func (aggregator *DocumentAggregator) ToSlice() []Document {
+	documents := make([]Document, 0, len(aggregator.Documents))
+	for _, document := range aggregator.Documents {
+		sort.Strings(document.Categories)
+		documents = append(documents, *document)
+	}
+	return documents
+}
+
+type DocumentCondition struct {
+	Subset *string
+	Id     *string
+	Before *time.Time
+}
+
+func (condition *DocumentCondition) Check() error {
+	if condition.Id == nil && condition.Before == nil && condition.Subset == nil {
+		return errors.NotValidf("document condition")
+	}
+	return nil
+}
+
+type DocumentPatch struct {
+	IsHidden   *bool
+	Categories []string
+	Score      *float64
+}
+
+type TimeSeriesPoint struct {
+	Name      string    `gorm:"primaryKey"`
+	Timestamp time.Time `gorm:"primaryKey"`
+	Value     float64
 }
 
 // Database is the common interface for cache store.
@@ -295,19 +287,17 @@ type Database interface {
 	AddSet(ctx context.Context, key string, members ...string) error
 	RemSet(ctx context.Context, key string, members ...string) error
 
-	AddSorted(ctx context.Context, sortedSets ...SortedSet) error
-	GetSorted(ctx context.Context, key string, begin, end int) ([]Scored, error)
-	GetSortedByScore(ctx context.Context, key string, begin, end float64) ([]Scored, error)
-	RemSortedByScore(ctx context.Context, key string, begin, end float64) error
-	SetSorted(ctx context.Context, key string, scores []Scored) error
-	RemSorted(ctx context.Context, members ...SetMember) error
-
 	Push(ctx context.Context, name, value string) error
 	Pop(ctx context.Context, name string) (string, error)
 	Remain(ctx context.Context, name string) (int64, error)
 
-	AddDocuments(ctx context.Context, name string, documents ...Document) error
-	SearchDocuments(ctx context.Context, name string, query []string, begin, end int) ([]Document, error)
+	AddDocuments(ctx context.Context, collection, subset string, documents []Document) error
+	SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error)
+	DeleteDocuments(ctx context.Context, collection []string, condition DocumentCondition) error
+	UpdateDocuments(ctx context.Context, collection []string, id string, patch DocumentPatch) error
+
+	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
+	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error)
 }
 
 // Open a connection to a database.
@@ -368,6 +358,7 @@ func Open(path, tablePrefix string) (Database, error) {
 		// append parameters
 		if name, err = storage.AppendMySQLParams(name, map[string]string{
 			isolationVarName: "'READ-UNCOMMITTED'",
+			"parseTime":      "true",
 		}); err != nil {
 			return nil, errors.Trace(err)
 		}

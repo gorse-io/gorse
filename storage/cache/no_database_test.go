@@ -16,8 +16,10 @@ package cache
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNoDatabase(t *testing.T) {
@@ -53,19 +55,6 @@ func TestNoDatabase(t *testing.T) {
 	err = database.RemSet(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	_, err = database.GetSorted(ctx, "", 0, 0)
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.GetSortedByScore(ctx, "", 0, 0)
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSortedByScore(ctx, "", 0, 0)
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetSorted(ctx, "", nil)
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.AddSorted(ctx)
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSorted(ctx)
-	assert.ErrorIs(t, err, ErrNoDatabase)
-
 	err = database.Push(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.Pop(ctx, "")
@@ -73,8 +62,17 @@ func TestNoDatabase(t *testing.T) {
 	_, err = database.Remain(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	err = database.AddDocuments(ctx, "")
+	err = database.AddDocuments(ctx, "", "", nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.SearchDocuments(ctx, "", nil, 0, 0)
+	_, err = database.SearchDocuments(ctx, "", "", nil, 0, 0)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.UpdateDocuments(ctx, nil, "", DocumentPatch{})
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.DeleteDocuments(ctx, nil, DocumentCondition{})
+	assert.ErrorIs(t, err, ErrNoDatabase)
+
+	err = database.AddTimeSeriesPoints(ctx, nil)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.GetTimeSeriesPoints(ctx, "", time.Time{}, time.Time{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }
