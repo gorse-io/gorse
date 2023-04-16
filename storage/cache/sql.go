@@ -431,7 +431,7 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 			if err = db.gormDB.ScanRows(rows, &document); err != nil {
 				return nil, errors.Trace(err)
 			}
-			document.Timestamp = document.Timestamp.In(time.Local)
+			document.Timestamp = document.Timestamp.In(time.UTC)
 			documents = append(documents, document)
 		}
 	}

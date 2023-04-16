@@ -174,7 +174,11 @@ func (r *ReturnValue) Time() (time.Time, error) {
 	if r.err != nil {
 		return time.Time{}, r.err
 	}
-	return dateparse.ParseAny(r.value)
+	t, err := dateparse.ParseAny(r.value)
+	if err != nil {
+		return time.Time{}, errors.Trace(err)
+	}
+	return t.In(time.UTC), nil
 }
 
 type Document struct {
