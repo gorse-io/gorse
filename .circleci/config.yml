@@ -101,20 +101,20 @@ jobs:
       - run:
           name: Set up dataset
           command: |
-            mkdir -p ~/.gorse/dataset
-            mkdir -p ~/.gorse/download
-            wget https://cdn.gorse.io/datasets/ml-100k.zip -P ~/.gorse/download
-            wget https://cdn.gorse.io/datasets/ml-1m.zip -P ~/.gorse/download
-            wget https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
-            wget https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
-            wget https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
-            wget https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
-            unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
-            unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
-            unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
-            unzip ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
-            unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
-            unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
+            New-Item -Type Directory -Path ~/.gorse/dataset
+            New-Item -Type Directory -Path ~/.gorse/download
+            Invoke-WebRequest https://cdn.gorse.io/datasets/ml-100k.zip -OutFile ~/.gorse/download
+            Invoke-WebRequest https://cdn.gorse.io/datasets/ml-1m.zip -OutFile ~/.gorse/download
+            Invoke-WebRequest https://cdn.gorse.io/datasets/pinterest-20.zip -OutFile ~/.gorse/download
+            Invoke-WebRequest https://cdn.gorse.io/datasets/frappe.zip -OutFile ~/.gorse/download
+            Invoke-WebRequest https://cdn.gorse.io/datasets/ml-tag.zip -OutFile ~/.gorse/download
+            Invoke-WebRequest https://cdn.gorse.io/datasets/criteo.zip -OutFile ~/.gorse/download
+            Expand-Archive ~/.gorse/download/ml-100k.zip -DestinationPath ~/.gorse/dataset
+            Expand-Archive ~/.gorse/download/ml-1m.zip -DestinationPath ~/.gorse/dataset
+            Expand-Archive ~/.gorse/download/pinterest-20.zip -DestinationPath ~/.gorse/dataset
+            Expand-Archive ~/.gorse/download/frappe.zip -DestinationPath ~/.gorse/dataset
+            Expand-Archive ~/.gorse/download/ml-tag.zip -DestinationPath ~/.gorse/dataset
+            Expand-Archive ~/.gorse/download/criteo.zip -DestinationPath ~/.gorse/dataset
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
