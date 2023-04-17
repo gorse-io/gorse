@@ -92,3 +92,4 @@ workflows:
   unit-test:
     jobs:
       - unit-test-amd64
+      - unit-test-macos
