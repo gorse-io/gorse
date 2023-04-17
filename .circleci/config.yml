@@ -51,6 +51,43 @@ jobs:
           name: Run tests
           command: go test -timeout 20m -v ./...
 
+  unit-test-macos:
+    macos:
+      xcode: 14.2.0
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - run:
+          name: Set up dataset
+          command: |
+            mkdir -p ~/.gorse/dataset
+            mkdir -p ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/ml-100k.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/ml-1m.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
+            wget https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
+            unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run:
+          name: Install Dependencies
+          command: go mod download
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"
+      - run:
+          name: Run tests
+          command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis"
+
 workflows:
   unit-test:
     jobs:
