@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  win: circleci/windows@5.0
+
 jobs:
   unit-test-amd64:
     machine:
@@ -88,8 +91,27 @@ jobs:
           name: Run tests
           command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis"
 
+  unit-test-windows:
+    executor: win/server-2022
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
+      - run:
+          name: Install Dependencies
+          command: go mod download
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"
+      - run:
+          name: Run tests
+          command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis"
+
 workflows:
   unit-test:
     jobs:
       - unit-test-amd64
       - unit-test-macos
+      - unit-test-windows
