@@ -1,21 +1,10 @@
 version: 2.1
 
-executors:
-  amd64:
-    machine:
-      image: ubuntu-2004:current
-    resource_class: large
-  arm64:
+jobs:
+  unit-test-amd64:
     machine:
       image: ubuntu-2004:current
     resource_class: arm.large
-
-jobs:
-  unit-test:
-    parameters:
-      platform:
-        type: executor
-    executor: << parameters.platform >>
     working_directory: ~/repo
     steps:
       - checkout
@@ -65,7 +54,4 @@ jobs:
 workflows:
   unit-test:
     jobs:
-      - unit-test:
-          matrix:
-            parameters:
-              platform: [amd64, arm64]
+      - unit-test-amd64
