@@ -115,10 +115,13 @@ popular_window = "720h"
 # The type of neighbors for users. There are three types:
 #   similar: Neighbors are found by number of common labels.
 #   related: Neighbors are found by number of common liked items.
-#   auto: If a user have labels, neighbors are found by number of common labels.
-#         If this user have no labels, neighbors are found by number of common liked items.
+#   auto: average of relevance and similarity. 
+#         Correlation refers to the number of common items of users (or the number of common users of items), 
+#         and similarity refers to the number of common tags between the two. In the new version, 
+#         "automatic" is the average value of correlation and similarity.
 # The default value is "auto".
-neighbor_type = "similar"
+neighbor_type = "auto"
+
 
 # Enable approximate user neighbor searching using vector index. The default value is true.
 enable_index = true
