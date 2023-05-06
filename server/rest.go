@@ -418,6 +418,26 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", []cache.Document{}).
 		Writes([]cache.Document{}))
 
+	// Get top items
+	ws.Route(ws.GET("/top/{name}").To(s.getTopItem).
+		Doc("Get top items.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("name", "Name of the top item recommender.").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Returns(http.StatusOK, "OK", []cache.Document{}).
+		Writes([]cache.Document{}))
+	ws.Route(ws.GET("/top/{name}/{category}").To(s.getTopItem).
+		Doc("Get top items in category.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("name", "Name of the top item recommender.").DataType("string")).
+		Param(ws.PathParameter("category", "Category of returned items.").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Returns(http.StatusOK, "OK", []cache.Document{}).
+		Writes([]cache.Document{}))
 	// Get popular items
 	ws.Route(ws.GET("/popular").To(s.getPopular).
 		Doc("Get popular items.").
@@ -612,6 +632,13 @@ func (s *RestServer) searchDocuments(collection, subset, category string, isItem
 		items = items[:n]
 	}
 	Ok(response, items)
+}
+
+func (s *RestServer) getTopItem(request *restful.Request, response *restful.Response) {
+	name := request.PathParameter("name")
+	category := request.PathParameter("category")
+	log.ResponseLogger(response).Debug("get top items", zap.String("name", name), zap.String("category", category))
+	s.searchDocuments(cache.TopItems, name, category, true, request, response)
 }
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
