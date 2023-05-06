@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package json
+package jsonutil
 
 import "encoding/json"
 
@@ -29,4 +29,13 @@ func Unmarshal(data []byte, v interface{}) error {
 		data = []byte("null")
 	}
 	return json.Unmarshal(data, v)
+}
+
+// MustMarshal returns the JSON encoding of v. Panic if error occurs.
+func MustMarshal(v interface{}) string {
+	data, err := Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
 }
