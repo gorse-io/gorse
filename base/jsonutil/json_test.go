@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package json
+package jsonutil
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -34,4 +34,10 @@ func TestMarshal(t *testing.T) {
 	data, err := Marshal(nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "null", string(data))
+}
+
+func TestMustMarshal(t *testing.T) {
+	assert.Panics(t, func() {
+		MustMarshal(make(chan int))
+	})
 }

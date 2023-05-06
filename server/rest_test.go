@@ -179,7 +179,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Handler(suite.handler).
 		Post("/api/user").
 		Header("X-API-Key", apiKey).
-		JSON(data.User{UserId: "malicious", Labels: map[string]any{"price": 100}}).
+		JSON(data.User{UserId: "malicious", Labels: []any{"price", 100}}).
 		Expect(t).
 		Status(http.StatusBadRequest).
 		End()
@@ -187,7 +187,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Handler(suite.handler).
 		Post("/api/users").
 		Header("X-API-Key", apiKey).
-		JSON([]data.User{{UserId: "malicious", Labels: map[string]any{"price": 100}}}).
+		JSON([]data.User{{UserId: "malicious", Labels: []any{"price", 100}}}).
 		Expect(t).
 		Status(http.StatusBadRequest).
 		End()
@@ -195,7 +195,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Handler(suite.handler).
 		Patch("/api/user/malicious").
 		Header("X-API-Key", apiKey).
-		JSON(data.UserPatch{Labels: map[string]any{"price": 100}}).
+		JSON(data.UserPatch{Labels: []any{"price", 100}}).
 		Expect(t).
 		Status(http.StatusBadRequest).
 		End()
@@ -634,7 +634,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Handler(suite.handler).
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
-		JSON(Item{ItemId: "malicious", Labels: map[string]any{"price": 100}}).
+		JSON(Item{ItemId: "malicious", Labels: []any{"price", 1}}).
 		Expect(t).
 		Status(http.StatusBadRequest).
 		End()
@@ -642,7 +642,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Handler(suite.handler).
 		Post("/api/items").
 		Header("X-API-Key", apiKey).
-		JSON([]Item{{ItemId: "malicious", Labels: map[string]any{"price": 100}}}).
+		JSON([]Item{{ItemId: "malicious", Labels: []any{"price", 1}}}).
 		Expect(t).
 		Status(http.StatusBadRequest).
 		End()
@@ -650,7 +650,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Handler(suite.handler).
 		Patch("/api/item/malicious").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{Labels: map[string]any{"price": 100}}).
+		JSON(data.ItemPatch{Labels: []any{"price", 1}}).
 		Expect(t).
 		Status(http.StatusBadRequest).
 		End()

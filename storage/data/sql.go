@@ -26,7 +26,7 @@ import (
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/json"
+	"github.com/zhenghaoz/gorse/base/jsonutil"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
@@ -57,10 +57,10 @@ func NewSQLItem(item Item) (sqlItem SQLItem) {
 	var buf []byte
 	sqlItem.ItemId = item.ItemId
 	sqlItem.IsHidden = item.IsHidden
-	buf, _ = json.Marshal(item.Categories)
+	buf, _ = jsonutil.Marshal(item.Categories)
 	sqlItem.Categories = string(buf)
 	sqlItem.Timestamp = item.Timestamp
-	buf, _ = json.Marshal(item.Labels)
+	buf, _ = jsonutil.Marshal(item.Labels)
 	sqlItem.Labels = string(buf)
 	sqlItem.Comment = item.Comment
 	return
@@ -76,9 +76,9 @@ type SQLUser struct {
 func NewSQLUser(user User) (sqlUser SQLUser) {
 	var buf []byte
 	sqlUser.UserId = user.UserId
-	buf, _ = json.Marshal(user.Labels)
+	buf, _ = jsonutil.Marshal(user.Labels)
 	sqlUser.Labels = string(buf)
-	buf, _ = json.Marshal(user.Subscribe)
+	buf, _ = jsonutil.Marshal(user.Subscribe)
 	sqlUser.Subscribe = string(buf)
 	sqlUser.Comment = user.Comment
 	return
@@ -292,14 +292,14 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 		}
 	}
 	if patch.Categories != nil {
-		text, _ := json.Marshal(patch.Categories)
+		text, _ := jsonutil.Marshal(patch.Categories)
 		attributes["categories"] = string(text)
 	}
 	if patch.Comment != nil {
 		attributes["comment"] = *patch.Comment
 	}
 	if patch.Labels != nil {
-		text, _ := json.Marshal(patch.Labels)
+		text, _ := jsonutil.Marshal(patch.Labels)
 		attributes["labels"] = string(text)
 	}
 	if patch.Timestamp != nil {
@@ -479,11 +479,11 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 		attributes["comment"] = *patch.Comment
 	}
 	if patch.Labels != nil {
-		text, _ := json.Marshal(patch.Labels)
+		text, _ := jsonutil.Marshal(patch.Labels)
 		attributes["labels"] = string(text)
 	}
 	if patch.Subscribe != nil {
-		text, _ := json.Marshal(patch.Subscribe)
+		text, _ := jsonutil.Marshal(patch.Subscribe)
 		attributes["subscribe"] = string(text)
 	}
 	err := d.gormDB.WithContext(ctx).Model(&SQLUser{UserId: userId}).Updates(attributes).Error
@@ -691,7 +691,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
 	if len(buf) > 0 {
 		var cursorKey FeedbackKey
-		if err := json.Unmarshal(buf, &cursorKey); err != nil {
+		if err := jsonutil.Unmarshal(buf, &cursorKey); err != nil {
 			return "", nil, err
 		}
 		tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
@@ -721,7 +721,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	}
 	if len(feedbacks) == n+1 {
 		nextCursorKey := feedbacks[len(feedbacks)-1].FeedbackKey
-		nextCursor, err := json.Marshal(nextCursorKey)
+		nextCursor, err := jsonutil.Marshal(nextCursorKey)
 		if err != nil {
 			return "", nil, errors.Trace(err)
 		}

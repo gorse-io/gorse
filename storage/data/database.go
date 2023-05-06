@@ -16,15 +16,16 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/XSAM/otelsql"
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/base/jsonutil"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -46,21 +47,34 @@ var (
 	ErrNoDatabase   = errors.NotAssignedf("database")
 )
 
+// ValidateLabels checks if labels are valid. Labels are valid if consists of:
+// - []string			slice of strings
+// - []float64			slice of numbers
+// - map[string]any		map of strings to valid labels or float64
 func ValidateLabels(o any) error {
 	if o == nil {
 		return nil
 	}
 	switch labels := o.(type) {
-	case []any:
-		labelSet := mapset.NewSet[string]()
-		for _, label := range labels {
-			if s, ok := label.(string); !ok {
-				return errors.Errorf("elemnts in arrays must be strings")
-			} else if labelSet.Contains(s) {
-				return errors.Errorf("duplicate labels are not allowed")
-			} else {
-				labelSet.Add(s)
+	case []any: // must be []string or []float64
+		if len(labels) == 0 {
+			return nil
+		}
+		switch labels[0].(type) {
+		case string:
+			for _, val := range labels {
+				if _, ok := val.(string); !ok {
+					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
+				}
 			}
+		case json.Number:
+			for _, val := range labels {
+				if _, ok := val.(json.Number); !ok {
+					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
+				}
+			}
+		default:
+			return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
 		}
 		return nil
 	case map[string]any:
@@ -70,7 +84,7 @@ func ValidateLabels(o any) error {
 			}
 		}
 		return nil
-	case string:
+	case string, json.Number:
 		return nil
 	default:
 		return errors.Errorf("unsupported type in labels: %v", reflect.TypeOf(labels))
@@ -88,11 +102,17 @@ func flattenLabels(result []string, prefix string, o any) []string {
 	}
 	switch labels := o.(type) {
 	case []any:
-		for _, label := range labels {
-			if s, ok := label.(string); !ok {
-				panic("elemnts in arrays must be strings")
-			} else {
-				result = append(result, prefix+s)
+		if len(labels) == 0 {
+			return nil
+		}
+		switch labels[0].(type) {
+		case string:
+			for _, val := range labels {
+				if s, ok := val.(string); ok {
+					result = append(result, prefix+s)
+				} else {
+					panic("unsupported labels: " + jsonutil.MustMarshal(labels))
+				}
 			}
 		}
 	case map[string]any:
@@ -101,8 +121,6 @@ func flattenLabels(result []string, prefix string, o any) []string {
 		}
 	case string:
 		result = append(result, prefix+labels)
-	default:
-		panic("unsupported type in labels: " + reflect.TypeOf(labels).String())
 	}
 	return result
 }
