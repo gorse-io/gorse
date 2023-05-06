@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antonmedv/expr"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -109,6 +110,7 @@ type RecommendConfig struct {
 	Replacement   ReplacementConfig   `mapstructure:"replacement"`
 	Offline       OfflineConfig       `mapstructure:"offline"`
 	Online        OnlineConfig        `mapstructure:"online"`
+	Candidate     CandidateConfig     `mapstructure:"candidate"`
 }
 
 type DataSourceConfig struct {
@@ -162,6 +164,20 @@ type OfflineConfig struct {
 type OnlineConfig struct {
 	FallbackRecommend            []string `mapstructure:"fallback_recommend"`
 	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based" validate:"gt=0"`
+}
+
+type CandidateConfig struct {
+	Top []TopConfig `mapstructure:"top"`
+}
+
+type TopConfig struct {
+	Name  string `mapstructure:"name" validate:"required"`
+	Score string `mapstructure:"score" validate:"required"`
+}
+
+func (top *TopConfig) Validate() error {
+	_, err := expr.Compile(top.Score)
+	return err
 }
 
 type TracingConfig struct {

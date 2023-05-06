@@ -450,3 +450,10 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	cfg2.Recommend.Replacement.PositiveReplacementDecay = 0.2
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 }
+
+func TestTopConfig(t *testing.T) {
+	top := TopConfig{Score: "a+b"}
+	assert.NoError(t, top.Validate())
+	top = TopConfig{Score: "%%"}
+	assert.Error(t, top.Validate())
+}

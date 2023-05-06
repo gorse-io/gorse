@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/XSAM/otelsql v0.17.0
+	github.com/antonmedv/expr v1.12.5
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
