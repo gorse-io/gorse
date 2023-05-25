@@ -981,6 +981,47 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	}, recommends)
 }
 
+func (suite *WorkerTestSuite) TestUserActivity() {
+	ctx := context.Background()
+	err := suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().AddDate(0, 0, -1)))
+	suite.NoError(err)
+	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "1"), time.Now().AddDate(0, 0, -10)))
+	suite.NoError(err)
+	err = suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{{Id: "0", Score: 1, Categories: []string{""}}})
+	suite.NoError(err)
+	err = suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "1", []cache.Document{{Id: "1", Score: 1, Categories: []string{""}}})
+	suite.NoError(err)
+	err = suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "2", []cache.Document{{Id: "2", Score: 1, Categories: []string{""}}})
+	suite.NoError(err)
+
+	suite.True(suite.checkUserActiveTime(ctx, "0"))
+	suite.True(suite.checkUserActiveTime(ctx, "1"))
+	suite.True(suite.checkUserActiveTime(ctx, "2"))
+	docs, err := suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 1)
+	suite.NoError(err)
+	suite.NotEmpty(docs)
+	docs, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "1", []string{""}, 0, 1)
+	suite.NoError(err)
+	suite.NotEmpty(docs)
+	docs, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "2", []string{""}, 0, 1)
+	suite.NoError(err)
+	suite.NotEmpty(docs)
+
+	suite.Config.Recommend.ActiveUserTTL = 5
+	suite.True(suite.checkUserActiveTime(ctx, "0"))
+	suite.False(suite.checkUserActiveTime(ctx, "1"))
+	suite.True(suite.checkUserActiveTime(ctx, "2"))
+	docs, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 1)
+	suite.NoError(err)
+	suite.NotEmpty(docs)
+	docs, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "1", []string{""}, 0, 1)
+	suite.NoError(err)
+	suite.Empty(docs)
+	docs, err = suite.CacheClient.SearchDocuments(ctx, cache.OfflineRecommend, "2", []string{""}, 0, 1)
+	suite.NoError(err)
+	suite.NotEmpty(docs)
+}
+
 func (suite *WorkerTestSuite) TestHealth() {
 	// ready
 	req := httptest.NewRequest("GET", "https://example.com/", nil)

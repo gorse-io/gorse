@@ -101,6 +101,7 @@ type ServerConfig struct {
 type RecommendConfig struct {
 	CacheSize     int                 `mapstructure:"cache_size" validate:"gt=0"`
 	CacheExpire   time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
+	ActiveUserTTL int                 `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource    DataSourceConfig    `mapstructure:"data_source"`
 	Popular       PopularConfig       `mapstructure:"popular"`
 	UserNeighbors NeighborsConfig     `mapstructure:"user_neighbors"`

@@ -91,6 +91,9 @@ cache_size = 100
 # Recommended cache expire time. The default value is 72h.
 cache_expire = "72h"
 
+# The time-to-live (days) of active users, 0 means disabled. Recommendation won't be cached for inactive users. The default value is 0.
+active_user_ttl = 0
+
 [recommend.data_source]
 
 # The feedback types for positive events.
