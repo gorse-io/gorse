@@ -50,6 +50,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -550,7 +551,7 @@ func (w *Worker) Recommend(users []data.User) {
 		user := users[jobId]
 		userId := user.UserId
 		// skip inactive users before max recommend period
-		if !w.checkRecommendCacheTimeout(ctx, userId, itemCategories) {
+		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheTimeout(ctx, userId, itemCategories) {
 			return nil
 		}
 		updateUserCount.Add(1)
@@ -1050,6 +1051,30 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Document, excludeSet 
 		}
 	}
 	return exploreRecommend, nil
+}
+
+func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
+	if w.Config.Recommend.ActiveUserTTL == 0 {
+		return true
+	}
+	// read active time
+	activeTime, err := w.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
+	if err != nil {
+		if !errors.Is(err, errors.NotFound) {
+			log.Logger().Error("failed to read last modify user time", zap.Error(err))
+		}
+		return true
+	}
+	// check active time
+	if time.Since(activeTime) < time.Duration(w.Config.Recommend.ActiveUserTTL*24)*time.Hour {
+		return true
+	}
+	// remove recommend cache for inactive users
+	if err := w.CacheClient.DeleteDocuments(ctx, []string{cache.OfflineRecommend, cache.CollaborativeRecommend},
+		cache.DocumentCondition{Subset: proto.String(userId)}); err != nil {
+		log.Logger().Error("failed to delete recommend cache", zap.String("user_id", userId), zap.Error(err))
+	}
+	return false
 }
 
 // checkRecommendCacheTimeout checks if recommend cache stale.
