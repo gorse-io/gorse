@@ -113,7 +113,7 @@ func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, job
 	return &Worker{
 		managedMode:   managedMode,
 		Settings:      config.NewSettings(),
-		randGenerator: rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
+		randGenerator: base.NewRand(time.Now().UTC().UnixNano()),
 		// config
 		cacheFile:  cacheFile,
 		masterHost: masterHost,
