@@ -335,6 +335,7 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	})
 
 	var builder strings.Builder
+	config.Recommend.Offline.Lock()
 	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v-%v",
 		config.Recommend.Offline.ExploreRecommend,
 		config.Recommend.Offline.EnableLatestRecommend,
@@ -345,6 +346,7 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 		options.enableRanking,
 		config.Recommend.Replacement.EnableReplacement,
 	))
+	config.Recommend.Offline.UnLock()
 	if config.Recommend.Offline.EnablePopularRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Popular.PopularWindow))
 	}
