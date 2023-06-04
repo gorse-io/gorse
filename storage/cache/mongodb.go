@@ -92,17 +92,18 @@ func (m MongoDB) Init() error {
 	}
 	_, err = d.Collection(m.DocumentTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			// update set ... where name = ? and value = ?
 			Keys: bson.D{
-				{"name", 1},
-				{"value", 1},
+				{"collection", 1},
+				{"subset", 1},
+				{"id", 1},
 			},
 		},
 		{
-			// select * from documents where name = ? and ? <@ categories order by score asc
 			Keys: bson.D{
-				{"name", 1},
+				{"collection", 1},
+				{"subset", 1},
 				{"categories", 1},
+				{"is_hidden", 1},
 				{"score", -1},
 			},
 		},

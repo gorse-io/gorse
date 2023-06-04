@@ -17,9 +17,13 @@ import (
 	"context"
 	"io"
 	"math"
+	"math/rand"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/fxtlabs/primes"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -461,4 +465,69 @@ func TestKey(t *testing.T) {
 	assert.Equal(t, "a", Key("a"))
 	assert.Equal(t, "a", Key("a", ""))
 	assert.Equal(t, "a/b", Key("a", "b"))
+}
+
+var (
+	benchmarkDataSize = 100000
+	primeTable        []int
+)
+
+func init() {
+	benchmarkDataSizeStr := os.Getenv("BENCHMARK_DATA_SIZE")
+	if benchmarkDataSizeStr != "" {
+		benchmarkDataSize, _ = strconv.Atoi(benchmarkDataSizeStr)
+	}
+	primeTable = primes.Sieve(benchmarkDataSize)
+}
+
+func primeFactor(n int) []int {
+	var factors []int
+	for _, p := range primeTable {
+		if n%p == 0 {
+			factors = append(factors, p)
+		}
+	}
+	return factors
+}
+
+func benchmarkAddDocuments(b *testing.B, database Database) {
+	ctx := context.Background()
+	var documents []Document
+	for i := 1; i <= b.N; i++ {
+		documents = append(documents, Document{
+			Id:         strconv.Itoa(i),
+			Score:      float64(-i),
+			Categories: lo.Map(primeFactor(i), func(n, _ int) string { return strconv.Itoa(n) }),
+			Timestamp:  time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+		})
+	}
+	b.ResetTimer()
+	err := database.AddDocuments(ctx, "a", "", documents)
+	assert.NoError(b, err)
+}
+
+func benchmarkSearchDocuments(b *testing.B, database Database) {
+	// insert data
+	ctx := context.Background()
+	var documents []Document
+	for i := 1; i <= benchmarkDataSize; i++ {
+		documents = append(documents, Document{
+			Id:         strconv.Itoa(i),
+			Score:      float64(-i),
+			Categories: lo.Map(primeFactor(i), func(n, _ int) string { return strconv.Itoa(n) }),
+			Timestamp:  time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+		})
+	}
+	err := database.AddDocuments(ctx, "a", "", documents)
+	assert.NoError(b, err)
+	// search data
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// select a random prime
+		p := primeTable[rand.Intn(len(primeTable))]
+		// search documents
+		r, err := database.SearchDocuments(ctx, "a", "", []string{strconv.Itoa(p)}, 0, 10)
+		assert.NoError(b, err)
+		assert.NotEmpty(b, r)
+	}
 }

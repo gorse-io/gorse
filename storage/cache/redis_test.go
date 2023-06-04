@@ -19,7 +19,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/base/log"
 )
 
 var (
@@ -55,4 +57,24 @@ func (suite *RedisTestSuite) SetupSuite() {
 
 func TestRedis(t *testing.T) {
 	suite.Run(t, new(RedisTestSuite))
+}
+
+func BenchmarkRedis(b *testing.B) {
+	log.CloseLogger()
+	// open db
+	database, err := Open(redisDSN, "gorse_")
+	assert.NoError(b, err)
+	// flush db
+	err = database.(*Redis).client.FlushDB(context.TODO()).Err()
+	assert.NoError(b, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	b.Run("AddDocuments", func(b *testing.B) {
+		benchmarkAddDocuments(b, database)
+	})
+	b.Run("SearchDocuments", func(b *testing.B) {
+		benchmarkSearchDocuments(b, database)
+	})
 }

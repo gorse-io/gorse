@@ -12,6 +12,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.3.0
 	github.com/emicklei/go-restful-openapi/v2 v2.9.0
 	github.com/emicklei/go-restful/v3 v3.9.0
+	github.com/fxtlabs/primes v0.0.0-20150821004651-dad82d10a449
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.0
