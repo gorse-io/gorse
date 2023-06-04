@@ -19,22 +19,21 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/lib/pq"
-	_ "github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"modernc.org/sqlite"
-	_ "modernc.org/sqlite"
 )
 
 func init() {
@@ -149,7 +148,35 @@ func (db *SQLDatabase) Init() error {
 	switch db.driver {
 	case Postgres:
 		err = db.gormDB.AutoMigrate(&PostgresDocument{})
-	case SQLite, MySQL:
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// create extension btree_gin
+		err = db.gormDB.Exec("CREATE EXTENSION IF NOT EXISTS btree_gin").Error
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// create index
+		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_categories ON %s USING GIN (collection, subset, categories)", db.DocumentTable())).Error
+		if err != nil {
+			return errors.Trace(err)
+		}
+	case MySQL:
+		err = db.gormDB.AutoMigrate(&SQLDocument{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// create index
+		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
+		if err != nil {
+			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
+				// ignore duplicate index error
+				err = nil
+			} else {
+				return errors.Trace(err)
+			}
+		}
+	case SQLite:
 		err = db.gormDB.AutoMigrate(&SQLDocument{})
 	}
 	return errors.Trace(err)

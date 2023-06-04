@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
 )
 
@@ -139,4 +140,79 @@ func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) 
 	err = rows.Scan(&result)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
+}
+
+func BenchmarkPostgres(b *testing.B) {
+	log.CloseLogger()
+	// create database
+	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable")
+	assert.NoError(b, err)
+	const dbName = "gorse_cache_benchmark"
+	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
+	assert.NoError(b, err)
+	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	assert.NoError(b, err)
+	err = databaseComm.Close()
+	assert.NoError(b, err)
+	// connect database
+	database, err := Open(postgresDSN+strings.ToLower(dbName)+"?sslmode=disable", "gorse_")
+	assert.NoError(b, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	b.Run("AddDocuments", func(b *testing.B) {
+		benchmarkAddDocuments(b, database)
+	})
+	b.Run("SearchDocuments", func(b *testing.B) {
+		benchmarkSearchDocuments(b, database)
+	})
+	// close database
+	err = database.Close()
+	assert.NoError(b, err)
+}
+
+func BenchmarkMySQL(b *testing.B) {
+	log.CloseLogger()
+	// create database
+	databaseComm, err := sql.Open("mysql", mySqlDSN[len(storage.MySQLPrefix):])
+	assert.NoError(b, err)
+	const dbName = "gorse_cache_benchmark"
+	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
+	assert.NoError(b, err)
+	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	assert.NoError(b, err)
+	err = databaseComm.Close()
+	assert.NoError(b, err)
+	// connect database
+	database, err := Open(mySqlDSN+dbName, "gorse_")
+	assert.NoError(b, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	b.Run("AddDocuments", func(b *testing.B) {
+		benchmarkAddDocuments(b, database)
+	})
+	b.Run("SearchDocuments", func(b *testing.B) {
+		benchmarkSearchDocuments(b, database)
+	})
+}
+
+func BenchmarkSQLite(b *testing.B) {
+	log.CloseLogger()
+	// create database
+	path := fmt.Sprintf("sqlite://%s/sqlite.db", b.TempDir())
+	database, err := Open(path, "gorse_")
+	assert.NoError(b, err)
+	// create schema
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	b.Run("AddDocuments", func(b *testing.B) {
+		benchmarkAddDocuments(b, database)
+	})
+	b.Run("SearchDocuments", func(b *testing.B) {
+		benchmarkSearchDocuments(b, database)
+	})
 }
