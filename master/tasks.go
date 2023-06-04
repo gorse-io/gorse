@@ -310,6 +310,7 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemLabels))
 		// inverse document frequency of labels
 		for i := range labeledItems {
+			labeledItems[i] = lo.Uniq(labeledItems[i])
 			if dataset.ItemCount() == len(labeledItems[i]) {
 				labelIDF[i] = 1
 			} else {
@@ -634,6 +635,7 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserLabels))
 		// inverse document frequency of labels
 		for i := range labeledUsers {
+			labeledUsers[i] = lo.Uniq(labeledUsers[i])
 			if dataset.UserCount() == len(labeledUsers[i]) {
 				labelIDF[i] = 1
 			} else {

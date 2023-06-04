@@ -266,8 +266,8 @@ func TestMaster_FindItemNeighborsIVF_ZeroIDF(t *testing.T) {
 
 	// create dataset
 	err := m.DataClient.BatchInsertItems(ctx, []data.Item{
-		{"0", false, []string{"*"}, time.Now(), []string{"a"}, ""},
-		{"1", false, []string{"*"}, time.Now(), []string{"a"}, ""},
+		{"0", false, []string{"*"}, time.Now(), []string{"a", "a"}, ""},
+		{"1", false, []string{"*"}, time.Now(), []string{"a", "a"}, ""},
 	})
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -486,8 +486,8 @@ func TestMaster_FindUserNeighborsIVF_ZeroIDF(t *testing.T) {
 
 	// create dataset
 	err := m.DataClient.BatchInsertUsers(ctx, []data.User{
-		{"0", []string{"a"}, nil, ""},
-		{"1", []string{"a"}, nil, ""},
+		{"0", []string{"a", "a"}, nil, ""},
+		{"1", []string{"a", "a"}, nil, ""},
 	})
 	assert.NoError(t, err)
 	err = m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
