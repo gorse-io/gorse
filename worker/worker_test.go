@@ -727,6 +727,55 @@ func TestWorker_Sync(t *testing.T) {
 	done <- struct{}{}
 }
 
+func TestWorker_SyncRecommend(t *testing.T) {
+	cfg := config.GetDefaultConfig()
+	cfg.Recommend.Offline.ExploreRecommend = map[string]float64{"popular": 0.5}
+	master := newMockMaster(t)
+	master.meta.Config = marshal(t, cfg)
+	go master.Start(t)
+	address := <-master.addr
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	assert.NoError(t, err)
+	worker := &Worker{
+		Settings:     config.NewSettings(),
+		jobs:         1,
+		testMode:     true,
+		masterClient: protocol.NewMasterClient(conn),
+		syncedChan:   parallel.NewConditionChannel(),
+		ticker:       time.NewTicker(time.Minute),
+	}
+	worker.Sync()
+
+	stopSync := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stopSync:
+				return
+			default:
+				worker.Sync()
+			}
+		}
+	}()
+
+	stopRecommend := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stopRecommend:
+				return
+			default:
+				worker.Settings.Config.OfflineRecommendDigest()
+			}
+		}
+	}()
+
+	time.Sleep(time.Second)
+	stopSync <- struct{}{}
+	stopRecommend <- struct{}{}
+	master.Stop()
+}
+
 type mockFactorizationMachine struct {
 	click.BaseFactorizationMachine
 }
