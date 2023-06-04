@@ -256,8 +256,8 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF_ZeroIDF() {
 
 	// create dataset
 	err := s.DataClient.BatchInsertItems(ctx, []data.Item{
-		{"0", false, []string{"*"}, time.Now(), []string{"a"}, ""},
-		{"1", false, []string{"*"}, time.Now(), []string{"a"}, ""},
+		{"0", false, []string{"*"}, time.Now(), []string{"a", "a"}, ""},
+		{"1", false, []string{"*"}, time.Now(), []string{"a", "a"}, ""},
 	})
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -467,8 +467,8 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF_ZeroIDF() {
 
 	// create dataset
 	err := s.DataClient.BatchInsertUsers(ctx, []data.User{
-		{"0", []string{"a"}, nil, ""},
-		{"1", []string{"a"}, nil, ""},
+		{"0", []string{"a", "a"}, nil, ""},
+		{"1", []string{"a", "a"}, nil, ""},
 	})
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
