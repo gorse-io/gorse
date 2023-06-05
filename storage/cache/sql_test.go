@@ -161,12 +161,7 @@ func BenchmarkPostgres(b *testing.B) {
 	err = database.Init()
 	assert.NoError(b, err)
 	// benchmark
-	b.Run("AddDocuments", func(b *testing.B) {
-		benchmarkAddDocuments(b, database)
-	})
-	b.Run("SearchDocuments", func(b *testing.B) {
-		benchmarkSearchDocuments(b, database)
-	})
+	benchmark(b, database)
 	// close database
 	err = database.Close()
 	assert.NoError(b, err)
@@ -191,12 +186,7 @@ func BenchmarkMySQL(b *testing.B) {
 	err = database.Init()
 	assert.NoError(b, err)
 	// benchmark
-	b.Run("AddDocuments", func(b *testing.B) {
-		benchmarkAddDocuments(b, database)
-	})
-	b.Run("SearchDocuments", func(b *testing.B) {
-		benchmarkSearchDocuments(b, database)
-	})
+	benchmark(b, database)
 }
 
 func BenchmarkSQLite(b *testing.B) {
@@ -209,10 +199,5 @@ func BenchmarkSQLite(b *testing.B) {
 	err = database.Init()
 	assert.NoError(b, err)
 	// benchmark
-	b.Run("AddDocuments", func(b *testing.B) {
-		benchmarkAddDocuments(b, database)
-	})
-	b.Run("SearchDocuments", func(b *testing.B) {
-		benchmarkSearchDocuments(b, database)
-	})
+	benchmark(b, database)
 }
