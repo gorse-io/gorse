@@ -1140,6 +1140,36 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestGetRecommendsWithMultiCategories() {
+	ctx := context.Background()
+	t := suite.T()
+	// insert recommendation
+	err := suite.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", []cache.Document{
+		{Id: "1", Score: 1, Categories: []string{""}},
+		{Id: "2", Score: 2, Categories: []string{"", "2"}},
+		{Id: "3", Score: 3, Categories: []string{"", "3"}},
+		{Id: "4", Score: 4, Categories: []string{"", "2"}},
+		{Id: "5", Score: 5, Categories: []string{"", "5"}},
+		{Id: "6", Score: 6, Categories: []string{"", "2", "3"}},
+		{Id: "7", Score: 7, Categories: []string{"", "7"}},
+		{Id: "8", Score: 8, Categories: []string{"", "2"}},
+		{Id: "9", Score: 9, Categories: []string{"", "3"}},
+	})
+	suite.NoError(err)
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryCollection(map[string][]string{
+			"n":        []string{"3"},
+			"category": []string{"2", "3"},
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"6"})).
+		End()
+}
+
 func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
 	ctx := context.Background()
 	t := suite.T()
