@@ -490,6 +490,18 @@ func primeFactor(n int) []int {
 	return factors
 }
 
+func benchmark(b *testing.B, database Database) {
+	b.Run("AddDocuments", func(b *testing.B) {
+		benchmarkAddDocuments(b, database)
+	})
+	b.Run("SearchDocuments", func(b *testing.B) {
+		benchmarkSearchDocuments(b, database)
+	})
+	b.Run("UpdateDocuments", func(b *testing.B) {
+		benchmarkUpdateDocuments(b, database)
+	})
+}
+
 func benchmarkAddDocuments(b *testing.B, database Database) {
 	ctx := context.Background()
 	var documents []Document
@@ -529,5 +541,19 @@ func benchmarkSearchDocuments(b *testing.B, database Database) {
 		r, err := database.SearchDocuments(ctx, "a", "", []string{strconv.Itoa(p)}, 0, 10)
 		assert.NoError(b, err)
 		assert.NotEmpty(b, r)
+	}
+}
+
+func benchmarkUpdateDocuments(b *testing.B, database Database) {
+	ctx := context.Background()
+	b.ResetTimer()
+	for i := 1; i <= b.N; i++ {
+		// select a random number
+		n := rand.Intn(benchmarkDataSize) + 1
+		// update documents
+		err := database.UpdateDocuments(ctx, []string{"a"}, strconv.Itoa(n), DocumentPatch{
+			Score: proto.Float64(float64(n)),
+		})
+		assert.NoError(b, err)
 	}
 }

@@ -71,10 +71,5 @@ func BenchmarkRedis(b *testing.B) {
 	err = database.Init()
 	assert.NoError(b, err)
 	// benchmark
-	b.Run("AddDocuments", func(b *testing.B) {
-		benchmarkAddDocuments(b, database)
-	})
-	b.Run("SearchDocuments", func(b *testing.B) {
-		benchmarkSearchDocuments(b, database)
-	})
+	benchmark(b, database)
 }

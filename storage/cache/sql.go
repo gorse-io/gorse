@@ -157,7 +157,11 @@ func (db *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		// create index
-		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_categories ON %s USING GIN (collection, subset, categories)", db.DocumentTable())).Error
+		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_subset_categories ON %s USING GIN (collection, subset, categories)", db.DocumentTable())).Error
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_id ON %s (collection, id)", db.DocumentTable())).Error
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -167,7 +171,16 @@ func (db *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		// create index
-		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
+		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
+		if err != nil {
+			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
+				// ignore duplicate index error
+				err = nil
+			} else {
+				return errors.Trace(err)
+			}
+		}
+		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_id (collection, id)", db.DocumentTable())).Error
 		if err != nil {
 			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
 				// ignore duplicate index error
