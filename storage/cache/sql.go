@@ -175,7 +175,6 @@ func (db *SQLDatabase) Init() error {
 		if err != nil {
 			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
 				// ignore duplicate index error
-				err = nil
 			} else {
 				return errors.Trace(err)
 			}
