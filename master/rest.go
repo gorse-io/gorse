@@ -756,7 +756,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// parse arguments
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
-	category := request.PathParameter("category")
+	categories := []string{request.PathParameter("category")}
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
@@ -765,13 +765,13 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	var results []string
 	switch recommender {
 	case "offline":
-		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendOffline)
+		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendOffline)
 	case "collaborative":
-		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendCollaborative)
+		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendCollaborative)
 	case "user_based":
-		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendUserBased)
+		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendUserBased)
 	case "item_based":
-		results, err = m.Recommend(ctx, response, userId, category, n, m.RecommendItemBased)
+		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendItemBased)
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
 		for _, recommender := range m.Config.Recommend.Online.FallbackRecommend {
@@ -791,7 +791,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 				return
 			}
 		}
-		results, err = m.Recommend(ctx, response, userId, category, n, recommenders...)
+		results, err = m.Recommend(ctx, response, userId, categories, n, recommenders...)
 	}
 	if err != nil {
 		server.InternalServerError(response, err)
