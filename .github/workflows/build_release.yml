@@ -73,7 +73,7 @@ jobs:
         uses: battila7/get-version-action@v2
 
       - name: Build docker image
-        if: ${{ github.event.release.prerelease }} == false
+        if: github.event.release.prerelease == false
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -86,7 +86,7 @@ jobs:
             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
 
       - name: Build prerelease docker image
-        if: ${{ github.event.release.prerelease }} == true
+        if: github.event.release.prerelease == true
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -110,7 +110,7 @@ jobs:
         uses: battila7/get-version-action@v2
 
       - name: Build docker image
-        if: ${{ github.event.release.prerelease }} == false
+        if: github.event.release.prerelease == false
         run: |
           docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
@@ -124,7 +124,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build prerelease docker image
-        if: ${{ github.event.release.prerelease }} == true
+        if: github.event.release.prerelease == true
         run: |
           docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
