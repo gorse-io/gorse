@@ -23,6 +23,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -39,8 +40,8 @@ type DataSet struct {
 	UserFeedback   [][]int32
 	ItemFeedback   [][]int32
 	Negatives      [][]int32
-	ItemLabels     [][]int32
-	UserLabels     [][]int32
+	ItemFeatures   [][]lo.Tuple2[int32, float32]
+	UserFeatures   [][]lo.Tuple2[int32, float32]
 	HiddenItems    []bool
 	ItemCategories [][]string
 	CategorySet    mapset.Set[string]
@@ -89,8 +90,8 @@ func (dataset *DataSet) Bytes() int {
 	bytes += encoding.MatrixBytes(dataset.Negatives)
 
 	// ItemLabels + UserLabels
-	bytes += reflect.TypeOf(dataset.ItemLabels).Elem().Size() * uintptr(len(dataset.ItemLabels)+len(dataset.UserLabels))
-	bytes += reflect.TypeOf(dataset.ItemLabels).Elem().Elem().Size() * uintptr(dataset.NumItemLabelUsed+dataset.NumUserLabelUsed)
+	bytes += reflect.TypeOf(dataset.ItemFeatures).Elem().Size() * uintptr(len(dataset.ItemFeatures)+len(dataset.UserFeatures))
+	bytes += reflect.TypeOf(dataset.ItemFeatures).Elem().Elem().Size() * uintptr(dataset.NumItemLabelUsed+dataset.NumUserLabelUsed)
 
 	bytes += encoding.ArrayBytes(dataset.HiddenItems)
 	bytes += encoding.ArrayBytes(dataset.ItemCategories)
@@ -200,8 +201,8 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet.HiddenItems, testSet.HiddenItems = dataset.HiddenItems, dataset.HiddenItems
 	trainSet.ItemCategories, testSet.ItemCategories = dataset.ItemCategories, dataset.ItemCategories
 	trainSet.CategorySet, testSet.CategorySet = dataset.CategorySet, dataset.CategorySet
-	trainSet.ItemLabels, testSet.ItemLabels = dataset.ItemLabels, dataset.ItemLabels
-	trainSet.UserLabels, testSet.UserLabels = dataset.UserLabels, dataset.UserLabels
+	trainSet.ItemFeatures, testSet.ItemFeatures = dataset.ItemFeatures, dataset.ItemFeatures
+	trainSet.UserFeatures, testSet.UserFeatures = dataset.UserFeatures, dataset.UserFeatures
 	trainSet.NumItemLabelUsed, testSet.NumItemLabelUsed = dataset.NumItemLabelUsed, dataset.NumItemLabelUsed
 	trainSet.NumUserLabelUsed, testSet.NumUserLabelUsed = dataset.NumUserLabelUsed, dataset.NumUserLabelUsed
 	trainSet.UserIndex, testSet.UserIndex = dataset.UserIndex, dataset.UserIndex

@@ -94,7 +94,7 @@ func TestFM_Regression_Criteo(t *testing.T) {
 
 	// test prediction
 	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.5, 0.5, 0.5, 0.5}),
-		m.Predict("1", "2", []string{"3", "4"}, []string{"5", "6"}))
+		m.Predict("1", "2", []Feature{{Name: "3"}, {Name: "4"}}, []Feature{{Name: "5"}, {Name: "6"}}))
 
 	// test increment test
 	buf := bytes.NewBuffer(nil)

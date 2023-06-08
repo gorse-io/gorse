@@ -758,26 +758,3 @@ func TestValidateLabels(t *testing.T) {
 	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", json.Number("2"), "3"}}))
 	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", json.Number("3")}}))
 }
-
-func TestFlattenLabels(t *testing.T) {
-	labels := FlattenLabels(nil)
-	assert.Nil(t, labels)
-	labels = FlattenLabels("label")
-	assert.ElementsMatch(t, []string{"label"}, labels)
-	labels = FlattenLabels([]any{"1", "2", "3"})
-	assert.ElementsMatch(t, []string{"1", "2", "3"}, labels)
-	labels = FlattenLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}})
-	assert.ElementsMatch(t, []string{"city.wenzhou", "tags.1", "tags.2", "tags.3"}, labels)
-	labels = FlattenLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}})
-	assert.ElementsMatch(t, []string{"address.province.zhejiang", "address.city.wenzhou"}, labels)
-
-	// not supported yet
-	labels = FlattenLabels(float64(1))
-	assert.Empty(t, labels)
-	labels = FlattenLabels([]any{float64(1), float64(2), float64(3)})
-	assert.Empty(t, labels)
-	labels = FlattenLabels(map[string]any{"city": "wenzhou", "tags": float64(1)})
-	assert.ElementsMatch(t, []string{"city.wenzhou"}, labels)
-	labels = FlattenLabels(map[string]any{"city": "wenzhou", "tags": []any{float64(1), float64(2), float64(3)}})
-	assert.ElementsMatch(t, []string{"city.wenzhou"}, labels)
-}

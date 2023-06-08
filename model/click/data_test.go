@@ -14,10 +14,54 @@
 package click
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
+
+func TestConvertLabelsToFeatures(t *testing.T) {
+	features := ConvertLabelsToFeatures(nil)
+	assert.Nil(t, features)
+
+	// categorical features
+	features = ConvertLabelsToFeatures("label")
+	assert.ElementsMatch(t, []Feature{{Name: "label", Value: 1}}, features)
+	features = ConvertLabelsToFeatures([]any{"1", "2", "3"})
+	assert.ElementsMatch(t, []Feature{
+		{Name: "1", Value: 1},
+		{Name: "2", Value: 1},
+		{Name: "3", Value: 1},
+	}, features)
+	features = ConvertLabelsToFeatures(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}})
+	assert.ElementsMatch(t, []Feature{
+		{Name: "city.wenzhou", Value: 1},
+		{Name: "tags.1", Value: 1},
+		{Name: "tags.2", Value: 1},
+		{Name: "tags.3", Value: 1},
+	}, features)
+	features = ConvertLabelsToFeatures(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}})
+	assert.ElementsMatch(t, []Feature{
+		{Name: "address.province.zhejiang", Value: 1},
+		{Name: "address.city.wenzhou", Value: 1},
+	}, features)
+
+	// numerical features
+	features = ConvertLabelsToFeatures(json.Number("1"))
+	assert.Equal(t, []Feature{{Name: "", Value: 1}}, features)
+	features = ConvertLabelsToFeatures(map[string]any{"city": "wenzhou", "tags": json.Number("0.5")})
+	assert.ElementsMatch(t, []Feature{
+		{Name: "city.wenzhou", Value: 1},
+		{Name: "tags.", Value: 0.5},
+	}, features)
+
+	// not supported
+	features = ConvertLabelsToFeatures([]any{float64(1), float64(2), float64(3)})
+	assert.Empty(t, features)
+	features = ConvertLabelsToFeatures(map[string]any{"city": "wenzhou", "tags": []any{float64(1), float64(2), float64(3)}})
+	assert.ElementsMatch(t, []Feature{{Name: "city.wenzhou", Value: 1}}, features)
+}
 
 func TestLoadDataFromBuiltIn(t *testing.T) {
 	train, test, err := LoadDataFromBuiltIn("frappe")
@@ -35,14 +79,21 @@ func TestDataset_Split(t *testing.T) {
 		unifiedIndex.AddUser(fmt.Sprintf("user%v", i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i+1))
-		dataset.UserFeatures = append(dataset.UserFeatures, []int32{int32(2 * i), int32(2*i + 1)})
+		dataset.UserFeatures = append(dataset.UserFeatures, []lo.Tuple2[int32, float32]{
+			{A: int32(2 * i), B: 1},
+			{A: int32(2*i + 1), B: 1},
+		})
 	}
 	for i := 0; i < numItems; i++ {
 		unifiedIndex.AddItem(fmt.Sprintf("item%v", i))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+1))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+2))
-		dataset.ItemFeatures = append(dataset.ItemFeatures, []int32{int32(3 * i), int32(3*i + 1), int32(3*i + 2)})
+		dataset.ItemFeatures = append(dataset.ItemFeatures, []lo.Tuple2[int32, float32]{
+			{A: int32(3 * i), B: 1},
+			{A: int32(3*i + 1), B: 1},
+			{A: int32(3*i + 2), B: 1},
+		})
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := 0; j < numItems; j++ {

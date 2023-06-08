@@ -16,23 +16,78 @@ package click
 
 import (
 	"bufio"
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/jsonutil"
 	"github.com/zhenghaoz/gorse/model"
 	"modernc.org/mathutil"
 )
+
+type Feature struct {
+	Name      string
+	Value     float32
+	Embedding []float32
+}
+
+func ConvertLabelsToFeatures(o any) []Feature {
+	features := make([]Feature, 0)
+	return convertLabelsToFeatures(features, "", o)
+}
+
+func convertLabelsToFeatures(result []Feature, prefix string, o any) []Feature {
+	if o == nil {
+		return nil
+	}
+	switch labels := o.(type) {
+	case []any:
+		if len(labels) == 0 {
+			return nil
+		}
+		switch labels[0].(type) {
+		case string:
+			for _, val := range labels {
+				if s, ok := val.(string); ok {
+					result = append(result, Feature{
+						Name:  prefix + s,
+						Value: 1,
+					})
+				} else {
+					panic("unsupported labels: " + jsonutil.MustMarshal(labels))
+				}
+			}
+		}
+	case map[string]any:
+		for key, val := range labels {
+			result = convertLabelsToFeatures(result, prefix+key+".", val)
+		}
+	case string:
+		result = append(result, Feature{
+			Name:  prefix + labels,
+			Value: 1,
+		})
+	case json.Number:
+		value, _ := labels.Float64()
+		result = append(result, Feature{
+			Name:  prefix,
+			Value: float32(value),
+		})
+	}
+	return result
+}
 
 // Dataset for click-through-rate models.
 type Dataset struct {
 	Index UnifiedIndex
 
-	UserFeatures [][]int32 // features of users
-	ItemFeatures [][]int32 // features of items
+	UserFeatures [][]lo.Tuple2[int32, float32] // features of users
+	ItemFeatures [][]lo.Tuple2[int32, float32] // features of items
 
 	Users       base.Array[int32]
 	Items       base.Array[int32]
@@ -106,7 +161,7 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 	if dataset.Users.Len() > 0 {
 		userFeatures := dataset.UserFeatures[dataset.Users.Get(i)]
 		for _, feature := range userFeatures {
-			features = append(features, position+feature)
+			features = append(features, position+feature.A)
 		}
 		values = append(values, base.RepeatFloat32s(len(userFeatures), dataset.NormValues.Get(i))...)
 		position += dataset.Index.CountUserLabels()
@@ -115,7 +170,7 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 	if dataset.Items.Len() > 0 {
 		itemFeatures := dataset.ItemFeatures[dataset.Items.Get(i)]
 		for _, feature := range itemFeatures {
-			features = append(features, position+feature)
+			features = append(features, position+feature.A)
 		}
 		values = append(values, base.RepeatFloat32s(len(itemFeatures), dataset.NormValues.Get(i))...)
 	}

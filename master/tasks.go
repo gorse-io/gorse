@@ -202,7 +202,7 @@ func (m *Master) estimateFindItemNeighborsComplexity(dataset *ranking.DataSet) i
 	}
 	if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		complexity += len(dataset.ItemLabels) + int(dataset.NumItemLabels)
+		complexity += len(dataset.ItemFeatures) + int(dataset.NumItemLabels)
 	}
 	if m.Config.Recommend.ItemNeighbors.EnableIndex {
 		complexity += search.EstimateIVFBuilderComplexity(dataset.ItemCount(), m.Config.Recommend.ItemNeighbors.IndexFitEpoch)
@@ -1460,27 +1460,33 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, user := range users {
 			rankingDataset.AddUser(user.UserId)
 			userIndex := rankingDataset.UserIndex.ToNumber(user.UserId)
-			if len(rankingDataset.UserLabels) == int(userIndex) {
-				rankingDataset.UserLabels = append(rankingDataset.UserLabels, nil)
+			if len(rankingDataset.UserFeatures) == int(userIndex) {
+				rankingDataset.UserFeatures = append(rankingDataset.UserFeatures, nil)
 			}
-			labels := data.FlattenLabels(user.Labels)
-			rankingDataset.NumUserLabelUsed += len(labels)
-			rankingDataset.UserLabels[userIndex] = make([]int32, 0, len(labels))
-			for _, label := range labels {
-				userLabelCount[label]++
+			features := click.ConvertLabelsToFeatures(user.Labels)
+			rankingDataset.NumUserLabelUsed += len(features)
+			rankingDataset.UserFeatures[userIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
+			for _, feature := range features {
+				userLabelCount[feature.Name]++
 				// Memorize the first occurrence.
-				if userLabelCount[label] == 1 {
-					userLabelFirst[label] = userIndex
+				if userLabelCount[feature.Name] == 1 {
+					userLabelFirst[feature.Name] = userIndex
 				}
 				// Add the label to the index in second occurrence.
-				if userLabelCount[label] == 2 {
-					userLabelIndex.Add(label)
-					firstUserIndex := userLabelFirst[label]
-					rankingDataset.UserLabels[firstUserIndex] = append(rankingDataset.UserLabels[firstUserIndex], userLabelIndex.ToNumber(label))
+				if userLabelCount[feature.Name] == 2 {
+					userLabelIndex.Add(feature.Name)
+					firstUserIndex := userLabelFirst[feature.Name]
+					rankingDataset.UserFeatures[firstUserIndex] = append(rankingDataset.UserFeatures[firstUserIndex], lo.Tuple2[int32, float32]{
+						A: userLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 				// Add the label to the user.
-				if userLabelCount[label] > 1 {
-					rankingDataset.UserLabels[userIndex] = append(rankingDataset.UserLabels[userIndex], userLabelIndex.ToNumber(label))
+				if userLabelCount[feature.Name] > 1 {
+					rankingDataset.UserFeatures[userIndex] = append(rankingDataset.UserFeatures[userIndex], lo.Tuple2[int32, float32]{
+						A: userLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 			}
 		}
@@ -1506,30 +1512,36 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, item := range items {
 			rankingDataset.AddItem(item.ItemId)
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
-			if len(rankingDataset.ItemLabels) == int(itemIndex) {
-				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
+			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
+				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
 				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
 				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
 				rankingDataset.CategorySet.Append(item.Categories...)
 			}
-			labels := data.FlattenLabels(item.Labels)
-			rankingDataset.NumItemLabelUsed += len(labels)
-			rankingDataset.ItemLabels[itemIndex] = make([]int32, 0, len(labels))
-			for _, label := range labels {
-				itemLabelCount[label]++
+			features := click.ConvertLabelsToFeatures(item.Labels)
+			rankingDataset.NumItemLabelUsed += len(features)
+			rankingDataset.ItemFeatures[itemIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
+			for _, feature := range features {
+				itemLabelCount[feature.Name]++
 				// Memorize the first occurrence.
-				if itemLabelCount[label] == 1 {
-					itemLabelFirst[label] = itemIndex
+				if itemLabelCount[feature.Name] == 1 {
+					itemLabelFirst[feature.Name] = itemIndex
 				}
 				// Add the label to the index in second occurrence.
-				if itemLabelCount[label] == 2 {
-					itemLabelIndex.Add(label)
-					firstItemIndex := itemLabelFirst[label]
-					rankingDataset.ItemLabels[firstItemIndex] = append(rankingDataset.ItemLabels[firstItemIndex], itemLabelIndex.ToNumber(label))
+				if itemLabelCount[feature.Name] == 2 {
+					itemLabelIndex.Add(feature.Name)
+					firstItemIndex := itemLabelFirst[feature.Name]
+					rankingDataset.ItemFeatures[firstItemIndex] = append(rankingDataset.ItemFeatures[firstItemIndex], lo.Tuple2[int32, float32]{
+						A: itemLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 				// Add the label to the item.
-				if itemLabelCount[label] > 1 {
-					rankingDataset.ItemLabels[itemIndex] = append(rankingDataset.ItemLabels[itemIndex], itemLabelIndex.ToNumber(label))
+				if itemLabelCount[feature.Name] > 1 {
+					rankingDataset.ItemFeatures[itemIndex] = append(rankingDataset.ItemFeatures[itemIndex], lo.Tuple2[int32, float32]{
+						A: itemLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 			}
 			if item.IsHidden { // set hidden flag
