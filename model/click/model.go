@@ -127,7 +127,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 
 type FactorizationMachine interface {
 	model.Model
-	Predict(userId, itemId string, userLabels, itemLabels []Feature) float32
+	Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32
 	InternalPredict(x []int32, values []float32) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 	Marshal(w io.Writer) error
@@ -197,7 +197,7 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 }
 
-func (fm *FM) Predict(userId, itemId string, userLabels, itemLabels []Feature) float32 {
+func (fm *FM) Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32 {
 	var features []int32
 	var values []float32
 	// encode user
@@ -211,16 +211,16 @@ func (fm *FM) Predict(userId, itemId string, userLabels, itemLabels []Feature) f
 		values = append(values, 1)
 	}
 	// normalization
-	norm := math32.Sqrt(float32(len(userLabels) + len(itemLabels)))
+	norm := math32.Sqrt(float32(len(userFeatures) + len(itemFeatures)))
 	// encode user labels
-	for _, userLabel := range userLabels {
+	for _, userLabel := range userFeatures {
 		if userLabelIndex := fm.Index.EncodeUserLabel(userLabel.Name); userLabelIndex != base.NotId {
 			features = append(features, userLabelIndex)
 			values = append(values, 1/norm)
 		}
 	}
 	// encode item labels
-	for _, itemLabel := range itemLabels {
+	for _, itemLabel := range itemFeatures {
 		if itemLabelIndex := fm.Index.EncodeItemLabel(itemLabel.Name); itemLabelIndex != base.NotId {
 			features = append(features, itemLabelIndex)
 			values = append(values, 1/norm)

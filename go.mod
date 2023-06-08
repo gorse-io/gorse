@@ -35,7 +35,7 @@ require (
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rakyll/statik v0.1.7
-	github.com/samber/lo v1.33.0
+	github.com/samber/lo v1.38.1
 	github.com/schollz/progressbar/v3 v3.9.0
 	github.com/sclevine/yj v0.0.0-20210612025309-737bdf40a5d1
 	github.com/spf13/cobra v1.5.0

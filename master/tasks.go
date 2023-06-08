@@ -296,13 +296,15 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 	labelIDF := make([]float32, dataset.NumItemLabels)
 	if t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		for i, itemLabels := range dataset.ItemLabels {
-			sort.Sort(sortutil.Int32Slice(itemLabels))
+		for i, itemLabels := range dataset.ItemFeatures {
+			sort.Slice(itemLabels, func(i, j int) bool {
+				return itemLabels[i].A < itemLabels[j].A
+			})
 			for _, label := range itemLabels {
-				labeledItems[label] = append(labeledItems[label], int32(i))
+				labeledItems[label.A] = append(labeledItems[label.A], int32(i))
 			}
 		}
-		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemLabels))
+		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemFeatures))
 		// inverse document frequency of labels
 		for i := range labeledItems {
 			labeledItems[i] = lo.Uniq(labeledItems[i])
@@ -355,12 +357,18 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 	var vector VectorsInterface
 	switch m.Config.Recommend.ItemNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vector = NewVectors(dataset.ItemLabels, labeledItems, labelIDF)
+		vector = NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+			indices, _ := lo.Unzip2(features)
+			return indices
+		}), labeledItems, labelIDF)
 	case config.NeighborTypeRelated:
 		vector = NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF)
 	case config.NeighborTypeAuto:
 		vector = NewDualVectors(
-			NewVectors(dataset.ItemLabels, labeledItems, labelIDF),
+			NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+				indices, _ := lo.Unzip2(features)
+				return indices
+			}), labeledItems, labelIDF),
 			NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF))
 	default:
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
@@ -447,16 +455,18 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	var vectors []search.Vector
 	switch m.Config.Recommend.ItemNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
-			return search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
+		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
+			indices, _ := lo.Unzip2(dataset.ItemFeatures[i])
+			return search.NewDictionaryVector(indices, labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		})
 	case config.NeighborTypeRelated:
-		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
+		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
 			return search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		})
 	case config.NeighborTypeAuto:
-		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
-			return NewDualDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
+		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
+			indices, _ := lo.Unzip2(dataset.ItemFeatures[i])
+			return NewDualDictionaryVector(indices, labelIDF, dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		})
 	default:
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
@@ -544,7 +554,7 @@ func (m *Master) estimateFindUserNeighborsComplexity(dataset *ranking.DataSet) i
 	}
 	if m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		complexity += len(dataset.UserLabels) + int(dataset.NumUserLabels)
+		complexity += len(dataset.UserFeatures) + int(dataset.NumUserLabels)
 	}
 	if m.Config.Recommend.UserNeighbors.EnableIndex {
 		complexity += search.EstimateIVFBuilderComplexity(dataset.UserCount(), m.Config.Recommend.UserNeighbors.IndexFitEpoch)
@@ -638,13 +648,15 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 	labelIDF := make([]float32, dataset.NumUserLabels)
 	if t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		for i, userLabels := range dataset.UserLabels {
-			sort.Sort(sortutil.Int32Slice(userLabels))
+		for i, userLabels := range dataset.UserFeatures {
+			sort.Slice(userLabels, func(i, j int) bool {
+				return userLabels[i].A < userLabels[j].A
+			})
 			for _, label := range userLabels {
-				labeledUsers[label] = append(labeledUsers[label], int32(i))
+				labeledUsers[label.A] = append(labeledUsers[label.A], int32(i))
 			}
 		}
-		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserLabels))
+		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserFeatures))
 		// inverse document frequency of labels
 		for i := range labeledUsers {
 			labeledUsers[i] = lo.Uniq(labeledUsers[i])
@@ -696,12 +708,18 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 	var vectors VectorsInterface
 	switch m.Config.Recommend.UserNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vectors = NewVectors(dataset.UserLabels, labeledUsers, labelIDF)
+		vectors = NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+			indices, _ := lo.Unzip2(features)
+			return indices
+		}), labeledUsers, labelIDF)
 	case config.NeighborTypeRelated:
 		vectors = NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF)
 	case config.NeighborTypeAuto:
 		vectors = NewDualVectors(
-			NewVectors(dataset.UserLabels, labeledUsers, labelIDF),
+			NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+				indices, _ := lo.Unzip2(features)
+				return indices
+			}), labeledUsers, labelIDF),
 			NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF))
 	default:
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
@@ -778,7 +796,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	var vectors []search.Vector
 	switch m.Config.Recommend.UserNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vectors = lo.Map(dataset.UserLabels, func(indices []int32, _ int) search.Vector {
+		vectors = lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) search.Vector {
+			indices, _ := lo.Unzip2(features)
 			return search.NewDictionaryVector(indices, labelIDF, nil, false)
 		})
 	case config.NeighborTypeRelated:
@@ -788,7 +807,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	case config.NeighborTypeAuto:
 		vectors = make([]search.Vector, dataset.UserCount())
 		for i := range vectors {
-			vectors[i] = NewDualDictionaryVector(dataset.UserLabels[i], labelIDF, dataset.UserFeedback[i], itemIDF, nil, false)
+			indices, _ := lo.Unzip2(dataset.UserFeatures[i])
+			vectors[i] = NewDualDictionaryVector(indices, labelIDF, dataset.UserFeedback[i], itemIDF, nil, false)
 		}
 	default:
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
@@ -1653,8 +1673,8 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	unifiedIndex.UserLabelIndex = userLabelIndex
 	clickDataset = &click.Dataset{
 		Index:        unifiedIndex.Build(),
-		UserFeatures: rankingDataset.UserLabels,
-		ItemFeatures: rankingDataset.ItemLabels,
+		UserFeatures: rankingDataset.UserFeatures,
+		ItemFeatures: rankingDataset.ItemFeatures,
 	}
 	for userIndex := range positiveSet {
 		if positiveSet[userIndex].Cardinality() == 0 || negativeSet[userIndex].Cardinality() == 0 {

@@ -958,7 +958,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	for _, item := range items {
 		topItems = append(topItems, cache.Document{
 			Id:    item.ItemId,
-			Score: float64(w.ClickModel.Predict(user.UserId, item.ItemId, data.FlattenLabels(user.Labels), data.FlattenLabels(item.Labels))),
+			Score: float64(w.ClickModel.Predict(user.UserId, item.ItemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels))),
 		})
 	}
 	cache.SortDocuments(topItems)
@@ -1239,7 +1239,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Document, user *data.U
 			// 3. Otherwise, give a random score.
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
-				score = float64(w.ClickModel.Predict(user.UserId, itemId, data.FlattenLabels(user.Labels), data.FlattenLabels(item.Labels)))
+				score = float64(w.ClickModel.Predict(user.UserId, itemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels)))
 			} else if w.RankingModel != nil && !w.RankingModel.Invalid() && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(user.UserId)) {
 				score = float64(w.RankingModel.Predict(user.UserId, itemId))
 			} else {
@@ -1323,7 +1323,6 @@ func (c *ItemCache) Set(itemId string, item data.Item) {
 		c.ByteCount += reflect.TypeOf(item.ItemId).Size() * uintptr(len(itemId))
 		c.ByteCount += reflect.TypeOf(item.Comment).Size() * uintptr(len(itemId))
 		c.ByteCount += encoding.StringsBytes(item.Categories)
-		c.ByteCount += encoding.StringsBytes(data.FlattenLabels(item.Labels))
 		c.ByteCount += reflect.TypeOf(item).Size()
 	}
 }
