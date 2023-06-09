@@ -202,7 +202,7 @@ func (m *Master) estimateFindItemNeighborsComplexity(dataset *ranking.DataSet) i
 	}
 	if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		complexity += len(dataset.ItemLabels) + int(dataset.NumItemLabels)
+		complexity += len(dataset.ItemFeatures) + int(dataset.NumItemLabels)
 	}
 	if m.Config.Recommend.ItemNeighbors.EnableIndex {
 		complexity += search.EstimateIVFBuilderComplexity(dataset.ItemCount(), m.Config.Recommend.ItemNeighbors.IndexFitEpoch)
@@ -296,13 +296,15 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 	labelIDF := make([]float32, dataset.NumItemLabels)
 	if t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		for i, itemLabels := range dataset.ItemLabels {
-			sort.Sort(sortutil.Int32Slice(itemLabels))
+		for i, itemLabels := range dataset.ItemFeatures {
+			sort.Slice(itemLabels, func(i, j int) bool {
+				return itemLabels[i].A < itemLabels[j].A
+			})
 			for _, label := range itemLabels {
-				labeledItems[label] = append(labeledItems[label], int32(i))
+				labeledItems[label.A] = append(labeledItems[label.A], int32(i))
 			}
 		}
-		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemLabels))
+		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.ItemFeatures))
 		// inverse document frequency of labels
 		for i := range labeledItems {
 			labeledItems[i] = lo.Uniq(labeledItems[i])
@@ -355,12 +357,18 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 	var vector VectorsInterface
 	switch m.Config.Recommend.ItemNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vector = NewVectors(dataset.ItemLabels, labeledItems, labelIDF)
+		vector = NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+			indices, _ := lo.Unzip2(features)
+			return indices
+		}), labeledItems, labelIDF)
 	case config.NeighborTypeRelated:
 		vector = NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF)
 	case config.NeighborTypeAuto:
 		vector = NewDualVectors(
-			NewVectors(dataset.ItemLabels, labeledItems, labelIDF),
+			NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+				indices, _ := lo.Unzip2(features)
+				return indices
+			}), labeledItems, labelIDF),
 			NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF))
 	default:
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
@@ -447,16 +455,18 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 	var vectors []search.Vector
 	switch m.Config.Recommend.ItemNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
-			return search.NewDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
+		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
+			indices, _ := lo.Unzip2(dataset.ItemFeatures[i])
+			return search.NewDictionaryVector(indices, labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		})
 	case config.NeighborTypeRelated:
-		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
+		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
 			return search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		})
 	case config.NeighborTypeAuto:
-		vectors = lo.Map(dataset.ItemLabels, func(_ []int32, i int) search.Vector {
-			return NewDualDictionaryVector(dataset.ItemLabels[i], labelIDF, dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
+		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
+			indices, _ := lo.Unzip2(dataset.ItemFeatures[i])
+			return NewDualDictionaryVector(indices, labelIDF, dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
 		})
 	default:
 		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
@@ -544,7 +554,7 @@ func (m *Master) estimateFindUserNeighborsComplexity(dataset *ranking.DataSet) i
 	}
 	if m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		m.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		complexity += len(dataset.UserLabels) + int(dataset.NumUserLabels)
+		complexity += len(dataset.UserFeatures) + int(dataset.NumUserLabels)
 	}
 	if m.Config.Recommend.UserNeighbors.EnableIndex {
 		complexity += search.EstimateIVFBuilderComplexity(dataset.UserCount(), m.Config.Recommend.UserNeighbors.IndexFitEpoch)
@@ -638,13 +648,15 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 	labelIDF := make([]float32, dataset.NumUserLabels)
 	if t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		for i, userLabels := range dataset.UserLabels {
-			sort.Sort(sortutil.Int32Slice(userLabels))
+		for i, userLabels := range dataset.UserFeatures {
+			sort.Slice(userLabels, func(i, j int) bool {
+				return userLabels[i].A < userLabels[j].A
+			})
 			for _, label := range userLabels {
-				labeledUsers[label] = append(labeledUsers[label], int32(i))
+				labeledUsers[label.A] = append(labeledUsers[label.A], int32(i))
 			}
 		}
-		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserLabels))
+		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.UserFeatures))
 		// inverse document frequency of labels
 		for i := range labeledUsers {
 			labeledUsers[i] = lo.Uniq(labeledUsers[i])
@@ -696,12 +708,18 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 	var vectors VectorsInterface
 	switch m.Config.Recommend.UserNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vectors = NewVectors(dataset.UserLabels, labeledUsers, labelIDF)
+		vectors = NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+			indices, _ := lo.Unzip2(features)
+			return indices
+		}), labeledUsers, labelIDF)
 	case config.NeighborTypeRelated:
 		vectors = NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF)
 	case config.NeighborTypeAuto:
 		vectors = NewDualVectors(
-			NewVectors(dataset.UserLabels, labeledUsers, labelIDF),
+			NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
+				indices, _ := lo.Unzip2(features)
+				return indices
+			}), labeledUsers, labelIDF),
 			NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF))
 	default:
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
@@ -778,7 +796,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	var vectors []search.Vector
 	switch m.Config.Recommend.UserNeighbors.NeighborType {
 	case config.NeighborTypeSimilar:
-		vectors = lo.Map(dataset.UserLabels, func(indices []int32, _ int) search.Vector {
+		vectors = lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) search.Vector {
+			indices, _ := lo.Unzip2(features)
 			return search.NewDictionaryVector(indices, labelIDF, nil, false)
 		})
 	case config.NeighborTypeRelated:
@@ -788,7 +807,8 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	case config.NeighborTypeAuto:
 		vectors = make([]search.Vector, dataset.UserCount())
 		for i := range vectors {
-			vectors[i] = NewDualDictionaryVector(dataset.UserLabels[i], labelIDF, dataset.UserFeedback[i], itemIDF, nil, false)
+			indices, _ := lo.Unzip2(dataset.UserFeatures[i])
+			vectors[i] = NewDualDictionaryVector(indices, labelIDF, dataset.UserFeedback[i], itemIDF, nil, false)
 		}
 	default:
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
@@ -1460,27 +1480,33 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, user := range users {
 			rankingDataset.AddUser(user.UserId)
 			userIndex := rankingDataset.UserIndex.ToNumber(user.UserId)
-			if len(rankingDataset.UserLabels) == int(userIndex) {
-				rankingDataset.UserLabels = append(rankingDataset.UserLabels, nil)
+			if len(rankingDataset.UserFeatures) == int(userIndex) {
+				rankingDataset.UserFeatures = append(rankingDataset.UserFeatures, nil)
 			}
-			labels := data.FlattenLabels(user.Labels)
-			rankingDataset.NumUserLabelUsed += len(labels)
-			rankingDataset.UserLabels[userIndex] = make([]int32, 0, len(labels))
-			for _, label := range labels {
-				userLabelCount[label]++
+			features := click.ConvertLabelsToFeatures(user.Labels)
+			rankingDataset.NumUserLabelUsed += len(features)
+			rankingDataset.UserFeatures[userIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
+			for _, feature := range features {
+				userLabelCount[feature.Name]++
 				// Memorize the first occurrence.
-				if userLabelCount[label] == 1 {
-					userLabelFirst[label] = userIndex
+				if userLabelCount[feature.Name] == 1 {
+					userLabelFirst[feature.Name] = userIndex
 				}
 				// Add the label to the index in second occurrence.
-				if userLabelCount[label] == 2 {
-					userLabelIndex.Add(label)
-					firstUserIndex := userLabelFirst[label]
-					rankingDataset.UserLabels[firstUserIndex] = append(rankingDataset.UserLabels[firstUserIndex], userLabelIndex.ToNumber(label))
+				if userLabelCount[feature.Name] == 2 {
+					userLabelIndex.Add(feature.Name)
+					firstUserIndex := userLabelFirst[feature.Name]
+					rankingDataset.UserFeatures[firstUserIndex] = append(rankingDataset.UserFeatures[firstUserIndex], lo.Tuple2[int32, float32]{
+						A: userLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 				// Add the label to the user.
-				if userLabelCount[label] > 1 {
-					rankingDataset.UserLabels[userIndex] = append(rankingDataset.UserLabels[userIndex], userLabelIndex.ToNumber(label))
+				if userLabelCount[feature.Name] > 1 {
+					rankingDataset.UserFeatures[userIndex] = append(rankingDataset.UserFeatures[userIndex], lo.Tuple2[int32, float32]{
+						A: userLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 			}
 		}
@@ -1506,30 +1532,36 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, item := range items {
 			rankingDataset.AddItem(item.ItemId)
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
-			if len(rankingDataset.ItemLabels) == int(itemIndex) {
-				rankingDataset.ItemLabels = append(rankingDataset.ItemLabels, nil)
+			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
+				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
 				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
 				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
 				rankingDataset.CategorySet.Append(item.Categories...)
 			}
-			labels := data.FlattenLabels(item.Labels)
-			rankingDataset.NumItemLabelUsed += len(labels)
-			rankingDataset.ItemLabels[itemIndex] = make([]int32, 0, len(labels))
-			for _, label := range labels {
-				itemLabelCount[label]++
+			features := click.ConvertLabelsToFeatures(item.Labels)
+			rankingDataset.NumItemLabelUsed += len(features)
+			rankingDataset.ItemFeatures[itemIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
+			for _, feature := range features {
+				itemLabelCount[feature.Name]++
 				// Memorize the first occurrence.
-				if itemLabelCount[label] == 1 {
-					itemLabelFirst[label] = itemIndex
+				if itemLabelCount[feature.Name] == 1 {
+					itemLabelFirst[feature.Name] = itemIndex
 				}
 				// Add the label to the index in second occurrence.
-				if itemLabelCount[label] == 2 {
-					itemLabelIndex.Add(label)
-					firstItemIndex := itemLabelFirst[label]
-					rankingDataset.ItemLabels[firstItemIndex] = append(rankingDataset.ItemLabels[firstItemIndex], itemLabelIndex.ToNumber(label))
+				if itemLabelCount[feature.Name] == 2 {
+					itemLabelIndex.Add(feature.Name)
+					firstItemIndex := itemLabelFirst[feature.Name]
+					rankingDataset.ItemFeatures[firstItemIndex] = append(rankingDataset.ItemFeatures[firstItemIndex], lo.Tuple2[int32, float32]{
+						A: itemLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 				// Add the label to the item.
-				if itemLabelCount[label] > 1 {
-					rankingDataset.ItemLabels[itemIndex] = append(rankingDataset.ItemLabels[itemIndex], itemLabelIndex.ToNumber(label))
+				if itemLabelCount[feature.Name] > 1 {
+					rankingDataset.ItemFeatures[itemIndex] = append(rankingDataset.ItemFeatures[itemIndex], lo.Tuple2[int32, float32]{
+						A: itemLabelIndex.ToNumber(feature.Name),
+						B: feature.Value,
+					})
 				}
 			}
 			if item.IsHidden { // set hidden flag
@@ -1641,8 +1673,8 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	unifiedIndex.UserLabelIndex = userLabelIndex
 	clickDataset = &click.Dataset{
 		Index:        unifiedIndex.Build(),
-		UserFeatures: rankingDataset.UserLabels,
-		ItemFeatures: rankingDataset.ItemLabels,
+		UserFeatures: rankingDataset.UserFeatures,
+		ItemFeatures: rankingDataset.ItemFeatures,
 	}
 	for userIndex := range positiveSet {
 		if positiveSet[userIndex].Cardinality() == 0 || negativeSet[userIndex].Cardinality() == 0 {
@@ -1655,7 +1687,6 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
-			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
 			clickDataset.Target.Append(1)
 			clickDataset.PositiveCount++
 		}
@@ -1663,7 +1694,6 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, itemIndex := range negativeSet[userIndex].ToSlice() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
-			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
 			clickDataset.Target.Append(-1)
 			clickDataset.NegativeCount++
 		}

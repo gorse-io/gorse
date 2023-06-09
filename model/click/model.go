@@ -127,7 +127,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 
 type FactorizationMachine interface {
 	model.Model
-	Predict(userId, itemId string, userLabels, itemLabels []string) float32
+	Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32
 	InternalPredict(x []int32, values []float32) float32
 	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 	Marshal(w io.Writer) error
@@ -197,7 +197,7 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 }
 
-func (fm *FM) Predict(userId, itemId string, userLabels, itemLabels []string) float32 {
+func (fm *FM) Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32 {
 	var features []int32
 	var values []float32
 	// encode user
@@ -210,20 +210,18 @@ func (fm *FM) Predict(userId, itemId string, userLabels, itemLabels []string) fl
 		features = append(features, itemIndex)
 		values = append(values, 1)
 	}
-	// normalization
-	norm := math32.Sqrt(float32(len(userLabels) + len(itemLabels)))
 	// encode user labels
-	for _, userLabel := range userLabels {
-		if userLabelIndex := fm.Index.EncodeUserLabel(userLabel); userLabelIndex != base.NotId {
-			features = append(features, userLabelIndex)
-			values = append(values, 1/norm)
+	for _, userFeature := range userFeatures {
+		if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != base.NotId {
+			features = append(features, userFeatureIndex)
+			values = append(values, userFeature.Value)
 		}
 	}
 	// encode item labels
-	for _, itemLabel := range itemLabels {
-		if itemLabelIndex := fm.Index.EncodeItemLabel(itemLabel); itemLabelIndex != base.NotId {
-			features = append(features, itemLabelIndex)
-			values = append(values, 1/norm)
+	for _, itemFeature := range itemFeatures {
+		if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != base.NotId {
+			features = append(features, itemFeatureIndex)
+			values = append(values, itemFeature.Value)
 		}
 	}
 	return fm.InternalPredict(features, values)

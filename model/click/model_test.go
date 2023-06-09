@@ -93,8 +93,16 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test prediction
-	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.5, 0.5, 0.5, 0.5}),
-		m.Predict("1", "2", []string{"3", "4"}, []string{"5", "6"}))
+	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.3, 0.4, 0.5, 0.6}),
+		m.Predict("1", "2",
+			[]Feature{
+				{Name: "3", Value: 0.3},
+				{Name: "4", Value: 0.4},
+			},
+			[]Feature{
+				{Name: "5", Value: 0.5},
+				{Name: "6", Value: 0.6},
+			}))
 
 	// test increment test
 	buf := bytes.NewBuffer(nil)

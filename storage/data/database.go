@@ -91,40 +91,6 @@ func ValidateLabels(o any) error {
 	}
 }
 
-func FlattenLabels(o any) []string {
-	labels := make([]string, 0)
-	return flattenLabels(labels, "", o)
-}
-
-func flattenLabels(result []string, prefix string, o any) []string {
-	if o == nil {
-		return nil
-	}
-	switch labels := o.(type) {
-	case []any:
-		if len(labels) == 0 {
-			return nil
-		}
-		switch labels[0].(type) {
-		case string:
-			for _, val := range labels {
-				if s, ok := val.(string); ok {
-					result = append(result, prefix+s)
-				} else {
-					panic("unsupported labels: " + jsonutil.MustMarshal(labels))
-				}
-			}
-		}
-	case map[string]any:
-		for key, val := range labels {
-			result = flattenLabels(result, prefix+key+".", val)
-		}
-	case string:
-		result = append(result, prefix+labels)
-	}
-	return result
-}
-
 // Item stores meta data about item.
 type Item struct {
 	ItemId     string    `gorm:"primaryKey" mapstructure:"item_id"`

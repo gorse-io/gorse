@@ -66,7 +66,7 @@ func (m *mockFactorizationMachineForSearch) Fit(_, _ *Dataset, cfg *FitConfig) S
 	return Score{Task: FMClassification, AUC: score}
 }
 
-func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []string) float32 {
+func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []Feature) float32 {
 	panic("don't call me")
 }
 
