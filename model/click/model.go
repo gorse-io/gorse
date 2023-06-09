@@ -210,20 +210,18 @@ func (fm *FM) Predict(userId, itemId string, userFeatures, itemFeatures []Featur
 		features = append(features, itemIndex)
 		values = append(values, 1)
 	}
-	// normalization
-	norm := math32.Sqrt(float32(len(userFeatures) + len(itemFeatures)))
 	// encode user labels
-	for _, userLabel := range userFeatures {
-		if userLabelIndex := fm.Index.EncodeUserLabel(userLabel.Name); userLabelIndex != base.NotId {
-			features = append(features, userLabelIndex)
-			values = append(values, 1/norm)
+	for _, userFeature := range userFeatures {
+		if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != base.NotId {
+			features = append(features, userFeatureIndex)
+			values = append(values, userFeature.Value)
 		}
 	}
 	// encode item labels
-	for _, itemLabel := range itemFeatures {
-		if itemLabelIndex := fm.Index.EncodeItemLabel(itemLabel.Name); itemLabelIndex != base.NotId {
-			features = append(features, itemLabelIndex)
-			values = append(values, 1/norm)
+	for _, itemFeature := range itemFeatures {
+		if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != base.NotId {
+			features = append(features, itemFeatureIndex)
+			values = append(values, itemFeature.Value)
 		}
 	}
 	return fm.InternalPredict(features, values)
