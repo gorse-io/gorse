@@ -1687,7 +1687,6 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
-			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
 			clickDataset.Target.Append(1)
 			clickDataset.PositiveCount++
 		}
@@ -1695,7 +1694,6 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		for _, itemIndex := range negativeSet[userIndex].ToSlice() {
 			clickDataset.Users.Append(int32(userIndex))
 			clickDataset.Items.Append(itemIndex)
-			clickDataset.NormValues.Append(1 / math32.Sqrt(float32(len(clickDataset.UserFeatures[userIndex])+len(clickDataset.ItemFeatures[itemIndex]))))
 			clickDataset.Target.Append(-1)
 			clickDataset.NegativeCount++
 		}

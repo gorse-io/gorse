@@ -100,17 +100,13 @@ func TestDataset_Split(t *testing.T) {
 			if i+j > 4 {
 				dataset.Users.Append(int32(i))
 				dataset.Items.Append(int32(j))
-				dataset.CtxFeatures = append(dataset.CtxFeatures, []int32{int32(i * j)})
-				dataset.CtxValues = append(dataset.CtxValues, []float32{float32(i + j)})
-				dataset.NormValues.Append(1.5)
+				dataset.ContextFeatures = append(dataset.ContextFeatures, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
 				dataset.Target.Append(1)
 				dataset.PositiveCount++
 			} else {
 				dataset.Users.Append(int32(i))
 				dataset.Items.Append(int32(j))
-				dataset.CtxFeatures = append(dataset.CtxFeatures, []int32{int32(i * j)})
-				dataset.CtxValues = append(dataset.CtxValues, []float32{float32(i + j)})
-				dataset.NormValues.Append(1.5)
+				dataset.ContextFeatures = append(dataset.ContextFeatures, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
 				dataset.Target.Append(-1)
 				dataset.NegativeCount++
 			}
@@ -135,7 +131,7 @@ func TestDataset_Split(t *testing.T) {
 		dataset.Index.CountUsers() + dataset.Index.CountItems() + dataset.Index.CountUserLabels() + 8,
 		0,
 	}, features)
-	assert.Equal(t, []float32{1, 1, 1.5, 1.5, 1.5, 1.5, 1.5, 2}, values)
+	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 0.5}, values)
 	assert.Equal(t, float32(-1), target)
 
 	// split
