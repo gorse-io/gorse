@@ -16,21 +16,25 @@ package click
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/model"
 	"gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
-	"testing"
 )
 
 func TestDeepFM_Classification_Frappe(t *testing.T) {
 	train, test, err := LoadDataFromBuiltIn("frappe")
 	assert.NoError(t, err)
-	m := NewDeepFM()
+	m := NewDeepFM(model.Params{
+		model.NFactors: 16,
+		model.NEpochs:  1,
+	})
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	_ = score
-	//assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
-	//assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
+	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
+	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.3, 0.4, 0.5, 0.6}),
 		m.Predict("1", "2",
 			[]Feature{
