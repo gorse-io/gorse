@@ -85,6 +85,8 @@ const (
 	//  Categorized the latest items - latest_items/{category}
 	LatestItems = "latest_items"
 
+	TopItems = "top_items"
+
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	ItemCategories = "item_categories"
