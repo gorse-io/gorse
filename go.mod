@@ -179,3 +179,5 @@ require (
 )
 
 replace gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
+
+replace gorgonia.org/gorgonia v0.9.18-0.20230327110624-d1c17944ed22 => github.com/gorse-io/gorgonia v0.0.0-20230616141820-a111e77e4ad7

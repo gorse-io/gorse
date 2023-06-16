@@ -15,13 +15,10 @@
 package click
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
-	"gorgonia.org/gorgonia"
-	"gorgonia.org/tensor"
 )
 
 func TestDeepFM_Classification_Frappe(t *testing.T) {
@@ -45,38 +42,4 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 				{Name: "5", Value: 0.5},
 				{Name: "6", Value: 0.6},
 			}))
-}
-
-func TestGorgonia(t *testing.T) {
-	b := []float64{
-		0, 0, 0, 0,
-		1, 1, 1, 1,
-		2, 2, 2, 2,
-		3, 3, 3, 3,
-	}
-	g := gorgonia.NewGraph()
-	embeddingMatrix := gorgonia.NewMatrix(g, gorgonia.Float64,
-		gorgonia.WithValue(tensor.New(tensor.WithShape(4, 4),
-			tensor.WithBacking(b))), gorgonia.WithName("embedding"))
-	var embeddingLayers []*gorgonia.Node
-	var inputLayers []*gorgonia.Node
-	var outputLayers []*gorgonia.Node
-	for i := 0; i < 4; i++ {
-		inputLayer := gorgonia.NodeFromAny(g, float64(0), gorgonia.WithName(fmt.Sprintf("x_%d", i)))
-		inputLayers = append(inputLayers, inputLayer)
-		embeddingLayer := gorgonia.Must(gorgonia.Slice(embeddingMatrix, gorgonia.S(i)))
-		embeddingLayers = append(embeddingLayers, embeddingLayer)
-		temp := gorgonia.Must(gorgonia.Mul(inputLayer, embeddingLayer))
-		outputLayers = append(outputLayers, temp)
-	}
-	outputLayer := gorgonia.Must(gorgonia.Concat(0, outputLayers...))
-
-	x := []int{1, 3}
-	vm := gorgonia.NewTapeMachine(g)
-	for i, v := range x {
-		gorgonia.UnsafeLet(embeddingLayers[i], gorgonia.S(v))
-		gorgonia.Let(inputLayers[i], float64(1))
-	}
-	vm.RunAll()
-	fmt.Println(outputLayer.Value().Data())
 }
