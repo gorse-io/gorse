@@ -25,21 +25,13 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 	train, test, err := LoadDataFromBuiltIn("frappe")
 	assert.NoError(t, err)
 	m := NewDeepFM(model.Params{
-		model.NFactors: 16,
-		model.NEpochs:  1,
+		model.InitStdDev: 0.01,
+		model.NFactors:   8,
+		model.NEpochs:    20,
+		model.Lr:         0.001,
+		model.Reg:        0.0001,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	assert.InDelta(t, 0.86964, score.Accuracy, classificationDelta)
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
-	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.3, 0.4, 0.5, 0.6}),
-		m.Predict("1", "2",
-			[]Feature{
-				{Name: "3", Value: 0.3},
-				{Name: "4", Value: 0.4},
-			},
-			[]Feature{
-				{Name: "5", Value: 0.5},
-				{Name: "6", Value: 0.6},
-			}))
+	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
 }

@@ -42,8 +42,8 @@ type DeepFM struct {
 	target  *gorgonia.Node
 	cost    *gorgonia.Node
 
-	learnables []*gorgonia.Node
-	// v            *gorgonia.Node
+	learnables   []*gorgonia.Node
+	v            *gorgonia.Node
 	w            *gorgonia.Node
 	b            *gorgonia.Node
 	B            float32
@@ -80,6 +80,7 @@ func (fm *DeepFM) Invalid() bool {
 }
 
 func (fm *DeepFM) SetParams(params model.Params) {
+	fm.BaseFactorizationMachine.SetParams(params)
 	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
 	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
@@ -168,9 +169,10 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 	indicesTensor, valuesTensor, targetTensor := fm.convertToTensors(x, y)
 
 	lo.Must1(gorgonia.Grad(fm.cost, fm.learnables...))
-	solver := gorgonia.NewAdamSolver(gorgonia.WithBatchSize(float64(fm.batchSize)), gorgonia.WithLearnRate(1e-5))
+	solver := gorgonia.NewAdamSolver(gorgonia.WithBatchSize(float64(fm.batchSize)),
+		gorgonia.WithL2Reg(float64(fm.reg)),
+		gorgonia.WithLearnRate(float64(fm.lr)))
 	vm := gorgonia.NewTapeMachine(fm.g, gorgonia.BindDualValues(fm.learnables...))
-	fmt.Println(fm.w.Value(), lo.Must1(fm.w.Grad()))
 
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
@@ -181,34 +183,9 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 			lo.Must0(gorgonia.Let(fm.target, lo.Must1(targetTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 			lo.Must0(vm.RunAll())
 
-			fmt.Println(fm.w.Value(), lo.Must1(fm.w.Grad()))
-			//os.Exit(0)
-
-			// fmt.Println(lo.Must1(fm.b.Grad()).Data())
-			// g := lo.Must1(fm.w.Grad()).Data().([]float32)
-			// for i := range g {
-			// 	if g[i] != 0 {
-			// 		fmt.Printf("%v:%v ", i, g[i])
-			// 	}
-			// }
-			// os.Exit(0)
-			// fmt.Println()
-			// fmt.Println(fm.v.Grad())
-
 			cost += fm.cost.Value().Data().(float32)
 			lo.Must0(solver.Step(gorgonia.NodesToValueGrads(fm.learnables)))
 			vm.Reset()
-			fm.vm = vm
-			// fmt.Println(fm.b.Value().Data())
-			// g = fm.w.Value().Data().([]float32)
-			// // g := lo.Must1(fm.w.Grad()).Data().([]float32)
-			// for i := range g {
-			// 	if g[i] != 0 {
-			// 		fmt.Printf("%v:%v ", i, g[i])
-			// 	}
-			// }
-			// fmt.Println()
-			// os.Exit(0)
 		}
 
 		fitTime := time.Since(fitStart)
@@ -243,10 +220,10 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
 
-	// fm.v = gorgonia.NewMatrix(fm.g, tensor.Float32,
-	// 	gorgonia.WithShape(fm.numFeatures, fm.nFactors),
-	// 	gorgonia.WithName("v"),
-	// 	gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev))))
+	fm.v = gorgonia.NewMatrix(fm.g, tensor.Float32,
+		gorgonia.WithShape(fm.numFeatures, fm.nFactors),
+		gorgonia.WithName("v"),
+		gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev))))
 	fm.w = gorgonia.NewMatrix(fm.g, tensor.Float32,
 		gorgonia.WithShape(fm.numFeatures, 1),
 		gorgonia.WithName("w"),
@@ -255,7 +232,7 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 		gorgonia.WithShape(1, 1),
 		gorgonia.WithName("b"),
 		gorgonia.WithInit(gorgonia.Zeroes()))
-	fm.learnables = []*gorgonia.Node{fm.w, fm.b}
+	fm.learnables = []*gorgonia.Node{fm.v, fm.w, fm.b}
 
 	fm.forward(fm.batchSize)
 
@@ -288,27 +265,24 @@ func (fm *DeepFM) forward(batchSize int) {
 		gorgonia.WithName("target"))
 
 	// factorization machine
-	// v := gorgonia.Must(gorgonia.Embedding(fm.v, fm.indices))
+	v := gorgonia.Must(gorgonia.Embedding(fm.v, fm.indices))
 	w := gorgonia.Must(gorgonia.Embedding(fm.w, fm.indices))
 	x := gorgonia.Must(gorgonia.Reshape(fm.values, []int{batchSize, fm.numDimension, 1}))
-	// vx := gorgonia.Must(gorgonia.BatchedMatMul(v, x, true))
-	// sumSquare := gorgonia.Must(gorgonia.Square(vx))
-	// v2 := gorgonia.Must(gorgonia.Square(v))
-	// x2 := gorgonia.Must(gorgonia.Square(x))
-	// squareSum := gorgonia.Must(gorgonia.BatchedMatMul(v2, x2, true))
-	// sum := gorgonia.Must(gorgonia.Sub(sumSquare, squareSum))
-	// sum = gorgonia.Must(gorgonia.Sum(sum, 1))
-	// sum = gorgonia.Must(gorgonia.Mul(sum, gorgonia.NodeFromAny(fm.g, float32(0.5))))
+	vx := gorgonia.Must(gorgonia.BatchedMatMul(v, x, true))
+	sumSquare := gorgonia.Must(gorgonia.Square(vx))
+	v2 := gorgonia.Must(gorgonia.Square(v))
+	x2 := gorgonia.Must(gorgonia.Square(x))
+	squareSum := gorgonia.Must(gorgonia.BatchedMatMul(v2, x2, true))
+	sum := gorgonia.Must(gorgonia.Sub(sumSquare, squareSum))
+	sum = gorgonia.Must(gorgonia.Sum(sum, 1))
+	sum = gorgonia.Must(gorgonia.Mul(sum, gorgonia.NodeFromAny(fm.g, float32(0.5))))
 	linear := gorgonia.Must(gorgonia.BatchedMatMul(w, x, true, false))
 	fm.output = gorgonia.Must(gorgonia.BroadcastAdd(
 		gorgonia.Must(gorgonia.Reshape(linear, []int{batchSize})),
 		fm.b,
 		nil, []byte{0},
 	))
-	// fm.output = gorgonia.Must(gorgonia.Add(fm.output, gorgonia.Must(gorgonia.Reshape(sum, []int{batchSize}))))
-	// fm.output = gorgonia.Must(gorgonia.Sigmoid(fm.output))
-	// fm.output = gorgonia.Must(gorgonia.Mul(fm.output, gorgonia.NodeFromAny(fm.g, float32(2))))
-	// fm.output = gorgonia.Must(gorgonia.Sub(fm.output, gorgonia.NodeFromAny(fm.g, float32(1))))
+	fm.output = gorgonia.Must(gorgonia.Add(fm.output, gorgonia.Must(gorgonia.Reshape(sum, []int{batchSize}))))
 
 	// loss function
 	fm.cost = fm.bceWithLogits(fm.target, fm.output)
@@ -373,6 +347,5 @@ func (fm *DeepFM) bceWithLogits(target, prediction *gorgonia.Node) *gorgonia.Nod
 	negativeLoss := gorgonia.Must(gorgonia.Mul(oneMinusTarget, logExpPredictionPlusOne))
 	negativeLoss = gorgonia.Must(gorgonia.Div(negativeLoss, gorgonia.NodeFromAny(fm.g, float32(2))))
 
-	bce := gorgonia.Must(gorgonia.Add(positiveLoss, negativeLoss))
-	return gorgonia.Must(gorgonia.Div(bce, gorgonia.NodeFromAny(fm.g, float32(-fm.batchSize))))
+	return gorgonia.Must(gorgonia.Add(positiveLoss, negativeLoss))
 }
