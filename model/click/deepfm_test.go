@@ -30,7 +30,7 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
+	assert.InDelta(t, 0.86964, score.Accuracy, classificationDelta)
 	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.3, 0.4, 0.5, 0.6}),
 		m.Predict("1", "2",

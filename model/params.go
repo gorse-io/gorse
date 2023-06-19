@@ -16,9 +16,10 @@ package model
 
 import (
 	"encoding/json"
+	"reflect"
+
 	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
-	"reflect"
 )
 
 /* ParamName */
@@ -38,6 +39,7 @@ const (
 	Alpha       ParamName = "Alpha"       // weight for negative samples in ALS
 	Similarity  ParamName = "Similarity"
 	UseFeature  ParamName = "UseFeature"
+	BatchSize   ParamName = "BatchSize"
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings

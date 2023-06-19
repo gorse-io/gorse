@@ -312,8 +312,8 @@ github.com/gorilla/securecookie v1.1.1 h1:miw7JPhV+b/lAHSXz4qd/nN9jRiAFV5FwjeKyC
 github.com/gorilla/securecookie v1.1.1/go.mod h1:ra0sb63/xPlUeL+yeDciTfxMRAA+MP+HVt/4epWDjd4=
 github.com/gorse-io/dashboard v0.0.0-20230319140716-18e3dabe9366 h1:s4CZgfU5HnOtJnGJ1EmUipY1IBpZa0nQmtTTz9gvXvM=
 github.com/gorse-io/dashboard v0.0.0-20230319140716-18e3dabe9366/go.mod h1:w74IGf70uM5ZCeXmkBhLl3Ux6D+HpBryzcc75VfZA4s=
-github.com/gorse-io/gorgonia v0.0.0-20230617115700-8047dcf5d624 h1:+vnhnIhptW44OGHmlBNwdUEPR5jpdcTdKx6hDQcbyBM=
-github.com/gorse-io/gorgonia v0.0.0-20230617115700-8047dcf5d624/go.mod h1:TdV4UXKprIVs6rZv0IiRcMznbn4diHrFUc5lXfwB8pM=
+github.com/gorse-io/gorgonia v0.0.0-20230619122207-1b11a6cabcdf h1:d1ROz+Djs2oSuHMY8uBQUnReoW4OqrWkw1CBooVPB7c=
+github.com/gorse-io/gorgonia v0.0.0-20230619122207-1b11a6cabcdf/go.mod h1:TdV4UXKprIVs6rZv0IiRcMznbn4diHrFUc5lXfwB8pM=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e h1:uPQtYQzG1QcC3Qbv+tuEe8Q2l++V4KEcqYSSwB9qobg=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e/go.mod h1:PmIOwYnI+F1lRKd6F/PdLXGgI8GZ5H8x8z1yx0+0bmQ=
 github.com/gorse-io/tensor v0.0.0-20230617102451-4c006ddc5162 h1:W4aIbIvkE9/9PLuGJ7OcWuEtTeUaXgTd2enX440+e7Q=
