@@ -27,11 +27,11 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 	m := NewDeepFM(model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
-		model.NEpochs:    20,
-		model.Lr:         0.001,
+		model.NEpochs:    10,
+		model.Lr:         0.01,
 		model.Reg:        0.0001,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)
-	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
+	assert.InDelta(t, 0.9271656, score.Accuracy, classificationDelta)
 }
