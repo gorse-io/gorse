@@ -135,6 +135,10 @@ type FactorizationMachine interface {
 	Complexity() int
 }
 
+type BatchInference interface {
+	BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32
+}
+
 type BaseFactorizationMachine struct {
 	model.BaseModel
 	Index UnifiedIndex

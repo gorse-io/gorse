@@ -15,10 +15,12 @@
 package click
 
 import (
+	"sort"
+
 	"github.com/chewxy/math32"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"modernc.org/sortutil"
-	"sort"
 )
 
 // EvaluateRegression evaluates factorization machines in regression task.
@@ -30,7 +32,7 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 		prediction := estimator.InternalPredict(features, values)
 		sum += (target - prediction) * (target - prediction)
 	}
-	if 0 == testSet.Count() {
+	if testSet.Count() == 0 {
 		return Score{
 			Task: FMRegression,
 			RMSE: 0,
@@ -45,17 +47,28 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 // EvaluateClassification evaluates factorization machines in classification task.
 func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Score {
 	// For all UserFeedback
-	var posPrediction, negPrediction []float32
+	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
 	for i := 0; i < testSet.Count(); i++ {
-		features, values, target := testSet.Get(i)
-		prediction := estimator.InternalPredict(features, values)
+		indices, values, target := testSet.Get(i)
 		if target > 0 {
-			posPrediction = append(posPrediction, prediction)
+			posFeatures = append(posFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		} else {
-			negPrediction = append(negPrediction, prediction)
+			negFeatures = append(negFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		}
 	}
-	if 0 == testSet.Count() {
+	var posPrediction, negPrediction []float32
+	if batchInference, ok := estimator.(BatchInference); ok {
+		posPrediction = batchInference.BatchPredict(posFeatures)
+		negPrediction = batchInference.BatchPredict(negFeatures)
+	} else {
+		for _, features := range posFeatures {
+			posPrediction = append(posPrediction, estimator.InternalPredict(features.A, features.B))
+		}
+		for _, features := range negFeatures {
+			negPrediction = append(negPrediction, estimator.InternalPredict(features.A, features.B))
+		}
+	}
+	if testSet.Count() == 0 {
 		return Score{
 			Task:      FMClassification,
 			Precision: 0,
