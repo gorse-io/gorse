@@ -52,6 +52,7 @@ jobs:
             - "/go/pkg/mod"
       - run:
           name: Run tests
+          no_output_timeout: 20m
           command: go test -timeout 20m -v ./...
 
   unit-test-macos:
@@ -92,6 +93,7 @@ jobs:
             - "/go/pkg/mod"
       - run:
           name: Run tests
+          no_output_timeout: 20m
           command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis"
 
   unit-test-windows:
@@ -127,6 +129,7 @@ jobs:
             - "/go/pkg/mod"
       - run:
           name: Run tests
+          no_output_timeout: 20m
           command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis"
 
 workflows:
