@@ -298,6 +298,8 @@ var command = &cobra.Command{
 		for _, m := range machineOptions {
 			options = append(options, "-m"+m)
 		}
+		extraOptions, _ := cmd.PersistentFlags().GetStringSlice("extra-option")
+		options = append(options, extraOptions...)
 		optimizeLevel, _ := cmd.PersistentFlags().GetInt("optimize-level")
 		options = append(options, fmt.Sprintf("-O%d", optimizeLevel))
 		file := NewTranslateUnit(args[0], output, options...)
@@ -311,6 +313,7 @@ var command = &cobra.Command{
 func init() {
 	command.PersistentFlags().StringP("output", "o", "", "output directory of generated files")
 	command.PersistentFlags().StringSliceP("machine-option", "m", nil, "machine option for clang")
+	command.PersistentFlags().StringSliceP("extra-option", "e", nil, "extra option for clang")
 	command.PersistentFlags().IntP("optimize-level", "O", 0, "optimization level for clang")
 }
 
