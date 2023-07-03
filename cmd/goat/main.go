@@ -296,9 +296,7 @@ var command = &cobra.Command{
 			options = append(options, "-m"+m)
 		}
 		extraOptions, _ := cmd.PersistentFlags().GetStringSlice("extra-option")
-		for _, e := range extraOptions {
-			options = append(options, e)
-		}
+		options = append(options, extraOptions...)
 		optimizeLevel, _ := cmd.PersistentFlags().GetInt("optimize-level")
 		options = append(options, fmt.Sprintf("-O%d", optimizeLevel))
 		file := NewTranslateUnit(args[0], output, options...)
