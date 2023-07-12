@@ -23,6 +23,11 @@ type Feedback struct {
 	Timestamp    string `json:"Timestamp"`
 }
 
+type Feedbacks struct {
+	Cursor   string     `json:"Cursor"`
+	Feedback []Feedback `json:"Feedback"`
+}
+
 type ErrorMessage string
 
 func (e ErrorMessage) Error() string {
@@ -45,6 +50,11 @@ type User struct {
 	Comment   string   `json:"Comment"`
 }
 
+type Users struct {
+	Cursor string `json:"Cursor"`
+	Users  []User `json:"Users"`
+}
+
 type UserPatch struct {
 	Labels    []string
 	Subscribe []string
@@ -60,10 +70,23 @@ type Item struct {
 	Comment    string   `json:"Comment"`
 }
 
+type Items struct {
+	Cursor string `json:"Cursor"`
+	Items  []Item `json:"Items"`
+}
+
 type ItemPatch struct {
 	IsHidden   *bool
 	Categories []string
 	Timestamp  *time.Time
 	Labels     []string
 	Comment    *string
+}
+
+type Health struct {
+	CacheStoreConnected bool   `json:"CacheStoreConnected"`
+	CacheStoreError     string `json:"CacheStoreError"`
+	DataStoreConnected  bool   `json:"DataStoreConnected"`
+	DataStoreError      string `json:"DataStoreError"`
+	Ready               bool   `json:"Ready"`
 }
