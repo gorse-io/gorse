@@ -206,7 +206,7 @@ func (c *GorseClient) PutItemCategory(ctx context.Context, itemId string, catego
 }
 
 func (c *GorseClient) DelItemCategory(ctx context.Context, itemId string, category string) (RowAffected, error) {
-	return request[RowAffected, any](ctx, c, "DELETE", c.entryPoint+fmt.Sprintf("%s/api/item/%s/category/%s", itemId, category), nil)
+	return request[RowAffected, any](ctx, c, "DELETE", c.entryPoint+fmt.Sprintf("/api/item/%s/category/%s", itemId, category), nil)
 }
 
 func (c *GorseClient) HealthLive(ctx context.Context) (Health, error) {
