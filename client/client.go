@@ -107,7 +107,7 @@ func (c *GorseClient) GetItemPopular(ctx context.Context, userid string, n, offs
 }
 
 func (c *GorseClient) GetItemPopularWithCategory(ctx context.Context, userid, category string, n, offset int) ([]Score, error) {
-	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/popular?user-id=%s&category=%s&n=%d&offset=%d", userid, category, n, offset), nil)
+	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/popular/%s?user-id=%s&n=%d&offset=%d", category, userid, n, offset), nil)
 }
 
 func (c *GorseClient) GetItemRecommend(ctx context.Context, userId string, writeBackType, writeBackDelay string, n, offset int) ([]string, error) {
