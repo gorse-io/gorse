@@ -39,8 +39,8 @@ type RowAffected struct {
 }
 
 type Score struct {
-	Id    string `json:"Id"`
-	Score int    `json:"Score"`
+	Id    string  `json:"Id"`
+	Score float64 `json:"Score"`
 }
 
 type User struct {
