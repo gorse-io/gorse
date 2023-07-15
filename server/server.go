@@ -79,7 +79,7 @@ func (s *Server) Serve() {
 			log.Logger().Info("no cache file found, create a new one", zap.String("path", s.cacheFile))
 		} else {
 			log.Logger().Error("failed to connect local store", zap.Error(err),
-				zap.String("path", state.path))
+				zap.String("path", s.cacheFile))
 		}
 	}
 	if state.ServerName == "" {
