@@ -352,7 +352,7 @@ func (w *Worker) Serve() {
 				log.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
 			} else {
 				log.Logger().Error("failed to load persist state", zap.Error(err),
-					zap.String("path", state.path))
+					zap.String("path", w.cacheFile))
 			}
 		}
 		if state.WorkerName == "" {
