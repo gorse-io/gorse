@@ -62,6 +62,7 @@ type DeepFM struct {
 	m_w        []float32
 	v_v        [][]float32
 	v_w        []float32
+	t          int
 
 	// Hyper parameters
 	batchSize  int
@@ -355,34 +356,40 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 		}
 	}
 
+	fm.t++
+	correction1 := float32(1 - math32.Pow(beta1, float32(fm.t)))
+	correction2 := float32(1 - math32.Pow(beta2, float32(fm.t)))
+
 	for index, grad := range gradV {
 		for k := 0; k < fm.nFactors; k++ {
+			grad[k] += fm.reg * fm.v[index][k]
 			grad[k] /= float32(batchSize)
-			// m_t = eta * [ beta_1 * m_{t-1} + (1 - beta_1) * g_t ]
-			fm.m_v[index][k] = fm.lr * (beta1*fm.m_v[index][k] + (1-beta1)*grad[k])
+			// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+			fm.m_v[index][k] = beta1*fm.m_v[index][k] + (1-beta1)*grad[k]
 			// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
 			fm.v_v[index][k] = beta2*fm.v_v[index][k] + (1-beta2)*grad[k]*grad[k]
 			// \hat{m}_t = m_t / (1 - beta_1^t)
-			mHat := fm.m_v[index][k] / (1 - math32.Pow(beta1, float32(t)))
+			mHat := fm.m_v[index][k] / correction1
 			// \hat{v}_t = v_t / (1 - beta_2^t)
-			vHat := fm.v_v[index][k] / (1 - math32.Pow(beta2, float32(t)))
+			vHat := fm.v_v[index][k] / correction2
 			// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
-			fm.v[index][k] -= mHat / (math32.Sqrt(vHat) + eps)
+			fm.v[index][k] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
 		}
 	}
 
 	for index, grad := range gradW {
+		grad += fm.reg * fm.w[index]
 		grad /= float32(batchSize)
-		// m_t = eta * [ beta_1 * m_{t-1} + (1 - beta_1) * g_t ]
-		fm.m_w[index] = fm.lr * (beta1*fm.m_w[index] + (1-beta1)*grad)
+		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+		fm.m_w[index] = beta1*fm.m_w[index] + (1-beta1)*grad
 		// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
 		fm.v_w[index] = beta2*fm.v_w[index] + (1-beta2)*grad*grad
 		// \hat{m}_t = m_t / (1 - beta_1^t)
-		mHat := fm.m_w[index] / (1 - math32.Pow(beta1, float32(t)))
+		mHat := fm.m_w[index] / correction1
 		// \hat{v}_t = v_t / (1 - beta_2^t)
-		vHat := fm.v_w[index] / (1 - math32.Pow(beta2, float32(t)))
+		vHat := fm.v_w[index] / correction2
 		// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
-		fm.w[index] -= mHat / (math32.Sqrt(vHat) + eps)
+		fm.w[index] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
 	}
 }
 
