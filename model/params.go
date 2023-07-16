@@ -29,17 +29,18 @@ type ParamName string
 
 // Predefined hyper-parameter names
 const (
-	Lr          ParamName = "Lr"          // learning rate
-	Reg         ParamName = "Reg"         // regularization strength
-	NEpochs     ParamName = "NEpochs"     // number of epochs
-	NFactors    ParamName = "NFactors"    // number of factors
-	RandomState ParamName = "RandomState" // random state (seed)
-	InitMean    ParamName = "InitMean"    // mean of gaussian initial parameter
-	InitStdDev  ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
-	Alpha       ParamName = "Alpha"       // weight for negative samples in ALS
-	Similarity  ParamName = "Similarity"
-	UseFeature  ParamName = "UseFeature"
-	BatchSize   ParamName = "BatchSize"
+	Lr           ParamName = "Lr"          // learning rate
+	Reg          ParamName = "Reg"         // regularization strength
+	NEpochs      ParamName = "NEpochs"     // number of epochs
+	NFactors     ParamName = "NFactors"    // number of factors
+	RandomState  ParamName = "RandomState" // random state (seed)
+	InitMean     ParamName = "InitMean"    // mean of gaussian initial parameter
+	InitStdDev   ParamName = "InitStdDev"  // standard deviation of gaussian initial parameter
+	Alpha        ParamName = "Alpha"       // weight for negative samples in ALS
+	Similarity   ParamName = "Similarity"
+	UseFeature   ParamName = "UseFeature"
+	BatchSize    ParamName = "BatchSize"
+	HiddenLayers ParamName = "HiddenLayers"
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
@@ -133,6 +134,20 @@ func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 func (parameters Params) GetString(name ParamName, _default string) string {
 	if val, exist := parameters[name]; exist {
 		return val.(string)
+	}
+	return _default
+}
+
+func (parameters Params) GetIntSlice(name ParamName, _default []int) []int {
+	if val, exist := parameters[name]; exist {
+		switch val := val.(type) {
+		case []int:
+			return val
+		default:
+			log.Logger().Error("type mismatch",
+				zap.String("param_name", string(name)),
+				zap.String("actual_type", reflect.TypeOf(name).Name()))
+		}
 	}
 	return _default
 }

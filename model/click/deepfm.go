@@ -50,16 +50,21 @@ type DeepFM struct {
 	v          *gorgonia.Node
 	w          *gorgonia.Node
 	b          *gorgonia.Node
+	w0         *gorgonia.Node
+	b0         *gorgonia.Node
+	w1         []*gorgonia.Node
+	b1         []*gorgonia.Node
 	learnables []*gorgonia.Node
 
 	// Hyper parameters
-	batchSize  int
-	nFactors   int
-	nEpochs    int
-	lr         float32
-	reg        float32
-	initMean   float32
-	initStdDev float32
+	batchSize    int
+	nFactors     int
+	nEpochs      int
+	lr           float32
+	reg          float32
+	initMean     float32
+	initStdDev   float32
+	hiddenLayers []int
 }
 
 func NewDeepFM(params model.Params) FactorizationMachine {
@@ -87,6 +92,7 @@ func (fm *DeepFM) SetParams(params model.Params) {
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
+	fm.hiddenLayers = fm.Params.GetIntSlice(model.HiddenLayers, []int{200, 200})
 }
 
 func (fm *DeepFM) GetParamsGrid(withSize bool) model.ParamsGrid {
@@ -229,6 +235,34 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 		gorgonia.WithShape(1, 1),
 		gorgonia.WithName("b"),
 		gorgonia.WithInit(gorgonia.Zeroes()))
+	fm.w0 = gorgonia.NewMatrix(fm.g, tensor.Float32,
+		gorgonia.WithShape(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0]),
+		gorgonia.WithName("w0"),
+		gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev))))
+	fm.b0 = gorgonia.NewMatrix(fm.g, tensor.Float32,
+		gorgonia.WithShape(1, fm.hiddenLayers[0]),
+		gorgonia.WithName("b0"),
+		gorgonia.WithInit(gorgonia.Zeroes()))
+	for i := 1; i < len(fm.hiddenLayers); i++ {
+		var (
+			inputSize  int
+			outputSize int
+		)
+		inputSize = fm.hiddenLayers[i]
+		if i == len(fm.hiddenLayers)-1 {
+			outputSize = 1
+		} else {
+			outputSize = fm.hiddenLayers[i+1]
+		}
+		fm.w1 = append(fm.w1, gorgonia.NewMatrix(fm.g, tensor.Float32,
+			gorgonia.WithShape(inputSize, outputSize),
+			gorgonia.WithName(fmt.Sprintf("w%d", i)),
+			gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev)))))
+		fm.b1 = append(fm.b1, gorgonia.NewMatrix(fm.g, tensor.Float32,
+			gorgonia.WithShape(1, outputSize),
+			gorgonia.WithName(fmt.Sprintf("b%d", i)),
+			gorgonia.WithInit(gorgonia.Zeroes())))
+	}
 	fm.learnables = []*gorgonia.Node{fm.v, fm.w, fm.b}
 
 	fm.forward(fm.batchSize)
@@ -280,7 +314,29 @@ func (fm *DeepFM) forward(batchSize int) {
 		fm.b,
 		nil, []byte{0},
 	))
-	fm.output = gorgonia.Must(gorgonia.Add(fm.output, gorgonia.Must(gorgonia.Reshape(sum, []int{batchSize}))))
+	fmOutput := gorgonia.Must(gorgonia.Add(fm.output, gorgonia.Must(gorgonia.Reshape(sum, []int{batchSize}))))
+
+	// deep network
+	a0 := gorgonia.Must(gorgonia.Reshape(v, []int{batchSize, fm.numDimension * fm.nFactors, 1}))
+	w0 := gorgonia.Must(gorgonia.Embedding(fm.w0, fm.indices))
+	w0 = gorgonia.Must(gorgonia.Reshape(w0, []int{batchSize, fm.numDimension * fm.nFactors, fm.hiddenLayers[0]}))
+	l0 := gorgonia.Must(gorgonia.BatchedMatMul(a0, w0, true))
+	l0 = gorgonia.Must(gorgonia.Reshape(l0, []int{batchSize, fm.hiddenLayers[0]}))
+	l0 = gorgonia.Must(gorgonia.BroadcastAdd(l0, fm.b0, nil, []byte{0}))
+	dnn := gorgonia.Must(gorgonia.Rectify(l0))
+	for i := 1; i < len(fm.hiddenLayers); i++ {
+		l := gorgonia.Must(gorgonia.Mul(dnn, fm.w1[i-1]))
+		l = gorgonia.Must(gorgonia.BroadcastAdd(l, fm.b1[i-1], nil, []byte{0}))
+		if i == len(fm.hiddenLayers)-1 {
+			dnn = gorgonia.Must(gorgonia.Sigmoid(l))
+		} else {
+			dnn = gorgonia.Must(gorgonia.Rectify(l))
+		}
+	}
+	dnnOutput := gorgonia.Must(gorgonia.Reshape(dnn, []int{batchSize}))
+
+	// output
+	fm.output = gorgonia.Must(gorgonia.Add(fmOutput, dnnOutput))
 
 	// loss function
 	fm.cost = fm.bceWithLogits(fm.target, fm.output)
