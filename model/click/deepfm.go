@@ -31,6 +31,12 @@ import (
 	"modernc.org/mathutil"
 )
 
+const (
+	beta1 float32 = 0.9
+	beta2 float32 = 0.999
+	eps   float32 = 1e-8
+)
+
 type DeepFM struct {
 	BaseFactorizationMachine
 
@@ -40,21 +46,30 @@ type DeepFM struct {
 	numFeatures  int
 	numDimension int
 
-	vm         gorgonia.VM
-	g          *gorgonia.ExprGraph
-	indices    *gorgonia.Node
-	values     *gorgonia.Node
-	output     *gorgonia.Node
-	target     *gorgonia.Node
-	cost       *gorgonia.Node
-	v          *gorgonia.Node
-	w          *gorgonia.Node
-	b          *gorgonia.Node
-	w0         *gorgonia.Node
-	b0         *gorgonia.Node
-	w1         []*gorgonia.Node
-	b1         []*gorgonia.Node
-	learnables []*gorgonia.Node
+	vm          gorgonia.VM
+	g           *gorgonia.ExprGraph
+	embeddingV  *gorgonia.Node
+	embeddingW  *gorgonia.Node
+	embeddingW0 *gorgonia.Node
+	values      *gorgonia.Node
+	output      *gorgonia.Node
+	target      *gorgonia.Node
+	cost        *gorgonia.Node
+	b           *gorgonia.Node
+	b0          *gorgonia.Node
+	w1          []*gorgonia.Node
+	b1          []*gorgonia.Node
+	learnables  []*gorgonia.Node
+	v           [][]float32
+	w           []float32
+	w0          [][]float32
+	m_v         [][]float32
+	m_w         []float32
+	m_w0        [][]float32
+	v_v         [][]float32
+	v_w         []float32
+	v_w0        [][]float32
+	t           int
 
 	// Hyper parameters
 	batchSize    int
@@ -145,7 +160,10 @@ func (fm *DeepFM) BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
 	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
-		lo.Must0(gorgonia.Let(fm.indices, lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
+		v, w, w0 := fm.embedding(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
+		lo.Must0(gorgonia.Let(fm.embeddingV, v))
+		lo.Must0(gorgonia.Let(fm.embeddingW, w))
+		lo.Must0(gorgonia.Let(fm.embeddingW0, w0))
 		lo.Must0(gorgonia.Let(fm.values, lo.Must1(valuesTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 		lo.Must0(fm.vm.RunAll())
 		predictions = append(predictions, fm.output.Value().Data().([]float32)...)
@@ -181,11 +199,15 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 		fitStart := time.Now()
 		cost := float32(0)
 		for i := 0; i < trainSet.Count(); i += fm.batchSize {
-			lo.Must0(gorgonia.Let(fm.indices, lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
+			v, w, w0 := fm.embedding(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
+			lo.Must0(gorgonia.Let(fm.embeddingV, v))
+			lo.Must0(gorgonia.Let(fm.embeddingW, w))
+			lo.Must0(gorgonia.Let(fm.embeddingW0, w0))
 			lo.Must0(gorgonia.Let(fm.values, lo.Must1(valuesTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 			lo.Must0(gorgonia.Let(fm.target, lo.Must1(targetTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 			lo.Must0(fm.vm.RunAll())
 
+			fm.backward(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))), epoch)
 			cost += fm.cost.Value().Data().(float32)
 			lo.Must0(solver.Step(gorgonia.NodesToValueGrads(fm.learnables)))
 			fm.vm.Reset()
@@ -223,22 +245,19 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
 
-	fm.v = gorgonia.NewMatrix(fm.g, tensor.Float32,
-		gorgonia.WithShape(fm.numFeatures, fm.nFactors),
-		gorgonia.WithName("v"),
-		gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev))))
-	fm.w = gorgonia.NewMatrix(fm.g, tensor.Float32,
-		gorgonia.WithShape(fm.numFeatures, 1),
-		gorgonia.WithName("w"),
-		gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev))))
+	fm.v = fm.GetRandomGenerator().NormalMatrix(fm.numFeatures, fm.nFactors, fm.initMean, fm.initStdDev)
+	fm.w = fm.GetRandomGenerator().NormalVector(fm.numFeatures, fm.initMean, fm.initStdDev)
+	fm.w0 = fm.GetRandomGenerator().NormalMatrix(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0], fm.initMean, fm.initStdDev)
+	fm.m_v = zeros(fm.numFeatures, fm.nFactors)
+	fm.m_w = make([]float32, fm.numFeatures)
+	fm.m_w0 = zeros(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0])
+	fm.v_v = zeros(fm.numFeatures, fm.nFactors)
+	fm.v_w = make([]float32, fm.numFeatures)
+	fm.v_w0 = zeros(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0])
 	fm.b = gorgonia.NewMatrix(fm.g, tensor.Float32,
 		gorgonia.WithShape(1, 1),
 		gorgonia.WithName("b"),
 		gorgonia.WithInit(gorgonia.Zeroes()))
-	fm.w0 = gorgonia.NewMatrix(fm.g, tensor.Float32,
-		gorgonia.WithShape(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0]),
-		gorgonia.WithName("w0"),
-		gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev))))
 	fm.b0 = gorgonia.NewMatrix(fm.g, tensor.Float32,
 		gorgonia.WithShape(1, fm.hiddenLayers[0]),
 		gorgonia.WithName("b0"),
@@ -263,10 +282,14 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 			gorgonia.WithName(fmt.Sprintf("b%d", i)),
 			gorgonia.WithInit(gorgonia.Zeroes())))
 	}
-	fm.learnables = []*gorgonia.Node{fm.v, fm.w, fm.b}
+	fm.learnables = []*gorgonia.Node{fm.b, fm.b0}
+	fm.learnables = append(fm.learnables, fm.w1...)
+	fm.learnables = append(fm.learnables, fm.b1...)
 
 	fm.forward(fm.batchSize)
-	lo.Must1(gorgonia.Grad(fm.cost, fm.learnables...))
+	wrts := []*gorgonia.Node{fm.embeddingV, fm.embeddingW, fm.embeddingW0}
+	wrts = append(wrts, fm.learnables...)
+	lo.Must1(gorgonia.Grad(fm.cost, wrts...))
 
 	fm.vm = gorgonia.NewTapeMachine(fm.g, gorgonia.BindDualValues(fm.learnables...))
 	fm.BaseFactorizationMachine.Init(trainSet)
@@ -286,9 +309,15 @@ func (fm *DeepFM) Complexity() int {
 
 func (fm *DeepFM) forward(batchSize int) {
 	// input nodes
-	fm.indices = gorgonia.NodeFromAny(fm.g,
-		tensor.New(tensor.WithShape(batchSize, fm.numDimension), tensor.WithBacking(make([]float32, batchSize*fm.numDimension))),
-		gorgonia.WithName("indices"))
+	fm.embeddingV = gorgonia.NodeFromAny(fm.g,
+		tensor.New(tensor.WithShape(batchSize, fm.numDimension, fm.nFactors), tensor.WithBacking(make([]float32, batchSize*fm.numDimension*fm.nFactors))),
+		gorgonia.WithName("embeddingV"))
+	fm.embeddingW = gorgonia.NodeFromAny(fm.g,
+		tensor.New(tensor.WithShape(batchSize, fm.numDimension, 1), tensor.WithBacking(make([]float32, batchSize*fm.numDimension))),
+		gorgonia.WithName("embeddingW"))
+	fm.embeddingW0 = gorgonia.NodeFromAny(fm.g,
+		tensor.New(tensor.WithShape(batchSize, fm.numDimension, fm.nFactors*fm.hiddenLayers[0]), tensor.WithBacking(make([]float32, batchSize*fm.numDimension*fm.nFactors*fm.hiddenLayers[0]))),
+		gorgonia.WithName("embeddingW0"))
 	fm.values = gorgonia.NodeFromAny(fm.g,
 		tensor.New(tensor.WithShape(batchSize, fm.numDimension), tensor.WithBacking(make([]float32, batchSize*fm.numDimension))),
 		gorgonia.WithName("values"))
@@ -297,18 +326,16 @@ func (fm *DeepFM) forward(batchSize int) {
 		gorgonia.WithName("target"))
 
 	// factorization machine
-	v := gorgonia.Must(gorgonia.Embedding(fm.v, fm.indices))
-	w := gorgonia.Must(gorgonia.Embedding(fm.w, fm.indices))
 	x := gorgonia.Must(gorgonia.Reshape(fm.values, []int{batchSize, fm.numDimension, 1}))
-	vx := gorgonia.Must(gorgonia.BatchedMatMul(v, x, true))
+	vx := gorgonia.Must(gorgonia.BatchedMatMul(fm.embeddingV, x, true))
 	sumSquare := gorgonia.Must(gorgonia.Square(vx))
-	v2 := gorgonia.Must(gorgonia.Square(v))
+	v2 := gorgonia.Must(gorgonia.Square(fm.embeddingV))
 	x2 := gorgonia.Must(gorgonia.Square(x))
 	squareSum := gorgonia.Must(gorgonia.BatchedMatMul(v2, x2, true))
 	sum := gorgonia.Must(gorgonia.Sub(sumSquare, squareSum))
 	sum = gorgonia.Must(gorgonia.Sum(sum, 1))
 	sum = gorgonia.Must(gorgonia.Mul(sum, fm.nodeFromFloat64(0.5)))
-	linear := gorgonia.Must(gorgonia.BatchedMatMul(w, x, true, false))
+	linear := gorgonia.Must(gorgonia.BatchedMatMul(fm.embeddingW, x, true, false))
 	fm.output = gorgonia.Must(gorgonia.BroadcastAdd(
 		gorgonia.Must(gorgonia.Reshape(linear, []int{batchSize})),
 		fm.b,
@@ -317,9 +344,8 @@ func (fm *DeepFM) forward(batchSize int) {
 	fmOutput := gorgonia.Must(gorgonia.Add(fm.output, gorgonia.Must(gorgonia.Reshape(sum, []int{batchSize}))))
 
 	// deep network
-	a0 := gorgonia.Must(gorgonia.Reshape(v, []int{batchSize, fm.numDimension * fm.nFactors, 1}))
-	w0 := gorgonia.Must(gorgonia.Embedding(fm.w0, fm.indices))
-	w0 = gorgonia.Must(gorgonia.Reshape(w0, []int{batchSize, fm.numDimension * fm.nFactors, fm.hiddenLayers[0]}))
+	a0 := gorgonia.Must(gorgonia.Reshape(fm.embeddingV, []int{batchSize, fm.numDimension * fm.nFactors, 1}))
+	w0 := gorgonia.Must(gorgonia.Reshape(fm.embeddingW0, []int{batchSize, fm.numDimension * fm.nFactors, fm.hiddenLayers[0]}))
 	l0 := gorgonia.Must(gorgonia.BatchedMatMul(a0, w0, true))
 	l0 = gorgonia.Must(gorgonia.Reshape(l0, []int{batchSize, fm.hiddenLayers[0]}))
 	l0 = gorgonia.Must(gorgonia.BroadcastAdd(l0, fm.b0, nil, []byte{0}))
@@ -340,6 +366,128 @@ func (fm *DeepFM) forward(batchSize int) {
 
 	// loss function
 	fm.cost = fm.bceWithLogits(fm.target, fm.output)
+}
+
+func (fm *DeepFM) embedding(indices tensor.View) (v, w, w0 *tensor.Dense) {
+	s := indices.Shape()
+	if len(s) != 2 {
+		panic("indices must be 2-dimensional")
+	}
+	batchSize, numDimension := s[0], s[1]
+
+	dataV := make([]float32, batchSize*numDimension*fm.nFactors)
+	dataW := make([]float32, batchSize*numDimension)
+	dataW0 := make([]float32, batchSize*numDimension*fm.nFactors*fm.hiddenLayers[0])
+	for i := 0; i < batchSize; i++ {
+		for j := 0; j < numDimension; j++ {
+			index := lo.Must1(indices.At(i, j)).(float32)
+			for k := 0; k < fm.nFactors; k++ {
+				dataV[i*numDimension*fm.nFactors+j*fm.nFactors+k] = fm.v[int(index)][k]
+			}
+			dataW[i*numDimension+j] = fm.w[int(index)]
+			for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
+				dataW0[i*numDimension*fm.nFactors*fm.hiddenLayers[0]+j*fm.nFactors*fm.hiddenLayers[0]+k] = fm.w0[int(index)][k]
+			}
+		}
+	}
+
+	v = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors), tensor.WithBacking(dataV))
+	w = tensor.New(tensor.WithShape(batchSize, numDimension, 1), tensor.WithBacking(dataW))
+	w0 = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors*fm.hiddenLayers[0]), tensor.WithBacking(dataW0))
+	return
+}
+
+func (fm *DeepFM) backward(indices tensor.View, t int) {
+	s := indices.Shape()
+	if len(s) != 2 {
+		panic("indices must be 2-dimensional")
+	}
+	batchSize, numDimension := s[0], s[1]
+
+	gradEmbeddingV := lo.Must1(fm.embeddingV.Grad()).Data().([]float32)
+	gradEmbeddingW := lo.Must1(fm.embeddingW.Grad()).Data().([]float32)
+	gradEmbeddingW0 := lo.Must1(fm.embeddingW0.Grad()).Data().([]float32)
+	gradV := make(map[int][]float32)
+	gradW := make(map[int]float32)
+	gradW0 := make(map[int][]float32)
+
+	for i := 0; i < batchSize; i++ {
+		for j := 0; j < numDimension; j++ {
+			index := int(lo.Must1(indices.At(i, j)).(float32))
+
+			if _, exist := gradV[index]; !exist {
+				gradV[index] = make([]float32, fm.nFactors)
+			}
+			for k := 0; k < fm.nFactors; k++ {
+				gradV[index][k] += gradEmbeddingV[i*numDimension*fm.nFactors+j*fm.nFactors+k]
+			}
+
+			if _, exist := gradW[index]; !exist {
+				gradW[index] = 0
+			}
+			gradW[index] += gradEmbeddingW[i*numDimension+j]
+
+			if _, exist := gradW0[index]; !exist {
+				gradW0[index] = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+			}
+			for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
+				gradW0[index][k] += gradEmbeddingW0[i*numDimension*fm.nFactors*fm.hiddenLayers[0]+j*fm.nFactors*fm.hiddenLayers[0]+k]
+			}
+		}
+	}
+
+	fm.t++
+	correction1 := float32(1 - math32.Pow(beta1, float32(fm.t)))
+	correction2 := float32(1 - math32.Pow(beta2, float32(fm.t)))
+
+	for index, grad := range gradV {
+		for k := 0; k < fm.nFactors; k++ {
+			grad[k] += fm.reg * fm.v[index][k]
+			grad[k] /= float32(batchSize)
+			// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+			fm.m_v[index][k] = beta1*fm.m_v[index][k] + (1-beta1)*grad[k]
+			// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
+			fm.v_v[index][k] = beta2*fm.v_v[index][k] + (1-beta2)*grad[k]*grad[k]
+			// \hat{m}_t = m_t / (1 - beta_1^t)
+			mHat := fm.m_v[index][k] / correction1
+			// \hat{v}_t = v_t / (1 - beta_2^t)
+			vHat := fm.v_v[index][k] / correction2
+			// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+			fm.v[index][k] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
+		}
+	}
+
+	for index, grad := range gradW {
+		grad += fm.reg * fm.w[index]
+		grad /= float32(batchSize)
+		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+		fm.m_w[index] = beta1*fm.m_w[index] + (1-beta1)*grad
+		// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
+		fm.v_w[index] = beta2*fm.v_w[index] + (1-beta2)*grad*grad
+		// \hat{m}_t = m_t / (1 - beta_1^t)
+		mHat := fm.m_w[index] / correction1
+		// \hat{v}_t = v_t / (1 - beta_2^t)
+		vHat := fm.v_w[index] / correction2
+		// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+		fm.w[index] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
+	}
+
+	for index, grad := range gradW0 {
+		for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
+			grad[k] += fm.reg * fm.w0[index][k]
+			grad[k] /= float32(batchSize)
+			// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+			fm.m_w0[index][k] = beta1*fm.m_w0[index][k] + (1-beta1)*grad[k]
+			// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
+			fm.v_w0[index][k] = beta2*fm.v_w0[index][k] + (1-beta2)*grad[k]*grad[k]
+			// \hat{m}_t = m_t / (1 - beta_1^t)
+			mHat := fm.m_w0[index][k] / correction1
+			// \hat{v}_t = v_t / (1 - beta_2^t)
+			vHat := fm.v_w0[index][k] / correction2
+			// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+			fm.w0[index][k] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
+		}
+	}
 }
 
 func (fm *DeepFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, targetTensor *tensor.Dense) {
@@ -406,4 +554,12 @@ func (fm *DeepFM) bceWithLogits(target, prediction *gorgonia.Node) *gorgonia.Nod
 
 func (fm *DeepFM) nodeFromFloat64(any float32) *gorgonia.Node {
 	return gorgonia.NodeFromAny(fm.g, any, gorgonia.WithName(uuid.NewString()))
+}
+
+func zeros(a, b int) [][]float32 {
+	retVal := make([][]float32, a)
+	for i := range retVal {
+		retVal[i] = make([]float32, b)
+	}
+	return retVal
 }
