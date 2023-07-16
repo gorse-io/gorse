@@ -59,6 +59,14 @@ func (rng RandomGenerator) NormalMatrix(row, col int, mean, stdDev float32) [][]
 	return ret
 }
 
+func (rng RandomGenerator) NormalVector(size int, mean, stdDev float32) []float32 {
+	ret := make([]float32, size)
+	for i := 0; i < len(ret); i++ {
+		ret[i] = float32(rng.NormFloat64())*stdDev + mean
+	}
+	return ret
+}
+
 // UniformMatrix makes a matrix filled with uniform random floats.
 func (rng RandomGenerator) UniformMatrix(row, col int, low, high float32) [][]float32 {
 	ret := make([][]float32, row)
