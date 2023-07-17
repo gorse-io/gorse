@@ -14,7 +14,6 @@
 
 #include <immintrin.h>
 #include <stdint.h>
-#include <math.h>
 
 void _mm512_mul_const_add_to(float *a, float *b, float *c, int64_t n)
 {
