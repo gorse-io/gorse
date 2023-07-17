@@ -310,7 +310,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	}
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
-	log.Logger().Info(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
+	log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
 	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
@@ -342,6 +342,9 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 					floats.MulConstAddTo(fm.V[j], values[it], temp[workerId])
 				}
 
+				correct1 := 1 / (1 - math32.Pow(beta1, float32(epoch)))
+				correct2 := 1 / (1 - math32.Pow(beta2, float32(epoch)))
+
 				// Update w_0
 				switch fm.optimizer {
 				case model.SGD:
@@ -352,9 +355,9 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 					// v_t = \beta_2 v_{t-1} + (1 - \beta_2) g^2_t
 					vB[workerId] = beta2*vB[workerId] + (1-beta2)*grad*grad
 					// \hat{m}_t = m_t / (1 - \beta^t_1)
-					mBHat := mB[workerId] / (1 - math32.Pow(beta1, float32(epoch)))
+					mBHat := mB[workerId] * correct1
 					// \hat{v}_t = v_t / (1 - \beta^t_2)
-					vBHat := vB[workerId] / (1 - math32.Pow(beta2, float32(epoch)))
+					vBHat := vB[workerId] * correct2
 					// w_0 = w_0 - \eta \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
 					fm.B -= fm.lr * mBHat / (math32.Sqrt(vBHat) + eps)
 				default:
@@ -372,9 +375,9 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 						// v_t = \beta_2 v_{t-1} + (1 - \beta_2) g^2_t
 						vW[workerId][i] = beta2*vW[workerId][i] + (1-beta2)*grad*grad
 						// \hat{m}_t = m_t / (1 - \beta^t_1)
-						mWHat := mW[workerId][i] / (1 - math32.Pow(beta1, float32(epoch)))
+						mWHat := mW[workerId][i] * correct1
 						// \hat{v}_t = v_t / (1 - \beta^t_2)
-						vWHat := vW[workerId][i] / (1 - math32.Pow(beta2, float32(epoch)))
+						vWHat := vW[workerId][i] * correct2
 						// w_i = w_i - \eta \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
 						fm.W[i] -= fm.lr * mWHat / (math32.Sqrt(vWHat) + eps)
 					default:
@@ -398,9 +401,9 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 						floats.MulTo(vGrad[workerId], vGrad[workerId], vGrad2[workerId])
 						floats.MulConstAddTo(vGrad2[workerId], 1-beta2, vV[workerId][i])
 						// \hat{m}_t = m_t / (1 - \beta^t_1)
-						floats.MulConstTo(mV[workerId][i], 1/(1-math32.Pow(beta1, float32(epoch))), mVHat[workerId])
+						floats.MulConstTo(mV[workerId][i], correct1, mVHat[workerId])
 						// \hat{v}_t = v_t / (1 - \beta^t_2)
-						floats.MulConstTo(vV[workerId][i], 1/(1-math32.Pow(beta2, float32(epoch))), vVHat[workerId])
+						floats.MulConstTo(vV[workerId][i], correct2, vVHat[workerId])
 						// v_{i,f} = v_{i,f} - \eta \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
 						floats.Sqrt(vVHat[workerId])
 						floats.AddConst(vVHat[workerId], eps)
@@ -431,7 +434,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
