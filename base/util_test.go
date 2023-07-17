@@ -15,8 +15,9 @@
 package base
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewMatrix32(t *testing.T) {
@@ -46,4 +47,11 @@ func TestNewMatrixInt(t *testing.T) {
 	for _, v := range m {
 		assert.Equal(t, 3, len(v))
 	}
+}
+
+func TestNewTensor32(t *testing.T) {
+	a := NewTensor32(3, 4, 5)
+	assert.Equal(t, 3, len(a))
+	assert.Equal(t, 4, len(a[0]))
+	assert.Equal(t, 5, len(a[0][0]))
 }
