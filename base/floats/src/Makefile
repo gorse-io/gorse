@@ -2,7 +2,7 @@ SOURCES = munit.c floats_test.c
 
 ifeq ($(shell uname -m),x86_64)
 	SOURCES += floats_avx.c floats_avx512.c
-	CFLAGS = -O3 -mavx -mavx512f -mavx512dq
+	CFLAGS = -O3 -mavx -mavx512f -mavx512dq -fno-math-errno
 else ifeq ($(shell uname -m),aarch64)
 	SOURCES += floats_neon.c
 	CFLAGS = -O3

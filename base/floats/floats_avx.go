@@ -18,4 +18,7 @@ func _mm256_mul_const(a, b, n unsafe.Pointer)
 func _mm256_mul_to(a, b, c, n unsafe.Pointer)
 
 //go:noescape
+func _mm256_sqrt(a, n unsafe.Pointer)
+
+//go:noescape
 func _mm256_dot(a, b, n, ret unsafe.Pointer)

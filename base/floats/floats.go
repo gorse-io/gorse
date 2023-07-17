@@ -14,6 +14,8 @@
 
 package floats
 
+import "math"
+
 func dot(a, b []float32) (ret float32) {
 	for i := range a {
 		ret += a[i] * b[i]
@@ -146,6 +148,18 @@ func AddTo(a, b, dst []float32) {
 	}
 	for i := range a {
 		dst[i] = a[i] + b[i]
+	}
+}
+
+func AddConst(dst []float32, c float32) {
+	for i := range dst {
+		dst[i] += c
+	}
+}
+
+func Sqrt(a []float32) {
+	for i := range a {
+		a[i] = float32(math.Sqrt(float64(a[i])))
 	}
 }
 

@@ -15,10 +15,11 @@ package click
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
-	"testing"
 )
 
 const (
@@ -48,6 +49,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 		model.NEpochs:    20,
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
+		model.Optimizer:  model.Adam,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(train, test, fitConfig)

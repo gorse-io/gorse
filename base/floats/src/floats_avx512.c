@@ -14,6 +14,7 @@
 
 #include <immintrin.h>
 #include <stdint.h>
+#include <math.h>
 
 void _mm512_mul_const_add_to(float *a, float *b, float *c, int64_t n)
 {
@@ -130,6 +131,31 @@ void _mm512_mul_to(float *a, float *b, float *c, int64_t n)
     for (int i = 0; i < remain; i++)
     {
         c[i] = a[i] * b[i];
+    }
+}
+
+void _mm512_sqrt(float *a, int64_t n)
+{
+    int epoch = n / 16;
+    int remain = n % 16;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m512 v = _mm512_loadu_ps(a);
+        v = _mm512_sqrt_ps(v);
+        _mm512_storeu_ps(a, v);
+        a += 16;
+    }
+    if (remain >= 8)
+    {
+        __m256 v = _mm256_loadu_ps(a);
+        v = _mm256_sqrt_ps(v);
+        _mm256_storeu_ps(a, v);
+        a += 8;
+        remain -= 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        a[i] = __builtin_sqrtf(a[i]);
     }
 }
 
