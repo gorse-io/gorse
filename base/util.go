@@ -46,6 +46,15 @@ func NewMatrix32(row, col int) [][]float32 {
 	return ret
 }
 
+// NewTensor32 creates a 3D tensor of 32-bit floats.
+func NewTensor32(a, b, c int) [][][]float32 {
+	ret := make([][][]float32, a)
+	for i := range ret {
+		ret[i] = NewMatrix32(b, c)
+	}
+	return ret
+}
+
 // NewMatrixInt creates a 2D matrix of integers.
 func NewMatrixInt(row, col int) [][]int {
 	ret := make([][]int, row)

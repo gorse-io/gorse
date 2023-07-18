@@ -40,6 +40,10 @@ const (
 	Similarity  ParamName = "Similarity"
 	UseFeature  ParamName = "UseFeature"
 	BatchSize   ParamName = "BatchSize"
+	Optimizer   ParamName = "Optimizer"
+
+	SGD  = "sgd"
+	Adam = "adam"
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings

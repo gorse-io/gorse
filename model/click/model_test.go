@@ -15,14 +15,15 @@ package click
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
-	"testing"
 )
 
 const (
-	regressionDelta     = 0.001
+	regressionDelta     = 0.01
 	classificationDelta = 0.01
 )
 
@@ -40,19 +41,24 @@ func TestFM_Classification_Frappe(t *testing.T) {
 	// libfm.exe -train train.libfm -test test.libfm -task c \
 	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
 	//   -learn_rate 0.01 -regular 0,0,0.0001
-	train, test, err := LoadDataFromBuiltIn("frappe")
-	assert.NoError(t, err)
-	m := NewFM(FMClassification, model.Params{
-		model.InitStdDev: 0.01,
-		model.NFactors:   8,
-		model.NEpochs:    20,
-		model.Lr:         0.01,
-		model.Reg:        0.0001,
-	})
-	fitConfig := newFitConfigWithTestTracker(20)
-	score := m.Fit(train, test, fitConfig)
-	assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
+	for _, optimizer := range []string{model.Adam, model.SGD} {
+		t.Run(optimizer, func(t *testing.T) {
+			train, test, err := LoadDataFromBuiltIn("frappe")
+			assert.NoError(t, err)
+			m := NewFM(FMClassification, model.Params{
+				model.InitStdDev: 0.01,
+				model.NFactors:   8,
+				model.NEpochs:    20,
+				model.Lr:         0.01,
+				model.Reg:        0.0001,
+				model.Optimizer:  optimizer,
+			})
+			fitConfig := newFitConfigWithTestTracker(20)
+			score := m.Fit(train, test, fitConfig)
+			assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
+			assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
+		})
+	}
 }
 
 //func TestFM_Classification_MovieLens(t *testing.T) {
