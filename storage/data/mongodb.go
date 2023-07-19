@@ -405,6 +405,10 @@ func (db *MongoDB) ModifyUser(ctx context.Context, userId string, patch UserPatc
 	return errors.Trace(err)
 }
 
+func (db *MongoDB) UpdateUserId(ctx context.Context, userId string, newUserId string) error {
+  return nil
+}
+
 // DeleteUser deletes a user from MongoDB.
 func (db *MongoDB) DeleteUser(ctx context.Context, userId string) error {
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())

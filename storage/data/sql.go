@@ -486,7 +486,22 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 		text, _ := jsonutil.Marshal(patch.Subscribe)
 		attributes["subscribe"] = string(text)
 	}
+	fmt.Println("attributes", attributes)
 	err := d.gormDB.WithContext(ctx).Model(&SQLUser{UserId: userId}).Updates(attributes).Error
+	return errors.Trace(err)
+}
+
+func (d *SQLDatabase) UpdateUserId(ctx context.Context, userId string, newUserId string) error {
+	tx := d.gormDB.WithContext(ctx).Begin()
+	err := tx.Table("users").Where("user_id = ?", userId).Update("user_id", newUserId).Error
+	if err == nil {
+		err = tx.Table("feedback").Where("user_id = ?", userId).Update("user_id", newUserId).Error
+	}
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
 	return errors.Trace(err)
 }
 

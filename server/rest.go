@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2020 gorse Project Author
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -193,6 +193,16 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Param(ws.PathParameter("user-id", "ID of the user to modify").DataType("string")).
 		Reads(data.UserPatch{}).
+		Returns(http.StatusOK, "OK", Success{}).
+		Writes(Success{}))
+	// Modify a user id
+	ws.Route(ws.PATCH("/user/update/{user-id}").To(s.updateUserId).
+		Doc("Modify a user id.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to modify").DataType("string")).
+		Param(ws.QueryParameter("newUserId", "New Id of the User to update").DataType("string")).
+		//Reads(data.UserPatch{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 	// Get a user
@@ -1170,6 +1180,24 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 	if err := s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, userId), time.Now())); err != nil {
 		return
 	}
+	Ok(response, Success{RowAffected: 1})
+}
+
+func (s *RestServer) updateUserId(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	userId := request.PathParameter("user-id")
+	newUserId := request.QueryParameter("newUserId")
+
+	if len(newUserId) == 0 {
+		BadRequest(response, errors.New("Not a valid user id"))
+		return
+	} else {
+		if err := s.DataClient.UpdateUserId(ctx, userId, newUserId); err != nil {
+			InternalServerError(response, err)
+			return
+		}
+	}
+
 	Ok(response, Success{RowAffected: 1})
 }
 

@@ -174,6 +174,7 @@ type Database interface {
 	DeleteUser(ctx context.Context, userId string) error
 	GetUser(ctx context.Context, userId string) (User, error)
 	ModifyUser(ctx context.Context, userId string, patch UserPatch) error
+	UpdateUserId(ctx context.Context, userId string, newUserId string) error
 	GetUsers(ctx context.Context, cursor string, n int) (string, []User, error)
 	GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error)
 	GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error)

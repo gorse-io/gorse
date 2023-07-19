@@ -158,3 +158,7 @@ func (d NoDatabase) ModifyItem(_ context.Context, _ string, _ ItemPatch) error {
 func (d NoDatabase) ModifyUser(_ context.Context, _ string, _ UserPatch) error {
 	return ErrNoDatabase
 }
+
+func (d NoDatabase) UpdateUserId(_ context.Context, _ string, _ string) error {
+	return ErrNoDatabase
+}
