@@ -41,6 +41,10 @@ const (
 	UseFeature   ParamName = "UseFeature"
 	BatchSize    ParamName = "BatchSize"
 	HiddenLayers ParamName = "HiddenLayers"
+	Optimizer    ParamName = "Optimizer"
+
+	SGD  = "sgd"
+	Adam = "adam"
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings

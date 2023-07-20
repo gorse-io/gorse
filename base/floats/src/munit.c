@@ -1072,7 +1072,7 @@ munit_print_time(FILE* fp, munit_uint64_t nanoseconds) {
 }
 #endif
 
-/* Add a paramter to an array of parameters. */
+/* Add a parameter to an array of parameters. */
 static MunitResult
 munit_parameters_add(size_t* params_size, MunitParameter* params[MUNIT_ARRAY_PARAM(*params_size)], char* name, char* value) {
   *params = realloc(*params, sizeof(MunitParameter) * (*params_size + 2));

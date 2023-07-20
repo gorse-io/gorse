@@ -171,6 +171,7 @@ type FM struct {
 	reg        float32
 	initMean   float32
 	initStdDev float32
+	optimizer  string
 }
 
 func (fm *FM) GetParamsGrid(withSize bool) model.ParamsGrid {
@@ -199,6 +200,7 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
+	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
 }
 
 func (fm *FM) Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32 {
@@ -285,6 +287,15 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	maxJobs := config.MaxJobs()
 	temp := base.NewMatrix32(maxJobs, fm.nFactors)
 	vGrad := base.NewMatrix32(maxJobs, fm.nFactors)
+	vGrad2 := base.NewMatrix32(maxJobs, fm.nFactors)
+	mV := base.NewTensor32(maxJobs, int(trainSet.Index.Len()), fm.nFactors)
+	mW := base.NewMatrix32(maxJobs, int(trainSet.Index.Len()))
+	mB := make([]float32, maxJobs)
+	vV := base.NewTensor32(maxJobs, int(trainSet.Index.Len()), fm.nFactors)
+	vW := base.NewMatrix32(maxJobs, int(trainSet.Index.Len()))
+	vB := make([]float32, maxJobs)
+	mVHat := base.NewMatrix32(maxJobs, fm.nFactors)
+	vVHat := base.NewMatrix32(maxJobs, fm.nFactors)
 
 	snapshots := SnapshotManger{}
 	evalStart := time.Now()
@@ -330,17 +341,77 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 				for it, j := range features {
 					floats.MulConstAddTo(fm.V[j], values[it], temp[workerId])
 				}
+
+				correct1 := 1 / (1 - math32.Pow(beta1, float32(epoch)))
+				correct2 := 1 / (1 - math32.Pow(beta2, float32(epoch)))
+
 				// Update w_0
-				fm.B -= fm.lr * grad
+				switch fm.optimizer {
+				case model.SGD:
+					fm.B -= fm.lr * grad
+				case model.Adam:
+					// m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t
+					mB[workerId] = beta1*mB[workerId] + (1-beta1)*grad
+					// v_t = \beta_2 v_{t-1} + (1 - \beta_2) g^2_t
+					vB[workerId] = beta2*vB[workerId] + (1-beta2)*grad*grad
+					// \hat{m}_t = m_t / (1 - \beta^t_1)
+					mBHat := mB[workerId] * correct1
+					// \hat{v}_t = v_t / (1 - \beta^t_2)
+					vBHat := vB[workerId] * correct2
+					// w_0 = w_0 - \eta \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+					fm.B -= fm.lr * mBHat / (math32.Sqrt(vBHat) + eps)
+				default:
+					log.Logger().Fatal("unknown optimizer", zap.String("optimizer", fm.optimizer))
+				}
+
 				for it, i := range features {
 					// Update w_i
-					fm.W[i] -= fm.lr * grad * values[it]
+					switch fm.optimizer {
+					case model.SGD:
+						fm.W[i] -= fm.lr * grad
+					case model.Adam:
+						// m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t
+						mW[workerId][i] = beta1*mW[workerId][i] + (1-beta1)*grad
+						// v_t = \beta_2 v_{t-1} + (1 - \beta_2) g^2_t
+						vW[workerId][i] = beta2*vW[workerId][i] + (1-beta2)*grad*grad
+						// \hat{m}_t = m_t / (1 - \beta^t_1)
+						mWHat := mW[workerId][i] * correct1
+						// \hat{v}_t = v_t / (1 - \beta^t_2)
+						vWHat := vW[workerId][i] * correct2
+						// w_i = w_i - \eta \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+						fm.W[i] -= fm.lr * mWHat / (math32.Sqrt(vWHat) + eps)
+					default:
+						log.Logger().Fatal("unknown optimizer", zap.String("optimizer", fm.optimizer))
+					}
+
 					// Update v_{i,f}
 					floats.MulConstTo(temp[workerId], values[it], vGrad[workerId])
 					floats.MulConstAddTo(fm.V[i], -values[it]*values[it], vGrad[workerId])
 					floats.MulConst(vGrad[workerId], grad)
 					floats.MulConstAddTo(fm.V[i], fm.reg, vGrad[workerId])
-					floats.MulConstAddTo(vGrad[workerId], -fm.lr, fm.V[i])
+					switch fm.optimizer {
+					case model.SGD:
+						floats.MulConstAddTo(vGrad[workerId], -fm.lr, fm.V[i])
+					case model.Adam:
+						// m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t
+						floats.MulConst(mV[workerId][i], beta1)
+						floats.MulConstAddTo(vGrad[workerId], 1-beta1, mV[workerId][i])
+						// v_t = \beta_2 v_{t-1} + (1 - \beta_2) g^2_t
+						floats.MulConst(vV[workerId][i], beta2)
+						floats.MulTo(vGrad[workerId], vGrad[workerId], vGrad2[workerId])
+						floats.MulConstAddTo(vGrad2[workerId], 1-beta2, vV[workerId][i])
+						// \hat{m}_t = m_t / (1 - \beta^t_1)
+						floats.MulConstTo(mV[workerId][i], correct1, mVHat[workerId])
+						// \hat{v}_t = v_t / (1 - \beta^t_2)
+						floats.MulConstTo(vV[workerId][i], correct2, vVHat[workerId])
+						// v_{i,f} = v_{i,f} - \eta \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+						floats.Sqrt(vVHat[workerId])
+						floats.AddConst(vVHat[workerId], eps)
+						floats.Div(mVHat[workerId], vVHat[workerId])
+						floats.MulConstAddTo(mVHat[workerId], -fm.lr, fm.V[i])
+					default:
+						log.Logger().Fatal("unknown optimizer", zap.String("optimizer", fm.optimizer))
+					}
 				}
 			}
 			return nil
