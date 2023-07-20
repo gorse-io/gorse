@@ -381,13 +381,9 @@ func (fm *DeepFM) embedding(indices tensor.View) (v, w, w0 *tensor.Dense) {
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := lo.Must1(indices.At(i, j)).(float32)
-			for k := 0; k < fm.nFactors; k++ {
-				dataV[i*numDimension*fm.nFactors+j*fm.nFactors+k] = fm.v[int(index)][k]
-			}
+			copy(dataV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors], fm.v[int(index)])
 			dataW[i*numDimension+j] = fm.w[int(index)]
-			for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
-				dataW0[i*numDimension*fm.nFactors*fm.hiddenLayers[0]+j*fm.nFactors*fm.hiddenLayers[0]+k] = fm.w0[int(index)][k]
-			}
+			copy(dataW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]], fm.w0[int(index)])
 		}
 	}
 
