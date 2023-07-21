@@ -28,6 +28,8 @@ jobs:
             -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
             -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
             -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" ./...
+        env:
+          CGO_ENABLED: 0
 
       - name: Install zip
         uses: montudor/action-zip@v0.1.1
