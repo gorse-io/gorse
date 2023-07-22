@@ -403,29 +403,24 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 	gradEmbeddingV := lo.Must1(fm.embeddingV.Grad()).Data().([]float32)
 	gradEmbeddingW := lo.Must1(fm.embeddingW.Grad()).Data().([]float32)
 	gradEmbeddingW0 := lo.Must1(fm.embeddingW0.Grad()).Data().([]float32)
-	gradV := make(map[int][]float32)
-	gradW := make(map[int]float32)
-	gradW0 := make(map[int][]float32)
+	indexSet := mapset.NewSet[int]()
+	gradV := make([][]float32, fm.numFeatures)
+	gradW := make([]float32, fm.numFeatures)
+	gradW0 := make([][]float32, fm.numFeatures)
 
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := int(lo.Must1(indices.At(i, j)).(float32))
-
-			if _, exist := gradV[index]; !exist {
+			if !indexSet.Contains(index) {
+				indexSet.Add(index)
 				gradV[index] = make([]float32, fm.nFactors)
+				gradW0[index] = make([]float32, fm.nFactors*fm.hiddenLayers[0])
 			}
+
 			for k := 0; k < fm.nFactors; k++ {
 				gradV[index][k] += gradEmbeddingV[i*numDimension*fm.nFactors+j*fm.nFactors+k]
 			}
-
-			if _, exist := gradW[index]; !exist {
-				gradW[index] = 0
-			}
 			gradW[index] += gradEmbeddingW[i*numDimension+j]
-
-			if _, exist := gradW0[index]; !exist {
-				gradW0[index] = make([]float32, fm.nFactors*fm.hiddenLayers[0])
-			}
 			for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
 				gradW0[index][k] += gradEmbeddingW0[i*numDimension*fm.nFactors*fm.hiddenLayers[0]+j*fm.nFactors*fm.hiddenLayers[0]+k]
 			}
@@ -433,10 +428,11 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 	}
 
 	fm.t++
-	correction1 := float32(1 - math32.Pow(beta1, float32(fm.t)))
-	correction2 := float32(1 - math32.Pow(beta2, float32(fm.t)))
+	correction1 := 1 - math32.Pow(beta1, float32(fm.t))
+	correction2 := 1 - math32.Pow(beta2, float32(fm.t))
 
-	for index, grad := range gradV {
+	for index := range indexSet.Iter() {
+		grad := gradV[index]
 		for k := 0; k < fm.nFactors; k++ {
 			grad[k] += fm.reg * fm.v[index][k]
 			grad[k] /= float32(batchSize)
@@ -453,7 +449,8 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 		}
 	}
 
-	for index, grad := range gradW {
+	for index := range indexSet.Iter() {
+		grad := gradW[index]
 		grad += fm.reg * fm.w[index]
 		grad /= float32(batchSize)
 		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
@@ -468,7 +465,8 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 		fm.w[index] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
 	}
 
-	for index, grad := range gradW0 {
+	for index := range indexSet.Iter() {
+		grad := gradW0[index]
 		for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
 			grad[k] += fm.reg * fm.w0[index][k]
 			grad[k] /= float32(batchSize)
