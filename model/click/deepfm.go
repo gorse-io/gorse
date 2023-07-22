@@ -20,9 +20,11 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -207,7 +209,7 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 			lo.Must0(gorgonia.Let(fm.target, lo.Must1(targetTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 			lo.Must0(fm.vm.RunAll())
 
-			fm.backward(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))), epoch)
+			fm.backward(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
 			cost += fm.cost.Value().Data().(float32)
 			lo.Must0(solver.Step(gorgonia.NodesToValueGrads(fm.learnables)))
 			fm.vm.Reset()
@@ -393,7 +395,7 @@ func (fm *DeepFM) embedding(indices tensor.View) (v, w, w0 *tensor.Dense) {
 	return
 }
 
-func (fm *DeepFM) backward(indices tensor.View, t int) {
+func (fm *DeepFM) backward(indices tensor.View) {
 	s := indices.Shape()
 	if len(s) != 2 {
 		panic("indices must be 2-dimensional")
@@ -417,13 +419,9 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 				gradW0[index] = make([]float32, fm.nFactors*fm.hiddenLayers[0])
 			}
 
-			for k := 0; k < fm.nFactors; k++ {
-				gradV[index][k] += gradEmbeddingV[i*numDimension*fm.nFactors+j*fm.nFactors+k]
-			}
+			floats.Add(gradV[index], gradEmbeddingV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors])
 			gradW[index] += gradEmbeddingW[i*numDimension+j]
-			for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
-				gradW0[index][k] += gradEmbeddingW0[i*numDimension*fm.nFactors*fm.hiddenLayers[0]+j*fm.nFactors*fm.hiddenLayers[0]+k]
-			}
+			floats.Add(gradW0[index], gradEmbeddingW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]])
 		}
 	}
 
@@ -431,22 +429,29 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 	correction1 := 1 - math32.Pow(beta1, float32(fm.t))
 	correction2 := 1 - math32.Pow(beta2, float32(fm.t))
 
+	grad2 := make([]float32, fm.nFactors)
+	mHat := make([]float32, fm.nFactors)
+	vHat := make([]float32, fm.nFactors)
 	for index := range indexSet.Iter() {
 		grad := gradV[index]
-		for k := 0; k < fm.nFactors; k++ {
-			grad[k] += fm.reg * fm.v[index][k]
-			grad[k] /= float32(batchSize)
-			// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
-			fm.m_v[index][k] = beta1*fm.m_v[index][k] + (1-beta1)*grad[k]
-			// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
-			fm.v_v[index][k] = beta2*fm.v_v[index][k] + (1-beta2)*grad[k]*grad[k]
-			// \hat{m}_t = m_t / (1 - beta_1^t)
-			mHat := fm.m_v[index][k] / correction1
-			// \hat{v}_t = v_t / (1 - beta_2^t)
-			vHat := fm.v_v[index][k] / correction2
-			// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
-			fm.v[index][k] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
-		}
+		floats.MulConstAddTo(fm.v[index], fm.reg, grad)
+		floats.MulConst(grad, 1/float32(batchSize))
+		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+		floats.MulConst(fm.m_v[index], beta1)
+		floats.MulConstAddTo(grad, 1-beta1, fm.m_v[index])
+		// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
+		floats.MulConst(fm.v_v[index], beta2)
+		floats.MulTo(grad, grad, grad2)
+		floats.MulConstAddTo(grad2, 1-beta2, fm.v_v[index])
+		// \hat{m}_t = m_t / (1 - beta_1^t)
+		floats.MulConstTo(fm.m_v[index], 1/correction1, mHat)
+		// \hat{v}_t = v_t / (1 - beta_2^t)
+		floats.MulConstTo(fm.v_v[index], 1/correction2, vHat)
+		// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+		floats.Sqrt(vHat)
+		floats.AddConst(vHat, eps)
+		floats.Div(mHat, vHat)
+		floats.MulConstAddTo(mHat, -fm.lr, fm.v[index])
 	}
 
 	for index := range indexSet.Iter() {
@@ -465,22 +470,29 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 		fm.w[index] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
 	}
 
+	grad2 = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+	mHat = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+	vHat = make([]float32, fm.nFactors*fm.hiddenLayers[0])
 	for index := range indexSet.Iter() {
 		grad := gradW0[index]
-		for k := 0; k < fm.nFactors*fm.hiddenLayers[0]; k++ {
-			grad[k] += fm.reg * fm.w0[index][k]
-			grad[k] /= float32(batchSize)
-			// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
-			fm.m_w0[index][k] = beta1*fm.m_w0[index][k] + (1-beta1)*grad[k]
-			// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
-			fm.v_w0[index][k] = beta2*fm.v_w0[index][k] + (1-beta2)*grad[k]*grad[k]
-			// \hat{m}_t = m_t / (1 - beta_1^t)
-			mHat := fm.m_w0[index][k] / correction1
-			// \hat{v}_t = v_t / (1 - beta_2^t)
-			vHat := fm.v_w0[index][k] / correction2
-			// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
-			fm.w0[index][k] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
-		}
+		floats.MulConstAddTo(fm.w0[index], fm.reg, grad)
+		floats.MulConst(grad, 1/float32(batchSize))
+		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+		floats.MulConst(fm.m_w0[index], beta1)
+		floats.MulConstAddTo(grad, 1-beta1, fm.m_w0[index])
+		// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
+		floats.MulConst(fm.v_w0[index], beta2)
+		floats.MulTo(grad, grad, grad2)
+		floats.MulConstAddTo(grad2, 1-beta2, fm.v_w0[index])
+		// \hat{m}_t = m_t / (1 - beta_1^t)
+		floats.MulConstTo(fm.m_w0[index], 1/correction1, mHat)
+		// \hat{v}_t = v_t / (1 - beta_2^t)
+		floats.MulConstTo(fm.v_w0[index], 1/correction2, vHat)
+		// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+		floats.Sqrt(vHat)
+		floats.AddConst(vHat, eps)
+		floats.Div(mHat, vHat)
+		floats.MulConstAddTo(mHat, -fm.lr, fm.w0[index])
 	}
 }
 
