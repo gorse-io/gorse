@@ -20,6 +20,11 @@ services:
       MYSQL_PASSWORD: gorse_pass
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: mysqladmin ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% elif database == 'postgres' %}
 
@@ -31,6 +36,11 @@ services:
       POSTGRES_DB: gorse
       POSTGRES_USER: gorse
       POSTGRES_PASSWORD: gorse_pass
+    healthcheck:
+      test: pg_isready
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% elif database == 'mongo' %}
 
@@ -42,6 +52,11 @@ services:
       MONGO_INITDB_DATABASE: gorse
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
+    healthcheck:
+      test: mongo
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% endif %}
 
