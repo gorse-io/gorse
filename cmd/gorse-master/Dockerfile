@@ -1,3 +1,5 @@
+# syntax = docker/dockerfile:1-experimental
+
 ############################
 # STEP 1 build executable binary
 ############################
@@ -11,7 +13,8 @@ RUN go mod download
 
 COPY . ./
 
-RUN cd cmd/gorse-master && \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    cd cmd/gorse-master && \
     CGO_ENABLED=0 go build -ldflags=" \
        -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
        -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
