@@ -5,6 +5,11 @@ services:
     restart: unless-stopped
     ports:
       - 6379:6379
+    healthcheck:
+      test: redis-cli ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% if database == 'mysql' %}
 
@@ -123,6 +128,7 @@ services:
       - master_data:/var/lib/gorse
     depends_on:
       redis:
+        condition: service_healthy
       {% if database == 'mysql' %}
       mysql:
         condition: service_healthy
