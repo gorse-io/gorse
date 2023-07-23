@@ -122,15 +122,15 @@ services:
       - gorse_log:/var/log/gorse
       - master_data:/var/lib/gorse
     depends_on:
-      - redis
+      redis:
       {% if database == 'mysql' %}
-      - mysql
+      mysql:
         condition: service_healthy
       {% elif database == 'postgres' %}
-      - postgres
+      postgres:
         condition: service_healthy
       {% elif database == 'mongo' %}
-      - mongo
+      mongo:
         condition: service_healthy
       {% endif %}
 
