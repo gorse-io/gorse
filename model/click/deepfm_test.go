@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
 )
@@ -50,6 +51,20 @@ func TestDeepFM_Classification_Criteo(t *testing.T) {
 	fitConfig := newFitConfigWithTestTracker(10)
 	score := m.Fit(train, test, fitConfig)
 	assert.InDelta(t, 0.77, score.Accuracy, classificationDelta)
+
+	// test prediction
+	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}),
+		m.BatchPredict([]lo.Tuple4[string, string, []Feature, []Feature]{{
+			A: "1",
+			B: "2",
+			C: []Feature{
+				{Name: "3", Value: 0.3},
+				{Name: "4", Value: 0.4},
+			},
+			D: []Feature{
+				{Name: "5", Value: 0.5},
+				{Name: "6", Value: 0.6},
+			}}}))
 
 	// test increment test
 	buf := bytes.NewBuffer(nil)

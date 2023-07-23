@@ -128,42 +128,14 @@ func (fm *DeepFM) GetParamsGrid(withSize bool) model.ParamsGrid {
 }
 
 func (fm *DeepFM) Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32 {
-	var (
-		indices []int32
-		values  []float32
-	)
-	// encode user
-	if userIndex := fm.Index.EncodeUser(userId); userIndex != base.NotId {
-		indices = append(indices, userIndex)
-		values = append(values, 1)
-	}
-	// encode item
-	if itemIndex := fm.Index.EncodeItem(itemId); itemIndex != base.NotId {
-		indices = append(indices, itemIndex)
-		values = append(values, 1)
-	}
-	// encode user labels
-	for _, userFeature := range userFeatures {
-		if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != base.NotId {
-			indices = append(indices, userFeatureIndex)
-			values = append(values, userFeature.Value)
-		}
-	}
-	// encode item labels
-	for _, itemFeature := range itemFeatures {
-		if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != base.NotId {
-			indices = append(indices, itemFeatureIndex)
-			values = append(values, itemFeature.Value)
-		}
-	}
-	return fm.InternalPredict(indices, values)
+	panic("Predict is unsupported for deep learning models")
 }
 
 func (fm *DeepFM) InternalPredict(indices []int32, values []float32) float32 {
 	panic("InternalPredict is unsupported for deep learning models")
 }
 
-func (fm *DeepFM) BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
+func (fm *DeepFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
 	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
@@ -177,6 +149,37 @@ func (fm *DeepFM) BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
 		fm.vm.Reset()
 	}
 	return predictions[:len(x)]
+}
+
+func (fm *DeepFM) BatchPredict(inputs []lo.Tuple4[string, string, []Feature, []Feature]) []float32 {
+	x := make([]lo.Tuple2[[]int32, []float32], len(inputs))
+	for i, input := range inputs {
+		// encode user
+		if userIndex := fm.Index.EncodeUser(input.A); userIndex != base.NotId {
+			x[i].A = append(x[i].A, userIndex)
+			x[i].B = append(x[i].B, 1)
+		}
+		// encode item
+		if itemIndex := fm.Index.EncodeItem(input.B); itemIndex != base.NotId {
+			x[i].A = append(x[i].A, itemIndex)
+			x[i].B = append(x[i].B, 1)
+		}
+		// encode user labels
+		for _, userFeature := range input.C {
+			if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != base.NotId {
+				x[i].A = append(x[i].A, userFeatureIndex)
+				x[i].B = append(x[i].B, userFeature.Value)
+			}
+		}
+		// encode item labels
+		for _, itemFeature := range input.D {
+			if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != base.NotId {
+				x[i].A = append(x[i].A, itemFeatureIndex)
+				x[i].B = append(x[i].B, itemFeature.Value)
+			}
+		}
+	}
+	return fm.BatchInternalPredict(x)
 }
 
 func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
