@@ -127,6 +127,8 @@ jobs:
 
     - name: Build the stack
       run: docker-compose -f client/docker-compose.yml --project-directory . up -d
+      env:
+        DOCKER_BUILDKIT: 1
 
     - name: Check the deployed service URL
       uses: jtalk/url-health-check-action@v2
