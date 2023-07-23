@@ -125,10 +125,13 @@ services:
       - redis
       {% if database == 'mysql' %}
       - mysql
+        condition: service_healthy
       {% elif database == 'postgres' %}
       - postgres
+        condition: service_healthy
       {% elif database == 'mongo' %}
       - mongo
+        condition: service_healthy
       {% endif %}
 
 volumes:
