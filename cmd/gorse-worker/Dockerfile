@@ -5,11 +5,11 @@ FROM golang:1.20
 
 WORKDIR /src
 
-COPY go.* .
+COPY go.* ./
 
 RUN go mod download
 
-COPY . .
+COPY . ./
 
 RUN cd gorse/cmd/gorse-worker && \
     CGO_ENABLED=0 go build -ldflags=" \
@@ -17,7 +17,7 @@ RUN cd gorse/cmd/gorse-worker && \
        -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
        -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" .
 
-RUN /src/gorse/cmd/gorse-worker/gorse-worker --version
+RUN /src/cmd/gorse-worker/gorse-worker --version
 
 ############################
 # STEP 2 build a small image
@@ -26,7 +26,7 @@ FROM scratch
 
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=0 /src/gorse/cmd/gorse-worker/gorse-worker /usr/bin/gorse-worker
+COPY --from=0 /src/cmd/gorse-worker/gorse-worker /usr/bin/gorse-worker
 
 ENV USER root
 

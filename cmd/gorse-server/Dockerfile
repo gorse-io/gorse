@@ -5,11 +5,11 @@ FROM golang:1.20
 
 WORKDIR /src
 
-COPY go.* .
+COPY go.* ./
 
 RUN go mod download
 
-COPY . .
+COPY . ./
 
 RUN cd cmd/gorse-server && \
     CGO_ENABLED=0 go build -ldflags=" \
