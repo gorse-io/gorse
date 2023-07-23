@@ -5,6 +5,11 @@ services:
     restart: unless-stopped
     ports:
       - 6379:6379
+    healthcheck:
+      test: redis-cli ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% if database == 'mysql' %}
 
@@ -20,6 +25,11 @@ services:
       MYSQL_PASSWORD: gorse_pass
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: mysqladmin ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% elif database == 'postgres' %}
 
@@ -31,6 +41,11 @@ services:
       POSTGRES_DB: gorse
       POSTGRES_USER: gorse
       POSTGRES_PASSWORD: gorse_pass
+    healthcheck:
+      test: pg_isready
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% elif database == 'mongo' %}
 
@@ -42,6 +57,11 @@ services:
       MONGO_INITDB_DATABASE: gorse
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
+    healthcheck:
+      test: mongo
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% endif %}
 
@@ -107,13 +127,17 @@ services:
       - gorse_log:/var/log/gorse
       - master_data:/var/lib/gorse
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
       {% if database == 'mysql' %}
-      - mysql
+      mysql:
+        condition: service_healthy
       {% elif database == 'postgres' %}
-      - postgres
+      postgres:
+        condition: service_healthy
       {% elif database == 'mongo' %}
-      - mongo
+      mongo:
+        condition: service_healthy
       {% endif %}
 
 volumes:

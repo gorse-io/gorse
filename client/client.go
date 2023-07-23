@@ -92,8 +92,6 @@ func (c *GorseClient) ListFeedbacks(ctx context.Context, feedbackType, userId st
 	return request[[]Feedback, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/user/%s/feedback/%s", userId, feedbackType), nil)
 }
 
-//////
-
 func (c *GorseClient) GetItemLatest(ctx context.Context, userid string, n, offset int) ([]Score, error) {
 	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/latest?user-id=%s&n=%d&offset=%d", userid, n, offset), nil)
 }
@@ -110,16 +108,20 @@ func (c *GorseClient) GetItemPopularWithCategory(ctx context.Context, userid, ca
 	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/popular/%s?user-id=%s&n=%d&offset=%d", category, userid, n, offset), nil)
 }
 
-func (c *GorseClient) GetItemRecommend(ctx context.Context, userId string, writeBackType, writeBackDelay string, n, offset int) ([]string, error) {
-	return request[[]string, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s?write-back-type=%s&write-back-delay=%s&n=%d&offset=%d", userId, writeBackType, writeBackDelay, n, offset), nil)
+func (c *GorseClient) GetItemRecommend(ctx context.Context, userId string, categories []string, writeBackType, writeBackDelay string, n, offset int) ([]string, error) {
+	var queryCategories string
+	if len(categories) > 0 {
+		queryCategories = "&category=" + strings.Join(categories, "&category=")
+	}
+	return request[[]string, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s?write-back-type=%s&write-back-delay=%s&n=%d&offset=%d%s", userId, writeBackType, writeBackDelay, n, offset, queryCategories), nil)
 }
 
-func (c *GorseClient) GetItemRecommendWithCategory(ctx context.Context, userId string, category, writeBackType, writeBackDelay string, n, offset int) ([]string, error) {
+func (c *GorseClient) GetItemRecommendWithCategory(ctx context.Context, userId, category, writeBackType, writeBackDelay string, n, offset int) ([]string, error) {
 	return request[[]string, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s/%s?write-back-type=%s&write-back-delay=%s&n=%d&offset=%d", userId, category, writeBackType, writeBackDelay, n, offset), nil)
 }
 
 // Deprecated: GetItemRecommendWithCategory instead
-func (c *GorseClient) GetRecommend(ctx context.Context, userId string, category string, n int) ([]string, error) {
+func (c *GorseClient) GetRecommend(ctx context.Context, userId, category string, n int) ([]string, error) {
 	return request[[]string, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/recommend/%s/%s?n=%d", userId, category, n), nil)
 }
 
