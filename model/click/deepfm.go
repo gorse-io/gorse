@@ -15,6 +15,7 @@
 package click
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"time"
@@ -22,8 +23,10 @@ import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/uuid"
+	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model"
@@ -65,13 +68,15 @@ type DeepFM struct {
 	v           [][]float32
 	w           []float32
 	w0          [][]float32
-	m_v         [][]float32
-	m_w         []float32
-	m_w0        [][]float32
-	v_v         [][]float32
-	v_w         []float32
-	v_w0        [][]float32
-	t           int
+
+	// Adam optimizer variables
+	m_v  [][]float32
+	m_w  []float32
+	m_w0 [][]float32
+	v_v  [][]float32
+	v_w  []float32
+	v_w0 [][]float32
+	t    int
 
 	// Hyper parameters
 	batchSize    int
@@ -84,7 +89,7 @@ type DeepFM struct {
 	hiddenLayers []int
 }
 
-func NewDeepFM(params model.Params) FactorizationMachine {
+func NewDeepFM(params model.Params) *DeepFM {
 	fm := new(DeepFM)
 	fm.g = gorgonia.NewGraph()
 	fm.SetParams(params)
@@ -298,6 +303,57 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 }
 
 func (fm *DeepFM) Marshal(w io.Writer) error {
+	// write params
+	if err := encoding.WriteGob(w, fm.Params); err != nil {
+		return errors.Trace(err)
+	}
+	// write index
+	if err := fm.Index.Marshal(w); err != nil {
+		return errors.Trace(err)
+	}
+	// write weights
+	if err := encoding.WriteGob(w, fm.v); err != nil {
+		return errors.Trace(err)
+	}
+	if err := binary.Write(w, binary.LittleEndian, fm.w); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.w0); err != nil {
+		return errors.Trace(err)
+	}
+	for _, node := range fm.learnables {
+		if err := binary.Write(w, binary.LittleEndian, node.Value().Data()); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+func (fm *DeepFM) Unmarshal(r io.Reader) error {
+	// read params
+	if err := encoding.ReadGob(r, &fm.Params); err != nil {
+		return errors.Trace(err)
+	}
+	fm.SetParams(fm.Params)
+	// read index
+	if err := fm.Index.Unmarshal(r); err != nil {
+		return errors.Trace(err)
+	}
+	// read weights
+	if err := encoding.ReadGob(r, &fm.v); err != nil {
+		return errors.Trace(err)
+	}
+	if err := binary.Read(r, binary.LittleEndian, &fm.w); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &fm.w0); err != nil {
+		return errors.Trace(err)
+	}
+	for _, node := range fm.learnables {
+		if err := binary.Read(r, binary.LittleEndian, node.Value().Data()); err != nil {
+			return errors.Trace(err)
+		}
+	}
 	return nil
 }
 
@@ -383,9 +439,11 @@ func (fm *DeepFM) embedding(indices tensor.View) (v, w, w0 *tensor.Dense) {
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := lo.Must1(indices.At(i, j)).(float32)
-			copy(dataV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors], fm.v[int(index)])
-			dataW[i*numDimension+j] = fm.w[int(index)]
-			copy(dataW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]], fm.w0[int(index)])
+			if index >= 0 && index < float32(fm.numFeatures) {
+				copy(dataV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors], fm.v[int(index)])
+				dataW[i*numDimension+j] = fm.w[int(index)]
+				copy(dataW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]], fm.w0[int(index)])
+			}
 		}
 	}
 
@@ -413,15 +471,17 @@ func (fm *DeepFM) backward(indices tensor.View) {
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := int(lo.Must1(indices.At(i, j)).(float32))
-			if !indexSet.Contains(index) {
-				indexSet.Add(index)
-				gradV[index] = make([]float32, fm.nFactors)
-				gradW0[index] = make([]float32, fm.nFactors*fm.hiddenLayers[0])
-			}
+			if index >= 0 && index < fm.numFeatures {
+				if !indexSet.Contains(index) {
+					indexSet.Add(index)
+					gradV[index] = make([]float32, fm.nFactors)
+					gradW0[index] = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+				}
 
-			floats.Add(gradV[index], gradEmbeddingV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors])
-			gradW[index] += gradEmbeddingW[i*numDimension+j]
-			floats.Add(gradW0[index], gradEmbeddingW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]])
+				floats.Add(gradV[index], gradEmbeddingV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors])
+				gradW[index] += gradEmbeddingW[i*numDimension+j]
+				floats.Add(gradW0[index], gradEmbeddingW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]])
+			}
 		}
 	}
 

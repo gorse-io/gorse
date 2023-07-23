@@ -124,6 +124,7 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
+	assert.False(t, m.Invalid())
 	m.Clear()
 	assert.True(t, m.Invalid())
 }
