@@ -11,7 +11,7 @@ RUN go mod download
 
 COPY . ./
 
-RUN cd gorse/cmd/gorse-worker && \
+RUN cd cmd/gorse-worker && \
     CGO_ENABLED=0 go build -ldflags=" \
        -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
        -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
