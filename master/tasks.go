@@ -293,7 +293,7 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindItemNeighbors, len(dataset.UserFeedback))
 	}
 	labeledItems := make([][]int32, dataset.NumItemLabels)
-	labelIDF := make([]float32, dataset.NumItemLabels)
+	labelWeights := make([]float32, dataset.NumItemLabels)
 	if t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
 		for i, itemLabels := range dataset.ItemFeatures {
@@ -309,9 +309,9 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 		for i := range labeledItems {
 			labeledItems[i] = lo.Uniq(labeledItems[i])
 			if dataset.ItemCount() == len(labeledItems[i]) {
-				labelIDF[i] = 1
+				labelWeights[i] = 1
 			} else {
-				labelIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
+				labelWeights[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
 			}
 		}
 		t.taskMonitor.Add(TaskFindItemNeighbors, len(labeledItems))
@@ -320,9 +320,9 @@ func (t *FindItemNeighborsTask) run(j *task.JobsAllocator) error {
 	start := time.Now()
 	var err error
 	if t.Config.Recommend.ItemNeighbors.EnableIndex {
-		err = t.findItemNeighborsIVF(dataset, labelIDF, userIDF, completed, j)
+		err = t.findItemNeighborsIVF(dataset, labelWeights, userIDF, completed, j)
 	} else {
-		err = t.findItemNeighborsBruteForce(dataset, labeledItems, labelIDF, userIDF, completed, j)
+		err = t.findItemNeighborsBruteForce(dataset, labeledItems, labelWeights, userIDF, completed, j)
 	}
 	searchTime := time.Since(start)
 
@@ -645,7 +645,7 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 		t.taskMonitor.Add(TaskFindUserNeighbors, len(dataset.ItemFeedback))
 	}
 	labeledUsers := make([][]int32, dataset.NumUserLabels)
-	labelIDF := make([]float32, dataset.NumUserLabels)
+	labelWeights := make([]float32, dataset.NumUserLabels)
 	if t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
 		t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
 		for i, userLabels := range dataset.UserFeatures {
@@ -661,9 +661,9 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 		for i := range labeledUsers {
 			labeledUsers[i] = lo.Uniq(labeledUsers[i])
 			if dataset.UserCount() == len(labeledUsers[i]) {
-				labelIDF[i] = 1
+				labelWeights[i] = 1
 			} else {
-				labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
+				labelWeights[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
 			}
 		}
 		t.taskMonitor.Add(TaskFindUserNeighbors, len(labeledUsers))
@@ -672,9 +672,9 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 	start := time.Now()
 	var err error
 	if t.Config.Recommend.UserNeighbors.EnableIndex {
-		err = t.findUserNeighborsIVF(dataset, labelIDF, itemIDF, completed, j)
+		err = t.findUserNeighborsIVF(dataset, labelWeights, itemIDF, completed, j)
 	} else {
-		err = t.findUserNeighborsBruteForce(dataset, labeledUsers, labelIDF, itemIDF, completed, j)
+		err = t.findUserNeighborsBruteForce(dataset, labeledUsers, labelWeights, itemIDF, completed, j)
 	}
 	searchTime := time.Since(start)
 
@@ -698,7 +698,7 @@ func (t *FindUserNeighborsTask) run(j *task.JobsAllocator) error {
 	return nil
 }
 
-func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
+func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelWeights, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateUserCount     atomic.Float64
 		findNeighborSeconds atomic.Float64
@@ -711,7 +711,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 		vectors = NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
 			indices, _ := lo.Unzip2(features)
 			return indices
-		}), labeledUsers, labelIDF)
+		}), labeledUsers, labelWeights)
 	case config.NeighborTypeRelated:
 		vectors = NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF)
 	case config.NeighborTypeAuto:
@@ -719,7 +719,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 			NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
 				indices, _ := lo.Unzip2(features)
 				return indices
-			}), labeledUsers, labelIDF),
+			}), labeledUsers, labelWeights),
 			NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF))
 	default:
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
@@ -783,7 +783,7 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 	return nil
 }
 
-func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
+func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelWeights, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateUserCount     atomic.Float64
 		buildIndexSeconds   atomic.Float64
@@ -798,7 +798,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 	case config.NeighborTypeSimilar:
 		vectors = lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) search.Vector {
 			indices, _ := lo.Unzip2(features)
-			return search.NewDictionaryVector(indices, labelIDF, nil, false)
+			return search.NewDictionaryVector(indices, labelWeights, nil, false)
 		})
 	case config.NeighborTypeRelated:
 		vectors = lo.Map(dataset.UserFeedback, func(indices []int32, _ int) search.Vector {
@@ -808,7 +808,7 @@ func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemID
 		vectors = make([]search.Vector, dataset.UserCount())
 		for i := range vectors {
 			indices, _ := lo.Unzip2(dataset.UserFeatures[i])
-			vectors[i] = NewDualDictionaryVector(indices, labelIDF, dataset.UserFeedback[i], itemIDF, nil, false)
+			vectors[i] = NewDualDictionaryVector(indices, labelWeights, dataset.UserFeedback[i], itemIDF, nil, false)
 		}
 	default:
 		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
