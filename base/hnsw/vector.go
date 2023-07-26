@@ -20,6 +20,39 @@ type Vector interface {
 	Euclidean(vec Vector) float32
 }
 
+type Result struct {
+	Index    int32
+	Distance float32
+}
+
+type DenseVector struct {
+	Data []float32
+}
+
+func NewDenseVector(data []float32) Vector {
+	return &DenseVector{
+		Data: data,
+	}
+}
+
+func (v DenseVector) Euclidean(vec Vector) float32 {
+	// check type
+	dense, ok := vec.(*DenseVector)
+	if !ok {
+		panic("dense vector can only compare with dense vector")
+	}
+	// check length
+	if len(v.Data) != len(dense.Data) {
+		panic("dense vector must have the same length")
+	}
+	// calculate distance
+	var sum float32
+	for i := range v.Data {
+		sum += (v.Data[i] - dense.Data[i]) * (v.Data[i] - dense.Data[i])
+	}
+	return sum
+}
+
 type SparseVector struct {
 	indices []int32
 	values  []float32
@@ -55,7 +88,8 @@ func (v SparseVector) Euclidean(vec Vector) float32 {
 	}
 	// calculate distance
 	var sum float32
-	for i, j := 0, 0; i < len(v.indices) && j < len(sparse.indices); {
+	i, j := 0, 0
+	for i < len(v.indices) && j < len(sparse.indices) {
 		if v.indices[i] == sparse.indices[j] {
 			sum += (v.values[i] - sparse.values[j]) * (v.values[i] - sparse.values[j])
 			i++
@@ -67,6 +101,12 @@ func (v SparseVector) Euclidean(vec Vector) float32 {
 			sum += sparse.values[j] * sparse.values[j]
 			j++
 		}
+	}
+	for ; i < len(v.indices); i++ {
+		sum += v.values[i] * v.values[i]
+	}
+	for ; j < len(sparse.indices); j++ {
+		sum += sparse.values[j] * sparse.values[j]
 	}
 	return sum
 }

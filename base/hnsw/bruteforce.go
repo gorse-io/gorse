@@ -20,34 +20,33 @@ type Bruteforce struct {
 	vectors []Vector
 }
 
-// Build a vector index on data.
-func (b *Bruteforce) Build() {}
-
-// NewBruteforce creates a Bruteforce vector index.
-func NewBruteforce(vectors []Vector) *Bruteforce {
-	return &Bruteforce{
-		vectors: vectors,
-	}
+func NewBruteforce() *Bruteforce {
+	return &Bruteforce{}
 }
 
-// Search top-k similar vectors.
-func (b *Bruteforce) Search(q Vector, n int, prune0 bool) (values []int32, scores []float32) {
+func (b *Bruteforce) Add(vectors ...Vector) {
+	b.vectors = append(b.vectors, vectors...)
+}
+
+// Search returns the nearest neighbors of q.
+func (b *Bruteforce) Search(q Vector, n int) []Result {
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
 		if vec != q {
-			pq.Push(int32(i), q.Distance(vec))
+			pq.Push(int32(i), q.Euclidean(vec))
 			if pq.Len() > n {
 				pq.Pop()
 			}
 		}
 	}
 	pq = pq.Reverse()
+	var results []Result
 	for pq.Len() > 0 {
 		value, score := pq.Pop()
-		if !prune0 || score < 0 {
-			values = append(values, value)
-			scores = append(scores, score)
-		}
+		results = append(results, Result{
+			Index:    value,
+			Distance: score,
+		})
 	}
-	return
+	return results
 }

@@ -14,8 +14,32 @@
 
 package hnsw
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestDenseVector_Euclidean(t *testing.T) {
+	a := NewDenseVector([]float32{1, 2, 3})
+	b := NewDenseVector([]float32{1, 4, 9})
+	assert.Equal(t, float32(40), a.Euclidean(b))
+
+	a = NewDenseVector([]float32{1, 2, 3, 4})
+	b = NewDenseVector([]float32{1, 2, 3, 4, 5})
+	assert.Panics(t, func() { a.Euclidean(b) })
+}
 
 func TestSparseVector_Euclidean(t *testing.T) {
+	a := NewSparseVector([]int32{1, 2, 3}, []float32{1, 2, 3})
+	b := NewSparseVector([]int32{1, 2, 3}, []float32{1, 4, 9})
+	assert.Equal(t, float32(40), a.Euclidean(b))
 
+	a = NewSparseVector([]int32{1, 2, 4, 5}, []float32{1, 2, 3, 4})
+	b = NewSparseVector([]int32{1, 2, 3, 5, 6}, []float32{1, 2, 3, 4, 5})
+	assert.Equal(t, float32(43), a.Euclidean(b))
+
+	a = NewSparseVector([]int32{1, 2, 3, 5, 6}, []float32{1, 2, 3, 4, 5})
+	b = NewSparseVector([]int32{1, 2, 4, 5}, []float32{1, 2, 3, 4})
+	assert.Equal(t, float32(43), a.Euclidean(b))
 }
