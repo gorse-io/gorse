@@ -28,6 +28,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/hnsw"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/search"
@@ -354,71 +355,74 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		findNeighborSeconds atomic.Float64
 	)
 
-	var vector VectorsInterface
-	switch m.Config.Recommend.ItemNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		vector = NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-			indices, _ := lo.Unzip2(features)
-			return indices
-		}), labeledItems, labelIDF)
-	case config.NeighborTypeRelated:
-		vector = NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF)
-	case config.NeighborTypeAuto:
-		vector = NewDualVectors(
-			NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-				indices, _ := lo.Unzip2(features)
-				return indices
-			}), labeledItems, labelIDF),
-			NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF))
-	default:
-		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
+	vectors := make([]hnsw.Vector, dataset.ItemCount())
+	for i := range vectors {
+		switch m.Config.Recommend.ItemNeighbors.NeighborType {
+		case config.NeighborTypeSimilar:
+			indices := make([]int32, len(dataset.ItemFeatures[i]))
+			values := make([]float32, len(dataset.ItemFeatures[i]))
+			for j, label := range dataset.ItemFeatures[i] {
+				indices[j] = label.A
+				values[j] = label.B
+			}
+			vectors[i] = hnsw.NewSparseVector(indices, values)
+		case config.NeighborTypeRelated:
+			indices := make([]int32, len(dataset.ItemFeedback[i]))
+			values := make([]float32, len(dataset.ItemFeedback[i]))
+			for j, feedback := range dataset.ItemFeedback[i] {
+				indices[j] = feedback
+				values[j] = 1
+			}
+			vectors[i] = hnsw.NewSparseVector(indices, values)
+		case config.NeighborTypeAuto:
+			indices := make([]int32, len(dataset.ItemFeatures[i])+len(dataset.ItemFeedback[i]))
+			values := make([]float32, len(dataset.ItemFeatures[i])+len(dataset.ItemFeedback[i]))
+			for j, label := range dataset.ItemFeatures[i] {
+				indices[j] = label.A
+				values[j] = label.B
+			}
+			for j, feedback := range dataset.ItemFeedback[i] {
+				indices[j+len(dataset.ItemFeatures[i])] = feedback
+				values[j+len(dataset.ItemFeatures[i])] = 1
+			}
+			vectors[i] = hnsw.NewSparseVector(indices, values)
+		default:
+			return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
+		}
 	}
+	bf := hnsw.NewBruteforce()
+	bf.Add(vectors...)
 
 	err := parallel.DynamicParallel(dataset.ItemCount(), j, func(workerId, itemIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
-		startSearchTime := time.Now()
+		startTime := time.Now()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
 			return nil
 		}
 		updateItemCount.Add(1)
-		startTime := time.Now()
-		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float64])
-		nearItemsFilters[""] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
-		for _, category := range dataset.CategorySet.ToSlice() {
-			nearItemsFilters[category] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
-		}
 
-		adjacencyItems := vector.Neighbors(itemIndex)
-		for _, j := range adjacencyItems {
-			if j != int32(itemIndex) && !dataset.HiddenItems[j] {
-				score := vector.Distance(itemIndex, int(j))
-				if score > 0 {
-					nearItemsFilters[""].Push(j, float64(score))
-					for _, category := range dataset.ItemCategories[j] {
-						nearItemsFilters[category].Push(j, float64(score))
-					}
-				}
+		results := bf.Search(vectors[itemIndex], m.Config.Recommend.CacheSize)
+		documents := make([]cache.Document, 0)
+		for _, result := range results {
+			if uint32(result.Index) != uint32(itemIndex) {
+				documents = append(documents, cache.Document{
+					Id:         dataset.ItemIndex.ToName(int32(result.Index)),
+					Score:      float64(-result.Distance),
+					Categories: append([]string{""}, dataset.ItemCategories[result.Index]...),
+					Timestamp:  startTime,
+				})
 			}
 		}
 
-		aggregator := cache.NewDocumentAggregator(startSearchTime)
-		for category, nearItemsFilter := range nearItemsFilters {
-			elem, scores := nearItemsFilter.PopAll()
-			recommends := make([]string, len(elem))
-			for i := range recommends {
-				recommends[i] = dataset.ItemIndex.ToName(elem[i])
-			}
-			aggregator.Add(category, recommends, scores)
-		}
-		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, documents); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
 			Subset: proto.String(itemId),
-			Before: &aggregator.Timestamp,
+			Before: &startTime,
 		}); err != nil {
 			return errors.Trace(err)
 		}
@@ -705,62 +709,73 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 	)
 	ctx := context.Background()
 
-	var vectors VectorsInterface
-	switch m.Config.Recommend.UserNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		vectors = NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-			indices, _ := lo.Unzip2(features)
-			return indices
-		}), labeledUsers, labelWeights)
-	case config.NeighborTypeRelated:
-		vectors = NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF)
-	case config.NeighborTypeAuto:
-		vectors = NewDualVectors(
-			NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-				indices, _ := lo.Unzip2(features)
-				return indices
-			}), labeledUsers, labelWeights),
-			NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF))
-	default:
-		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
+	vectors := make([]hnsw.Vector, dataset.UserCount())
+	for i := range vectors {
+		switch m.Config.Recommend.UserNeighbors.NeighborType {
+		case config.NeighborTypeSimilar:
+			indices := make([]int32, len(dataset.UserFeatures[i]))
+			values := make([]float32, len(dataset.UserFeatures[i]))
+			for j, label := range dataset.UserFeatures[i] {
+				indices[j] = label.A
+				values[j] = label.B
+			}
+			vectors[i] = hnsw.NewSparseVector(indices, values)
+		case config.NeighborTypeRelated:
+			indices := make([]int32, len(dataset.UserFeedback[i]))
+			values := make([]float32, len(dataset.UserFeedback[i]))
+			for j, feedback := range dataset.UserFeedback[i] {
+				indices[j] = feedback
+				values[j] = 1
+			}
+		case config.NeighborTypeAuto:
+			indices := make([]int32, len(dataset.UserFeatures[i])+len(dataset.UserFeedback[i]))
+			values := make([]float32, len(dataset.UserFeatures[i])+len(dataset.UserFeedback[i]))
+			for j, label := range dataset.UserFeatures[i] {
+				indices[j] = label.A
+				values[j] = label.B
+			}
+			for j, feedback := range dataset.UserFeedback[i] {
+				indices[j+len(dataset.UserFeatures[i])] = feedback
+				values[j+len(dataset.UserFeatures[i])] = 1
+			}
+			vectors[i] = hnsw.NewSparseVector(indices, values)
+		default:
+			return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
+		}
 	}
+	bf := hnsw.NewBruteforce()
+	bf.Add(vectors...)
 
 	err := parallel.DynamicParallel(dataset.UserCount(), j, func(workerId, userIndex int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
-		startSearchTime := time.Now()
+		startTime := time.Now()
 		userId := dataset.UserIndex.ToName(int32(userIndex))
 		if !m.checkUserNeighborCacheTimeout(userId) {
 			return nil
 		}
 		updateUserCount.Add(1)
-		startTime := time.Now()
-		nearUsers := heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
 
-		adjacencyUsers := vectors.Neighbors(userIndex)
-		for _, j := range adjacencyUsers {
-			if j != int32(userIndex) {
-				score := vectors.Distance(userIndex, int(j))
-				if score > 0 {
-					nearUsers.Push(j, float64(score))
-				}
+		results := bf.Search(vectors[userIndex], m.Config.Recommend.CacheSize)
+		documents := make([]cache.Document, 0)
+		for _, result := range results {
+			if uint32(result.Index) != uint32(userIndex) {
+				documents = append(documents, cache.Document{
+					Id:         dataset.UserIndex.ToName(int32(result.Index)),
+					Score:      float64(-result.Distance),
+					Categories: []string{""},
+					Timestamp:  startTime,
+				})
 			}
 		}
 
-		elem, scores := nearUsers.PopAll()
-		recommends := make([]string, len(elem))
-		for i := range recommends {
-			recommends[i] = dataset.UserIndex.ToName(elem[i])
-		}
-		aggregator := cache.NewDocumentAggregator(startSearchTime)
-		aggregator.Add("", recommends, scores)
-		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()); err != nil {
+		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, documents); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
 			Subset: proto.String(userId),
-			Before: &aggregator.Timestamp,
+			Before: &startTime,
 		}); err != nil {
 			return errors.Trace(err)
 		}
