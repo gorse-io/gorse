@@ -20,6 +20,11 @@ type Vector interface {
 	Euclidean(vec Vector) float32
 }
 
+type VectorIndex interface {
+	Add(vectors ...Vector)
+	Search(q Vector, n int) []Result
+}
+
 type Result struct {
 	Index    int32
 	Distance float32
