@@ -15,6 +15,7 @@
 package click
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,6 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 		model.Reg:        0.0001,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
-	score := m.Fit(train, test, fitConfig)
+	score := m.Fit(context.Background(), train, test, fitConfig)
 	assert.InDelta(t, 0.9271656, score.Accuracy, classificationDelta)
 }

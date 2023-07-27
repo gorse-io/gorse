@@ -47,7 +47,6 @@ type FitConfig struct {
 	Verbose    int
 	Candidates int
 	TopK       int
-	Task       *task.Task
 }
 
 func NewFitConfig() *FitConfig {
@@ -65,11 +64,6 @@ func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
 
 func (config *FitConfig) SetJobsAllocator(allocator *task.JobsAllocator) *FitConfig {
 	config.JobsAllocator = allocator
-	return config
-}
-
-func (config *FitConfig) SetTask(t *task.Task) *FitConfig {
-	config.Task = t
 	return config
 }
 
@@ -421,7 +415,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	}
 	snapshots := SnapshotManger{}
 	evalStart := time.Now()
-	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
+	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
 	log.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", 0, bpr.nEpochs),
 		zap.String("eval_time", evalTime.String()),
@@ -433,7 +427,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
-		numJobs := config.AvailableJobs(config.Task)
+		numJobs := config.AvailableJobs()
 		cost := make([]float32, numJobs)
 		_ = parallel.Parallel(trainSet.Count(), numJobs, func(workerId, _ int) error {
 			// Select a user
@@ -482,7 +476,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Cross validation
 		if epoch%config.Verbose == 0 || epoch == bpr.nEpochs {
 			evalStart = time.Now()
-			scores = Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
+			scores = Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
 			log.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
 				zap.String("fit_time", fitTime.String()),
@@ -492,7 +486,6 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
-		config.Task.Add(1)
 	}
 	// restore best snapshot
 	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
@@ -739,7 +732,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 	// evaluate initial model
 	snapshots := SnapshotManger{}
 	evalStart := time.Now()
-	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
+	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
 	log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", 0, ccd.nEpochs),
 		zap.String("eval_time", evalTime.String()),
@@ -761,7 +754,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 		}
-		_ = parallel.Parallel(trainSet.UserCount(), config.AvailableJobs(config.Task), func(workerId, userIndex int) error {
+		_ = parallel.Parallel(trainSet.UserCount(), config.AvailableJobs(), func(workerId, userIndex int) error {
 			userFeedback := trainSet.UserFeedback[userIndex]
 			for _, i := range userFeedback {
 				userPredictions[workerId][i] = ccd.InternalPredict(int32(userIndex), i)
@@ -802,7 +795,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				}
 			}
 		}
-		_ = parallel.Parallel(trainSet.ItemCount(), config.AvailableJobs(config.Task), func(workerId, itemIndex int) error {
+		_ = parallel.Parallel(trainSet.ItemCount(), config.AvailableJobs(), func(workerId, itemIndex int) error {
 			itemFeedback := trainSet.ItemFeedback[itemIndex]
 			for _, u := range itemFeedback {
 				itemPredictions[workerId][u] = ccd.InternalPredict(u, int32(itemIndex))
@@ -835,7 +828,7 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		// Cross validation
 		if ep%config.Verbose == 0 || ep == ccd.nEpochs {
 			evalStart = time.Now()
-			scores = Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(config.Task), NDCG, Precision, Recall)
+			scores = Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
 			log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
 				zap.String("fit_time", fitTime.String()),
@@ -845,7 +838,6 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
-		config.Task.Add(1)
 	}
 	// restore best snapshot
 	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
