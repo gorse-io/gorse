@@ -15,6 +15,7 @@
 package ranking
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -31,6 +32,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -77,7 +79,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 type Model interface {
 	model.Model
 	// Fit a model with a train set and parameters.
-	Fit(trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score
+	Fit(ctx context.Context, trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score
 	// GetItemIndex returns item index.
 	GetItemIndex() base.Index
 	// Marshal model into byte stream.
@@ -110,8 +112,6 @@ type MatrixFactorization interface {
 	Unmarshal(r io.Reader) error
 	// Bytes returns used memory.
 	Bytes() int
-	// Complexity returns the complexity of the model.
-	Complexity() int
 }
 
 type BaseMatrixFactorization struct {
@@ -335,10 +335,6 @@ func (bpr *BPR) GetItemFactor(itemIndex int32) []float32 {
 	return bpr.ItemFactor[itemIndex]
 }
 
-func (bpr *BPR) Complexity() int {
-	return bpr.nEpochs
-}
-
 // SetParams sets hyper-parameters of the BPR model.
 func (bpr *BPR) SetParams(params model.Params) {
 	bpr.BaseMatrixFactorization.SetParams(params)
@@ -387,7 +383,7 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int32) float32 {
 }
 
 // Fit the BPR model. Its task complexity is O(bpr.nEpochs).
-func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
+func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit bpr",
 		zap.Int("train_set_size", trainSet.Count()),
@@ -424,6 +420,7 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 	snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 	// Training
+	_, span := progress.Start(ctx, "BPR.Fit", bpr.nEpochs)
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
@@ -486,7 +483,9 @@ func (bpr *BPR) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
+		span.Add(1)
 	}
+	span.End()
 	// restore best snapshot
 	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
 	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
@@ -613,10 +612,6 @@ func (ccd *CCD) GetItemFactor(itemIndex int32) []float32 {
 	return ccd.ItemFactor[itemIndex]
 }
 
-func (ccd *CCD) Complexity() int {
-	return ccd.nEpochs
-}
-
 // SetParams sets hyper-parameters for the ALS model.
 func (ccd *CCD) SetParams(params model.Params) {
 	ccd.BaseMatrixFactorization.SetParams(params)
@@ -708,7 +703,7 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 }
 
 // Fit the CCD model. Its task complexity is O(ccd.nEpochs).
-func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
+func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit ccd",
 		zap.Int("train_set_size", trainSet.Count()),
@@ -740,6 +735,8 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 	snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
+
+	_, span := progress.Start(ctx, "CCD.Fit", ccd.nEpochs)
 	for ep := 1; ep <= ccd.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Update user factors
@@ -838,7 +835,10 @@ func (ccd *CCD) Fit(trainSet, valSet *DataSet, config *FitConfig) Score {
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
+		span.Add(1)
 	}
+	span.End()
+
 	// restore best snapshot
 	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
 	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
