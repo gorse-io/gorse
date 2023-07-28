@@ -58,10 +58,11 @@ type Master struct {
 	server.RestServer
 	grpcServer *grpc.Server
 
-	tracer        progress.Tracer
-	jobsScheduler *task.JobsScheduler
-	cacheFile     string
-	managedMode   bool
+	tracer         *progress.Tracer
+	remoteProgress sync.Map
+	jobsScheduler  *task.JobsScheduler
+	cacheFile      string
+	managedMode    bool
 
 	// cluster meta cache
 	ttlCache       *ttlcache.Cache

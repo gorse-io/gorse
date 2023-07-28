@@ -17,32 +17,50 @@ package progress
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
 
-var spanKey = uuid.New().String()
+type spanKeyType string
+
+var spanKeyName = spanKeyType(uuid.New().String())
+
+type Status string
+
+const (
+	StatusPending   Status = "Pending"
+	StatusComplete  Status = "Complete"
+	StatusRunning   Status = "Running"
+	StatusSuspended Status = "Suspended"
+	StatusFailed    Status = "Failed"
+)
 
 type Tracer struct {
+	name  string
 	spans sync.Map
 }
 
+func NewTracer(name string) *Tracer {
+	return &Tracer{name: name}
+}
+
 // Start creates a root span.
-func (t *Tracer) Start(ctx context.Context, name string, total int64) (context.Context, *Span) {
+func (t *Tracer) Start(ctx context.Context, name string, total int) (context.Context, *Span) {
 	span := &Span{name: name, total: total}
 	t.spans.Store(name, span)
-	return context.WithValue(ctx, spanKey, span), span
+	return context.WithValue(ctx, spanKeyName, span), span
 }
 
 func (t *Tracer) List() []Progress {
 	var progress []Progress
 	t.spans.Range(func(key, value interface{}) bool {
-		span := value.(*Span)
-		progress = append(progress, Progress{
-			Name:  span.name,
-			Total: span.total,
-			Count: span.count,
-		})
+		// span := value.(*Span)
+		// progress = append(progress, Progress{
+		// 	Name:  span.name,
+		// 	Total: span.total,
+		// 	Count: span.count,
+		// })
 		return true
 	})
 	return progress
@@ -50,13 +68,16 @@ func (t *Tracer) List() []Progress {
 
 type Span struct {
 	name     string
-	total    int64
-	count    int64
+	status   Status
+	total    int
+	count    int
 	err      error
+	start    time.Time
+	finish   time.Time
 	children sync.Map
 }
 
-func (s *Span) Add(n int64) {
+func (s *Span) Add(n int) {
 	s.count += n
 }
 
@@ -68,21 +89,36 @@ func (s *Span) Error(err error) {
 	s.err = err
 }
 
-func Start(ctx context.Context, name string, total int64) (context.Context, *Span) {
-	childSpan := &Span{name: name, total: total}
+func (s *Span) Count() int {
+	return s.count
+}
+
+func Start(ctx context.Context, name string, total int) (context.Context, *Span) {
+	childSpan := &Span{
+		name:   name,
+		status: StatusRunning,
+		total:  total,
+		count:  0,
+		start:  time.Now(),
+	}
 	if ctx == nil {
 		return nil, childSpan
 	}
-	span, ok := (ctx).Value(spanKey).(*Span)
+	span, ok := (ctx).Value(spanKeyName).(*Span)
 	if !ok {
 		return nil, childSpan
 	}
 	span.children.Store(name, childSpan)
-	return context.WithValue(ctx, spanKey, childSpan), childSpan
+	return context.WithValue(ctx, spanKeyName, childSpan), childSpan
 }
 
 type Progress struct {
-	Name  string
-	Total int64
-	Count int64
+	Tracer     string
+	Name       string
+	Status     Status
+	Error      string
+	Count      int
+	Total      int
+	StartTime  time.Time
+	FinishTime time.Time
 }

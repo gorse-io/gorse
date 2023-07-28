@@ -17,6 +17,9 @@ package master
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"strings"
+
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -24,8 +27,6 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/peer"
-	"io"
-	"strings"
 )
 
 // Node could be worker node for server node.
@@ -232,11 +233,21 @@ func (m *Master) nodeDown(key string, value interface{}) {
 	delete(m.nodesInfo, key)
 }
 
-func (m *Master) PushTaskInfo(
+func (m *Master) PushProgress(
 	_ context.Context,
-	in *protocol.PushTaskInfoRequest) (*protocol.PushTaskInfoResponse, error) {
-	m.taskMonitor.TaskLock.Lock()
-	defer m.taskMonitor.TaskLock.Unlock()
-	m.taskMonitor.Tasks[in.GetName()] = protocol.DecodeTask(in)
-	return &protocol.PushTaskInfoResponse{}, nil
+	in *protocol.PushProgressRequest) (*protocol.PushProgressResponse, error) {
+	// check empty progress
+	if len(in.Progress) == 0 {
+		return &protocol.PushProgressResponse{}, nil
+	}
+	// check tracers
+	tracer := in.Progress[0].Tracer
+	for _, p := range in.Progress {
+		if p.Tracer != tracer {
+			return nil, errors.Errorf("tracers must be the same, expect %v, got %v", tracer, p.Tracer)
+		}
+	}
+	// store progress
+	m.remoteProgress.Store(tracer, protocol.DecodeProgress(in))
+	return &protocol.PushProgressResponse{}, nil
 }
