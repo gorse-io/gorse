@@ -15,28 +15,31 @@
 package protocol
 
 import (
-	"github.com/zhenghaoz/gorse/base/task"
 	"time"
+
+	"github.com/zhenghaoz/gorse/base/progress"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative protocol.proto
 
-func DecodeTask(in *PushTaskInfoRequest) *task.Task {
-	return &task.Task{
+func DecodeProgress(in *PushProgressRequest) *progress.Progress {
+	return &progress.Progress{
+		Tracer:     in.GetTracer(),
 		Name:       in.GetName(),
-		Status:     task.Status(in.GetStatus()),
-		Done:       int(in.GetDone()),
+		Status:     progress.Status(in.GetStatus()),
+		Count:      int(in.GetCount()),
 		Total:      int(in.GetTotal()),
 		StartTime:  time.UnixMilli(in.GetStartTime()),
 		FinishTime: time.UnixMilli(in.GetFinishTime()),
 	}
 }
 
-func EncodeTask(t *task.Task) *PushTaskInfoRequest {
-	return &PushTaskInfoRequest{
+func EncodeProgress(t *progress.Progress) *PushProgressRequest {
+	return &PushProgressRequest{
+		Tracer:     t.Tracer,
 		Name:       t.Name,
 		Status:     string(t.Status),
-		Done:       int64(t.Done),
+		Count:      int64(t.Count),
 		Total:      int64(t.Total),
 		StartTime:  t.StartTime.UnixMilli(),
 		FinishTime: t.FinishTime.UnixMilli(),

@@ -15,21 +15,23 @@
 package protocol
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/progress"
 )
 
 func TestEncodeDecode(t *testing.T) {
-	tk := &task.Task{
+	tk := &progress.Progress{
+		Tracer:     "tracer",
 		Name:       "a",
 		Total:      100,
-		Done:       50,
-		Status:     task.StatusRunning,
+		Count:      50,
+		Status:     progress.StatusRunning,
 		StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
 		FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
 	}
-	pb := EncodeTask(tk)
-	assert.Equal(t, tk, DecodeTask(pb))
+	pb := EncodeProgress(tk)
+	assert.Equal(t, tk, DecodeProgress(pb))
 }

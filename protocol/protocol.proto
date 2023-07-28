@@ -32,8 +32,7 @@ service Master {
   rpc GetRankingModel(VersionInfo) returns (stream Fragment) {}
   rpc GetClickModel(VersionInfo) returns (stream Fragment) {}
 
-  /* task management */
-  rpc PushTaskInfo(PushTaskInfoRequest) returns (PushTaskInfoResponse) {}
+  rpc PushProgress(PushProgressRequest) returns (PushProgressResponse) {}
 
 }
 
@@ -61,14 +60,15 @@ message NodeInfo {
   string binary_version = 4;
 }
 
-message PushTaskInfoRequest {
-  string name = 1;
-  string status = 2;
-  int64 done = 3;
-  int64 total = 4;
-  int64 start_time = 5;
-  int64 finish_time = 6;
-  string error = 7;
+message PushProgressRequest {
+  string tracer = 1;
+  string name = 2;
+  string status = 3;
+  string error = 4;
+  int64 count = 5;
+  int64 total = 6;
+  int64 start_time = 7;
+  int64 finish_time = 8;
 }
 
-message PushTaskInfoResponse {}
+message PushProgressResponse {}

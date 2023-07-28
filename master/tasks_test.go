@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -34,16 +33,16 @@ func (s *MasterTestSuite) TestFindItemNeighborsBruteForce() {
 	s.Config.Master.NumJobs = 4
 	// collect similar
 	items := []data.Item{
-		{"0", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d"}, ""},
-		{"1", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"2", false, []string{"*"}, time.Now(), []string{"b", "c", "d"}, ""},
-		{"3", false, nil, time.Now(), []string{}, ""},
-		{"4", false, nil, time.Now(), []string{"b", "c"}, ""},
-		{"5", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"6", false, []string{"*"}, time.Now(), []string{"c"}, ""},
-		{"7", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"8", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
-		{"9", false, nil, time.Now(), []string{}, ""},
+		{ItemId: "0", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"a", "b", "c", "d"}, Comment: ""},
+		{ItemId: "1", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "2", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"b", "c", "d"}, Comment: ""},
+		{ItemId: "3", IsHidden: false, Categories: nil, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "4", IsHidden: false, Categories: nil, Timestamp: time.Now(), Labels: []string{"b", "c"}, Comment: ""},
+		{ItemId: "5", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "6", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"c"}, Comment: ""},
+		{ItemId: "7", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "8", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"a", "b", "c", "d", "e"}, Comment: ""},
+		{ItemId: "9", IsHidden: false, Categories: nil, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
@@ -88,12 +87,10 @@ func (s *MasterTestSuite) TestFindItemNeighborsBruteForce() {
 	// similar items (common users)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err := s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindItemNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{"*"}, 0, 100)
 	s.NoError(err)
@@ -104,12 +101,10 @@ func (s *MasterTestSuite) TestFindItemNeighborsBruteForce() {
 	s.NoError(err)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindItemNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{"*"}, 0, 100)
 	s.NoError(err)
@@ -122,15 +117,13 @@ func (s *MasterTestSuite) TestFindItemNeighborsBruteForce() {
 	s.NoError(err)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindItemNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
 
 func (s *MasterTestSuite) TestFindItemNeighborsIVF() {
@@ -145,16 +138,16 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF() {
 	s.Config.Recommend.ItemNeighbors.IndexFitEpoch = 10
 	// collect similar
 	items := []data.Item{
-		{"0", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d"}, ""},
-		{"1", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"2", false, []string{"*"}, time.Now(), []string{"b", "c", "d"}, ""},
-		{"3", false, nil, time.Now(), []string{}, ""},
-		{"4", false, nil, time.Now(), []string{"b", "c"}, ""},
-		{"5", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"6", false, []string{"*"}, time.Now(), []string{"c"}, ""},
-		{"7", false, []string{"*"}, time.Now(), []string{}, ""},
-		{"8", false, []string{"*"}, time.Now(), []string{"a", "b", "c", "d", "e"}, ""},
-		{"9", false, nil, time.Now(), []string{}, ""},
+		{ItemId: "0", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"a", "b", "c", "d"}, Comment: ""},
+		{ItemId: "1", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "2", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"b", "c", "d"}, Comment: ""},
+		{ItemId: "3", IsHidden: false, Categories: nil, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "4", IsHidden: false, Categories: nil, Timestamp: time.Now(), Labels: []string{"b", "c"}, Comment: ""},
+		{ItemId: "5", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "6", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"c"}, Comment: ""},
+		{ItemId: "7", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
+		{ItemId: "8", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"a", "b", "c", "d", "e"}, Comment: ""},
+		{ItemId: "9", IsHidden: false, Categories: nil, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
@@ -199,12 +192,10 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF() {
 	// similar items (common users)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err := s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindItemNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common users)
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{"*"}, 0, 100)
 	s.NoError(err)
@@ -215,12 +206,10 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF() {
 	s.NoError(err)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindItemNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 	// similar items in category (common labels)
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{"*"}, 0, 100)
 	s.NoError(err)
@@ -233,15 +222,13 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF() {
 	s.NoError(err)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindItemNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindItemNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindItemNeighbors].Status)
 }
 
 func (s *MasterTestSuite) TestFindItemNeighborsIVF_ZeroIDF() {
@@ -256,8 +243,8 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF_ZeroIDF() {
 
 	// create dataset
 	err := s.DataClient.BatchInsertItems(ctx, []data.Item{
-		{"0", false, []string{"*"}, time.Now(), []string{"a", "a"}, ""},
-		{"1", false, []string{"*"}, time.Now(), []string{"a", "a"}, ""},
+		{ItemId: "0", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"a", "a"}, Comment: ""},
+		{ItemId: "1", IsHidden: false, Categories: []string{"*"}, Timestamp: time.Now(), Labels: []string{"a", "a"}, Comment: ""},
 	})
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -272,7 +259,7 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF_ZeroIDF() {
 	// similar items (common users)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err := s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "0", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"1"}, cache.ConvertDocumentsToValues(similar))
@@ -280,7 +267,7 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF_ZeroIDF() {
 	// similar items (common labels)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindItemNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "0", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"1"}, cache.ConvertDocumentsToValues(similar))
@@ -294,16 +281,16 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.Config.Master.NumJobs = 4
 	// collect similar
 	users := []data.User{
-		{"0", []string{"a", "b", "c", "d"}, nil, ""},
-		{"1", []string{}, nil, ""},
-		{"2", []string{"b", "c", "d"}, nil, ""},
-		{"3", []string{}, nil, ""},
-		{"4", []string{"b", "c"}, nil, ""},
-		{"5", []string{}, nil, ""},
-		{"6", []string{"c"}, nil, ""},
-		{"7", []string{}, nil, ""},
-		{"8", []string{"a", "b", "c", "d", "e"}, nil, ""},
-		{"9", []string{}, nil, ""},
+		{UserId: "0", Labels: []string{"a", "b", "c", "d"}, Subscribe: nil, Comment: ""},
+		{UserId: "1", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "2", Labels: []string{"b", "c", "d"}, Subscribe: nil, Comment: ""},
+		{UserId: "3", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "4", Labels: []string{"b", "c"}, Subscribe: nil, Comment: ""},
+		{UserId: "5", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "6", Labels: []string{"c"}, Subscribe: nil, Comment: ""},
+		{UserId: "7", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "8", Labels: []string{"a", "b", "c", "d", "e"}, Subscribe: nil, Comment: ""},
+		{UserId: "9", Labels: []string{}, Subscribe: nil, Comment: ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
@@ -332,24 +319,20 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	// similar items (common users)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err := s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindUserNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindUserNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
@@ -358,15 +341,13 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.NoError(err)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindUserNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
 
 func (s *MasterTestSuite) TestFindUserNeighborsIVF() {
@@ -380,16 +361,16 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF() {
 	s.Config.Recommend.UserNeighbors.IndexFitEpoch = 10
 	// collect similar
 	users := []data.User{
-		{"0", []string{"a", "b", "c", "d"}, nil, ""},
-		{"1", []string{}, nil, ""},
-		{"2", []string{"b", "c", "d"}, nil, ""},
-		{"3", []string{}, nil, ""},
-		{"4", []string{"b", "c"}, nil, ""},
-		{"5", []string{}, nil, ""},
-		{"6", []string{"c"}, nil, ""},
-		{"7", []string{}, nil, ""},
-		{"8", []string{"a", "b", "c", "d", "e"}, nil, ""},
-		{"9", []string{}, nil, ""},
+		{UserId: "0", Labels: []string{"a", "b", "c", "d"}, Subscribe: nil, Comment: ""},
+		{UserId: "1", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "2", Labels: []string{"b", "c", "d"}, Subscribe: nil, Comment: ""},
+		{UserId: "3", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "4", Labels: []string{"b", "c"}, Subscribe: nil, Comment: ""},
+		{UserId: "5", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "6", Labels: []string{"c"}, Subscribe: nil, Comment: ""},
+		{UserId: "7", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "8", Labels: []string{"a", "b", "c", "d", "e"}, Subscribe: nil, Comment: ""},
+		{UserId: "9", Labels: []string{}, Subscribe: nil, Comment: ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
@@ -418,24 +399,20 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF() {
 	// similar items (common users)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err := s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindUserNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindUserNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 
 	// similar items (auto)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
@@ -444,15 +421,13 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF() {
 	s.NoError(err)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	s.Equal(s.estimateFindUserNeighborsComplexity(dataset), s.taskMonitor.Tasks[TaskFindUserNeighbors].Done)
-	s.Equal(task.StatusComplete, s.taskMonitor.Tasks[TaskFindUserNeighbors].Status)
 }
 
 func (s *MasterTestSuite) TestFindUserNeighborsIVF_ZeroIDF() {
@@ -467,8 +442,8 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF_ZeroIDF() {
 
 	// create dataset
 	err := s.DataClient.BatchInsertUsers(ctx, []data.User{
-		{"0", []string{"a", "a"}, nil, ""},
-		{"1", []string{"a", "a"}, nil, ""},
+		{UserId: "0", Labels: []string{"a", "a"}, Subscribe: nil, Comment: ""},
+		{UserId: "1", Labels: []string{"a", "a"}, Subscribe: nil, Comment: ""},
 	})
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -483,7 +458,7 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF_ZeroIDF() {
 	// similar users (common items)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err := s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "0", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"1"}, cache.ConvertDocumentsToValues(similar))
@@ -491,7 +466,7 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF_ZeroIDF() {
 	// similar users (common labels)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(nil))
+	s.NoError(neighborTask.run(context.Background(), nil))
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "0", []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"1"}, cache.ConvertDocumentsToValues(similar))
