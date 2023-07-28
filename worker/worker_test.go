@@ -36,6 +36,7 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -56,6 +57,7 @@ type WorkerTestSuite struct {
 func (suite *WorkerTestSuite) SetupSuite() {
 	// open database
 	var err error
+	suite.tracer = progress.NewTracer("test")
 	suite.Settings = config.NewSettings()
 	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)

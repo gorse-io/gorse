@@ -37,8 +37,8 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/search"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -65,6 +65,7 @@ type ScheduleState struct {
 
 // Worker manages states of a worker node.
 type Worker struct {
+	tracer      *progress.Tracer
 	oneMode     bool
 	testMode    bool
 	managedMode bool
@@ -369,6 +370,9 @@ func (w *Worker) Serve() {
 			zap.String("worker_name", w.workerName))
 	}
 
+	// create progress tracer
+	w.tracer = progress.NewTracer(w.workerName)
+
 	// connect to master
 	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -424,14 +428,6 @@ func (w *Worker) Serve() {
 	}
 }
 
-func (w *Worker) estimateRecommendComplexity(numUsers, numItems int) int {
-	complexity := numUsers * numItems * recommendComplexityFactor
-	if w.Config.Recommend.Collaborative.EnableIndex {
-		complexity += search.EstimateHNSWBuilderComplexity(numItems, w.Config.Recommend.Collaborative.IndexFitEpoch)
-	}
-	return complexity
-}
-
 // Recommend items to users. The workflow of recommendation is:
 // 1. Skip inactive users.
 // 2. Load historical items.
@@ -464,12 +460,8 @@ func (w *Worker) Recommend(users []data.User) {
 	if !w.oneMode {
 		recommendTaskName += fmt.Sprintf(" [%s]", w.workerName)
 	}
-	recommendTask := task.NewTask(recommendTaskName, w.estimateRecommendComplexity(len(users), itemCache.Len()))
-	if w.masterClient != nil {
-		if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
-			log.Logger().Error("failed to report start task", zap.Error(err))
-		}
-	}
+	_, span := w.tracer.Start(context.Background(), "Recommend", len(users))
+	defer span.End()
 
 	go func() {
 		defer base.CheckPanic()
@@ -487,14 +479,14 @@ func (w *Worker) Recommend(users []data.User) {
 				previousCount = completedCount
 				if throughput > 0 {
 					if w.masterClient != nil {
-						recommendTask.Add(throughput * itemCache.Len() * recommendComplexityFactor)
+						span.Add(throughput)
 					}
 					log.Logger().Info("ranking recommendation",
 						zap.Int("n_complete_users", completedCount),
 						zap.Int("n_working_users", len(users)),
 						zap.Int("throughput", throughput))
 				}
-				if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
+				if _, err := w.masterClient.PushProgress(context.Background(), protocol.EncodeProgress(w.tracer.List())); err != nil {
 					log.Logger().Error("failed to report update task", zap.Error(err))
 				}
 			}
@@ -518,8 +510,8 @@ func (w *Worker) Recommend(users []data.User) {
 			}
 			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, w.jobs)
 			var recall float32
-			w.rankingIndex, recall = builder.Build(w.Config.Recommend.Collaborative.IndexRecall,
-				w.Config.Recommend.Collaborative.IndexFitEpoch, false, recommendTask)
+			w.rankingIndex, recall = builder.Build(ctx, w.Config.Recommend.Collaborative.IndexRecall,
+				w.Config.Recommend.Collaborative.IndexFitEpoch, false)
 			CollaborativeFilteringIndexRecall.Set(float64(recall))
 			if err = w.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
 				log.Logger().Error("failed to write meta", zap.Error(err))
@@ -818,12 +810,6 @@ func (w *Worker) Recommend(users []data.User) {
 	if err != nil {
 		log.Logger().Error("failed to continue offline recommendation", zap.Error(err))
 		return
-	}
-	if w.masterClient != nil {
-		recommendTask.Finish()
-		if _, err := w.masterClient.PushTaskInfo(context.Background(), protocol.EncodeTask(recommendTask)); err != nil {
-			log.Logger().Error("failed to report finish task", zap.Error(err))
-		}
 	}
 	log.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
