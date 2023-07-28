@@ -23,15 +23,26 @@ import (
 )
 
 func TestEncodeDecode(t *testing.T) {
-	tk := &progress.Progress{
-		Tracer:     "tracer",
-		Name:       "a",
-		Total:      100,
-		Count:      50,
-		Status:     progress.StatusRunning,
-		StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
-		FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
+	progressList := []progress.Progress{
+		{
+			Tracer:     "tracer",
+			Name:       "a",
+			Total:      100,
+			Count:      50,
+			Status:     progress.StatusRunning,
+			StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
+			FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
+		},
+		{
+			Tracer:     "tracer",
+			Name:       "b",
+			Total:      100,
+			Count:      50,
+			Status:     progress.StatusRunning,
+			StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
+			FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
+		},
 	}
-	pb := EncodeProgress(tk)
-	assert.Equal(t, tk, DecodeProgress(pb))
+	pb := EncodeProgress(progressList)
+	assert.Equal(t, progressList, DecodeProgress(pb))
 }

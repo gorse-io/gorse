@@ -22,26 +22,36 @@ import (
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative protocol.proto
 
-func DecodeProgress(in *PushProgressRequest) *progress.Progress {
-	return &progress.Progress{
-		Tracer:     in.GetTracer(),
-		Name:       in.GetName(),
-		Status:     progress.Status(in.GetStatus()),
-		Count:      int(in.GetCount()),
-		Total:      int(in.GetTotal()),
-		StartTime:  time.UnixMilli(in.GetStartTime()),
-		FinishTime: time.UnixMilli(in.GetFinishTime()),
+func DecodeProgress(in *PushProgressRequest) []progress.Progress {
+	var progressList []progress.Progress
+	for _, p := range in.Progress {
+		progressList = append(progressList, progress.Progress{
+			Tracer:     p.GetTracer(),
+			Name:       p.GetName(),
+			Status:     progress.Status(p.GetStatus()),
+			Count:      int(p.GetCount()),
+			Total:      int(p.GetTotal()),
+			StartTime:  time.UnixMilli(p.GetStartTime()),
+			FinishTime: time.UnixMilli(p.GetFinishTime()),
+		})
 	}
+	return progressList
 }
 
-func EncodeProgress(t *progress.Progress) *PushProgressRequest {
+func EncodeProgress(progressList []progress.Progress) *PushProgressRequest {
+	var pbList []*Progress
+	for _, p := range progressList {
+		pbList = append(pbList, &Progress{
+			Tracer:     p.Tracer,
+			Name:       p.Name,
+			Status:     string(p.Status),
+			Count:      int64(p.Count),
+			Total:      int64(p.Total),
+			StartTime:  p.StartTime.UnixMilli(),
+			FinishTime: p.FinishTime.UnixMilli(),
+		})
+	}
 	return &PushProgressRequest{
-		Tracer:     t.Tracer,
-		Name:       t.Name,
-		Status:     string(t.Status),
-		Count:      int64(t.Count),
-		Total:      int64(t.Total),
-		StartTime:  t.StartTime.UnixMilli(),
-		FinishTime: t.FinishTime.UnixMilli(),
+		Progress: pbList,
 	}
 }

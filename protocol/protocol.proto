@@ -60,7 +60,7 @@ message NodeInfo {
   string binary_version = 4;
 }
 
-message PushProgressRequest {
+message Progress {
   string tracer = 1;
   string name = 2;
   string status = 3;
@@ -69,6 +69,10 @@ message PushProgressRequest {
   int64 total = 6;
   int64 start_time = 7;
   int64 finish_time = 8;
+}
+
+message PushProgressRequest {
+  repeated Progress progress = 1;
 }
 
 message PushProgressResponse {}

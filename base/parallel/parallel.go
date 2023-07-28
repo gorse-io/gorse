@@ -94,7 +94,7 @@ func DynamicParallel(nJobs int, jobsAlloc *task.JobsAllocator, worker func(worke
 	// consumer
 	for {
 		exit := atomic.NewBool(true)
-		numJobs := jobsAlloc.AvailableJobs(nil)
+		numJobs := jobsAlloc.AvailableJobs()
 		var wg sync.WaitGroup
 		wg.Add(numJobs)
 		errs := make([]error, nJobs)

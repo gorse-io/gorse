@@ -176,7 +176,7 @@ func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
 	return false
 }
 
-func (m *mockMatrixFactorizationForRecommend) Fit(_, _ *ranking.DataSet, _ *ranking.FitConfig) ranking.Score {
+func (m *mockMatrixFactorizationForRecommend) Fit(_ context.Context, _, _ *ranking.DataSet, _ *ranking.FitConfig) ranking.Score {
 	panic("implement me")
 }
 
@@ -659,7 +659,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	// create click model
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
-	fm.Fit(train, test, nil)
+	fm.Fit(context.Background(), train, test, nil)
 	clickModelBuffer := bytes.NewBuffer(nil)
 	err := click.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
@@ -667,7 +667,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(trainSet, testSet, nil)
+	bpr.Fit(context.Background(), trainSet, testSet, nil)
 	rankingModelBuffer := bytes.NewBuffer(nil)
 	err = ranking.MarshalModel(rankingModelBuffer, bpr)
 	assert.NoError(t, err)
@@ -848,7 +848,7 @@ func (m mockFactorizationMachine) InternalPredict(_ []int32, _ []float32) float3
 	panic("implement me")
 }
 
-func (m mockFactorizationMachine) Fit(_, _ *click.Dataset, _ *click.FitConfig) click.Score {
+func (m mockFactorizationMachine) Fit(_ context.Context, _, _ *click.Dataset, _ *click.FitConfig) click.Score {
 	panic("implement me")
 }
 
