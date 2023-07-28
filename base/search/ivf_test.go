@@ -31,7 +31,7 @@ func TestIVFConfig(t *testing.T) {
 	assert.Equal(t, float32(0.123), ivf.errorRate)
 
 	SetIVFJobsAllocator(task.NewConstantJobsAllocator(234))(ivf)
-	assert.Equal(t, 234, ivf.jobsAlloc.AvailableJobs(nil))
+	assert.Equal(t, 234, ivf.jobsAlloc.AvailableJobs())
 
 	SetMaxIteration(345)(ivf)
 	assert.Equal(t, 345, ivf.maxIter)

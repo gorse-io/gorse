@@ -15,6 +15,8 @@
 package search
 
 import (
+	"context"
+
 	"github.com/zhenghaoz/gorse/base/heap"
 )
 
@@ -26,7 +28,7 @@ type Bruteforce struct {
 }
 
 // Build a vector index on data.
-func (b *Bruteforce) Build() {}
+func (b *Bruteforce) Build(_ context.Context) {}
 
 // NewBruteforce creates a Bruteforce vector index.
 func NewBruteforce(vectors []Vector) *Bruteforce {
