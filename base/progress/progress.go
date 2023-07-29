@@ -16,10 +16,12 @@ package progress
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"modernc.org/mathutil"
 )
 
 type spanKeyType string
@@ -47,7 +49,12 @@ func NewTracer(name string) *Tracer {
 
 // Start creates a root span.
 func (t *Tracer) Start(ctx context.Context, name string, total int) (context.Context, *Span) {
-	span := &Span{name: name, total: total}
+	span := &Span{
+		name:   name,
+		status: StatusRunning,
+		total:  total,
+		start:  time.Now(),
+	}
 	t.spans.Store(name, span)
 	return context.WithValue(ctx, spanKeyName, span), span
 }
@@ -55,13 +62,13 @@ func (t *Tracer) Start(ctx context.Context, name string, total int) (context.Con
 func (t *Tracer) List() []Progress {
 	var progress []Progress
 	t.spans.Range(func(key, value interface{}) bool {
-		// span := value.(*Span)
-		// progress = append(progress, Progress{
-		// 	Name:  span.name,
-		// 	Total: span.total,
-		// 	Count: span.count,
-		// })
+		span := value.(*Span)
+		progress = append(progress, span.Progress())
 		return true
+	})
+	// sort by start time
+	sort.Slice(progress, func(i, j int) bool {
+		return progress[i].StartTime.Before(progress[j].StartTime)
 	})
 	return progress
 }
@@ -71,26 +78,69 @@ type Span struct {
 	status   Status
 	total    int
 	count    int
-	err      error
+	err      string
 	start    time.Time
 	finish   time.Time
 	children sync.Map
 }
 
 func (s *Span) Add(n int) {
-	s.count += n
+	s.count = mathutil.Min(s.count+n, s.total)
 }
 
 func (s *Span) End() {
+	s.status = StatusComplete
 	s.count = s.total
+	s.finish = time.Now()
 }
 
 func (s *Span) Error(err error) {
-	s.err = err
+	s.err = err.Error()
 }
 
 func (s *Span) Count() int {
 	return s.count
+}
+
+func (s *Span) Progress() Progress {
+	// find running children
+	var children []Progress
+	s.children.Range(func(key, value interface{}) bool {
+		child := value.(*Span)
+		progress := child.Progress()
+		if progress.Status == StatusRunning {
+			children = append(children, progress)
+		}
+		return true
+	})
+	// leaf node
+	if len(children) == 0 {
+		return Progress{
+			Name:       s.name,
+			Status:     s.status,
+			Error:      s.err,
+			Count:      s.count,
+			Total:      s.total,
+			StartTime:  s.start,
+			FinishTime: s.finish,
+		}
+	}
+	// non-leaf node
+	childTotal := children[0].Total
+	parentTotal := s.total * childTotal
+	parentCount := s.count * childTotal
+	for _, child := range children {
+		parentCount += childTotal * child.Count / child.Total
+	}
+	return Progress{
+		Name:       s.name,
+		Status:     s.status,
+		Error:      s.err,
+		Count:      parentCount,
+		Total:      parentTotal,
+		StartTime:  s.start,
+		FinishTime: s.finish,
+	}
 }
 
 func Start(ctx context.Context, name string, total int) (context.Context, *Span) {

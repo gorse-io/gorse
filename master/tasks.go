@@ -30,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
@@ -67,7 +68,9 @@ type Task interface {
 
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask() error {
-	ctx := context.Background()
+	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
+	defer span.End()
+
 	initialStartTime := time.Now()
 	log.Logger().Info("load dataset",
 		zap.Strings("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
@@ -75,7 +78,7 @@ func (m *Master) runLoadDatasetTask() error {
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
-	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(m.DataClient,
+	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
@@ -220,6 +223,9 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	numItems := dataset.ItemCount()
 	numFeedback := dataset.Count()
 
+	_, span := t.tracer.Start(ctx, "Find Item Neighbors", dataset.ItemCount())
+	defer span.End()
+
 	if numItems == 0 {
 		return nil
 	} else if numItems == t.lastNumItems && numFeedback == t.lastNumFeedback {
@@ -250,6 +256,7 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 						zap.Int("n_complete_items", completedCount),
 						zap.Int("n_items", dataset.ItemCount()),
 						zap.Int("throughput", throughput/10))
+					span.Add(throughput)
 				}
 			}
 		}
@@ -545,6 +552,9 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	numUsers := dataset.UserCount()
 	numFeedback := dataset.Count()
 
+	newCtx, span := t.tracer.Start(ctx, "Find User Neighbors", dataset.UserCount())
+	defer span.End()
+
 	if numUsers == 0 {
 		return nil
 	} else if numUsers == t.lastNumUsers && numFeedback == t.lastNumFeedback {
@@ -575,6 +585,7 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 						zap.Int("n_complete_users", completedCount),
 						zap.Int("n_users", dataset.UserCount()),
 						zap.Int("throughput", throughput))
+					span.Add(throughput)
 				}
 			}
 		}
@@ -621,9 +632,9 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	start := time.Now()
 	var err error
 	if t.Config.Recommend.UserNeighbors.EnableIndex {
-		err = t.findUserNeighborsIVF(dataset, labelIDF, itemIDF, completed, j)
+		err = t.findUserNeighborsIVF(newCtx, dataset, labelIDF, itemIDF, completed, j)
 	} else {
-		err = t.findUserNeighborsBruteForce(dataset, labeledUsers, labelIDF, itemIDF, completed, j)
+		err = t.findUserNeighborsBruteForce(newCtx, dataset, labeledUsers, labelIDF, itemIDF, completed, j)
 	}
 	searchTime := time.Since(start)
 
@@ -645,12 +656,11 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	return nil
 }
 
-func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
+func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateUserCount     atomic.Float64
 		findNeighborSeconds atomic.Float64
 	)
-	ctx := context.Background()
 
 	var vectors VectorsInterface
 	switch m.Config.Recommend.UserNeighbors.NeighborType {
@@ -730,13 +740,12 @@ func (m *Master) findUserNeighborsBruteForce(dataset *ranking.DataSet, labeledUs
 	return nil
 }
 
-func (m *Master) findUserNeighborsIVF(dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
+func (m *Master) findUserNeighborsIVF(ctx context.Context, dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
 	var (
 		updateUserCount     atomic.Float64
 		buildIndexSeconds   atomic.Float64
 		findNeighborSeconds atomic.Float64
 	)
-	ctx := context.Background()
 	// build index
 	buildStart := time.Now()
 	var index search.VectorIndex
@@ -975,6 +984,9 @@ func (t *FitRankingModelTask) priority() int {
 }
 
 func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
+	newCtx, span := t.Master.tracer.Start(ctx, "Fit Embedding", 1)
+	defer span.End()
+
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
 	dataset := t.rankingTrainSet
@@ -1010,7 +1022,7 @@ func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) er
 	}
 
 	startFitTime := time.Now()
-	score := rankingModel.Fit(ctx, t.rankingTrainSet, t.rankingTestSet, ranking.NewFitConfig().SetJobsAllocator(j))
+	score := rankingModel.Fit(newCtx, t.rankingTrainSet, t.rankingTestSet, ranking.NewFitConfig().SetJobsAllocator(j))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update ranking model
@@ -1077,6 +1089,9 @@ func (t *FitClickModelTask) priority() int {
 }
 
 func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
+	newCtx, span := t.tracer.Start(ctx, "Fit Ranker", 1)
+	defer span.End()
+
 	log.Logger().Info("prepare to fit click model", zap.Int("n_jobs", t.Config.Master.NumJobs))
 	t.clickDataMutex.RLock()
 	defer t.clickDataMutex.RUnlock()
@@ -1120,7 +1135,7 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 		return nil
 	}
 	startFitTime := time.Now()
-	score := clickModel.Fit(context.Background(), t.clickTrainSet, t.clickTestSet, click.NewFitConfig().
+	score := clickModel.Fit(newCtx, t.clickTrainSet, t.clickTestSet, click.NewFitConfig().
 		SetJobsAllocator(j))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
@@ -1375,10 +1390,12 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 }
 
 // LoadDataFromDatabase loads dataset from data store.
-func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
+func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
 	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems *cache.DocumentAggregator, popularItems *cache.DocumentAggregator, err error) {
+	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase", 4)
+	defer span.End()
+
 	startLoadTime := time.Now()
-	ctx := context.Background()
 	// setup time limit
 	var itemTimeLimit, feedbackTimeLimit *time.Time
 	if itemTTL > 0 {
@@ -1404,7 +1421,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	userLabelFirst := make(map[string]int32)
 	userLabelIndex := base.NewMapIndex()
 	start := time.Now()
-	userChan, errChan := database.GetUserStream(ctx, batchSize)
+	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
 		for _, user := range users {
 			rankingDataset.AddUser(user.UserId)
@@ -1449,13 +1466,14 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		zap.Int32("n_user_labels", userLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
+	span.Add(1)
 
 	// STEP 2: pull items
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
 	itemLabelIndex := base.NewMapIndex()
 	start = time.Now()
-	itemChan, errChan := database.GetItemStream(ctx, batchSize, itemTimeLimit)
+	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for items := range itemChan {
 		for _, item := range items {
 			rankingDataset.AddItem(item.ItemId)
@@ -1514,6 +1532,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		zap.Int32("n_item_labels", itemLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_items").Set(time.Since(start).Seconds())
+	span.Add(1)
 
 	// create positive set
 	popularCount := make([]int32, rankingDataset.ItemCount())
@@ -1525,7 +1544,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	// STEP 3: pull positive feedback
 	var feedbackCount float64
 	start = time.Now()
-	feedbackChan, errChan := database.GetFeedbackStream(ctx, batchSize, feedbackTimeLimit, m.Config.Now(), posFeedbackTypes...)
+	feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), posFeedbackTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
 			feedbackCount++
@@ -1554,6 +1573,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 		zap.Int("n_positive_feedback", rankingDataset.Count()),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_positive_feedback").Set(time.Since(start).Seconds())
+	span.Add(1)
 
 	// create negative set
 	negativeSet := make([]mapset.Set[int32], rankingDataset.UserCount())
@@ -1563,7 +1583,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	feedbackChan, errChan = database.GetFeedbackStream(ctx, batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
+	feedbackChan, errChan = database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
 			feedbackCount++
@@ -1588,6 +1608,7 @@ func (m *Master) LoadDataFromDatabase(database data.Database, posFeedbackTypes, 
 	log.Logger().Debug("pulled negative feedback from database",
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())
+	span.Add(1)
 
 	// STEP 5: create click dataset
 	start = time.Now()

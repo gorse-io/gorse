@@ -119,6 +119,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 		cacheFile:     cacheFile,
 		managedMode:   managedMode,
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
+		tracer:        progress.NewTracer("master"),
 		// default ranking model
 		rankingModelName: "bpr",
 		rankingModelSearcher: ranking.NewModelSearcher(
