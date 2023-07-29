@@ -15,30 +15,43 @@
 package protocol
 
 import (
-	"github.com/zhenghaoz/gorse/base/task"
 	"time"
+
+	"github.com/zhenghaoz/gorse/base/progress"
 )
 
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative protocol.proto
 
-func DecodeTask(in *PushTaskInfoRequest) *task.Task {
-	return &task.Task{
-		Name:       in.GetName(),
-		Status:     task.Status(in.GetStatus()),
-		Done:       int(in.GetDone()),
-		Total:      int(in.GetTotal()),
-		StartTime:  time.UnixMilli(in.GetStartTime()),
-		FinishTime: time.UnixMilli(in.GetFinishTime()),
+func DecodeProgress(in *PushProgressRequest) []progress.Progress {
+	var progressList []progress.Progress
+	for _, p := range in.Progress {
+		progressList = append(progressList, progress.Progress{
+			Tracer:     p.GetTracer(),
+			Name:       p.GetName(),
+			Status:     progress.Status(p.GetStatus()),
+			Count:      int(p.GetCount()),
+			Total:      int(p.GetTotal()),
+			StartTime:  time.UnixMilli(p.GetStartTime()),
+			FinishTime: time.UnixMilli(p.GetFinishTime()),
+		})
 	}
+	return progressList
 }
 
-func EncodeTask(t *task.Task) *PushTaskInfoRequest {
-	return &PushTaskInfoRequest{
-		Name:       t.Name,
-		Status:     string(t.Status),
-		Done:       int64(t.Done),
-		Total:      int64(t.Total),
-		StartTime:  t.StartTime.UnixMilli(),
-		FinishTime: t.FinishTime.UnixMilli(),
+func EncodeProgress(progressList []progress.Progress) *PushProgressRequest {
+	var pbList []*Progress
+	for _, p := range progressList {
+		pbList = append(pbList, &Progress{
+			Tracer:     p.Tracer,
+			Name:       p.Name,
+			Status:     string(p.Status),
+			Count:      int64(p.Count),
+			Total:      int64(p.Total),
+			StartTime:  p.StartTime.UnixMilli(),
+			FinishTime: p.FinishTime.UnixMilli(),
+		})
+	}
+	return &PushProgressRequest{
+		Progress: pbList,
 	}
 }

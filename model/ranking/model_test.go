@@ -15,13 +15,15 @@ package ranking
 
 import (
 	"bytes"
+	"context"
+	"math"
+	"runtime"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
-	"math"
-	"runtime"
-	"testing"
 )
 
 const (
@@ -30,8 +32,7 @@ const (
 )
 
 func newFitConfig(numEpoch int) *FitConfig {
-	t := task.NewTask("test", numEpoch)
-	cfg := NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU())).SetTask(t)
+	cfg := NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
 	return cfg
 }
 
@@ -50,11 +51,10 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitStdDev: 0.001,
 	})
 	fitConfig := newFitConfig(30)
-	score := m.Fit(trainSet, testSet, fitConfig)
+	score := m.Fit(context.Background(), trainSet, testSet, fitConfig)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 	assert.Equal(t, trainSet.UserIndex, m.GetUserIndex())
 	assert.Equal(t, testSet.ItemIndex, m.GetItemIndex())
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
@@ -77,9 +77,8 @@ func TestBPR_MovieLens(t *testing.T) {
 	m = tmp.(*BPR)
 	m.nEpochs = 1
 	fitConfig = newFitConfig(1)
-	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	scoreInc := m.Fit(context.Background(), trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()
@@ -111,9 +110,8 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	fitConfig := newFitConfig(30)
-	score := m.Fit(trainSet, testSet, fitConfig)
+	score := m.Fit(context.Background(), trainSet, testSet, fitConfig)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test predict
 	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
@@ -128,9 +126,8 @@ func TestCCD_MovieLens(t *testing.T) {
 	m = tmp.(*CCD)
 	m.nEpochs = 1
 	fitConfig = newFitConfig(1)
-	scoreInc := m.Fit(trainSet, testSet, fitConfig)
+	scoreInc := m.Fit(context.Background(), trainSet, testSet, fitConfig)
 	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()

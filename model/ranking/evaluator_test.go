@@ -14,6 +14,7 @@
 package ranking
 
 import (
+	"context"
 	"io"
 	"strconv"
 	"testing"
@@ -68,10 +69,6 @@ type mockMatrixFactorizationForEval struct {
 	negative []mapset.Set[int32]
 }
 
-func (m *mockMatrixFactorizationForEval) Complexity() int {
-	panic("implement me")
-}
-
 func (m *mockMatrixFactorizationForEval) Bytes() int {
 	panic("implement me")
 }
@@ -112,7 +109,7 @@ func (m *mockMatrixFactorizationForEval) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) Fit(_, _ *DataSet, _ *FitConfig) Score {
+func (m *mockMatrixFactorizationForEval) Fit(_ context.Context, _, _ *DataSet, _ *FitConfig) Score {
 	panic("don't call me")
 }
 

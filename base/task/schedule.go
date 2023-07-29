@@ -45,13 +45,13 @@ func (allocator *JobsAllocator) MaxJobs() int {
 	return allocator.numJobs
 }
 
-func (allocator *JobsAllocator) AvailableJobs(tracker *Task) int {
+func (allocator *JobsAllocator) AvailableJobs() int {
 	if allocator == nil || allocator.numJobs < 1 {
 		// Return 1 for invalid allocator
 		return 1
 	} else if allocator.scheduler != nil {
 		// Use jobs scheduler
-		return allocator.scheduler.allocateJobsForTask(allocator.taskName, true, tracker)
+		return allocator.scheduler.allocateJobsForTask(allocator.taskName, true)
 	}
 	return allocator.numJobs
 }
@@ -59,7 +59,7 @@ func (allocator *JobsAllocator) AvailableJobs(tracker *Task) int {
 // Init jobs allocation. This method is used to request allocation of jobs for the first time.
 func (allocator *JobsAllocator) Init() {
 	if allocator.scheduler != nil {
-		allocator.scheduler.allocateJobsForTask(allocator.taskName, true, nil)
+		allocator.scheduler.allocateJobsForTask(allocator.taskName, true)
 	}
 }
 
@@ -126,7 +126,7 @@ func (s *JobsScheduler) GetJobsAllocator(taskName string) *JobsAllocator {
 	}
 }
 
-func (s *JobsScheduler) allocateJobsForTask(taskName string, block bool, tracker *Task) int {
+func (s *JobsScheduler) allocateJobsForTask(taskName string, block bool) int {
 	// Find current task and return the jobs temporarily.
 	s.L.Lock()
 	currentTask, exist := s.tasks[taskName]
@@ -142,14 +142,12 @@ func (s *JobsScheduler) allocateJobsForTask(taskName string, block bool, tracker
 	for {
 		s.allocateJobsForAll()
 		if currentTask.jobs == 0 && block {
-			tracker.Suspend(true)
 			if currentTask.previous > 0 {
 				log.Logger().Debug("suspend task", zap.String("task", currentTask.name))
 				s.Broadcast()
 			}
 			s.Wait()
 		} else {
-			tracker.Suspend(false)
 			if currentTask.previous == 0 {
 				log.Logger().Debug("resume task", zap.String("task", currentTask.name))
 			}
