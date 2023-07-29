@@ -434,6 +434,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
+				span.Fail(errors.New("model diverged"))
 				break
 			}
 			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)

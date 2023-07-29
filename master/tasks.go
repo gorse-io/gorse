@@ -223,7 +223,7 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	numItems := dataset.ItemCount()
 	numFeedback := dataset.Count()
 
-	_, span := t.tracer.Start(ctx, "Find Item Neighbors", dataset.ItemCount())
+	newCtx, span := t.tracer.Start(ctx, "Find Item Neighbors", dataset.ItemCount())
 	defer span.End()
 
 	if numItems == 0 {
@@ -312,6 +312,7 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	close(completed)
 	if err != nil {
 		log.Logger().Error("failed to searching neighbors of items", zap.Error(err))
+		progress.Fail(newCtx, err)
 		FindItemNeighborsTotalSeconds.Set(0)
 	} else {
 		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime), time.Now())); err != nil {
@@ -641,6 +642,7 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	close(completed)
 	if err != nil {
 		log.Logger().Error("failed to searching neighbors of users", zap.Error(err))
+		progress.Fail(newCtx, err)
 		FindUserNeighborsTotalSeconds.Set(0)
 	} else {
 		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime), time.Now())); err != nil {

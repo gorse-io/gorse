@@ -89,12 +89,15 @@ func (s *Span) Add(n int) {
 }
 
 func (s *Span) End() {
-	s.status = StatusComplete
-	s.count = s.total
-	s.finish = time.Now()
+	if s.status == StatusRunning {
+		s.status = StatusComplete
+		s.count = s.total
+		s.finish = time.Now()
+	}
 }
 
-func (s *Span) Error(err error) {
+func (s *Span) Fail(err error) {
+	s.status = StatusFailed
 	s.err = err.Error()
 }
 
@@ -110,6 +113,10 @@ func (s *Span) Progress() Progress {
 		progress := child.Progress()
 		if progress.Status == StatusRunning {
 			children = append(children, progress)
+		}
+		if s.err == "" && progress.Error != "" {
+			s.err = progress.Error
+			s.status = StatusFailed
 		}
 		return true
 	})
@@ -160,6 +167,14 @@ func Start(ctx context.Context, name string, total int) (context.Context, *Span)
 	}
 	span.children.Store(name, childSpan)
 	return context.WithValue(ctx, spanKeyName, childSpan), childSpan
+}
+
+func Fail(ctx context.Context, err error) {
+	span, ok := (ctx).Value(spanKeyName).(*Span)
+	if !ok {
+		return
+	}
+	span.Fail(err)
 }
 
 type Progress struct {

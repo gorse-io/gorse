@@ -318,6 +318,9 @@ func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
 }
 
 func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
+	if len(documents) == 0 {
+		return nil
+	}
 	var models []mongo.WriteModel
 	for _, document := range documents {
 		models = append(models, mongo.NewUpdateOneModel().
