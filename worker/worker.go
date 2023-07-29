@@ -456,10 +456,6 @@ func (w *Worker) Recommend(users []data.User) {
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
-	recommendTaskName := "Generate offline recommendation"
-	if !w.oneMode {
-		recommendTaskName += fmt.Sprintf(" [%s]", w.workerName)
-	}
 	_, span := w.tracer.Start(context.Background(), "Recommend", len(users))
 	defer span.End()
 
