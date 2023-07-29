@@ -32,7 +32,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -303,11 +302,7 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 
 	start := time.Now()
 	var err error
-	if t.Config.Recommend.ItemNeighbors.EnableIndex {
-		err = t.findItemNeighborsIVF(dataset, labelWeights, userIDF, completed, j)
-	} else {
-		err = t.findItemNeighborsBruteForce(dataset, labeledItems, labelWeights, userIDF, completed, j)
-	}
+	err = t.findItemNeighborsBruteForce(dataset, labeledItems, labelWeights, userIDF, completed, j)
 	searchTime := time.Since(start)
 
 	close(completed)
@@ -427,110 +422,6 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 	return nil
 }
 
-func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
-	var (
-		updateItemCount     atomic.Float64
-		findNeighborSeconds atomic.Float64
-		buildIndexSeconds   atomic.Float64
-	)
-	ctx := context.Background()
-
-	// build index
-	buildStart := time.Now()
-	var index search.VectorIndex
-	var vectors []search.Vector
-	switch m.Config.Recommend.ItemNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
-			indices, _ := lo.Unzip2(dataset.ItemFeatures[i])
-			return search.NewDictionaryVector(indices, labelIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
-		})
-	case config.NeighborTypeRelated:
-		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
-			return search.NewDictionaryVector(dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
-		})
-	case config.NeighborTypeAuto:
-		vectors = lo.Map(dataset.ItemFeatures, func(_ []lo.Tuple2[int32, float32], i int) search.Vector {
-			indices, _ := lo.Unzip2(dataset.ItemFeatures[i])
-			return NewDualDictionaryVector(indices, labelIDF, dataset.ItemFeedback[i], userIDF, dataset.ItemCategories[i], dataset.HiddenItems[i])
-		})
-	default:
-		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
-	}
-
-	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize,
-		search.SetIVFJobsAllocator(j))
-	var recall float32
-	index, recall = builder.Build(m.Config.Recommend.ItemNeighbors.IndexRecall,
-		m.Config.Recommend.ItemNeighbors.IndexFitEpoch,
-		true)
-	ItemNeighborIndexRecall.Set(float64(recall))
-	if err := m.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
-		return errors.Trace(err)
-	}
-	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
-
-	err := parallel.DynamicParallel(dataset.ItemCount(), j, func(workerId, itemIndex int) error {
-		defer func() {
-			completed <- struct{}{}
-		}()
-		startSearchTime := time.Now()
-		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
-		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
-			return nil
-		}
-		updateItemCount.Add(1)
-		startTime := time.Now()
-		var neighbors map[string][]int32
-		var scores map[string][]float32
-		if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
-			m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.ToSlice(),
-				m.Config.Recommend.CacheSize, true)
-		}
-		if m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
-			m.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto && len(neighbors[""]) == 0 {
-			neighbors, scores = index.MultiSearch(vectors[itemIndex], dataset.CategorySet.ToSlice(),
-				m.Config.Recommend.CacheSize, true)
-		}
-		aggregator := cache.NewDocumentAggregator(startSearchTime)
-		for category := range neighbors {
-			if categoryNeighbors, exist := neighbors[category]; exist && len(categoryNeighbors) > 0 {
-				resultValues, resultScores := make([]string, len(neighbors[category])), make([]float64, len(neighbors[category]))
-				for i := range scores[category] {
-					resultValues[i] = dataset.ItemIndex.ToName(neighbors[category][i])
-					resultScores[i] = float64(-scores[category][i])
-				}
-				aggregator.Add(category, resultValues, resultScores)
-			}
-		}
-		if err := m.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.ItemNeighbors}, cache.DocumentCondition{
-			Subset: proto.String(itemId),
-			Before: &aggregator.Timestamp,
-		}); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.Set(
-			ctx,
-			cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, itemId), time.Now()),
-			cache.String(cache.Key(cache.ItemNeighborsDigest, itemId), m.Config.ItemNeighborDigest())); err != nil {
-			return errors.Trace(err)
-		}
-		findNeighborSeconds.Add(time.Since(startTime).Seconds())
-		return nil
-	})
-	if err != nil {
-		return errors.Trace(err)
-	}
-	UpdateItemNeighborsTotal.Set(updateItemCount.Load())
-	FindItemNeighborsSecondsVec.WithLabelValues("find_item_neighbors").Set(findNeighborSeconds.Load())
-	FindItemNeighborsSecondsVec.WithLabelValues("build_index").Set(buildIndexSeconds.Load())
-	return nil
-}
-
 // FindUserNeighborsTask updates neighbors of users.
 type FindUserNeighborsTask struct {
 	*Master
@@ -636,11 +527,7 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 
 	start := time.Now()
 	var err error
-	if t.Config.Recommend.UserNeighbors.EnableIndex {
-		err = t.findUserNeighborsIVF(newCtx, dataset, labelIDF, itemIDF, completed, j)
-	} else {
-		err = t.findUserNeighborsBruteForce(newCtx, dataset, labeledUsers, labelIDF, itemIDF, completed, j)
-	}
+	err = t.findUserNeighborsBruteForce(newCtx, dataset, labeledUsers, labelWeights, itemIDF, completed, j)
 	searchTime := time.Since(start)
 
 	close(completed)
@@ -754,97 +641,6 @@ func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranki
 	FindUserNeighborsSecondsVec.WithLabelValues("find_item_neighbors").Set(findNeighborSeconds.Load())
 	FindUserNeighborsSecondsVec.WithLabelValues("build_index").Set(0)
 	UserNeighborIndexRecall.Set(1)
-	return nil
-}
-
-func (m *Master) findUserNeighborsIVF(ctx context.Context, dataset *ranking.DataSet, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
-	var (
-		updateUserCount     atomic.Float64
-		buildIndexSeconds   atomic.Float64
-		findNeighborSeconds atomic.Float64
-	)
-	// build index
-	buildStart := time.Now()
-	var index search.VectorIndex
-	var vectors []search.Vector
-	switch m.Config.Recommend.UserNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		vectors = lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) search.Vector {
-			indices, _ := lo.Unzip2(features)
-			return search.NewDictionaryVector(indices, labelWeights, nil, false)
-		})
-	case config.NeighborTypeRelated:
-		vectors = lo.Map(dataset.UserFeedback, func(indices []int32, _ int) search.Vector {
-			return search.NewDictionaryVector(indices, itemIDF, nil, false)
-		})
-	case config.NeighborTypeAuto:
-		vectors = make([]search.Vector, dataset.UserCount())
-		for i := range vectors {
-			indices, _ := lo.Unzip2(dataset.UserFeatures[i])
-			vectors[i] = NewDualDictionaryVector(indices, labelWeights, dataset.UserFeedback[i], itemIDF, nil, false)
-		}
-	default:
-		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
-	}
-
-	builder := search.NewIVFBuilder(vectors, m.Config.Recommend.CacheSize,
-		search.SetIVFJobsAllocator(j))
-	var recall float32
-	index, recall = builder.Build(
-		m.Config.Recommend.UserNeighbors.IndexRecall,
-		m.Config.Recommend.UserNeighbors.IndexFitEpoch,
-		true)
-	UserNeighborIndexRecall.Set(float64(recall))
-	if err := m.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall), encoding.FormatFloat32(recall))); err != nil {
-		return errors.Trace(err)
-	}
-	buildIndexSeconds.Add(time.Since(buildStart).Seconds())
-
-	err := parallel.DynamicParallel(dataset.UserCount(), j, func(workerId, userIndex int) error {
-		defer func() {
-			completed <- struct{}{}
-		}()
-		startSearchTime := time.Now()
-		userId := dataset.UserIndex.ToName(int32(userIndex))
-		if !m.checkUserNeighborCacheTimeout(userId) {
-			return nil
-		}
-		updateUserCount.Add(1)
-		startTime := time.Now()
-		var neighbors []int32
-		var scores []float32
-		neighbors, scores = index.Search(vectors[userIndex], m.Config.Recommend.CacheSize, true)
-		resultValues, resultScores := make([]string, len(neighbors)), make([]float64, len(neighbors))
-		for i := range scores {
-			resultValues[i] = dataset.UserIndex.ToName(neighbors[i])
-			resultScores[i] = float64(-scores[i])
-		}
-		aggregator := cache.NewDocumentAggregator(startSearchTime)
-		aggregator.Add("", resultValues, resultScores)
-		if err := m.CacheClient.AddDocuments(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.DeleteDocuments(ctx, []string{cache.UserNeighbors}, cache.DocumentCondition{
-			Subset: proto.String(userId),
-			Before: &aggregator.Timestamp,
-		}); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.Set(
-			ctx,
-			cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, userId), time.Now()),
-			cache.String(cache.Key(cache.UserNeighborsDigest, userId), m.Config.UserNeighborDigest())); err != nil {
-			return errors.Trace(err)
-		}
-		findNeighborSeconds.Add(time.Since(startTime).Seconds())
-		return nil
-	})
-	if err != nil {
-		return errors.Trace(err)
-	}
-	UpdateUserNeighborsTotal.Set(updateUserCount.Load())
-	FindUserNeighborsSecondsVec.WithLabelValues("find_item_neighbors").Set(findNeighborSeconds.Load())
-	FindUserNeighborsSecondsVec.WithLabelValues("build_index").Set(buildIndexSeconds.Load())
 	return nil
 }
 

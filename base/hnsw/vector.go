@@ -63,8 +63,8 @@ type SparseVector struct {
 	values  []float32
 }
 
-func NewSparseVector(indices []int32, values []float32) SparseVector {
-	v := SparseVector{
+func NewSparseVector(indices []int32, values []float32) Vector {
+	v := &SparseVector{
 		indices: indices,
 		values:  values,
 	}
@@ -87,7 +87,7 @@ func (v SparseVector) Swap(i, j int) {
 
 func (v SparseVector) Euclidean(vec Vector) float32 {
 	// check type
-	sparse, ok := vec.(SparseVector)
+	sparse, ok := vec.(*SparseVector)
 	if !ok {
 		panic("sparse vector can only compare with sparse vector")
 	}

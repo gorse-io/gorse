@@ -34,6 +34,8 @@ import (
 
 var _ VectorIndex = &HNSW{}
 
+const DefaultTestSize = 1000
+
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
 type HNSW struct {
 	vectors         []Vector

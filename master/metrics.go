@@ -256,7 +256,7 @@ func (evaluator *OnlineEvaluator) Read(userIndex, itemIndex int32, timestamp tim
 			evaluator.ReadFeedbacks[index][userIndex] = mapset.NewSet[int32]()
 		}
 		evaluator.ReadFeedbacks[index][userIndex].Add(itemIndex)
-		evaluator.ReverseIndex[lo.Tuple2[int32, int32]{userIndex, itemIndex}] = timestamp
+		evaluator.ReverseIndex[lo.Tuple2[int32, int32]{A: userIndex, B: itemIndex}] = timestamp
 	}
 }
 

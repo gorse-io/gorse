@@ -26,7 +26,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
-	"github.com/zhenghaoz/gorse/base/task"
 	"go.uber.org/zap"
 	"modernc.org/mathutil"
 )
@@ -47,7 +46,6 @@ type HNSW struct {
 	maxConnection0 int
 	efConstruction int
 	numJobs        int
-	task           *task.SubTask
 }
 
 // HNSWConfig is the configuration function for HNSW.
@@ -138,7 +136,6 @@ func (h *HNSW) Build() {
 			case <-ticker.C:
 				throughput := completedCount - previousCount
 				previousCount = completedCount
-				h.task.Add(throughput * len(h.vectors))
 				if throughput > 0 {
 					log.Logger().Info("building index",
 						zap.Int("n_indexed_vectors", completedCount),
