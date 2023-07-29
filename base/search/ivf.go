@@ -15,6 +15,7 @@
 package search
 
 import (
+	"context"
 	"math"
 	"math/rand"
 	"sync"
@@ -47,8 +48,6 @@ type IVF struct {
 	maxIter   int
 	numProbe  int
 	jobsAlloc *task.JobsAllocator
-
-	task *task.SubTask
 }
 
 type IVFConfig func(ivf *IVF)
@@ -179,7 +178,7 @@ func (idx *IVF) MultiSearch(q Vector, terms []string, n int, prune0 bool) (value
 	return
 }
 
-func (idx *IVF) Build() {
+func (idx *IVF) Build(_ context.Context) {
 	if idx.k > len(idx.data) {
 		panic("the size of the observations set must greater than or equal to k")
 	} else if len(idx.data) == 0 {
@@ -206,7 +205,7 @@ func (idx *IVF) Build() {
 
 		// reassign clusters
 		nextClusters := make([]ivfCluster, idx.k)
-		_ = parallel.Parallel(len(idx.data), idx.jobsAlloc.AvailableJobs(idx.task.Parent), func(_, i int) error {
+		_ = parallel.Parallel(len(idx.data), idx.jobsAlloc.AvailableJobs(), func(_, i int) error {
 			if !idx.data[i].IsHidden() {
 				nextCluster, nextDistance := -1, float32(math32.MaxFloat32)
 				for c := range clusters {
@@ -237,8 +236,6 @@ func (idx *IVF) Build() {
 			nextClusters[c].centroid = idx.data[0].Centroid(idx.data, nextClusters[c].observations)
 		}
 		clusters = nextClusters
-
-		idx.task.Add(len(idx.data) * int(math.Sqrt(float64(len(idx.data)))))
 	}
 }
 
@@ -260,7 +257,7 @@ func NewIVFBuilder(data []Vector, k int, configs ...IVFConfig) *IVFBuilder {
 		rng:        base.NewRandomGenerator(0),
 		configs:    configs,
 	}
-	b.bruteForce.Build()
+	b.bruteForce.Build(context.Background())
 	return b
 }
 
@@ -269,7 +266,7 @@ func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = parallel.Parallel(len(samples), idx.jobsAlloc.AvailableJobs(idx.task.Parent), func(_, i int) error {
+	_ = parallel.Parallel(len(samples), idx.jobsAlloc.AvailableJobs(), func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.Search(b.data[sample], b.k, prune0)
 		if len(expected) > 0 {
@@ -287,20 +284,15 @@ func (b *IVFBuilder) evaluate(idx *IVF, prune0 bool) float32 {
 	return result / count
 }
 
-func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool, t *task.Task) (idx *IVF, score float32) {
+func (b *IVFBuilder) Build(recall float32, numEpoch int, prune0 bool) (idx *IVF, score float32) {
 	idx = NewIVF(b.data, b.configs...)
-	idx.task = t.SubTask(DefaultMaxIter * len(b.data) * int(math.Sqrt(float64(len(b.data)))))
 	start := time.Now()
-	idx.Build()
-	idx.task.Finish()
+	idx.Build(context.Background())
 
-	probeTask := t.SubTask(len(b.data) * DefaultTestSize * numEpoch)
-	defer probeTask.Finish()
 	buildTime := time.Since(start)
 	idx.numProbe = int(math32.Ceil(float32(b.k) / math32.Sqrt(float32(len(b.data)))))
 	for i := 0; i < numEpoch; i++ {
 		score = b.evaluate(idx, prune0)
-		probeTask.Add(len(b.data) * DefaultTestSize)
 		log.Logger().Info("try to build vector index",
 			zap.String("index_type", "IVF"),
 			zap.Int("num_probe", idx.numProbe),
@@ -320,7 +312,7 @@ func (b *IVFBuilder) evaluateTermSearch(idx *IVF, prune0 bool, term string) floa
 	samples := b.rng.Sample(0, len(b.data), testSize)
 	var result, count float32
 	var mu sync.Mutex
-	_ = parallel.Parallel(len(samples), idx.jobsAlloc.AvailableJobs(idx.task.Parent), func(_, i int) error {
+	_ = parallel.Parallel(len(samples), idx.jobsAlloc.AvailableJobs(), func(_, i int) error {
 		sample := samples[i]
 		expected, _ := b.bruteForce.MultiSearch(b.data[sample], []string{term}, b.k, prune0)
 		if len(expected) > 0 {

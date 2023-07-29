@@ -15,6 +15,7 @@
 package click
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"gorgonia.org/gorgonia"
@@ -162,7 +164,7 @@ func (fm *DeepFM) BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
 	return predictions[:len(x)]
 }
 
-func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
+func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
 	fm.Init(trainSet)
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet)
@@ -185,6 +187,7 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 		gorgonia.WithL2Reg(float64(fm.reg)),
 		gorgonia.WithLearnRate(float64(fm.lr)))
 
+	_, span := progress.Start(ctx, "DeepFM.Fit", fm.nEpochs*trainSet.Count())
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
@@ -200,6 +203,7 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 			cost += fm.cost.Value().Data().(float32)
 			lo.Must0(solver.Step(gorgonia.NodesToValueGrads(fm.learnables)))
 			fm.vm.Reset()
+			span.Add(mathutil.Min(fm.batchSize, trainSet.Count()-i))
 		}
 
 		fitTime := time.Since(fitStart)
@@ -220,8 +224,8 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 				break
 			}
 		}
-		config.Task.Add(1)
 	}
+	span.End()
 	return score
 }
 
@@ -258,10 +262,6 @@ func (fm *DeepFM) Marshal(w io.Writer) error {
 }
 
 func (fm *DeepFM) Bytes() int {
-	return 0
-}
-
-func (fm *DeepFM) Complexity() int {
 	return 0
 }
 

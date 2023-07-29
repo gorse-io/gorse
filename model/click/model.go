@@ -15,6 +15,7 @@
 package click
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -31,6 +32,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -94,7 +96,6 @@ func (score Score) BetterThan(s Score) bool {
 type FitConfig struct {
 	*task.JobsAllocator
 	Verbose int
-	Task    *task.Task
 }
 
 func NewFitConfig() *FitConfig {
@@ -113,11 +114,6 @@ func (config *FitConfig) SetJobsAllocator(allocator *task.JobsAllocator) *FitCon
 	return config
 }
 
-func (config *FitConfig) SetTask(t *task.Task) *FitConfig {
-	config.Task = t
-	return config
-}
-
 func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 	if config == nil {
 		return NewFitConfig()
@@ -129,10 +125,9 @@ type FactorizationMachine interface {
 	model.Model
 	Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32
 	InternalPredict(x []int32, values []float32) float32
-	Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
+	Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 	Marshal(w io.Writer) error
 	Bytes() int
-	Complexity() int
 }
 
 type BatchInference interface {
@@ -271,7 +266,7 @@ func (fm *FM) InternalPredict(features []int32, values []float32) float32 {
 }
 
 // Fit trains the model. Its task complexity is O(fm.nEpochs).
-func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
+func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit FM",
 		zap.Int("train_size", trainSet.Count()),
@@ -313,6 +308,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 	log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
 	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 
+	_, span := progress.Start(ctx, "FM.Fit", fm.nEpochs)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		for i := 0; i < trainSet.Target.Len(); i++ {
 			fm.MinTarget = math32.Min(fm.MinTarget, trainSet.Target.Get(i))
@@ -320,7 +316,7 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 		}
 		fitStart := time.Now()
 		cost := float32(0)
-		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(config.Task), 128, func(workerId, beginJobId, endJobId int) error {
+		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(), 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
 				prediction := fm.internalPredictImpl(features, values)
@@ -331,8 +327,8 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 					cost += grad * grad / 2
 				case FMClassification:
 					grad = -target * (1 - 1/(1+math32.Exp(-target*prediction)))
-					cost += (1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2
-					cost += (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
+					cost += (1 + target) * math32.Log1p(exp(-prediction)) / 2
+					cost += (1 - target) * math32.Log1p(exp(prediction)) / 2
 				default:
 					log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 				}
@@ -438,12 +434,14 @@ func (fm *FM) Fit(trainSet, testSet *Dataset, config *FitConfig) Score {
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
+				span.Fail(errors.New("model diverged"))
 				break
 			}
 			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 		}
-		config.Task.Add(1)
+		span.Add(1)
 	}
+	span.End()
 	// restore best snapshot
 	fm.V = snapshots.BestWeights[0].([][]float32)
 	fm.W = snapshots.BestWeights[1].([]float32)
@@ -537,10 +535,6 @@ func (fm *FM) Bytes() int {
 		bytes += reflect.TypeOf(fm.V).Elem().Elem().Size() * uintptr(len(fm.V)) * uintptr(fm.nFactors)
 	}
 	return int(bytes) + fm.Index.Bytes()
-}
-
-func (fm *FM) Complexity() int {
-	return fm.nEpochs
 }
 
 func MarshalModel(w io.Writer, m FactorizationMachine) error {
@@ -651,4 +645,12 @@ func (fm *FM) Unmarshal(r io.Reader) error {
 		return errors.Trace(err)
 	}
 	return nil
+}
+
+func exp(x float32) float32 {
+	e := math32.Exp(x)
+	if math32.IsInf(e, 1) {
+		return math32.MaxFloat32
+	}
+	return e
 }

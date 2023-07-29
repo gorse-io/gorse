@@ -17,9 +17,13 @@ package master
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"testing"
+	"time"
+
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -30,9 +34,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"net"
-	"testing"
-	"time"
 )
 
 type mockMasterRPC struct {
@@ -45,14 +46,13 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	// create click model
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
-	fm.Fit(train, test, nil)
+	fm.Fit(context.Background(), train, test, nil)
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(trainSet, testSet, nil)
+	bpr.Fit(context.Background(), trainSet, testSet, nil)
 	return &mockMasterRPC{
 		Master: Master{
-			taskMonitor:      task.NewTaskMonitor(),
 			nodesInfo:        make(map[string]*Node),
 			rankingModelName: "bpr",
 			RestServer: server.RestServer{
@@ -101,26 +101,21 @@ func TestRPC(t *testing.T) {
 	client := protocol.NewMasterClient(conn)
 	ctx := context.Background()
 
-	testTask := task.NewTask("a", 12)
-	_, err = client.PushTaskInfo(ctx, protocol.EncodeTask(testTask))
+	progressList := []progress.Progress{{
+		Tracer:     "tracer",
+		Name:       "a",
+		Status:     progress.StatusRunning,
+		Total:      12,
+		Count:      6,
+		StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
+		FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
+	}}
+	_, err = client.PushProgress(ctx, protocol.EncodeProgress(progressList))
 	assert.NoError(t, err)
-	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
-	assert.Equal(t, 0, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, task.StatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
-
-	testTask.Update(10)
-	_, err = client.PushTaskInfo(ctx, protocol.EncodeTask(testTask))
-	assert.NoError(t, err)
-	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
-	assert.Equal(t, 10, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, task.StatusRunning, rpcServer.taskMonitor.Tasks["a"].Status)
-
-	testTask.Finish()
-	_, err = client.PushTaskInfo(ctx, protocol.EncodeTask(testTask))
-	assert.NoError(t, err)
-	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Total)
-	assert.Equal(t, 12, rpcServer.taskMonitor.Tasks["a"].Done)
-	assert.Equal(t, task.StatusComplete, rpcServer.taskMonitor.Tasks["a"].Status)
+	i, ok := rpcServer.remoteProgress.Load("tracer")
+	assert.True(t, ok)
+	remoteProgressList := i.([]progress.Progress)
+	assert.Equal(t, progressList, remoteProgressList)
 
 	// test get click model
 	clickModelReceiver, err := client.GetClickModel(ctx, &protocol.VersionInfo{Version: 456})

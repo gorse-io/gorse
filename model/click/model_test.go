@@ -15,6 +15,7 @@ package click
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,11 +29,9 @@ const (
 )
 
 func newFitConfigWithTestTracker(numEpoch int) *FitConfig {
-	t := task.NewTask("test", numEpoch)
 	cfg := NewFitConfig().
 		SetVerbose(1).
-		SetJobsAllocator(task.NewConstantJobsAllocator(1)).
-		SetTask(t)
+		SetJobsAllocator(task.NewConstantJobsAllocator(1))
 	return cfg
 }
 
@@ -54,9 +53,8 @@ func TestFM_Classification_Frappe(t *testing.T) {
 				model.Optimizer:  optimizer,
 			})
 			fitConfig := newFitConfigWithTestTracker(20)
-			score := m.Fit(train, test, fitConfig)
+			score := m.Fit(context.Background(), train, test, fitConfig)
 			assert.InDelta(t, 0.91684, score.Accuracy, classificationDelta)
-			assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 		})
 	}
 }
@@ -94,9 +92,8 @@ func TestFM_Regression_Criteo(t *testing.T) {
 		model.Reg:        0.0001,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
-	score := m.Fit(train, test, fitConfig)
+	score := m.Fit(context.Background(), train, test, fitConfig)
 	assert.InDelta(t, 0.839194, score.RMSE, regressionDelta)
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test prediction
 	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.3, 0.4, 0.5, 0.6}),
@@ -119,9 +116,8 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	m = tmp.(*FM)
 	m.nEpochs = 1
 	fitConfig = newFitConfigWithTestTracker(1)
-	scoreInc := m.Fit(train, test, fitConfig)
+	scoreInc := m.Fit(context.Background(), train, test, fitConfig)
 	assert.InDelta(t, 0.839194, scoreInc.RMSE, regressionDelta)
-	assert.Equal(t, m.Complexity(), fitConfig.Task.Done)
 
 	// test clear
 	m.Clear()

@@ -1,4 +1,4 @@
-// Copyright 2022 gorse Project Authors
+// Copyright 2023 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,27 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search
+package progress
 
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestIVFConfig(t *testing.T) {
-	ivf := &IVF{}
+type ProgressTestSuite struct {
+	suite.Suite
+	tracer Tracer
+}
 
-	SetNumProbe(123)(ivf)
-	assert.Equal(t, 123, ivf.numProbe)
+func (suite *ProgressTestSuite) SetupTest() {
+	suite.tracer = Tracer{}
+}
 
-	SetClusterErrorRate(0.123)(ivf)
-	assert.Equal(t, float32(0.123), ivf.errorRate)
-
-	SetIVFJobsAllocator(task.NewConstantJobsAllocator(234))(ivf)
-	assert.Equal(t, 234, ivf.jobsAlloc.AvailableJobs())
-
-	SetMaxIteration(345)(ivf)
-	assert.Equal(t, 345, ivf.maxIter)
+func TestProgressTestSuite(t *testing.T) {
+	suite.Run(t, new(ProgressTestSuite))
 }
