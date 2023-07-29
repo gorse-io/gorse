@@ -448,7 +448,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 				}
 			}
 			diff := bpr.InternalPredict(userIndex, posIndex) - bpr.InternalPredict(userIndex, negIndex)
-			cost[workerId] += math32.Log(1 + math32.Exp(-diff))
+			cost[workerId] += math32.Log1p(math32.Exp(-diff))
 			grad := math32.Exp(-diff) / (1.0 + math32.Exp(-diff))
 			// Pairwise update
 			copy(userFactor[workerId], bpr.UserFactor[userIndex])

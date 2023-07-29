@@ -327,8 +327,8 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 					cost += grad * grad / 2
 				case FMClassification:
 					grad = -target * (1 - 1/(1+math32.Exp(-target*prediction)))
-					cost += (1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2
-					cost += (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
+					cost += (1 + target) * math32.Log1p(exp(-prediction)) / 2
+					cost += (1 - target) * math32.Log1p(exp(prediction)) / 2
 				default:
 					log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
 				}
@@ -645,4 +645,12 @@ func (fm *FM) Unmarshal(r io.Reader) error {
 		return errors.Trace(err)
 	}
 	return nil
+}
+
+func exp(x float32) float32 {
+	e := math32.Exp(x)
+	if math32.IsInf(e, 1) {
+		return math32.MaxFloat32
+	}
+	return e
 }
