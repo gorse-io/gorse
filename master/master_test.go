@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -31,6 +32,7 @@ type MasterTestSuite struct {
 func (s *MasterTestSuite) SetupTest() {
 	// open database
 	var err error
+	s.tracer = progress.NewTracer("test")
 	s.Settings = config.NewSettings()
 	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", s.T().TempDir()), "")
 	s.NoError(err)
