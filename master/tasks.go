@@ -644,31 +644,6 @@ func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranki
 	return nil
 }
 
-func commonElements(a, b []int32, weights []float32) (float32, float32) {
-	i, j, sum, count := 0, 0, float32(0), float32(0)
-	for i < len(a) && j < len(b) {
-		if a[i] == b[j] {
-			sum += weights[a[i]]
-			count++
-			i++
-			j++
-		} else if a[i] < b[j] {
-			i++
-		} else if a[i] > b[j] {
-			j++
-		}
-	}
-	return sum, count
-}
-
-func weightedSum(a []int32, weights []float32) float32 {
-	var sum float32
-	for _, i := range a {
-		sum += weights[i]
-	}
-	return sum
-}
-
 // checkUserNeighborCacheTimeout checks if user neighbor cache stale.
 // 1. if cache is empty, stale.
 // 2. if modified time > update time, stale.
@@ -1013,6 +988,9 @@ func (t *SearchRankingModelTask) priority() int {
 }
 
 func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
+	newCtx, span := t.Master.tracer.Start(ctx, "Optimize Embedding", 1)
+	defer span.End()
+
 	log.Logger().Info("start searching ranking model")
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
@@ -1037,7 +1015,7 @@ func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator)
 	}
 
 	startTime := time.Now()
-	err := t.rankingModelSearcher.Fit(ctx, t.rankingTrainSet, t.rankingTestSet, nil)
+	err := t.rankingModelSearcher.Fit(newCtx, t.rankingTrainSet, t.rankingTestSet, nil)
 	if err != nil {
 		log.Logger().Error("failed to search collaborative filtering model", zap.Error(err))
 		return nil
@@ -1074,6 +1052,9 @@ func (t *SearchClickModelTask) priority() int {
 }
 
 func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
+	newCtx, span := t.Master.tracer.Start(ctx, "Optimize Ranker", 1)
+	defer span.End()
+
 	log.Logger().Info("start searching click model")
 	t.clickDataMutex.RLock()
 	defer t.clickDataMutex.RUnlock()
@@ -1097,7 +1078,7 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 	}
 
 	startTime := time.Now()
-	err := t.clickModelSearcher.Fit(context.Background(), t.clickTrainSet, t.clickTestSet, j)
+	err := t.clickModelSearcher.Fit(newCtx, t.clickTrainSet, t.clickTestSet, j)
 	if err != nil {
 		log.Logger().Error("failed to search ranking model", zap.Error(err))
 		return nil

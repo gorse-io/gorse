@@ -18,6 +18,7 @@ import "sort"
 
 type Vector interface {
 	Euclidean(vec Vector) float32
+	Dot(vec Vector) float32
 }
 
 type VectorIndex interface {
@@ -54,6 +55,24 @@ func (v DenseVector) Euclidean(vec Vector) float32 {
 	var sum float32
 	for i := range v.Data {
 		sum += (v.Data[i] - dense.Data[i]) * (v.Data[i] - dense.Data[i])
+	}
+	return sum
+}
+
+func (v DenseVector) Dot(vec Vector) float32 {
+	// check type
+	dense, ok := vec.(*DenseVector)
+	if !ok {
+		panic("dense vector can only compare with dense vector")
+	}
+	// check length
+	if len(v.Data) != len(dense.Data) {
+		panic("dense vector must have the same length")
+	}
+	// calculate distance
+	var sum float32
+	for i := range v.Data {
+		sum += v.Data[i] * dense.Data[i]
 	}
 	return sum
 }
@@ -112,6 +131,29 @@ func (v SparseVector) Euclidean(vec Vector) float32 {
 	}
 	for ; j < len(sparse.indices); j++ {
 		sum += sparse.values[j] * sparse.values[j]
+	}
+	return sum
+}
+
+func (v SparseVector) Dot(vec Vector) float32 {
+	// check type
+	sparse, ok := vec.(*SparseVector)
+	if !ok {
+		panic("sparse vector can only compare with sparse vector")
+	}
+	// calculate distance
+	var sum float32
+	i, j := 0, 0
+	for i < len(v.indices) && j < len(sparse.indices) {
+		if v.indices[i] == sparse.indices[j] {
+			sum += v.values[i] * sparse.values[j]
+			i++
+			j++
+		} else if v.indices[i] < sparse.indices[j] {
+			i++
+		} else {
+			j++
+		}
 	}
 	return sum
 }
