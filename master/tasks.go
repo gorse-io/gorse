@@ -350,6 +350,7 @@ func (m *Master) findItemNeighbors(ctx context.Context, dataset *ranking.DataSet
 		searchIndex = hnsw.NewBruteforce()
 	}
 	searchIndex.Add(newCtx, vectors...)
+	log.Logger().Info("complete build index", zap.Float64("recall", searchIndex.Evaluate(m.Config.Recommend.CacheSize)))
 	span.Add(1)
 
 	// step 2: find neighbors of items
@@ -483,7 +484,7 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	}
 
 	start := time.Now()
-	err := t.findUserNeighbors(newCtx, dataset, labeledUsers, labelWeights, itemIDF, completed, j)
+	err := t.findUserNeighbors(newCtx, dataset, labeledUsers, labelWeights, itemIDF, j)
 	searchTime := time.Since(start)
 
 	if err != nil {
@@ -555,6 +556,7 @@ func (m *Master) findUserNeighbors(ctx context.Context, dataset *ranking.DataSet
 		searchIndex = hnsw.NewBruteforce()
 	}
 	searchIndex.Add(ctx, vectors...)
+	log.Logger().Info("complete build index", zap.Float64("recall", searchIndex.Evaluate(m.Config.Recommend.CacheSize)))
 	span.Add(1)
 
 	// step 2: find neighbors of users

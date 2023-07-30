@@ -26,6 +26,7 @@ type Vector interface {
 
 type VectorIndex interface {
 	Add(ctx context.Context, vectors ...Vector)
+	Evaluate(n int) float64
 	Search(q Vector, n int) []Result
 }
 

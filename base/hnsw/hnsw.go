@@ -22,6 +22,7 @@ import (
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
@@ -100,6 +101,54 @@ func (h *HNSW) Add(ctx context.Context, vectors ...Vector) {
 		span.Add(1)
 		return nil
 	})
+}
+
+func (h *HNSW) Evaluate(n int) float64 {
+	// create brute force index
+	bf := NewBruteforce()
+	bf.Add(context.Background(), h.vectors...)
+
+	// generate test samples
+	randomGenerator := base.NewRandomGenerator(0)
+	testSize := mathutil.Min(1024, len(h.vectors))
+	testSamples := randomGenerator.Sample(0, len(h.vectors), testSize)
+
+	// calculate recall
+	var result, count float64
+	var mu sync.Mutex
+	_ = parallel.Parallel(len(testSamples), h.numJobs, func(_, i int) error {
+		sample := testSamples[i]
+		expected := bf.Search(h.vectors[sample], n)
+		if len(expected) > 0 {
+			actual := h.Search(h.vectors[sample], n)
+			mu.Lock()
+			defer mu.Unlock()
+			result += recall(expected, actual)
+			count++
+		}
+		return nil
+	})
+	if count == 0 {
+		return 0
+	}
+	return result / count
+}
+
+func recall(expected, actual []Result) float64 {
+	var result float64
+	truth := mapset.NewSet[int32]()
+	for _, v := range expected {
+		truth.Add(v.Index)
+	}
+	for _, v := range actual {
+		if truth.Contains(v.Index) {
+			result++
+		}
+	}
+	if result == 0 {
+		return 0
+	}
+	return result / float64(len(actual))
 }
 
 // Search a vector in Hierarchical Navigable Small Worlds.

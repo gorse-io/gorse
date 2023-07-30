@@ -32,6 +32,10 @@ func (b *Bruteforce) Add(ctx context.Context, vectors ...Vector) {
 	b.vectors = append(b.vectors, vectors...)
 }
 
+func (b *Bruteforce) Evaluate(n int) float64 {
+	return 1
+}
+
 // Search returns the nearest neighbors of q.
 func (b *Bruteforce) Search(q Vector, n int) []Result {
 	pq := heap.NewPriorityQueue(true)
