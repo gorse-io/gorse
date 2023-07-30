@@ -19,6 +19,16 @@ import (
 	"sort"
 )
 
+type Distance func(a, b Vector) float32
+
+func Euclidean(a, b Vector) float32 {
+	return a.Euclidean(b)
+}
+
+func Dot(a, b Vector) float32 {
+	return a.Dot(b)
+}
+
 type Vector interface {
 	Euclidean(vec Vector) float32
 	Dot(vec Vector) float32
@@ -78,7 +88,7 @@ func (v DenseVector) Dot(vec Vector) float32 {
 	for i := range v.Data {
 		sum += v.Data[i] * dense.Data[i]
 	}
-	return sum
+	return -sum
 }
 
 type SparseVector struct {
@@ -159,5 +169,5 @@ func (v SparseVector) Dot(vec Vector) float32 {
 			j++
 		}
 	}
-	return sum
+	return -sum
 }

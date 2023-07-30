@@ -63,7 +63,9 @@ func (t *Tracer) List() []Progress {
 	var progress []Progress
 	t.spans.Range(func(key, value interface{}) bool {
 		span := value.(*Span)
-		progress = append(progress, span.Progress())
+		p := span.Progress()
+		p.Tracer = t.name
+		progress = append(progress, p)
 		return true
 	})
 	// sort by start time

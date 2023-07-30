@@ -22,10 +22,13 @@ import (
 
 type Bruteforce struct {
 	vectors []Vector
+	distFn  Distance
 }
 
-func NewBruteforce() *Bruteforce {
-	return &Bruteforce{}
+func NewBruteforce(dist Distance) *Bruteforce {
+	return &Bruteforce{
+		distFn: dist,
+	}
 }
 
 func (b *Bruteforce) Add(ctx context.Context, vectors ...Vector) {
@@ -41,7 +44,7 @@ func (b *Bruteforce) Search(q Vector, n int) []Result {
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
 		if vec != q {
-			pq.Push(int32(i), q.Euclidean(vec))
+			pq.Push(int32(i), b.distFn(q, vec))
 			if pq.Len() > n {
 				pq.Pop()
 			}

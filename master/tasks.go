@@ -345,9 +345,9 @@ func (m *Master) findItemNeighbors(ctx context.Context, dataset *ranking.DataSet
 	}
 	var searchIndex hnsw.VectorIndex
 	if m.Config.Recommend.ItemNeighbors.EnableIndex {
-		searchIndex = hnsw.NewHNSW()
+		searchIndex = hnsw.NewHNSW(hnsw.Euclidean)
 	} else {
-		searchIndex = hnsw.NewBruteforce()
+		searchIndex = hnsw.NewBruteforce(hnsw.Euclidean)
 	}
 	searchIndex.Add(newCtx, vectors...)
 	log.Logger().Info("complete build index", zap.Float64("recall", searchIndex.Evaluate(m.Config.Recommend.CacheSize)))
@@ -551,9 +551,9 @@ func (m *Master) findUserNeighbors(ctx context.Context, dataset *ranking.DataSet
 	}
 	var searchIndex hnsw.VectorIndex
 	if m.Config.Recommend.UserNeighbors.EnableIndex {
-		searchIndex = hnsw.NewHNSW()
+		searchIndex = hnsw.NewHNSW(hnsw.Euclidean)
 	} else {
-		searchIndex = hnsw.NewBruteforce()
+		searchIndex = hnsw.NewBruteforce(hnsw.Euclidean)
 	}
 	searchIndex.Add(ctx, vectors...)
 	log.Logger().Info("complete build index", zap.Float64("recall", searchIndex.Evaluate(m.Config.Recommend.CacheSize)))

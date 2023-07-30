@@ -13,3 +13,58 @@
 // limitations under the License.
 
 package hnsw
+
+import (
+	"context"
+	"runtime"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/ranking"
+)
+
+func TestHNSW_InnerProduct(t *testing.T) {
+	// load dataset
+	trainSet, testSet, err := ranking.LoadDataFromBuiltIn("ml-100k")
+	assert.NoError(t, err)
+	m := ranking.NewBPR(model.Params{
+		model.NFactors:   8,
+		model.Reg:        0.01,
+		model.Lr:         0.05,
+		model.NEpochs:    30,
+		model.InitMean:   0,
+		model.InitStdDev: 0.001,
+	})
+	fitConfig := ranking.NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
+	m.Fit(context.Background(), trainSet, testSet, fitConfig)
+	var vectors []Vector
+	for _, itemFactor := range m.ItemFactor {
+		vectors = append(vectors, NewDenseVector(itemFactor))
+	}
+
+	// build vector index
+	embeddingIndex := NewHNSW(Dot)
+	embeddingIndex.Add(context.Background(), vectors...)
+	assert.Greater(t, embeddingIndex.Evaluate(100), 0.9)
+}
+
+func TestHNSW_Cosine(t *testing.T) {
+	// load dataset
+	trainSet, _, err := ranking.LoadDataFromBuiltIn("ml-100k")
+	assert.NoError(t, err)
+	var vectors []Vector
+	for _, feedback := range trainSet.ItemFeedback {
+		values := make([]float32, len(feedback))
+		for i := range feedback {
+			values[i] = 1
+		}
+		vectors = append(vectors, NewSparseVector(feedback, values))
+	}
+
+	// build vector index
+	embeddingIndex := NewHNSW(Euclidean)
+	embeddingIndex.Add(context.Background(), vectors...)
+	assert.Greater(t, embeddingIndex.Evaluate(100), 0.8)
+}

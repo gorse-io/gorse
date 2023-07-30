@@ -91,7 +91,7 @@ type Worker struct {
 
 	latestRankingModelVersion int64
 	latestClickModelVersion   int64
-	embeddingIndex            *hnsw.VectorIndex
+	embeddingIndex            hnsw.VectorIndex
 	randGenerator             *rand.Rand
 
 	// peers
@@ -578,8 +578,8 @@ func (w *Worker) Recommend(users []data.User) {
 			if userIndex := w.RankingModel.GetUserIndex().ToNumber(userId); w.RankingModel.IsUserPredictable(userIndex) {
 				var recommend map[string][]string
 				var usedTime time.Duration
-				if w.Config.Recommend.Collaborative.EnableIndex && w.rankingIndex != nil {
-					recommend, usedTime, err = w.collaborativeRecommendHNSW(w.rankingIndex, userId, itemCategories, excludeSet, itemCache)
+				if w.Config.Recommend.Collaborative.EnableIndex && w.embeddingIndex != nil {
+					recommend, usedTime, err = w.collaborativeRecommendHNSW(w.embeddingIndex, userId, itemCategories, excludeSet, itemCache)
 				} else {
 					recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
 				}
@@ -860,11 +860,11 @@ func (w *Worker) collaborativeRecommendHNSW(embeddingIndex hnsw.VectorIndex, use
 	ctx := context.Background()
 	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
 	localStartTime := time.Now()
-	values, scores := embeddingIndex.Search(hnsw.NewDenseVector(w.RankingModel.GetUserFactor(userIndex)), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
+	results := embeddingIndex.Search(hnsw.NewDenseVector(w.RankingModel.GetUserFactor(userIndex)), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// save result
 	recommend := make(map[string][]string)
 	aggregator := cache.NewDocumentAggregator(localStartTime)
-	for category, catValues := range values {
+	for category, catValues := range results {
 		recommendItems := make([]string, 0, len(catValues))
 		recommendScores := make([]float64, 0, len(catValues))
 		for i := range catValues {

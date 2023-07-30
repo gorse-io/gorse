@@ -33,7 +33,7 @@ func TestDenseVector_Euclidean(t *testing.T) {
 func TestDenseVector_Dot(t *testing.T) {
 	a := NewDenseVector([]float32{1, 2, 3})
 	b := NewDenseVector([]float32{1, 4, 9})
-	assert.Equal(t, float32(36), a.Dot(b))
+	assert.Equal(t, float32(-36), a.Dot(b))
 
 	a = NewDenseVector([]float32{1, 2, 3, 4})
 	b = NewDenseVector([]float32{1, 2, 3, 4, 5})
@@ -57,13 +57,13 @@ func TestSparseVector_Euclidean(t *testing.T) {
 func TestSparseVector_Dot(t *testing.T) {
 	a := NewSparseVector([]int32{1, 2, 3}, []float32{1, 2, 3})
 	b := NewSparseVector([]int32{1, 2, 3}, []float32{1, 4, 9})
-	assert.Equal(t, float32(36), a.Dot(b))
+	assert.Equal(t, float32(-36), a.Dot(b))
 
 	a = NewSparseVector([]int32{1, 2, 4, 5}, []float32{1, 2, 3, 4})
 	b = NewSparseVector([]int32{1, 2, 3, 5, 6}, []float32{1, 2, 3, 4, 5})
-	assert.Equal(t, float32(21), a.Dot(b))
+	assert.Equal(t, float32(-21), a.Dot(b))
 
 	a = NewSparseVector([]int32{1, 2, 3, 5, 6}, []float32{1, 2, 3, 4, 5})
 	b = NewSparseVector([]int32{1, 2, 4, 5}, []float32{1, 2, 3, 4})
-	assert.Equal(t, float32(21), a.Dot(b))
+	assert.Equal(t, float32(-21), a.Dot(b))
 }

@@ -32,6 +32,7 @@ import (
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
 type HNSW struct {
 	vectors         []Vector
+	distFn          Distance
 	bottomNeighbors []*heap.PriorityQueue
 	upperNeighbors  []sync.Map
 	enterPoint      int32
@@ -74,8 +75,9 @@ func SetEFConstruction(efConstruction int) HNSWConfig {
 }
 
 // NewHNSW builds a vector index based on Hierarchical Navigable Small Worlds.
-func NewHNSW(configs ...HNSWConfig) *HNSW {
+func NewHNSW(distFn Distance, configs ...HNSWConfig) *HNSW {
 	h := &HNSW{
+		distFn:         distFn,
 		levelFactor:    1.0 / math32.Log(48),
 		maxConnection:  48,
 		maxConnection0: 96,
@@ -105,7 +107,7 @@ func (h *HNSW) Add(ctx context.Context, vectors ...Vector) {
 
 func (h *HNSW) Evaluate(n int) float64 {
 	// create brute force index
-	bf := NewBruteforce()
+	bf := NewBruteforce(h.distFn)
 	bf.Add(context.Background(), h.vectors...)
 
 	// generate test samples
@@ -275,7 +277,7 @@ func (h *HNSW) searchLayer(q Vector, enterPoints *heap.PriorityQueue, ef, curren
 				v.Add(e)
 				// get the furthest element from w to q
 				_, fq = w.Peek()
-				if eq := h.vectors[e].Euclidean(q); eq < fq || w.Len() < ef {
+				if eq := h.distFn(h.vectors[e], q); eq < fq || w.Len() < ef {
 					candidates.Push(e, eq)
 					w.Push(e, eq)
 					if w.Len() > ef {
@@ -317,7 +319,7 @@ func (h *HNSW) selectNeighbors(_ Vector, candidates *heap.PriorityQueue, m int) 
 func (h *HNSW) distance(q Vector, points []int32) *heap.PriorityQueue {
 	pq := heap.NewPriorityQueue(false)
 	for _, point := range points {
-		pq.Push(point, h.vectors[point].Euclidean(q))
+		pq.Push(point, h.distFn(h.vectors[point], q))
 	}
 	return pq
 }

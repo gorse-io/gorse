@@ -15,23 +15,32 @@
 package hnsw
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBruteforce(t *testing.T) {
-	bf := NewBruteforce()
-	bf.Add(NewDenseVector([]float32{0, 0, 0, 0, 0, 1}))
-	bf.Add(NewDenseVector([]float32{0, 0, 0, 0, 1, 1}))
-	bf.Add(NewDenseVector([]float32{0, 0, 0, 1, 1, 1}))
-	bf.Add(NewDenseVector([]float32{0, 0, 1, 1, 1, 1}))
-	bf.Add(NewDenseVector([]float32{0, 1, 1, 1, 1, 1}))
-	bf.Add(NewDenseVector([]float32{1, 1, 1, 1, 1, 1}))
+	bf := NewBruteforce(Euclidean)
+	bf.Add(context.Background(), NewDenseVector([]float32{0, 0, 0, 0, 0, 1}))
+	bf.Add(context.Background(), NewDenseVector([]float32{0, 0, 0, 0, 1, 1}))
+	bf.Add(context.Background(), NewDenseVector([]float32{0, 0, 0, 1, 1, 1}))
+	bf.Add(context.Background(), NewDenseVector([]float32{0, 0, 1, 1, 1, 1}))
+	bf.Add(context.Background(), NewDenseVector([]float32{0, 1, 1, 1, 1, 1}))
+	bf.Add(context.Background(), NewDenseVector([]float32{1, 1, 1, 1, 1, 1}))
 	results := bf.Search(NewDenseVector([]float32{0, 0, 0, 0, 0, 0}), 3)
 	assert.Equal(t, []Result{
 		{Index: 0, Distance: 1},
 		{Index: 1, Distance: 2},
 		{Index: 2, Distance: 3},
+	}, results)
+
+	bf.distFn = Dot
+	results = bf.Search(NewDenseVector([]float32{1, 1, 1, 1, 1, 1}), 3)
+	assert.Equal(t, []Result{
+		{Index: 5, Distance: -6},
+		{Index: 4, Distance: -5},
+		{Index: 3, Distance: -4},
 	}, results)
 }
