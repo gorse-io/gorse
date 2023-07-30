@@ -35,10 +35,10 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/zhenghaoz/gorse/base/hnsw"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -91,7 +91,7 @@ type Worker struct {
 
 	latestRankingModelVersion int64
 	latestClickModelVersion   int64
-	rankingIndex              *search.HNSW
+	embeddingIndex            *hnsw.VectorIndex
 	randGenerator             *rand.Rand
 
 	// peers
@@ -242,7 +242,7 @@ func (w *Worker) Pull() {
 					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
 					w.RankingModel = rankingModel
-					w.rankingIndex = nil
+					w.embeddingIndex = nil
 					w.RankingModelVersion = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
 						zap.String("version", encoding.Hex(w.RankingModelVersion)))
@@ -490,28 +490,28 @@ func (w *Worker) Recommend(users []data.User) {
 	}()
 
 	// build ranking index
-	if w.RankingModel != nil && !w.RankingModel.Invalid() && w.rankingIndex == nil {
+	if w.RankingModel != nil && !w.RankingModel.Invalid() && w.embeddingIndex == nil {
 		if w.Config.Recommend.Collaborative.EnableIndex {
 			startTime := time.Now()
 			log.Logger().Info("start building ranking index")
 			itemIndex := w.RankingModel.GetItemIndex()
-			vectors := make([]search.Vector, itemIndex.Len())
+			vectors := make([]hnsw.Vector, itemIndex.Len())
 			for i := int32(0); i < itemIndex.Len(); i++ {
 				itemId := itemIndex.ToName(i)
 				if itemCache.IsAvailable(itemId) {
-					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), itemCache.GetCategory(itemId), false)
+					vectors[i] = hnsw.NewDenseVector(w.RankingModel.GetItemFactor(i))
 				} else {
-					vectors[i] = search.NewDenseVector(w.RankingModel.GetItemFactor(i), nil, true)
+					vectors[i] = hnsw.NewDenseVector(w.RankingModel.GetItemFactor(i))
 				}
 			}
-			builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, w.jobs)
-			var recall float32
-			w.rankingIndex, recall = builder.Build(ctx, w.Config.Recommend.Collaborative.IndexRecall,
-				w.Config.Recommend.Collaborative.IndexFitEpoch, false)
-			CollaborativeFilteringIndexRecall.Set(float64(recall))
-			if err = w.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
-				log.Logger().Error("failed to write meta", zap.Error(err))
-			}
+			// builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, w.jobs)
+			// var recall float32
+			// w.rankingIndex, recall = builder.Build(ctx, w.Config.Recommend.Collaborative.IndexRecall,
+			// 	w.Config.Recommend.Collaborative.IndexFitEpoch, false)
+			// CollaborativeFilteringIndexRecall.Set(float64(recall))
+			// if err = w.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
+			// 	log.Logger().Error("failed to write meta", zap.Error(err))
+			// }
 			log.Logger().Info("complete building ranking index",
 				zap.Duration("build_time", time.Since(startTime)))
 		} else {
@@ -856,12 +856,11 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	return recommend, time.Since(localStartTime), nil
 }
 
-func (w *Worker) collaborativeRecommendHNSW(rankingIndex *search.HNSW, userId string, itemCategories []string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
+func (w *Worker) collaborativeRecommendHNSW(embeddingIndex hnsw.VectorIndex, userId string, itemCategories []string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	ctx := context.Background()
 	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
 	localStartTime := time.Now()
-	values, scores := rankingIndex.MultiSearch(search.NewDenseVector(w.RankingModel.GetUserFactor(userIndex), nil, false),
-		itemCategories, w.Config.Recommend.CacheSize+excludeSet.Cardinality(), false)
+	values, scores := embeddingIndex.Search(hnsw.NewDenseVector(w.RankingModel.GetUserFactor(userIndex)), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// save result
 	recommend := make(map[string][]string)
 	aggregator := cache.NewDocumentAggregator(localStartTime)

@@ -223,7 +223,7 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	numItems := dataset.ItemCount()
 	numFeedback := dataset.Count()
 
-	newCtx, span := t.tracer.Start(ctx, "Find Item Neighbors", dataset.ItemCount())
+	newCtx, span := t.tracer.Start(ctx, "Find Item Neighbors", 1)
 	defer span.End()
 
 	if numItems == 0 {
@@ -236,31 +236,6 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	startTaskTime := time.Now()
 	log.Logger().Info("start searching neighbors of items",
 		zap.Int("n_cache", t.Config.Recommend.CacheSize))
-	// create progress tracker
-	completed := make(chan struct{}, 1000)
-	go func() {
-		completedCount, previousCount := 0, 0
-		ticker := time.NewTicker(time.Second * 10)
-		for {
-			select {
-			case _, ok := <-completed:
-				if !ok {
-					return
-				}
-				completedCount++
-			case <-ticker.C:
-				throughput := completedCount - previousCount
-				previousCount = completedCount
-				if throughput > 0 {
-					log.Logger().Debug("searching neighbors of items",
-						zap.Int("n_complete_items", completedCount),
-						zap.Int("n_items", dataset.ItemCount()),
-						zap.Int("throughput", throughput/10))
-					span.Add(throughput)
-				}
-			}
-		}
-	}()
 
 	userIDF := make([]float32, dataset.UserCount())
 	if t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
@@ -301,11 +276,9 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	}
 
 	start := time.Now()
-	var err error
-	err = t.findItemNeighborsBruteForce(dataset, labeledItems, labelWeights, userIDF, completed, j)
+	err := t.findItemNeighbors(newCtx, dataset, labeledItems, labelWeights, userIDF, j)
 	searchTime := time.Since(start)
 
-	close(completed)
 	if err != nil {
 		log.Logger().Error("failed to searching neighbors of items", zap.Error(err))
 		progress.Fail(newCtx, err)
@@ -324,14 +297,17 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	return nil
 }
 
-func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledItems [][]int32,
-	labelIDF, userIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
-	ctx := context.Background()
+func (m *Master) findItemNeighbors(ctx context.Context, dataset *ranking.DataSet, labeledItems [][]int32,
+	labelIDF, userIDF []float32, j *task.JobsAllocator) error {
+	newCtx, span := progress.Start(ctx, "Master.findItemNeighbors", 2)
+	defer span.End()
+
 	var (
 		updateItemCount     atomic.Float64
 		findNeighborSeconds atomic.Float64
 	)
 
+	// step 1: build index
 	vectors := make([]hnsw.Vector, dataset.ItemCount())
 	for i := range vectors {
 		switch m.Config.Recommend.ItemNeighbors.NeighborType {
@@ -367,13 +343,19 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
 		}
 	}
-	bf := hnsw.NewBruteforce()
-	bf.Add(vectors...)
+	var searchIndex hnsw.VectorIndex
+	if m.Config.Recommend.ItemNeighbors.EnableIndex {
+		searchIndex = hnsw.NewHNSW()
+	} else {
+		searchIndex = hnsw.NewBruteforce()
+	}
+	searchIndex.Add(newCtx, vectors...)
+	span.Add(1)
 
+	// step 2: find neighbors of items
+	_, parallelSpan := progress.Start(newCtx, "Master.findItemNeighbors.parallel", dataset.ItemCount())
 	err := parallel.DynamicParallel(dataset.ItemCount(), j, func(workerId, itemIndex int) error {
-		defer func() {
-			completed <- struct{}{}
-		}()
+		defer parallelSpan.Add(1)
 		startTime := time.Now()
 		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
 		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
@@ -381,7 +363,7 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 		}
 		updateItemCount.Add(1)
 
-		results := bf.Search(vectors[itemIndex], m.Config.Recommend.CacheSize)
+		results := searchIndex.Search(vectors[itemIndex], m.Config.Recommend.CacheSize)
 		documents := make([]cache.Document, 0)
 		for _, result := range results {
 			if uint32(result.Index) != uint32(itemIndex) {
@@ -461,31 +443,6 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	startTaskTime := time.Now()
 	log.Logger().Info("start searching neighbors of users",
 		zap.Int("n_cache", t.Config.Recommend.CacheSize))
-	// create progress tracker
-	completed := make(chan struct{}, 1000)
-	go func() {
-		completedCount, previousCount := 0, 0
-		ticker := time.NewTicker(time.Second)
-		for {
-			select {
-			case _, ok := <-completed:
-				if !ok {
-					return
-				}
-				completedCount++
-			case <-ticker.C:
-				throughput := completedCount - previousCount
-				previousCount = completedCount
-				if throughput > 0 {
-					log.Logger().Debug("searching neighbors of users",
-						zap.Int("n_complete_users", completedCount),
-						zap.Int("n_users", dataset.UserCount()),
-						zap.Int("throughput", throughput))
-					span.Add(throughput)
-				}
-			}
-		}
-	}()
 
 	itemIDF := make([]float32, dataset.ItemCount())
 	if t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
@@ -526,11 +483,9 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	}
 
 	start := time.Now()
-	var err error
-	err = t.findUserNeighborsBruteForce(newCtx, dataset, labeledUsers, labelWeights, itemIDF, completed, j)
+	err := t.findUserNeighbors(newCtx, dataset, labeledUsers, labelWeights, itemIDF, completed, j)
 	searchTime := time.Since(start)
 
-	close(completed)
 	if err != nil {
 		log.Logger().Error("failed to searching neighbors of users", zap.Error(err))
 		progress.Fail(newCtx, err)
@@ -549,12 +504,16 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 	return nil
 }
 
-func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
+func (m *Master) findUserNeighbors(ctx context.Context, dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, j *task.JobsAllocator) error {
+	newCtx, span := progress.Start(ctx, "Master.findUserNeighbors", 2)
+	defer span.End()
+
 	var (
 		updateUserCount     atomic.Float64
 		findNeighborSeconds atomic.Float64
 	)
 
+	// step 1: build index
 	vectors := make([]hnsw.Vector, dataset.UserCount())
 	for i := range vectors {
 		switch m.Config.Recommend.UserNeighbors.NeighborType {
@@ -589,13 +548,19 @@ func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranki
 			return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
 		}
 	}
-	bf := hnsw.NewBruteforce()
-	bf.Add(vectors...)
+	var searchIndex hnsw.VectorIndex
+	if m.Config.Recommend.UserNeighbors.EnableIndex {
+		searchIndex = hnsw.NewHNSW()
+	} else {
+		searchIndex = hnsw.NewBruteforce()
+	}
+	searchIndex.Add(ctx, vectors...)
+	span.Add(1)
 
+	// step 2: find neighbors of users
+	_, parallelSpan := progress.Start(newCtx, "Master.findUserNeighbors.parallel", dataset.UserCount())
 	err := parallel.DynamicParallel(dataset.UserCount(), j, func(workerId, userIndex int) error {
-		defer func() {
-			completed <- struct{}{}
-		}()
+		defer parallelSpan.Add(1)
 		startTime := time.Now()
 		userId := dataset.UserIndex.ToName(int32(userIndex))
 		if !m.checkUserNeighborCacheTimeout(userId) {
@@ -603,7 +568,7 @@ func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranki
 		}
 		updateUserCount.Add(1)
 
-		results := bf.Search(vectors[userIndex], m.Config.Recommend.CacheSize)
+		results := searchIndex.Search(vectors[userIndex], m.Config.Recommend.CacheSize)
 		documents := make([]cache.Document, 0)
 		for _, result := range results {
 			if uint32(result.Index) != uint32(userIndex) {

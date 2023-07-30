@@ -14,7 +14,11 @@
 
 package hnsw
 
-import "github.com/zhenghaoz/gorse/base/heap"
+import (
+	"context"
+
+	"github.com/zhenghaoz/gorse/base/heap"
+)
 
 type Bruteforce struct {
 	vectors []Vector
@@ -24,7 +28,7 @@ func NewBruteforce() *Bruteforce {
 	return &Bruteforce{}
 }
 
-func (b *Bruteforce) Add(vectors ...Vector) {
+func (b *Bruteforce) Add(ctx context.Context, vectors ...Vector) {
 	b.vectors = append(b.vectors, vectors...)
 }
 

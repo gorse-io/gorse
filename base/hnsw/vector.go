@@ -14,7 +14,10 @@
 
 package hnsw
 
-import "sort"
+import (
+	"context"
+	"sort"
+)
 
 type Vector interface {
 	Euclidean(vec Vector) float32
@@ -22,7 +25,7 @@ type Vector interface {
 }
 
 type VectorIndex interface {
-	Add(vectors ...Vector)
+	Add(ctx context.Context, vectors ...Vector)
 	Search(q Vector, n int) []Result
 }
 

@@ -82,9 +82,12 @@ type Span struct {
 	start    time.Time
 	finish   time.Time
 	children sync.Map
+	mu       sync.RWMutex
 }
 
 func (s *Span) Add(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.count = mathutil.Min(s.count+n, s.total)
 }
 

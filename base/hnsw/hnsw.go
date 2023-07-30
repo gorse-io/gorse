@@ -15,18 +15,16 @@
 package hnsw
 
 import (
+	"context"
 	"math/rand"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/heap"
-	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
-	"go.uber.org/zap"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"modernc.org/mathutil"
 )
 
@@ -75,9 +73,8 @@ func SetEFConstruction(efConstruction int) HNSWConfig {
 }
 
 // NewHNSW builds a vector index based on Hierarchical Navigable Small Worlds.
-func NewHNSW(vectors []Vector, configs ...HNSWConfig) *HNSW {
+func NewHNSW(configs ...HNSWConfig) *HNSW {
 	h := &HNSW{
-		vectors:        vectors,
 		levelFactor:    1.0 / math32.Log(48),
 		maxConnection:  48,
 		maxConnection0: 96,
@@ -88,6 +85,21 @@ func NewHNSW(vectors []Vector, configs ...HNSWConfig) *HNSW {
 		config(h)
 	}
 	return h
+}
+
+func (h *HNSW) Add(ctx context.Context, vectors ...Vector) {
+	_, span := progress.Start(ctx, "HNSW.Add", len(vectors))
+	defer span.End()
+
+	oldLen := len(h.vectors)
+	h.vectors = append(h.vectors, vectors...)
+	h.bottomNeighbors = append(h.bottomNeighbors, make([]*heap.PriorityQueue, len(vectors))...)
+	h.nodeMutexes = append(h.nodeMutexes, make([]sync.RWMutex, len(vectors))...)
+	_ = parallel.Parallel(len(vectors), h.numJobs, func(_, jobId int) error {
+		h.insert(int32(oldLen + jobId))
+		span.Add(1)
+		return nil
+	})
 }
 
 // Search a vector in Hierarchical Navigable Small Worlds.
@@ -117,43 +129,6 @@ func (h *HNSW) knnSearch(q Vector, k, ef int) *heap.PriorityQueue {
 	}
 	w = h.searchLayer(q, enterPoints, ef, 0)
 	return h.selectNeighbors(q, w, k)
-}
-
-// Build a vector index on data.
-func (h *HNSW) Build() {
-	completed := make(chan struct{}, h.numJobs)
-	go func() {
-		defer base.CheckPanic()
-		completedCount, previousCount := 0, 0
-		ticker := time.NewTicker(10 * time.Second)
-		for {
-			select {
-			case _, ok := <-completed:
-				if !ok {
-					return
-				}
-				completedCount++
-			case <-ticker.C:
-				throughput := completedCount - previousCount
-				previousCount = completedCount
-				if throughput > 0 {
-					log.Logger().Info("building index",
-						zap.Int("n_indexed_vectors", completedCount),
-						zap.Int("n_vectors", len(h.vectors)),
-						zap.Int("throughput", throughput))
-				}
-			}
-		}
-	}()
-
-	h.bottomNeighbors = make([]*heap.PriorityQueue, len(h.vectors))
-	h.nodeMutexes = make([]sync.RWMutex, len(h.vectors))
-	_ = parallel.Parallel(len(h.vectors), h.numJobs, func(_, jobId int) error {
-		h.insert(int32(jobId))
-		completed <- struct{}{}
-		return nil
-	})
-	close(completed)
 }
 
 // insert i-th vector into the vector index.
