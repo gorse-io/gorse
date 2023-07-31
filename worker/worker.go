@@ -504,14 +504,13 @@ func (w *Worker) Recommend(users []data.User) {
 					vectors[i] = hnsw.NewDenseVector(w.RankingModel.GetItemFactor(i))
 				}
 			}
-			// builder := search.NewHNSWBuilder(vectors, w.Config.Recommend.CacheSize, w.jobs)
-			// var recall float32
-			// w.rankingIndex, recall = builder.Build(ctx, w.Config.Recommend.Collaborative.IndexRecall,
-			// 	w.Config.Recommend.Collaborative.IndexFitEpoch, false)
-			// CollaborativeFilteringIndexRecall.Set(float64(recall))
-			// if err = w.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
-			// 	log.Logger().Error("failed to write meta", zap.Error(err))
-			// }
+			w.embeddingIndex = hnsw.NewHNSW(hnsw.Dot)
+			w.embeddingIndex.Add(context.Background(), vectors...)
+			recall := w.embeddingIndex.Evaluate(w.Config.Recommend.CacheSize)
+			CollaborativeFilteringIndexRecall.Set(float64(recall))
+			if err = w.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
+				log.Logger().Error("failed to write meta", zap.Error(err))
+			}
 			log.Logger().Info("complete building ranking index",
 				zap.Duration("build_time", time.Since(startTime)))
 		} else {
