@@ -17,6 +17,7 @@ package hnsw
 import (
 	"context"
 
+	"github.com/chewxy/math32"
 	"github.com/zhenghaoz/gorse/base/heap"
 )
 
@@ -44,7 +45,11 @@ func (b *Bruteforce) Search(q Vector, n int) []Result {
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
 		if vec != nil && vec != q {
-			pq.Push(int32(i), b.distFn(q, vec))
+			d := b.distFn(q, vec)
+			if math32.IsInf(d, 1) {
+				continue
+			}
+			pq.Push(int32(i), d)
 			if pq.Len() > n {
 				pq.Pop()
 			}

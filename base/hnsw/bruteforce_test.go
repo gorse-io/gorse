@@ -45,10 +45,18 @@ func TestBruteforce(t *testing.T) {
 	}, results)
 }
 
-func TestBruteforceHasNil(t *testing.T) {
+func TestBruteforce_HasNil(t *testing.T) {
 	vectors := []Vector{nil, nil, NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), nil}
 	bf := NewBruteforce(Euclidean)
 	bf.Add(context.Background(), vectors...)
 	results := bf.Search(NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), 3)
 	assert.Equal(t, []Result{{Index: 2, Distance: 0}}, results)
+}
+
+func TestBruteforce_HasInf(t *testing.T) {
+	bf := NewBruteforce(Euclidean)
+	bf.Add(context.Background(), NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3}))
+	bf.Add(context.Background(), NewSparseVector([]int32{2, 4, 6}, []float32{1, 2, 3}))
+	results := bf.Search(NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3}), 3)
+	assert.Equal(t, []Result{{Index: 0, Distance: 0}}, results)
 }

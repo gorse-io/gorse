@@ -17,6 +17,8 @@ package hnsw
 import (
 	"context"
 	"sort"
+
+	"github.com/chewxy/math32"
 )
 
 type Distance func(a, b Vector) float32
@@ -118,6 +120,7 @@ func (v SparseVector) Swap(i, j int) {
 	v.values[i], v.values[j] = v.values[j], v.values[i]
 }
 
+// Euclidean calculates the Euclidean distance between two sparse vectors. If there are no common indices, the distance is +Inf.
 func (v SparseVector) Euclidean(vec Vector) float32 {
 	// check type
 	sparse, ok := vec.(*SparseVector)
@@ -126,12 +129,13 @@ func (v SparseVector) Euclidean(vec Vector) float32 {
 	}
 	// calculate distance
 	var sum float32
-	i, j := 0, 0
+	i, j, k := 0, 0, 0
 	for i < len(v.indices) && j < len(sparse.indices) {
 		if v.indices[i] == sparse.indices[j] {
 			sum += (v.values[i] - sparse.values[j]) * (v.values[i] - sparse.values[j])
 			i++
 			j++
+			k++
 		} else if v.indices[i] < sparse.indices[j] {
 			sum += v.values[i] * v.values[i]
 			i++
@@ -139,6 +143,9 @@ func (v SparseVector) Euclidean(vec Vector) float32 {
 			sum += sparse.values[j] * sparse.values[j]
 			j++
 		}
+	}
+	if k == 0 {
+		return math32.Inf(1)
 	}
 	for ; i < len(v.indices); i++ {
 		sum += v.values[i] * v.values[i]
@@ -149,6 +156,7 @@ func (v SparseVector) Euclidean(vec Vector) float32 {
 	return sum
 }
 
+// Dot calculates the dot product between two sparse vectors. If there are no common indices, the distance is +Inf.
 func (v SparseVector) Dot(vec Vector) float32 {
 	// check type
 	sparse, ok := vec.(*SparseVector)
@@ -157,17 +165,21 @@ func (v SparseVector) Dot(vec Vector) float32 {
 	}
 	// calculate distance
 	var sum float32
-	i, j := 0, 0
+	i, j, k := 0, 0, 0
 	for i < len(v.indices) && j < len(sparse.indices) {
 		if v.indices[i] == sparse.indices[j] {
 			sum += v.values[i] * sparse.values[j]
 			i++
 			j++
+			k++
 		} else if v.indices[i] < sparse.indices[j] {
 			i++
 		} else {
 			j++
 		}
+	}
+	if k == 0 {
+		return math32.Inf(1)
 	}
 	return -sum
 }

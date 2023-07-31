@@ -161,6 +161,9 @@ func (h *HNSW) Search(q Vector, n int) []Result {
 	results := make([]Result, 0, w.Len())
 	for w.Len() > 0 {
 		value, score := w.Pop()
+		if math32.IsInf(score, 1) {
+			break
+		}
 		results = append(results, Result{
 			Index:    value,
 			Distance: score,

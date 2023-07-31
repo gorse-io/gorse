@@ -17,6 +17,7 @@ package hnsw
 import (
 	"testing"
 
+	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,6 +53,11 @@ func TestSparseVector_Euclidean(t *testing.T) {
 	a = NewSparseVector([]int32{1, 2, 3, 5, 6}, []float32{1, 2, 3, 4, 5})
 	b = NewSparseVector([]int32{1, 2, 4, 5}, []float32{1, 2, 3, 4})
 	assert.Equal(t, float32(43), a.Euclidean(b))
+
+	// infinite distance
+	a = NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3})
+	b = NewSparseVector([]int32{2, 4, 6}, []float32{1, 2, 3})
+	assert.Equal(t, float32(math32.Inf(1)), a.Euclidean(b))
 }
 
 func TestSparseVector_Dot(t *testing.T) {
@@ -66,4 +72,9 @@ func TestSparseVector_Dot(t *testing.T) {
 	a = NewSparseVector([]int32{1, 2, 3, 5, 6}, []float32{1, 2, 3, 4, 5})
 	b = NewSparseVector([]int32{1, 2, 4, 5}, []float32{1, 2, 3, 4})
 	assert.Equal(t, float32(-21), a.Dot(b))
+
+	// infinite distance
+	a = NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3})
+	b = NewSparseVector([]int32{2, 4, 6}, []float32{1, 2, 3})
+	assert.Equal(t, float32(math32.Inf(1)), a.Dot(b))
 }

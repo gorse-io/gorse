@@ -76,3 +76,11 @@ func TestHNSW_HasNil(t *testing.T) {
 	results := index.Search(NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), 3)
 	assert.Equal(t, []Result{{Index: 2, Distance: 0}}, results)
 }
+
+func TestHNSW_HasInf(t *testing.T) {
+	index := NewHNSW(Euclidean)
+	index.Add(context.Background(), NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3}))
+	index.Add(context.Background(), NewSparseVector([]int32{2, 4, 6}, []float32{1, 2, 3}))
+	results := index.Search(NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3}), 3)
+	assert.Equal(t, []Result{{Index: 0, Distance: 0}}, results)
+}
