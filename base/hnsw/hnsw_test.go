@@ -68,3 +68,11 @@ func TestHNSW_Cosine(t *testing.T) {
 	embeddingIndex.Add(context.Background(), vectors...)
 	assert.Greater(t, embeddingIndex.Evaluate(100), 0.8)
 }
+
+func TestHNSW_HasNil(t *testing.T) {
+	vectors := []Vector{nil, nil, NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), nil}
+	index := NewHNSW(Euclidean)
+	index.Add(context.Background(), vectors...)
+	results := index.Search(NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), 3)
+	assert.Equal(t, []Result{{Index: 2, Distance: 0}}, results)
+}

@@ -44,3 +44,11 @@ func TestBruteforce(t *testing.T) {
 		{Index: 3, Distance: -4},
 	}, results)
 }
+
+func TestBruteforceHasNil(t *testing.T) {
+	vectors := []Vector{nil, nil, NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), nil}
+	bf := NewBruteforce(Euclidean)
+	bf.Add(context.Background(), vectors...)
+	results := bf.Search(NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), 3)
+	assert.Equal(t, []Result{{Index: 2, Distance: 0}}, results)
+}

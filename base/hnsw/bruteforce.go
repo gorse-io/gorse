@@ -43,7 +43,7 @@ func (b *Bruteforce) Evaluate(n int) float64 {
 func (b *Bruteforce) Search(q Vector, n int) []Result {
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
-		if vec != q {
+		if vec != nil && vec != q {
 			pq.Push(int32(i), b.distFn(q, vec))
 			if pq.Len() > n {
 				pq.Pop()

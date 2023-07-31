@@ -99,7 +99,9 @@ func (h *HNSW) Add(ctx context.Context, vectors ...Vector) {
 	h.bottomNeighbors = append(h.bottomNeighbors, make([]*heap.PriorityQueue, len(vectors))...)
 	h.nodeMutexes = append(h.nodeMutexes, make([]sync.RWMutex, len(vectors))...)
 	_ = parallel.Parallel(len(vectors), h.numJobs, func(_, jobId int) error {
-		h.insert(int32(oldLen + jobId))
+		if vectors[jobId] != nil {
+			h.insert(int32(oldLen + jobId))
+		}
 		span.Add(1)
 		return nil
 	})
