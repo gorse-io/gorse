@@ -579,7 +579,7 @@ func (w *Worker) Recommend(users []data.User) {
 				var recommend map[string][]string
 				var usedTime time.Duration
 				if w.Config.Recommend.Collaborative.EnableIndex && w.embeddingIndex != nil {
-					recommend, usedTime, err = w.collaborativeRecommendHNSW(w.embeddingIndex, userId, itemCategories, excludeSet, itemCache)
+					recommend, usedTime, err = w.collaborativeRecommendHNSW(ctx, w.embeddingIndex, userId, itemCategories, excludeSet, itemCache)
 				} else {
 					recommend, usedTime, err = w.collaborativeRecommendBruteForce(userId, itemCategories, excludeSet, itemCache)
 				}
@@ -856,28 +856,29 @@ func (w *Worker) collaborativeRecommendBruteForce(userId string, itemCategories 
 	return recommend, time.Since(localStartTime), nil
 }
 
-func (w *Worker) collaborativeRecommendHNSW(embeddingIndex hnsw.VectorIndex, userId string, itemCategories []string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
-	ctx := context.Background()
+func (w *Worker) collaborativeRecommendHNSW(ctx context.Context, embeddingIndex hnsw.VectorIndex, userId string, itemCategories []string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
 	localStartTime := time.Now()
 	results := embeddingIndex.Search(hnsw.NewDenseVector(w.RankingModel.GetUserFactor(userIndex)), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// save result
+	documents := make([]cache.Document, 0, len(results))
 	recommend := make(map[string][]string)
-	aggregator := cache.NewDocumentAggregator(localStartTime)
-	for category, catValues := range results {
-		recommendItems := make([]string, 0, len(catValues))
-		recommendScores := make([]float64, 0, len(catValues))
-		for i := range catValues {
-			itemId := w.RankingModel.GetItemIndex().ToName(catValues[i])
-			if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) {
-				recommendItems = append(recommendItems, itemId)
-				recommendScores = append(recommendScores, float64(scores[category][i]))
+	for _, result := range results {
+		itemId := w.RankingModel.GetItemIndex().ToName(result.Index)
+		if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) && w.RankingModel.IsItemPredictable(result.Index) {
+			categories := append([]string{""}, itemCache.GetCategory(itemId)...)
+			documents = append(documents, cache.Document{
+				Id:         itemId,
+				Score:      float64(result.Distance),
+				Categories: categories,
+				Timestamp:  localStartTime,
+			})
+			for _, category := range categories {
+				recommend[category] = append(recommend[category], itemId)
 			}
 		}
-		recommend[category] = recommendItems
-		aggregator.Add(category, recommendItems, recommendScores)
 	}
-	if err := w.CacheClient.AddDocuments(ctx, cache.CollaborativeRecommend, userId, aggregator.ToSlice()); err != nil {
+	if err := w.CacheClient.AddDocuments(ctx, cache.CollaborativeRecommend, userId, documents); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)
 	}
