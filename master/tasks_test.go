@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -479,6 +480,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Config.Recommend.CacheSize = 3
 	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
 	s.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"negative"}
+	s.Config.Master.NumJobs = runtime.NumCPU()
 
 	// insert items
 	var items []data.Item
