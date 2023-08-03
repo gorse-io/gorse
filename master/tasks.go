@@ -1590,26 +1590,28 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
-	for feedback := range feedbackChan {
+	for _, userId := range rankingDataset.UserIndex.GetNames() {
+		// convert user id to index
+		userIndex := rankingDataset.UserIndex.ToNumber(userId)
+		if userIndex == base.NotId {
+			continue
+		}
+		// load negative feedback from database
+		feedback, err := database.GetUserFeedback(ctx, userId, feedbackTimeLimit, readTypes...)
+		if err != nil {
+			return nil, nil, nil, nil, errors.Trace(err)
+		}
 		for _, f := range feedback {
-			feedbackCount++
-			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
-			if userIndex == base.NotId {
-				continue
-			}
 			itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
 			if itemIndex == base.NotId {
 				continue
 			}
+			feedbackCount++
 			if !positiveSet[userIndex].Contains(itemIndex) {
 				negativeSet[userIndex].Add(itemIndex)
 			}
 			evaluator.Read(userIndex, itemIndex, f.Timestamp)
 		}
-	}
-	if err = <-errChan; err != nil {
-		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	FeedbacksTotal.Set(feedbackCount)
 	log.Logger().Debug("pulled negative feedback from database",
