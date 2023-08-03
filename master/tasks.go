@@ -1546,20 +1546,28 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	// STEP 3: pull positive feedback
 	var feedbackCount float64
 	start = time.Now()
-	feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), posFeedbackTypes...)
-	for feedback := range feedbackChan {
+	for _, userId := range rankingDataset.UserIndex.GetNames() {
+		// convert user id to index
+		userIndex := rankingDataset.UserIndex.ToNumber(userId)
+		if userIndex == base.NotId {
+			continue
+		}
+		// load positive feedback from database
+		feedback, err := database.GetUserFeedback(ctx, userId, feedbackTimeLimit, posFeedbackTypes...)
+		if err != nil {
+			return nil, nil, nil, nil, errors.Trace(err)
+		}
+
 		for _, f := range feedback {
-			feedbackCount++
-			rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
-			// insert feedback to positive set
-			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
-			if userIndex == base.NotId {
-				continue
-			}
+			// convert item id to index
 			itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
 			if itemIndex == base.NotId {
 				continue
 			}
+			positiveSet[userIndex].Add(itemIndex)
+			// add feedback to ranking dataset
+			feedbackCount++
+			rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
 			positiveSet[userIndex].Add(itemIndex)
 			// insert feedback to popularity counter
 			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
@@ -1567,9 +1575,6 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			}
 			evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
 		}
-	}
-	if err = <-errChan; err != nil {
-		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", rankingDataset.Count()),
@@ -1585,7 +1590,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	feedbackChan, errChan = database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
+	feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
 	for feedback := range feedbackChan {
 		for _, f := range feedback {
 			feedbackCount++
