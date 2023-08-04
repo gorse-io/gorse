@@ -1568,7 +1568,6 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			mu.Lock()
 			feedbackCount++
 			rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
-			positiveSet[userIndex].Add(itemIndex)
 			// insert feedback to popularity counter
 			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 				popularCount[itemIndex]++
@@ -1608,11 +1607,13 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			if itemIndex == base.NotId {
 				continue
 			}
-			feedbackCount++
 			if !positiveSet[userIndex].Contains(itemIndex) {
 				negativeSet[userIndex].Add(itemIndex)
 			}
+			mu.Lock()
+			feedbackCount++
 			evaluator.Read(int32(userIndex), itemIndex, f.Timestamp)
+			mu.Unlock()
 		}
 		return nil
 	})
