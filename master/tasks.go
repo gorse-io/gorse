@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -1544,31 +1545,39 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	}
 
 	// STEP 3: pull positive feedback
+	var mu sync.Mutex
 	var feedbackCount float64
 	start = time.Now()
-	feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), posFeedbackTypes...)
-	for feedback := range feedbackChan {
+	err = parallel.Parallel(int(rankingDataset.UserIndex.Len()), m.Config.Master.NumJobs, func(_, userIndex int) error {
+		// convert user index to id
+		userId := rankingDataset.UserIndex.ToName(int32(userIndex))
+		// load positive feedback from database
+		feedback, err := database.GetUserFeedback(ctx, userId, feedbackTimeLimit, posFeedbackTypes...)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
 		for _, f := range feedback {
-			feedbackCount++
-			rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
-			// insert feedback to positive set
-			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
-			if userIndex == base.NotId {
-				continue
-			}
+			// convert item id to index
 			itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
 			if itemIndex == base.NotId {
 				continue
 			}
 			positiveSet[userIndex].Add(itemIndex)
+			// add feedback to ranking dataset
+			mu.Lock()
+			feedbackCount++
+			rankingDataset.AddRawFeedback(int32(userIndex), itemIndex)
 			// insert feedback to popularity counter
 			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 				popularCount[itemIndex]++
 			}
-			evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
+			evaluator.Positive(f.FeedbackType, int32(userIndex), itemIndex, f.Timestamp)
+			mu.Unlock()
 		}
-	}
-	if err = <-errChan; err != nil {
+		return nil
+	})
+	if err != nil {
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
@@ -1585,14 +1594,15 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	feedbackChan, errChan = database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
-	for feedback := range feedbackChan {
+	err = parallel.Parallel(int(rankingDataset.UserIndex.Len()), m.Config.Master.NumJobs, func(_, userIndex int) error {
+		// convert user index to id
+		userId := rankingDataset.UserIndex.ToName(int32(userIndex))
+		// load negative feedback from database
+		feedback, err := database.GetUserFeedback(ctx, userId, feedbackTimeLimit, readTypes...)
+		if err != nil {
+			return errors.Trace(err)
+		}
 		for _, f := range feedback {
-			feedbackCount++
-			userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
-			if userIndex == base.NotId {
-				continue
-			}
 			itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
 			if itemIndex == base.NotId {
 				continue
@@ -1600,10 +1610,14 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			if !positiveSet[userIndex].Contains(itemIndex) {
 				negativeSet[userIndex].Add(itemIndex)
 			}
-			evaluator.Read(userIndex, itemIndex, f.Timestamp)
+			mu.Lock()
+			feedbackCount++
+			evaluator.Read(int32(userIndex), itemIndex, f.Timestamp)
+			mu.Unlock()
 		}
-	}
-	if err = <-errChan; err != nil {
+		return nil
+	})
+	if err != nil {
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	FeedbacksTotal.Set(feedbackCount)

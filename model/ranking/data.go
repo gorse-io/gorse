@@ -124,17 +124,21 @@ func (dataset *DataSet) AddFeedback(userId, itemId string, insertUserItem bool) 
 	userIndex := dataset.UserIndex.ToNumber(userId)
 	itemIndex := dataset.ItemIndex.ToNumber(itemId)
 	if userIndex != base.NotId && itemIndex != base.NotId {
-		dataset.FeedbackUsers.Append(userIndex)
-		dataset.FeedbackItems.Append(itemIndex)
-		for int(itemIndex) >= len(dataset.ItemFeedback) {
-			dataset.ItemFeedback = append(dataset.ItemFeedback, make([]int32, 0))
-		}
-		dataset.ItemFeedback[itemIndex] = append(dataset.ItemFeedback[itemIndex], userIndex)
-		for int(userIndex) >= len(dataset.UserFeedback) {
-			dataset.UserFeedback = append(dataset.UserFeedback, make([]int32, 0))
-		}
-		dataset.UserFeedback[userIndex] = append(dataset.UserFeedback[userIndex], itemIndex)
+		dataset.AddRawFeedback(userIndex, itemIndex)
 	}
+}
+
+func (dataset *DataSet) AddRawFeedback(userIndex, itemIndex int32) {
+	dataset.FeedbackUsers.Append(userIndex)
+	dataset.FeedbackItems.Append(itemIndex)
+	for int(itemIndex) >= len(dataset.ItemFeedback) {
+		dataset.ItemFeedback = append(dataset.ItemFeedback, make([]int32, 0))
+	}
+	dataset.ItemFeedback[itemIndex] = append(dataset.ItemFeedback[itemIndex], userIndex)
+	for int(userIndex) >= len(dataset.UserFeedback) {
+		dataset.UserFeedback = append(dataset.UserFeedback, make([]int32, 0))
+	}
+	dataset.UserFeedback[userIndex] = append(dataset.UserFeedback[userIndex], itemIndex)
 }
 
 func (dataset *DataSet) SetNegatives(userId string, negatives []string) {
