@@ -1567,7 +1567,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			// add feedback to ranking dataset
 			mu.Lock()
 			feedbackCount++
-			rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
+			rankingDataset.AddRawFeedback(int32(userIndex), itemIndex)
 			// insert feedback to popularity counter
 			if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 				popularCount[itemIndex]++
