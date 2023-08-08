@@ -576,15 +576,15 @@ func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
 	case headerFM:
 		var fm FM
 		if err := fm.Unmarshal(r); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 		return &fm, nil
 	case headerDeepFM:
-		var fm DeepFM
+		fm := NewDeepFM(nil)
 		if err := fm.Unmarshal(r); err != nil {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
-		return &fm, nil
+		return fm, nil
 	}
 	return nil, fmt.Errorf("unknown model: %v", header)
 }

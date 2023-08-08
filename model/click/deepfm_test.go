@@ -66,16 +66,14 @@ func TestDeepFM_Classification_Criteo(t *testing.T) {
 				{Name: "6", Value: 0.6},
 			}}}))
 
-	// test increment test
+	// test marshal and unmarshal
 	buf := bytes.NewBuffer(nil)
 	err = MarshalModel(buf, m)
 	assert.NoError(t, err)
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
-	m = tmp.(*DeepFM)
-	m.nEpochs = 1
-	scoreInc := m.Fit(train, test, fitConfig)
-	assert.InDelta(t, 0.77, scoreInc.RMSE, regressionDelta)
+	scoreClone := EvaluateClassification(tmp, test)
+	assert.InDelta(t, 0.77, scoreClone.Accuracy, regressionDelta)
 
 	// test clear
 	assert.False(t, m.Invalid())

@@ -15,7 +15,6 @@
 package click
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"time"
@@ -45,12 +44,23 @@ const (
 type DeepFM struct {
 	BaseFactorizationMachine
 
-	MinTarget    float32
-	MaxTarget    float32
-	Task         FMTask
+	// dataset stats
+	minTarget    float32
+	maxTarget    float32
 	numFeatures  int
 	numDimension int
 
+	// tuned parameters
+	v          [][]float32
+	w          []float32
+	w0         [][]float32
+	bData      []float32
+	b0Data     []float32
+	w1Data     [][]float32
+	b1Data     [][]float32
+	marshables []any
+
+	// gorgonia graph
 	vm          gorgonia.VM
 	g           *gorgonia.ExprGraph
 	embeddingV  *gorgonia.Node
@@ -65,9 +75,6 @@ type DeepFM struct {
 	w1          []*gorgonia.Node
 	b1          []*gorgonia.Node
 	learnables  []*gorgonia.Node
-	v           [][]float32
-	w           []float32
-	w0          [][]float32
 
 	// Adam optimizer variables
 	m_v  [][]float32
@@ -91,8 +98,9 @@ type DeepFM struct {
 
 func NewDeepFM(params model.Params) *DeepFM {
 	fm := new(DeepFM)
-	fm.g = gorgonia.NewGraph()
 	fm.SetParams(params)
+	fm.g = gorgonia.NewGraph()
+	fm.marshables = []any{&fm.v, &fm.w, &fm.w0, &fm.bData, &fm.b0Data, &fm.w1Data, &fm.b1Data}
 	return fm
 }
 
@@ -193,8 +201,8 @@ func (fm *DeepFM) Fit(trainSet *Dataset, testSet *Dataset, config *FitConfig) Sc
 	var x []lo.Tuple2[[]int32, []float32]
 	var y []float32
 	for i := 0; i < trainSet.Target.Len(); i++ {
-		fm.MinTarget = math32.Min(fm.MinTarget, trainSet.Target.Get(i))
-		fm.MaxTarget = math32.Max(fm.MaxTarget, trainSet.Target.Get(i))
+		fm.minTarget = math32.Min(fm.minTarget, trainSet.Target.Get(i))
+		fm.maxTarget = math32.Max(fm.maxTarget, trainSet.Target.Get(i))
 		indices, values, target := trainSet.Get(i)
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		y = append(y, target)
@@ -255,23 +263,123 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
 
+	// init manually tuned parameters
 	fm.v = fm.GetRandomGenerator().NormalMatrix(fm.numFeatures, fm.nFactors, fm.initMean, fm.initStdDev)
 	fm.w = fm.GetRandomGenerator().NormalVector(fm.numFeatures, fm.initMean, fm.initStdDev)
 	fm.w0 = fm.GetRandomGenerator().NormalMatrix(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0], fm.initMean, fm.initStdDev)
+
+	// init automatically tuned parameters
+	fm.bData = make([]float32, 1)
+	fm.b0Data = make([]float32, fm.hiddenLayers[0])
+	fm.w1Data = make([][]float32, len(fm.hiddenLayers)-1)
+	fm.b1Data = make([][]float32, len(fm.hiddenLayers)-1)
+	for i := 1; i < len(fm.hiddenLayers); i++ {
+		var (
+			inputSize  int
+			outputSize int
+		)
+		inputSize = fm.hiddenLayers[i]
+		if i == len(fm.hiddenLayers)-1 {
+			outputSize = 1
+		} else {
+			outputSize = fm.hiddenLayers[i+1]
+		}
+		fm.w1Data[i-1] = fm.GetRandomGenerator().NormalVector(inputSize*outputSize, fm.initMean, fm.initStdDev)
+		fm.b1Data[i-1] = make([]float32, outputSize)
+	}
+
+	fm.build()
+	fm.BaseFactorizationMachine.Init(trainSet)
+}
+
+func (fm *DeepFM) Marshal(w io.Writer) error {
+	// write params
+	if err := encoding.WriteGob(w, fm.Params); err != nil {
+		return errors.Trace(err)
+	}
+	// write index
+	if err := MarshalIndex(w, fm.Index); err != nil {
+		return errors.Trace(err)
+	}
+	// write dataset stats
+	if err := encoding.WriteGob(w, fm.minTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.maxTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.numFeatures); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.numDimension); err != nil {
+		return errors.Trace(err)
+	}
+	// write weights
+	for _, data := range fm.marshables {
+		if err := encoding.WriteGob(w, data); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+func (fm *DeepFM) Unmarshal(r io.Reader) error {
+	var err error
+	// read params
+	if err := encoding.ReadGob(r, &fm.Params); err != nil {
+		return errors.Trace(err)
+	}
+	fm.SetParams(fm.Params)
+	// read index
+	if fm.Index, err = UnmarshalIndex(r); err != nil {
+		return errors.Trace(err)
+	}
+	// read dataset stats
+	if err := encoding.ReadGob(r, &fm.minTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &fm.maxTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &fm.numFeatures); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &fm.numDimension); err != nil {
+		return errors.Trace(err)
+	}
+	// read weights
+	for _, data := range fm.marshables {
+		if err := encoding.ReadGob(r, data); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	fm.build()
+	return nil
+}
+
+func (fm *DeepFM) Bytes() int {
+	return 0
+}
+
+func (fm *DeepFM) Complexity() int {
+	return 0
+}
+
+func (fm *DeepFM) build() {
+	// init Adam optimizer variables
 	fm.m_v = zeros(fm.numFeatures, fm.nFactors)
 	fm.m_w = make([]float32, fm.numFeatures)
 	fm.m_w0 = zeros(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0])
 	fm.v_v = zeros(fm.numFeatures, fm.nFactors)
 	fm.v_w = make([]float32, fm.numFeatures)
 	fm.v_w0 = zeros(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0])
+
 	fm.b = gorgonia.NewMatrix(fm.g, tensor.Float32,
-		gorgonia.WithShape(1, 1),
-		gorgonia.WithName("b"),
-		gorgonia.WithInit(gorgonia.Zeroes()))
+		gorgonia.WithValue(tensor.New(tensor.WithShape(1, 1), tensor.WithBacking(fm.bData))),
+		gorgonia.WithName("b"))
 	fm.b0 = gorgonia.NewMatrix(fm.g, tensor.Float32,
-		gorgonia.WithShape(1, fm.hiddenLayers[0]),
-		gorgonia.WithName("b0"),
-		gorgonia.WithInit(gorgonia.Zeroes()))
+		gorgonia.WithValue(tensor.New(tensor.WithShape(1, fm.hiddenLayers[0]), tensor.WithBacking(fm.b0Data))),
+		gorgonia.WithName("b0"))
 	for i := 1; i < len(fm.hiddenLayers); i++ {
 		var (
 			inputSize  int
@@ -284,13 +392,11 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 			outputSize = fm.hiddenLayers[i+1]
 		}
 		fm.w1 = append(fm.w1, gorgonia.NewMatrix(fm.g, tensor.Float32,
-			gorgonia.WithShape(inputSize, outputSize),
-			gorgonia.WithName(fmt.Sprintf("w%d", i)),
-			gorgonia.WithInit(gorgonia.Gaussian(float64(fm.initMean), float64(fm.initStdDev)))))
+			gorgonia.WithValue(tensor.New(tensor.WithShape(inputSize, outputSize), tensor.WithBacking(fm.w1Data[i-1]))),
+			gorgonia.WithName(fmt.Sprintf("w%d", i))))
 		fm.b1 = append(fm.b1, gorgonia.NewMatrix(fm.g, tensor.Float32,
-			gorgonia.WithShape(1, outputSize),
-			gorgonia.WithName(fmt.Sprintf("b%d", i)),
-			gorgonia.WithInit(gorgonia.Zeroes())))
+			gorgonia.WithValue(tensor.New(tensor.WithShape(1, outputSize), tensor.WithBacking(fm.b1Data[i-1]))),
+			gorgonia.WithName(fmt.Sprintf("b%d", i))))
 	}
 	fm.learnables = []*gorgonia.Node{fm.b, fm.b0}
 	fm.learnables = append(fm.learnables, fm.w1...)
@@ -302,70 +408,6 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 	lo.Must1(gorgonia.Grad(fm.cost, wrts...))
 
 	fm.vm = gorgonia.NewTapeMachine(fm.g, gorgonia.BindDualValues(fm.learnables...))
-	fm.BaseFactorizationMachine.Init(trainSet)
-}
-
-func (fm *DeepFM) Marshal(w io.Writer) error {
-	// write params
-	if err := encoding.WriteGob(w, fm.Params); err != nil {
-		return errors.Trace(err)
-	}
-	// write index
-	if err := fm.Index.Marshal(w); err != nil {
-		return errors.Trace(err)
-	}
-	// write weights
-	if err := encoding.WriteGob(w, fm.v); err != nil {
-		return errors.Trace(err)
-	}
-	if err := binary.Write(w, binary.LittleEndian, fm.w); err != nil {
-		return errors.Trace(err)
-	}
-	if err := encoding.WriteGob(w, fm.w0); err != nil {
-		return errors.Trace(err)
-	}
-	for _, node := range fm.learnables {
-		if err := binary.Write(w, binary.LittleEndian, node.Value().Data()); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
-}
-
-func (fm *DeepFM) Unmarshal(r io.Reader) error {
-	// read params
-	if err := encoding.ReadGob(r, &fm.Params); err != nil {
-		return errors.Trace(err)
-	}
-	fm.SetParams(fm.Params)
-	// read index
-	if err := fm.Index.Unmarshal(r); err != nil {
-		return errors.Trace(err)
-	}
-	// read weights
-	if err := encoding.ReadGob(r, &fm.v); err != nil {
-		return errors.Trace(err)
-	}
-	if err := binary.Read(r, binary.LittleEndian, &fm.w); err != nil {
-		return errors.Trace(err)
-	}
-	if err := encoding.ReadGob(r, &fm.w0); err != nil {
-		return errors.Trace(err)
-	}
-	for _, node := range fm.learnables {
-		if err := binary.Read(r, binary.LittleEndian, node.Value().Data()); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
-}
-
-func (fm *DeepFM) Bytes() int {
-	return 0
-}
-
-func (fm *DeepFM) Complexity() int {
-	return 0
 }
 
 func (fm *DeepFM) forward(batchSize int) {
