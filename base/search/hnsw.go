@@ -15,6 +15,7 @@
 package search
 
 import (
+	"context"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -26,7 +27,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
-	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"go.uber.org/zap"
 	"modernc.org/mathutil"
 )
@@ -49,7 +50,6 @@ type HNSW struct {
 	maxConnection0 int
 	efConstruction int
 	numJobs        int
-	task           *task.SubTask
 }
 
 // HNSWConfig is the configuration function for HNSW.
@@ -123,24 +123,26 @@ func (h *HNSW) knnSearch(q Vector, k, ef int) *heap.PriorityQueue {
 }
 
 // Build a vector index on data.
-func (h *HNSW) Build() {
+func (h *HNSW) Build(ctx context.Context) {
 	completed := make(chan struct{}, h.numJobs)
 	go func() {
 		defer base.CheckPanic()
 		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(10 * time.Second)
+		_, span := progress.Start(ctx, "HNSW.Build", len(h.vectors))
 		for {
 			select {
 			case _, ok := <-completed:
 				if !ok {
+					span.End()
 					return
 				}
 				completedCount++
 			case <-ticker.C:
 				throughput := completedCount - previousCount
 				previousCount = completedCount
-				h.task.Add(throughput * len(h.vectors))
 				if throughput > 0 {
+					span.Add(throughput)
 					log.Logger().Info("building index",
 						zap.Int("n_indexed_vectors", completedCount),
 						zap.Int("n_vectors", len(h.vectors)),
@@ -320,7 +322,7 @@ func NewHNSWBuilder(data []Vector, k, numJobs int) *HNSWBuilder {
 		rng:        base.NewRandomGenerator(0),
 		numJobs:    numJobs,
 	}
-	b.bruteForce.Build()
+	b.bruteForce.Build(context.Background())
 	return b
 }
 
@@ -361,20 +363,19 @@ func (b *HNSWBuilder) evaluate(idx *HNSW, prune0 bool) float32 {
 	return result / count
 }
 
-func (b *HNSWBuilder) Build(recall float32, trials int, prune0 bool, t *task.Task) (idx *HNSW, score float32) {
-	buildTask := t.SubTask(EstimateHNSWBuilderComplexity(len(b.data), trials))
-	defer buildTask.Finish()
+func (b *HNSWBuilder) Build(ctx context.Context, recall float32, trials int, prune0 bool) (idx *HNSW, score float32) {
 	ef := 1 << int(math32.Ceil(math32.Log2(float32(b.k))))
+	newCtx, span := progress.Start(ctx, "HNSWBuilder.Build", trials)
+	defer span.End()
 	for i := 0; i < trials; i++ {
 		start := time.Now()
 		idx = NewHNSW(b.data,
 			SetEFConstruction(ef),
 			SetHNSWNumJobs(b.numJobs))
-		idx.task = buildTask
-		idx.Build()
+		idx.Build(newCtx)
 		buildTime := time.Since(start)
 		score = b.evaluate(idx, prune0)
-		idx.task.Add(b.testSize * len(b.data))
+		span.Add(1)
 		log.Logger().Info("try to build vector index",
 			zap.String("index_type", "HNSW"),
 			zap.Int("ef_construction", ef),

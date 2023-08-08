@@ -16,6 +16,7 @@ package click
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/samber/lo"
@@ -34,7 +35,7 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 		model.Reg:        0.0001,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
-	score := m.Fit(train, test, fitConfig)
+	score := m.Fit(context.Background(), train, test, fitConfig)
 	assert.InDelta(t, 0.9439709, score.Accuracy, classificationDelta)
 }
 
@@ -49,7 +50,7 @@ func TestDeepFM_Classification_Criteo(t *testing.T) {
 		model.Reg:        0.0001,
 	})
 	fitConfig := newFitConfigWithTestTracker(10)
-	score := m.Fit(train, test, fitConfig)
+	score := m.Fit(context.Background(), train, test, fitConfig)
 	assert.InDelta(t, 0.77, score.Accuracy, classificationDelta)
 
 	// test prediction

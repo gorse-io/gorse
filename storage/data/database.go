@@ -41,6 +41,12 @@ import (
 	"moul.io/zapgorm2"
 )
 
+const (
+	maxIdleConns = 64
+	maxOpenConns = 64
+	maxLifetime  = time.Minute
+)
+
 var (
 	ErrUserNotExist = errors.NotFoundf("user")
 	ErrItemNotExist = errors.NotFoundf("item")
@@ -228,6 +234,9 @@ func Open(path, tablePrefix string) (Database, error) {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
+		database.client.SetMaxIdleConns(maxIdleConns)
+		database.client.SetMaxOpenConns(maxOpenConns)
+		database.client.SetConnMaxLifetime(maxLifetime)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)

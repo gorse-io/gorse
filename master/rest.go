@@ -40,7 +40,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -82,8 +82,8 @@ func (m *Master) CreateWebService() {
 		Doc("Get tasks.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Returns(http.StatusOK, "OK", []task.Task{}).
-		Writes([]task.Task{}))
+		Returns(http.StatusOK, "OK", []progress.Progress{}).
+		Writes([]progress.Progress{}))
 	ws.Route(ws.GET("/dashboard/rates").To(m.getRates).
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -639,17 +639,24 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 
 func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 	// List workers
-	workers := make([]string, 0)
+	workers := mapset.NewSet[string]()
 	m.nodesInfoMutex.RLock()
 	for _, info := range m.nodesInfo {
 		if info.Type == WorkerNode {
-			workers = append(workers, info.Name)
+			workers.Add(info.Name)
 		}
 	}
 	m.nodesInfoMutex.RUnlock()
-	// List tasks
-	tasks := m.taskMonitor.List(workers...)
-	server.Ok(response, tasks)
+	// List local progress
+	progressList := m.tracer.List()
+	// list remote progress
+	m.remoteProgress.Range(func(key, value interface{}) bool {
+		if workers.Contains(key.(string)) {
+			progressList = append(progressList, value.([]progress.Progress)...)
+		}
+		return true
+	})
+	server.Ok(response, progressList)
 }
 
 func (m *Master) getRates(request *restful.Request, response *restful.Response) {
