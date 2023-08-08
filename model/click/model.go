@@ -15,6 +15,7 @@
 package click
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -27,7 +28,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -585,8 +585,11 @@ func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
 
 // Clone a model with deep copy.
 func Clone(m FactorizationMachine) FactorizationMachine {
-	var copied FactorizationMachine
-	if err := copier.Copy(&copied, m); err != nil {
+	buf := bytes.NewBuffer(nil)
+	if err := MarshalModel(buf, m); err != nil {
+		panic(err)
+	}
+	if copied, err := UnmarshalModel(buf); err != nil {
 		panic(err)
 	} else {
 		copied.SetParams(copied.GetParams())

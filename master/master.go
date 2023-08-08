@@ -113,7 +113,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	otel.SetTracerProvider(tp)
 	otel.SetErrorHandler(log.GetErrorHandler())
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	return &Master{
+	m := &Master{
 		nodesInfo: make(map[string]*Node),
 		// create task monitor
 		cacheFile:     cacheFile,
@@ -153,6 +153,14 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 		loadDataChan: parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
 	}
+
+	// enable deep learning
+	if cfg.Experimental.EnableDeepLearning {
+		log.Logger().Debug("enable deep learning")
+		m.ClickModel = click.NewDeepFM(nil)
+	}
+
+	return m
 }
 
 // Serve starts the master node.

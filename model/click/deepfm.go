@@ -117,7 +117,7 @@ func (fm *DeepFM) Invalid() bool {
 
 func (fm *DeepFM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachine.SetParams(params)
-	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
+	fm.batchSize = fm.Params.GetInt(model.BatchSize, 128)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
 	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.001)
@@ -357,7 +357,9 @@ func (fm *DeepFM) Unmarshal(r io.Reader) error {
 			return errors.Trace(err)
 		}
 	}
-	fm.build()
+	if !fm.Invalid() {
+		fm.build()
+	}
 	return nil
 }
 
