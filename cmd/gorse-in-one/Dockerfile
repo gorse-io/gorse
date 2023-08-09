@@ -1,7 +1,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.20
+FROM golang:1.21
 
 COPY . gorse
 
