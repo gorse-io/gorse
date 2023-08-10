@@ -164,6 +164,61 @@ func (sorter feedbackSorter) Swap(i, j int) {
 	sorter[i], sorter[j] = sorter[j], sorter[i]
 }
 
+type ScanOptions struct {
+	BeginUserId   *string
+	EndUserId     *string
+	BeginTime     *time.Time
+	EndTime       *time.Time
+	FeedbackTypes []string
+}
+
+type ScanOption func(options *ScanOptions)
+
+// WithBeginUserId sets the begin user id. The begin user id is included in the result.
+func WithBeginUserId(userId string) ScanOption {
+	return func(options *ScanOptions) {
+		options.BeginUserId = &userId
+	}
+}
+
+// WithEndUserId sets the end user id. The end user id is included in the result.
+func WithEndUserId(userId string) ScanOption {
+	return func(options *ScanOptions) {
+		options.EndUserId = &userId
+	}
+}
+
+// WithBeginTime sets the begin time. The begin time is included in the result.
+func WithBeginTime(t time.Time) ScanOption {
+	return func(options *ScanOptions) {
+		options.BeginTime = &t
+	}
+}
+
+// WithEndTime sets the end time. The end time is included in the result.
+func WithEndTime(t time.Time) ScanOption {
+	return func(options *ScanOptions) {
+		options.EndTime = &t
+	}
+}
+
+// WithFeedbackTypes sets the feedback types.
+func WithFeedbackTypes(feedbackTypes ...string) ScanOption {
+	return func(options *ScanOptions) {
+		options.FeedbackTypes = feedbackTypes
+	}
+}
+
+func NewScanOptions(opts ...ScanOption) ScanOptions {
+	options := ScanOptions{}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+	return options
+}
+
 type Database interface {
 	Init() error
 	Ping() error
@@ -188,7 +243,7 @@ type Database interface {
 	GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error)
 	GetUserStream(ctx context.Context, batchSize int) (chan []User, chan error)
 	GetItemStream(ctx context.Context, batchSize int, timeLimit *time.Time) (chan []Item, chan error)
-	GetFeedbackStream(ctx context.Context, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error)
+	GetFeedbackStream(ctx context.Context, batchSize int, options ...ScanOption) (chan []Feedback, chan error)
 }
 
 // Open a connection to a database.

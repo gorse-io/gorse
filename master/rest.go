@@ -1287,7 +1287,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			return
 		}
 		// write rows
-		feedbackChan, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, nil, m.Config.Now())
+		feedbackChan, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, data.WithEndTime(*m.Config.Now()))
 		for feedback := range feedbackChan {
 			for _, v := range feedback {
 				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s,%s,%v\r\n",

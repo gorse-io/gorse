@@ -731,7 +731,8 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 }
 
 // GetFeedbackStream reads feedback by stream.
-func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scanOptions ...ScanOption) (chan []Feedback, chan error) {
+	scan := NewScanOptions(scanOptions...)
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
@@ -741,14 +742,20 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, begi
 		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
 			Select("feedback_type, user_id, item_id, time_stamp, comment").
 			Order("feedback_type, user_id, item_id")
-		if len(feedbackTypes) > 0 {
-			tx.Where("feedback_type IN ?", feedbackTypes)
+		if len(scan.FeedbackTypes) > 0 {
+			tx.Where("feedback_type IN ?", scan.FeedbackTypes)
 		}
-		if beginTime != nil {
-			tx.Where("time_stamp >= ?", d.convertTimeZone(beginTime))
+		if scan.BeginTime != nil {
+			tx.Where("time_stamp >= ?", d.convertTimeZone(scan.BeginTime))
 		}
-		if endTime != nil {
-			tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
+		if scan.EndTime != nil {
+			tx.Where("time_stamp <= ?", d.convertTimeZone(scan.EndTime))
+		}
+		if scan.BeginUserId != nil {
+			tx.Where("user_id >= ?", scan.BeginUserId)
+		}
+		if scan.EndUserId != nil {
+			tx.Where("user_id <= ?", scan.EndUserId)
 		}
 		result, err := tx.Rows()
 		if err != nil {
