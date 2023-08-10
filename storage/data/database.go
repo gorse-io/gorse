@@ -212,7 +212,9 @@ func WithFeedbackTypes(feedbackTypes ...string) ScanOption {
 func NewScanOptions(opts ...ScanOption) ScanOptions {
 	options := ScanOptions{}
 	for _, opt := range opts {
-		opt(&options)
+		if opt != nil {
+			opt(&options)
+		}
 	}
 	return options
 }
