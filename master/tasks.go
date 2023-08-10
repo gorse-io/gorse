@@ -1552,7 +1552,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	// STEP 3: pull positive feedback
 	var mu sync.Mutex
-	var feedbackCount float64
+	var posFeedbackCount int
 	start = time.Now()
 	err = parallel.Parallel(len(userGroups), m.Config.Master.NumJobs, func(_, userIndex int) error {
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
@@ -1576,7 +1576,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 				positiveSet[userIndex].Add(itemIndex)
 
 				mu.Lock()
-				feedbackCount++
+				posFeedbackCount++
 				// insert feedback to ranking dataset
 				rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
 				// insert feedback to popularity counter
@@ -1597,7 +1597,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
-		zap.Int("n_positive_feedback", rankingDataset.Count()),
+		zap.Int("n_positive_feedback", posFeedbackCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_positive_feedback").Set(time.Since(start).Seconds())
 	span.Add(1)
@@ -1610,6 +1610,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
+	var negativeFeedbackCount float64
 	err = parallel.Parallel(len(userGroups), m.Config.Master.NumJobs, func(_, userIndex int) error {
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
 			data.WithBeginUserId(userGroups[userIndex][0]),
@@ -1632,7 +1633,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 				}
 
 				mu.Lock()
-				feedbackCount++
+				negativeFeedbackCount++
 				evaluator.Read(userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
 			}
@@ -1645,8 +1646,8 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	if err != nil {
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
-	FeedbacksTotal.Set(feedbackCount)
 	log.Logger().Debug("pulled negative feedback from database",
+		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())
 	span.Add(1)
