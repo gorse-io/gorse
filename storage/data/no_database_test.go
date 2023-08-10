@@ -78,6 +78,6 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.DeleteUserItemFeedback(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, c = database.GetFeedbackStream(ctx, 0, nil, lo.ToPtr(time.Now()))
+	_, c = database.GetFeedbackStream(ctx, 0)
 	assert.ErrorIs(t, <-c, ErrNoDatabase)
 }

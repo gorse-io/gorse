@@ -683,7 +683,8 @@ func (db *MongoDB) GetFeedback(ctx context.Context, cursor string, n int, beginT
 }
 
 // GetFeedbackStream reads feedback from MongoDB by stream.
-func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) (chan []Feedback, chan error) {
+func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOptions ...ScanOption) (chan []Feedback, chan error) {
+	scan := NewScanOptions(scanOptions...)
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
@@ -695,18 +696,32 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, beginTi
 		opt := options.Find()
 		filter := make(bson.M)
 		// pass feedback type to filter
-		if len(feedbackTypes) > 0 {
-			filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+		if len(scan.FeedbackTypes) > 0 {
+			filter["feedbackkey.feedbacktype"] = bson.M{"$in": scan.FeedbackTypes}
 		}
 		// pass time limit to filter
-		timestampConditions := bson.M{}
-		if beginTime != nil {
-			timestampConditions["$gt"] = *beginTime
+		if scan.BeginTime != nil || scan.EndTime != nil {
+			timestampConditions := bson.M{}
+			if scan.BeginTime != nil {
+				timestampConditions["$gt"] = *scan.BeginTime
+			}
+			if scan.EndTime != nil {
+				timestampConditions["$lte"] = *scan.EndTime
+			}
+			filter["timestamp"] = timestampConditions
 		}
-		if endTime != nil {
-			timestampConditions["$lte"] = *endTime
+		// pass user id to filter
+		if scan.BeginUserId != nil || scan.EndUserId != nil {
+			userIdConditions := bson.M{}
+			if scan.BeginUserId != nil {
+				userIdConditions["$gte"] = *scan.BeginUserId
+			}
+			if scan.EndUserId != nil {
+				userIdConditions["$lte"] = *scan.EndUserId
+			}
+			filter["feedbackkey.userid"] = userIdConditions
 		}
-		filter["timestamp"] = timestampConditions
+
 		r, err := c.Find(ctx, filter, opt)
 		if err != nil {
 			errChan <- errors.Trace(err)
