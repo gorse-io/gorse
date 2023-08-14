@@ -210,6 +210,7 @@ func TestTablePrefixCompat(t *testing.T) {
 	data, err := os.ReadFile("config.toml")
 	assert.NoError(t, err)
 	text := string(data)
+	text = strings.Replace(text, "cache_store = \"redis://localhost:6379/0\"", "cache_store = \"redis+cluster://localhost:6379/0\"", -1)
 	text = strings.Replace(text, "cache_table_prefix = \"\"", "", -1)
 	text = strings.Replace(text, "data_table_prefix = \"\"", "", -1)
 	text = strings.Replace(text, "table_prefix = \"\"", "table_prefix = \"gorse_\"", -1)
@@ -222,6 +223,7 @@ func TestTablePrefixCompat(t *testing.T) {
 	assert.Equal(t, "gorse_", config.Database.TablePrefix)
 	assert.Equal(t, "gorse_", config.Database.CacheTablePrefix)
 	assert.Equal(t, "gorse_", config.Database.DataTablePrefix)
+	assert.Equal(t, "redis+cluster://localhost:6379/0", config.Database.CacheStore)
 }
 
 func TestConfig_UserNeighborDigest(t *testing.T) {

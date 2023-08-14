@@ -613,6 +613,7 @@ func (config *Config) Validate(oneModel bool) error {
 		prefixes := []string{
 			storage.RedisPrefix,
 			storage.RedissPrefix,
+			storage.RedisClusterPrefix,
 			storage.MongoPrefix,
 			storage.MongoSrvPrefix,
 			storage.MySQLPrefix,

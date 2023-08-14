@@ -29,14 +29,15 @@ import (
 )
 
 const (
-	MySQLPrefix      = "mysql://"
-	MongoPrefix      = "mongodb://"
-	MongoSrvPrefix   = "mongodb+srv://"
-	PostgresPrefix   = "postgres://"
-	PostgreSQLPrefix = "postgresql://"
-	SQLitePrefix     = "sqlite://"
-	RedisPrefix      = "redis://"
-	RedissPrefix     = "rediss://"
+	MySQLPrefix        = "mysql://"
+	MongoPrefix        = "mongodb://"
+	MongoSrvPrefix     = "mongodb+srv://"
+	PostgresPrefix     = "postgres://"
+	PostgreSQLPrefix   = "postgresql://"
+	SQLitePrefix       = "sqlite://"
+	RedisClusterPrefix = "redis+cluster://"
+	RedisPrefix        = "redis://"
+	RedissPrefix       = "rediss://"
 )
 
 func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {
