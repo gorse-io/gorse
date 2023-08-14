@@ -1400,14 +1400,15 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	startLoadTime := time.Now()
 	// setup time limit
-	var itemTimeLimit, feedbackTimeLimit *time.Time
+	var feedbackTimeLimit data.ScanOption
+	var itemTimeLimit *time.Time
 	if itemTTL > 0 {
 		temp := time.Now().AddDate(0, 0, -int(itemTTL))
 		itemTimeLimit = &temp
 	}
 	if positiveFeedbackTTL > 0 {
 		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
-		feedbackTimeLimit = &temp
+		feedbackTimeLimit = data.WithBeginTime(temp)
 	}
 	timeWindowLimit := time.Time{}
 	if m.Config.Recommend.Popular.PopularWindow > 0 {
@@ -1544,17 +1545,25 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		positiveSet[i] = mapset.NewSet[int32]()
 	}
 
+	// split user groups
+	users := rankingDataset.UserIndex.GetNames()
+	sort.Strings(users)
+	userGroups := parallel.Split(users, m.Config.Master.NumJobs)
+
 	// STEP 3: pull positive feedback
 	var mu sync.Mutex
-	var feedbackCount float64
+	var posFeedbackCount int
 	start = time.Now()
-	if m.Config.Master.NumJobs == 1 {
-		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), posFeedbackTypes...)
+	err = parallel.Parallel(len(userGroups), m.Config.Master.NumJobs, func(_, userIndex int) error {
+		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
+			data.WithBeginUserId(userGroups[userIndex][0]),
+			data.WithEndUserId(userGroups[userIndex][len(userGroups[userIndex])-1]),
+			feedbackTimeLimit,
+			data.WithEndTime(*m.Config.Now()),
+			data.WithFeedbackTypes(posFeedbackTypes...))
 		for feedback := range feedbackChan {
 			for _, f := range feedback {
-				feedbackCount++
-				rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
-				// insert feedback to positive set
+				// convert user and item id to index
 				userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
 				if userIndex == base.NotId {
 					continue
@@ -1563,53 +1572,32 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 				if itemIndex == base.NotId {
 					continue
 				}
+				// insert feedback to positive set
 				positiveSet[userIndex].Add(itemIndex)
+
+				mu.Lock()
+				posFeedbackCount++
+				// insert feedback to ranking dataset
+				rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
 				// insert feedback to popularity counter
 				if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
 					popularCount[itemIndex]++
 				}
+				// insert feedback to evaluator
 				evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
+				mu.Unlock()
 			}
 		}
 		if err = <-errChan; err != nil {
-			return nil, nil, nil, nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
-	} else {
-		err = parallel.Parallel(int(rankingDataset.UserIndex.Len()), m.Config.Master.NumJobs, func(_, userIndex int) error {
-			// convert user index to id
-			userId := rankingDataset.UserIndex.ToName(int32(userIndex))
-			// load positive feedback from database
-			feedback, err := database.GetUserFeedback(ctx, userId, feedbackTimeLimit, posFeedbackTypes...)
-			if err != nil {
-				return errors.Trace(err)
-			}
-
-			for _, f := range feedback {
-				// convert item id to index
-				itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
-				if itemIndex == base.NotId {
-					continue
-				}
-				positiveSet[userIndex].Add(itemIndex)
-				// add feedback to ranking dataset
-				mu.Lock()
-				feedbackCount++
-				rankingDataset.AddRawFeedback(int32(userIndex), itemIndex)
-				// insert feedback to popularity counter
-				if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
-					popularCount[itemIndex]++
-				}
-				evaluator.Positive(f.FeedbackType, int32(userIndex), itemIndex, f.Timestamp)
-				mu.Unlock()
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, nil, nil, nil, errors.Trace(err)
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
-		zap.Int("n_positive_feedback", rankingDataset.Count()),
+		zap.Int("n_positive_feedback", posFeedbackCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_positive_feedback").Set(time.Since(start).Seconds())
 	span.Add(1)
@@ -1622,11 +1610,16 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	if m.Config.Master.NumJobs == 1 {
-		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize, feedbackTimeLimit, m.Config.Now(), readTypes...)
+	var negativeFeedbackCount float64
+	err = parallel.Parallel(len(userGroups), m.Config.Master.NumJobs, func(_, userIndex int) error {
+		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
+			data.WithBeginUserId(userGroups[userIndex][0]),
+			data.WithEndUserId(userGroups[userIndex][len(userGroups[userIndex])-1]),
+			feedbackTimeLimit,
+			data.WithEndTime(*m.Config.Now()),
+			data.WithFeedbackTypes(readTypes...))
 		for feedback := range feedbackChan {
 			for _, f := range feedback {
-				feedbackCount++
 				userIndex := rankingDataset.UserIndex.ToNumber(f.UserId)
 				if userIndex == base.NotId {
 					continue
@@ -1638,42 +1631,23 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 				if !positiveSet[userIndex].Contains(itemIndex) {
 					negativeSet[userIndex].Add(itemIndex)
 				}
+
+				mu.Lock()
+				negativeFeedbackCount++
 				evaluator.Read(userIndex, itemIndex, f.Timestamp)
+				mu.Unlock()
 			}
 		}
 		if err = <-errChan; err != nil {
-			return nil, nil, nil, nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
-	} else {
-		err = parallel.Parallel(int(rankingDataset.UserIndex.Len()), m.Config.Master.NumJobs, func(_, userIndex int) error {
-			// convert user index to id
-			userId := rankingDataset.UserIndex.ToName(int32(userIndex))
-			// load negative feedback from database
-			feedback, err := database.GetUserFeedback(ctx, userId, feedbackTimeLimit, readTypes...)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			for _, f := range feedback {
-				itemIndex := rankingDataset.ItemIndex.ToNumber(f.ItemId)
-				if itemIndex == base.NotId {
-					continue
-				}
-				if !positiveSet[userIndex].Contains(itemIndex) {
-					negativeSet[userIndex].Add(itemIndex)
-				}
-				mu.Lock()
-				feedbackCount++
-				evaluator.Read(int32(userIndex), itemIndex, f.Timestamp)
-				mu.Unlock()
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, nil, nil, nil, errors.Trace(err)
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, nil, nil, errors.Trace(err)
 	}
-	FeedbacksTotal.Set(feedbackCount)
 	log.Logger().Debug("pulled negative feedback from database",
+		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())
 	span.Add(1)
