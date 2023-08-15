@@ -117,7 +117,7 @@ func (fm *DeepFM) Invalid() bool {
 
 func (fm *DeepFM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachine.SetParams(params)
-	fm.batchSize = fm.Params.GetInt(model.BatchSize, 128)
+	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
 	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.001)
