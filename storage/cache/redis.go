@@ -343,7 +343,7 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 		builder.WriteString(fmt.Sprintf(" @id:{ %s }", *condition.Id))
 	}
 	if condition.Before != nil {
-		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf,%d]", condition.Before.UnixMicro()))
+		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf (%d]", condition.Before.UnixMicro()))
 	}
 	for {
 		// search documents
@@ -447,9 +447,15 @@ func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoin
 }
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+	// The tag `name` most likely contains a `/', and the snippet below
+	// escapes it with `\` to ensure proper functioning of RediSearch
+	// filters. For more context, refer to the issue at:
+	// https://github.com/RediSearch/RediSearch/issues/2566.
+	escaped_name := strings.ReplaceAll(name, "/", "\\/")
+
 	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
-		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", name, begin.UnixMicro(), end.UnixMicro()),
-		"SORTBY", "timestamp").Result()
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d %d]", escaped_name, begin.UnixMicro(), end.UnixMicro()),
+		"SORTBY", "timestamp", "DESC").Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -457,6 +463,14 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	// Results in the JSON serializer producing an empty array instead of a
+	// null value. More info at:
+	// https://github.com/golang/go/wiki/CodeReviewComments#declaring-empty-slices
+	if points == nil {
+		return []TimeSeriesPoint{}, nil
+	}
+
 	return points, nil
 }
 
