@@ -449,8 +449,7 @@ func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoin
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
 	// The tag `name` most likely contains a `/', and the snippet below
 	// escapes it with `\` to ensure proper functioning of RediSearch
-	// filters. For more context, refer to the issue at:
-	// https://github.com/RediSearch/RediSearch/issues/2566.
+	// filters.
 	escaped_name := strings.ReplaceAll(name, "/", "\\/")
 
 	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
