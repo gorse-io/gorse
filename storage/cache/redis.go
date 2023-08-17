@@ -453,8 +453,8 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 	escaped_name := strings.ReplaceAll(name, "/", "\\/")
 
 	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
-		fmt.Sprintf("@name:{ %s } @timestamp:[%d %d]", escaped_name, begin.UnixMicro(), end.UnixMicro()),
-		"SORTBY", "timestamp", "DESC").Result()
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", escaped_name, begin.UnixMicro(), end.UnixMicro()),
+		"SORTBY", "timestamp").Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
