@@ -127,7 +127,6 @@ type FactorizationMachine interface {
 	InternalPredict(x []int32, values []float32) float32
 	Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
 	Marshal(w io.Writer) error
-	Bytes() int
 }
 
 type BatchInference interface {
@@ -137,6 +136,10 @@ type BatchInference interface {
 
 type FactorizationMachineCloner interface {
 	Clone() FactorizationMachine
+}
+
+type FactorizationMachineSpawner interface {
+	Spawn() FactorizationMachine
 }
 
 type BaseFactorizationMachine struct {
@@ -527,21 +530,6 @@ func (fm *FM) Init(trainSet *Dataset) {
 	fm.BaseFactorizationMachine.Init(trainSet)
 }
 
-func (fm *FM) Bytes() int {
-	// The memory usage of FM consists of:
-	// 1. struct
-	// 2. float32 in fm.W
-	// 3. slice in fm.V
-	// 4. UnifiedIndex
-	bytes := reflect.TypeOf(fm).Elem().Size()
-	bytes += reflect.TypeOf(fm.W).Elem().Size() * uintptr(len(fm.W))
-	if len(fm.V) > 0 {
-		bytes += reflect.TypeOf(fm.V).Elem().Size() * uintptr(len(fm.V))
-		bytes += reflect.TypeOf(fm.V).Elem().Elem().Size() * uintptr(len(fm.V)) * uintptr(fm.nFactors)
-	}
-	return int(bytes) + fm.Index.Bytes()
-}
-
 func MarshalModel(w io.Writer, m FactorizationMachine) error {
 	// write header
 	var err error
@@ -599,6 +587,13 @@ func Clone(m FactorizationMachine) FactorizationMachine {
 		copied.SetParams(copied.GetParams())
 		return copied
 	}
+}
+
+func Spawn(m FactorizationMachine) FactorizationMachine {
+	if cloner, ok := m.(FactorizationMachineSpawner); ok {
+		return cloner.Spawn()
+	}
+	return m
 }
 
 // Marshal model into byte stream.

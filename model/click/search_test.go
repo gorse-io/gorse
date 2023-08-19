@@ -35,14 +35,6 @@ type mockFactorizationMachineForSearch struct {
 	model.BaseModel
 }
 
-func (m *mockFactorizationMachineForSearch) Complexity() int {
-	panic("implement me")
-}
-
-func (m *mockFactorizationMachineForSearch) Bytes() int {
-	panic("implement me")
-}
-
 func (m *mockFactorizationMachineForSearch) Marshal(_ io.Writer) error {
 	panic("implement me")
 }

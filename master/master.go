@@ -32,8 +32,10 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
+	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -157,7 +159,9 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	// enable deep learning
 	if cfg.Experimental.EnableDeepLearning {
 		log.Logger().Debug("enable deep learning")
-		m.ClickModel = click.NewDeepFM(nil)
+		m.ClickModel = click.NewDeepFM(model.Params{
+			model.BatchSize: cfg.Experimental.DeepLearningBatchSize,
+		})
 	}
 
 	return m
@@ -202,7 +206,7 @@ func (m *Master) Serve() {
 		RankingPrecision.Set(float64(m.clickScore.Precision))
 		RankingRecall.Set(float64(m.clickScore.Recall))
 		RankingAUC.Set(float64(m.clickScore.AUC))
-		MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(m.ClickModel.Bytes()))
+		MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(m.ClickModel)))
 	}
 
 	// create cluster meta cache
