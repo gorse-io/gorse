@@ -39,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/search"
+	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -269,7 +270,7 @@ func (w *Worker) Pull() {
 					w.ClickModelVersion = w.latestClickModelVersion
 					log.Logger().Info("synced click model",
 						zap.String("version", encoding.Hex(w.ClickModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(w.ClickModel.Bytes()))
+					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(w.ClickModel)))
 					pulled = true
 				}
 			}
