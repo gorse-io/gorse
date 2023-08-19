@@ -937,11 +937,28 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	}
 	// rank by CTR
 	topItems := make([]cache.Document, 0, len(items))
-	for _, item := range items {
-		topItems = append(topItems, cache.Document{
-			Id:    item.ItemId,
-			Score: float64(w.ClickModel.Predict(user.UserId, item.ItemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels))),
-		})
+	if batchPredictor, ok := w.ClickModel.(click.BatchInference); ok {
+		inputs := make([]lo.Tuple4[string, string, []click.Feature, []click.Feature], len(items))
+		for i, item := range items {
+			inputs[i].A = user.UserId
+			inputs[i].B = item.ItemId
+			inputs[i].C = click.ConvertLabelsToFeatures(user.Labels)
+			inputs[i].D = click.ConvertLabelsToFeatures(item.Labels)
+		}
+		output := batchPredictor.BatchPredict(inputs)
+		for i, score := range output {
+			topItems = append(topItems, cache.Document{
+				Id:    items[i].ItemId,
+				Score: float64(score),
+			})
+		}
+	} else {
+		for _, item := range items {
+			topItems = append(topItems, cache.Document{
+				Id:    item.ItemId,
+				Score: float64(w.ClickModel.Predict(user.UserId, item.ItemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels))),
+			})
+		}
 	}
 	cache.SortDocuments(topItems)
 	return topItems, nil

@@ -253,4 +253,4 @@ ratio = 1
 [experimental]
 
 # Enable deep learning recommenders. The default value is false.
-enabale_deep_learning = false
+enable_deep_learning = false

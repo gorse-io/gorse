@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -48,8 +49,9 @@ const (
 type DeepFM struct {
 	BaseFactorizationMachine
 
-	// number of working CPUs
-	numCPU int
+	// runtime
+	numCPU       int
+	predictMutex sync.Mutex
 
 	// dataset stats
 	minTarget    float32
@@ -157,6 +159,8 @@ func (fm *DeepFM) InternalPredict(indices []int32, values []float32) float32 {
 }
 
 func (fm *DeepFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
+	fm.predictMutex.Lock()
+	defer fm.predictMutex.Unlock()
 	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
