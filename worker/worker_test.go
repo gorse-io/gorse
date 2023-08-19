@@ -891,8 +891,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 		itemCache.Set(strconv.Itoa(i), data.Item{ItemId: strconv.Itoa(i)})
 	}
 	// rank items
-	suite.ClickModel = new(mockFactorizationMachine)
-	result, err := suite.rankByClickTroughRate(&data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache, suite.ClickModel)
+	result, err := suite.rankByClickTroughRate(&data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache, new(mockFactorizationMachine))
 	suite.NoError(err)
 	suite.Equal([]string{"5", "4", "3", "2", "1"}, lo.Map(result, func(d cache.Document, _ int) string {
 		return d.Id
@@ -924,7 +923,7 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	suite.NoError(err)
-	suite.ClickModel = new(mockFactorizationMachine)
+	suite.rankers = []click.FactorizationMachine{new(mockFactorizationMachine)}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
