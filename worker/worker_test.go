@@ -891,7 +891,8 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 		itemCache.Set(strconv.Itoa(i), data.Item{ItemId: strconv.Itoa(i)})
 	}
 	// rank items
-	result, err := suite.rankByClickTroughRate(&data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache, new(mockFactorizationMachine))
+	suite.ClickModel = new(mockFactorizationMachine)
+	result, err := suite.rankByClickTroughRate(&data.User{UserId: "1"}, [][]string{{"1", "2", "3", "4", "5"}}, itemCache, suite.ClickModel)
 	suite.NoError(err)
 	suite.Equal([]string{"5", "4", "3", "2", "1"}, lo.Map(result, func(d cache.Document, _ int) string {
 		return d.Id
