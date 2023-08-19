@@ -51,7 +51,7 @@ jobs:
           --health-retries 5
 
       redis:
-        image: redis/redis-stack
+        image: redis/redis-stack:6.2.6-v9
         ports:
           - 6379
 
