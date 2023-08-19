@@ -136,6 +136,9 @@ type BatchInference interface {
 
 type FactorizationMachineCloner interface {
 	Clone() FactorizationMachine
+}
+
+type FactorizationMachineSpawner interface {
 	Spawn() FactorizationMachine
 }
 
@@ -587,7 +590,7 @@ func Clone(m FactorizationMachine) FactorizationMachine {
 }
 
 func Spawn(m FactorizationMachine) FactorizationMachine {
-	if cloner, ok := m.(FactorizationMachineCloner); ok {
+	if cloner, ok := m.(FactorizationMachineSpawner); ok {
 		return cloner.Spawn()
 	}
 	return m

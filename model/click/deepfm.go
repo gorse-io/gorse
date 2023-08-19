@@ -699,6 +699,10 @@ func (fm *DeepFM) Clone() FactorizationMachine {
 	}
 }
 
+func (fm *DeepFM) Spawn() FactorizationMachine {
+	return fm.Clone()
+}
+
 func zeros(a, b int) [][]float32 {
 	retVal := make([][]float32, a)
 	for i := range retVal {

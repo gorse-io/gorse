@@ -175,7 +175,8 @@ type TracingConfig struct {
 }
 
 type ExperimentalConfig struct {
-	EnableDeepLearning bool `mapstructure:"enable_deep_learning"`
+	EnableDeepLearning    bool `mapstructure:"enable_deep_learning"`
+	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
 }
 
 func GetDefaultConfig() *Config {
@@ -247,6 +248,9 @@ func GetDefaultConfig() *Config {
 		Tracing: TracingConfig{
 			Exporter: "jaeger",
 			Sampler:  "always",
+		},
+		Experimental: ExperimentalConfig{
+			DeepLearningBatchSize: 128,
 		},
 	}
 }
@@ -522,6 +526,8 @@ func setDefault() {
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
+	// [experimental]
+	viper.SetDefault("experimental.deep_learning_batch_size", defaultConfig.Experimental.DeepLearningBatchSize)
 }
 
 type configBinding struct {

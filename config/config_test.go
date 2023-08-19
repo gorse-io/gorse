@@ -140,6 +140,8 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "http://localhost:14268/api/traces", config.Tracing.CollectorEndpoint)
 			assert.Equal(t, "always", config.Tracing.Sampler)
 			assert.Equal(t, 1.0, config.Tracing.Ratio)
+			// [experimental]
+			assert.Equal(t, 128, config.Experimental.DeepLearningBatchSize)
 		})
 	}
 }
