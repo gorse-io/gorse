@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -45,6 +46,9 @@ const (
 
 type DeepFM struct {
 	BaseFactorizationMachine
+
+	// number of working CPUs
+	numCPU int
 
 	// dataset stats
 	minTarget    float32
@@ -87,6 +91,11 @@ type DeepFM struct {
 	v_w0 [][]float32
 	t    int
 
+	// preallocated arrays
+	dataV  []float32
+	dataW  []float32
+	dataW0 []float32
+
 	// Hyper parameters
 	batchSize    int
 	nFactors     int
@@ -101,6 +110,7 @@ type DeepFM struct {
 func NewDeepFM(params model.Params) *DeepFM {
 	fm := new(DeepFM)
 	fm.SetParams(params)
+	fm.numCPU = runtime.NumCPU()
 	fm.g = gorgonia.NewGraph()
 	fm.marshables = []any{&fm.v, &fm.w, &fm.w0, &fm.bData, &fm.b0Data, &fm.w1Data, &fm.b1Data}
 	return fm
@@ -380,6 +390,11 @@ func (fm *DeepFM) build() {
 	fm.v_w = make([]float32, fm.numFeatures)
 	fm.v_w0 = zeros(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0])
 
+	// init preallocated arrays
+	fm.dataV = make([]float32, fm.batchSize*fm.numDimension*fm.nFactors)
+	fm.dataW = make([]float32, fm.batchSize*fm.numDimension)
+	fm.dataW0 = make([]float32, fm.batchSize*fm.numDimension*fm.nFactors*fm.hiddenLayers[0])
+
 	fm.b = gorgonia.NewMatrix(fm.g, tensor.Float32,
 		gorgonia.WithValue(tensor.New(tensor.WithShape(1, 1), tensor.WithBacking(fm.bData))),
 		gorgonia.WithName("b"))
@@ -436,15 +451,15 @@ func (fm *DeepFM) forward(batchSize int) {
 
 	// factorization machine
 	x := gorgonia.Must(gorgonia.Reshape(fm.values, []int{batchSize, fm.numDimension, 1}))
-	vx := gorgonia.Must(gorgonia.BatchedMatMul(fm.embeddingV, x, true))
+	vx := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(fm.embeddingV, 0, 2, 1)), x, &fm.numCPU))
 	sumSquare := gorgonia.Must(gorgonia.Square(vx))
 	v2 := gorgonia.Must(gorgonia.Square(fm.embeddingV))
 	x2 := gorgonia.Must(gorgonia.Square(x))
-	squareSum := gorgonia.Must(gorgonia.BatchedMatMul(v2, x2, true))
+	squareSum := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(v2, 0, 2, 1)), x2, &fm.numCPU))
 	sum := gorgonia.Must(gorgonia.Sub(sumSquare, squareSum))
 	sum = gorgonia.Must(gorgonia.Sum(sum, 1))
 	sum = gorgonia.Must(gorgonia.Mul(sum, fm.nodeFromFloat64(0.5)))
-	linear := gorgonia.Must(gorgonia.BatchedMatMul(fm.embeddingW, x, true, false))
+	linear := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(fm.embeddingW, 0, 2, 1)), x, &fm.numCPU))
 	fm.output = gorgonia.Must(gorgonia.BroadcastAdd(
 		gorgonia.Must(gorgonia.Reshape(linear, []int{batchSize})),
 		fm.b,
@@ -455,7 +470,7 @@ func (fm *DeepFM) forward(batchSize int) {
 	// deep network
 	a0 := gorgonia.Must(gorgonia.Reshape(fm.embeddingV, []int{batchSize, fm.numDimension * fm.nFactors, 1}))
 	w0 := gorgonia.Must(gorgonia.Reshape(fm.embeddingW0, []int{batchSize, fm.numDimension * fm.nFactors, fm.hiddenLayers[0]}))
-	l0 := gorgonia.Must(gorgonia.BatchedMatMul(a0, w0, true))
+	l0 := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(a0, 0, 2, 1)), w0, &fm.numCPU))
 	l0 = gorgonia.Must(gorgonia.Reshape(l0, []int{batchSize, fm.hiddenLayers[0]}))
 	l0 = gorgonia.Must(gorgonia.BroadcastAdd(l0, fm.b0, nil, []byte{0}))
 	dnn := gorgonia.Must(gorgonia.Rectify(l0))
@@ -484,23 +499,20 @@ func (fm *DeepFM) embedding(indices tensor.View) (v, w, w0 *tensor.Dense) {
 	}
 	batchSize, numDimension := s[0], s[1]
 
-	dataV := make([]float32, batchSize*numDimension*fm.nFactors)
-	dataW := make([]float32, batchSize*numDimension)
-	dataW0 := make([]float32, batchSize*numDimension*fm.nFactors*fm.hiddenLayers[0])
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := lo.Must1(indices.At(i, j)).(float32)
 			if index >= 0 && index < float32(fm.numFeatures) {
-				copy(dataV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors], fm.v[int(index)])
-				dataW[i*numDimension+j] = fm.w[int(index)]
-				copy(dataW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]], fm.w0[int(index)])
+				copy(fm.dataV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors], fm.v[int(index)])
+				fm.dataW[i*numDimension+j] = fm.w[int(index)]
+				copy(fm.dataW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]], fm.w0[int(index)])
 			}
 		}
 	}
 
-	v = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors), tensor.WithBacking(dataV))
-	w = tensor.New(tensor.WithShape(batchSize, numDimension, 1), tensor.WithBacking(dataW))
-	w0 = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors*fm.hiddenLayers[0]), tensor.WithBacking(dataW0))
+	v = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors), tensor.WithBacking(fm.dataV))
+	w = tensor.New(tensor.WithShape(batchSize, numDimension, 1), tensor.WithBacking(fm.dataW))
+	w0 = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors*fm.hiddenLayers[0]), tensor.WithBacking(fm.dataW0))
 	return
 }
 
