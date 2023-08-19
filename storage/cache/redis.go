@@ -255,9 +255,9 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 		return nil, nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", collection))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collection)))
 	if subset != "" {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", subset))
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(subset)))
 	}
 	for _, q := range query {
 		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", encdodeCategory(q)))
@@ -287,8 +287,8 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 		return nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", strings.Join(collections, " | ")))
-	builder.WriteString(fmt.Sprintf(" @id:{ %s }", id))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
+	builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(id)))
 	for {
 		// search documents
 		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
@@ -335,12 +335,12 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", strings.Join(collections, " | ")))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
 	if condition.Subset != nil {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", *condition.Subset))
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(*condition.Subset)))
 	}
 	if condition.Id != nil {
-		builder.WriteString(fmt.Sprintf(" @id:{ %s }", *condition.Id))
+		builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(*condition.Id)))
 	}
 	if condition.Before != nil {
 		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf,%d]", condition.Before.UnixMicro()))
@@ -543,4 +543,10 @@ func decodeCategories(s string) ([]string, error) {
 		categories = append(categories, category)
 	}
 	return categories, nil
+}
+
+// escape -:.
+func escape(s string) string {
+	r := strings.NewReplacer("-", "\\-", ":", "\\:", ".", "\\.")
+	return r.Replace(s)
 }
