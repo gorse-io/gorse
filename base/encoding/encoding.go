@@ -19,11 +19,12 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
-	"github.com/chewxy/math32"
-	"github.com/juju/errors"
 	"io"
 	"reflect"
 	"strconv"
+
+	"github.com/chewxy/math32"
+	"github.com/juju/errors"
 )
 
 // Hex returns the hex form of a 64-bit integer.
@@ -87,13 +88,19 @@ func ReadBytes(r io.Reader) ([]byte, error) {
 		return nil, err
 	}
 	data := make([]byte, length)
-	n, err := r.Read(data)
-	if err != nil {
-		return nil, err
-	} else if n != len(data) {
-		return nil, errors.New("fail to read string")
+	readCount := 0
+	for {
+		n, err := r.Read(data[readCount:])
+		if err != nil {
+			return nil, err
+		}
+		readCount += n
+		if readCount == len(data) {
+			return data, nil
+		} else if n == 0 {
+			return nil, errors.New("fail to read string")
+		}
 	}
-	return data, nil
 }
 
 // WriteGob writes object to byte stream.

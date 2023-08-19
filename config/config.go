@@ -54,11 +54,12 @@ const (
 
 // Config is the configuration for the engine.
 type Config struct {
-	Database  DatabaseConfig  `mapstructure:"database"`
-	Master    MasterConfig    `mapstructure:"master"`
-	Server    ServerConfig    `mapstructure:"server"`
-	Recommend RecommendConfig `mapstructure:"recommend"`
-	Tracing   TracingConfig   `mapstructure:"tracing"`
+	Database     DatabaseConfig     `mapstructure:"database"`
+	Master       MasterConfig       `mapstructure:"master"`
+	Server       ServerConfig       `mapstructure:"server"`
+	Recommend    RecommendConfig    `mapstructure:"recommend"`
+	Tracing      TracingConfig      `mapstructure:"tracing"`
+	Experimental ExperimentalConfig `mapstructure:"experimental"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -171,6 +172,10 @@ type TracingConfig struct {
 	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
 	Sampler           string  `mapstructure:"sampler"`
 	Ratio             float64 `mapstructure:"ratio"`
+}
+
+type ExperimentalConfig struct {
+	EnableDeepLearning bool `mapstructure:"enable_deep_learning"`
 }
 
 func GetDefaultConfig() *Config {

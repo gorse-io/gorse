@@ -15,15 +15,22 @@
 package click
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/uuid"
+	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/encoding"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/model"
@@ -42,44 +49,73 @@ const (
 type DeepFM struct {
 	BaseFactorizationMachine
 
-	MinTarget    float32
-	MaxTarget    float32
-	Task         FMTask
+	// runtime
+	numCPU       int
+	predictMutex sync.Mutex
+
+	// dataset stats
+	minTarget    float32
+	maxTarget    float32
 	numFeatures  int
 	numDimension int
 
-	vm         gorgonia.VM
-	g          *gorgonia.ExprGraph
-	embeddingV *gorgonia.Node
-	embeddingW *gorgonia.Node
-	values     *gorgonia.Node
-	output     *gorgonia.Node
-	target     *gorgonia.Node
-	cost       *gorgonia.Node
-	b          *gorgonia.Node
-	learnables []*gorgonia.Node
+	// tuned parameters
 	v          [][]float32
 	w          []float32
-	m_v        [][]float32
-	m_w        []float32
-	v_v        [][]float32
-	v_w        []float32
-	t          int
+	w0         [][]float32
+	bData      []float32
+	b0Data     []float32
+	w1Data     [][]float32
+	b1Data     [][]float32
+	marshables []any
+
+	// gorgonia graph
+	vm          gorgonia.VM
+	g           *gorgonia.ExprGraph
+	embeddingV  *gorgonia.Node
+	embeddingW  *gorgonia.Node
+	embeddingW0 *gorgonia.Node
+	values      *gorgonia.Node
+	output      *gorgonia.Node
+	target      *gorgonia.Node
+	cost        *gorgonia.Node
+	b           *gorgonia.Node
+	b0          *gorgonia.Node
+	w1          []*gorgonia.Node
+	b1          []*gorgonia.Node
+	learnables  []*gorgonia.Node
+
+	// Adam optimizer variables
+	m_v  [][]float32
+	m_w  []float32
+	m_w0 [][]float32
+	v_v  [][]float32
+	v_w  []float32
+	v_w0 [][]float32
+	t    int
+
+	// preallocated arrays
+	dataV  []float32
+	dataW  []float32
+	dataW0 []float32
 
 	// Hyper parameters
-	batchSize  int
-	nFactors   int
-	nEpochs    int
-	lr         float32
-	reg        float32
-	initMean   float32
-	initStdDev float32
+	batchSize    int
+	nFactors     int
+	nEpochs      int
+	lr           float32
+	reg          float32
+	initMean     float32
+	initStdDev   float32
+	hiddenLayers []int
 }
 
-func NewDeepFM(params model.Params) FactorizationMachine {
+func NewDeepFM(params model.Params) *DeepFM {
 	fm := new(DeepFM)
-	fm.g = gorgonia.NewGraph()
 	fm.SetParams(params)
+	fm.numCPU = runtime.NumCPU()
+	fm.g = gorgonia.NewGraph()
+	fm.marshables = []any{&fm.v, &fm.w, &fm.w0, &fm.bData, &fm.b0Data, &fm.w1Data, &fm.b1Data}
 	return fm
 }
 
@@ -96,11 +132,12 @@ func (fm *DeepFM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachine.SetParams(params)
 	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
-	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
+	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 50)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.001)
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
+	fm.hiddenLayers = fm.Params.GetIntSlice(model.HiddenLayers, []int{200, 200})
 }
 
 func (fm *DeepFM) GetParamsGrid(withSize bool) model.ParamsGrid {
@@ -114,48 +151,23 @@ func (fm *DeepFM) GetParamsGrid(withSize bool) model.ParamsGrid {
 }
 
 func (fm *DeepFM) Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32 {
-	var (
-		indices []int32
-		values  []float32
-	)
-	// encode user
-	if userIndex := fm.Index.EncodeUser(userId); userIndex != base.NotId {
-		indices = append(indices, userIndex)
-		values = append(values, 1)
-	}
-	// encode item
-	if itemIndex := fm.Index.EncodeItem(itemId); itemIndex != base.NotId {
-		indices = append(indices, itemIndex)
-		values = append(values, 1)
-	}
-	// encode user labels
-	for _, userFeature := range userFeatures {
-		if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != base.NotId {
-			indices = append(indices, userFeatureIndex)
-			values = append(values, userFeature.Value)
-		}
-	}
-	// encode item labels
-	for _, itemFeature := range itemFeatures {
-		if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != base.NotId {
-			indices = append(indices, itemFeatureIndex)
-			values = append(values, itemFeature.Value)
-		}
-	}
-	return fm.InternalPredict(indices, values)
+	panic("Predict is unsupported for deep learning models")
 }
 
 func (fm *DeepFM) InternalPredict(indices []int32, values []float32) float32 {
 	panic("InternalPredict is unsupported for deep learning models")
 }
 
-func (fm *DeepFM) BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
+func (fm *DeepFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
+	fm.predictMutex.Lock()
+	defer fm.predictMutex.Unlock()
 	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
-		v, w := fm.embedding(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
+		v, w, w0 := fm.embedding(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
 		lo.Must0(gorgonia.Let(fm.embeddingV, v))
 		lo.Must0(gorgonia.Let(fm.embeddingW, w))
+		lo.Must0(gorgonia.Let(fm.embeddingW0, w0))
 		lo.Must0(gorgonia.Let(fm.values, lo.Must1(valuesTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 		lo.Must0(fm.vm.RunAll())
 		predictions = append(predictions, fm.output.Value().Data().([]float32)...)
@@ -164,19 +176,50 @@ func (fm *DeepFM) BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
 	return predictions[:len(x)]
 }
 
+func (fm *DeepFM) BatchPredict(inputs []lo.Tuple4[string, string, []Feature, []Feature]) []float32 {
+	x := make([]lo.Tuple2[[]int32, []float32], len(inputs))
+	for i, input := range inputs {
+		// encode user
+		if userIndex := fm.Index.EncodeUser(input.A); userIndex != base.NotId {
+			x[i].A = append(x[i].A, userIndex)
+			x[i].B = append(x[i].B, 1)
+		}
+		// encode item
+		if itemIndex := fm.Index.EncodeItem(input.B); itemIndex != base.NotId {
+			x[i].A = append(x[i].A, itemIndex)
+			x[i].B = append(x[i].B, 1)
+		}
+		// encode user labels
+		for _, userFeature := range input.C {
+			if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != base.NotId {
+				x[i].A = append(x[i].A, userFeatureIndex)
+				x[i].B = append(x[i].B, userFeature.Value)
+			}
+		}
+		// encode item labels
+		for _, itemFeature := range input.D {
+			if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != base.NotId {
+				x[i].A = append(x[i].A, itemFeatureIndex)
+				x[i].B = append(x[i].B, itemFeature.Value)
+			}
+		}
+	}
+	return fm.BatchInternalPredict(x)
+}
+
 func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
 	fm.Init(trainSet)
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet)
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
-	log.Logger().Info(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
+	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", 0, fm.nEpochs), fields...)
 
 	var x []lo.Tuple2[[]int32, []float32]
 	var y []float32
 	for i := 0; i < trainSet.Target.Len(); i++ {
-		fm.MinTarget = math32.Min(fm.MinTarget, trainSet.Target.Get(i))
-		fm.MaxTarget = math32.Max(fm.MaxTarget, trainSet.Target.Get(i))
+		fm.minTarget = math32.Min(fm.minTarget, trainSet.Target.Get(i))
+		fm.maxTarget = math32.Max(fm.maxTarget, trainSet.Target.Get(i))
 		indices, values, target := trainSet.Get(i)
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		y = append(y, target)
@@ -192,14 +235,15 @@ func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, 
 		fitStart := time.Now()
 		cost := float32(0)
 		for i := 0; i < trainSet.Count(); i += fm.batchSize {
-			v, w := fm.embedding(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
+			v, w, w0 := fm.embedding(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
 			lo.Must0(gorgonia.Let(fm.embeddingV, v))
 			lo.Must0(gorgonia.Let(fm.embeddingW, w))
+			lo.Must0(gorgonia.Let(fm.embeddingW0, w0))
 			lo.Must0(gorgonia.Let(fm.values, lo.Must1(valuesTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 			lo.Must0(gorgonia.Let(fm.target, lo.Must1(targetTensor.Slice(gorgonia.S(i, i+fm.batchSize)))))
 			lo.Must0(fm.vm.RunAll())
 
-			fm.backward(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))), epoch)
+			fm.backward(lo.Must1(indicesTensor.Slice(gorgonia.S(i, i+fm.batchSize))))
 			cost += fm.cost.Value().Data().(float32)
 			lo.Must0(solver.Step(gorgonia.NodesToValueGrads(fm.learnables)))
 			fm.vm.Reset()
@@ -217,7 +261,7 @@ func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, 
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
@@ -238,31 +282,158 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
 
+	// init manually tuned parameters
 	fm.v = fm.GetRandomGenerator().NormalMatrix(fm.numFeatures, fm.nFactors, fm.initMean, fm.initStdDev)
 	fm.w = fm.GetRandomGenerator().NormalVector(fm.numFeatures, fm.initMean, fm.initStdDev)
-	fm.m_v = zeros(fm.numFeatures, fm.nFactors)
-	fm.m_w = make([]float32, fm.numFeatures)
-	fm.v_v = zeros(fm.numFeatures, fm.nFactors)
-	fm.v_w = make([]float32, fm.numFeatures)
-	fm.b = gorgonia.NewMatrix(fm.g, tensor.Float32,
-		gorgonia.WithShape(1, 1),
-		gorgonia.WithName("b"),
-		gorgonia.WithInit(gorgonia.Zeroes()))
+	fm.w0 = fm.GetRandomGenerator().NormalMatrix(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0], fm.initMean, fm.initStdDev)
 
-	fm.forward(fm.batchSize)
-	fm.learnables = []*gorgonia.Node{fm.b, fm.embeddingV, fm.embeddingW}
-	lo.Must1(gorgonia.Grad(fm.cost, fm.learnables...))
+	// init automatically tuned parameters
+	fm.bData = make([]float32, 1)
+	fm.b0Data = make([]float32, fm.hiddenLayers[0])
+	fm.w1Data = make([][]float32, len(fm.hiddenLayers)-1)
+	fm.b1Data = make([][]float32, len(fm.hiddenLayers)-1)
+	for i := 1; i < len(fm.hiddenLayers); i++ {
+		var (
+			inputSize  int
+			outputSize int
+		)
+		inputSize = fm.hiddenLayers[i]
+		if i == len(fm.hiddenLayers)-1 {
+			outputSize = 1
+		} else {
+			outputSize = fm.hiddenLayers[i+1]
+		}
+		fm.w1Data[i-1] = fm.GetRandomGenerator().NormalVector(inputSize*outputSize, fm.initMean, fm.initStdDev)
+		fm.b1Data[i-1] = make([]float32, outputSize)
+	}
 
-	fm.vm = gorgonia.NewTapeMachine(fm.g, gorgonia.BindDualValues(fm.learnables...))
+	fm.build()
 	fm.BaseFactorizationMachine.Init(trainSet)
 }
 
 func (fm *DeepFM) Marshal(w io.Writer) error {
+	// write params
+	if err := encoding.WriteGob(w, fm.Params); err != nil {
+		return errors.Trace(err)
+	}
+	// write index
+	if err := MarshalIndex(w, fm.Index); err != nil {
+		return errors.Trace(err)
+	}
+	// write dataset stats
+	if err := encoding.WriteGob(w, fm.minTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.maxTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.numFeatures); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.numDimension); err != nil {
+		return errors.Trace(err)
+	}
+	// write weights
+	for _, data := range fm.marshables {
+		if err := encoding.WriteGob(w, data); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+func (fm *DeepFM) Unmarshal(r io.Reader) error {
+	var err error
+	// read params
+	if err := encoding.ReadGob(r, &fm.Params); err != nil {
+		return errors.Trace(err)
+	}
+	fm.SetParams(fm.Params)
+	// read index
+	if fm.Index, err = UnmarshalIndex(r); err != nil {
+		return errors.Trace(err)
+	}
+	// read dataset stats
+	if err := encoding.ReadGob(r, &fm.minTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &fm.maxTarget); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &fm.numFeatures); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &fm.numDimension); err != nil {
+		return errors.Trace(err)
+	}
+	// read weights
+	for _, data := range fm.marshables {
+		if err := encoding.ReadGob(r, data); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if !fm.Invalid() {
+		fm.build()
+	}
 	return nil
 }
 
 func (fm *DeepFM) Bytes() int {
 	return 0
+}
+
+func (fm *DeepFM) Complexity() int {
+	return 0
+}
+
+func (fm *DeepFM) build() {
+	// init Adam optimizer variables
+	fm.m_v = zeros(fm.numFeatures, fm.nFactors)
+	fm.m_w = make([]float32, fm.numFeatures)
+	fm.m_w0 = zeros(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0])
+	fm.v_v = zeros(fm.numFeatures, fm.nFactors)
+	fm.v_w = make([]float32, fm.numFeatures)
+	fm.v_w0 = zeros(fm.numFeatures, fm.nFactors*fm.hiddenLayers[0])
+
+	// init preallocated arrays
+	fm.dataV = make([]float32, fm.batchSize*fm.numDimension*fm.nFactors)
+	fm.dataW = make([]float32, fm.batchSize*fm.numDimension)
+	fm.dataW0 = make([]float32, fm.batchSize*fm.numDimension*fm.nFactors*fm.hiddenLayers[0])
+
+	fm.b = gorgonia.NewMatrix(fm.g, tensor.Float32,
+		gorgonia.WithValue(tensor.New(tensor.WithShape(1, 1), tensor.WithBacking(fm.bData))),
+		gorgonia.WithName("b"))
+	fm.b0 = gorgonia.NewMatrix(fm.g, tensor.Float32,
+		gorgonia.WithValue(tensor.New(tensor.WithShape(1, fm.hiddenLayers[0]), tensor.WithBacking(fm.b0Data))),
+		gorgonia.WithName("b0"))
+	for i := 1; i < len(fm.hiddenLayers); i++ {
+		var (
+			inputSize  int
+			outputSize int
+		)
+		inputSize = fm.hiddenLayers[i]
+		if i == len(fm.hiddenLayers)-1 {
+			outputSize = 1
+		} else {
+			outputSize = fm.hiddenLayers[i+1]
+		}
+		fm.w1 = append(fm.w1, gorgonia.NewMatrix(fm.g, tensor.Float32,
+			gorgonia.WithValue(tensor.New(tensor.WithShape(inputSize, outputSize), tensor.WithBacking(fm.w1Data[i-1]))),
+			gorgonia.WithName(fmt.Sprintf("w%d", i))))
+		fm.b1 = append(fm.b1, gorgonia.NewMatrix(fm.g, tensor.Float32,
+			gorgonia.WithValue(tensor.New(tensor.WithShape(1, outputSize), tensor.WithBacking(fm.b1Data[i-1]))),
+			gorgonia.WithName(fmt.Sprintf("b%d", i))))
+	}
+	fm.learnables = []*gorgonia.Node{fm.b, fm.b0}
+	fm.learnables = append(fm.learnables, fm.w1...)
+	fm.learnables = append(fm.learnables, fm.b1...)
+
+	fm.forward(fm.batchSize)
+	wrts := []*gorgonia.Node{fm.embeddingV, fm.embeddingW, fm.embeddingW0}
+	wrts = append(wrts, fm.learnables...)
+	lo.Must1(gorgonia.Grad(fm.cost, wrts...))
+
+	fm.vm = gorgonia.NewTapeMachine(fm.g, gorgonia.BindDualValues(fm.learnables...))
 }
 
 func (fm *DeepFM) forward(batchSize int) {
@@ -273,6 +444,9 @@ func (fm *DeepFM) forward(batchSize int) {
 	fm.embeddingW = gorgonia.NodeFromAny(fm.g,
 		tensor.New(tensor.WithShape(batchSize, fm.numDimension, 1), tensor.WithBacking(make([]float32, batchSize*fm.numDimension))),
 		gorgonia.WithName("embeddingW"))
+	fm.embeddingW0 = gorgonia.NodeFromAny(fm.g,
+		tensor.New(tensor.WithShape(batchSize, fm.numDimension, fm.nFactors*fm.hiddenLayers[0]), tensor.WithBacking(make([]float32, batchSize*fm.numDimension*fm.nFactors*fm.hiddenLayers[0]))),
+		gorgonia.WithName("embeddingW0"))
 	fm.values = gorgonia.NodeFromAny(fm.g,
 		tensor.New(tensor.WithShape(batchSize, fm.numDimension), tensor.WithBacking(make([]float32, batchSize*fm.numDimension))),
 		gorgonia.WithName("values"))
@@ -282,51 +456,76 @@ func (fm *DeepFM) forward(batchSize int) {
 
 	// factorization machine
 	x := gorgonia.Must(gorgonia.Reshape(fm.values, []int{batchSize, fm.numDimension, 1}))
-	vx := gorgonia.Must(gorgonia.BatchedMatMul(fm.embeddingV, x, true))
+	vx := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(fm.embeddingV, 0, 2, 1)), x, &fm.numCPU))
 	sumSquare := gorgonia.Must(gorgonia.Square(vx))
 	v2 := gorgonia.Must(gorgonia.Square(fm.embeddingV))
 	x2 := gorgonia.Must(gorgonia.Square(x))
-	squareSum := gorgonia.Must(gorgonia.BatchedMatMul(v2, x2, true))
+	squareSum := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(v2, 0, 2, 1)), x2, &fm.numCPU))
 	sum := gorgonia.Must(gorgonia.Sub(sumSquare, squareSum))
 	sum = gorgonia.Must(gorgonia.Sum(sum, 1))
 	sum = gorgonia.Must(gorgonia.Mul(sum, fm.nodeFromFloat64(0.5)))
-	linear := gorgonia.Must(gorgonia.BatchedMatMul(fm.embeddingW, x, true, false))
+	linear := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(fm.embeddingW, 0, 2, 1)), x, &fm.numCPU))
 	fm.output = gorgonia.Must(gorgonia.BroadcastAdd(
 		gorgonia.Must(gorgonia.Reshape(linear, []int{batchSize})),
 		fm.b,
 		nil, []byte{0},
 	))
-	fm.output = gorgonia.Must(gorgonia.Add(fm.output, gorgonia.Must(gorgonia.Reshape(sum, []int{batchSize}))))
+	fmOutput := gorgonia.Must(gorgonia.Add(fm.output, gorgonia.Must(gorgonia.Reshape(sum, []int{batchSize}))))
+
+	// deep network
+	a0 := gorgonia.Must(gorgonia.Reshape(fm.embeddingV, []int{batchSize, fm.numDimension * fm.nFactors, 1}))
+	w0 := gorgonia.Must(gorgonia.Reshape(fm.embeddingW0, []int{batchSize, fm.numDimension * fm.nFactors, fm.hiddenLayers[0]}))
+	l0 := gorgonia.Must(gorgonia.ParallelBMM(gorgonia.Must(gorgonia.Transpose(a0, 0, 2, 1)), w0, &fm.numCPU))
+	l0 = gorgonia.Must(gorgonia.Reshape(l0, []int{batchSize, fm.hiddenLayers[0]}))
+	l0 = gorgonia.Must(gorgonia.BroadcastAdd(l0, fm.b0, nil, []byte{0}))
+	dnn := gorgonia.Must(gorgonia.Rectify(l0))
+	for i := 1; i < len(fm.hiddenLayers); i++ {
+		l := gorgonia.Must(gorgonia.Mul(dnn, fm.w1[i-1]))
+		l = gorgonia.Must(gorgonia.BroadcastAdd(l, fm.b1[i-1], nil, []byte{0}))
+		if i == len(fm.hiddenLayers)-1 {
+			dnn = gorgonia.Must(gorgonia.Sigmoid(l))
+		} else {
+			dnn = gorgonia.Must(gorgonia.Rectify(l))
+		}
+	}
+	dnnOutput := gorgonia.Must(gorgonia.Reshape(dnn, []int{batchSize}))
+
+	// output
+	fm.output = gorgonia.Must(gorgonia.Add(fmOutput, dnnOutput))
 
 	// loss function
 	fm.cost = fm.bceWithLogits(fm.target, fm.output)
 }
 
-func (fm *DeepFM) embedding(indices tensor.View) (v, w *tensor.Dense) {
+func (fm *DeepFM) embedding(indices tensor.View) (v, w, w0 *tensor.Dense) {
 	s := indices.Shape()
 	if len(s) != 2 {
 		panic("indices must be 2-dimensional")
 	}
 	batchSize, numDimension := s[0], s[1]
 
-	dataV := make([]float32, batchSize*numDimension*fm.nFactors)
-	dataW := make([]float32, batchSize*numDimension)
+	clear(fm.dataV)
+	clear(fm.dataW)
+	clear(fm.dataW0)
+
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := lo.Must1(indices.At(i, j)).(float32)
-			for k := 0; k < fm.nFactors; k++ {
-				dataV[i*numDimension*fm.nFactors+j*fm.nFactors+k] = fm.v[int(index)][k]
+			if index >= 0 && index < float32(fm.numFeatures) {
+				copy(fm.dataV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors], fm.v[int(index)])
+				fm.dataW[i*numDimension+j] = fm.w[int(index)]
+				copy(fm.dataW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]], fm.w0[int(index)])
 			}
-			dataW[i*numDimension+j] = fm.w[int(index)]
 		}
 	}
 
-	v = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors), tensor.WithBacking(dataV))
-	w = tensor.New(tensor.WithShape(batchSize, numDimension, 1), tensor.WithBacking(dataW))
+	v = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors), tensor.WithBacking(fm.dataV))
+	w = tensor.New(tensor.WithShape(batchSize, numDimension, 1), tensor.WithBacking(fm.dataW))
+	w0 = tensor.New(tensor.WithShape(batchSize, numDimension, fm.nFactors*fm.hiddenLayers[0]), tensor.WithBacking(fm.dataW0))
 	return
 }
 
-func (fm *DeepFM) backward(indices tensor.View, t int) {
+func (fm *DeepFM) backward(indices tensor.View) {
 	s := indices.Shape()
 	if len(s) != 2 {
 		panic("indices must be 2-dimensional")
@@ -335,49 +534,60 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 
 	gradEmbeddingV := lo.Must1(fm.embeddingV.Grad()).Data().([]float32)
 	gradEmbeddingW := lo.Must1(fm.embeddingW.Grad()).Data().([]float32)
-	gradV := make(map[int][]float32)
-	gradW := make(map[int]float32)
+	gradEmbeddingW0 := lo.Must1(fm.embeddingW0.Grad()).Data().([]float32)
+	indexSet := mapset.NewSet[int]()
+	gradV := make([][]float32, fm.numFeatures)
+	gradW := make([]float32, fm.numFeatures)
+	gradW0 := make([][]float32, fm.numFeatures)
 
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := int(lo.Must1(indices.At(i, j)).(float32))
+			if index >= 0 && index < fm.numFeatures {
+				if !indexSet.Contains(index) {
+					indexSet.Add(index)
+					gradV[index] = make([]float32, fm.nFactors)
+					gradW0[index] = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+				}
 
-			if _, exist := gradV[index]; !exist {
-				gradV[index] = make([]float32, fm.nFactors)
+				floats.Add(gradV[index], gradEmbeddingV[(i*numDimension+j)*fm.nFactors:(i*numDimension+j+1)*fm.nFactors])
+				gradW[index] += gradEmbeddingW[i*numDimension+j]
+				floats.Add(gradW0[index], gradEmbeddingW0[(i*numDimension+j)*fm.nFactors*fm.hiddenLayers[0]:(i*numDimension+j+1)*fm.nFactors*fm.hiddenLayers[0]])
 			}
-			for k := 0; k < fm.nFactors; k++ {
-				gradV[index][k] += gradEmbeddingV[i*numDimension*fm.nFactors+j*fm.nFactors+k]
-			}
-
-			if _, exist := gradW[index]; !exist {
-				gradW[index] = 0
-			}
-			gradW[index] += gradEmbeddingW[i*numDimension+j]
 		}
 	}
 
 	fm.t++
-	correction1 := float32(1 - math32.Pow(beta1, float32(fm.t)))
-	correction2 := float32(1 - math32.Pow(beta2, float32(fm.t)))
+	correction1 := 1 - math32.Pow(beta1, float32(fm.t))
+	correction2 := 1 - math32.Pow(beta2, float32(fm.t))
 
-	for index, grad := range gradV {
-		for k := 0; k < fm.nFactors; k++ {
-			grad[k] += fm.reg * fm.v[index][k]
-			grad[k] /= float32(batchSize)
-			// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
-			fm.m_v[index][k] = beta1*fm.m_v[index][k] + (1-beta1)*grad[k]
-			// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
-			fm.v_v[index][k] = beta2*fm.v_v[index][k] + (1-beta2)*grad[k]*grad[k]
-			// \hat{m}_t = m_t / (1 - beta_1^t)
-			mHat := fm.m_v[index][k] / correction1
-			// \hat{v}_t = v_t / (1 - beta_2^t)
-			vHat := fm.v_v[index][k] / correction2
-			// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
-			fm.v[index][k] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
-		}
+	grad2 := make([]float32, fm.nFactors)
+	mHat := make([]float32, fm.nFactors)
+	vHat := make([]float32, fm.nFactors)
+	for index := range indexSet.Iter() {
+		grad := gradV[index]
+		floats.MulConstAddTo(fm.v[index], fm.reg, grad)
+		floats.MulConst(grad, 1/float32(batchSize))
+		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+		floats.MulConst(fm.m_v[index], beta1)
+		floats.MulConstAddTo(grad, 1-beta1, fm.m_v[index])
+		// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
+		floats.MulConst(fm.v_v[index], beta2)
+		floats.MulTo(grad, grad, grad2)
+		floats.MulConstAddTo(grad2, 1-beta2, fm.v_v[index])
+		// \hat{m}_t = m_t / (1 - beta_1^t)
+		floats.MulConstTo(fm.m_v[index], 1/correction1, mHat)
+		// \hat{v}_t = v_t / (1 - beta_2^t)
+		floats.MulConstTo(fm.v_v[index], 1/correction2, vHat)
+		// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+		floats.Sqrt(vHat)
+		floats.AddConst(vHat, eps)
+		floats.Div(mHat, vHat)
+		floats.MulConstAddTo(mHat, -fm.lr, fm.v[index])
 	}
 
-	for index, grad := range gradW {
+	for index := range indexSet.Iter() {
+		grad := gradW[index]
 		grad += fm.reg * fm.w[index]
 		grad /= float32(batchSize)
 		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
@@ -390,6 +600,31 @@ func (fm *DeepFM) backward(indices tensor.View, t int) {
 		vHat := fm.v_w[index] / correction2
 		// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
 		fm.w[index] -= fm.lr * mHat / (math32.Sqrt(vHat) + eps)
+	}
+
+	grad2 = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+	mHat = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+	vHat = make([]float32, fm.nFactors*fm.hiddenLayers[0])
+	for index := range indexSet.Iter() {
+		grad := gradW0[index]
+		floats.MulConstAddTo(fm.w0[index], fm.reg, grad)
+		floats.MulConst(grad, 1/float32(batchSize))
+		// m_t = beta_1 * m_{t-1} + (1 - beta_1) * g_t
+		floats.MulConst(fm.m_w0[index], beta1)
+		floats.MulConstAddTo(grad, 1-beta1, fm.m_w0[index])
+		// v_t = beta_2 * v_{t-1} + (1 - beta_2) * g_t^2
+		floats.MulConst(fm.v_w0[index], beta2)
+		floats.MulTo(grad, grad, grad2)
+		floats.MulConstAddTo(grad2, 1-beta2, fm.v_w0[index])
+		// \hat{m}_t = m_t / (1 - beta_1^t)
+		floats.MulConstTo(fm.m_w0[index], 1/correction1, mHat)
+		// \hat{v}_t = v_t / (1 - beta_2^t)
+		floats.MulConstTo(fm.v_w0[index], 1/correction2, vHat)
+		// \theta_t = \theta_{t-1} + \eta * \hat{m}_t / (\sqrt{\hat{v}_t} + \epsilon)
+		floats.Sqrt(vHat)
+		floats.AddConst(vHat, eps)
+		floats.Div(mHat, vHat)
+		floats.MulConstAddTo(mHat, -fm.lr, fm.w0[index])
 	}
 }
 
@@ -457,6 +692,19 @@ func (fm *DeepFM) bceWithLogits(target, prediction *gorgonia.Node) *gorgonia.Nod
 
 func (fm *DeepFM) nodeFromFloat64(any float32) *gorgonia.Node {
 	return gorgonia.NodeFromAny(fm.g, any, gorgonia.WithName(uuid.NewString()))
+}
+
+func (fm *DeepFM) Clone() FactorizationMachine {
+	buf := bytes.NewBuffer(nil)
+	if err := MarshalModel(buf, fm); err != nil {
+		panic(err)
+	}
+	if copied, err := UnmarshalModel(buf); err != nil {
+		panic(err)
+	} else {
+		copied.SetParams(copied.GetParams())
+		return copied
+	}
 }
 
 func zeros(a, b int) [][]float32 {

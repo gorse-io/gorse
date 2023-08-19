@@ -15,9 +15,11 @@
 package click
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/model"
 )
@@ -31,8 +33,53 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 		model.NEpochs:    10,
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
+		model.BatchSize:  1024,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(context.Background(), train, test, fitConfig)
-	assert.InDelta(t, 0.9271656, score.Accuracy, classificationDelta)
+	assert.InDelta(t, 0.9439709, score.Accuracy, classificationDelta)
+}
+
+func TestDeepFM_Classification_Criteo(t *testing.T) {
+	train, test, err := LoadDataFromBuiltIn("criteo")
+	assert.NoError(t, err)
+	m := NewDeepFM(model.Params{
+		model.InitStdDev: 0.01,
+		model.NFactors:   8,
+		model.NEpochs:    10,
+		model.Lr:         0.01,
+		model.Reg:        0.0001,
+		model.BatchSize:  1024,
+	})
+	fitConfig := newFitConfigWithTestTracker(10)
+	score := m.Fit(context.Background(), train, test, fitConfig)
+	assert.InDelta(t, 0.77, score.Accuracy, classificationDelta)
+
+	// test prediction
+	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}),
+		m.BatchPredict([]lo.Tuple4[string, string, []Feature, []Feature]{{
+			A: "1",
+			B: "2",
+			C: []Feature{
+				{Name: "3", Value: 0.3},
+				{Name: "4", Value: 0.4},
+			},
+			D: []Feature{
+				{Name: "5", Value: 0.5},
+				{Name: "6", Value: 0.6},
+			}}}))
+
+	// test marshal and unmarshal
+	buf := bytes.NewBuffer(nil)
+	err = MarshalModel(buf, m)
+	assert.NoError(t, err)
+	tmp, err := UnmarshalModel(buf)
+	assert.NoError(t, err)
+	scoreClone := EvaluateClassification(tmp, test)
+	assert.InDelta(t, 0.77, scoreClone.Accuracy, regressionDelta)
+
+	// test clear
+	assert.False(t, m.Invalid())
+	m.Clear()
+	assert.True(t, m.Invalid())
 }

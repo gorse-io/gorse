@@ -120,6 +120,7 @@ func TestFM_Regression_Criteo(t *testing.T) {
 	assert.InDelta(t, 0.839194, scoreInc.RMSE, regressionDelta)
 
 	// test clear
+	assert.False(t, m.Invalid())
 	m.Clear()
 	assert.True(t, m.Invalid())
 }

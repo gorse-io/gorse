@@ -249,3 +249,8 @@ sampler = "always"
 
 # The ratio of ratio based sampler. The default value is 1.
 ratio = 1
+
+[experimental]
+
+# Enable deep learning recommenders. The default value is false.
+enable_deep_learning = false

@@ -17,12 +17,13 @@ package click
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
 	"io"
 	"reflect"
 	"strconv"
+
+	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/log"
 )
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.
@@ -51,10 +52,15 @@ type UnifiedIndex interface {
 const (
 	mapIndex uint8 = iota
 	directIndex
+	nilIndex
 )
 
 // MarshalIndex marshal index into byte stream.
 func MarshalIndex(w io.Writer, index UnifiedIndex) error {
+	// if index is nil
+	if index == nil {
+		return binary.Write(w, binary.LittleEndian, nilIndex)
+	}
 	// write index type
 	var indexType uint8
 	switch index.(type) {
@@ -87,6 +93,8 @@ func UnmarshalIndex(r io.Reader) (UnifiedIndex, error) {
 		index = &UnifiedMapIndex{}
 	case directIndex:
 		index = &UnifiedDirectIndex{}
+	case nilIndex:
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown index type (%v)", indexType)
 	}

@@ -131,7 +131,12 @@ type FactorizationMachine interface {
 }
 
 type BatchInference interface {
-	BatchPredict(x []lo.Tuple2[[]int32, []float32]) []float32
+	BatchPredict(inputs []lo.Tuple4[string, string, []Feature, []Feature]) []float32
+	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32
+}
+
+type FactorizationMachineCloner interface {
+	Clone() FactorizationMachine
 }
 
 type BaseFactorizationMachine struct {
@@ -538,19 +543,55 @@ func (fm *FM) Bytes() int {
 }
 
 func MarshalModel(w io.Writer, m FactorizationMachine) error {
+	// write header
+	var err error
+	switch m.(type) {
+	case *FM:
+		err = encoding.WriteString(w, headerFM)
+	case *DeepFM:
+		err = encoding.WriteString(w, headerDeepFM)
+	default:
+		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
+	}
+	if err != nil {
+		return err
+	}
 	return m.Marshal(w)
 }
 
+const (
+	headerFM     = "FM"
+	headerDeepFM = "DeepFM"
+)
+
 func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
-	var fm FM
-	if err := fm.Unmarshal(r); err != nil {
+	// read header
+	header, err := encoding.ReadString(r)
+	if err != nil {
 		return nil, err
 	}
-	return &fm, nil
+	switch header {
+	case headerFM:
+		var fm FM
+		if err := fm.Unmarshal(r); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return &fm, nil
+	case headerDeepFM:
+		fm := NewDeepFM(nil)
+		if err := fm.Unmarshal(r); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return fm, nil
+	}
+	return nil, fmt.Errorf("unknown model: %v", header)
 }
 
 // Clone a model with deep copy.
 func Clone(m FactorizationMachine) FactorizationMachine {
+	if cloner, ok := m.(FactorizationMachineCloner); ok {
+		return cloner.Clone()
+	}
 	var copied FactorizationMachine
 	if err := copier.Copy(&copied, m); err != nil {
 		panic(err)
