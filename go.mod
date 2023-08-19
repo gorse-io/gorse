@@ -1,6 +1,6 @@
 module github.com/zhenghaoz/gorse
 
-go 1.18
+go 1.21
 
 require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0

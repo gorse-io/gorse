@@ -15,7 +15,6 @@
 package click
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -28,6 +27,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -133,6 +133,10 @@ type FactorizationMachine interface {
 type BatchInference interface {
 	BatchPredict(inputs []lo.Tuple4[string, string, []Feature, []Feature]) []float32
 	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32
+}
+
+type FactorizationMachineCloner interface {
+	Clone() FactorizationMachine
 }
 
 type BaseFactorizationMachine struct {
@@ -585,11 +589,11 @@ func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
 
 // Clone a model with deep copy.
 func Clone(m FactorizationMachine) FactorizationMachine {
-	buf := bytes.NewBuffer(nil)
-	if err := MarshalModel(buf, m); err != nil {
-		panic(err)
+	if cloner, ok := m.(FactorizationMachineCloner); ok {
+		return cloner.Clone()
 	}
-	if copied, err := UnmarshalModel(buf); err != nil {
+	var copied FactorizationMachine
+	if err := copier.Copy(&copied, m); err != nil {
 		panic(err)
 	} else {
 		copied.SetParams(copied.GetParams())

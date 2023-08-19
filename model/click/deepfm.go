@@ -15,6 +15,7 @@
 package click
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -129,7 +130,7 @@ func (fm *DeepFM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachine.SetParams(params)
 	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
-	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
+	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 50)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.001)
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
@@ -208,7 +209,7 @@ func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, 
 	score := EvaluateClassification(fm, testSet)
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
-	log.Logger().Info(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
+	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", 0, fm.nEpochs), fields...)
 
 	var x []lo.Tuple2[[]int32, []float32]
 	var y []float32
@@ -256,7 +257,7 @@ func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, 
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
@@ -499,6 +500,10 @@ func (fm *DeepFM) embedding(indices tensor.View) (v, w, w0 *tensor.Dense) {
 	}
 	batchSize, numDimension := s[0], s[1]
 
+	clear(fm.dataV)
+	clear(fm.dataW)
+	clear(fm.dataW0)
+
 	for i := 0; i < batchSize; i++ {
 		for j := 0; j < numDimension; j++ {
 			index := lo.Must1(indices.At(i, j)).(float32)
@@ -683,6 +688,19 @@ func (fm *DeepFM) bceWithLogits(target, prediction *gorgonia.Node) *gorgonia.Nod
 
 func (fm *DeepFM) nodeFromFloat64(any float32) *gorgonia.Node {
 	return gorgonia.NodeFromAny(fm.g, any, gorgonia.WithName(uuid.NewString()))
+}
+
+func (fm *DeepFM) Clone() FactorizationMachine {
+	buf := bytes.NewBuffer(nil)
+	if err := MarshalModel(buf, fm); err != nil {
+		panic(err)
+	}
+	if copied, err := UnmarshalModel(buf); err != nil {
+		panic(err)
+	} else {
+		copied.SetParams(copied.GetParams())
+		return copied
+	}
 }
 
 func zeros(a, b int) [][]float32 {

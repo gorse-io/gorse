@@ -33,6 +33,7 @@ func TestDeepFM_Classification_Frappe(t *testing.T) {
 		model.NEpochs:    10,
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
+		model.BatchSize:  1024,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
 	score := m.Fit(context.Background(), train, test, fitConfig)
@@ -48,6 +49,7 @@ func TestDeepFM_Classification_Criteo(t *testing.T) {
 		model.NEpochs:    10,
 		model.Lr:         0.01,
 		model.Reg:        0.0001,
+		model.BatchSize:  1024,
 	})
 	fitConfig := newFitConfigWithTestTracker(10)
 	score := m.Fit(context.Background(), train, test, fitConfig)
