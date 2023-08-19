@@ -378,14 +378,6 @@ func (fm *DeepFM) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-func (fm *DeepFM) Bytes() int {
-	return 0
-}
-
-func (fm *DeepFM) Complexity() int {
-	return 0
-}
-
 func (fm *DeepFM) build() {
 	// init Adam optimizer variables
 	fm.m_v = zeros(fm.numFeatures, fm.nFactors)
