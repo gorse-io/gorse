@@ -27,7 +27,6 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/jsonutil"
 	"github.com/zhenghaoz/gorse/model"
-	"modernc.org/mathutil"
 )
 
 type Feature struct {
@@ -205,7 +204,7 @@ func LoadLibFMFile(path string) (features [][]lo.Tuple2[int32, float32], targets
 					A: int32(feature),
 					B: float32(value),
 				})
-				maxLabel = mathutil.MaxInt32Val(maxLabel, int32(feature))
+				maxLabel = max(maxLabel, int32(feature))
 			}
 		}
 		features = append(features, lineFeatures)
@@ -231,7 +230,7 @@ func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 	if test.ContextFeatures, test.Target, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
 		return nil, nil, err
 	}
-	unifiedIndex := NewUnifiedDirectIndex(mathutil.MaxInt32(trainMaxLabel, testMaxLabel) + 1)
+	unifiedIndex := NewUnifiedDirectIndex(max(trainMaxLabel, testMaxLabel) + 1)
 	train.Index = unifiedIndex
 	test.Index = unifiedIndex
 	return

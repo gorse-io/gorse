@@ -26,7 +26,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
-	"modernc.org/mathutil"
 )
 
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
@@ -114,7 +113,7 @@ func (h *HNSW) Evaluate(n int) float64 {
 
 	// generate test samples
 	randomGenerator := base.NewRandomGenerator(0)
-	testSize := mathutil.Min(1024, len(h.vectors))
+	testSize := min(1024, len(h.vectors))
 	testSamples := randomGenerator.Sample(0, len(h.vectors), testSize)
 
 	// calculate recall
@@ -157,7 +156,7 @@ func recall(expected, actual []Result) float64 {
 
 // Search a vector in Hierarchical Navigable Small Worlds.
 func (h *HNSW) Search(q Vector, n int) []Result {
-	w := h.knnSearch(q, n, mathutil.Max(h.efConstruction, n))
+	w := h.knnSearch(q, n, max(h.efConstruction, n))
 	results := make([]Result, 0, w.Len())
 	for w.Len() > 0 {
 		value, score := w.Pop()
@@ -223,7 +222,7 @@ func (h *HNSW) insert(q int32) {
 	}
 
 	h.nodeMutexes[q].Lock()
-	for currentLayer := mathutil.Min(topLayer, l); currentLayer >= 0; currentLayer-- {
+	for currentLayer := min(topLayer, l); currentLayer >= 0; currentLayer-- {
 		w = h.searchLayer(h.vectors[q], enterPoints, h.efConstruction, currentLayer)
 		neighbors := h.selectNeighbors(h.vectors[q], w, h.maxConnection)
 		// add bidirectional connections from upperNeighbors to q at layer l_c

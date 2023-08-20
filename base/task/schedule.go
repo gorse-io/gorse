@@ -22,7 +22,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
-	"modernc.org/mathutil"
 )
 
 type JobsAllocator struct {
@@ -184,7 +183,7 @@ func (s *JobsScheduler) allocateJobsForAll() {
 			return
 		}
 		targetJobs := s.numJobs/len(tasks) + lo.If(i < s.numJobs%len(tasks), 1).Else(0)
-		targetJobs = mathutil.Min(targetJobs, s.freeJobs)
+		targetJobs = min(targetJobs, s.freeJobs)
 		if task.jobs < targetJobs {
 			if task.previous != targetJobs {
 				log.Logger().Debug("reallocate jobs for task",

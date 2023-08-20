@@ -41,7 +41,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
-	"modernc.org/mathutil"
 )
 
 const (
@@ -1008,7 +1007,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		InternalServerError(response, err)
 		return
 	}
-	results = results[mathutil.Min(offset, len(results)):]
+	results = results[min(offset, len(results)):]
 	// write back
 	if writeBackFeedback != "" {
 		startTime := time.Now()
@@ -1119,7 +1118,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	} else {
 		result = nil
 	}
-	result = result[:lo.Min([]int{len(result), n})]
+	result = result[:min(len(result), n)]
 	// Send result
 	Ok(response, result)
 }

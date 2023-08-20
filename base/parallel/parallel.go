@@ -20,7 +20,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/task"
 	"go.uber.org/atomic"
-	"modernc.org/mathutil"
 )
 
 const (
@@ -145,7 +144,7 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	// producer
 	go func() {
 		for i := 0; i < nJobs; i += batchSize {
-			c <- batchJob{beginId: i, endId: mathutil.Min(i+batchSize, nJobs)}
+			c <- batchJob{beginId: i, endId: min(i+batchSize, nJobs)}
 		}
 		close(c)
 	}()
