@@ -116,9 +116,9 @@ func (suite *baseTestSuite) getFeedback(ctx context.Context, batchSize int, begi
 	}
 }
 
-func (suite *baseTestSuite) getFeedbackStream(ctx context.Context, batchSize int, beginTime, endTime *time.Time, feedbackTypes ...string) []Feedback {
+func (suite *baseTestSuite) getFeedbackStream(ctx context.Context, batchSize int, scanOptions ...ScanOption) []Feedback {
 	var feedbacks []Feedback
-	feedbackChan, errChan := suite.Database.GetFeedbackStream(ctx, batchSize, beginTime, endTime, feedbackTypes...)
+	feedbackChan, errChan := suite.Database.GetFeedbackStream(ctx, batchSize, scanOptions...)
 	for batchFeedback := range feedbackChan {
 		feedbacks = append(feedbacks, batchFeedback...)
 	}
@@ -250,12 +250,14 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret = suite.getFeedback(ctx, 2, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	suite.Empty(ret)
 	// Get feedback stream
-	feedbackFromStream := suite.getFeedbackStream(ctx, 3, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
+	feedbackFromStream := suite.getFeedbackStream(ctx, 3, WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType))
 	suite.ElementsMatch(feedback, feedbackFromStream)
-	feedbackFromStream = suite.getFeedbackStream(ctx, 3, nil, lo.ToPtr(time.Now()))
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithEndTime(time.Now()))
 	suite.Equal(len(feedback)+2, len(feedbackFromStream))
-	feedbackFromStream = suite.getFeedbackStream(ctx, 3, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginTime(timestamp.Add(time.Second)), WithEndTime(time.Now()))
 	suite.Empty(feedbackFromStream)
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginUserId("1"), WithEndUserId("3"), WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType))
+	suite.Equal(feedback[1:4], feedbackFromStream)
 	// Get items
 	items := suite.getItems(ctx, 3)
 	suite.Equal(5, len(items))

@@ -16,12 +16,16 @@ package cache
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/base/log"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -53,6 +57,43 @@ func (suite *RedisTestSuite) SetupSuite() {
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
+}
+
+func (suite *RedisTestSuite) TestEscapeCharacters() {
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := context.Background()
+	for _, c := range []string{"-", ":", "."} {
+		suite.Run(c, func() {
+			collection := fmt.Sprintf("a%s1", c)
+			subset := fmt.Sprintf("b%s2", c)
+			id := fmt.Sprintf("c%s3", c)
+			err := suite.AddDocuments(ctx, collection, subset, []Document{{
+				Id:         id,
+				Score:      math.MaxFloat64,
+				Categories: []string{"a", "b"},
+				Timestamp:  ts,
+			}})
+			suite.NoError(err)
+			documents, err := suite.SearchDocuments(ctx, collection, subset, []string{"b"}, 0, -1)
+			suite.NoError(err)
+			suite.Equal([]Document{{Id: id, Score: math.MaxFloat64, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
+
+			err = suite.UpdateDocuments(ctx, []string{collection}, id, DocumentPatch{Score: proto.Float64(1)})
+			suite.NoError(err)
+			documents, err = suite.SearchDocuments(ctx, collection, subset, []string{"b"}, 0, -1)
+			suite.NoError(err)
+			suite.Equal([]Document{{Id: id, Score: 1, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
+
+			err = suite.DeleteDocuments(ctx, []string{collection}, DocumentCondition{
+				Subset: proto.String(subset),
+				Id:     proto.String(id),
+			})
+			suite.NoError(err)
+			documents, err = suite.SearchDocuments(ctx, collection, subset, []string{"b"}, 0, -1)
+			suite.NoError(err)
+			suite.Empty(documents)
+		})
+	}
 }
 
 func TestRedis(t *testing.T) {

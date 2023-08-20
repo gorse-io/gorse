@@ -1,6 +1,6 @@
 module github.com/zhenghaoz/gorse
 
-go 1.18
+go 1.21
 
 require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
@@ -9,7 +9,7 @@ require (
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
 	github.com/chewxy/math32 v1.10.1
-	github.com/deckarep/golang-set/v2 v2.3.0
+	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/emicklei/go-restful-openapi/v2 v2.9.0
 	github.com/emicklei/go-restful/v3 v3.9.0
 	github.com/fxtlabs/primes v0.0.0-20150821004651-dad82d10a449
@@ -181,3 +181,5 @@ require (
 replace gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
 
 replace gorgonia.org/tensor v0.9.23 => github.com/gorse-io/tensor v0.0.0-20230617102451-4c006ddc5162
+
+replace gorgonia.org/gorgonia v0.9.18-0.20230327110624-d1c17944ed22 => github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849

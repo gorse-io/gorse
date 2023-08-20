@@ -131,3 +131,13 @@ func TestBatchParallelFail(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
+
+func TestSplit(t *testing.T) {
+	a := []int{1, 2, 3, 4, 5, 6}
+	b := Split(a, 3)
+	assert.Equal(t, [][]int{{1, 2}, {3, 4}, {5, 6}}, b)
+
+	a = []int{1, 2, 3, 4, 5, 6, 7}
+	b = Split(a, 3)
+	assert.Equal(t, [][]int{{1, 2, 3}, {4, 5}, {6, 7}}, b)
+}

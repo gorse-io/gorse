@@ -58,8 +58,8 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 	}
 	var posPrediction, negPrediction []float32
 	if batchInference, ok := estimator.(BatchInference); ok {
-		posPrediction = batchInference.BatchPredict(posFeatures)
-		negPrediction = batchInference.BatchPredict(negFeatures)
+		posPrediction = batchInference.BatchInternalPredict(posFeatures)
+		negPrediction = batchInference.BatchInternalPredict(negFeatures)
 	} else {
 		for _, features := range posFeatures {
 			posPrediction = append(posPrediction, estimator.InternalPredict(features.A, features.B))
