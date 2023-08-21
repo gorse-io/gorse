@@ -351,7 +351,13 @@ func (m *Master) findItemNeighbors(ctx context.Context, dataset *ranking.DataSet
 	} else {
 		searchIndex = hnsw.NewBruteforce(hnsw.Euclidean)
 	}
-	searchIndex.Add(newCtx, vectors...)
+	for i, v := range vectors {
+		if dataset.HiddenItems[i] {
+			searchIndex.Add(newCtx, nil)
+		} else {
+			searchIndex.Add(newCtx, v)
+		}
+	}
 	log.Logger().Info("complete build index", zap.Float64("recall", searchIndex.Evaluate(m.Config.Recommend.CacheSize)))
 	span.Add(1)
 

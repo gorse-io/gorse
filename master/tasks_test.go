@@ -95,7 +95,7 @@ func (s *MasterTestSuite) TestFindItemNeighborsBruteForce() {
 	// similar items in category (common users)
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "9", []string{"*"}, 0, 100)
 	s.NoError(err)
-	s.Equal([]string{"7", "5", "1"}, cache.ConvertDocumentsToValues(similar))
+	s.Equal([]string{"7", "5"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -109,7 +109,7 @@ func (s *MasterTestSuite) TestFindItemNeighborsBruteForce() {
 	// similar items in category (common labels)
 	similar, err = s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, "8", []string{"*"}, 0, 100)
 	s.NoError(err)
-	s.Equal([]string{"0", "2", "6"}, cache.ConvertDocumentsToValues(similar))
+	s.Equal([]string{"0", "2"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (auto)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))

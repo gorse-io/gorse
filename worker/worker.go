@@ -523,7 +523,7 @@ func (w *Worker) Recommend(users []data.User) {
 			w.embeddingIndex.Add(context.Background(), vectors...)
 			recall := w.embeddingIndex.Evaluate(w.Config.Recommend.CacheSize)
 			CollaborativeFilteringIndexRecall.Set(float64(recall))
-			if err = w.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(recall))); err != nil {
+			if err = w.CacheClient.Set(ctx, cache.String(cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall), encoding.FormatFloat32(float32(recall)))); err != nil {
 				log.Logger().Error("failed to write meta", zap.Error(err))
 			}
 			log.Logger().Info("complete building ranking index",
