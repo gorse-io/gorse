@@ -447,13 +447,8 @@ func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoin
 }
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
-	// The tag `name` most likely contains a `/', and the snippet below
-	// escapes it with `\` to ensure proper functioning of RediSearch
-	// filters.
-	escaped_name := strings.ReplaceAll(name, "/", "\\/")
-
 	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
-		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", escaped_name, begin.UnixMicro(), end.UnixMicro()),
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", escape(name), begin.UnixMicro(), end.UnixMicro()),
 		"SORTBY", "timestamp").Result()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -560,6 +555,11 @@ func decodeCategories(s string) ([]string, error) {
 
 // escape -:.
 func escape(s string) string {
-	r := strings.NewReplacer("-", "\\-", ":", "\\:", ".", "\\.")
+	r := strings.NewReplacer(
+		"-", "\\-",
+		":", "\\:",
+		".", "\\.",
+		"/", "\\/",
+	)
 	return r.Replace(s)
 }
