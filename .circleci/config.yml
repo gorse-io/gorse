@@ -117,6 +117,15 @@ jobs:
             Expand-Archive ~/.gorse/download/frappe.zip -DestinationPath ~/.gorse/dataset
             Expand-Archive ~/.gorse/download/ml-tag.zip -DestinationPath ~/.gorse/dataset
             Expand-Archive ~/.gorse/download/criteo.zip -DestinationPath ~/.gorse/dataset
+      - run:
+          name: Install Chocolatey
+          command: |
+            Set-ExecutionPolicy Bypass -Scope Process -Force; `
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
+            iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+      - run:
+          name: Install Go
+          command: choco install golang -y
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
