@@ -39,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/search"
+	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -70,6 +71,9 @@ type Worker struct {
 	testMode    bool
 	managedMode bool
 	*config.Settings
+
+	// spawned rankers
+	rankers []click.FactorizationMachine
 
 	// worker config
 	jobs       int
@@ -112,6 +116,7 @@ type Worker struct {
 // NewWorker creates a new worker node.
 func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string, managedMode bool) *Worker {
 	return &Worker{
+		rankers:       make([]click.FactorizationMachine, jobs),
 		managedMode:   managedMode,
 		Settings:      config.NewSettings(),
 		randGenerator: base.NewRand(time.Now().UTC().UnixNano()),
@@ -269,7 +274,17 @@ func (w *Worker) Pull() {
 					w.ClickModelVersion = w.latestClickModelVersion
 					log.Logger().Info("synced click model",
 						zap.String("version", encoding.Hex(w.ClickModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(w.ClickModel.Bytes()))
+					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(w.ClickModel)))
+
+					// spawn rankers
+					for i := 0; i < w.jobs; i++ {
+						if i == 0 {
+							w.rankers[i] = w.ClickModel
+						} else {
+							w.rankers[i] = click.Spawn(w.ClickModel)
+						}
+					}
+
 					pulled = true
 				}
 			}
@@ -743,8 +758,8 @@ func (w *Worker) Recommend(users []data.User) {
 		ctrUsed := false
 		results := make(map[string][]cache.Document)
 		for category, catCandidates := range candidates {
-			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil && !w.ClickModel.Invalid() {
-				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache)
+			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.rankers[workerId] != nil && !w.rankers[workerId].Invalid() {
+				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache, w.rankers[workerId])
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))
 					return errors.Trace(err)
@@ -914,7 +929,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache) ([]cache.Document, error) {
+func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache, predictor click.FactorizationMachine) ([]cache.Document, error) {
 	// concat candidates
 	memo := mapset.NewSet[string]()
 	var itemIds []string
@@ -937,11 +952,28 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	}
 	// rank by CTR
 	topItems := make([]cache.Document, 0, len(items))
-	for _, item := range items {
-		topItems = append(topItems, cache.Document{
-			Id:    item.ItemId,
-			Score: float64(w.ClickModel.Predict(user.UserId, item.ItemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels))),
-		})
+	if batchPredictor, ok := predictor.(click.BatchInference); ok {
+		inputs := make([]lo.Tuple4[string, string, []click.Feature, []click.Feature], len(items))
+		for i, item := range items {
+			inputs[i].A = user.UserId
+			inputs[i].B = item.ItemId
+			inputs[i].C = click.ConvertLabelsToFeatures(user.Labels)
+			inputs[i].D = click.ConvertLabelsToFeatures(item.Labels)
+		}
+		output := batchPredictor.BatchPredict(inputs)
+		for i, score := range output {
+			topItems = append(topItems, cache.Document{
+				Id:    items[i].ItemId,
+				Score: float64(score),
+			})
+		}
+	} else {
+		for _, item := range items {
+			topItems = append(topItems, cache.Document{
+				Id:    item.ItemId,
+				Score: float64(predictor.Predict(user.UserId, item.ItemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels))),
+			})
+		}
 	}
 	cache.SortDocuments(topItems)
 	return topItems, nil

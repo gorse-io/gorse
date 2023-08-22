@@ -249,3 +249,11 @@ sampler = "always"
 
 # The ratio of ratio based sampler. The default value is 1.
 ratio = 1
+
+[experimental]
+
+# Enable deep learning recommenders. The default value is false.
+enable_deep_learning = false
+
+# Batch size for deep learning recommenders. The default value is 128.
+deep_learning_batch_size = 128

@@ -1705,7 +1705,7 @@ munit_print_help(int argc, char* const argv[MUNIT_ARRAY_PARAM(argc + 1)], void* 
   puts(" --seed SEED\n"
        "           Value used to seed the PRNG.  Must be a 32-bit integer in decimal\n"
        "           notation with no separators (commas, decimals, spaces, etc.), or\n"
-       "           hexidecimal prefixed by \"0x\".\n"
+       "           hexadecimal prefixed by \"0x\".\n"
        " --iterations N\n"
        "           Run each test N times.  0 means the default number.\n"
        " --param name value\n"

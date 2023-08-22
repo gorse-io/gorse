@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +81,18 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	container.Handle(apiDocsPath, http.HandlerFunc(handler))
 	// register prometheus
 	container.Handle("/metrics", promhttp.Handler())
+	// register pprof
+	container.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	container.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	container.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	container.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	container.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+	container.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
+	container.Handle("/debug/pprof/block", pprof.Handler("block"))
+	container.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	container.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+	container.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+	container.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
 
 	// Add container filter to enable CORS
 	cors := restful.CrossOriginResourceSharing{

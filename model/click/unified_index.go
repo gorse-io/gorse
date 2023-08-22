@@ -17,18 +17,17 @@ package click
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
+	"strconv"
+
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
-	"io"
-	"reflect"
-	"strconv"
 )
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.
 type UnifiedIndex interface {
 	Len() int32
-	Bytes() int
 	EncodeUser(userId string) int32
 	EncodeItem(itemId string) int32
 	EncodeUserLabel(userLabel string) int32
@@ -51,10 +50,15 @@ type UnifiedIndex interface {
 const (
 	mapIndex uint8 = iota
 	directIndex
+	nilIndex
 )
 
 // MarshalIndex marshal index into byte stream.
 func MarshalIndex(w io.Writer, index UnifiedIndex) error {
+	// if index is nil
+	if index == nil {
+		return binary.Write(w, binary.LittleEndian, nilIndex)
+	}
 	// write index type
 	var indexType uint8
 	switch index.(type) {
@@ -87,6 +91,8 @@ func UnmarshalIndex(r io.Reader) (UnifiedIndex, error) {
 		index = &UnifiedMapIndex{}
 	case directIndex:
 		index = &UnifiedDirectIndex{}
+	case nilIndex:
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown index type (%v)", indexType)
 	}
@@ -199,12 +205,6 @@ func (unified *UnifiedMapIndex) Len() int32 {
 	return unified.UserIndex.Len() + unified.ItemIndex.Len() +
 		unified.UserLabelIndex.Len() + unified.ItemLabelIndex.Len() +
 		unified.CtxLabelIndex.Len()
-}
-
-func (unified *UnifiedMapIndex) Bytes() int {
-	return unified.UserIndex.Bytes() + unified.ItemIndex.Bytes() +
-		unified.UserLabelIndex.Bytes() + unified.ItemLabelIndex.Bytes() +
-		unified.CtxLabelIndex.Bytes()
 }
 
 // EncodeUser converts a user id to a integer in the encoding space.
@@ -370,10 +370,6 @@ func NewUnifiedDirectIndex(n int32) UnifiedIndex {
 // Len should be used by unit testing only.
 func (unified *UnifiedDirectIndex) Len() int32 {
 	return unified.N
-}
-
-func (unified *UnifiedDirectIndex) Bytes() int {
-	return int(reflect.TypeOf(unified).Elem().Size())
 }
 
 // EncodeUser should be used by unit testing only.

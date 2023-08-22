@@ -158,10 +158,6 @@ func (searcher *ModelSearcher) GetBestModel() (FactorizationMachine, Score) {
 	return searcher.bestModel, searcher.bestScore
 }
 
-func (searcher *ModelSearcher) Complexity() int {
-	return searcher.numTrials * searcher.numEpochs
-}
-
 func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet *Dataset, j *task.JobsAllocator) error {
 	log.Logger().Info("click model search",
 		zap.Int("n_users", trainSet.UserCount()),

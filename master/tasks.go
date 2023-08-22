@@ -33,6 +33,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/search"
+	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -191,8 +192,8 @@ func (m *Master) runLoadDatasetTask() error {
 	clickDataset = nil
 	m.clickDataMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
-	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(m.clickTrainSet.Bytes()))
-	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(m.clickTestSet.Bytes()))
+	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(m.clickTrainSet)))
+	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(m.clickTestSet)))
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return nil
@@ -1153,7 +1154,7 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
-	MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(t.ClickModel.Bytes()))
+	MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(t.ClickModel)))
 	if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
