@@ -343,7 +343,7 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 		builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(*condition.Id)))
 	}
 	if condition.Before != nil {
-		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf,%d]", condition.Before.UnixMicro()))
+		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf (%d]", condition.Before.UnixMicro()))
 	}
 	for {
 		// search documents
@@ -448,7 +448,7 @@ func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoin
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
 	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
-		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", name, begin.UnixMicro(), end.UnixMicro()),
+		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", escape(name), begin.UnixMicro(), end.UnixMicro()),
 		"SORTBY", "timestamp").Result()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -457,6 +457,14 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	// Results in the JSON serializer producing an empty array instead of a
+	// null value. More info at:
+	// https://github.com/golang/go/wiki/CodeReviewComments#declaring-empty-slices
+	if points == nil {
+		return []TimeSeriesPoint{}, nil
+	}
+
 	return points, nil
 }
 
@@ -547,6 +555,11 @@ func decodeCategories(s string) ([]string, error) {
 
 // escape -:.
 func escape(s string) string {
-	r := strings.NewReplacer("-", "\\-", ":", "\\:", ".", "\\.")
+	r := strings.NewReplacer(
+		"-", "\\-",
+		":", "\\:",
+		".", "\\.",
+		"/", "\\/",
+	)
 	return r.Replace(s)
 }

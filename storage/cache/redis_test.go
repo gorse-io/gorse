@@ -62,7 +62,7 @@ func (suite *RedisTestSuite) SetupSuite() {
 func (suite *RedisTestSuite) TestEscapeCharacters() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
-	for _, c := range []string{"-", ":", "."} {
+	for _, c := range []string{"-", ":", ".", "/"} {
 		suite.Run(c, func() {
 			collection := fmt.Sprintf("a%s1", c)
 			subset := fmt.Sprintf("b%s2", c)
