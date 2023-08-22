@@ -293,10 +293,11 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 		{UserId: "8", Labels: []string{"a", "b", "c", "d", "e"}, Subscribe: nil, Comment: ""},
 		{UserId: "9", Labels: []string{}, Subscribe: nil, Comment: ""},
 	}
+
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
-		for j := 0; j <= i; j++ {
-			if i%2 == 1 {
+		if i%2 == 1 {
+			for j := 0; j <= i; j++ {
 				feedbacks = append(feedbacks, data.Feedback{
 					FeedbackKey: data.FeedbackKey{
 						ItemId:       strconv.Itoa(j),

@@ -337,7 +337,7 @@ func (m *Master) findItemNeighbors(ctx context.Context, dataset *ranking.DataSet
 				values[j] = label.B
 			}
 			for j, feedback := range dataset.ItemFeedback[i] {
-				indices[j+len(dataset.ItemFeatures[i])] = feedback
+				indices[j+len(dataset.ItemFeatures[i])] = feedback + dataset.NumItemLabels
 				values[j+len(dataset.ItemFeatures[i])] = 1
 			}
 			vectors[i] = hnsw.NewSparseVector(indices, values)
@@ -541,6 +541,7 @@ func (m *Master) findUserNeighbors(ctx context.Context, dataset *ranking.DataSet
 				indices[j] = feedback
 				values[j] = 1
 			}
+			vectors[i] = hnsw.NewSparseVector(indices, values)
 		case config.NeighborTypeAuto:
 			indices := make([]int32, len(dataset.UserFeatures[i])+len(dataset.UserFeedback[i]))
 			values := make([]float32, len(dataset.UserFeatures[i])+len(dataset.UserFeedback[i]))
@@ -549,7 +550,7 @@ func (m *Master) findUserNeighbors(ctx context.Context, dataset *ranking.DataSet
 				values[j] = label.B
 			}
 			for j, feedback := range dataset.UserFeedback[i] {
-				indices[j+len(dataset.UserFeatures[i])] = feedback
+				indices[j+len(dataset.UserFeatures[i])] = feedback + dataset.NumUserLabels
 				values[j+len(dataset.UserFeatures[i])] = 1
 			}
 			vectors[i] = hnsw.NewSparseVector(indices, values)

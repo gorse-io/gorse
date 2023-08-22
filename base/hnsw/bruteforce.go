@@ -42,6 +42,9 @@ func (b *Bruteforce) Evaluate(n int) float64 {
 
 // Search returns the nearest neighbors of q.
 func (b *Bruteforce) Search(q Vector, n int) []Result {
+	if q == nil {
+		return nil
+	}
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
 		if vec != nil && vec != q {
