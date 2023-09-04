@@ -404,43 +404,43 @@ func (w *Worker) Serve() {
 		go w.ServeHTTP()
 	}
 
-	loop := func() {
-		w.scheduleState.IsRunning = true
-		w.scheduleState.StartTime = time.Now()
-		defer func() {
-			w.scheduleState.IsRunning = false
-			w.scheduleState.StartTime = time.Time{}
-		}()
-
-		// pull users
-		workingUsers, err := w.pullUsers(w.peers, w.me)
-		if err != nil {
-			log.Logger().Error("failed to split users", zap.Error(err),
-				zap.String("me", w.me),
-				zap.Strings("workers", w.peers))
-			return
-		}
-
-		// recommendation
-		w.Recommend(workingUsers)
-	}
-
-	if w.managedMode {
-		for range w.triggerChan.C {
-			loop()
-		}
-	} else {
-		for {
-			select {
-			case tick := <-w.ticker.C:
-				if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
-					loop()
-				}
-			case <-w.pulledChan.C:
-				loop()
-			}
-		}
-	}
+	//loop := func() {
+	//	w.scheduleState.IsRunning = true
+	//	w.scheduleState.StartTime = time.Now()
+	//	defer func() {
+	//		w.scheduleState.IsRunning = false
+	//		w.scheduleState.StartTime = time.Time{}
+	//	}()
+	//
+	//	// pull users
+	//	workingUsers, err := w.pullUsers(w.peers, w.me)
+	//	if err != nil {
+	//		log.Logger().Error("failed to split users", zap.Error(err),
+	//			zap.String("me", w.me),
+	//			zap.Strings("workers", w.peers))
+	//		return
+	//	}
+	//
+	//	// recommendation
+	//	w.Recommend(workingUsers)
+	//}
+	//
+	//if w.managedMode {
+	//	for range w.triggerChan.C {
+	//		loop()
+	//	}
+	//} else {
+	//	for {
+	//		select {
+	//		case tick := <-w.ticker.C:
+	//			if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
+	//				loop()
+	//			}
+	//		case <-w.pulledChan.C:
+	//			loop()
+	//		}
+	//	}
+	//}
 }
 
 // Recommend items to users. The workflow of recommendation is:

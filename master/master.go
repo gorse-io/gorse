@@ -282,9 +282,9 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		err   error
 		tasks = []Task{
 			NewFitClickModelTask(m),
-			NewFitRankingModelTask(m),
-			NewFindUserNeighborsTask(m),
-			NewFindItemNeighborsTask(m),
+			//NewFitRankingModelTask(m),
+			//NewFindUserNeighborsTask(m),
+			//NewFindItemNeighborsTask(m),
 		}
 		firstLoop = true
 	)
@@ -349,7 +349,7 @@ func (m *Master) RunRagtagTasksLoop() {
 		err   error
 		tasks = []Task{
 			NewCacheGarbageCollectionTask(m),
-			NewSearchRankingModelTask(m),
+			//NewSearchRankingModelTask(m),
 			NewSearchClickModelTask(m),
 		}
 	)

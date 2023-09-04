@@ -18,13 +18,13 @@ cache_store = "redis://localhost:6379/0"
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.
-table_prefix = ""
+table_prefix = "test"
 
 # The naming prefix for tables (collections, keys) in cache storage databases. The default value is `table_prefix`.
-cache_table_prefix = ""
+cache_table_prefix = "test"
 
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
-data_table_prefix = ""
+data_table_prefix = "test"
 
 [master]
 
@@ -55,10 +55,10 @@ n_jobs = 1
 meta_timeout = "10s"
 
 # Username for the master node dashboard.
-dashboard_user_name = ""
+dashboard_user_name = "root"
 
 # Password for the master node dashboard.
-dashboard_password = ""
+dashboard_password = "gorse"
 
 # Secret key for admin APIs (SSL required).
 admin_api_key = ""
@@ -97,10 +97,10 @@ active_user_ttl = 0
 [recommend.data_source]
 
 # The feedback types for positive events.
-positive_feedback_types = ["star","like"]
+positive_feedback_types = ["star","like", "detailPageShow"]
 
 # The feedback types for read events.
-read_feedback_types = ["read"]
+read_feedback_types = ["read","show"]
 
 # The time-to-live (days) of positive feedback, 0 means disabled. The default value is 0.
 positive_feedback_ttl = 0
@@ -163,7 +163,7 @@ index_recall = 0.9
 index_fit_epoch = 3
 
 # The time period for model fitting. The default value is "60m".
-model_fit_period = "60m"
+model_fit_period = "240m"
 
 # The time period for model searching. The default value is "360m".
 model_search_period = "360m"
@@ -197,19 +197,19 @@ check_recommend_period = "1m"
 refresh_recommend_period = "24h"
 
 # Enable latest recommendation during offline recommendation. The default value is false.
-enable_latest_recommend = true
+enable_latest_recommend = false
 
 # Enable popular recommendation during offline recommendation. The default value is false.
 enable_popular_recommend = false
 
 # Enable user-based similarity recommendation during offline recommendation. The default value is false.
-enable_user_based_recommend = true
+enable_user_based_recommend = false
 
 # Enable item-based similarity recommendation during offline recommendation. The default value is false.
 enable_item_based_recommend = false
 
 # Enable collaborative filtering recommendation during offline recommendation. The default value is true.
-enable_collaborative_recommend = true
+enable_collaborative_recommend = false
 
 # Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
 # would be merged randomly. The default value is false.
@@ -249,11 +249,3 @@ sampler = "always"
 
 # The ratio of ratio based sampler. The default value is 1.
 ratio = 1
-
-[experimental]
-
-# Enable deep learning recommenders. The default value is false.
-enable_deep_learning = false
-
-# Batch size for deep learning recommenders. The default value is 128.
-deep_learning_batch_size = 128

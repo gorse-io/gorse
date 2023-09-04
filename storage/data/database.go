@@ -42,9 +42,12 @@ import (
 )
 
 const (
-	maxIdleConns = 64
-	maxOpenConns = 64
-	maxLifetime  = time.Minute
+	maxIdleConns      = 64
+	maxOpenConns      = 64
+	maxLifetime       = time.Minute
+	maxIdleConnsMysql = 10
+	maxOpenConnsMysql = 30
+	maxLifetimeMysql  = time.Hour * 8
 )
 
 var (
@@ -274,6 +277,9 @@ func Open(path, tablePrefix string) (Database, error) {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
+		database.client.SetMaxIdleConns(maxIdleConnsMysql)
+		database.client.SetMaxOpenConns(maxOpenConnsMysql)
+		database.client.SetConnMaxLifetime(maxLifetimeMysql)
 		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
