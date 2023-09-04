@@ -91,6 +91,7 @@ fabric.properties
 
 # Sonarlint plugin
 .idea/sonarlint
+.idea/*
 
 ### Windows ###
 # Windows thumbnail cache files
