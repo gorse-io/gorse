@@ -15,18 +15,110 @@
 package progress
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 )
 
 type ProgressTestSuite struct {
 	suite.Suite
-	tracer Tracer
+	tracer *Tracer
 }
 
 func (suite *ProgressTestSuite) SetupTest() {
-	suite.tracer = Tracer{}
+	suite.tracer = NewTracer("test")
+}
+
+func (suite *ProgressTestSuite) TestLeafProgress() {
+	_, span := suite.tracer.Start(context.Background(), "root", 100)
+	progresList := suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusRunning, progresList[0].Status)
+	suite.Empty(progresList[0].Error)
+	suite.Equal(100, progresList[0].Total)
+	suite.Empty(progresList[0].Count)
+	suite.LessOrEqual(progresList[0].StartTime, time.Now())
+
+	span.Add(10)
+	progresList = suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusRunning, progresList[0].Status)
+	suite.Empty(progresList[0].Error)
+	suite.Equal(100, progresList[0].Total)
+	suite.Equal(10, progresList[0].Count)
+
+	span.End()
+	progresList = suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusComplete, progresList[0].Status)
+	suite.Empty(progresList[0].Error)
+	suite.Equal(100, progresList[0].Total)
+	suite.Equal(100, progresList[0].Count)
+	suite.Less(progresList[0].StartTime, progresList[0].FinishTime)
+
+	span.Fail(errors.New("some error"))
+	progresList = suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusFailed, progresList[0].Status)
+	suite.Equal("some error", progresList[0].Error)
+	suite.Equal(100, progresList[0].Total)
+	suite.Equal(100, progresList[0].Count)
+}
+
+func (suite *ProgressTestSuite) TestMultiLevelProgress() {
+	newCtx, rootSpan := suite.tracer.Start(context.Background(), "root", 100)
+	rootSpan.Add(10)
+	progresList := suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusRunning, progresList[0].Status)
+	suite.Empty(progresList[0].Error)
+	suite.Equal(100, progresList[0].Total)
+	suite.Equal(10, progresList[0].Count)
+	suite.LessOrEqual(progresList[0].StartTime, time.Now())
+
+	childCtx, childSpan := Start(newCtx, "child", 8)
+	childSpan.Add(2)
+	progresList = suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusRunning, progresList[0].Status)
+	suite.Empty(progresList[0].Error)
+	suite.Equal(800, progresList[0].Total)
+	suite.Equal(82, progresList[0].Count)
+
+	childSpan.End()
+	progresList = suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusRunning, progresList[0].Status)
+	suite.Empty(progresList[0].Error)
+	suite.Equal(100, progresList[0].Total)
+	suite.Equal(10, progresList[0].Count)
+
+	Fail(childCtx, errors.New("some error"))
+	progresList = suite.tracer.List()
+	suite.Equal(1, len(progresList))
+	suite.Equal("test", progresList[0].Tracer)
+	suite.Equal("root", progresList[0].Name)
+	suite.Equal(StatusFailed, progresList[0].Status)
+	suite.Equal("some error", progresList[0].Error)
+	suite.Equal(100, progresList[0].Total)
+	suite.Equal(10, progresList[0].Count)
 }
 
 func TestProgressTestSuite(t *testing.T) {

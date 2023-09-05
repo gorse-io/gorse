@@ -1,4 +1,4 @@
-// Copyright 2022 gorse Project Authors
+// Copyright 2023 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search
+package hnsw
 
 import (
 	"context"
-	"math/big"
 	"runtime"
 	"testing"
 
@@ -41,43 +40,47 @@ func TestHNSW_InnerProduct(t *testing.T) {
 	fitConfig := ranking.NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
 	m.Fit(context.Background(), trainSet, testSet, fitConfig)
 	var vectors []Vector
-	for i, itemFactor := range m.ItemFactor {
-		var terms []string
-		if big.NewInt(int64(i)).ProbablyPrime(0) {
-			terms = append(terms, "prime")
-		}
-		vectors = append(vectors, NewDenseVector(itemFactor, terms, false))
+	for _, itemFactor := range m.ItemFactor {
+		vectors = append(vectors, NewDenseVector(itemFactor))
 	}
 
 	// build vector index
-	builder := NewHNSWBuilder(vectors, 10, runtime.NumCPU())
-	idx, recall := builder.Build(context.Background(), 0.9, 5, false)
-	assert.Greater(t, recall, float32(0.9))
-	recall = builder.evaluateTermSearch(idx, true, "prime")
-	assert.Greater(t, recall, float32(0.8))
+	embeddingIndex := NewHNSW(Dot)
+	embeddingIndex.Add(context.Background(), vectors...)
+	assert.Greater(t, embeddingIndex.Evaluate(100), 0.9)
 }
 
-func TestIVF_Cosine(t *testing.T) {
+func TestHNSW_Cosine(t *testing.T) {
 	// load dataset
 	trainSet, _, err := ranking.LoadDataFromBuiltIn("ml-100k")
 	assert.NoError(t, err)
-	values := make([]float32, trainSet.UserCount())
-	for i := range values {
-		values[i] = 1
-	}
 	var vectors []Vector
-	for i, feedback := range trainSet.ItemFeedback {
-		var terms []string
-		if big.NewInt(int64(i)).ProbablyPrime(0) {
-			terms = append(terms, "prime")
+	for _, feedback := range trainSet.ItemFeedback {
+		values := make([]float32, len(feedback))
+		for i := range feedback {
+			values[i] = 1
 		}
-		vectors = append(vectors, NewDictionaryVector(feedback, values, terms, false))
+		vectors = append(vectors, NewSparseVector(feedback, values))
 	}
 
 	// build vector index
-	builder := NewIVFBuilder(vectors, 10)
-	idx, recall := builder.Build(0.9, 5, true)
-	assert.Greater(t, recall, float32(0.9))
-	recall = builder.evaluateTermSearch(idx, true, "prime")
-	assert.Greater(t, recall, float32(0.8))
+	embeddingIndex := NewHNSW(Euclidean)
+	embeddingIndex.Add(context.Background(), vectors...)
+	assert.Greater(t, embeddingIndex.Evaluate(100), 0.8)
+}
+
+func TestHNSW_HasNil(t *testing.T) {
+	vectors := []Vector{nil, nil, NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), nil}
+	index := NewHNSW(Euclidean)
+	index.Add(context.Background(), vectors...)
+	results := index.Search(NewDenseVector([]float32{0, 0, 0, 0, 0, 1}), 3)
+	assert.Equal(t, []Result{{Index: 2, Distance: 0}}, results)
+}
+
+func TestHNSW_HasInf(t *testing.T) {
+	index := NewHNSW(Euclidean)
+	index.Add(context.Background(), NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3}))
+	index.Add(context.Background(), NewSparseVector([]int32{2, 4, 6}, []float32{1, 2, 3}))
+	results := index.Search(NewSparseVector([]int32{1, 3, 5}, []float32{1, 2, 3}), 3)
+	assert.Equal(t, []Result{{Index: 0, Distance: 0}}, results)
 }

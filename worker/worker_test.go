@@ -88,7 +88,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// reset random generator
 	suite.randGenerator = rand.New(rand.NewSource(0))
 	// reset index
-	suite.rankingIndex = nil
+	suite.embeddingIndex = nil
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {

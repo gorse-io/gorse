@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"modernc.org/mathutil"
 )
 
 type spanKeyType string
@@ -63,7 +62,9 @@ func (t *Tracer) List() []Progress {
 	var progress []Progress
 	t.spans.Range(func(key, value interface{}) bool {
 		span := value.(*Span)
-		progress = append(progress, span.Progress())
+		p := span.Progress()
+		p.Tracer = t.name
+		progress = append(progress, p)
 		return true
 	})
 	// sort by start time
@@ -82,10 +83,13 @@ type Span struct {
 	start    time.Time
 	finish   time.Time
 	children sync.Map
+	mu       sync.RWMutex
 }
 
 func (s *Span) Add(n int) {
-	s.count = mathutil.Min(s.count+n, s.total)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.count = min(s.count+n, s.total)
 }
 
 func (s *Span) End() {

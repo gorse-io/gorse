@@ -71,7 +71,6 @@ require (
 	gorm.io/driver/sqlite v1.3.4
 	gorm.io/gorm v1.23.6
 	modernc.org/cc/v3 v3.40.0
-	modernc.org/mathutil v1.5.0
 	modernc.org/sortutil v1.1.0
 	modernc.org/sqlite v1.21.1
 	moul.io/zapgorm2 v1.1.3
@@ -172,6 +171,7 @@ require (
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/ccgo/v3 v3.16.13 // indirect
 	modernc.org/libc v1.22.3 // indirect
+	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.5.0 // indirect
 	modernc.org/opt v0.1.3 // indirect
 	modernc.org/strutil v1.1.3 // indirect

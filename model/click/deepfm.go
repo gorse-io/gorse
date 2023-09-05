@@ -37,7 +37,6 @@ import (
 	"go.uber.org/zap"
 	"gorgonia.org/gorgonia"
 	"gorgonia.org/tensor"
-	"modernc.org/mathutil"
 )
 
 const (
@@ -247,7 +246,7 @@ func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, 
 			cost += fm.cost.Value().Data().(float32)
 			lo.Must0(solver.Step(gorgonia.NodesToValueGrads(fm.learnables)))
 			fm.vm.Reset()
-			span.Add(mathutil.Min(fm.batchSize, trainSet.Count()-i))
+			span.Add(min(fm.batchSize, trainSet.Count()-i))
 		}
 
 		fitTime := time.Since(fitStart)
@@ -279,7 +278,7 @@ func (fm *DeepFM) Init(trainSet *Dataset) {
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
 		_, x, _ := trainSet.Get(i)
-		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
+		fm.numDimension = max(fm.numDimension, len(x))
 	}
 
 	// init manually tuned parameters
