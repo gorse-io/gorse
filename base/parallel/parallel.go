@@ -15,6 +15,7 @@
 package parallel
 
 import (
+	"github.com/zhenghaoz/gorse/base"
 	"sync"
 
 	"github.com/juju/errors"
@@ -56,6 +57,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		for j := 0; j < nWorkers; j++ {
 			// start workers
 			go func(workerId int) {
+				defer base.CheckPanic()
 				defer wg.Done()
 				for {
 					// read job
