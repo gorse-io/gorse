@@ -260,7 +260,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(subset)))
 	}
 	for _, q := range query {
-		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", encdodeCategory(q)))
+		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", escape(encdodeCategory(q))))
 	}
 	args := []any{"FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", begin}
 	if end == -1 {
@@ -560,6 +560,7 @@ func escape(s string) string {
 		":", "\\:",
 		".", "\\.",
 		"/", "\\/",
+		"+", "\\+",
 	)
 	return r.Replace(s)
 }
