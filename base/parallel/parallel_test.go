@@ -141,3 +141,14 @@ func TestSplit(t *testing.T) {
 	b = Split(a, 3)
 	assert.Equal(t, [][]int{{1, 2, 3}, {4, 5}, {6, 7}}, b)
 }
+
+// check panic
+func TestParallelPanic(t *testing.T) {
+	err := Parallel(10000, 4, func(workerId, jobId int) error {
+		panic("panic")
+	})
+	if err != nil {
+		return
+	}
+	time.Sleep(time.Second * 3)
+}
