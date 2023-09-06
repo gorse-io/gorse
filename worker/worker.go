@@ -669,9 +669,9 @@ func (w *Worker) Recommend(users []data.User) {
 				log.Logger().Error("failed to load similar users", zap.Error(err))
 				return errors.Trace(err)
 			}
-			fmt.Println("++670++ len(similarUsers) ", len(similarUsers))
+
 			if len(similarUsers) > 0 {
-				log.Logger().Info("similarUsers", zap.Any("similarUsers", len(similarUsers)), zap.Any("similarUsers0", similarUsers[0]))
+				log.Logger().Info("similarUsers", zap.Any("similarUsers", len(similarUsers)), zap.Any("similarUsers", similarUsers))
 			}
 			for _, user := range similarUsers {
 				// load historical feedback

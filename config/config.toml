@@ -17,17 +17,18 @@ cache_store = "redis://172.26.1.35:6379/0"
 #   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-#data_store = "mysql://newuser:Password_123@tcp(172.27.128.220:3306)/gorsesx"
-data_store = "mysql://gorse:gorse_pass@tcp(172.26.1.35:3306)/gorse"
+data_store = "mysql://root@tcp(172.27.128.115:31930)/business_wzk0825"
+#data_store = "mysql://newuser:Password_123@tcp(172.27.128.115:31930)/gorsesx"
+#data_store = "mysql://gorse:gorse_pass@tcp(172.26.1.35:3306)/gorse"
 
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.
-table_prefix = "test"
+table_prefix = ""
 
 # The naming prefix for tables (collections, keys) in cache storage databases. The default value is `table_prefix`.
-cache_table_prefix = "cache"
+cache_table_prefix = "cachedoris-"
 
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
-data_table_prefix = "test"
+data_table_prefix = ""
 
 [master]
 
@@ -78,10 +79,10 @@ api_key = ""
 clock_error = "5s"
 
 # Insert new users while inserting feedback. The default value is true.
-auto_insert_user = true
+auto_insert_user = false
 
 # Insert new items while inserting feedback. The default value is true.
-auto_insert_item = true
+auto_insert_item = false
 
 # Server-side cache expire time. The default value is 10s.
 cache_expire = "10s"

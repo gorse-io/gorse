@@ -19,6 +19,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -98,31 +100,31 @@ func (d *SQLDatabase) Init() error {
 	switch d.driver {
 	case MySQL:
 		// create tables
-		type Items struct {
-			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
-			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
-			Categories []string  `gorm:"column:categories;type:json;not null"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null"`
-			Labels     []string  `gorm:"column:labels;type:json;not null"`
-			Comment    string    `gorm:"column:comment;type:text;not null"`
-		}
-		type Users struct {
-			UserId    string   `gorm:"column:user_id;type:varchar(256);not null;primaryKey"`
-			Labels    []string `gorm:"column:labels;type:json;not null"`
-			Subscribe []string `gorm:"column:subscribe;type:json;not null"`
-			Comment   string   `gorm:"column:comment;type:text;not null"`
-		}
-		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
-			Comment      string    `gorm:"column:comment;type:text;not null"`
-		}
-		err := d.gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
-		if err != nil {
-			return errors.Trace(err)
-		}
+		//type Items struct {
+		//	ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
+		//	IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
+		//	Categories []string  `gorm:"column:categories;type:json;not null"`
+		//	Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null"`
+		//	Labels     []string  `gorm:"column:labels;type:json;not null"`
+		//	Comment    string    `gorm:"column:comment;type:text;not null"`
+		//}
+		//type Users struct {
+		//	UserId    string   `gorm:"column:user_id;type:varchar(256);not null;primaryKey"`
+		//	Labels    []string `gorm:"column:labels;type:json;not null"`
+		//	Subscribe []string `gorm:"column:subscribe;type:json;not null"`
+		//	Comment   string   `gorm:"column:comment;type:text;not null"`
+		//}
+		//type Feedback struct {
+		//	FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+		//	UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
+		//	ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
+		//	Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
+		//	Comment      string    `gorm:"column:comment;type:text;not null"`
+		//}
+		//err := d.gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
+		//if err != nil {
+		//	return errors.Trace(err)
+		//}
 	case Postgres:
 		// create tables
 		type Items struct {
@@ -356,9 +358,10 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		defer close(itemChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+		//FROM_UNIXTIME(publishTime) as publishTime,
+		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("itemId,categoryLevel1,publishTime")
 		if timeLimit != nil {
-			tx.Where("time_stamp >= ?", *timeLimit)
+			tx.Where("publishTime >= ?", (*timeLimit).UnixMilli())
 		}
 		result, err := tx.Rows()
 		if err != nil {
@@ -369,11 +372,18 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		items := make([]Item, 0, batchSize)
 		defer result.Close()
 		for result.Next() {
-			var item Item
-			if err = d.gormDB.ScanRows(result, &item); err != nil {
+			var itema ItemSetDoris
+			//var itema Item
+			if err = d.gormDB.ScanRows(result, &itema); err != nil {
 				errChan <- errors.Trace(err)
 				return
 			}
+			item := Item{
+				ItemId:     itema.ItemId,
+				Categories: []string{itema.CategoryLevel1},
+				Timestamp:  time.Unix(itema.PublishTime/1000, 0),
+			}
+			//fmt.Println("++382++", item, itema)
 			items = append(items, item)
 			if len(items) == batchSize {
 				itemChan <- items
@@ -452,7 +462,7 @@ func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) 
 	var result *sql.Rows
 	var err error
 	result, err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).
-		Select("user_id, labels, subscribe, comment").
+		Select("userId, '' as labels, '' as subscribe, '' as comment").
 		Where("user_id = ?", userId).Rows()
 	if err != nil {
 		return User{}, errors.Trace(err)
@@ -529,7 +539,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 		defer close(userChan)
 		defer close(errChan)
 		// send query
-		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, subscribe, comment").Rows()
+		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("userId, '[]' as labels, '[]' as subscribe, '' as comment").Rows()
 		if err != nil {
 			errChan <- errors.Trace(err)
 			return
@@ -543,6 +553,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 				errChan <- errors.Trace(err)
 				return
 			}
+			//fmt.Println("++558++", user)
 			users = append(users, user)
 			if len(users) == batchSize {
 				userChan <- users
@@ -560,13 +571,14 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 // GetUserFeedback returns feedback of a user from MySQL.
 func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-		Select("feedback_type, user_id, item_id, time_stamp, comment").
-		Where("user_id = ?", userId)
+		Select("`action`, userId, itemId, actionTime").
+		Where("userId = '" + userId + "'")
 	if endTime != nil {
-		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
+		tx.Where("actionTime <= " + strconv.FormatInt(endTime.UnixMilli(), 10))
 	}
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		types := "('" + strings.Join(feedbackTypes, "','") + "')"
+		tx.Where("`action` IN ?", types)
 	}
 	result, err := tx.Rows()
 	if err != nil {
@@ -575,13 +587,88 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 	feedbacks := make([]Feedback, 0)
 	defer result.Close()
 	for result.Next() {
-		var feedback Feedback
-		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
+		var feedbackDoris FeedbackDoris
+		if err = d.gormDB.ScanRows(result, &feedbackDoris); err != nil {
 			return nil, errors.Trace(err)
+		}
+		feedback := Feedback{
+			FeedbackKey: FeedbackKey{
+				FeedbackType: feedbackDoris.Action,
+				UserId:       feedbackDoris.UserId,
+				ItemId:       feedbackDoris.ItemId,
+			},
+			Timestamp: time.Unix(feedbackDoris.ActionTime/1000, 0),
+			Comment:   "",
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil
+}
+
+// GetFeedbackStream reads feedback by stream.
+func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scanOptions ...ScanOption) (chan []Feedback, chan error) {
+	scan := NewScanOptions(scanOptions...)
+	feedbackChan := make(chan []Feedback, bufSize)
+	errChan := make(chan error, 1)
+	go func() {
+		defer close(feedbackChan)
+		defer close(errChan)
+		// send query
+		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
+			Select("`action`, userId, itemId, actionTime").
+			Order("`action`, userId, itemId")
+		if len(scan.FeedbackTypes) > 0 {
+			types := "('" + strings.Join(scan.FeedbackTypes, "','") + "')"
+			tx.Where("`action` IN " + types)
+		}
+		if scan.BeginTime != nil {
+			tx.Where("actionTime >= " + strconv.FormatInt(scan.BeginTime.UnixMilli(), 10))
+		}
+		if scan.EndTime != nil {
+			tx.Where("actionTime <= " + strconv.FormatInt(scan.EndTime.UnixMilli(), 10))
+		}
+		if scan.BeginUserId != nil {
+			tx.Where("userId >= '" + *scan.BeginUserId + "'")
+		}
+		if scan.EndUserId != nil {
+			tx.Where("userId <= '" + *scan.EndUserId + "'")
+		}
+		result, err := tx.Rows()
+		if err != nil {
+			errChan <- errors.Trace(err)
+			return
+		}
+		// fetch result
+		feedbacks := make([]Feedback, 0, batchSize)
+		defer result.Close()
+		for result.Next() {
+			var feedbackDoris FeedbackDoris
+			if err = d.gormDB.ScanRows(result, &feedbackDoris); err != nil {
+				errChan <- errors.Trace(err)
+				return
+			}
+			feedback := Feedback{
+				FeedbackKey: FeedbackKey{
+					FeedbackType: feedbackDoris.Action,
+					UserId:       feedbackDoris.UserId,
+					ItemId:       feedbackDoris.ItemId,
+				},
+				Timestamp: time.Unix(feedbackDoris.ActionTime/1000, 0),
+				Comment:   "",
+			}
+			//fmt.Println("++793++", feedback)
+			feedbacks = append(feedbacks, feedback)
+			if len(feedbacks) == batchSize {
+				feedbackChan <- feedbacks
+				feedbacks = make([]Feedback, 0, batchSize)
+			}
+		}
+		if len(feedbacks) > 0 {
+			feedbackChan <- feedbacks
+		}
+		errChan <- nil
+	}()
+	return feedbackChan, errChan
 }
 
 // BatchInsertFeedback insert a batch feedback into MySQL.
@@ -729,61 +816,6 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 		return base64.StdEncoding.EncodeToString(nextCursor), feedbacks[:len(feedbacks)-1], nil
 	}
 	return "", feedbacks, nil
-}
-
-// GetFeedbackStream reads feedback by stream.
-func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scanOptions ...ScanOption) (chan []Feedback, chan error) {
-	scan := NewScanOptions(scanOptions...)
-	feedbackChan := make(chan []Feedback, bufSize)
-	errChan := make(chan error, 1)
-	go func() {
-		defer close(feedbackChan)
-		defer close(errChan)
-		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-			Select("feedback_type, user_id, item_id, time_stamp, comment").
-			Order("feedback_type, user_id, item_id")
-		if len(scan.FeedbackTypes) > 0 {
-			tx.Where("feedback_type IN ?", scan.FeedbackTypes)
-		}
-		if scan.BeginTime != nil {
-			tx.Where("time_stamp >= ?", d.convertTimeZone(scan.BeginTime))
-		}
-		if scan.EndTime != nil {
-			tx.Where("time_stamp <= ?", d.convertTimeZone(scan.EndTime))
-		}
-		if scan.BeginUserId != nil {
-			tx.Where("user_id >= ?", scan.BeginUserId)
-		}
-		if scan.EndUserId != nil {
-			tx.Where("user_id <= ?", scan.EndUserId)
-		}
-		result, err := tx.Rows()
-		if err != nil {
-			errChan <- errors.Trace(err)
-			return
-		}
-		// fetch result
-		feedbacks := make([]Feedback, 0, batchSize)
-		defer result.Close()
-		for result.Next() {
-			var feedback Feedback
-			if err = d.gormDB.ScanRows(result, &feedback); err != nil {
-				errChan <- errors.Trace(err)
-				return
-			}
-			feedbacks = append(feedbacks, feedback)
-			if len(feedbacks) == batchSize {
-				feedbackChan <- feedbacks
-				feedbacks = make([]Feedback, 0, batchSize)
-			}
-		}
-		if len(feedbacks) > 0 {
-			feedbackChan <- feedbacks
-		}
-		errChan <- nil
-	}()
-	return feedbackChan, errChan
 }
 
 // GetUserItemFeedback gets a feedback by user id and item id from MySQL.

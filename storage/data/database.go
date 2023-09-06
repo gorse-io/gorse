@@ -99,12 +99,27 @@ func ValidateLabels(o any) error {
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId     string    `gorm:"primaryKey" mapstructure:"item_id"`
-	IsHidden   bool      `mapstructure:"is_hidden"`
-	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
-	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
-	Labels     any       `gorm:"serializer:json" mapstructure:"labels"`
-	Comment    string    `mapsstructure:"comment"`
+	ItemId   string `mapstructure:"itemId"`
+	IsHidden bool   `mapstructure:"is_hidden"`
+	//CategoryLevel1 string    `gorm:"categoryLevel1" mapstructure:"categoryLevel1"`
+	Categories []string  `gorm:"-"`
+	Timestamp  time.Time `gorm:"-"`
+	//PublishTime    int       `gorm:"publishTime" mapstructure:"publishTime"`
+	Labels  any
+	Comment string
+}
+
+type ItemSetDoris struct {
+	ItemId         string `gorm:"column:itemId;primaryKey" json:"itemId"`
+	CategoryLevel1 string `gorm:"column:categoryLevel1" json:"categoryLevel1"`
+	PublishTime    int64  `gorm:"column:publishTime" json:"publishTime"`
+}
+
+type FeedbackDoris struct {
+	ItemId     string `gorm:"column:itemId" json:"itemId"`
+	UserId     string `gorm:"column:userId" json:"userId"`
+	Action     string `gorm:"column:action"`
+	ActionTime int64  `gorm:"column:actionTime" json:"actionTime"`
 }
 
 // ItemPatch is the modification on an item.
@@ -118,7 +133,7 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string   `gorm:"primaryKey" mapstructure:"user_id"`
+	UserId    string   `gorm:"column:userId;primaryKey" json:"userId"`
 	Labels    any      `gorm:"serializer:json" mapstructure:"labels"`
 	Subscribe []string `gorm:"serializer:json" mapstructure:"subscribe"`
 	Comment   string   `mapstructure:"comment"`

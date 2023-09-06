@@ -1435,7 +1435,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
-		fmt.Println("++1435++", len(users))
+		fmt.Println("++1435++ GetUserStream batch", len(users))
 		for _, user := range users {
 			rankingDataset.AddUser(user.UserId)
 			userIndex := rankingDataset.UserIndex.ToNumber(user.UserId)
@@ -1489,6 +1489,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for items := range itemChan {
+		fmt.Println("++1492++ GetItemStream batch", len(items))
 		for _, item := range items {
 			rankingDataset.AddItem(item.ItemId)
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
@@ -1560,7 +1561,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	users := rankingDataset.UserIndex.GetNames()
 	sort.Strings(users)
 	userGroups := parallel.Split(users, m.Config.Master.NumJobs)
-	fmt.Println("++1571++", len(users), users[0], users[1], len(userGroups), "posFeedbackTypes ", posFeedbackTypes)
+	fmt.Println("++1571++", len(users), users[0], users[1], "len(userGroups): ", len(userGroups), "posFeedbackTypes ", posFeedbackTypes)
 
 	// STEP 3: pull positive feedback
 	var mu sync.Mutex
@@ -1705,7 +1706,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		positiveSet[userIndex] = nil
 		negativeSet[userIndex] = nil
 	}
-	log.Logger().Debug("created ranking dataset",
+	log.Logger().Info("created ranking dataset",
 		zap.Int("n_valid_positive", clickDataset.PositiveCount),
 		zap.Int("n_valid_negative", clickDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
