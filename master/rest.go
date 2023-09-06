@@ -55,7 +55,7 @@ func (m *Master) CreateWebService() {
 	ws := m.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
-	ws.Filter(m.LoginFilter)
+	//ws.Filter(m.LoginFilter)
 
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").

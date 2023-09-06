@@ -208,14 +208,7 @@ func (s *RestServer) CreateWebService() {
 		Reads(data.UserPatch{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
-	// Get a user
-	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
-		Doc("Get a user.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
-		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
-		Param(ws.PathParameter("user-id", "ID of the user to get").DataType("string")).
-		Returns(http.StatusOK, "OK", data.User{}).
-		Writes(data.User{}))
+
 	// Insert users
 	ws.Route(ws.POST("/users").To(s.insertUsers).
 		Doc("Insert users.").
@@ -224,7 +217,17 @@ func (s *RestServer) CreateWebService() {
 		Reads([]data.User{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
-	// Get users
+
+	// Get a user  http://172.26.1.35:8088/api/dashboard/user/00000864-471b-11ee-909e-0cc47adb50d4
+	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
+		Doc("Get a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get").DataType("string")).
+		Returns(http.StatusOK, "OK", data.User{}).
+		Writes(data.User{}))
+
+	// Get users  http://172.26.1.35:8088/api/dashboard/users
 	ws.Route(ws.GET("/users").To(s.getUsers).
 		Doc("Get users.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
@@ -259,7 +262,7 @@ func (s *RestServer) CreateWebService() {
 		Reads(data.ItemPatch{}).
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
-	// Get items
+	// Get items  // http://172.26.1.35:8088/items  api http://172.26.1.35:8088/api/items
 	ws.Route(ws.GET("/items").To(s.getItems).
 		Doc("Get items.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
@@ -268,7 +271,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
 		Returns(http.StatusOK, "OK", ItemIterator{}).
 		Writes(ItemIterator{}))
-	// Get item
+	// Get item  http://172.26.1.35:8088/api/item/000b5874-4732-11ee-91bd-0cc47adb50d4
 	ws.Route(ws.GET("/item/{item-id}").To(s.getItem).
 		Doc("Get a item.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
@@ -276,6 +279,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("item-id", "ID of the item to get.").DataType("string")).
 		Returns(http.StatusOK, "OK", data.Item{}).
 		Writes(data.Item{}))
+
 	// Insert items
 	ws.Route(ws.POST("/items").To(s.insertItems).
 		Doc("Insert items. Overwrite if items exist").

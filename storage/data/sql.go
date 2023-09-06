@@ -260,25 +260,6 @@ func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
 	return nil
 }
 
-// GetItem get a item from MySQL.
-func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) {
-	var result *sql.Rows
-	var err error
-	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
-	if err != nil {
-		return Item{}, errors.Trace(err)
-	}
-	defer result.Close()
-	if result.Next() {
-		var item Item
-		if err = d.gormDB.ScanRows(result, &item); err != nil {
-			return Item{}, errors.Trace(err)
-		}
-		return item, nil
-	}
-	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
-}
-
 // ModifyItem modify an item in MySQL.
 func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error {
 	// ignore empty patch
@@ -317,6 +298,30 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 	return errors.Trace(err)
 }
 
+// GetItem get a item from MySQL.
+func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) {
+	var result *sql.Rows
+	var err error
+	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("itemId,categoryLevel1,publishTime").Where("itemId = '" + itemId + "'").Rows()
+	if err != nil {
+		return Item{}, errors.Trace(err)
+	}
+	defer result.Close()
+	if result.Next() {
+		var itema ItemSetDoris
+		if err = d.gormDB.ScanRows(result, &itema); err != nil {
+			return Item{}, errors.Trace(err)
+		}
+		item := Item{
+			ItemId:     itema.ItemId,
+			Categories: []string{itema.CategoryLevel1},
+			Timestamp:  time.Unix(itema.PublishTime/1000, 0),
+		}
+		return item, nil
+	}
+	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
+}
+
 // GetItems returns items from MySQL.
 func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
@@ -324,23 +329,28 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		return "", nil, errors.Trace(err)
 	}
 	cursorItem := string(buf)
-	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("itemId,categoryLevel1,publishTime")
 	if cursorItem != "" {
-		tx.Where("item_id >= ?", cursorItem)
+		tx.Where("itemId >= '" + cursorItem + "'")
 	}
 	if timeLimit != nil {
-		tx.Where("time_stamp >= ?", *timeLimit)
+		tx.Where("publishTime >= " + strconv.FormatInt((*timeLimit).UnixMilli(), 10))
 	}
-	result, err := tx.Order("item_id").Limit(n + 1).Rows()
+	result, err := tx.Order("itemId").Limit(n + 1).Rows()
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
 	items := make([]Item, 0)
 	defer result.Close()
 	for result.Next() {
-		var item Item
-		if err = d.gormDB.ScanRows(result, &item); err != nil {
+		var itema ItemSetDoris
+		if err = d.gormDB.ScanRows(result, &itema); err != nil {
 			return "", nil, errors.Trace(err)
+		}
+		item := Item{
+			ItemId:     itema.ItemId,
+			Categories: []string{itema.CategoryLevel1},
+			Timestamp:  time.Unix(itema.PublishTime/1000, 0),
 		}
 		items = append(items, item)
 	}
@@ -358,10 +368,9 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		defer close(itemChan)
 		defer close(errChan)
 		// send query
-		//FROM_UNIXTIME(publishTime) as publishTime,
 		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("itemId,categoryLevel1,publishTime")
 		if timeLimit != nil {
-			tx.Where("publishTime >= ?", (*timeLimit).UnixMilli())
+			tx.Where("publishTime >= " + strconv.FormatInt((*timeLimit).UnixMilli(), 10))
 		}
 		result, err := tx.Rows()
 		if err != nil {
@@ -457,27 +466,6 @@ func (d *SQLDatabase) DeleteUser(ctx context.Context, userId string) error {
 	return nil
 }
 
-// GetUser returns a user from MySQL.
-func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) {
-	var result *sql.Rows
-	var err error
-	result, err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).
-		Select("userId, '' as labels, '' as subscribe, '' as comment").
-		Where("user_id = ?", userId).Rows()
-	if err != nil {
-		return User{}, errors.Trace(err)
-	}
-	defer result.Close()
-	if result.Next() {
-		var user User
-		if err = d.gormDB.ScanRows(result, &user); err != nil {
-			return User{}, errors.Trace(err)
-		}
-		return user, nil
-	}
-	return User{}, errors.Annotate(ErrUserNotExist, userId)
-}
-
 // ModifyUser modify a user in MySQL.
 func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserPatch) error {
 	// ignore empty patch
@@ -501,6 +489,27 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 	return errors.Trace(err)
 }
 
+// GetUser returns a user from MySQL.
+func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) {
+	var result *sql.Rows
+	var err error
+	result, err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).
+		Select("userId, '[]' as labels, '[]' as subscribe, '' as comment").
+		Where("userId = '" + userId + "'").Rows()
+	if err != nil {
+		return User{}, errors.Trace(err)
+	}
+	defer result.Close()
+	if result.Next() {
+		var user User
+		if err = d.gormDB.ScanRows(result, &user); err != nil {
+			return User{}, errors.Trace(err)
+		}
+		return user, nil
+	}
+	return User{}, errors.Annotate(ErrUserNotExist, userId)
+}
+
 // GetUsers returns users from MySQL.
 func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (string, []User, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
@@ -508,11 +517,11 @@ func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (strin
 		return "", nil, errors.Trace(err)
 	}
 	cursorUser := string(buf)
-	tx := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, subscribe, comment")
+	tx := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("userId, '[]' as labels, '[]' as subscribe, '' as comment")
 	if cursorUser != "" {
-		tx.Where("user_id >= ?", cursorUser)
+		tx.Where("userId >= '" + cursorUser + "'")
 	}
-	result, err := tx.Order("user_id").Limit(n + 1).Rows()
+	result, err := tx.Order("userId").Limit(n + 1).Rows()
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
