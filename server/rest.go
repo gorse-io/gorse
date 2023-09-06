@@ -218,7 +218,7 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", Success{}).
 		Writes(Success{}))
 
-	// Get a user  http://172.26.1.35:8088/api/dashboard/user/00000864-471b-11ee-909e-0cc47adb50d4
+	// Get a user  http://172.26.1.35:8088/api/user/00000864-471b-11ee-909e-0cc47adb50d4
 	ws.Route(ws.GET("/user/{user-id}").To(s.getUser).
 		Doc("Get a user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
@@ -227,7 +227,7 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", data.User{}).
 		Writes(data.User{}))
 
-	// Get users  http://172.26.1.35:8088/api/dashboard/users
+	// Get users  http://172.26.1.35:8088/api/users
 	ws.Route(ws.GET("/users").To(s.getUsers).
 		Doc("Get users.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{UsersAPITag}).
@@ -236,6 +236,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
 		Returns(http.StatusOK, "OK", UserIterator{}).
 		Writes(UserIterator{}))
+
 	// Delete a user
 	ws.Route(ws.DELETE("/user/{user-id}").To(s.deleteUser).
 		Doc("Delete a user and his or her feedback.").
