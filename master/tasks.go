@@ -89,6 +89,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	fmt.Println("++94++", "load dataset succ")
 
 	// save popular items to cache
 	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, "", popularItems.ToSlice()); err != nil {
@@ -584,7 +585,7 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 				throughput := completedCount - previousCount
 				previousCount = completedCount
 				if throughput > 0 {
-					log.Logger().Debug("searching neighbors of users",
+					log.Logger().Info("searching neighbors of users",
 						zap.Int("n_complete_users", completedCount),
 						zap.Int("n_users", dataset.UserCount()),
 						zap.Int("throughput", throughput))
@@ -1396,8 +1397,10 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 // LoadDataFromDatabase loads dataset from data store.
 func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
 	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems *cache.DocumentAggregator, popularItems *cache.DocumentAggregator, err error) {
+	fmt.Println("++1403++", "in LoadDataFromDatabase")
 	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase", 4)
 	defer span.End()
+	fmt.Println("++1407++", "in LoadDataFromDatabase")
 
 	startLoadTime := time.Now()
 	// setup time limit
@@ -1417,6 +1420,8 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	}
 	rankingDataset = ranking.NewMapIndexDataset()
 
+	fmt.Println("++1426++")
+
 	// create filers for latest items
 	latestItemsFilters := make(map[string]*heap.TopKFilter[string, float64])
 	latestItemsFilters[""] = heap.NewTopKFilter[string, float64](m.Config.Recommend.CacheSize)
@@ -1426,8 +1431,11 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	userLabelFirst := make(map[string]int32)
 	userLabelIndex := base.NewMapIndex()
 	start := time.Now()
+	fmt.Println("++1437++")
+
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
+		fmt.Println("++1435++", len(users))
 		for _, user := range users {
 			rankingDataset.AddUser(user.UserId)
 			userIndex := rankingDataset.UserIndex.ToNumber(user.UserId)
@@ -1463,10 +1471,11 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		}
 	}
 	if err = <-errChan; err != nil {
+		fmt.Println("++1468++", err)
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumUserLabels = userLabelIndex.Len()
-	log.Logger().Debug("pulled users from database",
+	log.Logger().Info("pulled users from database",
 		zap.Int("n_users", rankingDataset.UserCount()),
 		zap.Int32("n_user_labels", userLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
@@ -1529,10 +1538,11 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		}
 	}
 	if err = <-errChan; err != nil {
+		fmt.Println("++1535++", err)
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumItemLabels = itemLabelIndex.Len()
-	log.Logger().Debug("pulled items from database",
+	log.Logger().Info("pulled items from database",
 		zap.Int("n_items", rankingDataset.ItemCount()),
 		zap.Int32("n_item_labels", itemLabelIndex.Len()),
 		zap.Duration("used_time", time.Since(start)))
@@ -1550,6 +1560,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	users := rankingDataset.UserIndex.GetNames()
 	sort.Strings(users)
 	userGroups := parallel.Split(users, m.Config.Master.NumJobs)
+	fmt.Println("++1571++", len(users), users[0], users[1], len(userGroups), "posFeedbackTypes ", posFeedbackTypes)
 
 	// STEP 3: pull positive feedback
 	var mu sync.Mutex
@@ -1590,14 +1601,16 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			}
 		}
 		if err = <-errChan; err != nil {
+			fmt.Println("++1597++", err)
 			return errors.Trace(err)
 		}
 		return nil
 	})
 	if err != nil {
+		fmt.Println("++1603++", err)
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
-	log.Logger().Debug("pulled positive feedback from database",
+	log.Logger().Info("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_positive_feedback").Set(time.Since(start).Seconds())
@@ -1640,14 +1653,16 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			}
 		}
 		if err = <-errChan; err != nil {
+			fmt.Println("++1650++", err)
 			return errors.Trace(err)
 		}
 		return nil
 	})
 	if err != nil {
+		fmt.Println("++1657++", err)
 		return nil, nil, nil, nil, errors.Trace(err)
 	}
-	log.Logger().Debug("pulled negative feedback from database",
+	log.Logger().Info("pulled negative feedback from database",
 		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())

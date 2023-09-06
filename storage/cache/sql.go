@@ -171,7 +171,8 @@ func (db *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		// create index
-		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
+		//err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
+		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection, subset)", db.DocumentTable())).Error
 		if err != nil {
 			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
 				// ignore duplicate index error

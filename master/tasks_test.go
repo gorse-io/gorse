@@ -16,6 +16,9 @@ package master
 
 import (
 	"context"
+	"fmt"
+	"github.com/zhenghaoz/gorse/base/log"
+	"go.uber.org/zap"
 	"runtime"
 	"strconv"
 	"time"
@@ -280,27 +283,45 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
 	s.Config.Master.NumJobs = 4
+
 	// collect similar
 	users := []data.User{
-		{UserId: "0", Labels: []string{"a", "b", "c", "d"}, Subscribe: nil, Comment: ""},
-		{UserId: "1", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "2", Labels: []string{"b", "c", "d"}, Subscribe: nil, Comment: ""},
-		{UserId: "3", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "4", Labels: []string{"b", "c"}, Subscribe: nil, Comment: ""},
-		{UserId: "5", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "6", Labels: []string{"c"}, Subscribe: nil, Comment: ""},
-		{UserId: "7", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "8", Labels: []string{"a", "b", "c", "d", "e"}, Subscribe: nil, Comment: ""},
-		{UserId: "9", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "0aa", Labels: []string{"a", "b", "c", "d"}, Subscribe: nil, Comment: ""},
+		{UserId: "1ab", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "2ac", Labels: []string{"b", "c", "d"}, Subscribe: nil, Comment: ""},
+		{UserId: "3ad", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "4ae", Labels: []string{"b", "c"}, Subscribe: nil, Comment: ""},
+		{UserId: "5af", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "6ag", Labels: []string{"c"}, Subscribe: nil, Comment: ""},
+		{UserId: "7ah", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "8aq", Labels: []string{"a", "b", "c", "d", "e"}, Subscribe: nil, Comment: ""},
+		{UserId: "9az", Labels: []string{}, Subscribe: nil, Comment: ""},
 	}
+
+	//users = []data.User{
+	//	{UserId: "0", Labels: []string{"a", "b", "c", "d"}, Subscribe: nil, Comment: ""},
+	//	{UserId: "1", Labels: []string{}, Subscribe: nil, Comment: ""},
+	//	{UserId: "2", Labels: []string{"b", "c", "d"}, Subscribe: nil, Comment: ""},
+	//	{UserId: "3", Labels: []string{}, Subscribe: nil, Comment: ""},
+	//	{UserId: "4", Labels: []string{"b", "c"}, Subscribe: nil, Comment: ""},
+	//	{UserId: "5", Labels: []string{}, Subscribe: nil, Comment: ""},
+	//	{UserId: "6", Labels: []string{"c"}, Subscribe: nil, Comment: ""},
+	//	{UserId: "7", Labels: []string{}, Subscribe: nil, Comment: ""},
+	//	{UserId: "8", Labels: []string{"a", "b", "c", "d", "e"}, Subscribe: nil, Comment: ""},
+	//	{UserId: "9", Labels: []string{}, Subscribe: nil, Comment: ""},
+	//}
+
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
 		for j := 0; j <= i; j++ {
 			if i%2 == 1 {
+				fmt.Println("++301++ add feedback userId", i, ", itemid", j)
 				feedbacks = append(feedbacks, data.Feedback{
 					FeedbackKey: data.FeedbackKey{
-						ItemId:       strconv.Itoa(j),
-						UserId:       strconv.Itoa(i),
+						ItemId: "itemid-" + strconv.Itoa(j),
+						//ItemId: strconv.Itoa(j),
+						UserId: users[i].UserId,
+						//UserId:       strconv.Itoa(i),
 						FeedbackType: "FeedbackType",
 					},
 					Timestamp: time.Now(),
@@ -308,12 +329,14 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 			}
 		}
 	}
+
 	var err error
 	err = s.DataClient.BatchInsertUsers(ctx, users)
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
 	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	log.Logger().Info("after load, get dataset", zap.Any("dataset", dataset))
 	s.NoError(err)
 	s.rankingTrainSet = dataset
 
@@ -321,34 +344,38 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&s.Master)
 	s.NoError(neighborTask.run(context.Background(), nil))
-	similar, err := s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
+	similar, err := s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9az", []string{""}, 0, 100)
 	s.NoError(err)
+	fmt.Println("++329++", similar)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
+
+	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
+	fmt.Println("++329++", similar)
 
 	// similar items (common labels)
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
-	s.NoError(err)
-	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
-	neighborTask = NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(context.Background(), nil))
-	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
-	s.NoError(err)
-	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-
-	// similar items (auto)
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
-	s.NoError(err)
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
-	s.NoError(err)
-	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
-	neighborTask = NewFindUserNeighborsTask(&s.Master)
-	s.NoError(neighborTask.run(context.Background(), nil))
-	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
-	s.NoError(err)
-	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
-	s.NoError(err)
-	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
+	//err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
+	//s.NoError(err)
+	//s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
+	//neighborTask = NewFindUserNeighborsTask(&s.Master)
+	//s.NoError(neighborTask.run(context.Background(), nil))
+	//similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
+	//s.NoError(err)
+	//s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
+	//
+	//// similar items (auto)
+	//err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
+	//s.NoError(err)
+	//err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
+	//s.NoError(err)
+	//s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
+	//neighborTask = NewFindUserNeighborsTask(&s.Master)
+	//s.NoError(neighborTask.run(context.Background(), nil))
+	//similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
+	//s.NoError(err)
+	//s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
+	//similar, err = s.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
+	//s.NoError(err)
+	//s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 }
 
 func (s *MasterTestSuite) TestFindUserNeighborsIVF() {

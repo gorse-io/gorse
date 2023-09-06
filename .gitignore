@@ -119,5 +119,8 @@ $RECYCLE.BIN/
 *.lnk
 
 .vscode
+one_cache.data/
+temp/
+
 
 # End of https://www.gitignore.io/api/go,windows,jetbrains

@@ -274,7 +274,9 @@ func Open(path, tablePrefix string) (Database, error) {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

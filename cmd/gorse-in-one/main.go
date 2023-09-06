@@ -89,6 +89,9 @@ var oneCommand = &cobra.Command{
 			fmt.Println()
 		} else {
 			configPath, _ := cmd.PersistentFlags().GetString("config")
+			if configPath == "" {
+				configPath = "config/config.toml"
+			}
 			log.Logger().Info("load config", zap.String("config", configPath))
 			conf, err = config.LoadConfig(configPath, true)
 			if err != nil {

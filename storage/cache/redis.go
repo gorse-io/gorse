@@ -269,6 +269,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 		args = append(args, end-begin)
 	}
 	result, err := r.client.Do(ctx, args...).Result()
+	//log.Logger().Info("++277++ redis ft.search result", zap.Any("result", result), zap.Error(err))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

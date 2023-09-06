@@ -15,18 +15,18 @@
 package log
 
 import (
+	"github.com/emicklei/go-restful/v3"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"net/url"
 	"os"
 	"runtime"
 	"strings"
 
-	"github.com/emicklei/go-restful/v3"
 	"github.com/go-sql-driver/mysql"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var logger *zap.Logger
@@ -34,7 +34,7 @@ var logger *zap.Logger
 func init() {
 	// setup default logger
 	var err error
-	logger, err = zap.NewProduction()
+	logger, err = zap.NewDevelopment()
 	if err != nil {
 		panic(err)
 	}
@@ -81,12 +81,18 @@ func SetLogger(flagSet *pflag.FlagSet, debug bool) {
 		encoder zapcore.Encoder
 		level   zapcore.LevelEnabler
 	)
+	timeEncoder := zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05.999999")
+
 	if debug {
-		encoder = zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+		cfg := zap.NewDevelopmentEncoderConfig()
+		cfg.EncodeTime = timeEncoder
+		encoder = zapcore.NewConsoleEncoder(cfg)
 		level = zap.DebugLevel
 	} else {
-		encoder = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
-		level = zap.InfoLevel
+		cfg := zap.NewProductionEncoderConfig()
+		cfg.EncodeTime = timeEncoder
+		encoder = zapcore.NewJSONEncoder(cfg)
+		level = zap.DebugLevel
 	}
 	// create lumberjack logger
 	writers := []zapcore.WriteSyncer{zapcore.AddSync(os.Stdout)}

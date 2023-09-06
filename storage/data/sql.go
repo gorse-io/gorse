@@ -94,6 +94,7 @@ type SQLDatabase struct {
 
 // Init tables and indices in MySQL.
 func (d *SQLDatabase) Init() error {
+	fmt.Println("++97++ init sql database", d.driver)
 	switch d.driver {
 	case MySQL:
 		// create tables

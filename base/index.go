@@ -116,9 +116,10 @@ func (idx *MapIndex) Len() int32 {
 // Add adds a new ID to the indexer.
 func (idx *MapIndex) Add(name string) {
 	if _, exist := idx.Numbers[name]; !exist {
-		idx.Numbers[name] = int32(len(idx.Names))
+		idx.Numbers[name] = int32(len(idx.Names)) // 从0开始，第一个userid、item id进入时，len=0,编号为0
 		idx.Names = append(idx.Names, name)
-		idx.Characters += len(name)
+		idx.Characters += len(name) // user_id item id累计长度？
+		//fmt.Printf("++123++ name - %s ,numbers %d, names %v, len char %d \n", name, idx.Numbers[name], idx.Names, idx.Characters)
 	}
 }
 
