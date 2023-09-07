@@ -99,14 +99,12 @@ func ValidateLabels(o any) error {
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId   string `mapstructure:"itemId"`
-	IsHidden bool   `mapstructure:"is_hidden"`
-	//CategoryLevel1 string    `gorm:"categoryLevel1" mapstructure:"categoryLevel1"`
-	Categories []string  `gorm:"-"`
-	Timestamp  time.Time `gorm:"-"`
-	//PublishTime    int       `gorm:"publishTime" mapstructure:"publishTime"`
-	Labels  any
-	Comment string
+	ItemId     string    `json:"ItemId"`
+	IsHidden   bool      `json:"IsHidden"`
+	Categories []string  `json:"Categories"`
+	Timestamp  time.Time `json:"Timestamp"`
+	Labels     any       `json:"Labels"`
+	Comment    string    `json:"Comment"`
 }
 
 type ItemSetDoris struct {
@@ -133,10 +131,10 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string   `gorm:"column:userId;primaryKey" json:"userId"`
-	Labels    any      `gorm:"serializer:json" mapstructure:"labels"`
-	Subscribe []string `gorm:"serializer:json" mapstructure:"subscribe"`
-	Comment   string   `mapstructure:"comment"`
+	UserId    string   `gorm:"column:userId;primaryKey" json:"UserId"`
+	Labels    any      `gorm:"-" json:"Labels"`
+	Subscribe []string `gorm:"-" json:"Subscribe"`
+	Comment   string   `gorm:"-" json:"Comment"`
 }
 
 // UserPatch is the modification on a user.

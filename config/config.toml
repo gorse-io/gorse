@@ -17,18 +17,24 @@ cache_store = "redis://172.26.1.35:6379/0"
 #   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-data_store = "mysql://root@tcp(172.27.128.115:31930)/business_wzk0825"
 #data_store = "mysql://newuser:Password_123@tcp(172.27.128.115:31930)/gorsesx"
-#data_store = "mysql://gorse:gorse_pass@tcp(172.26.1.35:3306)/gorse"
 
-# The naming prefix for tables (collections, keys) in databases. The default value is empty.
+#data_store = "mysql://newuser:Password_123@tcp(172.27.128.220:3306)/business_gorse_sxtest"
+#table_prefix = ""
+#cache_table_prefix = "selfdoris-"
+
+data_store = "mysql://root@tcp(172.27.128.115:31930)/business_wzk0825"
 table_prefix = ""
-
-# The naming prefix for tables (collections, keys) in cache storage databases. The default value is `table_prefix`.
 cache_table_prefix = "cachedoris-"
 
+# The naming prefix for tables (collections, keys) in databases. The default value is empty.
+#table_prefix = ""
+
+# The naming prefix for tables (collections, keys) in cache storage databases. The default value is `table_prefix`.
+#cache_table_prefix = "cachedoris-"
+
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
-data_table_prefix = ""
+#data_table_prefix = ""
 
 [master]
 
@@ -125,10 +131,10 @@ popular_window = "720h"
 #   auto: If a user have labels, neighbors are found by number of common labels.
 #         If this user have no labels, neighbors are found by number of common liked items.
 # The default value is "auto".
-neighbor_type = "similar"
+neighbor_type = "related"
 
 # Enable approximate user neighbor searching using vector index. The default value is true.
-enable_index = true
+enable_index = false
 
 # Minimal recall for approximate user neighbor searching. The default value is 0.8.
 index_recall = 0.8
@@ -144,7 +150,7 @@ index_fit_epoch = 3
 #   auto: If a item have labels, neighbors are found by number of common labels.
 #         If this item have no labels, neighbors are found by number of common users.
 # The default value is "auto".
-neighbor_type = "similar"
+neighbor_type = "related"
 
 # Enable approximate item neighbor searching using vector index. The default value is true.
 enable_index = true

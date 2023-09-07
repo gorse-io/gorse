@@ -89,7 +89,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	fmt.Println("++94++", "load dataset succ")
+	log.Logger().Info("loadDataFromDatabase succ")
 
 	// save popular items to cache
 	if err = m.CacheClient.AddDocuments(ctx, cache.PopularItems, "", popularItems.ToSlice()); err != nil {
@@ -1397,10 +1397,9 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 // LoadDataFromDatabase loads dataset from data store.
 func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
 	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems *cache.DocumentAggregator, popularItems *cache.DocumentAggregator, err error) {
-	fmt.Println("++1403++", "in LoadDataFromDatabase")
 	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase", 4)
 	defer span.End()
-	fmt.Println("++1407++", "in LoadDataFromDatabase")
+	log.Logger().Info("++1407++ in LoadDataFromDatabase")
 
 	startLoadTime := time.Now()
 	// setup time limit

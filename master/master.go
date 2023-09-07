@@ -306,7 +306,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 
 		// download dataset
 		err = m.runLoadDatasetTask()
-		fmt.Println("++309++", err, m.rankingTrainSet.UserCount(), m.rankingTrainSet.ItemCount(), m.rankingTrainSet.Count())
+		log.Logger().Info("runLoadDatasetTask succ", zap.Error(err), zap.Int("userCount", m.rankingTrainSet.UserCount()), zap.Int("itemCount", m.rankingTrainSet.ItemCount()), zap.Int("rankingTrainSetCount", m.rankingTrainSet.Count()))
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue

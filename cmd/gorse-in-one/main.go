@@ -136,7 +136,7 @@ func init() {
 	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
 	oneCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	oneCommand.PersistentFlags().String("cache-path", "one_cache.data", "path of cache file")
-	oneCommand.PersistentFlags().Int("recommend-jobs", 1, "number of working jobs for recommendation tasks")
+	oneCommand.PersistentFlags().Int("recommend-jobs", 100, "number of working jobs for recommendation tasks")
 }
 
 func main() {

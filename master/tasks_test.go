@@ -322,7 +322,7 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 						//ItemId: strconv.Itoa(j),
 						UserId: users[i].UserId,
 						//UserId:       strconv.Itoa(i),
-						FeedbackType: "FeedbackType",
+						FeedbackType: "detailPageShow",
 					},
 					Timestamp: time.Now(),
 				})
@@ -330,12 +330,14 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 		}
 	}
 
+	log.Logger().Info("", zap.Any("feedbacks", feedbacks))
+
 	var err error
 	err = s.DataClient.BatchInsertUsers(ctx, users)
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"detailPageShow"}, nil, 0, 0, NewOnlineEvaluator())
 	log.Logger().Info("after load, get dataset", zap.Any("dataset", dataset))
 	s.NoError(err)
 	s.rankingTrainSet = dataset

@@ -548,7 +548,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 		defer close(userChan)
 		defer close(errChan)
 		// send query
-		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("userId, '[]' as labels, '[]' as subscribe, '' as comment").Rows()
+		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("userId").Rows()
 		if err != nil {
 			errChan <- errors.Trace(err)
 			return
@@ -587,7 +587,7 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 	}
 	if len(feedbackTypes) > 0 {
 		types := "('" + strings.Join(feedbackTypes, "','") + "')"
-		tx.Where("`action` IN ?", types)
+		tx.Where("`action` IN " + types)
 	}
 	result, err := tx.Rows()
 	if err != nil {
