@@ -215,6 +215,9 @@ func (idx *IVF) Build(_ context.Context) {
 						nextDistance = d
 					}
 				}
+				if nextCluster == -1 {
+					return nil
+				}
 				if nextCluster != assignments[i] {
 					errorCount.Inc()
 				}
