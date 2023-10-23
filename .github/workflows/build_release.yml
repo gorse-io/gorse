@@ -1,138 +1,138 @@
 name: release
 
-on:
-  release:
-    types: [published]
+# on:
+#   release:
+#     types: [published]
 
-jobs:
-  build-binaries:
-    name: build binaries
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Go 1.21.x
-        uses: actions/setup-go@v4
-        with:
-          go-version: 1.21.x
-        id: go
+# jobs:
+#   build-binaries:
+#     name: build binaries
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Set up Go 1.21.x
+#         uses: actions/setup-go@v4
+#         with:
+#           go-version: 1.21.x
+#         id: go
         
-      - name: Pull source
-        uses: actions/checkout@v1
+#       - name: Pull source
+#         uses: actions/checkout@v1
         
-      - name: Install gox
-        run: go install github.com/mitchellh/gox@master
+#       - name: Install gox
+#         run: go install github.com/mitchellh/gox@master
         
-      - name: Build release
-        run: >
-          gox  -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
-            -osarch='darwin/arm64 darwin/amd64 windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
-            -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
-            -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
-            -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" ./...
-        env:
-          CGO_ENABLED: 0
+#       - name: Build release
+#         run: >
+#           gox  -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
+#             -osarch='darwin/arm64 darwin/amd64 windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
+#             -X 'github.com/Neura-Studios/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
+#             -X 'github.com/Neura-Studios/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
+#             -X 'github.com/Neura-Studios/gorse/cmd/version.BuildTime=$(date)'" ./...
+#         env:
+#           CGO_ENABLED: 0
 
-      - name: Install zip
-        uses: montudor/action-zip@v0.1.1
+#       - name: Install zip
+#         uses: montudor/action-zip@v0.1.1
 
-      - name: Zip binaries
-        run: |
-          zip -j gorse_linux_amd64.zip linux/amd64/gorse-*
-          zip -j gorse_linux_arm64.zip linux/arm64/gorse-*
-          zip -j gorse_windows_amd64.zip windows/amd64/gorse-*
-          zip -j gorse_windows_arm64.zip windows/arm64/gorse-*
-          zip -j gorse_darwin_amd64.zip darwin/amd64/gorse-*
-          zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
+#       - name: Zip binaries
+#         run: |
+#           zip -j gorse_linux_amd64.zip linux/amd64/gorse-*
+#           zip -j gorse_linux_arm64.zip linux/arm64/gorse-*
+#           zip -j gorse_windows_amd64.zip windows/amd64/gorse-*
+#           zip -j gorse_windows_arm64.zip windows/arm64/gorse-*
+#           zip -j gorse_darwin_amd64.zip darwin/amd64/gorse-*
+#           zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
           
-      - name: Upload release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: gorse_*_*.zip
-          tag: ${{ github.ref }}
-          overwrite: true
-          file_glob: true
+#       - name: Upload release
+#         uses: svenstaro/upload-release-action@v2
+#         with:
+#           repo_token: ${{ secrets.GITHUB_TOKEN }}
+#           file: gorse_*_*.zip
+#           tag: ${{ github.ref }}
+#           overwrite: true
+#           file_glob: true
 
-  build-docker-images:
-    name: build docker images
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
-    steps:
-      - name: Pull source
-        uses: actions/checkout@v1
+#   build-docker-images:
+#     name: build docker images
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
+#     steps:
+#       - name: Pull source
+#         uses: actions/checkout@v1
         
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v1
         
-      - name: Login to DockerHub
-        uses: docker/login-action@v1 
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#       - name: Login to DockerHub
+#         uses: docker/login-action@v1 
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
           
-      - id: get_version
-        uses: battila7/get-version-action@v2
+#       - id: get_version
+#         uses: battila7/get-version-action@v2
 
-      - name: Build docker image
-        if: github.event.release.prerelease == false
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          file: cmd/${{ matrix.image }}/Dockerfile
-          push: true
-          tags: |
-            zhenghaoz/${{ matrix.image }}:latest
-            zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
-            zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
+#       - name: Build docker image
+#         if: github.event.release.prerelease == false
+#         uses: docker/build-push-action@v2
+#         with:
+#           context: .
+#           platforms: linux/amd64,linux/arm64
+#           file: cmd/${{ matrix.image }}/Dockerfile
+#           push: true
+#           tags: |
+#             zhenghaoz/${{ matrix.image }}:latest
+#             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
+#             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
 
-      - name: Build prerelease docker image
-        if: github.event.release.prerelease == true
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          file: cmd/${{ matrix.image }}/Dockerfile
-          push: true
-          tags: |
-            zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
+#       - name: Build prerelease docker image
+#         if: github.event.release.prerelease == true
+#         uses: docker/build-push-action@v2
+#         with:
+#           context: .
+#           platforms: linux/amd64,linux/arm64
+#           file: cmd/${{ matrix.image }}/Dockerfile
+#           push: true
+#           tags: |
+#             zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
 
-  build-windows-images:
-    name: build windows images
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
-    steps:
-      - name: Pull source
-        uses: actions/checkout@v1
+#   build-windows-images:
+#     name: build windows images
+#     runs-on: windows-latest
+#     strategy:
+#       matrix:
+#         image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
+#     steps:
+#       - name: Pull source
+#         uses: actions/checkout@v1
         
-      - id: get_version
-        uses: battila7/get-version-action@v2
+#       - id: get_version
+#         uses: battila7/get-version-action@v2
 
-      - name: Build docker image
-        if: github.event.release.prerelease == false
-        run: |
-          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
-          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
-            -t zhenghaoz/${{ matrix.image }}:windowsservercore `
-            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}-windowsservercore `
-            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
-          docker image push --all-tags zhenghaoz/${{ matrix.image }}
-          docker logout
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+#       - name: Build docker image
+#         if: github.event.release.prerelease == false
+#         run: |
+#           docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
+#           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
+#             -t zhenghaoz/${{ matrix.image }}:windowsservercore `
+#             -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}-windowsservercore `
+#             -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
+#           docker image push --all-tags zhenghaoz/${{ matrix.image }}
+#           docker logout
+#         env:
+#           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+#           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build prerelease docker image
-        if: github.event.release.prerelease == true
-        run: |
-          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
-          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
-            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
-          docker image push --all-tags zhenghaoz/${{ matrix.image }}
-          docker logout
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+#       - name: Build prerelease docker image
+#         if: github.event.release.prerelease == true
+#         run: |
+#           docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
+#           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
+#             -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
+#           docker image push --all-tags zhenghaoz/${{ matrix.image }}
+#           docker logout
+#         env:
+#           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+#           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

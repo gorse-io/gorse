@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
+        image: [gorse-master, gorse-server, gorse-worker]
     steps:
       - name: Pull source
         uses: actions/checkout@v1
@@ -32,38 +32,17 @@ jobs:
           platforms: linux/amd64,linux/arm64
           file: cmd/${{ matrix.image }}/Dockerfile
           push: true
-          tags: zhenghaoz/${{ matrix.image }}:nightly
+          tags: neurastudios/${{ matrix.image }}:nightly
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Resolve Images on Description
         run: |
           sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
-          
+
       - name: Update DockerHub Description
         uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: zhenghaoz/${{ matrix.image }}
-
-  windows_images:
-    name: windows images
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
-    steps:
-      - name: Pull source
-        uses: actions/checkout@v1
-
-      - name: Build docker image
-        run: |
-          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
-          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
-            -t zhenghaoz/${{ matrix.image }}:nightly-windowsservercore .
-          docker image push --all-tags zhenghaoz/${{ matrix.image }}
-          docker logout
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: neurastudios/${{ matrix.image }}
