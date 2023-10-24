@@ -21,9 +21,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/floats"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/Neura-Studios/gorse/base/floats"
+	"github.com/Neura-Studios/gorse/base/task"
+	"github.com/Neura-Studios/gorse/model"
 )
 
 const (

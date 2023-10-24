@@ -30,7 +30,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/storage"
+	"github.com/Neura-Studios/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"modernc.org/sqlite"

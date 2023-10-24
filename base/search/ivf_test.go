@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/Neura-Studios/gorse/base/task"
 )
 
 func TestIVFConfig(t *testing.T) {

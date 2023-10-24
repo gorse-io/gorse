@@ -21,7 +21,7 @@ import (
 
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/Neura-Studios/gorse/model"
 )
 
 func TestDeepFM_Classification_Frappe(t *testing.T) {

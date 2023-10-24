@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/storage"
+	"github.com/Neura-Studios/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

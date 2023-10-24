@@ -1,6 +1,8 @@
 
 # Created by https://www.gitignore.io/api/go,windows,jetbrains
 
+.env
+
 ### Go ###
 # Binaries for programs and plugins
 *.exe
@@ -118,5 +120,4 @@ $RECYCLE.BIN/
 *.lnk
 
 .vscode
-
-# End of https://www.gitignore.io/api/go,windows,jetbrains
+config.toml

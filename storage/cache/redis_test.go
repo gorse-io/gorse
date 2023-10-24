@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/Neura-Studios/gorse/base/log"
 	"google.golang.org/protobuf/proto"
 )
 

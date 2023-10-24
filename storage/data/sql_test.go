@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/storage"
+	"github.com/Neura-Studios/gorse/storage"
 )
 
 var (

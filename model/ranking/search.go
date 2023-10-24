@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/Neura-Studios/gorse/base"
+	"github.com/Neura-Studios/gorse/base/log"
+	"github.com/Neura-Studios/gorse/base/progress"
+	"github.com/Neura-Studios/gorse/base/task"
+	"github.com/Neura-Studios/gorse/model"
 	"go.uber.org/zap"
 )
 

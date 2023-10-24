@@ -13,7 +13,7 @@
 // limitations under the License.
 syntax = "proto3";
 
-option go_package = "github.com/zhenghaoz/gorse/protocol";
+option go_package = "github.com/Neura-Studios/gorse/protocol";
 
 package protocol;
 

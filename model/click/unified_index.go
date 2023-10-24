@@ -21,8 +21,8 @@ import (
 	"strconv"
 
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/Neura-Studios/gorse/base"
+	"github.com/Neura-Studios/gorse/base/log"
 )
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.

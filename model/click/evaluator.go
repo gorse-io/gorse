@@ -19,7 +19,7 @@ import (
 
 	"github.com/chewxy/math32"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/copier"
+	"github.com/Neura-Studios/gorse/base/copier"
 	"modernc.org/sortutil"
 )
 

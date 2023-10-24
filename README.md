@@ -3,10 +3,10 @@
 <img width=160 src="assets/gorse.png"/>
 
 ![](https://img.shields.io/github/go-mod/go-version/zhenghaoz/gorse)
-[![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild)
+[![build](https://github.com/Neura-Studios/gorse/workflows/build/badge.svg)](https://github.com/Neura-Studios/gorse/actions?query=workflow%3Abuild)
 [![codecov](https://codecov.io/gh/gorse-io/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/gorse-io/gorse)
-[![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
-[![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Neura-Studios/gorse)](https://goreportcard.com/report/github.com/Neura-Studios/gorse)
+[![GoDoc](https://godoc.org/github.com/Neura-Studios/gorse?status.svg)](https://godoc.org/github.com/Neura-Studios/gorse)
 [![Discord](https://img.shields.io/discord/830635934210588743)](https://discord.gg/x6gAtNNkAE)
 [![Twitter Follow](https://img.shields.io/twitter/follow/gorse_io?label=Follow&style=social)](https://twitter.com/gorse_io)
 
@@ -23,7 +23,7 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be a 
 
 ## Quick Start
 
-The playground mode has been prepared for beginners. Just set up a recommender system for GitHub repositories by the following commands. 
+The playground mode has been prepared for beginners. Just set up a recommender system for GitHub repositories by the following commands.
 
 - Linux/macOS:
 
@@ -70,16 +70,16 @@ curl http://127.0.0.1:8088/api/recommend/bob?n=10
 
 ```json
 [
- "mbostock:d3",
- "nt1m:material-framework",
- "mdbootstrap:vue-bootstrap-with-material-design",
- "justice47:f2-vue",
- "10clouds:cyclejs-cookie",
- "academicpages:academicpages.github.io",
- "accenture:alexia",
- "addyosmani:tmi",
- "1wheel:d3-starterkit",
- "acdlite:redux-promise"
+  "mbostock:d3",
+  "nt1m:material-framework",
+  "mdbootstrap:vue-bootstrap-with-material-design",
+  "justice47:f2-vue",
+  "10clouds:cyclejs-cookie",
+  "academicpages:academicpages.github.io",
+  "accenture:alexia",
+  "addyosmani:tmi",
+  "1wheel:d3-starterkit",
+  "acdlite:redux-promise"
 ]
 ```
 
@@ -108,7 +108,7 @@ In addition, the administrator can perform system monitoring, data import and ex
 
 ## Contributors
 
-<a href="https://github.com/zhenghaoz/gorse/graphs/contributors">
+<a href="https://github.com/Neura-Studios/gorse/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=zhenghaoz/gorse" />
 </a>
 

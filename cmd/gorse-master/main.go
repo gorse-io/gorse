@@ -18,11 +18,11 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/Neura-Studios/gorse/base/log"
+	"github.com/Neura-Studios/gorse/cmd/version"
+	"github.com/Neura-Studios/gorse/config"
+	"github.com/Neura-Studios/gorse/master"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/cmd/version"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/master"
 	"go.uber.org/zap"
 )
 

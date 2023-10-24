@@ -15,10 +15,10 @@
 package config
 
 import (
-	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/Neura-Studios/gorse/model/click"
+	"github.com/Neura-Studios/gorse/model/ranking"
+	"github.com/Neura-Studios/gorse/storage/cache"
+	"github.com/Neura-Studios/gorse/storage/data"
 )
 
 type Settings struct {

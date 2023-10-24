@@ -15,9 +15,9 @@
 package protocol
 
 import (
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/Neura-Studios/gorse/base/log"
+	"github.com/Neura-Studios/gorse/model/click"
+	"github.com/Neura-Studios/gorse/model/ranking"
 	"go.uber.org/zap"
 	"io"
 )

@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/Neura-Studios/gorse/storage/cache"
 )
 
 func TestOnlineEvaluator(t *testing.T) {

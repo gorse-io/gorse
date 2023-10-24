@@ -21,8 +21,8 @@ import (
 	"sort"
 
 	"github.com/chewxy/math32"
-	"github.com/zhenghaoz/gorse/base/floats"
-	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/Neura-Studios/gorse/base/floats"
+	"github.com/Neura-Studios/gorse/base/log"
 	"go.uber.org/zap"
 	"modernc.org/sortutil"
 )

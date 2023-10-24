@@ -9,9 +9,9 @@ ENV CGO_ENABLED 0
 
 RUN cd gorse/cmd/gorse-server; \
     go build -ldflags="\" \
-        -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-        -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-        -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'\"" .; \
+        -X 'github.com/Neura-Studios/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+        -X 'github.com/Neura-Studios/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+        -X 'github.com/Neura-Studios/gorse/cmd/version.BuildTime=$(date)'\"" .; \
     mv gorse-server.exe /gorse-server.exe
 
 RUN /gorse-server.exe --version

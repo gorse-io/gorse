@@ -15,11 +15,11 @@
 package parallel
 
 import (
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/Neura-Studios/gorse/base"
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/Neura-Studios/gorse/base/task"
 	"go.uber.org/atomic"
 	"modernc.org/mathutil"
 )

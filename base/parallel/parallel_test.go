@@ -20,8 +20,8 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/Neura-Studios/gorse/base"
+	"github.com/Neura-Studios/gorse/base/task"
 )
 
 func TestParallel(t *testing.T) {

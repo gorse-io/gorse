@@ -21,7 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/Neura-Studios/gorse/storage/cache"
 )
 
 const (

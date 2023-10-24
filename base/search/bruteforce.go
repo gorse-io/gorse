@@ -17,7 +17,7 @@ package search
 import (
 	"context"
 
-	"github.com/zhenghaoz/gorse/base/heap"
+	"github.com/Neura-Studios/gorse/base/heap"
 )
 
 var _ VectorIndex = &Bruteforce{}

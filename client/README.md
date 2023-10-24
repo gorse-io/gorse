@@ -7,13 +7,13 @@ Go SDK for Gorse recommender system.
 ## Install
 
 ```bash
-go get github.com/zhenghaoz/gorse/client@master
+go get github.com/Neura-Studios/gorse/client@master
 ```
 
 ## Usage
 
 ```go
-import "github.com/zhenghaoz/gorse/client"
+import "github.com/Neura-Studios/gorse/client"
 
 gorse := client.NewGorseClient("http://127.0.0.1:8087", "api_key")
 
@@ -29,7 +29,6 @@ gorse.GetRecommend("bob", "", 10)
 ```
 
 ## Test
-
 
 In the root directory of Gorse source:
 

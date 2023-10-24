@@ -24,9 +24,9 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/jsonutil"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/Neura-Studios/gorse/base"
+	"github.com/Neura-Studios/gorse/base/jsonutil"
+	"github.com/Neura-Studios/gorse/model"
 	"modernc.org/mathutil"
 )
 

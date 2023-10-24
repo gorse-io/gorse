@@ -22,7 +22,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/Neura-Studios/gorse/base/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 	"moul.io/zapgorm2"

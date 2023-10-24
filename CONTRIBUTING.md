@@ -4,14 +4,14 @@ Welcome and thank you for considering contributing to Gorse!
 
 Reading and following these guidelines will help us make the contribution process easy and effective for everyone involved. It also communicates that you agree to respect the time of the developers managing and developing these open source projects. In return, we will reciprocate that respect by addressing your issue, assessing changes, and helping you finalize your pull requests.
 
-* [Getting Started](#getting-started)
-  * [Setup Develop Environment](#setup-develop-environment)
-  * [Option 1: Run an All-in-one Node](#option-1-run-an-all-in-one-node)
-  * [Option 2: Run Nodes](#option-2-run-nodes)
-  * [Run Unit Tests](#run-unit-tests)
-* [Your First Contribution](#your-first-contribution)
-  * [Contribution Workflow](#contribution-workflow)
-* [Getting Help](#getting-help)
+- [Getting Started](#getting-started)
+  - [Setup Develop Environment](#setup-develop-environment)
+  - [Option 1: Run an All-in-one Node](#option-1-run-an-all-in-one-node)
+  - [Option 2: Run Nodes](#option-2-run-nodes)
+  - [Run Unit Tests](#run-unit-tests)
+- [Your First Contribution](#your-first-contribution)
+  - [Contribution Workflow](#contribution-workflow)
+- [Getting Help](#getting-help)
 
 ## Getting Started
 
@@ -56,13 +56,13 @@ go run cmd/gorse-master/main.go --config config/config.toml
 - Start the worker node.
 
 ```bash
-go run cmd/gorse-worker/main.go 
+go run cmd/gorse-worker/main.go
 ```
 
 - Start the server node.
 
 ```bash
-go run cmd/gorse-server/main.go 
+go run cmd/gorse-server/main.go
 ```
 
 ### Run Unit Tests
@@ -76,7 +76,7 @@ go test -v ./...
 The default database URLs are directed to these databases in `storage/docker-compose.yml`. Test databases could be overrode by setting following environment variables:
 
 | Environment Value | Default Value                                |
-|-------------------|----------------------------------------------|
+| ----------------- | -------------------------------------------- |
 | `MYSQL_URI`       | `mysql://root:password@tcp(127.0.0.1:3306)/` |
 | `POSTGRES_URI`    | `postgres://gorse:gorse_pass@127.0.0.1/`     |
 | `MONGO_URI`       | `mongodb://root:password@127.0.0.1:27017/`   |
@@ -90,7 +90,7 @@ MYSQL_URI=mysql://root:password@tcp(127.0.0.1:4000)/ go test -v ./...
 
 ## Your First Contribution
 
-You can start by finding an existing issue with the [help wanted](https://github.com/zhenghaoz/gorse/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22) label in the Gorse repository. These issues are well suited for new contributors. Issues can be claimed by publishing an `/assign` comment.
+You can start by finding an existing issue with the [help wanted](https://github.com/Neura-Studios/gorse/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22) label in the Gorse repository. These issues are well suited for new contributors. Issues can be claimed by publishing an `/assign` comment.
 
 ### Contribution Workflow
 

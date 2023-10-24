@@ -22,7 +22,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/storage"
+	"github.com/Neura-Studios/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"

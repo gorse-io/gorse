@@ -21,10 +21,10 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
-	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/Neura-Studios/gorse/base/log"
+	"github.com/Neura-Studios/gorse/model/click"
+	"github.com/Neura-Studios/gorse/model/ranking"
+	"github.com/Neura-Studios/gorse/protocol"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/peer"
 )

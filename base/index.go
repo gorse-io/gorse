@@ -17,7 +17,7 @@ package base
 import (
 	"encoding/binary"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/encoding"
+	"github.com/Neura-Studios/gorse/base/encoding"
 	"io"
 	"reflect"
 	"strconv"

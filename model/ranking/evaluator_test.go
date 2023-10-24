@@ -21,8 +21,8 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/Neura-Studios/gorse/base"
+	"github.com/Neura-Studios/gorse/model"
 )
 
 const evalEpsilon = 0.00001

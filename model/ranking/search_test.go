@@ -19,9 +19,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/Neura-Studios/gorse/base"
+	"github.com/Neura-Studios/gorse/base/task"
+	"github.com/Neura-Studios/gorse/model"
 )
 
 type mockMatrixFactorizationForSearch struct {

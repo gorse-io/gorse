@@ -19,9 +19,9 @@ import (
 	"os/signal"
 
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/cmd/version"
-	"github.com/zhenghaoz/gorse/server"
+	"github.com/Neura-Studios/gorse/base/log"
+	"github.com/Neura-Studios/gorse/cmd/version"
+	"github.com/Neura-Studios/gorse/server"
 	"go.uber.org/zap"
 )
 

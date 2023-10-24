@@ -18,10 +18,10 @@ import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/thoas/go-funk"
-	"github.com/zhenghaoz/gorse/base/copier"
-	"github.com/zhenghaoz/gorse/base/floats"
-	"github.com/zhenghaoz/gorse/base/heap"
-	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/Neura-Studios/gorse/base/copier"
+	"github.com/Neura-Studios/gorse/base/floats"
+	"github.com/Neura-Studios/gorse/base/heap"
+	"github.com/Neura-Studios/gorse/base/parallel"
 )
 
 /* Evaluate Item Ranking */

@@ -1,4 +1,4 @@
-module github.com/zhenghaoz/gorse
+module github.com/Neura-Studios/gorse
 
 go 1.21
 

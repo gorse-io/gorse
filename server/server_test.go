@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/Neura-Studios/gorse/config"
+	"github.com/Neura-Studios/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

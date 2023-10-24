@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/Neura-Studios/gorse/base/log"
 	"go.uber.org/zap"
 	"modernc.org/mathutil"
 )

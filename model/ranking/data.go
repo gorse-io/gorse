@@ -24,10 +24,10 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/encoding"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/Neura-Studios/gorse/base"
+	"github.com/Neura-Studios/gorse/base/encoding"
+	"github.com/Neura-Studios/gorse/base/log"
+	"github.com/Neura-Studios/gorse/model"
 	"go.uber.org/zap"
 )
 
