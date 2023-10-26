@@ -8,3 +8,6 @@ deploy-docker:
   docker push neurastudios/gorse-master:latest
   docker push neurastudios/gorse-server:latest
   docker push neurastudios/gorse-worker:latest
+
+run-dev:
+  go run cmd/gorse-master/main.go --config master/config.toml

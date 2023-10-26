@@ -23,10 +23,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Neura-Studios/gorse/storage"
 	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/Neura-Studios/gorse/storage"
 )
 
 // Redis cache storage.
@@ -373,28 +373,49 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 }
 
 func parseSearchDocumentsResult(result any) (count int64, keys []string, documents []Document, err error) {
-	rows, ok := result.(map[interface {}]interface {})
-	if !ok {
-		print(result)
-		return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 1): %#v", result)
+	var rows []any
+	switch t := result.(type) {
+		case map[any]any:
+			for k, v := range t {
+        if key, ok := k.(string); ok && key == "results" {
+          rows = v.([]any)
+				}
+      }
+		case []any:
+			rows = t
+		default:
+			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 1): %v", result)
 	}
-	count, ok = rows[0].(int64)
-	if !ok {
-		return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 2): %#v", rows[0])
-	}
-	for i := 1; i < len(rows); i += 2 {
-		key, ok := rows[i].(string)
+
+	// spew.Dump(rows)
+
+	var redisRows []map[any]any
+	for _, row := range rows {
+		rowMap, ok := row.(map[any]any)
 		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 3): %#v", rows[i])
+			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 2): %#v", row)
 		}
+
+		attrs, ok := rowMap["extra_attributes"].(map[any]any)
+		if !ok {
+			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 3, invalid attrs, type %T): %#v", rowMap["extra_attributes"], rowMap["extra_attributes"])
+		}
+
+		redisRows = append(redisRows, attrs)
+	}
+
+	for i := 1; i < len(redisRows); i++ {
+		row := redisRows[i]
+
+		key, ok := row["id"].(string)
+		if !ok {
+			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 4, invalid id): %#v", row)
+		}
+
 		keys = append(keys, key)
-		row, ok := rows[i+1].([]any)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 4): %#v", rows[i+1])
-		}
 		fields := make(map[string]any)
-		for j := 0; j < len(row); j += 2 {
-			fields[row[j].(string)] = row[j+1]
+		for key, val := range row {
+			fields[key.(string)] = val
 		}
 		var document Document
 		document.Id, ok = fields["id"].(string)
