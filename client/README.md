@@ -15,9 +15,9 @@ go get github.com/zhenghaoz/gorse/client@master
 ```go
 import "github.com/zhenghaoz/gorse/client"
 
-gorse := client.NewGorseClient("http://127.0.0.1:8087", "api_key")
+gorse := client.NewGorseClient("http://127.0.0.1:8088", "api_key")
 
-gorse.InsertFeedback([]client.Feedback{
+gorse.InsertFeedback(context.Background(), []client.Feedback{
     {FeedbackType: "star", UserId: "bob", ItemId: "vuejs:vue", Timestamp: "2022-02-24"},
     {FeedbackType: "star", UserId: "bob", ItemId: "d3:d3", Timestamp: "2022-02-25"},
     {FeedbackType: "star", UserId: "bob", ItemId: "dogfalo:materialize", Timestamp: "2022-02-26"},
