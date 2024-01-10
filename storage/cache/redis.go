@@ -254,6 +254,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	if len(query) == 0 {
 		return nil, nil
 	}
+
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collection)))
 	if subset != "" {
@@ -276,6 +277,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
 	return documents, nil
 }
 
@@ -387,8 +389,6 @@ func parseSearchDocumentsResult(result any) (count int64, keys []string, documen
 			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result (step 1): %v", result)
 	}
 
-	// spew.Dump(rows)
-
 	var redisRows []map[any]any
 	for _, row := range rows {
 		rowMap, ok := row.(map[any]any)
@@ -404,7 +404,7 @@ func parseSearchDocumentsResult(result any) (count int64, keys []string, documen
 		redisRows = append(redisRows, attrs)
 	}
 
-	for i := 1; i < len(redisRows); i++ {
+	for i := 0; i < len(redisRows); i++ {
 		row := redisRows[i]
 
 		key, ok := row["id"].(string)

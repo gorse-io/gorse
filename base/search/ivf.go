@@ -21,12 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chewxy/math32"
 	"github.com/Neura-Studios/gorse/base"
 	"github.com/Neura-Studios/gorse/base/heap"
 	"github.com/Neura-Studios/gorse/base/log"
 	"github.com/Neura-Studios/gorse/base/parallel"
 	"github.com/Neura-Studios/gorse/base/task"
+	"github.com/chewxy/math32"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"modernc.org/mathutil"
@@ -108,9 +108,12 @@ func (idx *IVF) Search(q Vector, n int, prune0 bool) (values []int32, scores []f
 	for _, c := range clusters {
 		for _, i := range idx.clusters[c].observations {
 			if idx.data[i] != q {
-				pq.Push(i, q.Distance(idx.data[i]))
-				if pq.Len() > n {
-					pq.Pop()
+				distance := q.Distance(idx.data[i])
+				if (!math32.IsNaN(distance)) {
+					pq.Push(i, distance)
+					if pq.Len() > n {
+						pq.Pop()
+					}
 				}
 			}
 		}

@@ -25,7 +25,9 @@ RUN /src/cmd/gorse-server/gorse-server --version
 ############################
 # STEP 2 build a small image
 ############################
-FROM scratch
+FROM alpine:latest
+
+RUN apk --no-cache add curl
 
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 

@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.21
+FROM golang:1.21 as build
 
 WORKDIR /src
 
@@ -25,11 +25,11 @@ RUN /src/cmd/gorse-master/gorse-master --version
 ############################
 # STEP 2 build a small image
 ############################
-FROM scratch
+FROM alpine
 
-COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /src/cmd/gorse-master /usr/bin
+RUN /usr/bin/gorse-master --version
 
 ENV USER root
 

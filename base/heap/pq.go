@@ -16,6 +16,7 @@ package heap
 
 import (
 	"container/heap"
+	"fmt"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -77,7 +78,7 @@ func NewPriorityQueue(desc bool) *PriorityQueue {
 // Push inserts a new element into the queue. No action is performed on duplicate elements.
 func (p *PriorityQueue) Push(v int32, weight float32) {
 	if math32.IsNaN(weight) {
-		panic("NaN weight is forbidden")
+		panic(fmt.Sprintf("NaN weight is forbidden (value: %v)", v))
 	} else if !p.lookup.Contains(v) {
 		newItem := Elem[int32, float32]{
 			Value:  v,

@@ -27,16 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/araddon/dateparse"
-	mapset "github.com/deckarep/golang-set/v2"
-	restfulspec "github.com/emicklei/go-restful-openapi/v2"
-	"github.com/emicklei/go-restful/v3"
-	"github.com/gorilla/securecookie"
-	_ "github.com/gorse-io/dashboard"
-	"github.com/juju/errors"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rakyll/statik/fs"
-	"github.com/samber/lo"
 	"github.com/Neura-Studios/gorse/base"
 	"github.com/Neura-Studios/gorse/base/encoding"
 	"github.com/Neura-Studios/gorse/base/log"
@@ -48,6 +38,16 @@ import (
 	"github.com/Neura-Studios/gorse/server"
 	"github.com/Neura-Studios/gorse/storage/cache"
 	"github.com/Neura-Studios/gorse/storage/data"
+	"github.com/araddon/dateparse"
+	mapset "github.com/deckarep/golang-set/v2"
+	restfulspec "github.com/emicklei/go-restful-openapi/v2"
+	"github.com/emicklei/go-restful/v3"
+	"github.com/gorilla/securecookie"
+	_ "github.com/gorse-io/dashboard"
+	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
+	"github.com/rakyll/statik/fs"
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -304,6 +304,7 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	_, err := staticFileSystem.Open(request.RequestURI)
 	if request.RequestURI == "/" || os.IsNotExist(err) {
 		if !m.checkLogin(request) {
+			log.Logger().Info("redirect1")
 			http.Redirect(response, request, "/login", http.StatusFound)
 			log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
 			return
@@ -347,6 +348,7 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 				server.InternalServerError(restful.NewResponse(response), err)
 				return
 			} else if !isValid {
+				log.Logger().Info("redirect2")
 				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
 				return
@@ -362,12 +364,14 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 					Path:  "/",
 				}
 				http.SetCookie(response, cookie)
+				log.Logger().Info("redirect3")
 				http.Redirect(response, request, "/", http.StatusFound)
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
 				return
 			}
 		} else if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
 			if name != m.Config.Master.DashboardUserName || pass != m.Config.Master.DashboardPassword {
+				log.Logger().Info("redirect4")
 				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
 				return
@@ -386,11 +390,13 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 					Path:  "/",
 				}
 				http.SetCookie(response, cookie)
+				log.Logger().Info("redirect5")
 				http.Redirect(response, request, "/", http.StatusFound)
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
 				return
 			}
 		} else {
+			log.Logger().Info("redirect6")
 			http.Redirect(response, request, "/", http.StatusFound)
 			log.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
 		}
@@ -407,6 +413,7 @@ func (m *Master) logout(response http.ResponseWriter, request *http.Request) {
 		MaxAge: -1,
 	}
 	http.SetCookie(response, cookie)
+	log.Logger().Info("redirect7")
 	http.Redirect(response, request, "/login", http.StatusFound)
 	log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.RequestURI), zap.Int("status_code", http.StatusFound))
 }
