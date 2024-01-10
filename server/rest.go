@@ -69,6 +69,11 @@ type RestServer struct {
 	HiddenItemsManager *HiddenItemsManager
 }
 
+type ScoredItem struct {
+	data.Item
+	Score float64
+}
+
 // StartHttpServer starts the REST-ful API server.
 func (s *RestServer) StartHttpServer(container *restful.Container) {
 	// register restful APIs
@@ -430,6 +435,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned recommendations").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned recommendations").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("more-details", "If more details of items are needed").DataType("boolean")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/popular/{category}").To(s.getPopular).
@@ -440,6 +446,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("more-details", "If more details of items are needed").DataType("boolean")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	// Get latest items
@@ -450,6 +457,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("more-details", "If more details of items are needed").DataType("boolean")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	ws.Route(ws.GET("/latest/{category}").To(s.getLatest).
@@ -460,6 +468,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("more-details", "If more details of items are needed").DataType("boolean")).
 		Returns(http.StatusOK, "OK", []cache.Scored{}).
 		Writes([]cache.Scored{}))
 	// Get neighbors
@@ -583,6 +592,7 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 		return
 	}
 	userId = request.QueryParameter("user-id")
+	isDetailsRequired, _ := strconv.ParseBool(request.QueryParameter("more-details"))
 
 	// Get the popular list
 	items, err := s.CacheClient.GetSorted(ctx, cache.Key(key, category), offset, s.Config.Recommend.CacheSize)
@@ -590,35 +600,49 @@ func (s *RestServer) getSort(key, category string, isItem bool, request *restful
 		InternalServerError(response, err)
 		return
 	}
+
 	if isItem {
 		items = s.FilterOutHiddenScores(response, items, category)
 	}
-
-	// Remove read items
-	if userId != "" {
-		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
-		if err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		readItems := strset.New()
-		for _, f := range feedback {
-			readItems.Add(f.ItemId)
-		}
-		prunedItems := make([]cache.Scored, 0, len(items))
-		for _, item := range items {
-			if !readItems.Has(item.Id) {
-				prunedItems = append(prunedItems, item)
-			}
-		}
-		items = prunedItems
-	}
-
-	// Send result
 	if n > 0 && len(items) > n {
 		items = items[:n]
 	}
-	Ok(response, items)
+
+	if isDetailsRequired {
+		details := make([]ScoredItem, len(items))
+		for i := range items {
+			details[i].Score = items[i].Score
+			details[i].Item, err = s.DataClient.GetItem(ctx, items[i].Id)
+			if err != nil {
+				InternalServerError(response, err)
+				return
+			}
+		}
+		Ok(response, details)
+		// Send result
+	} else {
+		// Remove read items
+		if userId != "" {
+			feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+			if err != nil {
+				InternalServerError(response, err)
+				return
+			}
+			readItems := strset.New()
+			for _, f := range feedback {
+				readItems.Add(f.ItemId)
+			}
+			prunedItems := make([]cache.Scored, 0, len(items))
+			for _, item := range items {
+				if !readItems.Has(item.Id) {
+					prunedItems = append(prunedItems, item)
+				}
+			}
+			items = prunedItems
+		}
+		Ok(response, items)
+	}
+
 }
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
@@ -629,6 +653,7 @@ func (s *RestServer) getPopular(request *restful.Request, response *restful.Resp
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
+	log.ResponseLogger(response).Debug("get category popular items in category", zap.String("category", category))
 	log.ResponseLogger(response).Debug("get category latest items in category", zap.String("category", category))
 	s.getSort(cache.LatestItems, category, true, request, response)
 }
