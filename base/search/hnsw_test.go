@@ -15,8 +15,9 @@
 package search
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHNSWConfig(t *testing.T) {
@@ -30,4 +31,7 @@ func TestHNSWConfig(t *testing.T) {
 
 	SetEFConstruction(345)(hnsw)
 	assert.Equal(t, 345, hnsw.efConstruction)
+
+	SetEF(456)(hnsw)
+	assert.Equal(t, 456, hnsw.ef)
 }
