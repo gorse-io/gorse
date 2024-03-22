@@ -97,7 +97,7 @@ func (c *GorseClient) GetItemLatest(ctx context.Context, userid string, n, offse
 }
 
 func (c *GorseClient) GetItemLatestWithCategory(ctx context.Context, userid, category string, n, offset int) ([]Score, error) {
-	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/latest?user-id=%s&category=%s&n=%d&offset=%d", userid, category, n, offset), nil)
+	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/latest/%s?user-id=%s&n=%d&offset=%d", category, userid, n, offset), nil)
 }
 
 func (c *GorseClient) GetItemPopular(ctx context.Context, userid string, n, offset int) ([]Score, error) {
