@@ -55,7 +55,7 @@ func (m *Master) CreateWebService() {
 	ws := m.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
-	ws.Filter(m.LoginFilter)
+	//ws.Filter(m.LoginFilter)
 
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
@@ -90,13 +90,6 @@ func (m *Master) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Returns(http.StatusOK, "OK", map[string][]cache.TimeSeriesPoint{}).
 		Writes(map[string][]cache.TimeSeriesPoint{}))
-	// Get a user
-	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
-		Doc("Get a user.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
-		Returns(http.StatusOK, "OK", User{}).
-		Writes(User{}))
 	// Get a user feedback
 	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/{feedback-type}").To(m.getTypedFeedbackByUser).
 		Doc("Get feedback by user id with feedback type.").
@@ -106,7 +99,16 @@ func (m *Master) CreateWebService() {
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
 		Returns(http.StatusOK, "OK", []Feedback{}).
 		Writes([]Feedback{}))
-	// Get users
+
+	// Get a user   http://172.26.1.35:8088/api/dashboard/user/00000864-471b-11ee-909e-0cc47adb50d4
+	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
+		Doc("Get a user.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(http.StatusOK, "OK", User{}).
+		Writes(User{}))
+
+	// Get users http://172.26.1.35:8088/api/dashboard/users
 	ws.Route(ws.GET("/dashboard/users").To(m.getUsers).
 		Doc("Get users.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -114,6 +116,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
 		Returns(http.StatusOK, "OK", UserIterator{}).
 		Writes(UserIterator{}))
+
 	// Get popular items
 	ws.Route(ws.GET("/dashboard/popular/").To(m.getPopular).
 		Doc("get popular items").
@@ -170,6 +173,8 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
+
+	// http://172.26.1.35:8088/api/dashboard/item/000ac6fc-4732-11ee-91bd-0cc47adb50d4/neighbors
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
@@ -178,6 +183,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
+
 	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors/{category}").To(m.getItemCategorizedNeighbors).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -187,6 +193,8 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
+
+	// http://172.26.1.35:8088/api/dashboard/user/00000864-471b-11ee-909e-0cc47adb50d4/neighbors
 	ws.Route(ws.GET("/dashboard/user/{user-id}/neighbors").To(m.getUserNeighbors).
 		Doc("get neighbors of a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).

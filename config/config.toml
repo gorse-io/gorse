@@ -7,7 +7,9 @@
 #   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-cache_store = "redis://localhost:6379/0"
+cache_store = "redis://172.26.1.35:6379/0"
+#cache_store = "redis://172.26.1.35:6389/0"
+#cache_store = "mysql://newuser:Password_123@tcp(172.27.128.220:3306)/gorsesx"
 
 # The database for persist data, support MySQL, Postgres and MongoDB:
 #   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
@@ -15,27 +17,35 @@ cache_store = "redis://localhost:6379/0"
 #   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
+#data_store = "mysql://newuser:Password_123@tcp(172.27.128.115:31930)/gorsesx"
+
+#data_store = "mysql://newuser:Password_123@tcp(172.27.128.220:3306)/business_gorse_sxtest"
+#table_prefix = ""
+#cache_table_prefix = "selfdoris-"
+
+data_store = "mysql://root@tcp(172.27.128.115:31930)/business_wzk0825"
+table_prefix = ""
+cache_table_prefix = "cachedoris-"
 
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.
-table_prefix = ""
+#table_prefix = ""
 
 # The naming prefix for tables (collections, keys) in cache storage databases. The default value is `table_prefix`.
-cache_table_prefix = ""
+#cache_table_prefix = "cachedoris-"
 
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
-data_table_prefix = ""
+#data_table_prefix = ""
 
 [master]
 
 # GRPC port of the master node. The default value is 8086.
-port = 8086
+port = 8056
 
 # gRPC host of the master node. The default values is "0.0.0.0".
 host = "0.0.0.0"
 
 # HTTP port of the master node. The default values is 8088.
-http_port = 8088
+http_port = 8058
 
 # HTTP host of the master node. The default values is "0.0.0.0".
 http_host = "0.0.0.0"
@@ -55,10 +65,10 @@ n_jobs = 1
 meta_timeout = "10s"
 
 # Username for the master node dashboard.
-dashboard_user_name = ""
+dashboard_user_name = "root"
 
 # Password for the master node dashboard.
-dashboard_password = ""
+dashboard_password = "gorse"
 
 # Secret key for admin APIs (SSL required).
 admin_api_key = ""
@@ -75,10 +85,10 @@ api_key = ""
 clock_error = "5s"
 
 # Insert new users while inserting feedback. The default value is true.
-auto_insert_user = true
+auto_insert_user = false
 
 # Insert new items while inserting feedback. The default value is true.
-auto_insert_item = true
+auto_insert_item = false
 
 # Server-side cache expire time. The default value is 10s.
 cache_expire = "10s"
@@ -97,7 +107,7 @@ active_user_ttl = 0
 [recommend.data_source]
 
 # The feedback types for positive events.
-positive_feedback_types = ["star","like"]
+positive_feedback_types = ["detailPageShow"]
 
 # The feedback types for read events.
 read_feedback_types = ["read"]
@@ -121,10 +131,10 @@ popular_window = "720h"
 #   auto: If a user have labels, neighbors are found by number of common labels.
 #         If this user have no labels, neighbors are found by number of common liked items.
 # The default value is "auto".
-neighbor_type = "similar"
+neighbor_type = "related"
 
 # Enable approximate user neighbor searching using vector index. The default value is true.
-enable_index = true
+enable_index = false
 
 # Minimal recall for approximate user neighbor searching. The default value is 0.8.
 index_recall = 0.8
@@ -140,7 +150,7 @@ index_fit_epoch = 3
 #   auto: If a item have labels, neighbors are found by number of common labels.
 #         If this item have no labels, neighbors are found by number of common users.
 # The default value is "auto".
-neighbor_type = "similar"
+neighbor_type = "related"
 
 # Enable approximate item neighbor searching using vector index. The default value is true.
 enable_index = true
@@ -197,7 +207,7 @@ check_recommend_period = "1m"
 refresh_recommend_period = "24h"
 
 # Enable latest recommendation during offline recommendation. The default value is false.
-enable_latest_recommend = true
+enable_latest_recommend = false
 
 # Enable popular recommendation during offline recommendation. The default value is false.
 enable_popular_recommend = false
@@ -209,11 +219,11 @@ enable_user_based_recommend = true
 enable_item_based_recommend = false
 
 # Enable collaborative filtering recommendation during offline recommendation. The default value is true.
-enable_collaborative_recommend = true
+enable_collaborative_recommend = false
 
 # Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
 # would be merged randomly. The default value is false.
-enable_click_through_prediction = true
+enable_click_through_prediction = false
 
 # The explore recommendation method is used to inject popular items or latest items into recommended result:
 #   popular: Recommend popular items to cold-start users.

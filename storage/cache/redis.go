@@ -18,7 +18,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/zhenghaoz/gorse/base/log"
+	"go.uber.org/zap"
 	"io"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -268,6 +271,11 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	} else {
 		args = append(args, end-begin)
 	}
+
+	if rand.Intn(1000) == 1 {
+		log.Logger().Info("++274++ redis ft.search command", zap.Any("args", args))
+	}
+
 	result, err := r.client.Do(ctx, args...).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -294,6 +302,9 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
 		if err != nil {
 			return errors.Trace(err)
+		}
+		if rand.Intn(1000) == 1 {
+			log.Logger().Info("++307++ redis ft.search command " + fmt.Sprintf("%s %s %s %s %s %s %s %d %d", "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000))
 		}
 		count, keys, _, err := parseSearchDocumentsResult(result)
 		if err != nil {

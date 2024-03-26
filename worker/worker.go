@@ -412,7 +412,7 @@ func (w *Worker) Serve() {
 			w.scheduleState.StartTime = time.Time{}
 		}()
 
-		// pull users
+		//pull users
 		workingUsers, err := w.pullUsers(w.peers, w.me)
 		if err != nil {
 			log.Logger().Error("failed to split users", zap.Error(err),
@@ -421,7 +421,7 @@ func (w *Worker) Serve() {
 			return
 		}
 
-		// recommendation
+		//recommendation
 		w.Recommend(workingUsers)
 	}
 
@@ -466,6 +466,8 @@ func (w *Worker) Recommend(users []data.User) {
 		log.Logger().Error("failed to pull items", zap.Error(err))
 		return
 	}
+	log.Logger().Info("pullItems", zap.Any("itemCategories", itemCategories))
+
 	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(itemCache.Bytes()))
 	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
 
@@ -667,8 +669,13 @@ func (w *Worker) Recommend(users []data.User) {
 				log.Logger().Error("failed to load similar users", zap.Error(err))
 				return errors.Trace(err)
 			}
+
+			if len(similarUsers) > 0 {
+				log.Logger().Info("similarUsers", zap.Any("similarUsers", len(similarUsers)), zap.Any("similarUsers", similarUsers))
+			}
 			for _, user := range similarUsers {
 				// load historical feedback
+				//获取每个用户最近反馈（喜欢 点赞）的物料
 				similarUserPositiveItems, err := userFeedbackCache.GetUserFeedback(ctx, user.Id)
 				if err != nil {
 					log.Logger().Error("failed to pull user feedback",
@@ -678,6 +685,8 @@ func (w *Worker) Recommend(users []data.User) {
 				MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(userFeedbackCache.Bytes()))
 				// add unseen items
 				for _, itemId := range similarUserPositiveItems {
+					// 历史记录中没有，且 itemCache中含有，且不是隐藏属性
+					// 重复多次，分数就加多次
 					if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) {
 						scores[itemId] += user.Score
 					}
@@ -695,6 +704,7 @@ func (w *Worker) Recommend(users []data.User) {
 			// collect top k
 			filters := make(map[string]*heap.TopKFilter[string, float64])
 			filters[""] = heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
+			// 每个分类top k，而不是每个相似用户的top k  ？
 			for _, category := range itemCategories {
 				filters[category] = heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
 			}
@@ -782,6 +792,281 @@ func (w *Worker) Recommend(users []data.User) {
 			if results, err = w.replacement(results, &user, feedbacks, itemCache); err != nil {
 				log.Logger().Error("failed to replace items", zap.Error(err))
 				return errors.Trace(err)
+			}
+		}
+
+		// explore latest and popular
+		recommendTime := time.Now()
+		aggregator := cache.NewDocumentAggregator(recommendTime)
+		for category, result := range results {
+			scores, err := w.exploreRecommend(result, excludeSet, category)
+			if err != nil {
+				log.Logger().Error("failed to explore latest and popular items", zap.Error(err))
+				return errors.Trace(err)
+			}
+			aggregator.Add(category, lo.Map(scores, func(document cache.Document, _ int) string {
+				return document.Id
+			}), lo.Map(scores, func(document cache.Document, _ int) float64 {
+				return document.Score
+			}))
+		}
+		if err = w.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, userId, aggregator.ToSlice()); err != nil {
+			log.Logger().Error("failed to cache recommendation", zap.Error(err))
+			return errors.Trace(err)
+		}
+		if err = w.CacheClient.Set(
+			ctx,
+			cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, userId), recommendTime),
+			cache.String(cache.Key(cache.OfflineRecommendDigest, userId), w.Config.OfflineRecommendDigest(
+				config.WithCollaborative(collaborativeUsed),
+				config.WithRanking(ctrUsed),
+				config.WithItemNeighborDigest(strings.Join(itemNeighborDigests.ToSlice(), "-")),
+				config.WithUserNeighborDigest(strings.Join(userNeighborDigests.ToSlice(), "-")),
+			))); err != nil {
+			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
+		}
+		return nil
+	})
+	close(completed)
+	if err != nil {
+		log.Logger().Error("failed to continue offline recommendation", zap.Error(err))
+		return
+	}
+	log.Logger().Info("complete ranking recommendation",
+		zap.String("used_time", time.Since(startTime).String()))
+	UpdateUserRecommendTotal.Set(updateUserCount.Load())
+	OfflineRecommendTotalSeconds.Set(time.Since(startRecommendTime).Seconds())
+	OfflineRecommendStepSecondsVec.WithLabelValues("collaborative_recommend").Set(collaborativeRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Set(itemBasedRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("latest_recommend").Set(latestRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
+}
+
+func (w *Worker) RecommendUserCF(users []data.User) {
+	ctx := context.Background()
+	startRecommendTime := time.Now()
+	log.Logger().Info("ranking recommendation",
+		zap.Int("n_working_users", len(users)),
+		zap.Int("n_jobs", w.jobs),
+		zap.Int("cache_size", w.Config.Recommend.CacheSize))
+
+	// pull items from database
+	itemCache, itemCategories, err := w.pullItems(ctx)
+	if err != nil {
+		log.Logger().Error("failed to pull items", zap.Error(err))
+		return
+	}
+	log.Logger().Info("pullItems", zap.Any("itemCategories", itemCategories))
+
+	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(itemCache.Bytes()))
+	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
+
+	// progress tracker
+	completed := make(chan struct{}, 1000)
+	_, span := w.tracer.Start(context.Background(), "Recommend", len(users))
+	defer span.End()
+
+	go func() {
+		defer base.CheckPanic()
+		completedCount, previousCount := 0, 0
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case _, ok := <-completed:
+				if !ok {
+					return
+				}
+				completedCount++
+			case <-ticker.C:
+				throughput := completedCount - previousCount
+				previousCount = completedCount
+				if throughput > 0 {
+					if w.masterClient != nil {
+						span.Add(throughput)
+					}
+					log.Logger().Info("ranking recommendation",
+						zap.Int("n_complete_users", completedCount),
+						zap.Int("n_working_users", len(users)),
+						zap.Int("throughput", throughput))
+				}
+				if _, err := w.masterClient.PushProgress(context.Background(), protocol.EncodeProgress(w.tracer.List())); err != nil {
+					log.Logger().Error("failed to report update task", zap.Error(err))
+				}
+			}
+		}
+	}()
+
+	// recommendation
+	startTime := time.Now()
+	var (
+		updateUserCount               atomic.Float64
+		collaborativeRecommendSeconds atomic.Float64
+		userBasedRecommendSeconds     atomic.Float64
+		itemBasedRecommendSeconds     atomic.Float64
+		latestRecommendSeconds        atomic.Float64
+		popularRecommendSeconds       atomic.Float64
+	)
+
+	userFeedbackCache := NewFeedbackCache(w, w.Config.Recommend.DataSource.PositiveFeedbackTypes...)
+	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
+	err = parallel.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
+		defer func() {
+			completed <- struct{}{}
+		}()
+		user := users[jobId]
+		userId := user.UserId
+		// skip inactive users before max recommend period
+		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheTimeout(ctx, userId, itemCategories) {
+			return nil
+		}
+		updateUserCount.Add(1)
+
+		// load historical items
+		historyItems, _, err := w.loadUserHistoricalItems(w.DataClient, userId)
+		excludeSet := mapset.NewSet(historyItems...)
+		if err != nil {
+			log.Logger().Error("failed to pull user feedback",
+				zap.String("user_id", userId), zap.Error(err))
+			return errors.Trace(err)
+		}
+		// create candidates container
+		candidates := make(map[string][][]string)
+		candidates[""] = make([][]string, 0)
+		for _, category := range itemCategories {
+			candidates[category] = make([][]string, 0)
+		}
+
+		// Recommender #1: collaborative filtering.
+		collaborativeUsed := false
+
+		// Recommender #2: item-based.
+		itemNeighborDigests := mapset.NewSet[string]()
+		//if w.Config.Recommend.Offline.EnableItemBasedRecommend {
+		//	localStartTime := time.Now()
+		//	for _, category := range append([]string{""}, itemCategories...) {
+		//		// collect candidates
+		//		scores := make(map[string]float64)
+		//		for _, itemId := range positiveItems {
+		//			// load similar items
+		//			similarItems, err := w.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, itemId, []string{category}, 0, w.Config.Recommend.CacheSize)
+		//			if err != nil {
+		//				log.Logger().Error("failed to load similar items", zap.Error(err))
+		//				return errors.Trace(err)
+		//			}
+		//			// add unseen items
+		//			for _, item := range similarItems {
+		//				if !excludeSet.Contains(item.Id) && itemCache.IsAvailable(item.Id) {
+		//					scores[item.Id] += item.Score
+		//				}
+		//			}
+		//			// load item neighbors digest
+		//			digest, err := w.CacheClient.Get(ctx, cache.Key(cache.ItemNeighborsDigest, itemId)).String()
+		//			if err != nil {
+		//				if !errors.Is(err, errors.NotFound) {
+		//					log.Logger().Error("failed to load item neighbors digest", zap.Error(err))
+		//					return errors.Trace(err)
+		//				}
+		//			}
+		//			itemNeighborDigests.Add(digest)
+		//		}
+		//		// collect top k
+		//		filter := heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
+		//		for id, score := range scores {
+		//			filter.Push(id, score)
+		//		}
+		//		ids, _ := filter.PopAll()
+		//		candidates[category] = append(candidates[category], ids)
+		//	}
+		//	itemBasedRecommendSeconds.Add(time.Since(localStartTime).Seconds())
+		//}
+
+		// Recommender #3: insert user-based items
+		userNeighborDigests := mapset.NewSet[string]()
+		if w.Config.Recommend.Offline.EnableUserBasedRecommend {
+			localStartTime := time.Now()
+			scores := make(map[string]float64)
+			// load similar users
+			similarUsers, err := w.CacheClient.SearchDocuments(ctx, cache.UserNeighbors, userId, []string{""}, 0, w.Config.Recommend.CacheSize)
+			if err != nil {
+				log.Logger().Error("failed to load similar users", zap.Error(err))
+				return errors.Trace(err)
+			}
+			fmt.Println("++670++ len(similarUsers) ", len(similarUsers))
+			if len(similarUsers) > 0 {
+				log.Logger().Info("similarUsers", zap.Any("similarUsers", len(similarUsers)), zap.Any("similarUsers0", similarUsers[0]))
+			}
+			for _, user := range similarUsers {
+				// load historical feedback
+				//获取每个用户最近反馈（喜欢 点赞）的物料
+				similarUserPositiveItems, err := userFeedbackCache.GetUserFeedback(ctx, user.Id)
+				if err != nil {
+					log.Logger().Error("failed to pull user feedback",
+						zap.String("user_id", userId), zap.Error(err))
+					return errors.Trace(err)
+				}
+				MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(userFeedbackCache.Bytes()))
+				// add unseen items
+				for _, itemId := range similarUserPositiveItems {
+					// 历史记录中没有，且 itemCache中含有，且不是隐藏属性
+					// 重复多次，分数就加多次
+					if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) {
+						scores[itemId] += user.Score
+					}
+				}
+				// load user neighbors digest
+				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.UserNeighborsDigest, user.Id)).String()
+				if err != nil {
+					if !errors.Is(err, errors.NotFound) {
+						log.Logger().Error("failed to load user neighbors digest", zap.Error(err))
+						return errors.Trace(err)
+					}
+				}
+				userNeighborDigests.Add(digest)
+			}
+			// collect top k
+			filters := make(map[string]*heap.TopKFilter[string, float64])
+			filters[""] = heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
+			// 每个分类top k，而不是每个相似用户的top k  ？
+			for _, category := range itemCategories {
+				filters[category] = heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
+			}
+			for id, score := range scores {
+				filters[""].Push(id, score)
+				for _, category := range itemCache.GetCategory(id) {
+					filters[category].Push(id, score)
+				}
+			}
+			for category, filter := range filters {
+				ids, _ := filter.PopAll()
+				candidates[category] = append(candidates[category], ids)
+			}
+			userBasedRecommendSeconds.Add(time.Since(localStartTime).Seconds())
+		}
+
+		// rank items from different recommenders
+		// 1. If click-through rate prediction model is available, use it to rank items.
+		// 2. If collaborative filtering model is available, use it to rank items.
+		// 3. Otherwise, merge all recommenders' results randomly.
+		ctrUsed := false
+		results := make(map[string][]cache.Document)
+		for category, catCandidates := range candidates {
+			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.rankers[workerId] != nil && !w.rankers[workerId].Invalid() {
+				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache, w.rankers[workerId])
+				if err != nil {
+					log.Logger().Error("failed to rank items", zap.Error(err))
+					return errors.Trace(err)
+				}
+				ctrUsed = true
+			} else if w.RankingModel != nil && !w.RankingModel.Invalid() &&
+				w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(userId)) {
+				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
+				if err != nil {
+					log.Logger().Error("failed to rank items", zap.Error(err))
+					return errors.Trace(err)
+				}
+			} else {
+				results[category] = w.mergeAndShuffle(catCandidates)
 			}
 		}
 

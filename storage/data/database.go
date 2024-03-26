@@ -99,12 +99,25 @@ func ValidateLabels(o any) error {
 
 // Item stores meta data about item.
 type Item struct {
-	ItemId     string    `gorm:"primaryKey" mapstructure:"item_id"`
-	IsHidden   bool      `mapstructure:"is_hidden"`
-	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
-	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
-	Labels     any       `gorm:"serializer:json" mapstructure:"labels"`
-	Comment    string    `mapsstructure:"comment"`
+	ItemId     string    `json:"ItemId"`
+	IsHidden   bool      `json:"IsHidden"`
+	Categories []string  `json:"Categories"`
+	Timestamp  time.Time `json:"Timestamp"`
+	Labels     any       `json:"Labels"`
+	Comment    string    `json:"Comment"`
+}
+
+type ItemSetDoris struct {
+	ItemId         string `gorm:"column:itemId;primaryKey" json:"itemId"`
+	CategoryLevel1 string `gorm:"column:categoryLevel1" json:"categoryLevel1"`
+	PublishTime    int64  `gorm:"column:publishTime" json:"publishTime"`
+}
+
+type FeedbackDoris struct {
+	ItemId     string `gorm:"column:itemId" json:"itemId"`
+	UserId     string `gorm:"column:userId" json:"userId"`
+	Action     string `gorm:"column:action"`
+	ActionTime int64  `gorm:"column:actionTime" json:"actionTime"`
 }
 
 // ItemPatch is the modification on an item.
@@ -118,10 +131,10 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string   `gorm:"primaryKey" mapstructure:"user_id"`
-	Labels    any      `gorm:"serializer:json" mapstructure:"labels"`
-	Subscribe []string `gorm:"serializer:json" mapstructure:"subscribe"`
-	Comment   string   `mapstructure:"comment"`
+	UserId    string   `gorm:"column:userId;primaryKey" json:"UserId"`
+	Labels    any      `gorm:"-" json:"Labels"`
+	Subscribe []string `gorm:"-" json:"Subscribe"`
+	Comment   string   `gorm:"-" json:"Comment"`
 }
 
 // UserPatch is the modification on a user.
@@ -274,7 +287,9 @@ func Open(path, tablePrefix string) (Database, error) {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

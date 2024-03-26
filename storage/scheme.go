@@ -111,15 +111,15 @@ func (tp TablePrefix) PointsTable() string {
 }
 
 func (tp TablePrefix) UsersTable() string {
-	return string(tp) + "users"
+	return string(tp) + "user_info"
 }
 
 func (tp TablePrefix) ItemsTable() string {
-	return string(tp) + "items"
+	return string(tp) + "item_set_122"
 }
 
 func (tp TablePrefix) FeedbackTable() string {
-	return string(tp) + "feedback"
+	return string(tp) + "user_action"
 }
 
 func (tp TablePrefix) Key(key string) string {

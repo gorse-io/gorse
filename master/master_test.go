@@ -34,9 +34,14 @@ func (s *MasterTestSuite) SetupTest() {
 	var err error
 	s.tracer = progress.NewTracer("test")
 	s.Settings = config.NewSettings()
-	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", s.T().TempDir()), "")
+	tmpDir := s.T().TempDir()
+	//tmpDir = "F:\\www\\4thpd\\gorse-master-lbd\\temp\\sqlite"
+	fmt.Println("++37++ TempDir", s.T().TempDir(), tmpDir)
+	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", tmpDir), "")
+	//s.DataClient, err = data.Open("mysql://newuser:Password_123@tcp(172.27.128.220:3306)/gorse", "test_")
 	s.NoError(err)
-	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", s.T().TempDir()), "")
+	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", tmpDir), "")
+	//s.CacheClient, err = cache.Open("mysql://newuser:Password_123@tcp(172.27.128.220:3306)/gorse", "cache_")
 	s.NoError(err)
 	// init database
 	err = s.DataClient.Init()

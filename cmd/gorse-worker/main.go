@@ -59,7 +59,7 @@ func init() {
 	workerCommand.PersistentFlags().Int("http-port", 8089, "port for Prometheus metrics export")
 	workerCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	workerCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
-	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
+	workerCommand.PersistentFlags().IntP("jobs", "j", 100, "number of working jobs.")
 	workerCommand.PersistentFlags().String("cache-path", "worker_cache.data", "path of cache file")
 }
 

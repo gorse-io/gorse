@@ -224,9 +224,10 @@ func (m *Master) Serve() {
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
 	}
 	if err = m.DataClient.Init(); err != nil {
-		log.Logger().Fatal("failed to init database", zap.Error(err))
+		log.Logger().Fatal("failed to init database data client", zap.Error(err))
 	}
 
+	fmt.Println("++connect cache database++", m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix)
 	// connect cache database
 	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix)
 	if err != nil {
@@ -234,7 +235,7 @@ func (m *Master) Serve() {
 			zap.String("database", log.RedactDBURL(m.Config.Database.CacheStore)))
 	}
 	if err = m.CacheClient.Init(); err != nil {
-		log.Logger().Fatal("failed to init database", zap.Error(err))
+		log.Logger().Fatal("failed to init database cache client", zap.Error(err))
 	}
 
 	if m.managedMode {
@@ -242,8 +243,8 @@ func (m *Master) Serve() {
 	} else {
 		go m.RunPrivilegedTasksLoop()
 		log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
-		go m.RunRagtagTasksLoop()
-		log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
+		//go m.RunRagtagTasksLoop()
+		//log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
 	}
 
 	// start rpc server
@@ -281,8 +282,8 @@ func (m *Master) RunPrivilegedTasksLoop() {
 	var (
 		err   error
 		tasks = []Task{
-			NewFitClickModelTask(m),
-			NewFitRankingModelTask(m),
+			//NewFitClickModelTask(m),
+			//NewFitRankingModelTask(m),
 			NewFindUserNeighborsTask(m),
 			NewFindItemNeighborsTask(m),
 		}
@@ -305,6 +306,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 
 		// download dataset
 		err = m.runLoadDatasetTask()
+		log.Logger().Info("runLoadDatasetTask succ", zap.Error(err), zap.Int("userCount", m.rankingTrainSet.UserCount()), zap.Int("itemCount", m.rankingTrainSet.ItemCount()), zap.Int("rankingTrainSetCount", m.rankingTrainSet.Count()))
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
@@ -381,15 +383,15 @@ func (m *Master) RunRagtagTasksLoop() {
 func (m *Master) RunManagedTasksLoop() {
 	var (
 		privilegedTasks = []Task{
-			NewFitClickModelTask(m),
-			NewFitRankingModelTask(m),
+			//NewFitClickModelTask(m),
+			//NewFitRankingModelTask(m),
 			NewFindUserNeighborsTask(m),
 			NewFindItemNeighborsTask(m),
 		}
 		ragtagTasks = []Task{
-			NewCacheGarbageCollectionTask(m),
-			NewSearchRankingModelTask(m),
-			NewSearchClickModelTask(m),
+			//NewCacheGarbageCollectionTask(m),
+			//NewSearchRankingModelTask(m),
+			//NewSearchClickModelTask(m),
 		}
 	)
 
