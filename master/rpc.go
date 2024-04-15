@@ -221,7 +221,7 @@ func (m *Master) nodeUp(key string, value interface{}) {
 	m.nodesInfo[key] = node
 }
 
-// nodeDown handles node information timout events.
+// nodeDown handles node information timeout events.
 func (m *Master) nodeDown(key string, value interface{}) {
 	node := value.(*Node)
 	log.Logger().Info("node down",

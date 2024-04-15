@@ -270,7 +270,7 @@ END {
   if( caseIssue ){
     printerr( \
       "INFO Pure sqlite identifiers are case insensitive (even if quoted\n" \
-      "     or if ASCII) and doesnt cross-check TABLE and TEMPORARY TABLE\n" \
+      "     or if ASCII) and doesn't cross-check TABLE and TEMPORARY TABLE\n" \
       "     identifiers. Thus expect errors like \"table T has no column named F\".")
   }
 }
