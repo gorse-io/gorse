@@ -106,7 +106,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)),
 		zap.Strings("cors_methods", s.Config.Master.HttpCorsMethods),
-		zap.Strings("cors_doamins", s.Config.Master.HttpCorsDomains),
+		zap.Strings("cors_domains", s.Config.Master.HttpCorsDomains),
 	)
 	s.HttpServer = &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort),
