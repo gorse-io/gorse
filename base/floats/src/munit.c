@@ -154,7 +154,7 @@ static MUNIT_THREAD_LOCAL jmp_buf munit_error_jmp_buf;
 #endif
 
 /* At certain warning levels, mingw will trigger warnings about
- * suggesting the format attribute, which we've explicity *not* set
+ * suggesting the format attribute, which we've explicitly *not* set
  * because it will then choke on our attempts to use the MS-specific
  * I64 modifier for size_t (which we have to use since MSVC doesn't
  * support the C99 z modifier). */
@@ -1119,7 +1119,7 @@ munit_maybe_concat(size_t* len, char* prefix, char* suffix) {
   return res;
 }
 
-/* Possbily free a string returned by munit_maybe_concat. */
+/* Possibly free a string returned by munit_maybe_concat. */
 static void
 munit_maybe_free_concat(char* s, const char* prefix, const char* suffix) {
   if (prefix != s && suffix != s)
