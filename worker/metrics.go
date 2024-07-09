@@ -17,6 +17,7 @@ package worker
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/zhenghaoz/gorse/config"
 )
 
 const (
@@ -26,27 +27,27 @@ const (
 
 var (
 	UpdateUserRecommendTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "worker",
 		Name:      "update_user_recommend_total",
 	})
 	OfflineRecommendStepSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "worker",
 		Name:      "offline_recommend_step_seconds",
 	}, []string{LabelStep})
 	OfflineRecommendTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "worker",
 		Name:      "offline_recommend_total_seconds",
 	})
 	CollaborativeFilteringIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "worker",
 		Name:      "collaborative_filtering_index_recall",
 	})
 	MemoryInuseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "worker",
 		Name:      "memory_inuse_bytes",
 	}, []string{LabelData})

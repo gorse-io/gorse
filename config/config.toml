@@ -235,6 +235,9 @@ num_feedback_fallback_item_based = 10
 
 [tracing]
 
+# App name
+app_name = "gorse"
+
 # Enable tracing for REST APIs. The default value is false.
 enable_tracing = false
 

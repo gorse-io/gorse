@@ -17,11 +17,12 @@ package server
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/zhenghaoz/gorse/config"
 )
 
 var (
 	RestAPIRequestSecondsVec = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "server",
 		Name:      "rest_api_request_seconds",
 	}, []string{"api"})

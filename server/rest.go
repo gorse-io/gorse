@@ -177,7 +177,7 @@ func (s *RestServer) CreateWebService() {
 		Filter(s.LogFilter).
 		Filter(s.AuthFilter).
 		Filter(s.MetricsFilter).
-		Filter(otelrestful.OTelFilter("gorse"))
+		Filter(otelrestful.OTelFilter(s.Config.Tracing.AppName))
 
 	/* Health check */
 	ws.Route(ws.GET("/health/live").To(s.checkLive).
