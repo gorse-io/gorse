@@ -43,9 +43,9 @@ jobs:
       - run:
           name: Upgrade Go
           command: |
-            wget https://golang.org/dl/go1.21.0.linux-arm64.tar.gz
+            wget https://golang.org/dl/go1.22.0.linux-arm64.tar.gz
             sudo rm -rf /usr/local/go
-            sudo tar -C /usr/local -xzf go1.21.0.linux-arm64.tar.gz
+            sudo tar -C /usr/local -xzf go1.22.0.linux-arm64.tar.gz
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}

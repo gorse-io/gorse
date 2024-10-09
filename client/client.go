@@ -97,7 +97,7 @@ func (c *GorseClient) GetItemLatest(ctx context.Context, userid string, n, offse
 }
 
 func (c *GorseClient) GetItemLatestWithCategory(ctx context.Context, userid, category string, n, offset int) ([]Score, error) {
-	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/latest?user-id=%s&category=%s&n=%d&offset=%d", userid, category, n, offset), nil)
+	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/latest/%s?user-id=%s&n=%d&offset=%d", category, userid, n, offset), nil)
 }
 
 func (c *GorseClient) GetItemPopular(ctx context.Context, userid string, n, offset int) ([]Score, error) {
@@ -142,12 +142,12 @@ func (c *GorseClient) GetUserNeighbors(ctx context.Context, userId string, n, of
 	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/user/%s/neighbors?n=%d&offset=%d", userId, n, offset), nil)
 }
 
-func (c *GorseClient) GetItemNeighbors(ctx context.Context, itemId string, n, offset int) ([]Score, error) {
-	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors?n=%d&offset=%d", itemId, n, offset), nil)
+func (c *GorseClient) GetItemNeighbors(ctx context.Context, itemId, userId string, n, offset int) ([]Score, error) {
+	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors?n=%d&offset=%d&user-id=%s", itemId, n, offset, userId), nil)
 }
 
-func (c *GorseClient) GetItemNeighborsWithCategory(ctx context.Context, itemId, category string, n, offset int) ([]Score, error) {
-	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors/%s?n=%d&offset=%d", itemId, category, n, offset), nil)
+func (c *GorseClient) GetItemNeighborsWithCategory(ctx context.Context, itemId, category, userId string, n, offset int) ([]Score, error) {
+	return request[[]Score, any](ctx, c, "GET", c.entryPoint+fmt.Sprintf("/api/item/%s/neighbors/%s?n=%d&offset=%d&user-id=%s", itemId, category, n, offset, userId), nil)
 }
 
 // Deprecated: GetItemNeighbors instead

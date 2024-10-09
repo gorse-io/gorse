@@ -9,10 +9,10 @@ jobs:
     name: build binaries
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go 1.21.x
+      - name: Set up Go 1.22.x
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21.x
+          go-version: 1.22.x
         id: go
         
       - name: Pull source

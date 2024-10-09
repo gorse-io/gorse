@@ -106,7 +106,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	log.Logger().Info("start http server",
 		zap.String("url", fmt.Sprintf("http://%s:%d", s.HttpHost, s.HttpPort)),
 		zap.Strings("cors_methods", s.Config.Master.HttpCorsMethods),
-		zap.Strings("cors_doamins", s.Config.Master.HttpCorsDomains),
+		zap.Strings("cors_domains", s.Config.Master.HttpCorsDomains),
 	)
 	s.HttpServer = &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", s.HttpHost, s.HttpPort),
@@ -594,8 +594,25 @@ func (s *RestServer) searchDocuments(collection, subset, category string, isItem
 	}
 	userId = request.QueryParameter("user-id")
 
+	readItems := mapset.NewSet[string]()
+	if userId != "" {
+		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		for _, f := range feedback {
+			readItems.Add(f.ItemId)
+		}
+	}
+
+	end := offset + n
+	if end > 0 && readItems.Cardinality() > 0 {
+		end += readItems.Cardinality()
+	}
+
 	// Get the sorted list
-	items, err := s.CacheClient.SearchDocuments(ctx, collection, subset, []string{category}, offset, offset+n)
+	items, err := s.CacheClient.SearchDocuments(ctx, collection, subset, []string{category}, offset, end)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -603,15 +620,6 @@ func (s *RestServer) searchDocuments(collection, subset, category string, isItem
 
 	// Remove read items
 	if userId != "" {
-		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
-		if err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		readItems := mapset.NewSet[string]()
-		for _, f := range feedback {
-			readItems.Add(f.ItemId)
-		}
 		prunedItems := make([]cache.Document, 0, len(items))
 		for _, item := range items {
 			if !readItems.Contains(item.Id) {
@@ -1088,7 +1096,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 			return
 		}
 		// add unseen items
-		//similarItems = s.FilterOutHiddenScores(response, similarItems, "")
+		// similarItems = s.FilterOutHiddenScores(response, similarItems, "")
 		for _, item := range similarItems {
 			if !excludeSet.Contains(item.Id) {
 				candidates[item.Id] += item.Score
