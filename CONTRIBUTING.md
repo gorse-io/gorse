@@ -26,7 +26,7 @@ These following installations are required:
 ```bash
 cd storage
 
-docker-compose up -d
+docker compose up -d
 ```
 
 If you need import sample data, download the SQL file github.sql and import to the MySQL instance.

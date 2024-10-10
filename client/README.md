@@ -35,7 +35,7 @@ In the root directory of Gorse source:
 
 ```bash
 # Setup Gorse
-docker-compose up -d
+docker compose up -d
 
 # Test
 go test -tags='integrate_test' ./client/
