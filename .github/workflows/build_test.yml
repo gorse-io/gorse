@@ -126,7 +126,7 @@ jobs:
           database=${{ matrix.database }}
 
     - name: Build the stack
-      run: docker-compose -f client/docker-compose.yml --project-directory . up -d
+      run: docker compose -f client/docker-compose.yml --project-directory . up -d
       env:
         DOCKER_BUILDKIT: 1
 
