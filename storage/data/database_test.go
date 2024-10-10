@@ -370,6 +370,7 @@ func (suite *baseTestSuite) TestItems() {
 	// Items
 	items := []Item{
 		{
+			Namespace:  "namespace",
 			ItemId:     "0",
 			IsHidden:   true,
 			Categories: []string{"a"},
@@ -378,6 +379,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 0",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "2",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
@@ -385,6 +387,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 2",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "4",
 			IsHidden:   true,
 			Categories: []string{"a"},
@@ -393,6 +396,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 4",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "6",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
@@ -400,6 +404,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 6",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "8",
 			IsHidden:   true,
 			Categories: []string{"a"},
@@ -428,7 +433,7 @@ func (suite *baseTestSuite) TestItems() {
 	suite.NoError(err)
 	suite.Equal([]Item{items[1], items[3]}, batchItem)
 	// Delete item
-	err = suite.Database.DeleteItem(ctx, "0")
+	err = suite.Database.DeleteItem(ctx, "", "0")
 	suite.NoError(err)
 	_, err = suite.Database.GetItem(ctx, "0")
 	suite.True(errors.Is(err, errors.NotFound), err)
@@ -514,7 +519,7 @@ func (suite *baseTestSuite) TestDeleteItem() {
 	err := suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
 	// Delete item
-	err = suite.Database.DeleteItem(ctx, "b")
+	err = suite.Database.DeleteItem(ctx, "", "b")
 	suite.NoError(err)
 	_, err = suite.Database.GetItem(ctx, "b")
 	suite.Error(err, "failed to delete item")

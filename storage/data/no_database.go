@@ -51,7 +51,7 @@ func (NoDatabase) BatchGetItems(_ context.Context, _ []string) ([]Item, error) {
 }
 
 // DeleteItem method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) DeleteItem(_ context.Context, _ string) error {
+func (NoDatabase) DeleteItem(_ context.Context, _, _ string) error {
 	return ErrNoDatabase
 }
 

@@ -1575,7 +1575,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 	}
 	itemId := request.PathParameter("item-id")
 	// delete item from database
-	if err := s.DataClient.DeleteItem(ctx, itemId); err != nil {
+	if err := s.DataClient.DeleteItem(ctx, "", itemId); err != nil {
 		InternalServerError(response, err)
 		return
 	}

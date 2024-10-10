@@ -99,6 +99,7 @@ func ValidateLabels(o any) error {
 
 // Item stores meta data about item.
 type Item struct {
+	Namespace  string    `gorm:"primaryKey" mapstructure:"namespace"`
 	ItemId     string    `gorm:"primaryKey" mapstructure:"item_id"`
 	IsHidden   bool      `mapstructure:"is_hidden"`
 	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
@@ -226,7 +227,7 @@ type Database interface {
 	Purge() error
 	BatchInsertItems(ctx context.Context, items []Item) error
 	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)
-	DeleteItem(ctx context.Context, itemId string) error
+	DeleteItem(ctx context.Context, namespace, itemId string) error
 	GetItem(ctx context.Context, itemId string) (Item, error)
 	ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error
 	GetItems(ctx context.Context, cursor string, n int, beginTime *time.Time) (string, []Item, error)

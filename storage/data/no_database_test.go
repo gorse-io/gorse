@@ -46,7 +46,7 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, _, err = database.GetItems(ctx, "", 0, nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.DeleteItem(ctx, "")
+	err = database.DeleteItem(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, c := database.GetItemStream(ctx, 0, nil)
 	assert.ErrorIs(t, <-c, ErrNoDatabase)

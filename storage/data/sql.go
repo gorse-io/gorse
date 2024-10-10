@@ -45,6 +45,7 @@ const (
 )
 
 type SQLItem struct {
+	Namespace  string    `gorm:"column:namespace;primaryKey"`
 	ItemId     string    `gorm:"column:item_id;primaryKey"`
 	IsHidden   bool      `gorm:"column:is_hidden"`
 	Categories string    `gorm:"column:categories"`
@@ -55,6 +56,7 @@ type SQLItem struct {
 
 func NewSQLItem(item Item) (sqlItem SQLItem) {
 	var buf []byte
+	sqlItem.Namespace = item.Namespace
 	sqlItem.ItemId = item.ItemId
 	sqlItem.IsHidden = item.IsHidden
 	buf, _ = jsonutil.Marshal(item.Categories)
@@ -98,6 +100,7 @@ func (d *SQLDatabase) Init() error {
 	case MySQL:
 		// create tables
 		type Items struct {
+			Namespace  string    `gorm:"column:namespace;type:varchar(256) not null;primaryKey"`
 			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
 			Categories []string  `gorm:"column:categories;type:json;not null"`
@@ -218,7 +221,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 		}
 	}
 	err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "item_id"}},
+		Columns:   []clause.Column{{Name: "namespace"}, {Name: "item_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
 	}).Create(rows).Error
 	return errors.Trace(err)
@@ -229,7 +232,7 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string) ([]It
 		return nil, nil
 	}
 	result, err := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
-		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+		Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment").
 		Where("item_id IN ?", itemIds).Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -247,11 +250,15 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string) ([]It
 }
 
 // DeleteItem deletes a item from MySQL.
-func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
-	if err := d.gormDB.WithContext(ctx).Delete(&SQLItem{ItemId: itemId}).Error; err != nil {
+func (d *SQLDatabase) DeleteItem(ctx context.Context, namespace string, itemId string) error {
+	if err := d.gormDB.WithContext(ctx).Delete(&SQLItem{
+		Namespace: namespace,
+		ItemId:    itemId,
+	}).Error; err != nil {
 		return errors.Trace(err)
 	}
-	if err := d.gormDB.WithContext(ctx).Delete(&Feedback{}, "item_id = ?", itemId).Error; err != nil {
+	if err := d.gormDB.WithContext(ctx).
+		Delete(&Feedback{}, "namespace = ? and item_id = ?", namespace, itemId).Error; err != nil {
 		return errors.Trace(err)
 	}
 	return nil
@@ -261,7 +268,7 @@ func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
 func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) {
 	var result *sql.Rows
 	var err error
-	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
+	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
 	if err != nil {
 		return Item{}, errors.Trace(err)
 	}
@@ -321,7 +328,7 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		return "", nil, errors.Trace(err)
 	}
 	cursorItem := string(buf)
-	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
 	if cursorItem != "" {
 		tx.Where("item_id >= ?", cursorItem)
 	}
@@ -355,7 +362,7 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		defer close(itemChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
 		if timeLimit != nil {
 			tx.Where("time_stamp >= ?", *timeLimit)
 		}

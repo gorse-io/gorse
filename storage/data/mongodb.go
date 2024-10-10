@@ -234,7 +234,7 @@ func (db *MongoDB) ModifyItem(ctx context.Context, itemId string, patch ItemPatc
 }
 
 // DeleteItem deletes a item from MongoDB.
-func (db *MongoDB) DeleteItem(ctx context.Context, itemId string) error {
+func (db *MongoDB) DeleteItem(ctx context.Context, namespace, itemId string) error {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	_, err := c.DeleteOne(ctx, bson.M{"itemid": itemId})
 	if err != nil {
