@@ -1368,7 +1368,7 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 				return nil
 			}
 			// check item in database
-			_, err := t.DataClient.GetItem(ctx, itemId)
+			_, err := t.DataClient.GetItem(ctx, "", itemId)
 			if !errors.Is(err, errors.NotFound) {
 				if err != nil {
 					log.Logger().Error("failed to load item", zap.String("item_id", itemId), zap.Error(err))

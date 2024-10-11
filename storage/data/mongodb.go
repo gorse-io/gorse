@@ -112,8 +112,9 @@ func (db *MongoDB) Init() error {
 		return errors.Trace(err)
 	}
 	_, err = d.Collection(db.ItemsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.M{
-			"itemid": 1,
+		Keys: bson.D{
+			{"namespace", 1},
+			{"itemid", 1},
 		},
 		Options: options.Index().SetUnique(true),
 	})
@@ -179,19 +180,25 @@ func (db *MongoDB) BatchInsertItems(ctx context.Context, items []Item) error {
 	for _, item := range items {
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
-			SetFilter(bson.M{"itemid": bson.M{"$eq": item.ItemId}}).
+			SetFilter(bson.M{
+				"namespace": bson.M{"$eq": item.Namespace},
+				"itemid":    bson.M{"$eq": item.ItemId},
+			}).
 			SetUpdate(bson.M{"$set": item}))
 	}
 	_, err := c.BulkWrite(ctx, models)
 	return errors.Trace(err)
 }
 
-func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
+func (db *MongoDB) BatchGetItems(ctx context.Context, namespace string, itemIds []string) ([]Item, error) {
 	if len(itemIds) == 0 {
 		return nil, nil
 	}
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
-	r, err := c.Find(ctx, bson.M{"itemid": bson.M{"$in": itemIds}})
+	r, err := c.Find(ctx, bson.M{
+		"namespace": namespace,
+		"itemid":    bson.M{"$in": itemIds},
+	})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -209,7 +216,7 @@ func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string) ([]Item,
 }
 
 // ModifyItem modify an item in MongoDB.
-func (db *MongoDB) ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error {
+func (db *MongoDB) ModifyItem(ctx context.Context, namespace string, itemId string, patch ItemPatch) error {
 	// create update
 	update := bson.M{}
 	if patch.IsHidden != nil {
@@ -229,14 +236,20 @@ func (db *MongoDB) ModifyItem(ctx context.Context, itemId string, patch ItemPatc
 	}
 	// execute
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
-	_, err := c.UpdateOne(ctx, bson.M{"itemid": bson.M{"$eq": itemId}}, bson.M{"$set": update})
+	_, err := c.UpdateOne(ctx, bson.M{
+		"namespace": namespace,
+		"itemid":    bson.M{"$eq": itemId},
+	}, bson.M{"$set": update})
 	return errors.Trace(err)
 }
 
 // DeleteItem deletes a item from MongoDB.
 func (db *MongoDB) DeleteItem(ctx context.Context, namespace, itemId string) error {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
-	_, err := c.DeleteOne(ctx, bson.M{"itemid": itemId})
+	_, err := c.DeleteOne(ctx, bson.M{
+		"namespace": namespace,
+		"itemid":    itemId,
+	})
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -248,9 +261,12 @@ func (db *MongoDB) DeleteItem(ctx context.Context, namespace, itemId string) err
 }
 
 // GetItem returns a item from MongoDB.
-func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err error) {
+func (db *MongoDB) GetItem(ctx context.Context, namespace string, itemId string) (item Item, err error) {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
-	r := c.FindOne(ctx, bson.M{"itemid": itemId})
+	r := c.FindOne(ctx, bson.M{
+		"namespace": namespace,
+		"itemid":    itemId,
+	})
 	if r.Err() == mongo.ErrNoDocuments {
 		err = errors.Annotate(ErrItemNotExist, itemId)
 		return
@@ -342,7 +358,7 @@ func (db *MongoDB) GetItemStream(ctx context.Context, batchSize int, timeLimit *
 }
 
 // GetItemFeedback returns feedback of a item from MongoDB.
-func (db *MongoDB) GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error) {
+func (db *MongoDB) GetItemFeedback(ctx context.Context, namespace string, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var r *mongo.Cursor
 	var err error
@@ -505,7 +521,7 @@ func (db *MongoDB) GetUserStream(ctx context.Context, batchSize int) (chan []Use
 }
 
 // GetUserFeedback returns feedback of a user from MongoDB.
-func (db *MongoDB) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
+func (db *MongoDB) GetUserFeedback(ctx context.Context, namespace string, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var r *mongo.Cursor
 	var err error
@@ -591,7 +607,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		}
 	} else {
 		for _, itemId := range itemList {
-			_, err := db.GetItem(ctx, itemId)
+			_, err := db.GetItem(ctx, "", itemId)
 			if err != nil {
 				if errors.Is(err, errors.NotFound) {
 					items.Remove(itemId)
@@ -750,7 +766,7 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 }
 
 // GetUserItemFeedback returns a feedback return the user id and item id from MongoDB.
-func (db *MongoDB) GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
+func (db *MongoDB) GetUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var filter = bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},
@@ -776,7 +792,7 @@ func (db *MongoDB) GetUserItemFeedback(ctx context.Context, userId, itemId strin
 }
 
 // DeleteUserItemFeedback deletes a feedback return the user id and item id from MongoDB.
-func (db *MongoDB) DeleteUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) (int, error) {
+func (db *MongoDB) DeleteUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) (int, error) {
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var filter = bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},

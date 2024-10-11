@@ -774,7 +774,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err := suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), "click")
+	ret, err := suite.DataClient.GetUserFeedback(ctx, "", "0", suite.Config.Now(), "click")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
@@ -791,7 +791,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err = suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), "click")
+	ret, err = suite.DataClient.GetUserFeedback(ctx, "", "0", suite.Config.Now(), "click")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)

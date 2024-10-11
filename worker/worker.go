@@ -1154,7 +1154,7 @@ func (w *Worker) checkRecommendCacheTimeout(ctx context.Context, userId string, 
 func (w *Worker) loadUserHistoricalItems(database data.Database, userId string) ([]string, []data.Feedback, error) {
 	items := make([]string, 0)
 	ctx := context.Background()
-	feedbacks, err := database.GetUserFeedback(ctx, userId, w.Config.Now())
+	feedbacks, err := database.GetUserFeedback(ctx, "", userId, w.Config.Now())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1392,7 +1392,7 @@ func (c *FeedbackCache) GetUserFeedback(ctx context.Context, userId string) ([]s
 		return tmp.([]string), nil
 	} else {
 		items := make([]string, 0)
-		feedbacks, err := c.Client.GetUserFeedback(ctx, userId, c.Config.Now(), c.Types...)
+		feedbacks, err := c.Client.GetUserFeedback(ctx, "", userId, c.Config.Now(), c.Types...)
 		if err != nil {
 			return nil, err
 		}
