@@ -99,6 +99,7 @@ func ValidateLabels(o any) error {
 
 // Item stores meta data about item.
 type Item struct {
+	Namespace  string    `gorm:"primaryKey" mapstructure:"namespace"`
 	ItemId     string    `gorm:"primaryKey" mapstructure:"item_id"`
 	IsHidden   bool      `mapstructure:"is_hidden"`
 	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
@@ -114,6 +115,18 @@ type ItemPatch struct {
 	Timestamp  *time.Time
 	Labels     any
 	Comment    *string
+}
+
+type ItemUID struct {
+	Namespace string
+	ItemId    string
+}
+
+func (item *Item) ItemUID() ItemUID {
+	return ItemUID{
+		Namespace: item.Namespace,
+		ItemId:    item.ItemId,
+	}
 }
 
 // User stores meta data about user.
@@ -133,9 +146,17 @@ type UserPatch struct {
 
 // FeedbackKey identifies feedback.
 type FeedbackKey struct {
+	Namespace    string `gorm:"column:namespace" mapstructure:"namespace"`
 	FeedbackType string `gorm:"column:feedback_type" mapstructure:"feedback_type"`
 	UserId       string `gorm:"column:user_id" mapstructure:"user_id"`
 	ItemId       string `gorm:"column:item_id" mapstructure:"item_id"`
+}
+
+func (key *FeedbackKey) ItemUID() ItemUID {
+	return ItemUID{
+		Namespace: key.Namespace,
+		ItemId:    key.ItemId,
+	}
 }
 
 // Feedback stores feedback.
@@ -225,20 +246,20 @@ type Database interface {
 	Close() error
 	Purge() error
 	BatchInsertItems(ctx context.Context, items []Item) error
-	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)
-	DeleteItem(ctx context.Context, itemId string) error
-	GetItem(ctx context.Context, itemId string) (Item, error)
-	ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error
+	BatchGetItems(ctx context.Context, namespace string, itemIds []string) ([]Item, error)
+	DeleteItem(ctx context.Context, namespace, itemId string) error
+	GetItem(ctx context.Context, namespace, itemId string) (Item, error)
+	ModifyItem(ctx context.Context, namespace, itemId string, patch ItemPatch) error
 	GetItems(ctx context.Context, cursor string, n int, beginTime *time.Time) (string, []Item, error)
-	GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error)
+	GetItemFeedback(ctx context.Context, namespace, itemId string, feedbackTypes ...string) ([]Feedback, error)
 	BatchInsertUsers(ctx context.Context, users []User) error
 	DeleteUser(ctx context.Context, userId string) error
 	GetUser(ctx context.Context, userId string) (User, error)
 	ModifyUser(ctx context.Context, userId string, patch UserPatch) error
 	GetUsers(ctx context.Context, cursor string, n int) (string, []User, error)
-	GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error)
-	GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
-	DeleteUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) (int, error)
+	GetUserFeedback(ctx context.Context, namespace, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error)
+	GetUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
+	DeleteUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) (int, error)
 	BatchInsertFeedback(ctx context.Context, feedback []Feedback, insertUser, insertItem, overwrite bool) error
 	GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error)
 	GetUserStream(ctx context.Context, batchSize int) (chan []User, chan error)

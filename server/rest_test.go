@@ -751,7 +751,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z","Comment":""}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -759,7 +759,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z","Comment":""}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	// test overwrite
 	apitest.New().
@@ -774,7 +774,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err := suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), "click")
+	ret, err := suite.DataClient.GetUserFeedback(ctx, "", "0", suite.Config.Now(), "click")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
@@ -791,7 +791,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err = suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), "click")
+	ret, err = suite.DataClient.GetUserFeedback(ctx, "", "0", suite.Config.Now(), "click")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)

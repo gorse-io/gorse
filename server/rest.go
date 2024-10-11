@@ -596,7 +596,7 @@ func (s *RestServer) searchDocuments(collection, subset, category string, isItem
 
 	readItems := mapset.NewSet[string]()
 	if userId != "" {
-		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+		feedback, err := s.DataClient.GetUserFeedback(ctx, "", userId, s.Config.Now())
 		if err != nil {
 			InternalServerError(response, err)
 			return
@@ -656,7 +656,7 @@ func (s *RestServer) getTypedFeedbackByItem(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataClient.GetItemFeedback(ctx, itemId, feedbackType)
+	feedback, err := s.DataClient.GetItemFeedback(ctx, "", itemId, feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -671,7 +671,7 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 		ctx = request.Request.Context()
 	}
 	itemId := request.PathParameter("item-id")
-	feedback, err := s.DataClient.GetItemFeedback(ctx, itemId)
+	feedback, err := s.DataClient.GetItemFeedback(ctx, "", itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -774,7 +774,7 @@ type recommendContext struct {
 
 func (s *RestServer) createRecommendContext(ctx context.Context, userId string, categories []string, n int) (*recommendContext, error) {
 	// pull historical feedback
-	userFeedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+	userFeedback, err := s.DataClient.GetUserFeedback(ctx, "", userId, s.Config.Now())
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -847,14 +847,14 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		}
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(ctx.context, user.Id, s.Config.Now(), s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
+			feedbacks, err := s.DataClient.GetUserFeedback(ctx.context, "", user.Id, s.Config.Now(), s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
 				return errors.Trace(err)
 			}
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !ctx.excludeSet.Contains(feedback.ItemId) {
-					item, err := s.DataClient.GetItem(ctx.context, feedback.ItemId)
+					item, err := s.DataClient.GetItem(ctx.context, "", feedback.ItemId)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1297,7 +1297,7 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now(), feedbackType)
+	feedback, err := s.DataClient.GetUserFeedback(ctx, "", userId, s.Config.Now(), feedbackType)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1312,7 +1312,7 @@ func (s *RestServer) getFeedbackByUser(request *restful.Request, response *restf
 		ctx = request.Request.Context()
 	}
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+	feedback, err := s.DataClient.GetUserFeedback(ctx, "", userId, s.Config.Now())
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1345,7 +1345,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 	)
 	// load existed items
 	start := time.Now()
-	existedItems, err := s.DataClient.BatchGetItems(ctx, lo.Map(temp, func(t Item, i int) string {
+	existedItems, err := s.DataClient.BatchGetItems(ctx, "", lo.Map(temp, func(t Item, i int) string {
 		return t.ItemId
 	}))
 	if err != nil {
@@ -1512,7 +1512,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		}
 	}
 	// modify item
-	if err := s.DataClient.ModifyItem(ctx, itemId, patch); err != nil {
+	if err := s.DataClient.ModifyItem(ctx, "", itemId, patch); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1556,7 +1556,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	// Get item
-	item, err := s.DataClient.GetItem(ctx, itemId)
+	item, err := s.DataClient.GetItem(ctx, "", itemId)
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
 			PageNotFound(response, err)
@@ -1575,7 +1575,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 	}
 	itemId := request.PathParameter("item-id")
 	// delete item from database
-	if err := s.DataClient.DeleteItem(ctx, itemId); err != nil {
+	if err := s.DataClient.DeleteItem(ctx, "", itemId); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1596,7 +1596,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
 	// fetch item
-	item, err := s.DataClient.GetItem(ctx, itemId)
+	item, err := s.DataClient.GetItem(ctx, "", itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1626,7 +1626,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 	itemId := request.PathParameter("item-id")
 	category := request.PathParameter("category")
 	// fetch item
-	item, err := s.DataClient.GetItem(ctx, itemId)
+	item, err := s.DataClient.GetItem(ctx, "", itemId)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1777,7 +1777,7 @@ func (s *RestServer) getUserItemFeedback(request *restful.Request, response *res
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, userId, itemId); err != nil {
+	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, "", userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, feedback)
@@ -1792,7 +1792,7 @@ func (s *RestServer) deleteUserItemFeedback(request *restful.Request, response *
 	// Parse parameters
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(ctx, userId, itemId); err != nil {
+	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(ctx, "", userId, itemId); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{RowAffected: deleteCount})
@@ -1808,7 +1808,7 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, userId, itemId, feedbackType); err != nil {
+	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, "", userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else if feedbackType == "" {
 		Text(response, "{}")
@@ -1826,7 +1826,7 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
 	itemId := request.PathParameter("item-id")
-	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(ctx, userId, itemId, feedbackType); err != nil {
+	if deleteCount, err := s.DataClient.DeleteUserItemFeedback(ctx, "", userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else {
 		Ok(response, Success{deleteCount})

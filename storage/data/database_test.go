@@ -214,31 +214,31 @@ func (suite *baseTestSuite) TestFeedback() {
 	err := suite.Database.BatchInsertUsers(ctx, []User{{"0", []string{"a"}, []string{"x"}, "comment"}})
 	suite.NoError(err)
 	// items that already exists
-	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
+	err = suite.Database.BatchInsertItems(ctx, []Item{{Namespace: "namespace", ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
 	suite.NoError(err)
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "8"}, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "1", "6"}, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "2", "4"}, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "3", "2"}, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "4", "0"}, timestamp, "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "0", "8"}, timestamp, "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "1", "6"}, timestamp, "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "2", "4"}, timestamp, "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "3", "2"}, timestamp, "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "4", "0"}, timestamp, "comment"},
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, feedback, true, true, true)
 	suite.NoError(err)
 	// other type
-	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true, true)
+	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{"namespace", negativeFeedbackType, "0", "2"}}}, true, true, true)
 	suite.NoError(err)
-	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "2", "4"}}}, true, true, true)
+	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{"namespace", negativeFeedbackType, "2", "4"}}}, true, true, true)
 	suite.NoError(err)
 	// future feedback
 	futureFeedback := []Feedback{
-		{FeedbackKey{duplicateFeedbackType, "0", "0"}, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "1", "2"}, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "2", "4"}, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "3", "6"}, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "4", "8"}, time.Now().Add(time.Hour), "comment"},
+		{FeedbackKey{"namespace", duplicateFeedbackType, "0", "0"}, time.Now().Add(time.Hour), "comment"},
+		{FeedbackKey{"namespace", duplicateFeedbackType, "1", "2"}, time.Now().Add(time.Hour), "comment"},
+		{FeedbackKey{"namespace", duplicateFeedbackType, "2", "4"}, time.Now().Add(time.Hour), "comment"},
+		{FeedbackKey{"namespace", duplicateFeedbackType, "3", "6"}, time.Now().Add(time.Hour), "comment"},
+		{FeedbackKey{"namespace", duplicateFeedbackType, "4", "8"}, time.Now().Add(time.Hour), "comment"},
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, futureFeedback, true, true, true)
 	suite.NoError(err)
@@ -285,46 +285,46 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(User{"0", []any{"a"}, []string{"x"}, "comment"}, user)
 	// check items that already exists
-	item, err := suite.Database.GetItem(ctx, "0")
+	item, err := suite.Database.GetItem(ctx, "namespace", "0")
 	suite.NoError(err)
-	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
+	suite.Equal(Item{Namespace: "namespace", ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("2", ret[0].UserId)
 	suite.Equal("4", ret[0].ItemId)
 	// Get all feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()))
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()))
 	suite.NoError(err)
 	suite.Equal(2, len(ret))
 	// Get typed feedback by item
-	ret, err = suite.Database.GetItemFeedback(ctx, "4", positiveFeedbackType)
+	ret, err = suite.Database.GetItemFeedback(ctx, "namespace", "4", positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("2", ret[0].UserId)
 	suite.Equal("4", ret[0].ItemId)
 	// Get all feedback by item
-	ret, err = suite.Database.GetItemFeedback(ctx, "4")
+	ret, err = suite.Database.GetItemFeedback(ctx, "namespace", "4")
 	suite.NoError(err)
 	suite.Equal(2, len(ret))
 	// test override
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
-		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
+		FeedbackKey: FeedbackKey{"namespace", positiveFeedbackType, "0", "8"},
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
-	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("override", ret[0].Comment)
 	// test not overwrite
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
-		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
+		FeedbackKey: FeedbackKey{"namespace", positiveFeedbackType, "0", "8"},
 		Comment:     "not_override",
 	}}, true, true, false)
 	suite.NoError(err)
-	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("override", ret[0].Comment)
@@ -335,32 +335,32 @@ func (suite *baseTestSuite) TestFeedback() {
 
 	// not insert users or items
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
-		{FeedbackKey: FeedbackKey{"a", "100", "200"}},
-		{FeedbackKey: FeedbackKey{"a", "0", "200"}},
-		{FeedbackKey: FeedbackKey{"a", "100", "8"}},
+		{FeedbackKey: FeedbackKey{"namespace", "a", "100", "200"}},
+		{FeedbackKey: FeedbackKey{"namespace", "a", "0", "200"}},
+		{FeedbackKey: FeedbackKey{"namespace", "a", "100", "8"}},
 	}, false, false, false)
 	suite.NoError(err)
-	result, err := suite.Database.GetUserItemFeedback(ctx, "100", "200")
+	result, err := suite.Database.GetUserItemFeedback(ctx, "namespace", "100", "200")
 	suite.NoError(err)
 	suite.Empty(result)
-	result, err = suite.Database.GetUserItemFeedback(ctx, "0", "200")
+	result, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "0", "200")
 	suite.NoError(err)
 	suite.Empty(result)
-	result, err = suite.Database.GetUserItemFeedback(ctx, "100", "8")
+	result, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "100", "8")
 	suite.NoError(err)
 	suite.Empty(result)
 
 	// insert valid feedback and invalid feedback at the same time
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
-		{FeedbackKey: FeedbackKey{"a", "0", "8"}},
-		{FeedbackKey: FeedbackKey{"a", "100", "200"}},
+		{FeedbackKey: FeedbackKey{"namespace", "a", "0", "8"}},
+		{FeedbackKey: FeedbackKey{"namespace", "a", "100", "200"}},
 	}, false, false, false)
 	suite.NoError(err)
 
 	// insert duplicate feedback
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
-		{FeedbackKey: FeedbackKey{"a", "0", "0"}},
-		{FeedbackKey: FeedbackKey{"a", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace", "a", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace", "a", "0", "0"}},
 	}, true, true, true)
 	suite.NoError(err)
 }
@@ -370,6 +370,7 @@ func (suite *baseTestSuite) TestItems() {
 	// Items
 	items := []Item{
 		{
+			Namespace:  "namespace",
 			ItemId:     "0",
 			IsHidden:   true,
 			Categories: []string{"a"},
@@ -378,6 +379,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 0",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "2",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
@@ -385,6 +387,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 2",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "4",
 			IsHidden:   true,
 			Categories: []string{"a"},
@@ -393,6 +396,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 4",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "6",
 			Categories: []string{"b"},
 			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
@@ -400,6 +404,7 @@ func (suite *baseTestSuite) TestItems() {
 			Comment:    "comment 6",
 		},
 		{
+			Namespace:  "namespace",
 			ItemId:     "8",
 			IsHidden:   true,
 			Categories: []string{"a"},
@@ -419,24 +424,24 @@ func (suite *baseTestSuite) TestItems() {
 	suite.ElementsMatch(items, itemsFromStream)
 	// Get item
 	for _, item := range items {
-		ret, err := suite.Database.GetItem(ctx, item.ItemId)
+		ret, err := suite.Database.GetItem(ctx, item.Namespace, item.ItemId)
 		suite.NoError(err)
 		suite.Equal(item, ret)
 	}
 	// batch get items
-	batchItem, err := suite.Database.BatchGetItems(ctx, []string{"2", "6"})
+	batchItem, err := suite.Database.BatchGetItems(ctx, "namespace", []string{"2", "6"})
 	suite.NoError(err)
 	suite.Equal([]Item{items[1], items[3]}, batchItem)
 	// Delete item
-	err = suite.Database.DeleteItem(ctx, "0")
+	err = suite.Database.DeleteItem(ctx, "namespace", "0")
 	suite.NoError(err)
-	_, err = suite.Database.GetItem(ctx, "0")
+	_, err = suite.Database.GetItem(ctx, "namespace", "0")
 	suite.True(errors.Is(err, errors.NotFound), err)
 
 	// test override
-	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
+	err = suite.Database.BatchInsertItems(ctx, []Item{{Namespace: "namespace", ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
-	item, err := suite.Database.GetItem(ctx, "4")
+	item, err := suite.Database.GetItem(ctx, "namespace", "4")
 	suite.NoError(err)
 	suite.False(item.IsHidden)
 	suite.Equal([]string{"b"}, item.Categories)
@@ -445,17 +450,17 @@ func (suite *baseTestSuite) TestItems() {
 
 	// test modify
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{IsHidden: proto.Bool(true)})
+	err = suite.Database.ModifyItem(ctx, "namespace", "2", ItemPatch{IsHidden: proto.Bool(true)})
 	suite.NoError(err)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Categories: []string{"a"}})
+	err = suite.Database.ModifyItem(ctx, "namespace", "2", ItemPatch{Categories: []string{"a"}})
 	suite.NoError(err)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Comment: proto.String("modify")})
+	err = suite.Database.ModifyItem(ctx, "namespace", "2", ItemPatch{Comment: proto.String("modify")})
 	suite.NoError(err)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Labels: []string{"a", "b", "c"}})
+	err = suite.Database.ModifyItem(ctx, "namespace", "2", ItemPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Timestamp: &timestamp})
+	err = suite.Database.ModifyItem(ctx, "namespace", "2", ItemPatch{Timestamp: &timestamp})
 	suite.NoError(err)
-	item, err = suite.Database.GetItem(ctx, "2")
+	item, err = suite.Database.GetItem(ctx, "namespace", "2")
 	suite.NoError(err)
 	suite.True(item.IsHidden)
 	suite.Equal([]string{"a"}, item.Categories)
@@ -467,7 +472,7 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.BatchInsertItems(ctx, nil)
 	suite.NoError(err)
 	// test get empty
-	items, err = suite.Database.BatchGetItems(ctx, nil)
+	items, err = suite.Database.BatchGetItems(ctx, "namespace", nil)
 	suite.NoError(err)
 	suite.Empty(items)
 
@@ -480,11 +485,11 @@ func (suite *baseTestSuite) TestDeleteUser() {
 	ctx := context.Background()
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "a", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "a", "0"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "a", "2"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "a", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "a", "6"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "a", "8"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := suite.Database.BatchInsertFeedback(ctx, feedback, true, true, true)
 	suite.NoError(err)
@@ -493,7 +498,7 @@ func (suite *baseTestSuite) TestDeleteUser() {
 	suite.NoError(err)
 	_, err = suite.Database.GetUser(ctx, "a")
 	suite.NotNil(err, "failed to delete user")
-	ret, err := suite.Database.GetUserFeedback(ctx, "a", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err := suite.Database.GetUserFeedback(ctx, "namespace", "a", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(0, len(ret))
 	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
@@ -505,20 +510,20 @@ func (suite *baseTestSuite) TestDeleteItem() {
 	ctx := context.Background()
 	// Insert ret
 	feedbacks := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "1", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "2", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "3", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "4", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "0", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "1", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "2", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "3", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", positiveFeedbackType, "4", "b"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
 	// Delete item
-	err = suite.Database.DeleteItem(ctx, "b")
+	err = suite.Database.DeleteItem(ctx, "namespace", "b")
 	suite.NoError(err)
-	_, err = suite.Database.GetItem(ctx, "b")
+	_, err = suite.Database.GetItem(ctx, "namespace", "b")
 	suite.Error(err, "failed to delete item")
-	ret, err := suite.Database.GetItemFeedback(ctx, "b", positiveFeedbackType)
+	ret, err := suite.Database.GetItemFeedback(ctx, "namespace", "b", positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(0, len(ret))
 	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
@@ -529,34 +534,34 @@ func (suite *baseTestSuite) TestDeleteItem() {
 func (suite *baseTestSuite) TestDeleteFeedback() {
 	ctx := context.Background()
 	feedbacks := []Feedback{
-		{FeedbackKey{"type1", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type2", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type3", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "1", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type1", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type2", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type3", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type1", "2", "4"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type1", "1", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err := suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
 	// get user-item feedback
-	ret, err := suite.Database.GetUserItemFeedback(ctx, "2", "3")
+	ret, err := suite.Database.GetUserItemFeedback(ctx, "namespace", "2", "3")
 	suite.NoError(err)
 	suite.ElementsMatch([]Feedback{feedbacks[0], feedbacks[1], feedbacks[2]}, ret)
 	feedbackType2 := "type2"
-	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3", feedbackType2)
+	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "2", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Equal([]Feedback{feedbacks[1]}, ret)
 	// delete user-item feedback
-	deleteCount, err := suite.Database.DeleteUserItemFeedback(ctx, "2", "3")
+	deleteCount, err := suite.Database.DeleteUserItemFeedback(ctx, "namespace", "2", "3")
 	suite.NoError(err)
 	suite.Equal(3, deleteCount)
-	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3")
+	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)
 	feedbackType1 := "type1"
-	deleteCount, err = suite.Database.DeleteUserItemFeedback(ctx, "1", "3", feedbackType1)
+	deleteCount, err = suite.Database.DeleteUserItemFeedback(ctx, "namespace", "1", "3", feedbackType1)
 	suite.NoError(err)
 	suite.Equal(1, deleteCount)
-	ret, err = suite.Database.GetUserItemFeedback(ctx, "1", "3", feedbackType2)
+	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "1", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Empty(ret)
 }
@@ -605,11 +610,11 @@ func (suite *baseTestSuite) TestTimeLimit() {
 
 	// insert feedback
 	feedbacks := []Feedback{
-		{FeedbackKey{"type1", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type2", "2", "3"}, time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type3", "2", "3"}, time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "2", "4"}, time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "1", "3"}, time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type1", "2", "3"}, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type2", "2", "3"}, time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type3", "2", "3"}, time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type1", "2", "4"}, time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey{"namespace", "type1", "1", "3"}, time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
@@ -628,12 +633,12 @@ func (suite *baseTestSuite) TestTimezone() {
 	suite.NoError(err)
 	// insert feedbacks
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
-		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
-		{FeedbackKey: FeedbackKey{"read", "1", "2"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
-		{FeedbackKey: FeedbackKey{"read", "2", "2"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
-		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
-		{FeedbackKey: FeedbackKey{"like", "1", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
-		{FeedbackKey: FeedbackKey{"like", "2", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
+		{FeedbackKey: FeedbackKey{"namespace", "read", "1", "1"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
+		{FeedbackKey: FeedbackKey{"namespace", "read", "1", "2"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
+		{FeedbackKey: FeedbackKey{"namespace", "read", "2", "2"}, Timestamp: time.Now().Add(-time.Second).In(loc)},
+		{FeedbackKey: FeedbackKey{"namespace", "like", "1", "1"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
+		{FeedbackKey: FeedbackKey{"namespace", "like", "1", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
+		{FeedbackKey: FeedbackKey{"namespace", "like", "2", "2"}, Timestamp: time.Now().Add(time.Hour).In(loc)},
 	}, true, true, true)
 	suite.NoError(err)
 	// get feedback stream
@@ -644,49 +649,52 @@ func (suite *baseTestSuite) TestTimezone() {
 	suite.NoError(err)
 	suite.Equal(3, len(feedback))
 	// get user feedback
-	feedback, err = suite.Database.GetUserFeedback(ctx, "1", lo.ToPtr(time.Now()))
+	feedback, err = suite.Database.GetUserFeedback(ctx, "namespace", "1", lo.ToPtr(time.Now()))
 	suite.NoError(err)
 	suite.Equal(2, len(feedback))
 	// get item feedback
-	feedback, err = suite.Database.GetItemFeedback(ctx, "2") // no future feedback by default
+	feedback, err = suite.Database.GetItemFeedback(ctx, "namespace", "2") // no future feedback by default
 	suite.NoError(err)
 	suite.Equal(2, len(feedback))
 	// get user item feedback
-	feedback, err = suite.Database.GetUserItemFeedback(ctx, "1", "1") // return future feedback by default
+	feedback, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "1", "1") // return future feedback by default
 	suite.NoError(err)
 	suite.Equal(2, len(feedback))
 
 	// insert items
 	now := time.Now().In(loc)
-	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "100", Timestamp: now}, {ItemId: "200"}})
+	err = suite.Database.BatchInsertItems(ctx, []Item{
+		{Namespace: "namespace", ItemId: "100", Timestamp: now},
+		{Namespace: "namespace", ItemId: "200"},
+	})
 	suite.NoError(err)
-	err = suite.Database.ModifyItem(ctx, "200", ItemPatch{Timestamp: &now})
+	err = suite.Database.ModifyItem(ctx, "namespace", "200", ItemPatch{Timestamp: &now})
 	suite.NoError(err)
 	switch database := suite.Database.(type) {
 	case *SQLDatabase:
 		switch suite.Database.(*SQLDatabase).driver {
 		case Postgres:
-			item, err := suite.Database.GetItem(ctx, "100")
+			item, err := suite.Database.GetItem(ctx, "namespace", "100")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
-			item, err = suite.Database.GetItem(ctx, "200")
+			item, err = suite.Database.GetItem(ctx, "namespace", "200")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
 		case SQLite:
-			item, err := suite.Database.GetItem(ctx, "100")
+			item, err := suite.Database.GetItem(ctx, "namespace", "100")
 			suite.NoError(err)
 			suite.Equal(now.In(time.UTC), item.Timestamp.In(time.UTC))
-			item, err = suite.Database.GetItem(ctx, "200")
+			item, err = suite.Database.GetItem(ctx, "namespace", "200")
 			suite.NoError(err)
 			suite.Equal(now.In(time.UTC), item.Timestamp.In(time.UTC))
 		default:
 			suite.T().Skipf("unknown sql database: %v", database.driver)
 		}
 	case *MongoDB:
-		item, err := suite.Database.GetItem(ctx, "100")
+		item, err := suite.Database.GetItem(ctx, "namespace", "100")
 		suite.NoError(err)
 		suite.Equal(now.Truncate(time.Millisecond).In(time.UTC), item.Timestamp)
-		item, err = suite.Database.GetItem(ctx, "200")
+		item, err = suite.Database.GetItem(ctx, "namespace", "200")
 		suite.NoError(err)
 		suite.Equal(now.Truncate(time.Millisecond).In(time.UTC), item.Timestamp)
 	default:
@@ -731,17 +739,45 @@ func (suite *baseTestSuite) TestPurge() {
 	suite.NoError(err)
 }
 
+func (suite *baseTestSuite) TestNamespace() {
+	// insert items
+	items := []Item{
+		{Namespace: "namespace1", ItemId: "0"},
+		{Namespace: "namespace1", ItemId: "1"},
+		{Namespace: "namespace2", ItemId: "0"},
+	}
+	err := suite.Database.BatchInsertItems(context.Background(), items)
+	suite.NoError(err)
+	// get items
+	ret := suite.getItems(context.Background(), 3)
+	suite.Equal(items, ret)
+
+	// insert feedbacks
+	feedbacks := []Feedback{
+		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "1"}},
+		{FeedbackKey: FeedbackKey{"namespace2", "type1", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace3", "type1", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace4", "type1", "0", "0"}},
+	}
+	err = suite.Database.BatchInsertFeedback(context.Background(), feedbacks, true, true, true)
+	suite.NoError(err)
+	// get feedback
+	retFeedbacks := suite.getFeedback(context.Background(), 3, nil, lo.ToPtr(time.Now()))
+	suite.Equal(feedbacks, retFeedbacks)
+}
+
 func TestSortFeedbacks(t *testing.T) {
 	feedback := []Feedback{
-		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Date(2002, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace", "star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace", "like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace", "read", "1", "1"}, Timestamp: time.Date(2002, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	SortFeedbacks(feedback)
 	assert.Equal(t, []Feedback{
-		{FeedbackKey: FeedbackKey{"read", "1", "1"}, Timestamp: time.Date(2002, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
-		{FeedbackKey: FeedbackKey{"star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace", "read", "1", "1"}, Timestamp: time.Date(2002, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace", "like", "1", "1"}, Timestamp: time.Date(2001, 10, 1, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace", "star", "1", "1"}, Timestamp: time.Date(2000, 10, 1, 0, 0, 0, 0, time.UTC)},
 	}, feedback)
 }
 

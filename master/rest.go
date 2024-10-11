@@ -807,7 +807,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// Send result
 	details := make([]data.Item, len(results))
 	for i := range results {
-		details[i], err = m.DataClient.GetItem(ctx, results[i])
+		details[i], err = m.DataClient.GetItem(ctx, "", results[i])
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -832,7 +832,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), feedbackType)
+	feedback, err := m.DataClient.GetUserFeedback(ctx, "", userId, m.Config.Now(), feedbackType)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -843,7 +843,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		details[i].UserId = feedback[i].UserId
 		details[i].Timestamp = feedback[i].Timestamp
 		details[i].Comment = feedback[i].Comment
-		details[i].Item, err = m.DataClient.GetItem(ctx, feedback[i].ItemId)
+		details[i].Item, err = m.DataClient.GetItem(ctx, "", feedback[i].ItemId)
 		if errors.Is(err, errors.NotFound) {
 			details[i].Item = data.Item{ItemId: feedback[i].ItemId, Comment: "** This item doesn't exist in Gorse **"}
 		} else if err != nil {
@@ -895,7 +895,7 @@ func (m *Master) searchDocuments(collection, subset, category string, request *r
 		details := make([]ScoredItem, len(scores))
 		for i := range scores {
 			details[i].Score = scores[i].Score
-			details[i].Item, err = m.DataClient.GetItem(ctx, scores[i].Id)
+			details[i].Item, err = m.DataClient.GetItem(ctx, "", scores[i].Id)
 			if err != nil {
 				server.InternalServerError(response, err)
 				return

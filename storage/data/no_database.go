@@ -46,17 +46,17 @@ func (NoDatabase) BatchInsertItems(_ context.Context, _ []Item) error {
 }
 
 // BatchGetItems method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) BatchGetItems(_ context.Context, _ []string) ([]Item, error) {
+func (NoDatabase) BatchGetItems(context.Context, string, []string) ([]Item, error) {
 	return nil, ErrNoDatabase
 }
 
 // DeleteItem method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) DeleteItem(_ context.Context, _ string) error {
+func (NoDatabase) DeleteItem(_ context.Context, _, _ string) error {
 	return ErrNoDatabase
 }
 
 // GetItem method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetItem(_ context.Context, _ string) (Item, error) {
+func (NoDatabase) GetItem(context.Context, string, string) (Item, error) {
 	return Item{}, ErrNoDatabase
 }
 
@@ -78,7 +78,7 @@ func (NoDatabase) GetItemStream(_ context.Context, _ int, _ *time.Time) (chan []
 }
 
 // GetItemFeedback method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetItemFeedback(_ context.Context, _ string, _ ...string) ([]Feedback, error) {
+func (NoDatabase) GetItemFeedback(context.Context, string, string, ...string) ([]Feedback, error) {
 	return nil, ErrNoDatabase
 }
 
@@ -115,17 +115,17 @@ func (NoDatabase) GetUserStream(_ context.Context, _ int) (chan []User, chan err
 }
 
 // GetUserFeedback method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetUserFeedback(_ context.Context, _ string, _ *time.Time, _ ...string) ([]Feedback, error) {
+func (NoDatabase) GetUserFeedback(context.Context, string, string, *time.Time, ...string) ([]Feedback, error) {
 	return nil, ErrNoDatabase
 }
 
 // GetUserItemFeedback method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetUserItemFeedback(_ context.Context, _, _ string, _ ...string) ([]Feedback, error) {
+func (NoDatabase) GetUserItemFeedback(context.Context, string, string, string, ...string) ([]Feedback, error) {
 	return nil, ErrNoDatabase
 }
 
 // DeleteUserItemFeedback method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) DeleteUserItemFeedback(_ context.Context, _, _ string, _ ...string) (int, error) {
+func (NoDatabase) DeleteUserItemFeedback(context.Context, string, string, string, ...string) (int, error) {
 	return 0, ErrNoDatabase
 }
 
@@ -151,7 +151,7 @@ func (NoDatabase) GetFeedbackStream(_ context.Context, _ int, _ ...ScanOption) (
 	return feedbackChan, errChan
 }
 
-func (d NoDatabase) ModifyItem(_ context.Context, _ string, _ ItemPatch) error {
+func (d NoDatabase) ModifyItem(context.Context, string, string, ItemPatch) error {
 	return ErrNoDatabase
 }
 

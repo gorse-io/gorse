@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -45,6 +46,7 @@ const (
 )
 
 type SQLItem struct {
+	Namespace  string    `gorm:"column:namespace;primaryKey"`
 	ItemId     string    `gorm:"column:item_id;primaryKey"`
 	IsHidden   bool      `gorm:"column:is_hidden"`
 	Categories string    `gorm:"column:categories"`
@@ -55,6 +57,7 @@ type SQLItem struct {
 
 func NewSQLItem(item Item) (sqlItem SQLItem) {
 	var buf []byte
+	sqlItem.Namespace = item.Namespace
 	sqlItem.ItemId = item.ItemId
 	sqlItem.IsHidden = item.IsHidden
 	buf, _ = jsonutil.Marshal(item.Categories)
@@ -98,6 +101,7 @@ func (d *SQLDatabase) Init() error {
 	case MySQL:
 		// create tables
 		type Items struct {
+			Namespace  string    `gorm:"column:namespace;type:varchar(128) not null;primaryKey"`
 			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
 			Categories []string  `gorm:"column:categories;type:json;not null"`
@@ -112,7 +116,8 @@ func (d *SQLDatabase) Init() error {
 			Comment   string   `gorm:"column:comment;type:text;not null"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			Namespace    string    `gorm:"column:namespace;type:varchar(128);not null;primaryKey"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(128);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
@@ -125,6 +130,7 @@ func (d *SQLDatabase) Init() error {
 	case Postgres:
 		// create tables
 		type Items struct {
+			Namespace  string    `gorm:"column:namespace;type:varchar(128) not null;primaryKey"`
 			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string    `gorm:"column:categories;type:json;not null;default:'[]'"`
@@ -139,7 +145,8 @@ func (d *SQLDatabase) Init() error {
 			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			Namespace    string    `gorm:"column:namespace;type:varchar(128) not null;primaryKey"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(128);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
@@ -152,6 +159,7 @@ func (d *SQLDatabase) Init() error {
 	case SQLite:
 		// create tables
 		type Items struct {
+			Namespace  string `gorm:"column:namespace;type:varchar(128) not null;primaryKey"`
 			ItemId     string `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
 			IsHidden   bool   `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string `gorm:"column:categories;type:json;not null;default:'[]'"`
@@ -166,7 +174,8 @@ func (d *SQLDatabase) Init() error {
 			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
-			FeedbackType string `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			Namespace    string `gorm:"column:namespace;type:varchar(128) not null;primaryKey"`
+			FeedbackType string `gorm:"column:feedback_type;type:varchar(128);not null;primaryKey"`
 			UserId       string `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
 			ItemId       string `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
 			Timestamp    string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
@@ -206,10 +215,10 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 		return nil
 	}
 	rows := make([]SQLItem, 0, len(items))
-	memo := mapset.NewSet[string]()
+	memo := mapset.NewSet[ItemUID]()
 	for _, item := range items {
-		if !memo.Contains(item.ItemId) {
-			memo.Add(item.ItemId)
+		if !memo.Contains(item.ItemUID()) {
+			memo.Add(item.ItemUID())
 			row := NewSQLItem(item)
 			if d.driver == SQLite {
 				row.Timestamp = row.Timestamp.In(time.UTC)
@@ -218,19 +227,19 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 		}
 	}
 	err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "item_id"}},
+		Columns:   []clause.Column{{Name: "namespace"}, {Name: "item_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
 	}).Create(rows).Error
 	return errors.Trace(err)
 }
 
-func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
+func (d *SQLDatabase) BatchGetItems(ctx context.Context, namespace string, itemIds []string) ([]Item, error) {
 	if len(itemIds) == 0 {
 		return nil, nil
 	}
 	result, err := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
-		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
-		Where("item_id IN ?", itemIds).Rows()
+		Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment").
+		Where("namespace = ? and item_id IN ?", namespace, itemIds).Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -247,21 +256,27 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string) ([]It
 }
 
 // DeleteItem deletes a item from MySQL.
-func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
-	if err := d.gormDB.WithContext(ctx).Delete(&SQLItem{ItemId: itemId}).Error; err != nil {
+func (d *SQLDatabase) DeleteItem(ctx context.Context, namespace string, itemId string) error {
+	if err := d.gormDB.WithContext(ctx).Delete(&SQLItem{
+		Namespace: namespace,
+		ItemId:    itemId,
+	}).Error; err != nil {
 		return errors.Trace(err)
 	}
-	if err := d.gormDB.WithContext(ctx).Delete(&Feedback{}, "item_id = ?", itemId).Error; err != nil {
+	if err := d.gormDB.WithContext(ctx).
+		Delete(&Feedback{}, "namespace = ? and item_id = ?", namespace, itemId).Error; err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
 // GetItem get a item from MySQL.
-func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) {
+func (d *SQLDatabase) GetItem(ctx context.Context, namespace, itemId string) (Item, error) {
 	var result *sql.Rows
 	var err error
-	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
+	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
+		Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment").
+		Where("namespace = ? and item_id = ?", namespace, itemId).Rows()
 	if err != nil {
 		return Item{}, errors.Trace(err)
 	}
@@ -277,7 +292,7 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 }
 
 // ModifyItem modify an item in MySQL.
-func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error {
+func (d *SQLDatabase) ModifyItem(ctx context.Context, namespace string, itemId string, patch ItemPatch) error {
 	// ignore empty patch
 	if patch.IsHidden == nil && patch.Categories == nil && patch.Labels == nil && patch.Comment == nil && patch.Timestamp == nil {
 		log.Logger().Debug("empty item patch")
@@ -310,25 +325,35 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 			attributes["time_stamp"] = patch.Timestamp
 		}
 	}
-	err := d.gormDB.WithContext(ctx).Model(&SQLItem{ItemId: itemId}).Updates(attributes).Error
+	err := d.gormDB.WithContext(ctx).
+		Model(&SQLItem{Namespace: namespace, ItemId: itemId}).
+		Updates(attributes).Error
 	return errors.Trace(err)
 }
 
 // GetItems returns items from MySQL.
 func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
+	// Decode cursor
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	cursorItem := string(buf)
-	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
-	if cursorItem != "" {
-		tx.Where("item_id >= ?", cursorItem)
+	var uid *ItemUID
+	if len(buf) > 0 {
+		if err = json.Unmarshal(buf, &uid); err != nil {
+			return "", nil, errors.Trace(err)
+		}
+	}
+
+	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
+		Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
+	if uid != nil {
+		tx.Where("(namespace, item_id) >= (?,?)", uid.Namespace, uid.ItemId)
 	}
 	if timeLimit != nil {
 		tx.Where("time_stamp >= ?", *timeLimit)
 	}
-	result, err := tx.Order("item_id").Limit(n + 1).Rows()
+	result, err := tx.Order("namespace, item_id").Limit(n + 1).Rows()
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
@@ -342,7 +367,12 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		items = append(items, item)
 	}
 	if len(items) == n+1 {
-		return base64.StdEncoding.EncodeToString([]byte(items[len(items)-1].ItemId)), items[:len(items)-1], nil
+		// Encode cursor
+		data, err := json.Marshal(items[len(items)-1].ItemUID())
+		if err != nil {
+			return "", nil, errors.Trace(err)
+		}
+		return base64.StdEncoding.EncodeToString(data), items[:len(items)-1], nil
 	}
 	return "", items, nil
 }
@@ -355,7 +385,8 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		defer close(itemChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
+			Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
 		if timeLimit != nil {
 			tx.Where("time_stamp >= ?", *timeLimit)
 		}
@@ -388,13 +419,14 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 }
 
 // GetItemFeedback returns feedback of a item from MySQL.
-func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("user_id, item_id, feedback_type, time_stamp")
+func (d *SQLDatabase) GetItemFeedback(ctx context.Context, namespace string, itemId string, feedbackTypes ...string) ([]Feedback, error) {
+	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
+		Select("namespace, user_id, item_id, feedback_type, time_stamp")
 	switch d.driver {
 	case SQLite:
-		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
+		tx.Where("time_stamp <= DATETIME() AND namespace = ? AND item_id = ?", namespace, itemId)
 	default:
-		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
+		tx.Where("time_stamp <= NOW() AND namespace = ? AND item_id = ?", namespace, itemId)
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -557,10 +589,10 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 }
 
 // GetUserFeedback returns feedback of a user from MySQL.
-func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
+func (d *SQLDatabase) GetUserFeedback(ctx context.Context, namespace string, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-		Select("feedback_type, user_id, item_id, time_stamp, comment").
-		Where("user_id = ?", userId)
+		Select("namespace, feedback_type, user_id, item_id, time_stamp, comment").
+		Where("namespace = ? and user_id = ?", namespace, userId)
 	if endTime != nil {
 		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 	}
@@ -594,10 +626,10 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	}
 	// collect users and items
 	users := mapset.NewSet[string]()
-	items := mapset.NewSet[string]()
+	items := mapset.NewSet[ItemUID]()
 	for _, v := range feedback {
 		users.Add(v.UserId)
-		items.Add(v.ItemId)
+		items.Add(v.ItemUID())
 	}
 	// insert users
 	if insertUser {
@@ -632,11 +664,15 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	if insertItem {
 		itemList := items.ToSlice()
 		err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "item_id"}},
+			Columns: []clause.Column{
+				{Name: "namespace"},
+				{Name: "item_id"},
+			},
 			DoNothing: true,
-		}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
+		}).Create(lo.Map(itemList, func(uid ItemUID, _ int) SQLItem {
 			return SQLItem{
-				ItemId:     itemId,
+				Namespace:  uid.Namespace,
+				ItemId:     uid.ItemId,
 				Labels:     "null",
 				Categories: "null",
 			}
@@ -646,7 +682,9 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}
 	} else {
 		for _, item := range items.ToSlice() {
-			rs, err := tx.Table(d.ItemsTable()).Select("item_id").Where("item_id = ?", item).Rows()
+			rs, err := tx.Table(d.ItemsTable()).
+				Select("namespace, item_id").
+				Where("namespace = ? and item_id = ?", item.Namespace, item.ItemId).Rows()
 			if err != nil {
 				return errors.Trace(err)
 			} else if !rs.Next() {
@@ -659,11 +697,11 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	}
 	// insert feedback
 	rows := make([]Feedback, 0, len(feedback))
-	memo := make(map[lo.Tuple3[string, string, string]]struct{})
+	memo := mapset.NewSet[FeedbackKey]()
 	for _, f := range feedback {
-		if users.Contains(f.UserId) && items.Contains(f.ItemId) {
-			if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
-				memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
+		if users.Contains(f.UserId) && items.Contains(f.ItemUID()) {
+			if !memo.Contains(f.FeedbackKey) {
+				memo.Add(f.FeedbackKey)
 				if d.driver == SQLite {
 					f.Timestamp = f.Timestamp.In(time.UTC)
 				}
@@ -675,7 +713,12 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		return nil
 	}
 	err := tx.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
+		Columns: []clause.Column{
+			{Name: "namespace"},
+			{Name: "feedback_type"},
+			{Name: "user_id"},
+			{Name: "item_id"},
+		},
 		DoNothing: !overwrite,
 		DoUpdates: lo.If(overwrite, clause.AssignmentColumns([]string{"time_stamp", "comment"})).Else(nil),
 	}).Create(rows).Error
@@ -688,13 +731,16 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
+	tx := d.gormDB.WithContext(ctx).
+		Table(d.FeedbackTable()).
+		Select("namespace, feedback_type, user_id, item_id, time_stamp, comment")
 	if len(buf) > 0 {
 		var cursorKey FeedbackKey
 		if err := jsonutil.Unmarshal(buf, &cursorKey); err != nil {
 			return "", nil, err
 		}
-		tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+		tx.Where("(namespace, feedback_type, user_id, item_id) >= (?,?,?,?)",
+			cursorKey.Namespace, cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -705,7 +751,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	if endTime != nil {
 		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 	}
-	tx.Order("feedback_type, user_id, item_id").Limit(n + 1)
+	tx.Order("namespace, feedback_type, user_id, item_id").Limit(n + 1)
 	result, err := tx.Rows()
 	if err != nil {
 		return "", nil, errors.Trace(err)
@@ -740,8 +786,8 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		defer close(errChan)
 		// send query
 		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-			Select("feedback_type, user_id, item_id, time_stamp, comment").
-			Order("feedback_type, user_id, item_id")
+			Select("namespace, feedback_type, user_id, item_id, time_stamp, comment").
+			Order("namespace, feedback_type, user_id, item_id")
 		if len(scan.FeedbackTypes) > 0 {
 			tx.Where("feedback_type IN ?", scan.FeedbackTypes)
 		}
@@ -786,10 +832,10 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 }
 
 // GetUserItemFeedback gets a feedback by user id and item id from MySQL.
-func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
+func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-		Select("feedback_type, user_id, item_id, time_stamp, comment").
-		Where("user_id = ? AND item_id = ?", userId, itemId)
+		Select("namespace, feedback_type, user_id, item_id, time_stamp, comment").
+		Where("namespace = ? AND user_id = ? AND item_id = ?", namespace, userId, itemId)
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
@@ -810,8 +856,8 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 }
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from MySQL.
-func (d *SQLDatabase) DeleteUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) (int, error) {
-	tx := d.gormDB.WithContext(ctx).Where("user_id = ? AND item_id = ?", userId, itemId)
+func (d *SQLDatabase) DeleteUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) (int, error) {
+	tx := d.gormDB.WithContext(ctx).Where("namespace = ? AND user_id = ? AND item_id = ?", namespace, userId, itemId)
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
