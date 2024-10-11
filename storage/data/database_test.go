@@ -412,6 +412,16 @@ func (suite *baseTestSuite) TestItems() {
 			Labels:     []any{"b"},
 			Comment:    "comment 8",
 		},
+		// Items with different namespace
+		{
+			Namespace:  "xxx",
+			ItemId:     "0",
+			IsHidden:   true,
+			Categories: []string{"a"},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []any{"a"},
+			Comment:    "comment 0",
+		},
 	}
 	// Insert item
 	err := suite.Database.BatchInsertItems(ctx, items)
@@ -424,7 +434,7 @@ func (suite *baseTestSuite) TestItems() {
 	suite.ElementsMatch(items, itemsFromStream)
 	// Get item
 	for _, item := range items {
-		ret, err := suite.Database.GetItem(ctx, "namespace", item.ItemId)
+		ret, err := suite.Database.GetItem(ctx, item.Namespace, item.ItemId)
 		suite.NoError(err)
 		suite.Equal(item, ret)
 	}
@@ -472,7 +482,7 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.BatchInsertItems(ctx, nil)
 	suite.NoError(err)
 	// test get empty
-	items, err = suite.Database.BatchGetItems(ctx, "", nil)
+	items, err = suite.Database.BatchGetItems(ctx, "namespace", nil)
 	suite.NoError(err)
 	suite.Empty(items)
 
@@ -498,7 +508,7 @@ func (suite *baseTestSuite) TestDeleteUser() {
 	suite.NoError(err)
 	_, err = suite.Database.GetUser(ctx, "a")
 	suite.NotNil(err, "failed to delete user")
-	ret, err := suite.Database.GetUserFeedback(ctx, "", "a", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err := suite.Database.GetUserFeedback(ctx, "namespace", "a", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(0, len(ret))
 	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)

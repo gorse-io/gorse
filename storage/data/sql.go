@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -214,10 +215,10 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 		return nil
 	}
 	rows := make([]SQLItem, 0, len(items))
-	memo := mapset.NewSet[string]()
+	memo := mapset.NewSet[ItemUID]()
 	for _, item := range items {
-		if !memo.Contains(item.ItemId) {
-			memo.Add(item.ItemId)
+		if !memo.Contains(item.ItemUID()) {
+			memo.Add(item.ItemUID())
 			row := NewSQLItem(item)
 			if d.driver == SQLite {
 				row.Timestamp = row.Timestamp.In(time.UTC)
@@ -273,7 +274,8 @@ func (d *SQLDatabase) DeleteItem(ctx context.Context, namespace string, itemId s
 func (d *SQLDatabase) GetItem(ctx context.Context, namespace, itemId string) (Item, error) {
 	var result *sql.Rows
 	var err error
-	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment").
+	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
+		Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment").
 		Where("namespace = ? and item_id = ?", namespace, itemId).Rows()
 	if err != nil {
 		return Item{}, errors.Trace(err)
@@ -331,19 +333,27 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, namespace string, itemId s
 
 // GetItems returns items from MySQL.
 func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
+	// Decode cursor
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	cursorItem := string(buf)
-	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
-	if cursorItem != "" {
-		tx.Where("item_id >= ?", cursorItem)
+	var uid *ItemUID
+	if len(buf) > 0 {
+		if err = json.Unmarshal(buf, &uid); err != nil {
+			return "", nil, errors.Trace(err)
+		}
+	}
+
+	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
+		Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
+	if uid != nil {
+		tx.Where("(namespace, item_id) >= (?,?)", uid.Namespace, uid.ItemId)
 	}
 	if timeLimit != nil {
 		tx.Where("time_stamp >= ?", *timeLimit)
 	}
-	result, err := tx.Order("item_id").Limit(n + 1).Rows()
+	result, err := tx.Order("namespace, item_id").Limit(n + 1).Rows()
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
@@ -357,7 +367,12 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		items = append(items, item)
 	}
 	if len(items) == n+1 {
-		return base64.StdEncoding.EncodeToString([]byte(items[len(items)-1].ItemId)), items[:len(items)-1], nil
+		// Encode cursor
+		data, err := json.Marshal(items[len(items)-1].ItemUID())
+		if err != nil {
+			return "", nil, errors.Trace(err)
+		}
+		return base64.StdEncoding.EncodeToString(data), items[:len(items)-1], nil
 	}
 	return "", items, nil
 }
@@ -370,7 +385,8 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		defer close(itemChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
+		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
+			Select("namespace, item_id, is_hidden, categories, time_stamp, labels, comment")
 		if timeLimit != nil {
 			tx.Where("time_stamp >= ?", *timeLimit)
 		}
@@ -404,12 +420,13 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 
 // GetItemFeedback returns feedback of a item from MySQL.
 func (d *SQLDatabase) GetItemFeedback(ctx context.Context, namespace string, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("user_id, item_id, feedback_type, time_stamp")
+	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
+		Select("namespace, user_id, item_id, feedback_type, time_stamp")
 	switch d.driver {
 	case SQLite:
 		tx.Where("time_stamp <= DATETIME() AND namespace = ? AND item_id = ?", namespace, itemId)
 	default:
-		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
+		tx.Where("time_stamp <= NOW() AND namespace = ? AND item_id = ?", namespace, itemId)
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)

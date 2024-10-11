@@ -139,8 +139,9 @@ func (db *MongoDB) Init() error {
 		return errors.Trace(err)
 	}
 	_, err = d.Collection(db.FeedbackTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.M{
-			"feedbackkey.itemid": 1,
+		Keys: bson.D{
+			{"namespace", 1},
+			{"feedbackkey.itemid", 1},
 		},
 	})
 	if err != nil {
@@ -196,7 +197,7 @@ func (db *MongoDB) BatchGetItems(ctx context.Context, namespace string, itemIds 
 	}
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	r, err := c.Find(ctx, bson.M{
-		"namespace": namespace,
+		"namespace": bson.M{"$eq": namespace},
 		"itemid":    bson.M{"$in": itemIds},
 	})
 	if err != nil {
@@ -237,7 +238,7 @@ func (db *MongoDB) ModifyItem(ctx context.Context, namespace string, itemId stri
 	// execute
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	_, err := c.UpdateOne(ctx, bson.M{
-		"namespace": namespace,
+		"namespace": bson.M{"$eq": namespace},
 		"itemid":    bson.M{"$eq": itemId},
 	}, bson.M{"$set": update})
 	return errors.Trace(err)
@@ -247,7 +248,7 @@ func (db *MongoDB) ModifyItem(ctx context.Context, namespace string, itemId stri
 func (db *MongoDB) DeleteItem(ctx context.Context, namespace, itemId string) error {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	_, err := c.DeleteOne(ctx, bson.M{
-		"namespace": namespace,
+		"namespace": bson.M{"$eq": namespace},
 		"itemid":    itemId,
 	})
 	if err != nil {
@@ -255,7 +256,8 @@ func (db *MongoDB) DeleteItem(ctx context.Context, namespace, itemId string) err
 	}
 	c = db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	_, err = c.DeleteMany(ctx, bson.M{
-		"feedbackkey.itemid": bson.M{"$eq": itemId},
+		"feedbackkey.namespace": bson.M{"$eq": namespace},
+		"feedbackkey.itemid":    bson.M{"$eq": itemId},
 	})
 	return errors.Trace(err)
 }
@@ -278,16 +280,31 @@ func (db *MongoDB) GetItem(ctx context.Context, namespace string, itemId string)
 
 // GetItems returns items from MongoDB.
 func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
+	// Decode cursor
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	cursorItem := string(buf)
+	var uid ItemUID
+	if len(buf) > 0 {
+		if err = json.Unmarshal(buf, &uid); err != nil {
+			return "", nil, errors.Trace(err)
+		}
+	}
+
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	opt := options.Find()
 	opt.SetLimit(int64(n))
-	opt.SetSort(bson.D{{"itemid", 1}})
-	filter := bson.M{"itemid": bson.M{"$gt": cursorItem}}
+	opt.SetSort(bson.D{
+		{"namespace", 1},
+		{"itemid", 1},
+	})
+	filter := bson.M{
+		"$or": []bson.M{
+			{"namespace": bson.M{"$gt": uid.Namespace}},
+			{"namespace": bson.M{"$eq": uid.Namespace}, "itemid": bson.M{"$gt": uid.ItemId}},
+		},
+	}
 	if timeLimit != nil {
 		filter["timestamp"] = bson.M{"$gt": *timeLimit}
 	}
@@ -305,8 +322,14 @@ func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit
 		item.Labels = unpack(item.Labels)
 		items = append(items, item)
 	}
+
+	// Encode cursor
 	if len(items) == n {
-		cursor = items[n-1].ItemId
+		data, err := json.Marshal(items[n-1].ItemUID())
+		if err != nil {
+			return "", nil, err
+		}
+		cursor = string(data)
 	} else {
 		cursor = ""
 	}
