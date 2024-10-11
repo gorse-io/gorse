@@ -363,8 +363,9 @@ func (db *MongoDB) GetItemFeedback(ctx context.Context, namespace string, itemId
 	var r *mongo.Cursor
 	var err error
 	filter := bson.M{
-		"feedbackkey.itemid": bson.M{"$eq": itemId},
-		"timestamp":          bson.M{"$lte": time.Now()},
+		"feedbackkey.namespace": bson.M{"$eq": namespace},
+		"feedbackkey.itemid":    bson.M{"$eq": itemId},
+		"timestamp":             bson.M{"$lte": time.Now()},
 	}
 	if len(feedbackTypes) > 0 {
 		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
@@ -526,7 +527,8 @@ func (db *MongoDB) GetUserFeedback(ctx context.Context, namespace string, userId
 	var r *mongo.Cursor
 	var err error
 	filter := bson.M{
-		"feedbackkey.userid": bson.M{"$eq": userId},
+		"feedbackkey.namespace": bson.M{"$eq": namespace},
+		"feedbackkey.userid":    bson.M{"$eq": userId},
 	}
 	if endTime != nil {
 		filter["timestamp"] = bson.M{"$lte": endTime}
@@ -558,10 +560,10 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 	}
 	// collect users and items
 	users := mapset.NewSet[string]()
-	items := mapset.NewSet[string]()
+	items := mapset.NewSet[ItemUID]()
 	for _, v := range feedback {
 		users.Add(v.UserId)
-		items.Add(v.ItemId)
+		items.Add(v.ItemUID())
 	}
 	// insert users
 	userList := users.ToSlice()
@@ -594,11 +596,17 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 	itemList := items.ToSlice()
 	if insertItem {
 		var models []mongo.WriteModel
-		for _, itemId := range itemList {
+		for _, uid := range itemList {
 			models = append(models, mongo.NewUpdateOneModel().
 				SetUpsert(true).
-				SetFilter(bson.M{"itemid": bson.M{"$eq": itemId}}).
-				SetUpdate(bson.M{"$setOnInsert": Item{ItemId: itemId}}))
+				SetFilter(bson.M{
+					"namespace": bson.M{"$eq": uid.Namespace},
+					"itemid":    bson.M{"$eq": uid.ItemId},
+				}).
+				SetUpdate(bson.M{"$setOnInsert": Item{
+					Namespace: uid.Namespace,
+					ItemId:    uid.ItemId,
+				}}))
 		}
 		c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 		_, err := c.BulkWrite(ctx, models)
@@ -606,11 +614,11 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 			return errors.Trace(err)
 		}
 	} else {
-		for _, itemId := range itemList {
-			_, err := db.GetItem(ctx, "", itemId)
+		for _, uid := range itemList {
+			_, err := db.GetItem(ctx, uid.Namespace, uid.ItemId)
 			if err != nil {
 				if errors.Is(err, errors.NotFound) {
-					items.Remove(itemId)
+					items.Remove(uid)
 					continue
 				}
 				return errors.Trace(err)
@@ -621,7 +629,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var models []mongo.WriteModel
 	for _, f := range feedback {
-		if users.Contains(f.UserId) && items.Contains(f.ItemId) {
+		if users.Contains(f.UserId) && items.Contains(f.ItemUID()) {
 			model := mongo.NewUpdateOneModel().
 				SetUpsert(true).
 				SetFilter(bson.M{
@@ -769,8 +777,9 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 func (db *MongoDB) GetUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var filter = bson.M{
-		"feedbackkey.userid": bson.M{"$eq": userId},
-		"feedbackkey.itemid": bson.M{"$eq": itemId},
+		"feedbackkey.namespace": bson.M{"$eq": namespace},
+		"feedbackkey.userid":    bson.M{"$eq": userId},
+		"feedbackkey.itemid":    bson.M{"$eq": itemId},
 	}
 	if len(feedbackTypes) > 0 {
 		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
@@ -795,8 +804,9 @@ func (db *MongoDB) GetUserItemFeedback(ctx context.Context, namespace, userId, i
 func (db *MongoDB) DeleteUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) (int, error) {
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var filter = bson.M{
-		"feedbackkey.userid": bson.M{"$eq": userId},
-		"feedbackkey.itemid": bson.M{"$eq": itemId},
+		"feedbackkey.namespace": bson.M{"$eq": namespace},
+		"feedbackkey.userid":    bson.M{"$eq": userId},
+		"feedbackkey.itemid":    bson.M{"$eq": itemId},
 	}
 	if len(feedbackTypes) > 0 {
 		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}

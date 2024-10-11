@@ -117,6 +117,18 @@ type ItemPatch struct {
 	Comment    *string
 }
 
+type ItemUID struct {
+	Namespace string
+	ItemId    string
+}
+
+func (item *Item) ItemUID() ItemUID {
+	return ItemUID{
+		Namespace: item.Namespace,
+		ItemId:    item.ItemId,
+	}
+}
+
 // User stores meta data about user.
 type User struct {
 	UserId    string   `gorm:"primaryKey" mapstructure:"user_id"`
@@ -138,6 +150,13 @@ type FeedbackKey struct {
 	FeedbackType string `gorm:"column:feedback_type" mapstructure:"feedback_type"`
 	UserId       string `gorm:"column:user_id" mapstructure:"user_id"`
 	ItemId       string `gorm:"column:item_id" mapstructure:"item_id"`
+}
+
+func (key *FeedbackKey) ItemUID() ItemUID {
+	return ItemUID{
+		Namespace: key.Namespace,
+		ItemId:    key.ItemId,
+	}
 }
 
 // Feedback stores feedback.

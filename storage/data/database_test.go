@@ -214,7 +214,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	err := suite.Database.BatchInsertUsers(ctx, []User{{"0", []string{"a"}, []string{"x"}, "comment"}})
 	suite.NoError(err)
 	// items that already exists
-	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
+	err = suite.Database.BatchInsertItems(ctx, []Item{{Namespace: "namespace", ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
 	suite.NoError(err)
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -285,27 +285,27 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(User{"0", []any{"a"}, []string{"x"}, "comment"}, user)
 	// check items that already exists
-	item, err := suite.Database.GetItem(ctx, "", "0")
+	item, err := suite.Database.GetItem(ctx, "namespace", "0")
 	suite.NoError(err)
-	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
+	suite.Equal(Item{Namespace: "namespace", ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "", "2", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("2", ret[0].UserId)
 	suite.Equal("4", ret[0].ItemId)
 	// Get all feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "", "2", lo.ToPtr(time.Now()))
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()))
 	suite.NoError(err)
 	suite.Equal(2, len(ret))
 	// Get typed feedback by item
-	ret, err = suite.Database.GetItemFeedback(ctx, "", "4", positiveFeedbackType)
+	ret, err = suite.Database.GetItemFeedback(ctx, "namespace", "4", positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("2", ret[0].UserId)
 	suite.Equal("4", ret[0].ItemId)
 	// Get all feedback by item
-	ret, err = suite.Database.GetItemFeedback(ctx, "", "4")
+	ret, err = suite.Database.GetItemFeedback(ctx, "namespace", "4")
 	suite.NoError(err)
 	suite.Equal(2, len(ret))
 	// test override
@@ -314,7 +314,7 @@ func (suite *baseTestSuite) TestFeedback() {
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
-	ret, err = suite.Database.GetUserFeedback(ctx, "", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("override", ret[0].Comment)
@@ -324,7 +324,7 @@ func (suite *baseTestSuite) TestFeedback() {
 		Comment:     "not_override",
 	}}, true, true, false)
 	suite.NoError(err)
-	ret, err = suite.Database.GetUserFeedback(ctx, "", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("override", ret[0].Comment)
@@ -340,13 +340,13 @@ func (suite *baseTestSuite) TestFeedback() {
 		{FeedbackKey: FeedbackKey{"namespace", "a", "100", "8"}},
 	}, false, false, false)
 	suite.NoError(err)
-	result, err := suite.Database.GetUserItemFeedback(ctx, "", "100", "200")
+	result, err := suite.Database.GetUserItemFeedback(ctx, "namespace", "100", "200")
 	suite.NoError(err)
 	suite.Empty(result)
-	result, err = suite.Database.GetUserItemFeedback(ctx, "", "0", "200")
+	result, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "0", "200")
 	suite.NoError(err)
 	suite.Empty(result)
-	result, err = suite.Database.GetUserItemFeedback(ctx, "", "100", "8")
+	result, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "100", "8")
 	suite.NoError(err)
 	suite.Empty(result)
 

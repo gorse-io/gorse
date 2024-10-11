@@ -407,7 +407,7 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, namespace string, ite
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("user_id, item_id, feedback_type, time_stamp")
 	switch d.driver {
 	case SQLite:
-		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
+		tx.Where("time_stamp <= DATETIME() AND namespace = ? AND item_id = ?", namespace, itemId)
 	default:
 		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
 	}
@@ -574,8 +574,8 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 // GetUserFeedback returns feedback of a user from MySQL.
 func (d *SQLDatabase) GetUserFeedback(ctx context.Context, namespace string, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-		Select("feedback_type, user_id, item_id, time_stamp, comment").
-		Where("user_id = ?", userId)
+		Select("namespace, feedback_type, user_id, item_id, time_stamp, comment").
+		Where("namespace = ? and user_id = ?", namespace, userId)
 	if endTime != nil {
 		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 	}
@@ -609,10 +609,10 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	}
 	// collect users and items
 	users := mapset.NewSet[string]()
-	items := mapset.NewSet[string]()
+	items := mapset.NewSet[ItemUID]()
 	for _, v := range feedback {
 		users.Add(v.UserId)
-		items.Add(v.ItemId)
+		items.Add(v.ItemUID())
 	}
 	// insert users
 	if insertUser {
@@ -652,9 +652,10 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				{Name: "item_id"},
 			},
 			DoNothing: true,
-		}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
+		}).Create(lo.Map(itemList, func(uid ItemUID, _ int) SQLItem {
 			return SQLItem{
-				ItemId:     itemId,
+				Namespace:  uid.Namespace,
+				ItemId:     uid.ItemId,
 				Labels:     "null",
 				Categories: "null",
 			}
@@ -664,7 +665,9 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}
 	} else {
 		for _, item := range items.ToSlice() {
-			rs, err := tx.Table(d.ItemsTable()).Select("item_id").Where("item_id = ?", item).Rows()
+			rs, err := tx.Table(d.ItemsTable()).
+				Select("namespace, item_id").
+				Where("namespace = ? and item_id = ?", item.Namespace, item.ItemId).Rows()
 			if err != nil {
 				return errors.Trace(err)
 			} else if !rs.Next() {
@@ -677,11 +680,11 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	}
 	// insert feedback
 	rows := make([]Feedback, 0, len(feedback))
-	memo := make(map[lo.Tuple3[string, string, string]]struct{})
+	memo := mapset.NewSet[FeedbackKey]()
 	for _, f := range feedback {
-		if users.Contains(f.UserId) && items.Contains(f.ItemId) {
-			if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
-				memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
+		if users.Contains(f.UserId) && items.Contains(f.ItemUID()) {
+			if !memo.Contains(f.FeedbackKey) {
+				memo.Add(f.FeedbackKey)
 				if d.driver == SQLite {
 					f.Timestamp = f.Timestamp.In(time.UTC)
 				}
@@ -836,7 +839,7 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, namespace, userId
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) DeleteUserItemFeedback(ctx context.Context, namespace, userId, itemId string, feedbackTypes ...string) (int, error) {
-	tx := d.gormDB.WithContext(ctx).Where("user_id = ? AND item_id = ?", userId, itemId)
+	tx := d.gormDB.WithContext(ctx).Where("namespace = ? AND user_id = ? AND item_id = ?", namespace, userId, itemId)
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
