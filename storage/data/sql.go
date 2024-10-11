@@ -739,7 +739,8 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 		if err := jsonutil.Unmarshal(buf, &cursorKey); err != nil {
 			return "", nil, err
 		}
-		tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
+		tx.Where("(namespace, feedback_type, user_id, item_id) >= (?,?,?,?)",
+			cursorKey.Namespace, cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
 	}
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -750,7 +751,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	if endTime != nil {
 		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 	}
-	tx.Order("feedback_type, user_id, item_id").Limit(n + 1)
+	tx.Order("namespace, feedback_type, user_id, item_id").Limit(n + 1)
 	result, err := tx.Rows()
 	if err != nil {
 		return "", nil, errors.Trace(err)

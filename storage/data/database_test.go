@@ -412,16 +412,6 @@ func (suite *baseTestSuite) TestItems() {
 			Labels:     []any{"b"},
 			Comment:    "comment 8",
 		},
-		// Items with different namespace
-		{
-			Namespace:  "xxx",
-			ItemId:     "0",
-			IsHidden:   true,
-			Categories: []string{"a"},
-			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:     []any{"a"},
-			Comment:    "comment 0",
-		},
 	}
 	// Insert item
 	err := suite.Database.BatchInsertItems(ctx, items)
@@ -747,6 +737,34 @@ func (suite *baseTestSuite) TestPurge() {
 	// purge empty database
 	err = suite.Database.Purge()
 	suite.NoError(err)
+}
+
+func (suite *baseTestSuite) TestNamespace() {
+	// insert items
+	items := []Item{
+		{Namespace: "namespace1", ItemId: "0"},
+		{Namespace: "namespace1", ItemId: "1"},
+		{Namespace: "namespace2", ItemId: "0"},
+	}
+	err := suite.Database.BatchInsertItems(context.Background(), items)
+	suite.NoError(err)
+	// get items
+	ret := suite.getItems(context.Background(), 3)
+	suite.Equal(items, ret)
+
+	// insert feedbacks
+	feedbacks := []Feedback{
+		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "1"}},
+		{FeedbackKey: FeedbackKey{"namespace2", "type1", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace3", "type1", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace4", "type1", "0", "0"}},
+	}
+	err = suite.Database.BatchInsertFeedback(context.Background(), feedbacks, true, true, true)
+	suite.NoError(err)
+	// get feedback
+	retFeedbacks := suite.getFeedback(context.Background(), 3, nil, lo.ToPtr(time.Now()))
+	suite.Equal(feedbacks, retFeedbacks)
 }
 
 func TestSortFeedbacks(t *testing.T) {
