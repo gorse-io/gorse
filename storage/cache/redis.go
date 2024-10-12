@@ -46,14 +46,11 @@ func (r *Redis) Ping() error {
 
 // Init nothing.
 func (r *Redis) Init() error {
-	// list index
-	result, err := r.client.Do(context.TODO(), "FT._LIST").Result()
+	// list indices
+	indices, err := r.client.FT_List(context.Background()).Result()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	indices := lo.Map(result.([]any), func(s any, _ int) string {
-		return s.(string)
-	})
 	// create index
 	if !lo.Contains(indices, r.DocumentTable()) {
 		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
@@ -66,16 +63,33 @@ func (r *Redis) Init() error {
 			"categories", "TAG", "SEPARATOR", ";",
 			"timestamp", "NUMERIC", "SORTABLE").
 			Result()
+		// Blocked by https://github.com/redis/go-redis/issues/3150
+		//_, err = r.client.FTCreate(context.TODO(), r.DocumentTable(),
+		//	&redis.FTCreateOptions{
+		//		OnHash: true,
+		//		Prefix: []any{r.DocumentTable() + ":"},
+		//	},
+		//	&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
+		//	&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
+		//	&redis.FieldSchema{FieldName: "id", FieldType: redis.SearchFieldTypeTag},
+		//	&redis.FieldSchema{FieldName: "score", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+		//	&redis.FieldSchema{FieldName: "is_hidden", FieldType: redis.SearchFieldTypeNumeric},
+		//	&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Seperator: ";"},
+		//	&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+		//).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
 	}
 	if !lo.Contains(indices, r.PointsTable()) {
-		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.PointsTable(),
-			"ON", "HASH", "PREFIX", "1", r.PointsTable()+":", "SCHEMA",
-			"name", "TAG",
-			"timestamp", "NUMERIC", "SORTABLE").
-			Result()
+		_, err = r.client.FTCreate(context.TODO(), r.PointsTable(),
+			&redis.FTCreateOptions{
+				OnHash: true,
+				Prefix: []any{r.PointsTable() + ":"},
+			},
+			&redis.FieldSchema{FieldName: "name", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+		).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -262,19 +276,44 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	for _, q := range query {
 		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", escape(encdodeCategory(q))))
 	}
-	args := []any{"FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", begin}
+	options := &redis.FTSearchOptions{
+		SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
+		LimitOffset: begin,
+	}
 	if end == -1 {
-		args = append(args, 10000)
+		options.Limit = 10000
 	} else {
-		args = append(args, end-begin)
+		options.Limit = end - begin
 	}
-	result, err := r.client.Do(ctx, args...).Result()
+	result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), options).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	_, _, documents, err := parseSearchDocumentsResult(result)
-	if err != nil {
-		return nil, errors.Trace(err)
+	documents := make([]Document, 0, len(result.Docs))
+	for _, doc := range result.Docs {
+		var document Document
+		document.Id = doc.Fields["id"]
+		score, err := strconv.ParseFloat(doc.Fields["score"], 64)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		document.Score = score
+		isHidden, err := strconv.ParseInt(doc.Fields["is_hidden"], 10, 64)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		document.IsHidden = isHidden != 0
+		categories, err := decodeCategories(doc.Fields["categories"])
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		document.Categories = categories
+		timestamp, err := strconv.ParseInt(doc.Fields["timestamp"], 10, 64)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		document.Timestamp = time.UnixMicro(timestamp).In(time.UTC)
+		documents = append(documents, document)
 	}
 	return documents, nil
 }
@@ -291,16 +330,17 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 	builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(id)))
 	for {
 		// search documents
-		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
-		if err != nil {
-			return errors.Trace(err)
-		}
-		count, keys, _, err := parseSearchDocumentsResult(result)
+		result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), &redis.FTSearchOptions{
+			SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
+			LimitOffset: 0,
+			Limit:       10000,
+		}).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
 		// update documents
-		for _, key := range keys {
+		for _, doc := range result.Docs {
+			key := doc.ID
 			values := make([]any, 0)
 			if patch.Score != nil {
 				values = append(values, "score", *patch.Score)
@@ -323,7 +363,7 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 			}
 		}
 		// break if no more documents
-		if count <= int64(len(keys)) {
+		if result.Total <= len(result.Docs) {
 			break
 		}
 	}
@@ -347,87 +387,29 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 	}
 	for {
 		// search documents
-		result, err := r.client.Do(ctx, "FT.SEARCH", r.DocumentTable(), builder.String(), "SORTBY", "score", "DESC", "LIMIT", 0, 10000).Result()
-		if err != nil {
-			return errors.Trace(err)
-		}
-		count, keys, _, err := parseSearchDocumentsResult(result)
+		result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), &redis.FTSearchOptions{
+			SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
+			LimitOffset: 0,
+			Limit:       10000,
+		}).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
 		// delete documents
 		p := r.client.Pipeline()
-		for _, key := range keys {
-			p.Del(ctx, key)
+		for _, doc := range result.Docs {
+			p.Del(ctx, doc.ID)
 		}
 		_, err = p.Exec(ctx)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		// break if no more documents
-		if count == int64(len(keys)) {
+		if result.Total == len(result.Docs) {
 			break
 		}
 	}
 	return nil
-}
-
-func parseSearchDocumentsResult(result any) (count int64, keys []string, documents []Document, err error) {
-	rows, ok := result.([]any)
-	if !ok {
-		return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", result)
-	}
-	count, ok = rows[0].(int64)
-	if !ok {
-		return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", rows[0])
-	}
-	for i := 1; i < len(rows); i += 2 {
-		key, ok := rows[i].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", rows[i])
-		}
-		keys = append(keys, key)
-		row, ok := rows[i+1].([]any)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", rows[i+1])
-		}
-		fields := make(map[string]any)
-		for j := 0; j < len(row); j += 2 {
-			fields[row[j].(string)] = row[j+1]
-		}
-		var document Document
-		document.Id, ok = fields["id"].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", fields["id"])
-		}
-		score, ok := fields["score"].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", fields["score"])
-		}
-		document.Score, err = strconv.ParseFloat(score, 64)
-		if err != nil {
-			return 0, nil, nil, errors.Trace(err)
-		}
-		categories, ok := fields["categories"].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", fields["categories"])
-		}
-		document.Categories, err = decodeCategories(categories)
-		if err != nil {
-			return 0, nil, nil, errors.Trace(err)
-		}
-		timestamp, ok := fields["timestamp"].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", fields["timestamp"])
-		}
-		timestampMicros, err := strconv.ParseInt(timestamp, 10, 64)
-		if err != nil {
-			return 0, nil, nil, errors.Trace(err)
-		}
-		document.Timestamp = time.UnixMicro(timestampMicros).In(time.UTC)
-		documents = append(documents, document)
-	}
-	return
 }
 
 func (r *Redis) pointKey(name string, timestamp time.Time) string {
@@ -447,75 +429,28 @@ func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoin
 }
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
-	result, err := r.client.Do(ctx, "FT.SEARCH", r.PointsTable(),
+	result, err := r.client.FTSearchWithArgs(ctx, r.PointsTable(),
 		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", escape(name), begin.UnixMicro(), end.UnixMicro()),
-		"SORTBY", "timestamp").Result()
+		&redis.FTSearchOptions{SortBy: []redis.FTSearchSortBy{{FieldName: "timestamp"}}}).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	_, _, points, err := parseGetTimeSeriesPointsResult(result)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	// Results in the JSON serializer producing an empty array instead of a
-	// null value. More info at:
-	// https://github.com/golang/go/wiki/CodeReviewComments#declaring-empty-slices
-	if points == nil {
-		return []TimeSeriesPoint{}, nil
-	}
-
-	return points, nil
-}
-
-func parseGetTimeSeriesPointsResult(result any) (count int64, keys []string, points []TimeSeriesPoint, err error) {
-	rows, ok := result.([]any)
-	if !ok {
-		return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", result)
-	}
-	count, ok = rows[0].(int64)
-	if !ok {
-		return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", rows[0])
-	}
-	for i := 1; i < len(rows); i += 2 {
-		key, ok := rows[i].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", rows[i])
-		}
-		keys = append(keys, key)
-		row, ok := rows[i+1].([]any)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", rows[i+1])
-		}
-		fields := make(map[string]any)
-		for j := 0; j < len(row); j += 2 {
-			fields[row[j].(string)] = row[j+1]
-		}
+	points := make([]TimeSeriesPoint, 0, len(result.Docs))
+	for _, doc := range result.Docs {
 		var point TimeSeriesPoint
-		point.Name, ok = fields["name"].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", fields["name"])
-		}
-		value, ok := fields["value"].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", fields["value"])
-		}
-		point.Value, err = strconv.ParseFloat(value, 64)
+		point.Name = doc.Fields["name"]
+		point.Value, err = strconv.ParseFloat(doc.Fields["value"], 64)
 		if err != nil {
-			return 0, nil, nil, errors.Trace(err)
+			return nil, errors.Trace(err)
 		}
-		timestamp, ok := fields["timestamp"].(string)
-		if !ok {
-			return 0, nil, nil, errors.Errorf("invalid FT.SEARCH result: %#v", fields["timestamp"])
-		}
-		timestampMicros, err := strconv.ParseInt(timestamp, 10, 64)
+		timestamp, err := strconv.ParseInt(doc.Fields["timestamp"], 10, 64)
 		if err != nil {
-			return 0, nil, nil, errors.Trace(err)
+			return nil, errors.Trace(err)
 		}
-		point.Timestamp = time.UnixMicro(timestampMicros).In(time.UTC)
+		point.Timestamp = time.UnixMicro(timestamp).In(time.UTC)
 		points = append(points, point)
 	}
-	return
+	return points, nil
 }
 
 func encdodeCategory(category string) string {
