@@ -23,9 +23,9 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/araddon/dateparse"
-	"github.com/go-redis/redis/extra/redisotel/v9"
-	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
+	"github.com/redis/go-redis/extra/redisotel/v9"
+	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
@@ -308,6 +308,7 @@ func Open(path, tablePrefix string) (Database, error) {
 		if err != nil {
 			return nil, err
 		}
+		opt.Protocol = 2
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
