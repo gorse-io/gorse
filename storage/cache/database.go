@@ -23,9 +23,9 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/araddon/dateparse"
-	"github.com/go-redis/redis/extra/redisotel/v9"
-	"github.com/go-redis/redis/v9"
 	"github.com/juju/errors"
+	"github.com/redis/go-redis/extra/redisotel/v9"
+	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
