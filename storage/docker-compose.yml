@@ -5,6 +5,11 @@ services:
     ports:
       - 6379:6379
 
+  kvrocks:
+    image: apache/kvrocks
+    ports:
+      - 6666:6666
+
   mysql:
     image: mysql:8.0
     ports:

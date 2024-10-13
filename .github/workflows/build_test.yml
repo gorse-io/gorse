@@ -164,6 +164,10 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      kvrocks:
+        image: apache/kvrocks
+        ports:
+          - 6666
       mariadb:
         image: mariadb:10.2
         ports:
