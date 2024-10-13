@@ -52,9 +52,9 @@ func (r *Redis) Init() error {
 		return errors.Trace(err)
 	}
 	// create index
-	if !lo.Contains(indices, r.DocumentTable()) {
-		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
-			"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
+	if !lo.Contains(indices, r.ScoresTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.ScoresTable(),
+			"ON", "HASH", "PREFIX", "1", r.ScoresTable()+":", "SCHEMA",
 			"collection", "TAG",
 			"subset", "TAG",
 			"id", "TAG",
@@ -64,10 +64,10 @@ func (r *Redis) Init() error {
 			"timestamp", "NUMERIC", "SORTABLE").
 			Result()
 		// Blocked by https://github.com/redis/go-redis/issues/3150
-		//_, err = r.client.FTCreate(context.TODO(), r.DocumentTable(),
+		//_, err = r.client.FTCreate(context.TODO(), r.ScoresTable(),
 		//	&redis.FTCreateOptions{
 		//		OnHash: true,
-		//		Prefix: []any{r.DocumentTable() + ":"},
+		//		Prefix: []any{r.ScoresTable() + ":"},
 		//	},
 		//	&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
 		//	&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
@@ -245,7 +245,7 @@ func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
 }
 
 func (r *Redis) documentKey(collection, subset, value string) string {
-	return r.DocumentTable() + ":" + collection + ":" + subset + ":" + value
+	return r.ScoresTable() + ":" + collection + ":" + subset + ":" + value
 }
 
 func (r *Redis) AddScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset string, documents []Score) error {
@@ -269,9 +269,9 @@ func (r *Redis) SearchScores(ctx context.Context, collectionNamespace, collectio
 		return nil, nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collection)))
-	if subset != "" {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(subset)))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collectionName)))
+	if collectionSubset != "" {
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(collectionSubset)))
 	}
 	for _, q := range query {
 		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", escape(encdodeCategory(q))))
@@ -285,7 +285,7 @@ func (r *Redis) SearchScores(ctx context.Context, collectionNamespace, collectio
 	} else {
 		options.Limit = end - begin
 	}
-	result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), options).Result()
+	result, err := r.client.FTSearchWithArgs(ctx, r.ScoresTable(), builder.String(), options).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -319,18 +319,18 @@ func (r *Redis) SearchScores(ctx context.Context, collectionNamespace, collectio
 }
 
 func (r *Redis) UpdateScores(ctx context.Context, collectionNamespace string, collectionNames []string, scoreNamespace string, id string, patch ScorePatch) error {
-	if len(collections) == 0 {
+	if len(collectionNames) == 0 {
 		return nil
 	}
 	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
+	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collectionNames, " | "))))
 	builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(id)))
 	for {
 		// search documents
-		result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), &redis.FTSearchOptions{
+		result, err := r.client.FTSearchWithArgs(ctx, r.ScoresTable(), builder.String(), &redis.FTSearchOptions{
 			SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
 			LimitOffset: 0,
 			Limit:       10000,
@@ -387,7 +387,7 @@ func (r *Redis) DeleteScores(ctx context.Context, collectionNamespace string, co
 	}
 	for {
 		// search documents
-		result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), &redis.FTSearchOptions{
+		result, err := r.client.FTSearchWithArgs(ctx, r.ScoresTable(), builder.String(), &redis.FTSearchOptions{
 			SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
 			LimitOffset: 0,
 			Limit:       10000,
