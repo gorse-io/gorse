@@ -105,24 +105,28 @@ type Message struct {
 	Timestamp int64  `gorm:"index:timestamp"`
 }
 
-type PostgresDocument struct {
-	Collection string `gorm:"primaryKey"`
-	Subset     string `gorm:"primaryKey"`
-	Id         string `gorm:"primaryKey"`
-	IsHidden   bool
-	Categories pq.StringArray `gorm:"type:text[]"`
-	Score      float64
-	Timestamp  time.Time
+type PostgresScore struct {
+	CollectionNS string `gorm:"primaryKey"`
+	Collection   string `gorm:"primaryKey"`
+	Subset       string `gorm:"primaryKey"`
+	Namespace    string `gorm:"primaryKey"`
+	Id           string `gorm:"primaryKey"`
+	IsHidden     bool
+	Categories   pq.StringArray `gorm:"type:text[]"`
+	Score        float64
+	Timestamp    time.Time
 }
 
-type SQLDocument struct {
-	Collection string `gorm:"primaryKey"`
-	Subset     string `gorm:"primaryKey"`
-	Id         string `gorm:"primaryKey"`
-	IsHidden   bool
-	Categories []string `gorm:"type:text;serializer:json"`
-	Score      float64
-	Timestamp  time.Time
+type SQLScore struct {
+	CollectionNS string `gorm:"type:varchar(128);primaryKey"`
+	Collection   string `gorm:"type:varchar(128);primaryKey"`
+	Subset       string `gorm:"type:varchar(128);primaryKey"`
+	Namespace    string `gorm:"type:varchar(128);primaryKey"`
+	Id           string `gorm:"type:varchar(256);primaryKey"`
+	IsHidden     bool
+	Categories   []string `gorm:"type:text;serializer:json"`
+	Score        float64
+	Timestamp    time.Time
 }
 
 type SQLDatabase struct {
@@ -147,7 +151,7 @@ func (db *SQLDatabase) Init() error {
 	}
 	switch db.driver {
 	case Postgres:
-		err = db.gormDB.AutoMigrate(&PostgresDocument{})
+		err = db.gormDB.AutoMigrate(&PostgresScore{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -157,21 +161,21 @@ func (db *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		// create index
-		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_subset_categories ON %s USING GIN (collection, subset, categories)", db.DocumentTable())).Error
+		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_subset_categories ON %s USING GIN (collection_ns, collection, subset, namespace, categories)", db.ScoresTable())).Error
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_id ON %s (collection, id)", db.DocumentTable())).Error
+		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_id ON %s (collection_ns, collection, namespace, id)", db.ScoresTable())).Error
 		if err != nil {
 			return errors.Trace(err)
 		}
 	case MySQL:
-		err = db.gormDB.AutoMigrate(&SQLDocument{})
+		err = db.gormDB.AutoMigrate(&SQLScore{})
 		if err != nil {
 			return errors.Trace(err)
 		}
 		// create index
-		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
+		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection_ns, collection, subset, namespace, (CAST(categories AS CHAR(255) ARRAY)))", db.ScoresTable())).Error
 		if err != nil {
 			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
 				// ignore duplicate index error
@@ -179,7 +183,7 @@ func (db *SQLDatabase) Init() error {
 				return errors.Trace(err)
 			}
 		}
-		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_id (collection, id)", db.DocumentTable())).Error
+		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_id (collection_ns, collection, namespace, id)", db.ScoresTable())).Error
 		if err != nil {
 			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
 				// ignore duplicate index error
@@ -189,7 +193,7 @@ func (db *SQLDatabase) Init() error {
 			}
 		}
 	case SQLite:
-		err = db.gormDB.AutoMigrate(&SQLDocument{})
+		err = db.gormDB.AutoMigrate(&SQLScore{})
 	}
 	return errors.Trace(err)
 }
@@ -240,7 +244,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}, SQLDocument{}}
+	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}, SQLScore{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
@@ -391,55 +395,67 @@ func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, er
 	return
 }
 
-func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
+func (db *SQLDatabase) AddScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset string, documents []Score) error {
 	var rows any
 	switch db.driver {
 	case Postgres:
-		rows = lo.Map(documents, func(document Document, _ int) PostgresDocument {
-			return PostgresDocument{
-				Collection: collection,
-				Subset:     subset,
-				Id:         document.Id,
-				Score:      document.Score,
-				IsHidden:   document.IsHidden,
-				Categories: document.Categories,
-				Timestamp:  document.Timestamp,
+		rows = lo.Map(documents, func(document Score, _ int) PostgresScore {
+			return PostgresScore{
+				CollectionNS: collectionNamespace,
+				Collection:   collectionName,
+				Subset:       collectionSubset,
+				Namespace:    document.Namespace,
+				Id:           document.Id,
+				Score:        document.Score,
+				IsHidden:     document.IsHidden,
+				Categories:   document.Categories,
+				Timestamp:    document.Timestamp,
 			}
 		})
 	case SQLite, MySQL:
-		rows = lo.Map(documents, func(document Document, _ int) SQLDocument {
-			return SQLDocument{
-				Collection: collection,
-				Subset:     subset,
-				Id:         document.Id,
-				Score:      document.Score,
-				IsHidden:   document.IsHidden,
-				Categories: document.Categories,
-				Timestamp:  document.Timestamp,
+		rows = lo.Map(documents, func(document Score, _ int) SQLScore {
+			return SQLScore{
+				CollectionNS: collectionNamespace,
+				Collection:   collectionName,
+				Subset:       collectionSubset,
+				Namespace:    document.Namespace,
+				Id:           document.Id,
+				Score:        document.Score,
+				IsHidden:     document.IsHidden,
+				Categories:   document.Categories,
+				Timestamp:    document.Timestamp,
 			}
 		})
 	}
-	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "id"}},
+	db.gormDB.WithContext(ctx).Table(db.ScoresTable()).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "collection_ns"},
+			{Name: "collection"},
+			{Name: "subset"},
+			{Name: "namespace"},
+			{Name: "id"},
+		},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
 	}).Create(rows)
 	return nil
 }
 
-func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+func (db *SQLDatabase) SearchScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset, scoreNamespace string, query []string, begin, end int) ([]Score, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("id, score, categories, timestamp")
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresScore{}).Select("namespace, id, score, categories, timestamp")
 	switch db.driver {
 	case Postgres:
-		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and categories @> ?", collection, subset, pq.StringArray(query))
+		tx = tx.Where("collection_ns = ? and collection = ? and subset = ? and namespace = ? and is_hidden = false and categories @> ?",
+			collectionNamespace, collectionName, collectionSubset, scoreNamespace, pq.StringArray(query))
 	case SQLite, MySQL:
 		q, err := json.Marshal(query)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and JSON_CONTAINS(categories,?)", collection, subset, string(q))
+		tx = tx.Where("collection_ns = ? and collection = ? and subset = ? and namespace = ? and is_hidden = false and JSON_CONTAINS(categories,?)",
+			collectionNamespace, collectionName, collectionSubset, scoreNamespace, string(q))
 	}
 	tx = tx.Order("score desc").Offset(begin)
 	if end != -1 {
@@ -451,22 +467,23 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	documents := make([]Document, 0, 10)
+	documents := make([]Score, 0, 10)
 	for rows.Next() {
 		switch db.driver {
 		case Postgres:
-			var document PostgresDocument
-			if err = rows.Scan(&document.Id, &document.Score, &document.Categories, &document.Timestamp); err != nil {
+			var document PostgresScore
+			if err = rows.Scan(&document.Namespace, &document.Id, &document.Score, &document.Categories, &document.Timestamp); err != nil {
 				return nil, errors.Trace(err)
 			}
-			documents = append(documents, Document{
+			documents = append(documents, Score{
+				Namespace:  document.Namespace,
 				Id:         document.Id,
 				Score:      document.Score,
 				Categories: document.Categories,
 				Timestamp:  document.Timestamp,
 			})
 		case SQLite, MySQL:
-			var document Document
+			var document Score
 			if err = db.gormDB.ScanRows(rows, &document); err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -477,14 +494,16 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	return documents, nil
 }
 
-func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
-	if len(collections) == 0 {
+func (db *SQLDatabase) UpdateScores(ctx context.Context, collectionNamespace string, collectionNames []string, scoreNamespace string, id string, patch ScorePatch) error {
+	if len(collectionNames) == 0 {
 		return nil
 	}
 	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("collection in (?) and id = ?", collections, id)
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresScore{}).
+		Where("collection_ns = ? and collection in (?) and namespace = ? and id = ?",
+			collectionNamespace, collectionNames, scoreNamespace, id)
 	if patch.Score != nil {
 		tx = tx.Update("score", *patch.Score)
 	}
@@ -506,17 +525,21 @@ func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string
 	return tx.Error
 }
 
-func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+func (db *SQLDatabase) DeleteScores(ctx context.Context, collectionNamespace string, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	builder.WriteString("collection in (?)")
+	builder.WriteString("collection_ns = ? and collection in (?)")
 	var args []any
-	args = append(args, collections)
+	args = append(args, collectionNamespace, collections)
 	if condition.Subset != nil {
 		builder.WriteString(" and subset = ?")
 		args = append(args, *condition.Subset)
+	}
+	if condition.Namespace != nil {
+		builder.WriteString(" and namespace = ?")
+		args = append(args, *condition.Namespace)
 	}
 	if condition.Id != nil {
 		builder.WriteString(" and id = ?")
@@ -526,7 +549,7 @@ func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string
 		builder.WriteString(" and timestamp < ?")
 		args = append(args, *condition.Before)
 	}
-	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
+	return db.gormDB.WithContext(ctx).Delete(&SQLScore{}, append([]any{builder.String()}, args...)...).Error
 }
 
 func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {

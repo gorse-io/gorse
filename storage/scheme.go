@@ -102,8 +102,8 @@ func (tp TablePrefix) MessageTable() string {
 	return string(tp) + "message"
 }
 
-func (tp TablePrefix) DocumentTable() string {
-	return string(tp) + "documents"
+func (tp TablePrefix) ScoresTable() string {
+	return string(tp) + "scores"
 }
 
 func (tp TablePrefix) PointsTable() string {
@@ -140,8 +140,8 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 				"SQLUser", "Users",
 				"SQLItem", "Items",
 				"SQLFeedback", "Feedback",
-				"SQLDocument", "Documents",
-				"PostgresDocument", "Documents",
+				"SQLScore", "Scores",
+				"PostgresScore", "Scores",
 				"TimeSeriesPoint", "time_series_points",
 			),
 		},

@@ -90,18 +90,22 @@ func (m MongoDB) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = d.Collection(m.DocumentTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
+	_, err = d.Collection(m.ScoresTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{
+				{"collection_ns", 1},
 				{"collection", 1},
 				{"subset", 1},
+				{"namespace", 1},
 				{"id", 1},
 			},
 		},
 		{
 			Keys: bson.D{
+				{"collection_ns", 1},
 				{"collection", 1},
 				{"subset", 1},
+				{"namespace", 1},
 				{"categories", 1},
 				{"is_hidden", 1},
 				{"score", -1},
@@ -179,7 +183,7 @@ func (m MongoDB) Scan(work func(string) error) error {
 }
 
 func (m MongoDB) Purge() error {
-	tables := []string{m.ValuesTable(), m.SetsTable(), m.DocumentTable()}
+	tables := []string{m.ValuesTable(), m.SetsTable(), m.ScoresTable()}
 	for _, tableName := range tables {
 		c := m.client.Database(m.dbName).Collection(tableName)
 		_, err := c.DeleteMany(context.Background(), bson.D{})
@@ -317,7 +321,7 @@ func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
 	})
 }
 
-func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
+func (m MongoDB) AddScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset string, documents []Score) error {
 	if len(documents) == 0 {
 		return nil
 	}
@@ -326,9 +330,11 @@ func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, do
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
 			SetFilter(bson.M{
-				"collection": collection,
-				"subset":     subset,
-				"id":         document.Id,
+				"collection_ns": collectionNamespace,
+				"collection":    collectionName,
+				"subset":        collectionSubset,
+				"namespace":     document.Namespace,
+				"id":            document.Id,
 			}).
 			SetUpdate(bson.M{"$set": bson.M{
 				"score":      document.Score,
@@ -337,11 +343,11 @@ func (m MongoDB) AddDocuments(ctx context.Context, collection, subset string, do
 				"timestamp":  document.Timestamp,
 			}}))
 	}
-	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).BulkWrite(ctx, models)
+	_, err := m.client.Database(m.dbName).Collection(m.ScoresTable()).BulkWrite(ctx, models)
 	return errors.Trace(err)
 }
 
-func (m MongoDB) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+func (m MongoDB) SearchScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset, scoreNamespace string, query []string, begin, end int) ([]Score, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
@@ -349,18 +355,20 @@ func (m MongoDB) SearchDocuments(ctx context.Context, collection, subset string,
 	if end != -1 {
 		opt.SetLimit(int64(end - begin))
 	}
-	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{
-		"collection": collection,
-		"subset":     subset,
-		"is_hidden":  false,
-		"categories": bson.M{"$all": query},
+	cur, err := m.client.Database(m.dbName).Collection(m.ScoresTable()).Find(ctx, bson.M{
+		"collection_ns": collectionNamespace,
+		"collection":    collectionName,
+		"subset":        collectionSubset,
+		"namespace":     scoreNamespace,
+		"is_hidden":     false,
+		"categories":    bson.M{"$all": query},
 	}, opt)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	documents := make([]Document, 0)
+	documents := make([]Score, 0)
 	for cur.Next(ctx) {
-		var document Document
+		var document Score
 		if err = cur.Decode(&document); err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -369,8 +377,8 @@ func (m MongoDB) SearchDocuments(ctx context.Context, collection, subset string,
 	return documents, nil
 }
 
-func (m MongoDB) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
-	if len(collections) == 0 {
+func (m MongoDB) UpdateScores(ctx context.Context, collectionNamespace string, collectionNames []string, scoreNamespace string, id string, patch ScorePatch) error {
+	if len(collectionNames) == 0 {
 		return nil
 	}
 	if patch.IsHidden == nil && patch.Categories == nil && patch.Score == nil {
@@ -386,18 +394,26 @@ func (m MongoDB) UpdateDocuments(ctx context.Context, collections []string, id s
 	if patch.Score != nil {
 		update = append(update, bson.E{Key: "$set", Value: bson.M{"score": *patch.Score}})
 	}
-	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, bson.M{
-		"collection": bson.M{"$in": collections},
-		"id":         id,
+	_, err := m.client.Database(m.dbName).Collection(m.ScoresTable()).UpdateMany(ctx, bson.M{
+		"collection_ns": collectionNamespace,
+		"collection":    bson.M{"$in": collectionNames},
+		"namespace":     scoreNamespace,
+		"id":            id,
 	}, update)
 	return errors.Trace(err)
 }
 
-func (m MongoDB) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+func (m MongoDB) DeleteScores(ctx context.Context, collectionNamespace string, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}
-	filter := bson.M{"collection": bson.M{"$in": collections}}
+	filter := bson.M{
+		"collection_ns": collectionNamespace,
+		"collection":    bson.M{"$in": collections},
+	}
+	if condition.Namespace != nil {
+		filter["namespace"] = condition.Namespace
+	}
 	if condition.Subset != nil {
 		filter["subset"] = condition.Subset
 	}
@@ -407,7 +423,7 @@ func (m MongoDB) DeleteDocuments(ctx context.Context, collections []string, cond
 	if condition.Before != nil {
 		filter["timestamp"] = bson.M{"$lt": condition.Before}
 	}
-	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).DeleteMany(ctx, filter)
+	_, err := m.client.Database(m.dbName).Collection(m.ScoresTable()).DeleteMany(ctx, filter)
 	return errors.Trace(err)
 }
 

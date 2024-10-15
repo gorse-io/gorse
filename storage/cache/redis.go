@@ -52,11 +52,13 @@ func (r *Redis) Init() error {
 		return errors.Trace(err)
 	}
 	// create index
-	if !lo.Contains(indices, r.DocumentTable()) {
-		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
-			"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
+	if !lo.Contains(indices, r.ScoresTable()) {
+		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.ScoresTable(),
+			"ON", "HASH", "PREFIX", "1", r.ScoresTable()+":", "SCHEMA",
+			"collection_ns", "TAG",
 			"collection", "TAG",
 			"subset", "TAG",
+			"namespace", "TAG",
 			"id", "TAG",
 			"score", "NUMERIC", "SORTABLE",
 			"is_hidden", "NUMERIC",
@@ -64,10 +66,10 @@ func (r *Redis) Init() error {
 			"timestamp", "NUMERIC", "SORTABLE").
 			Result()
 		// Blocked by https://github.com/redis/go-redis/issues/3150
-		//_, err = r.client.FTCreate(context.TODO(), r.DocumentTable(),
+		//_, err = r.client.FTCreate(context.TODO(), r.ScoresTable(),
 		//	&redis.FTCreateOptions{
 		//		OnHash: true,
-		//		Prefix: []any{r.DocumentTable() + ":"},
+		//		Prefix: []any{r.ScoresTable() + ":"},
 		//	},
 		//	&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
 		//	&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
@@ -245,15 +247,17 @@ func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
 }
 
 func (r *Redis) documentKey(collection, subset, value string) string {
-	return r.DocumentTable() + ":" + collection + ":" + subset + ":" + value
+	return r.ScoresTable() + ":" + collection + ":" + subset + ":" + value
 }
 
-func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
+func (r *Redis) AddScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset string, documents []Score) error {
 	p := r.client.Pipeline()
 	for _, document := range documents {
-		p.HSet(ctx, r.documentKey(collection, subset, document.Id),
-			"collection", collection,
-			"subset", subset,
+		p.HSet(ctx, r.documentKey(collectionName, collectionSubset, document.Id),
+			"collection_ns", encodeNamespace(collectionNamespace),
+			"collection", collectionName,
+			"subset", collectionSubset,
+			"namespace", encodeNamespace(document.Namespace),
 			"id", document.Id,
 			"score", document.Score,
 			"is_hidden", document.IsHidden,
@@ -264,15 +268,17 @@ func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, doc
 	return errors.Trace(err)
 }
 
-func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+func (r *Redis) SearchScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset, scoreNamespace string, query []string, begin, end int) ([]Score, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collection)))
-	if subset != "" {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(subset)))
+	builder.WriteString(fmt.Sprintf("@collection_ns:{ %s } @collection:{ %s } @is_hidden:[0 0]",
+		escape(encodeNamespace(collectionNamespace)), escape(collectionName)))
+	if collectionSubset != "" {
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(collectionSubset)))
 	}
+	builder.WriteString(fmt.Sprintf(" @namespace:{ %s }", escape(encodeNamespace(scoreNamespace))))
 	for _, q := range query {
 		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", escape(encdodeCategory(q))))
 	}
@@ -285,13 +291,14 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	} else {
 		options.Limit = end - begin
 	}
-	result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), options).Result()
+	result, err := r.client.FTSearchWithArgs(ctx, r.ScoresTable(), builder.String(), options).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	documents := make([]Document, 0, len(result.Docs))
+	documents := make([]Score, 0, len(result.Docs))
 	for _, doc := range result.Docs {
-		var document Document
+		var document Score
+		document.Namespace = decodeNamespace(doc.Fields["namespace"])
 		document.Id = doc.Fields["id"]
 		score, err := strconv.ParseFloat(doc.Fields["score"], 64)
 		if err != nil {
@@ -318,19 +325,21 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	return documents, nil
 }
 
-func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
-	if len(collections) == 0 {
+func (r *Redis) UpdateScores(ctx context.Context, collectionNamespace string, collectionNames []string, scoreNamespace string, id string, patch ScorePatch) error {
+	if len(collectionNames) == 0 {
 		return nil
 	}
 	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
+	builder.WriteString(fmt.Sprintf("@collection_ns:{ %s }", escape(encodeNamespace(collectionNamespace))))
+	builder.WriteString(fmt.Sprintf(" @collection:{ %s }", escape(strings.Join(collectionNames, " | "))))
+	builder.WriteString(fmt.Sprintf(" @namespace:{ %s }", escape(encodeNamespace(scoreNamespace))))
 	builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(id)))
 	for {
 		// search documents
-		result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), &redis.FTSearchOptions{
+		result, err := r.client.FTSearchWithArgs(ctx, r.ScoresTable(), builder.String(), &redis.FTSearchOptions{
 			SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
 			LimitOffset: 0,
 			Limit:       10000,
@@ -370,14 +379,18 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 	return nil
 }
 
-func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+func (r *Redis) DeleteScores(ctx context.Context, collectionNamespace string, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
+	builder.WriteString(fmt.Sprintf("@collection_ns:{ %s } @collection:{ %s }",
+		escape(encodeNamespace(collectionNamespace)), escape(strings.Join(collections, " | "))))
 	if condition.Subset != nil {
 		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(*condition.Subset)))
+	}
+	if condition.Namespace != nil {
+		builder.WriteString(fmt.Sprintf(" @namespace:{ %s }", escape(encodeNamespace(*condition.Namespace))))
 	}
 	if condition.Id != nil {
 		builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(*condition.Id)))
@@ -387,7 +400,7 @@ func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condi
 	}
 	for {
 		// search documents
-		result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), &redis.FTSearchOptions{
+		result, err := r.client.FTSearchWithArgs(ctx, r.ScoresTable(), builder.String(), &redis.FTSearchOptions{
 			SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
 			LimitOffset: 0,
 			Limit:       10000,
@@ -486,6 +499,18 @@ func decodeCategories(s string) ([]string, error) {
 		categories = append(categories, category)
 	}
 	return categories, nil
+}
+
+func encodeNamespace(namespace string) string {
+	return base64.RawStdEncoding.EncodeToString([]byte("_" + namespace))
+}
+
+func decodeNamespace(s string) string {
+	b, err := base64.RawStdEncoding.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b[1:])
 }
 
 // escape -:.
