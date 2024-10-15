@@ -38,6 +38,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	beta1 float32 = 0.9
+	beta2 float32 = 0.999
+	eps   float32 = 1e-8
+)
+
 type Score struct {
 	Task      FMTask
 	RMSE      float32
@@ -536,8 +542,6 @@ func MarshalModel(w io.Writer, m FactorizationMachine) error {
 	switch m.(type) {
 	case *FM:
 		err = encoding.WriteString(w, headerFM)
-	case *DeepFM:
-		err = encoding.WriteString(w, headerDeepFM)
 	default:
 		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
 	}
@@ -548,8 +552,7 @@ func MarshalModel(w io.Writer, m FactorizationMachine) error {
 }
 
 const (
-	headerFM     = "FM"
-	headerDeepFM = "DeepFM"
+	headerFM = "FM"
 )
 
 func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
@@ -565,12 +568,6 @@ func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
 			return nil, errors.Trace(err)
 		}
 		return &fm, nil
-	case headerDeepFM:
-		fm := NewDeepFM(nil)
-		if err := fm.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
-		}
-		return fm, nil
 	}
 	return nil, fmt.Errorf("unknown model: %v", header)
 }

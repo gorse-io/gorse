@@ -35,7 +35,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -154,14 +153,6 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 		importedChan: parallel.NewConditionChannel(),
 		loadDataChan: parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
-	}
-
-	// enable deep learning
-	if cfg.Experimental.EnableDeepLearning {
-		log.Logger().Debug("enable deep learning")
-		m.ClickModel = click.NewDeepFM(model.Params{
-			model.BatchSize: cfg.Experimental.DeepLearningBatchSize,
-		})
 	}
 
 	return m

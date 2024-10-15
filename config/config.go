@@ -54,12 +54,11 @@ const (
 
 // Config is the configuration for the engine.
 type Config struct {
-	Database     DatabaseConfig     `mapstructure:"database"`
-	Master       MasterConfig       `mapstructure:"master"`
-	Server       ServerConfig       `mapstructure:"server"`
-	Recommend    RecommendConfig    `mapstructure:"recommend"`
-	Tracing      TracingConfig      `mapstructure:"tracing"`
-	Experimental ExperimentalConfig `mapstructure:"experimental"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Master    MasterConfig    `mapstructure:"master"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Recommend RecommendConfig `mapstructure:"recommend"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -174,11 +173,6 @@ type TracingConfig struct {
 	Ratio             float64 `mapstructure:"ratio"`
 }
 
-type ExperimentalConfig struct {
-	EnableDeepLearning    bool `mapstructure:"enable_deep_learning"`
-	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
-}
-
 func GetDefaultConfig() *Config {
 	return &Config{
 		Master: MasterConfig{
@@ -248,9 +242,6 @@ func GetDefaultConfig() *Config {
 		Tracing: TracingConfig{
 			Exporter: "jaeger",
 			Sampler:  "always",
-		},
-		Experimental: ExperimentalConfig{
-			DeepLearningBatchSize: 128,
 		},
 	}
 }
@@ -526,8 +517,6 @@ func setDefault() {
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
-	// [experimental]
-	viper.SetDefault("experimental.deep_learning_batch_size", defaultConfig.Experimental.DeepLearningBatchSize)
 }
 
 type configBinding struct {
