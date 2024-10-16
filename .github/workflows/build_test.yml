@@ -73,10 +73,10 @@ jobs:
         unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
 
-    - name: Set up Go 1.22.x
+    - name: Set up Go 1.23.x
       uses: actions/setup-go@v4
       with:
-        go-version: 1.22.x
+        go-version: 1.23.x
       id: go
 
     - name: Check out code into the Go module directory
@@ -126,7 +126,7 @@ jobs:
           database=${{ matrix.database }}
 
     - name: Build the stack
-      run: docker-compose -f client/docker-compose.yml --project-directory . up -d
+      run: docker compose -f client/docker-compose.yml --project-directory . up -d
       env:
         DOCKER_BUILDKIT: 1
 
@@ -142,10 +142,10 @@ jobs:
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
 
-    - name: Set up Go 1.22.x
+    - name: Set up Go 1.23.x
       uses: actions/setup-go@v4
       with:
-        go-version: 1.22.x
+        go-version: 1.23.x
       id: go
 
     - name: Test
@@ -172,10 +172,10 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
 
     steps:
-      - name: Set up Go 1.22.x
+      - name: Set up Go 1.23.x
         uses: actions/setup-go@v4
         with:
-          go-version: 1.22.x
+          go-version: 1.23.x
         id: go
 
       - name: Check out code into the Go module directory
@@ -192,7 +192,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: 1.22.x
+          go-version: 1.23.x
       - uses: actions/checkout@v2
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
