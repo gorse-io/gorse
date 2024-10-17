@@ -53,30 +53,19 @@ func (r *Redis) Init() error {
 	}
 	// create index
 	if !lo.Contains(indices, r.DocumentTable()) {
-		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.DocumentTable(),
-			"ON", "HASH", "PREFIX", "1", r.DocumentTable()+":", "SCHEMA",
-			"collection", "TAG",
-			"subset", "TAG",
-			"id", "TAG",
-			"score", "NUMERIC", "SORTABLE",
-			"is_hidden", "NUMERIC",
-			"categories", "TAG", "SEPARATOR", ";",
-			"timestamp", "NUMERIC", "SORTABLE").
-			Result()
-		// Blocked by https://github.com/redis/go-redis/issues/3150
-		//_, err = r.client.FTCreate(context.TODO(), r.DocumentTable(),
-		//	&redis.FTCreateOptions{
-		//		OnHash: true,
-		//		Prefix: []any{r.DocumentTable() + ":"},
-		//	},
-		//	&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
-		//	&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
-		//	&redis.FieldSchema{FieldName: "id", FieldType: redis.SearchFieldTypeTag},
-		//	&redis.FieldSchema{FieldName: "score", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
-		//	&redis.FieldSchema{FieldName: "is_hidden", FieldType: redis.SearchFieldTypeNumeric},
-		//	&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Seperator: ";"},
-		//	&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
-		//).Result()
+		_, err = r.client.FTCreate(context.TODO(), r.DocumentTable(),
+			&redis.FTCreateOptions{
+				OnHash: true,
+				Prefix: []any{r.DocumentTable() + ":"},
+			},
+			&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "id", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "score", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+			&redis.FieldSchema{FieldName: "is_hidden", FieldType: redis.SearchFieldTypeNumeric},
+			&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Separator: ";"},
+			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+		).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
