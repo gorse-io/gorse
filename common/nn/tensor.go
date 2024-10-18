@@ -12,6 +12,13 @@ type Tensor struct {
 	shape []int
 }
 
+func NewTensor(data []float32, shape ...int) *Tensor {
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
 func LinSpace(start, end float32, shape ...int) *Tensor {
 	n := 1
 	for _, s := range shape {
@@ -44,6 +51,11 @@ func RandN(shape ...int) *Tensor {
 }
 
 func (t *Tensor) String() string {
+	// Print scalar value
+	if len(t.shape) == 0 {
+		return fmt.Sprint(t.data[0])
+	}
+
 	builder := strings.Builder{}
 	builder.WriteString("[")
 	if len(t.data) <= 10 {
@@ -80,21 +92,34 @@ func (t *Tensor) clone() *Tensor {
 }
 
 func (t *Tensor) add(other *Tensor) *Tensor {
-	if len(t.data) != len(other.data) {
-		panic("tensors must have the same size")
+	wSize := 1
+	for i := range other.shape {
+		wSize *= other.shape[i]
 	}
 	for i := range t.data {
-		t.data[i] += other.data[i]
+		t.data[i] += other.data[i%wSize]
+	}
+	return t
+}
+
+func (t *Tensor) sub(other *Tensor) *Tensor {
+	wSize := 1
+	for i := range other.shape {
+		wSize *= other.shape[i]
+	}
+	for i := range t.data {
+		t.data[i] -= other.data[i%wSize]
 	}
 	return t
 }
 
 func (t *Tensor) mul(other *Tensor) *Tensor {
-	if len(t.data) != len(other.data) {
-		panic("tensors must have the same size")
+	wSize := 1
+	for i := range other.shape {
+		wSize *= other.shape[i]
 	}
 	for i := range t.data {
-		t.data[i] *= other.data[i]
+		t.data[i] *= other.data[i%wSize]
 	}
 	return t
 }
@@ -111,4 +136,12 @@ func (t *Tensor) sin() *Tensor {
 		t.data[i] = math32.Sin(t.data[i])
 	}
 	return t
+}
+
+func (t *Tensor) sum() float32 {
+	sum := float32(0)
+	for i := range t.data {
+		sum += t.data[i]
+	}
+	return sum
 }
