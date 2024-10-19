@@ -10,12 +10,21 @@ import (
 type Tensor struct {
 	data  []float32
 	shape []int
+	grad  *Tensor
+	op    op
 }
 
 func NewTensor(data []float32, shape ...int) *Tensor {
 	return &Tensor{
 		data:  data,
 		shape: shape,
+	}
+}
+
+func NewScalar(data float32) *Tensor {
+	return &Tensor{
+		data:  []float32{data},
+		shape: []int{},
 	}
 }
 
@@ -50,6 +59,43 @@ func RandN(shape ...int) *Tensor {
 	}
 }
 
+// Ones creates a tensor filled with ones.
+func Ones(shape ...int) *Tensor {
+	n := 1
+	for _, s := range shape {
+		n *= s
+	}
+	data := make([]float32, n)
+	for i := range data {
+		data[i] = 1
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+// Zeros creates a tensor filled with zeros.
+func Zeros(shape ...int) *Tensor {
+	n := 1
+	for _, s := range shape {
+		n *= s
+	}
+	data := make([]float32, n)
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+// NoGrad creates a tensor does not require gradient.
+func (t *Tensor) NoGrad() *Tensor {
+	if t.op != nil {
+		t.op = nil
+	}
+	return t
+}
+
 func (t *Tensor) String() string {
 	// Print scalar value
 	if len(t.shape) == 0 {
@@ -80,6 +126,27 @@ func (t *Tensor) String() string {
 	}
 	builder.WriteString("]")
 	return builder.String()
+}
+
+func (t *Tensor) Backward() {
+	t.grad = Ones(t.shape...)
+	ops := []op{t.op}
+	for len(ops) > 0 {
+		op := ops[0]
+		ops = ops[1:]
+		inputs, output := op.inputsAndOutput()
+		grads := op.backward(output.grad)
+		for i := range grads {
+			inputs[i].grad = grads[i]
+			if inputs[i].op != nil {
+				ops = append(ops, inputs[i].op)
+			}
+		}
+	}
+}
+
+func (t *Tensor) Grad() *Tensor {
+	return t.grad
 }
 
 func (t *Tensor) clone() *Tensor {
@@ -124,9 +191,31 @@ func (t *Tensor) mul(other *Tensor) *Tensor {
 	return t
 }
 
-func (t *Tensor) pow(n float32) *Tensor {
+func (t *Tensor) div(other *Tensor) *Tensor {
+	wSize := 1
+	for i := range other.shape {
+		wSize *= other.shape[i]
+	}
 	for i := range t.data {
-		t.data[i] = math32.Pow(t.data[i], n)
+		t.data[i] /= other.data[i%wSize]
+	}
+	return t
+}
+
+func (t *Tensor) square() *Tensor {
+	for i := range t.data {
+		t.data[i] = t.data[i] * t.data[i]
+	}
+	return t
+}
+
+func (t *Tensor) pow(other *Tensor) *Tensor {
+	wSize := 1
+	for i := range other.shape {
+		wSize *= other.shape[i]
+	}
+	for i := range t.data {
+		t.data[i] = math32.Pow(t.data[i], other.data[i%wSize])
 	}
 	return t
 }
@@ -134,6 +223,20 @@ func (t *Tensor) pow(n float32) *Tensor {
 func (t *Tensor) sin() *Tensor {
 	for i := range t.data {
 		t.data[i] = math32.Sin(t.data[i])
+	}
+	return t
+}
+
+func (t *Tensor) cos() *Tensor {
+	for i := range t.data {
+		t.data[i] = math32.Cos(t.data[i])
+	}
+	return t
+}
+
+func (t *Tensor) neg() *Tensor {
+	for i := range t.data {
+		t.data[i] = -t.data[i]
 	}
 	return t
 }
