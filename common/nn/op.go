@@ -261,6 +261,48 @@ func (p *pow) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{dx0, dx1}
 }
 
+type exp struct {
+	base
+}
+
+func (e *exp) String() string {
+	return "Exp"
+}
+
+func (e *exp) forward(inputs ...*Tensor) *Tensor {
+	y := inputs[0].clone()
+	y.exp()
+	return y
+}
+
+func (e *exp) backward(dy *Tensor) []*Tensor {
+	dx := e.inputs[0].clone()
+	dx.exp()
+	dx.mul(dy)
+	return []*Tensor{dx}
+}
+
+type log struct {
+	base
+}
+
+func (l *log) String() string {
+	return "Log"
+}
+
+func (l *log) forward(inputs ...*Tensor) *Tensor {
+	y := inputs[0].clone()
+	y.log()
+	return y
+}
+
+func (l *log) backward(dy *Tensor) []*Tensor {
+	dx := l.inputs[0].clone()
+	dx.div(l.inputs[0])
+	dx.mul(dy)
+	return []*Tensor{dx}
+}
+
 type sum struct {
 	base
 }
@@ -389,6 +431,52 @@ func (f *flatten) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{NewTensor(dy.data, f.inputs[0].shape...)}
 }
 
+type sigmoid struct {
+	base
+}
+
+func (s *sigmoid) String() string {
+	return "Sigmoid"
+}
+
+func (s *sigmoid) forward(inputs ...*Tensor) *Tensor {
+	// y = tanh(x * 0.5) * 0.5 + 0.5
+	y := inputs[0].clone()
+	y.mul(NewScalar(0.5))
+	y.tanh()
+	y.mul(NewScalar(0.5))
+	y.add(NewScalar(0.5))
+	return y
+}
+
+func (s *sigmoid) backward(dy *Tensor) []*Tensor {
+	// dx = dy * y * (1 - y)
+	dx := dy.clone()
+	dx.mul(s.output)
+	dx.mul(Sub(NewScalar(1), s.output))
+	return []*Tensor{dx}
+}
+
+type relu struct {
+	base
+}
+
+func (r *relu) String() string {
+	return "ReLU"
+}
+
+func (r *relu) forward(inputs ...*Tensor) *Tensor {
+	y := inputs[0].clone()
+	y.maximum(NewScalar(0))
+	return y
+}
+
+func (r *relu) backward(dy *Tensor) []*Tensor {
+	dx := dy.clone()
+	dx.maximum(NewScalar(0))
+	return []*Tensor{dx}
+}
+
 // Add returns the element-wise sum of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Add(x0, x1 *Tensor) *Tensor {
 	if len(x0.shape) < len(x1.shape) {
@@ -459,6 +547,16 @@ func Pow(x *Tensor, n *Tensor) *Tensor {
 	return apply(&pow{}, x, n)
 }
 
+// Exp returns the element-wise exponential of a tensor.
+func Exp(x *Tensor) *Tensor {
+	return apply(&exp{}, x)
+}
+
+// Log returns the element-wise natural logarithm of a tensor.
+func Log(x *Tensor) *Tensor {
+	return apply(&log{}, x)
+}
+
 // Sin returns the element-wise sine of a tensor.
 func Sin(x *Tensor) *Tensor {
 	return apply(&sin{}, x)
@@ -488,4 +586,12 @@ func Broadcast(x *Tensor, shape ...int) *Tensor {
 
 func Flatten(x *Tensor) *Tensor {
 	return apply(&flatten{}, x)
+}
+
+func Sigmoid(x *Tensor) *Tensor {
+	return apply(&sigmoid{}, x)
+}
+
+func ReLu(x *Tensor) *Tensor {
+	return apply(&relu{}, x)
 }

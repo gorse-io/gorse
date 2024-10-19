@@ -258,6 +258,34 @@ func TestPow(t *testing.T) {
 	}, y.grad.data, 1e-6)
 }
 
+func TestExp(t *testing.T) {
+	// (2,3) -> (2,3)
+	x := NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
+	y := Exp(x)
+	assert.InDeltaSlice(t, []float32{1, math32.Exp(1), math32.Exp(2), math32.Exp(3), math32.Exp(4), math32.Exp(5)}, y.data, 1e-6)
+
+	// Test gradient
+	x = RandN(2, 3)
+	y = Exp(x)
+	y.Backward()
+	dx := numericalDiff(Exp, x)
+	allClose(t, x.grad, dx)
+}
+
+func TestLog(t *testing.T) {
+	// (2,3) -> (2,3)
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := Log(x)
+	assert.InDeltaSlice(t, []float32{0, math32.Log(2), math32.Log(3), math32.Log(4), math32.Log(5), math32.Log(6)}, y.data, 1e-6)
+
+	// Test gradient
+	x = RandN(2, 3)
+	y = Log(x)
+	y.Backward()
+	dx := numericalDiff(Log, x)
+	allClose(t, x.grad, dx)
+}
+
 func TestSum(t *testing.T) {
 	// (2,3) -> ()
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
@@ -337,4 +365,32 @@ func TestBroadcast(t *testing.T) {
 	// Test gradient
 	y.Backward()
 	assert.Equal(t, []float32{3, 3}, x.grad.data)
+}
+
+func TestSigmoid(t *testing.T) {
+	// (2,3) -> (2,3)
+	x := NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
+	y := Sigmoid(x)
+	assert.InDeltaSlice(t, []float32{0.5, 0.7310585786300049, 0.8807970779778823, 0.9525741268224334, 0.9820137900379085, 0.9933071490757153}, y.data, 1e-6)
+
+	// Test gradient
+	x = RandN(2, 3)
+	y = Sigmoid(x)
+	y.Backward()
+	dx := numericalDiff(Sigmoid, x)
+	allClose(t, x.grad, dx)
+}
+
+func TestReLu(t *testing.T) {
+	// (2,3) -> (2,3)
+	x := NewTensor([]float32{-1, 0, 1, 2, 3, 4}, 2, 3)
+	y := ReLu(x)
+	assert.Equal(t, []float32{0, 0, 1, 2, 3, 4}, y.data)
+
+	// Test gradient
+	x = RandN(2, 3)
+	y = ReLu(x)
+	y.Backward()
+	dx := numericalDiff(ReLu, x)
+	allClose(t, x.grad, dx)
 }

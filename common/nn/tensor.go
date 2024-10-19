@@ -102,6 +102,10 @@ func Zeros(shape ...int) *Tensor {
 	}
 }
 
+func (t *Tensor) IsScalar() bool {
+	return len(t.shape) == 0
+}
+
 // NoGrad creates a tensor does not require gradient.
 func (t *Tensor) NoGrad() *Tensor {
 	if t.op != nil {
@@ -238,6 +242,20 @@ func (t *Tensor) pow(other *Tensor) *Tensor {
 	return t
 }
 
+func (t *Tensor) exp() *Tensor {
+	for i := range t.data {
+		t.data[i] = math32.Exp(t.data[i])
+	}
+	return t
+}
+
+func (t *Tensor) log() *Tensor {
+	for i := range t.data {
+		t.data[i] = math32.Log(t.data[i])
+	}
+	return t
+}
+
 func (t *Tensor) sin() *Tensor {
 	for i := range t.data {
 		t.data[i] = math32.Sin(t.data[i])
@@ -252,19 +270,18 @@ func (t *Tensor) cos() *Tensor {
 	return t
 }
 
+func (t *Tensor) tanh() *Tensor {
+	for i := range t.data {
+		t.data[i] = math32.Tanh(t.data[i])
+	}
+	return t
+}
+
 func (t *Tensor) neg() *Tensor {
 	for i := range t.data {
 		t.data[i] = -t.data[i]
 	}
 	return t
-}
-
-func (t *Tensor) sum() float32 {
-	sum := float32(0)
-	for i := range t.data {
-		sum += t.data[i]
-	}
-	return sum
 }
 
 func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
@@ -347,6 +364,18 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 		return &Tensor{
 			data:  result,
 			shape: []int{m, p},
+		}
+	}
+}
+
+func (t *Tensor) maximum(other *Tensor) {
+	if other.IsScalar() {
+		for i := range t.data {
+			t.data[i] = math32.Max(t.data[i], other.data[0])
+		}
+	} else {
+		for i := range t.data {
+			t.data[i] = math32.Max(t.data[i], other.data[i])
 		}
 	}
 }
