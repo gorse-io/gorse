@@ -1,6 +1,22 @@
+// Copyright 2024 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nn
 
-import "github.com/chewxy/math32"
+import (
+	"github.com/chewxy/math32"
+)
 
 type op interface {
 	String() string
@@ -266,6 +282,113 @@ func (s *sum) backward(*Tensor) []*Tensor {
 	return []*Tensor{Ones(s.inputs[0].shape...)}
 }
 
+type mean struct {
+	base
+}
+
+func (m *mean) String() string {
+	return "Mean"
+}
+
+func (m *mean) forward(inputs ...*Tensor) *Tensor {
+	x := inputs[0]
+	y := NewTensor([]float32{0})
+	for i := range x.data {
+		y.data[0] += x.data[i]
+	}
+	y.data[0] /= float32(len(x.data))
+	return y
+}
+
+func (m *mean) backward(*Tensor) []*Tensor {
+	dx := Zeros(m.inputs[0].shape...)
+	for i := range dx.data {
+		dx.data[i] = 1 / float32(len(dx.data))
+	}
+	return []*Tensor{dx}
+}
+
+type matMul struct {
+	base
+}
+
+func (m *matMul) String() string {
+	return "MatMul"
+}
+
+func (m *matMul) forward(inputs ...*Tensor) *Tensor {
+	return inputs[0].matMul(inputs[1], false, false)
+}
+
+func (m *matMul) backward(dy *Tensor) []*Tensor {
+	dx0 := dy.matMul(m.inputs[1], false, true)
+	dx1 := m.inputs[0].matMul(dy, true, false)
+	return []*Tensor{dx0, dx1}
+}
+
+type broadcast struct {
+	base
+	shape []int
+}
+
+func (b *broadcast) String() string {
+	return "Broadcast"
+}
+
+func (b *broadcast) forward(inputs ...*Tensor) *Tensor {
+	x := inputs[0]
+	// Concatenate the shape
+	shape := make([]int, len(x.shape))
+	copy(shape, x.shape)
+	shape = append(shape, b.shape...)
+	size := 1
+	for i := range shape {
+		size *= shape[i]
+	}
+	// Create a new tensor with the new shape
+	y := NewTensor(make([]float32, size), shape...)
+	wSize := 1
+	for i := range b.shape {
+		wSize *= b.shape[i]
+	}
+	for i := range x.data {
+		for j := i * wSize; j < (i+1)*wSize; j++ {
+			y.data[j] = x.data[i]
+		}
+	}
+	return y
+}
+
+func (b *broadcast) backward(dy *Tensor) []*Tensor {
+	gx := Zeros(b.inputs[0].shape...)
+	wSize := 1
+	for i := range b.shape {
+		wSize *= b.shape[i]
+	}
+	for i := range gx.data {
+		for j := i * wSize; j < (i+1)*wSize; j++ {
+			gx.data[i] += dy.data[j]
+		}
+	}
+	return []*Tensor{gx}
+}
+
+type flatten struct {
+	base
+}
+
+func (f *flatten) String() string {
+	return "Flatten"
+}
+
+func (f *flatten) forward(inputs ...*Tensor) *Tensor {
+	return NewTensor(inputs[0].data, len(inputs[0].data))
+}
+
+func (f *flatten) backward(dy *Tensor) []*Tensor {
+	return []*Tensor{NewTensor(dy.data, f.inputs[0].shape...)}
+}
+
 // Add returns the element-wise sum of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Add(x0, x1 *Tensor) *Tensor {
 	if len(x0.shape) < len(x1.shape) {
@@ -318,6 +441,7 @@ func Div(x0, x1 *Tensor) *Tensor {
 	return apply(&div{}, x0, x1)
 }
 
+// Square returns the element-wise square of a tensor.
 func Square(x *Tensor) *Tensor {
 	return apply(&square{}, x)
 }
@@ -347,4 +471,21 @@ func Cos(x *Tensor) *Tensor {
 // Sum returns the sum of all elements in a tensor.
 func Sum(x *Tensor) *Tensor {
 	return apply(&sum{}, x)
+}
+
+// Mean returns the mean of all elements in a tensor.
+func Mean(x *Tensor) *Tensor {
+	return apply(&mean{}, x)
+}
+
+func MatMul(x, y *Tensor) *Tensor {
+	return apply(&matMul{}, x, y)
+}
+
+func Broadcast(x *Tensor, shape ...int) *Tensor {
+	return apply(&broadcast{shape: shape}, x)
+}
+
+func Flatten(x *Tensor) *Tensor {
+	return apply(&flatten{}, x)
 }

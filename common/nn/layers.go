@@ -14,22 +14,26 @@
 
 package nn
 
-type SGD struct {
-	params []*Tensor
-	lr     float32
+type layer interface {
+	Parameters() []*Tensor
 }
 
-func NewSGD(params []*Tensor, lr float32) *SGD {
-	return &SGD{
-		params: params,
-		lr:     lr,
+type Linear struct {
+	w *Tensor
+	b *Tensor
+}
+
+func NewLinear(in, out int) *Linear {
+	return &Linear{
+		w: RandN(in, out),
+		b: RandN(out),
 	}
 }
 
-func (s *SGD) Step() {
-	for _, p := range s.params {
-		for i := range p.data {
-			p.data[i] -= s.lr * p.grad.data[i]
-		}
-	}
+func (l *Linear) Forward(x *Tensor) *Tensor {
+	return Add(MatMul(x, l.w), l.b)
+}
+
+func (l *Linear) Parameters() []*Tensor {
+	return []*Tensor{l.w, l.b}
 }

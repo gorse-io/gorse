@@ -16,25 +16,23 @@ func main() {
 	b := nn.RandN()
 	c := nn.RandN()
 	d := nn.RandN()
+	optimizer := nn.NewSGD([]*nn.Tensor{a, b, c, d}, 1e-6)
 
 	for i := 0; i < 1000; i++ {
 		// Forward pass: compute predicted y
-		yPred := nn.Add(nn.Add(nn.Add(nn.Mul(a, x), nn.Mul(b, nn.Pow(x, 1))), nn.Mul(c, nn.Pow(x, 2))), nn.Mul(d, nn.Pow(x, 3)))
+		yPred := nn.Add(nn.Add(nn.Add(nn.Mul(a, x), nn.Mul(b, x)), nn.Mul(c, nn.Square(x))), nn.Mul(d, nn.Pow(x, nn.NewScalar(3))))
 
 		// Compute and print loss
-		loss := nn.Sum(nn.Pow(nn.Sub(yPred, y), 2))
+		loss := nn.Sum(nn.Square(nn.Sub(yPred, y)))
 		if i%100 == 99 {
 			fmt.Println(i, loss)
 		}
 
+		// Backward pass: compute gradient of the loss with respect to model parameters
 		loss.Backward()
 
-		// Update weights using gradient descent
-		learningRate := nn.NewTensor([]float32{1e-6})
-		a = nn.Sub(a, nn.Mul(learningRate, a.Grad())).NoGrad()
-		b = nn.Sub(b, nn.Mul(learningRate, b.Grad())).NoGrad()
-		c = nn.Sub(c, nn.Mul(learningRate, c.Grad())).NoGrad()
-		d = nn.Sub(d, nn.Mul(learningRate, d.Grad())).NoGrad()
+		// Calling the step function on an Optimizer makes an update to its parameters
+		optimizer.Step()
 	}
 
 	fmt.Println("Result: y =", a, "+", b, "x +", c, "x^2 +", d, "x^3")

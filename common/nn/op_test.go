@@ -1,3 +1,17 @@
+// Copyright 2024 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nn
 
 import (
@@ -257,6 +271,19 @@ func TestSum(t *testing.T) {
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
 }
 
+func TestMean(t *testing.T) {
+	// (2,3) -> ()
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := Mean(x)
+	assert.Equal(t, []float32{3.5}, y.data)
+
+	// Test gradient
+	x = RandN(2, 3)
+	y = Mean(x)
+	y.Backward()
+	assert.Equal(t, []float32{1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6}, x.grad.data)
+}
+
 func TestCos(t *testing.T) {
 	// (2,3) -> (2,3)
 	x := NewTensor([]float32{0, 0.1, 0.2, 0.3, 0.4, 0.5}, 2, 3)
@@ -283,4 +310,31 @@ func TestSin(t *testing.T) {
 	y.Backward()
 	dx := numericalDiff(Sin, x)
 	allClose(t, x.grad, dx)
+}
+
+func TestMatMul(t *testing.T) {
+	// (2,3) * (3,4) -> (2,4)
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 4)
+	z := MatMul(x, y)
+	assert.Equal(t, []int{2, 4}, z.shape)
+	assert.Equal(t, []float32{38, 44, 50, 56, 83, 98, 113, 128}, z.data)
+
+	// Test gradient
+	z.Backward()
+	assert.Equal(t, []int{2, 3}, x.grad.shape)
+	assert.Equal(t, []float32{10, 26, 42, 10, 26, 42}, x.grad.data)
+	assert.Equal(t, []int{3, 4}, y.grad.shape)
+	assert.Equal(t, []float32{5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9}, y.grad.data)
+}
+
+func TestBroadcast(t *testing.T) {
+	// (2) -> (2,3)
+	x := NewTensor([]float32{1, 2}, 2)
+	y := Broadcast(x, 3)
+	assert.Equal(t, []float32{1, 1, 1, 2, 2, 2}, y.data)
+
+	// Test gradient
+	y.Backward()
+	assert.Equal(t, []float32{3, 3}, x.grad.data)
 }

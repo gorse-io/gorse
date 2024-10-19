@@ -1,3 +1,17 @@
+// Copyright 2024 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nn
 
 import (
@@ -94,6 +108,10 @@ func (t *Tensor) NoGrad() *Tensor {
 		t.op = nil
 	}
 	return t
+}
+
+func (t *Tensor) Shape() []int {
+	return t.shape
 }
 
 func (t *Tensor) String() string {
@@ -247,4 +265,88 @@ func (t *Tensor) sum() float32 {
 		sum += t.data[i]
 	}
 	return sum
+}
+
+func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
+	if !transpose1 && !transpose2 {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[1] != other.shape[0] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[0], t.shape[1], other.shape[1]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[i*n+k] * other.data[k*p+j]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	} else if transpose1 && !transpose2 {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[0] != other.shape[0] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[1], t.shape[0], other.shape[1]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[k*m+i] * other.data[k*p+j]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	} else if !transpose1 && transpose2 {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[1] != other.shape[1] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[0], t.shape[1], other.shape[0]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[i*n+k] * other.data[j*n+k]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	} else {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[0] != other.shape[0] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[1], t.shape[0], other.shape[1]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[k*m+i] * other.data[j*n+k]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	}
 }
