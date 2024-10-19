@@ -12,28 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nn
+package layers
+
+import "github.com/zhenghaoz/gorse/common/nn"
 
 type layer interface {
-	Parameters() []*Tensor
+	Parameters() []*nn.Tensor
 }
 
 type Linear struct {
-	w *Tensor
-	b *Tensor
+	w *nn.Tensor
+	b *nn.Tensor
 }
 
 func NewLinear(in, out int) *Linear {
 	return &Linear{
-		w: RandN(in, out),
-		b: RandN(out),
+		w: nn.RandN(in, out),
+		b: nn.RandN(out),
 	}
 }
 
-func (l *Linear) Forward(x *Tensor) *Tensor {
-	return Add(MatMul(x, l.w), l.b)
+func (l *Linear) Forward(x *nn.Tensor) *nn.Tensor {
+	return nn.Add(nn.MatMul(x, l.w), l.b)
 }
 
-func (l *Linear) Parameters() []*Tensor {
-	return []*Tensor{l.w, l.b}
+func (l *Linear) Parameters() []*nn.Tensor {
+	return []*nn.Tensor{l.w, l.b}
+}
+
+type Embedding struct {
+	w *nn.Tensor
+}
+
+func NewEmbedding(n, dim int) *Embedding {
+	return &Embedding{
+		w: nn.RandN(n, dim),
+	}
+}
+
+func (e *Embedding) Parameters() []*nn.Tensor {
+	return []*nn.Tensor{e.w}
+}
+
+func (e *Embedding) Forward(x *nn.Tensor) *nn.Tensor {
+	return nn.Embedding(e.w, x)
 }

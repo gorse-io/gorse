@@ -431,6 +431,48 @@ func (f *flatten) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{NewTensor(dy.data, f.inputs[0].shape...)}
 }
 
+type embedding struct {
+	base
+}
+
+func (e *embedding) String() string {
+	return "Embedding"
+}
+
+func (e *embedding) forward(inputs ...*Tensor) *Tensor {
+	w, x := inputs[0], inputs[1]
+	// Calculate shape
+	dim := w.shape[1]
+	shape := make([]int, len(x.shape), len(x.shape)+1)
+	copy(shape, x.shape)
+	shape = append(shape, dim)
+	// Calculate data size
+	size := 1
+	for _, s := range shape {
+		size *= s
+	}
+	// Create output tensor
+	data := make([]float32, size)
+	for i := 0; i < len(x.data); i++ {
+		index := int(x.data[i])
+		copy(data[i*dim:(i+1)*dim], w.data[index*dim:(index+1)*dim])
+	}
+	return NewTensor(data, shape...)
+}
+
+func (e *embedding) backward(dy *Tensor) []*Tensor {
+	w, x := e.inputs[0], e.inputs[1]
+	dim := w.shape[1]
+	dw := Zeros(w.shape...)
+	for i := 0; i < len(x.data); i++ {
+		index := int(x.data[i])
+		for j := 0; j < dim; j++ {
+			dw.data[index*dim+j] += dy.data[i*dim+j]
+		}
+	}
+	return []*Tensor{dw}
+}
+
 type sigmoid struct {
 	base
 }
@@ -586,6 +628,10 @@ func Broadcast(x *Tensor, shape ...int) *Tensor {
 
 func Flatten(x *Tensor) *Tensor {
 	return apply(&flatten{}, x)
+}
+
+func Embedding(w, x *Tensor) *Tensor {
+	return apply(&embedding{}, w, x)
 }
 
 func Sigmoid(x *Tensor) *Tensor {
