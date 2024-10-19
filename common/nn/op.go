@@ -441,11 +441,15 @@ func (e *embedding) String() string {
 
 func (e *embedding) forward(inputs ...*Tensor) *Tensor {
 	w, x := inputs[0], inputs[1]
+	// Calculate embedding size
+	dim := 1
+	for i := 1; i < len(w.shape); i++ {
+		dim *= w.shape[i]
+	}
 	// Calculate shape
-	dim := w.shape[1]
 	shape := make([]int, len(x.shape), len(x.shape)+1)
 	copy(shape, x.shape)
-	shape = append(shape, dim)
+	shape = append(shape, w.shape[1:]...)
 	// Calculate data size
 	size := 1
 	for _, s := range shape {
@@ -462,7 +466,10 @@ func (e *embedding) forward(inputs ...*Tensor) *Tensor {
 
 func (e *embedding) backward(dy *Tensor) []*Tensor {
 	w, x := e.inputs[0], e.inputs[1]
-	dim := w.shape[1]
+	dim := 1
+	for i := 1; i < len(w.shape); i++ {
+		dim *= w.shape[i]
+	}
 	dw := Zeros(w.shape...)
 	for i := 0; i < len(x.data); i++ {
 		index := int(x.data[i])

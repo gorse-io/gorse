@@ -44,9 +44,10 @@ type Embedding struct {
 	w *nn.Tensor
 }
 
-func NewEmbedding(n, dim int) *Embedding {
+func NewEmbedding(n int, shape ...int) *Embedding {
+	wShape := append([]int{n}, shape...)
 	return &Embedding{
-		w: nn.RandN(n, dim),
+		w: nn.RandN(wShape...),
 	}
 }
 

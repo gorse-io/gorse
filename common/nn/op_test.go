@@ -368,10 +368,23 @@ func TestBroadcast(t *testing.T) {
 }
 
 func TestEmbedding(t *testing.T) {
-	// (2,3) -> (2,3,4)
+	// (2,3) -> (2,3,2)
 	x := NewTensor([]float32{0, 1, 0, 3, 0, 5}, 2, 3)
 	w := NewTensor([]float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 6, 2)
 	y := Embedding(w, x)
+	assert.Equal(t, []int{2, 3, 2}, y.shape)
+	assert.Equal(t, []float32{0, 1, 2, 3, 0, 1, 6, 7, 0, 1, 10, 11}, y.data)
+
+	// Test gradient
+	y.Backward()
+	assert.Nil(t, x.grad)
+	assert.Equal(t, []float32{3, 3, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1}, w.grad.data)
+
+	// (2,3) -> (2,3,1,2)
+	x = NewTensor([]float32{0, 1, 0, 3, 0, 5}, 2, 3)
+	w = NewTensor([]float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 6, 1, 2)
+	y = Embedding(w, x)
+	assert.Equal(t, []int{2, 3, 1, 2}, y.shape)
 	assert.Equal(t, []float32{0, 1, 2, 3, 0, 1, 6, 7, 0, 1, 10, 11}, y.data)
 
 	// Test gradient
