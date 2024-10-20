@@ -356,6 +356,34 @@ func TestMatMul(t *testing.T) {
 	assert.Equal(t, []float32{5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9}, y.grad.data)
 }
 
+func TestBMM(t *testing.T) {
+	// (2,2,3) * (2,3,4) -> (2,2,4)
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, 2, 2, 3)
+	y := NewTensor([]float32{
+		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+	}, 2, 3, 4)
+	z := BMM(x, y)
+	assert.Equal(t, []int{2, 2, 4}, z.shape)
+	assert.Equal(t, []float32{
+		38, 44, 50, 56, 83, 98, 113, 128,
+		38, 44, 50, 56, 83, 98, 113, 128,
+	}, z.data)
+
+	// Test gradient
+	z.Backward()
+	assert.Equal(t, []int{2, 2, 3}, x.grad.shape)
+	assert.Equal(t, []float32{
+		10, 26, 42, 10, 26, 42,
+		10, 26, 42, 10, 26, 42,
+	}, x.grad.data)
+	assert.Equal(t, []int{2, 3, 4}, y.grad.shape)
+	assert.Equal(t, []float32{
+		5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9,
+		5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9,
+	}, y.grad.data)
+}
+
 func TestBroadcast(t *testing.T) {
 	// (2) -> (2,3)
 	x := NewTensor([]float32{1, 2}, 2)
@@ -419,4 +447,26 @@ func TestReLu(t *testing.T) {
 	y.Backward()
 	dx := numericalDiff(ReLu, x)
 	allClose(t, x.grad, dx)
+}
+
+func TestFlatten(t *testing.T) {
+	// (2,3) -> (6)
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := Flatten(x)
+	assert.Equal(t, []float32{1, 2, 3, 4, 5, 6}, y.data)
+
+	// Test gradient
+	y.Backward()
+	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
+}
+
+func TestReshape(t *testing.T) {
+	// (2,3) -> (3,2)
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := Reshape(x, 3, 2)
+	assert.Equal(t, []float32{1, 2, 3, 4, 5, 6}, y.data)
+
+	// Test gradient
+	y.Backward()
+	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
 }

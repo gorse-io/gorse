@@ -368,6 +368,26 @@ func (m *matMul) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{dx0, dx1}
 }
 
+type batchMatMul struct {
+	base
+	transpose1 bool
+	transpose2 bool
+}
+
+func (b *batchMatMul) String() string {
+	return "BatchMatMul"
+}
+
+func (b *batchMatMul) forward(inputs ...*Tensor) *Tensor {
+	return inputs[0].batchMatMul(inputs[1], b.transpose1, b.transpose2)
+}
+
+func (b *batchMatMul) backward(dy *Tensor) []*Tensor {
+	dx0 := dy.batchMatMul(b.inputs[1], b.transpose1, !b.transpose2)
+	dx1 := b.inputs[0].batchMatMul(dy, !b.transpose1, b.transpose2)
+	return []*Tensor{dx0, dx1}
+}
+
 type broadcast struct {
 	base
 	shape []int
@@ -429,6 +449,23 @@ func (f *flatten) forward(inputs ...*Tensor) *Tensor {
 
 func (f *flatten) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{NewTensor(dy.data, f.inputs[0].shape...)}
+}
+
+type reshape struct {
+	base
+	shape []int
+}
+
+func (r *reshape) String() string {
+	return "Reshape"
+}
+
+func (r *reshape) forward(inputs ...*Tensor) *Tensor {
+	return NewTensor(inputs[0].data, r.shape...)
+}
+
+func (r *reshape) backward(dy *Tensor) []*Tensor {
+	return []*Tensor{NewTensor(dy.data, r.inputs[0].shape...)}
 }
 
 type embedding struct {
@@ -629,12 +666,38 @@ func MatMul(x, y *Tensor) *Tensor {
 	return apply(&matMul{}, x, y)
 }
 
+func BMM(x, y *Tensor, transpose ...bool) *Tensor {
+	op := &batchMatMul{}
+	if len(transpose) > 0 {
+		op.transpose1 = transpose[0]
+	}
+	if len(transpose) > 1 {
+		op.transpose2 = transpose[1]
+	}
+	return apply(op, x, y)
+}
+
 func Broadcast(x *Tensor, shape ...int) *Tensor {
 	return apply(&broadcast{shape: shape}, x)
 }
 
 func Flatten(x *Tensor) *Tensor {
 	return apply(&flatten{}, x)
+}
+
+func Reshape(x *Tensor, shape ...int) *Tensor {
+	size1 := 1
+	for i := range x.shape {
+		size1 *= x.shape[i]
+	}
+	size2 := 1
+	for i := range shape {
+		size2 *= shape[i]
+	}
+	if size1 != size2 {
+		panic("the size of the tensor must be equal to the size of the new shape")
+	}
+	return apply(&reshape{shape: shape}, x)
 }
 
 func Embedding(w, x *Tensor) *Tensor {

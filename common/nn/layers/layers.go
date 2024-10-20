@@ -16,8 +16,11 @@ package layers
 
 import "github.com/zhenghaoz/gorse/common/nn"
 
+var _ layer = &Linear{}
+
 type layer interface {
 	Parameters() []*nn.Tensor
+	Forward(x *nn.Tensor) *nn.Tensor
 }
 
 type Linear struct {
