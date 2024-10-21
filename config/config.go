@@ -167,6 +167,7 @@ type OnlineConfig struct {
 }
 
 type TracingConfig struct {
+	AppName           string  `mapstructure:"app_name"`
 	EnableTracing     bool    `mapstructure:"enable_tracing"`
 	Exporter          string  `mapstructure:"exporter" validate:"oneof=jaeger zipkin otlp otlphttp"`
 	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
@@ -246,6 +247,7 @@ func GetDefaultConfig() *Config {
 			},
 		},
 		Tracing: TracingConfig{
+			AppName:  "gorse",
 			Exporter: "jaeger",
 			Sampler:  "always",
 		},
@@ -257,6 +259,10 @@ func GetDefaultConfig() *Config {
 
 func (config *Config) Now() *time.Time {
 	return lo.ToPtr(time.Now().Add(config.Server.ClockError))
+}
+
+func (config TracingConfig) GetAppName() string {
+	return config.AppName
 }
 
 func (config *Config) UserNeighborDigest() string {
@@ -450,7 +456,7 @@ func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 		tracesdk.WithBatcher(exporter),
 		tracesdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("gorse"),
+			semconv.ServiceNameKey.String(config.AppName),
 		)),
 	), nil
 }
@@ -524,6 +530,7 @@ func setDefault() {
 	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)
 	viper.SetDefault("recommend.online.num_feedback_fallback_item_based", defaultConfig.Recommend.Online.NumFeedbackFallbackItemBased)
 	// [tracing]
+	viper.SetDefault("tracing.app_name", defaultConfig.Tracing.AppName)
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
 	// [experimental]

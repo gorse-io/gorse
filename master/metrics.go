@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 )
 
@@ -32,194 +33,194 @@ const (
 
 var (
 	LoadDatasetStepSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "load_dataset_step_seconds",
 	}, []string{LabelStep})
 	LoadDatasetTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "load_dataset_total_seconds",
 	})
 	FindUserNeighborsSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "find_user_neighbors_seconds",
 	}, []string{LabelStep})
 	FindUserNeighborsTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "find_user_neighbors_total_seconds",
 	})
 	FindItemNeighborsSecondsVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "find_item_neighbors_seconds",
 	}, []string{"step"})
 	FindItemNeighborsTotalSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "find_item_neighbors_total_seconds",
 	})
 	UpdateUserNeighborsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "update_user_neighbors_total",
 	})
 	UpdateItemNeighborsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "update_item_neighbors_total",
 	})
 	CacheScannedTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "cache_scanned_total",
 	})
 	CacheReclaimedTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "cache_reclaimed_total",
 	})
 	CacheScannedSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "cache_scanned_seconds",
 	})
 
 	CollaborativeFilteringFitSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "collaborative_filtering_fit_seconds",
 	})
 	CollaborativeFilteringSearchSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "collaborative_filtering_search_seconds",
 	})
 	CollaborativeFilteringNDCG10 = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "collaborative_filtering_ndcg_10",
 	})
 	CollaborativeFilteringPrecision10 = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "collaborative_filtering_precision_10",
 	})
 	CollaborativeFilteringRecall10 = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "collaborative_filtering_recall_10",
 	})
 	CollaborativeFilteringSearchPrecision10 = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "collaborative_filtering_search_precision_10",
 	})
 	RankingFitSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "ranking_fit_seconds",
 	})
 	RankingSearchSeconds = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "ranking_search_seconds",
 	})
 	RankingPrecision = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "ranking_model_precision",
 	})
 	RankingRecall = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "ranking_model_recall",
 	})
 	RankingAUC = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "ranking_model_auc",
 	})
 	RankingSearchPrecision = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "ranking_search_precision",
 	})
 	UserNeighborIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "user_neighbor_index_recall",
 	})
 	ItemNeighborIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "item_neighbor_index_recall",
 	})
 
 	UsersTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "users_total",
 	})
 	ActiveUsersTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "active_users_total",
 	})
 	InactiveUsersTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "inactive_users_total",
 	})
 	ItemsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "items_total",
 	})
 	ActiveItemsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "active_items_total",
 	})
 	InactiveItemsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "inactive_items_total",
 	})
 	UserLabelsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "user_labels_total",
 	})
 	ItemLabelsTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "item_labels_total",
 	})
 	FeedbacksTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "feedbacks_total",
 	})
 	ImplicitFeedbacksTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "implicit_feedbacks_total",
 	})
 	PositiveFeedbacksTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "positive_feedbacks_total",
 	})
 	NegativeFeedbackTotal = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "negative_feedbacks_total",
 	})
 	MemoryInUseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "gorse",
+		Namespace: config.TracingConfig.GetAppName(),
 		Subsystem: "master",
 		Name:      "memory_inuse_bytes",
 	}, []string{LabelData})
