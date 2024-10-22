@@ -536,9 +536,11 @@ func (s *sigmoid) forward(inputs ...*Tensor) *Tensor {
 
 func (s *sigmoid) backward(dy *Tensor) []*Tensor {
 	// dx = dy * y * (1 - y)
-	dx := dy.clone()
+	dx := s.output.clone()
+	dx.neg()
+	dx.add(NewScalar(1))
 	dx.mul(s.output)
-	dx.mul(Sub(NewScalar(1), s.output))
+	dx.mul(dy)
 	return []*Tensor{dx}
 }
 
