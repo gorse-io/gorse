@@ -297,9 +297,8 @@ func (l *log) forward(inputs ...*Tensor) *Tensor {
 }
 
 func (l *log) backward(dy *Tensor) []*Tensor {
-	dx := l.inputs[0].clone()
+	dx := dy.clone()
 	dx.div(l.inputs[0])
-	dx.mul(dy)
 	return []*Tensor{dx}
 }
 
