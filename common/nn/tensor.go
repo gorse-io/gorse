@@ -166,7 +166,11 @@ func (t *Tensor) Backward() {
 		inputs, output := op.inputsAndOutput()
 		grads := op.backward(output.grad)
 		for i := range grads {
-			inputs[i].grad = grads[i]
+			if inputs[i].grad == nil {
+				inputs[i].grad = grads[i]
+			} else {
+				inputs[i].grad.add(grads[i])
+			}
 			if inputs[i].op != nil {
 				ops = append(ops, inputs[i].op)
 			}

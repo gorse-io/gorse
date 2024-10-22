@@ -15,7 +15,6 @@
 package nn
 
 import (
-	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -23,8 +22,8 @@ import (
 
 const (
 	eps  = 1e-4
-	rtol = 1e-5
-	atol = 1e-8
+	rtol = 1e-2
+	atol = 1e-4
 )
 
 func numericalDiff(f func(*Tensor) *Tensor, x *Tensor) *Tensor {
@@ -42,7 +41,7 @@ func allClose(t *testing.T, a, b *Tensor) {
 	}
 	for i := range a.data {
 		if math32.Abs(a.data[i]-b.data[i]) > atol+rtol*math32.Abs(b.data[i]) {
-			fmt.Printf("a.data[%d] = %f, b.data[%d] = %f\n", i, a.data[i], i, b.data[i])
+			t.Fatalf("a.data[%d] = %f, b.data[%d] = %f\n", i, a.data[i], i, b.data[i])
 			return
 		}
 	}
@@ -469,4 +468,16 @@ func TestReshape(t *testing.T) {
 	// Test gradient
 	y.Backward()
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
+}
+
+func TestReuse(t *testing.T) {
+	// x + x
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := Add(x, x)
+	assert.Equal(t, []float32{2, 4, 6, 8, 10, 12}, y.data)
+
+	// Test gradient
+	y.Backward()
+	dx := numericalDiff(func(x *Tensor) *Tensor { return Add(x, x) }, x)
+	allClose(t, x.grad, dx)
 }
