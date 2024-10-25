@@ -16,6 +16,7 @@ package nn
 
 import (
 	"github.com/chewxy/math32"
+	"github.com/gogo/protobuf/proto"
 )
 
 type op interface {
@@ -304,6 +305,7 @@ func (l *log) backward(dy *Tensor) []*Tensor {
 
 type sum struct {
 	base
+	along *int64
 }
 
 func (s *sum) String() string {
@@ -654,8 +656,14 @@ func Cos(x *Tensor) *Tensor {
 }
 
 // Sum returns the sum of all elements in a tensor.
-func Sum(x *Tensor) *Tensor {
-	return apply(&sum{}, x)
+func Sum(x *Tensor, along ...int) *Tensor {
+	op := &sum{}
+	if len(along) > 1 {
+		panic("only one along is allowed")
+	} else if len(along) == 1 {
+		op.along = proto.Int64(int64(along[0]))
+	}
+	return apply(op, x)
 }
 
 // Mean returns the mean of all elements in a tensor.
@@ -669,6 +677,9 @@ func MatMul(x, y *Tensor) *Tensor {
 
 func BMM(x, y *Tensor, transpose ...bool) *Tensor {
 	op := &batchMatMul{}
+	if len(transpose) > 2 {
+		panic("only two transpose is allowed")
+	}
 	if len(transpose) > 0 {
 		op.transpose1 = transpose[0]
 	}
