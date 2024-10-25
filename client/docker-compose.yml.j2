@@ -74,7 +74,7 @@ services:
       CLICKHOUSE_USER: gorse
       CLICKHOUSE_PASSWORD: gorse_pass
     healthcheck:
-      test: clickhouse-client --query "SELECT 1"
+      test: clickhouse-client --user $$CLICKHOUSE_USER --password $$CLICKHOUSE_PASSWORD --query "SELECT 1"
       interval: 10s
       timeout: 5s
       retries: 5
