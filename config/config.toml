@@ -9,10 +9,13 @@
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 cache_store = "redis://localhost:6379/0"
 
-# The database for persist data, support MySQL, Postgres and MongoDB:
+# The database for persist data, support MySQL, Postgres, ClickHouse and MongoDB:
 #   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
 #   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   chhttp://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   chhttps://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"

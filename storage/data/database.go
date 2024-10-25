@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
+	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -223,6 +225,7 @@ type Database interface {
 	Init() error
 	Ping() error
 	Close() error
+	Optimize() error
 	Purge() error
 	BatchInsertItems(ctx context.Context, items []Item) error
 	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)
@@ -293,6 +296,32 @@ func Open(path, tablePrefix string) (Database, error) {
 		database.client.SetMaxOpenConns(maxOpenConns)
 		database.client.SetConnMaxLifetime(maxLifetime)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, storage.ClickhousePrefix) || strings.HasPrefix(path, storage.CHHTTPPrefix) || strings.HasPrefix(path, storage.CHHTTPSPrefix) {
+		// replace schema
+		parsed, err := url.Parse(path)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if strings.HasPrefix(path, storage.CHHTTPSPrefix) {
+			parsed.Scheme = "https"
+		} else {
+			parsed.Scheme = "http"
+		}
+		uri := parsed.String()
+		database := new(SQLDatabase)
+		database.driver = ClickHouse
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		if database.client, err = otelsql.Open("chhttp", uri,
+			otelsql.WithAttributes(semconv.DBSystemKey.String("clickhouse")),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

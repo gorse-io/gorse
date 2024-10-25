@@ -34,6 +34,9 @@ const (
 	MongoSrvPrefix   = "mongodb+srv://"
 	PostgresPrefix   = "postgres://"
 	PostgreSQLPrefix = "postgresql://"
+	ClickhousePrefix = "clickhouse://"
+	CHHTTPPrefix     = "chhttp://"
+	CHHTTPSPrefix    = "chhttps://"
 	SQLitePrefix     = "sqlite://"
 	RedisPrefix      = "redis://"
 	RedissPrefix     = "rediss://"
@@ -143,6 +146,9 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 				"SQLDocument", "Documents",
 				"PostgresDocument", "Documents",
 				"TimeSeriesPoint", "time_series_points",
+				"ClickhouseUser", "Users",
+				"ClickHouseItem", "Items",
+				"ClickHouseFeedback", "Feedback",
 			),
 		},
 	}
