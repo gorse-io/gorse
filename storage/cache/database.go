@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -228,9 +229,7 @@ func (aggregator *DocumentAggregator) Add(category string, values []string, scor
 				Timestamp:  aggregator.Timestamp,
 			}
 		} else {
-			if aggregator.Documents[value].Score != scores[i] {
-				panic("score should be the same")
-			}
+			aggregator.Documents[value].Score = math.Max(aggregator.Documents[value].Score, scores[i])
 			aggregator.Documents[value].Categories = append(aggregator.Documents[value].Categories, category)
 		}
 	}
