@@ -295,28 +295,11 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 	if len(items) == 0 {
 		return nil
 	}
-	rows := make([]SQLItem, 0, len(items))
-	memo := mapset.NewSet[string]()
-	for _, item := range items {
-		if !memo.Contains(item.ItemId) {
-			memo.Add(item.ItemId)
-			row := NewSQLItem(item)
-			if d.driver == SQLite {
-				row.Timestamp = row.Timestamp.In(time.UTC)
-			}
-			rows = append(rows, row)
-		}
-	}
-	err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "item_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
-	}).Create(rows).Error
-	return errors.Trace(err)
 	if d.driver == ClickHouse {
 		rows := make([]ClickHouseItem, 0, len(items))
-		memo := strset.New()
+		memo := mapset.NewSet[string]()
 		for _, item := range items {
-			if !memo.Has(item.ItemId) {
+			if !memo.Contains(item.ItemId) {
 				memo.Add(item.ItemId)
 				rows = append(rows, NewClickHouseItem(item))
 			}
@@ -325,9 +308,9 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 		return errors.Trace(err)
 	} else {
 		rows := make([]SQLItem, 0, len(items))
-		memo := strset.New()
+		memo := mapset.NewSet[string]()
 		for _, item := range items {
-			if !memo.Has(item.ItemId) {
+			if !memo.Contains(item.ItemId) {
 				memo.Add(item.ItemId)
 				row := NewSQLItem(item)
 				if d.driver == SQLite {
@@ -540,24 +523,11 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 	if len(users) == 0 {
 		return nil
 	}
-	rows := make([]SQLUser, 0, len(users))
-	memo := mapset.NewSet[string]()
-	for _, user := range users {
-		if !memo.Contains(user.UserId) {
-			memo.Add(user.UserId)
-			rows = append(rows, NewSQLUser(user))
-		}
-	}
-	err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "user_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"labels", "subscribe", "comment"}),
-	}).Create(rows).Error
-	return errors.Trace(err)
 	if d.driver == ClickHouse {
 		rows := make([]ClickhouseUser, 0, len(users))
-		memo := strset.New()
+		memo := mapset.NewSet[string]()
 		for _, user := range users {
-			if !memo.Has(user.UserId) {
+			if !memo.Contains(user.UserId) {
 				memo.Add(user.UserId)
 				rows = append(rows, NewClickhouseUser(user))
 			}
@@ -566,9 +536,9 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 		return errors.Trace(err)
 	} else {
 		rows := make([]SQLUser, 0, len(users))
-		memo := strset.New()
+		memo := mapset.NewSet[string]()
 		for _, user := range users {
-			if !memo.Has(user.UserId) {
+			if !memo.Contains(user.UserId) {
 				memo.Add(user.UserId)
 				rows = append(rows, NewSQLUser(user))
 			}
@@ -748,19 +718,6 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	// insert users
 	if insertUser {
 		userList := users.ToSlice()
-		err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}},
-			DoNothing: true,
-		}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
-			return SQLUser{
-				UserId:    userId,
-				Labels:    "null",
-				Subscribe: "null",
-			}
-		})).Error
-		if err != nil {
-			return errors.Trace(err)
-		userList := users.List()
 		if d.driver == ClickHouse {
 			err := tx.Create(lo.Map(userList, func(userId string, _ int) ClickhouseUser {
 				return ClickhouseUser{
@@ -781,8 +738,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
 				return SQLUser{
 					UserId:    userId,
-					Labels:    "[]",
-					Subscribe: "[]",
+					Labels:    "null",
+					Subscribe: "null",
 				}
 			})).Error
 			if err != nil {
@@ -805,19 +762,6 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	// insert items
 	if insertItem {
 		itemList := items.ToSlice()
-		err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "item_id"}},
-			DoNothing: true,
-		}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
-			return SQLItem{
-				ItemId:     itemId,
-				Labels:     "null",
-				Categories: "null",
-			}
-		})).Error
-		if err != nil {
-			return errors.Trace(err)
-		itemList := items.List()
 		if d.driver == ClickHouse {
 			err := tx.Create(lo.Map(itemList, func(itemId string, _ int) ClickHouseItem {
 				return ClickHouseItem{
@@ -838,8 +782,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
 				return SQLItem{
 					ItemId:     itemId,
-					Labels:     "[]",
-					Categories: "[]",
+					Labels:     "null",
+					Categories: "null",
 				}
 			})).Error
 			if err != nil {
@@ -860,33 +804,11 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}
 	}
 	// insert feedback
-	rows := make([]Feedback, 0, len(feedback))
-	memo := make(map[lo.Tuple3[string, string, string]]struct{})
-	for _, f := range feedback {
-		if users.Contains(f.UserId) && items.Contains(f.ItemId) {
-			if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
-				memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
-				if d.driver == SQLite {
-					f.Timestamp = f.Timestamp.In(time.UTC)
-				}
-				rows = append(rows, f)
-			}
-		}
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-	err := tx.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
-		DoNothing: !overwrite,
-		DoUpdates: lo.If(overwrite, clause.AssignmentColumns([]string{"time_stamp", "comment"})).Else(nil),
-	}).Create(rows).Error
-	return errors.Trace(err)
 	if d.driver == ClickHouse {
 		rows := make([]ClickHouseFeedback, 0, len(feedback))
 		memo := make(map[lo.Tuple3[string, string, string]]struct{})
 		for _, f := range feedback {
-			if users.Has(f.UserId) && items.Has(f.ItemId) {
+			if users.Contains(f.UserId) && items.Contains(f.ItemId) {
 				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
 					f.Timestamp = f.Timestamp.In(time.UTC)
@@ -906,7 +828,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		rows := make([]Feedback, 0, len(feedback))
 		memo := make(map[lo.Tuple3[string, string, string]]struct{})
 		for _, f := range feedback {
-			if users.Has(f.UserId) && items.Has(f.ItemId) {
+			if users.Contains(f.UserId) && items.Contains(f.ItemId) {
 				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
 					if d.driver == SQLite {
