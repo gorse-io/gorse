@@ -40,6 +40,9 @@ case $CACHE_ARG in
 esac
 
 case $DATA_ARG in
+  clickhouse)
+    export BENCH_DATA_STORE='clickhouse://127.0.0.1:8123/'
+    ;;
   mysql)
     export BENCH_DATA_STORE='mysql://root:password@tcp(127.0.0.1:3306)/'
     ;;

@@ -19,16 +19,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math/rand"
-	"net"
-	"net/http"
-	"os"
-	"runtime"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
-
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-resty/resty/v2"
 	"github.com/redis/go-redis/v9"
@@ -41,6 +31,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/protobuf/proto"
+	"math/rand"
+	"net"
+	"net/http"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
 )
 
 const (
@@ -61,7 +60,7 @@ func init() {
 		}
 		return defaultValue
 	}
-	benchDataStore = env("BENCH_DATA_STORE", "mysql://root:password@tcp(127.0.0.1:3306)/")
+	benchDataStore = env("BENCH_DATA_STORE", "clickhouse://127.0.0.1:8123/")
 	benchCacheStore = env("BENCH_CACHE_STORE", "redis://127.0.0.1:6379/")
 }
 
@@ -192,6 +191,17 @@ func (s *benchServer) prepareData(b *testing.B, url, benchName string) string {
 		err = db.Close()
 		require.NoError(b, err)
 		return url + strings.ToLower(dbName) + "?sslmode=disable&TimeZone=UTC"
+	} else if strings.HasPrefix(url, "clickhouse://") {
+		uri := "http://" + url[len("clickhouse://"):]
+		db, err := sql.Open("clickhouse", uri)
+		require.NoError(b, err)
+		_, err = db.Exec("DROP DATABASE IF EXISTS " + dbName)
+		require.NoError(b, err)
+		_, err = db.Exec("CREATE DATABASE " + dbName)
+		require.NoError(b, err)
+		err = db.Close()
+		require.NoError(b, err)
+		return url + dbName + "?mutations_sync=2"
 	} else if strings.HasPrefix(url, "mongodb://") {
 		ctx := context.Background()
 		cli, err := mongo.Connect(ctx, options.Client().ApplyURI(url+"?authSource=admin&connect=direct"))

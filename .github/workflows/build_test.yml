@@ -50,6 +50,16 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      clickhouse:
+        image: clickhouse/clickhouse-server:21.10
+        ports:
+          - 8123
+        options: >-
+          --health-cmd="clickhouse-client --query 'SELECT 1'" 
+          --health-interval=10s 
+          --health-timeout=5s 
+          --health-retries=5
+
       redis:
         image: redis/redis-stack:6.2.6-v9
         ports:
@@ -102,6 +112,8 @@ jobs:
         POSTGRES_URI: postgres://gorse:gorse_pass@localhost:${{ job.services.postgres.ports[5432] }}/
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
+        # ClickHouse
+        CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
         # Redis
         REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
 
@@ -113,7 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        database: [mysql, postgres, mongo]
+        database: [mysql, postgres, mongo, clickhouse]
     steps:
     - uses: actions/checkout@v1
 

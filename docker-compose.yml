@@ -41,6 +41,17 @@ services:
   #   volumes:
   #     - mongo_data:/data/db
 
+  # clickhouse:
+  #   image: clickhouse/clickhouse-server:21.10
+  #   ports:
+  #     - 8123:8123
+  #   environment:
+  #     CLICKHOUSE_DB: gorse
+  #     CLICKHOUSE_USER: gorse
+  #     CLICKHOUSE_PASSWORD: gorse_pass
+  #   volumes:
+  #     - clickhouse_data:/var/lib/clickhouse
+
   worker:
     image: zhenghaoz/gorse-worker
     restart: unless-stopped
@@ -84,6 +95,7 @@ services:
       GORSE_DATA_STORE: mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse
       # GORSE_DATA_STORE: postgres://gorse:gorse_pass@postgres/gorse?sslmode=disable
       # GORSE_DATA_STORE: mongodb://root:password@mongo:27017/gorse?authSource=admin&connect=direct
+      # GORSE_DATA_STORE: clickhouse://gorse:gorse_pass@clickhouse:8123/gorse
     command: >
       -c /etc/gorse/config.toml 
       --log-path /var/log/gorse/master.log 
@@ -97,6 +109,7 @@ services:
       - mysql
       # - postgres
       # - mongo
+      # - clickhouse
 
 volumes:
   worker_data:
@@ -106,3 +119,4 @@ volumes:
   mysql_data:
   # postgres_data:
   # mongo_data:
+  # clickhouse_data:
