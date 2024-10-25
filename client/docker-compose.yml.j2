@@ -73,6 +73,11 @@ services:
       CLICKHOUSE_DB: gorse
       CLICKHOUSE_USER: gorse
       CLICKHOUSE_PASSWORD: gorse_pass
+    healthcheck:
+      test: clickhouse-client --query "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   {% endif %}
 
@@ -151,9 +156,9 @@ services:
       {% elif database == 'mongo' %}
       mongo:
         condition: service_healthy
-      - mongo
       {% elif database == 'clickhouse' %}
-      - clickhouse
+      clickhouse:
+        condition: service_healthy
       {% endif %}
 
 volumes:
