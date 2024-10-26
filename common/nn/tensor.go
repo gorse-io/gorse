@@ -22,10 +22,11 @@ import (
 )
 
 type Tensor struct {
-	data  []float32
-	shape []int
-	grad  *Tensor
-	op    op
+	data        []float32
+	shape       []int
+	grad        *Tensor
+	requireGrad bool
+	op          op
 }
 
 func NewTensor(data []float32, shape ...int) *Tensor {
@@ -121,6 +122,11 @@ func (t *Tensor) NoGrad() *Tensor {
 	return t
 }
 
+func (t *Tensor) RequireGrad() *Tensor {
+	t.requireGrad = true
+	return t
+}
+
 func (t *Tensor) Shape() []int {
 	return t.shape
 }
@@ -165,6 +171,8 @@ func (t *Tensor) Backward() {
 		ops = ops[1:]
 		inputs, output := op.inputsAndOutput()
 		grads := op.backward(output.grad)
+		// Clear gradient of non-leaf tensor
+		output.grad = nil
 		for i := range grads {
 			if inputs[i].grad == nil {
 				inputs[i].grad = grads[i]
@@ -173,6 +181,9 @@ func (t *Tensor) Backward() {
 			}
 			if inputs[i].op != nil {
 				ops = append(ops, inputs[i].op)
+			} else if !inputs[i].requireGrad {
+				// Clear gradient if the leaf tensor does not require gradient
+				inputs[i].grad = nil
 			}
 		}
 	}
