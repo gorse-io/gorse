@@ -263,7 +263,7 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW %s_mv TO %s AS SELECT * FROM %s",
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS SELECT * FROM %s",
 			d.UserFeedbackTable(), d.UserFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
 			return errors.Trace(err)
@@ -273,7 +273,7 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW %s_mv TO %s AS SELECT * FROM %s",
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS SELECT * FROM %s",
 			d.ItemFeedbackTable(), d.ItemFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
 			return errors.Trace(err)
