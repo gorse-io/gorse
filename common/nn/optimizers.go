@@ -14,6 +14,11 @@
 
 package nn
 
+import (
+	"github.com/chewxy/math32"
+	"github.com/google/uuid"
+)
+
 type Optimizer interface {
 	ZeroGrad()
 	Step()
@@ -51,20 +56,47 @@ func (s *SGD) Step() {
 
 type Adam struct {
 	baseOptimizer
-	lr float32
+	alpha float32
+	beta1 float32
+	beta2 float32
+	eps   float32
+	ms    map[uuid.UUID]*Tensor
+	vs    map[uuid.UUID]*Tensor
 }
 
-func NewAdam(params []*Tensor, lr float32) *Adam {
+func NewAdam(params []*Tensor, alpha float32) Optimizer {
 	return &Adam{
 		baseOptimizer: baseOptimizer{params: params},
-		lr:            lr,
+		alpha:         alpha,
+		beta1:         0.9,
+		beta2:         0.999,
+		eps:           1e-8,
+		ms:            make(map[uuid.UUID]*Tensor),
+		vs:            make(map[uuid.UUID]*Tensor),
 	}
 }
 
 func (a *Adam) Step() {
 	for _, p := range a.params {
+		if _, ok := a.ms[p.id]; !ok {
+			a.ms[p.id] = Zeros(p.shape...)
+			a.vs[p.id] = Zeros(p.shape...)
+		}
+
+		m, v := a.ms[p.id], a.vs[p.id]
+		grad := p.grad.data
+
+		// m += (1 - beta1) * (grad - m)
+		for i := range m.data {
+			m.data[i] += (1 - a.beta1) * (grad[i] - m.data[i])
+		}
+		// v += (1 - beta2) * (grad * grad - v)
+		for i := range v.data {
+			v.data[i] += (1 - a.beta2) * (grad[i]*grad[i] - v.data[i])
+		}
+		// param.data -= self.lr * m / (xp.sqrt(v) + eps)
 		for i := range p.data {
-			p.data[i] -= a.lr * p.grad.data[i]
+			p.data[i] -= a.alpha * m.data[i] / (math32.Sqrt(v.data[i]) + a.eps)
 		}
 	}
 }

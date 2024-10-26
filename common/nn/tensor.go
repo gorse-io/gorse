@@ -17,16 +17,19 @@ package nn
 import (
 	"fmt"
 	"github.com/chewxy/math32"
+	"github.com/google/uuid"
 	"math/rand"
 	"strings"
 )
 
 type Tensor struct {
-	data        []float32
-	shape       []int
-	grad        *Tensor
+	data  []float32
+	shape []int
+	grad  *Tensor
+	op    op
+
 	requireGrad bool
-	op          op
+	id          uuid.UUID // Only assigned if requireGrad is true
 }
 
 func NewTensor(data []float32, shape ...int) *Tensor {
@@ -124,6 +127,7 @@ func (t *Tensor) NoGrad() *Tensor {
 
 func (t *Tensor) RequireGrad() *Tensor {
 	t.requireGrad = true
+	t.id = uuid.New()
 	return t
 }
 
