@@ -125,6 +125,16 @@ func (tp TablePrefix) FeedbackTable() string {
 	return string(tp) + "feedback"
 }
 
+// UserFeedbackTable returns the materialized view of user feedback.
+func (tp TablePrefix) UserFeedbackTable() string {
+	return string(tp) + "user_feedback"
+}
+
+// ItemFeedbackTable returns the materialized view of item feedback.
+func (tp TablePrefix) ItemFeedbackTable() string {
+	return string(tp) + "item_feedback"
+}
+
 func (tp TablePrefix) Key(key string) string {
 	return string(tp) + key
 }

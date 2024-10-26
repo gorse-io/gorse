@@ -35,6 +35,7 @@ var (
 	positiveFeedbackType  = "positiveFeedbackType"
 	negativeFeedbackType  = "negativeFeedbackType"
 	duplicateFeedbackType = "duplicateFeedbackType"
+	dateTime64Zero        = time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 )
 
 type baseTestSuite struct {
@@ -279,8 +280,8 @@ func (suite *baseTestSuite) TestFeedback() {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
 			if suite.isClickHouse() {
-				// ClickHouse returns 1970-01-01 as zero date.
-				suite.Zero(item.Timestamp.Unix())
+				// ClickHouse returns 1900-01-01 00:00:00 +0000 UTC as zero date.
+				suite.Equal(dateTime64Zero, item.Timestamp)
 			} else {
 				suite.Zero(item.Timestamp)
 			}
@@ -310,9 +311,10 @@ func (suite *baseTestSuite) TestFeedback() {
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
-	suite.Equal(1, len(ret))
-	suite.Equal("2", ret[0].UserId)
-	suite.Equal("4", ret[0].ItemId)
+	if suite.Equal(1, len(ret)) {
+		suite.Equal("2", ret[0].UserId)
+		suite.Equal("4", ret[0].ItemId)
+	}
 	// Get all feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()))
 	suite.NoError(err)
@@ -579,6 +581,8 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 		// RowAffected isn't supported by ClickHouse,
 		suite.Equal(3, deleteCount)
 	}
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)

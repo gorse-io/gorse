@@ -125,7 +125,7 @@ type SQLDatabase struct {
 // Optimize is used by ClickHouse only.
 func (d *SQLDatabase) Optimize() error {
 	if d.driver == ClickHouse {
-		for _, tableName := range []string{d.UsersTable(), d.ItemsTable(), d.FeedbackTable()} {
+		for _, tableName := range []string{d.UsersTable(), d.ItemsTable(), d.FeedbackTable(), d.UserFeedbackTable(), d.ItemFeedbackTable()} {
 			_, err := d.client.Exec("OPTIMIZE TABLE " + tableName)
 			if err != nil {
 				return errors.Trace(err)
@@ -225,7 +225,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string    `gorm:"column:item_id;type:String"`
 			IsHidden   int       `gorm:"column:is_hidden;type:Boolean;default:0"`
 			Categories string    `gorm:"column:categories;type:String;default:'[]'"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime64(9,'UTC')"`
 			Labels     string    `gorm:"column:labels;type:String;default:'[]'"`
 			Comment    string    `gorm:"column:comment;type:String"`
 			Version    struct{}  `gorm:"column:version;type:DateTime"`
@@ -247,13 +247,34 @@ func (d *SQLDatabase) Init() error {
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
-			UserId       string    `gorm:"column:user_id;type:String;index:user_index,type:bloom_filter(0.01),granularity:1"`
-			ItemId       string    `gorm:"column:item_id;type:String;index:item_index,type:bloom_filter(0.01),granularity:1"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime"`
+			UserId       string    `gorm:"column:user_id;type:String"`
+			ItemId       string    `gorm:"column:item_id;type:String"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime64(9,'UTC')"`
 			Comment      string    `gorm:"column:comment;type:String"`
 			Version      struct{}  `gorm:"column:version;type:DateTime"`
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// create materialized views
+		type UserFeedback Feedback
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(UserFeedback{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS SELECT * FROM %s",
+			d.UserFeedbackTable(), d.UserFeedbackTable(), d.FeedbackTable())).Error
+		if err != nil {
+			return errors.Trace(err)
+		}
+		type ItemFeedback Feedback
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (item_id, user_id, feedback_type)").AutoMigrate(ItemFeedback{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS SELECT * FROM %s",
+			d.ItemFeedbackTable(), d.ItemFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -271,8 +292,8 @@ func (d *SQLDatabase) Close() error {
 }
 
 func (d *SQLDatabase) Purge() error {
-	tables := []string{d.ItemsTable(), d.FeedbackTable(), d.UsersTable()}
 	if d.driver == ClickHouse {
+		tables := []string{d.ItemsTable(), d.FeedbackTable(), d.UsersTable(), d.UserFeedbackTable(), d.ItemFeedbackTable()}
 		for _, tableName := range tables {
 			err := d.gormDB.Exec(fmt.Sprintf("alter table %s delete where 1=1", tableName)).Error
 			if err != nil {
@@ -280,6 +301,7 @@ func (d *SQLDatabase) Purge() error {
 			}
 		}
 	} else {
+		tables := []string{d.ItemsTable(), d.FeedbackTable(), d.UsersTable()}
 		for _, tableName := range tables {
 			err := d.gormDB.Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
 			if err != nil {
@@ -356,6 +378,14 @@ func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
 	}
 	if err := d.gormDB.WithContext(ctx).Delete(&Feedback{}, "item_id = ?", itemId).Error; err != nil {
 		return errors.Trace(err)
+	}
+	if d.driver == ClickHouse {
+		if err := d.gormDB.WithContext(ctx).Delete(&ItemFeedback{}, "item_id = ?", itemId).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.WithContext(ctx).Delete(&UserFeedback{}, "item_id = ?", itemId).Error; err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }
@@ -492,10 +522,18 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 
 // GetItemFeedback returns feedback of a item from MySQL.
 func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("user_id, item_id, feedback_type, time_stamp")
+	tx := d.gormDB.WithContext(ctx)
+	if d.driver == ClickHouse {
+		tx = tx.Table(d.ItemFeedbackTable())
+	} else {
+		tx = tx.Table(d.FeedbackTable())
+	}
+	tx = tx.Select("user_id, item_id, feedback_type, time_stamp")
 	switch d.driver {
 	case SQLite:
 		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
+	case ClickHouse:
+		tx.Where("time_stamp <= NOW('UTC') AND item_id = ?", itemId)
 	default:
 		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
 	}
@@ -558,6 +596,14 @@ func (d *SQLDatabase) DeleteUser(ctx context.Context, userId string) error {
 	}
 	if err := d.gormDB.WithContext(ctx).Delete(&Feedback{}, "user_id = ?", userId).Error; err != nil {
 		return errors.Trace(err)
+	}
+	if d.driver == ClickHouse {
+		if err := d.gormDB.WithContext(ctx).Delete(&ItemFeedback{}, "user_id = ?", userId).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.WithContext(ctx).Delete(&UserFeedback{}, "user_id = ?", userId).Error; err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }
@@ -674,8 +720,13 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 
 // GetUserFeedback returns feedback of a user from MySQL.
 func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-		Select("feedback_type, user_id, item_id, time_stamp, comment").
+	tx := d.gormDB.WithContext(ctx)
+	if d.driver == ClickHouse {
+		tx = tx.Table(d.UserFeedbackTable())
+	} else {
+		tx = tx.Table(d.FeedbackTable())
+	}
+	tx = tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
 		Where("user_id = ?", userId)
 	if endTime != nil {
 		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
@@ -955,8 +1006,13 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 
 // GetUserItemFeedback gets a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-		Select("feedback_type, user_id, item_id, time_stamp, comment").
+	tx := d.gormDB.WithContext(ctx)
+	if d.driver == ClickHouse {
+		tx = tx.Table(d.UserFeedbackTable())
+	} else {
+		tx = tx.Table(d.FeedbackTable())
+	}
+	tx = tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
 		Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
@@ -979,18 +1035,32 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 
 // DeleteUserItemFeedback deletes a feedback by user id and item id from MySQL.
 func (d *SQLDatabase) DeleteUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) (int, error) {
-	tx := d.gormDB.WithContext(ctx).Where("user_id = ? AND item_id = ?", userId, itemId)
-	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+	deleteUserItemFeedback := func(value any) (int, error) {
+		tx := d.gormDB.WithContext(ctx).Where("user_id = ? AND item_id = ?", userId, itemId)
+		if len(feedbackTypes) > 0 {
+			tx.Where("feedback_type IN ?", feedbackTypes)
+		}
+		tx.Delete(value)
+		if tx.Error != nil {
+			return 0, errors.Trace(tx.Error)
+		}
+		return int(tx.RowsAffected), nil
 	}
-	tx.Delete(&Feedback{})
-	if tx.Error != nil {
-		return 0, errors.Trace(tx.Error)
+	rowAffected, err := deleteUserItemFeedback(&Feedback{})
+	if err != nil {
+		return 0, errors.Trace(err)
 	}
-	if tx.Error != nil && d.driver != ClickHouse {
-		return 0, errors.Trace(tx.Error)
+	if d.driver == ClickHouse {
+		_, err = deleteUserItemFeedback(&UserFeedback{})
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
+		_, err = deleteUserItemFeedback(&ItemFeedback{})
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
 	}
-	return int(tx.RowsAffected), nil
+	return rowAffected, nil
 }
 
 func (d *SQLDatabase) convertTimeZone(timestamp *time.Time) time.Time {

@@ -17,8 +17,8 @@ package data
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 	"net/url"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -146,6 +146,10 @@ type Feedback struct {
 	Timestamp   time.Time `gorm:"column:time_stamp" mapsstructure:"timestamp"`
 	Comment     string    `gorm:"column:comment" mapsstructure:"comment"`
 }
+
+type UserFeedback Feedback
+
+type ItemFeedback Feedback
 
 // SortFeedbacks sorts feedback from latest to oldest.
 func SortFeedbacks(feedback []Feedback) {
