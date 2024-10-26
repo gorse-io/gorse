@@ -14,15 +14,30 @@
 
 package nn
 
-type SGD struct {
-	params []*Tensor
-	lr     float32
+type Optimizer interface {
+	ZeroGrad()
+	Step()
 }
 
-func NewSGD(params []*Tensor, lr float32) *SGD {
+type baseOptimizer struct {
+	params []*Tensor
+}
+
+func (o *baseOptimizer) ZeroGrad() {
+	for _, p := range o.params {
+		p.grad = nil
+	}
+}
+
+type SGD struct {
+	baseOptimizer
+	lr float32
+}
+
+func NewSGD(params []*Tensor, lr float32) Optimizer {
 	return &SGD{
-		params: params,
-		lr:     lr,
+		baseOptimizer: baseOptimizer{params: params},
+		lr:            lr,
 	}
 }
 
@@ -30,6 +45,26 @@ func (s *SGD) Step() {
 	for _, p := range s.params {
 		for i := range p.data {
 			p.data[i] -= s.lr * p.grad.data[i]
+		}
+	}
+}
+
+type Adam struct {
+	baseOptimizer
+	lr float32
+}
+
+func NewAdam(params []*Tensor, lr float32) *Adam {
+	return &Adam{
+		baseOptimizer: baseOptimizer{params: params},
+		lr:            lr,
+	}
+}
+
+func (a *Adam) Step() {
+	for _, p := range a.params {
+		for i := range p.data {
+			p.data[i] -= a.lr * p.grad.data[i]
 		}
 	}
 }

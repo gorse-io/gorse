@@ -193,6 +193,10 @@ func (t *Tensor) Grad() *Tensor {
 	return t.grad
 }
 
+func (t *Tensor) Data() []float32 {
+	return t.data
+}
+
 func (t *Tensor) clone() *Tensor {
 	newData := make([]float32, len(t.data))
 	copy(newData, t.data)
