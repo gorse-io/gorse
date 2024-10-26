@@ -35,6 +35,7 @@ var (
 	positiveFeedbackType  = "positiveFeedbackType"
 	negativeFeedbackType  = "negativeFeedbackType"
 	duplicateFeedbackType = "duplicateFeedbackType"
+	dateTime64Zero        = time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 )
 
 type baseTestSuite struct {
@@ -279,8 +280,8 @@ func (suite *baseTestSuite) TestFeedback() {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
 			if suite.isClickHouse() {
-				// ClickHouse returns 1970-01-01 as zero date.
-				suite.Zero(item.Timestamp.Unix())
+				// ClickHouse returns 1900-01-01 00:00:00 +0000 UTC as zero date.
+				suite.Equal(dateTime64Zero, item.Timestamp)
 			} else {
 				suite.Zero(item.Timestamp)
 			}

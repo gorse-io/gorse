@@ -225,7 +225,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string    `gorm:"column:item_id;type:String"`
 			IsHidden   int       `gorm:"column:is_hidden;type:Boolean;default:0"`
 			Categories string    `gorm:"column:categories;type:String;default:'[]'"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime64(9,'UTC')"`
 			Labels     string    `gorm:"column:labels;type:String;default:'[]'"`
 			Comment    string    `gorm:"column:comment;type:String"`
 			Version    struct{}  `gorm:"column:version;type:DateTime"`
@@ -249,7 +249,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
 			UserId       string    `gorm:"column:user_id;type:String;index:user_index,type:bloom_filter(0.01),granularity:1"`
 			ItemId       string    `gorm:"column:item_id;type:String;index:item_index,type:bloom_filter(0.01),granularity:1"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime64(9,'UTC')"`
 			Comment      string    `gorm:"column:comment;type:String"`
 			Version      struct{}  `gorm:"column:version;type:DateTime"`
 		}
@@ -496,6 +496,8 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	switch d.driver {
 	case SQLite:
 		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
+	case ClickHouse:
+		tx.Where("time_stamp <= NOW('UTC') AND item_id = ?", itemId)
 	default:
 		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
 	}
