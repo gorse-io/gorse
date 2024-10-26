@@ -311,9 +311,10 @@ func (suite *baseTestSuite) TestFeedback() {
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
-	suite.Equal(1, len(ret))
-	suite.Equal("2", ret[0].UserId)
-	suite.Equal("4", ret[0].ItemId)
+	if suite.Equal(1, len(ret)) {
+		suite.Equal("2", ret[0].UserId)
+		suite.Equal("4", ret[0].ItemId)
+	}
 	// Get all feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()))
 	suite.NoError(err)
@@ -580,6 +581,8 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 		// RowAffected isn't supported by ClickHouse,
 		suite.Equal(3, deleteCount)
 	}
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)
