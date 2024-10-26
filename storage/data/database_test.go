@@ -35,6 +35,7 @@ var (
 	positiveFeedbackType  = "positiveFeedbackType"
 	negativeFeedbackType  = "negativeFeedbackType"
 	duplicateFeedbackType = "duplicateFeedbackType"
+	dateTime64Zero        = time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 )
 
 type baseTestSuite struct {
@@ -221,10 +222,6 @@ func (suite *baseTestSuite) TestUsers() {
 }
 
 func (suite *baseTestSuite) TestFeedback() {
-	if suite.isClickHouse() {
-		// TODO: Fix in the next pull request
-		suite.T().Skip()
-	}
 	ctx := context.Background()
 	// users that already exists
 	err := suite.Database.BatchInsertUsers(ctx, []User{{"0", []string{"a"}, []string{"x"}, "comment"}})
@@ -283,8 +280,8 @@ func (suite *baseTestSuite) TestFeedback() {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
 			if suite.isClickHouse() {
-				// ClickHouse returns 1970-01-01 as zero date.
-				suite.Zero(item.Timestamp.Unix())
+				// ClickHouse returns 1900-01-01 00:00:00 +0000 UTC as zero date.
+				suite.Equal(dateTime64Zero, item.Timestamp)
 			} else {
 				suite.Zero(item.Timestamp)
 			}
@@ -314,9 +311,10 @@ func (suite *baseTestSuite) TestFeedback() {
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
-	suite.Equal(1, len(ret))
-	suite.Equal("2", ret[0].UserId)
-	suite.Equal("4", ret[0].ItemId)
+	if suite.Equal(1, len(ret)) {
+		suite.Equal("2", ret[0].UserId)
+		suite.Equal("4", ret[0].ItemId)
+	}
 	// Get all feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()))
 	suite.NoError(err)
@@ -471,6 +469,8 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.Optimize()
 	err = suite.Database.BatchInsertItems(ctx, []Item{{Namespace: "namespace", ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	item, err := suite.Database.GetItem(ctx, "namespace", "4")
 	suite.NoError(err)
 	suite.False(item.IsHidden)
@@ -590,6 +590,7 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 		suite.Equal(3, deleteCount)
 	}
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "2", "3")
+	err = suite.Database.Optimize()
 	suite.NoError(err)
 	suite.Empty(ret)
 	feedbackType1 := "type1"
@@ -670,10 +671,6 @@ func (suite *baseTestSuite) TestTimeLimit() {
 }
 
 func (suite *baseTestSuite) TestTimezone() {
-	if suite.isClickHouse() {
-		// TODO: Fix in the next pull request
-		suite.T().Skip()
-	}
 	ctx := context.Background()
 	loc, err := time.LoadLocation("Asia/Tokyo")
 	suite.NoError(err)
