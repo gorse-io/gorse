@@ -16,7 +16,6 @@ package nn
 
 import (
 	"github.com/chewxy/math32"
-	"github.com/gogo/protobuf/proto"
 )
 
 type op interface {
@@ -305,7 +304,6 @@ func (l *log) backward(dy *Tensor) []*Tensor {
 
 type sum struct {
 	base
-	along *int64
 }
 
 func (s *sum) String() string {
@@ -321,8 +319,79 @@ func (s *sum) forward(inputs ...*Tensor) *Tensor {
 	return y
 }
 
-func (s *sum) backward(*Tensor) []*Tensor {
-	return []*Tensor{Ones(s.inputs[0].shape...)}
+func (s *sum) backward(dy *Tensor) []*Tensor {
+	dx := Zeros(s.inputs[0].shape...)
+	for i := range dx.data {
+		dx.data[i] = dy.data[0]
+	}
+	return []*Tensor{dx}
+}
+
+type partialSum struct {
+	base
+	along int64
+}
+
+func (p *partialSum) String() string {
+	return "Sum"
+}
+
+func (p *partialSum) forward(inputs ...*Tensor) *Tensor {
+	x := inputs[0]
+	// Squash the shape.
+	s1, s2, s3 := 1, 1, 1
+	for i := 0; i < len(x.shape); i++ {
+		if int64(i) == p.along {
+			s2 = x.shape[i]
+		} else if int64(i) < p.along {
+			s1 *= x.shape[i]
+		} else {
+			s3 *= x.shape[i]
+		}
+	}
+	// Calculate the output size and shape.
+	outputSize := s1 * s3
+	outputShape := make([]int, 0)
+	for i := 0; i < len(x.shape); i++ {
+		if int64(i) != p.along {
+			outputShape = append(outputShape, x.shape[i])
+		}
+	}
+	// Calculate the output.
+	y := NewTensor(make([]float32, outputSize), outputShape...)
+	for i := 0; i < s1; i++ {
+		for j := 0; j < s2; j++ {
+			for k := 0; k < s3; k++ {
+				y.data[i*s3+k] += x.data[i*s2*s3+j*s3+k]
+			}
+		}
+	}
+	return y
+}
+
+func (p *partialSum) backward(dy *Tensor) []*Tensor {
+	x := p.inputs[0]
+	// Squash the shape.
+	s1, s2, s3 := 1, 1, 1
+	for i := 0; i < len(x.shape); i++ {
+		if int64(i) == p.along {
+			s2 = x.shape[i]
+		} else if int64(i) < p.along {
+			s1 *= x.shape[i]
+		} else {
+			s3 *= x.shape[i]
+		}
+	}
+	// Calculate the output.
+	dx := Zeros(x.shape...)
+	for i := 0; i < s1; i++ {
+		for j := 0; j < s2; j++ {
+			for k := 0; k < s3; k++ {
+				dx.data[i*s2*s3+j*s3+k] = dy.data[i*s3+k]
+			}
+		}
+	}
+	return []*Tensor{dx}
 }
 
 type mean struct {
@@ -343,10 +412,10 @@ func (m *mean) forward(inputs ...*Tensor) *Tensor {
 	return y
 }
 
-func (m *mean) backward(*Tensor) []*Tensor {
+func (m *mean) backward(dy *Tensor) []*Tensor {
 	dx := Zeros(m.inputs[0].shape...)
 	for i := range dx.data {
-		dx.data[i] = 1 / float32(len(dx.data))
+		dx.data[i] = dy.data[0] / float32(len(dx.data))
 	}
 	return []*Tensor{dx}
 }
@@ -657,13 +726,12 @@ func Cos(x *Tensor) *Tensor {
 
 // Sum returns the sum of all elements in a tensor.
 func Sum(x *Tensor, along ...int) *Tensor {
-	op := &sum{}
 	if len(along) > 1 {
 		panic("only one along is allowed")
 	} else if len(along) == 1 {
-		op.along = proto.Int64(int64(along[0]))
+		return apply(&partialSum{along: int64(along[0])}, x)
 	}
-	return apply(op, x)
+	return apply(&sum{}, x)
 }
 
 // Mean returns the mean of all elements in a tensor.

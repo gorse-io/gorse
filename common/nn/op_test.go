@@ -296,6 +296,19 @@ func TestSum(t *testing.T) {
 	y = Sum(x)
 	y.Backward()
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
+
+	// (2,3,2) -> (2,2)
+	x = NewTensor([]float32{1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, 2, 3, 2)
+	y = Sum(x, 1)
+	assert.Equal(t, []int{2, 2}, y.shape)
+	assert.Equal(t, []float32{9, 12, 9, 12}, y.data)
+
+	// Test gradient
+	x = RandN(2, 3, 2)
+	y = Sum(x, 1)
+	y.Backward()
+	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)
+	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, x.grad.data)
 }
 
 func TestMean(t *testing.T) {
