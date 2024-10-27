@@ -135,6 +135,39 @@ func (t *Tensor) Shape() []int {
 	return t.shape
 }
 
+// Slice returns a slice of the tensor.
+func (t *Tensor) Slice(start, end int) *Tensor {
+	if len(t.shape) < 1 {
+		panic("slice requires at least 1-D tensor")
+	}
+	if start < 0 || end > t.shape[0] {
+		panic("slice out of range")
+	}
+	subSize := 1
+	for i := 1; i < len(t.shape); i++ {
+		subSize *= t.shape[i]
+	}
+	return &Tensor{
+		data:  t.data[start*subSize : end*subSize],
+		shape: append([]int{end - start}, t.shape[1:]...),
+	}
+}
+
+// Get returns the value of the tensor at the given indices.
+func (t *Tensor) Get(indices ...int) float32 {
+	if len(indices) != len(t.shape) {
+		panic("the number of indices does not match the shape of the tensor")
+	}
+	index := 0
+	for i := range indices {
+		if indices[i] < 0 || indices[i] >= t.shape[i] {
+			panic("index out of range")
+		}
+		index = index*t.shape[i] + indices[i]
+	}
+	return t.data[index]
+}
+
 func (t *Tensor) String() string {
 	// Print scalar value
 	if len(t.shape) == 0 {
