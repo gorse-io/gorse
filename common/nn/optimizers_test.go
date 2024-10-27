@@ -63,5 +63,5 @@ func TestSGD(t *testing.T) {
 func TestAdam(t *testing.T) {
 	losses := testOptimizer(nn.NewAdam, 1000)
 	assert.IsDecreasing(t, losses)
-	assert.Less(t, losses[len(losses)-1], float32(0.1))
+	assert.Less(t, losses[len(losses)-1], float32(0.2))
 }

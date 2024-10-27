@@ -86,16 +86,12 @@ func (a *Adam) Step() {
 		m, v := a.ms[p.id], a.vs[p.id]
 		grad := p.grad.data
 
-		// m += (1 - beta1) * (grad - m)
 		for i := range m.data {
+			// m += (1 - beta1) * (grad - m)
 			m.data[i] += (1 - a.beta1) * (grad[i] - m.data[i])
-		}
-		// v += (1 - beta2) * (grad * grad - v)
-		for i := range v.data {
+			// v += (1 - beta2) * (grad * grad - v)
 			v.data[i] += (1 - a.beta2) * (grad[i]*grad[i] - v.data[i])
-		}
-		// param.data -= self.lr * m / (xp.sqrt(v) + eps)
-		for i := range p.data {
+			// param.data -= self.lr * m / (xp.sqrt(v) + eps)
 			p.data[i] -= a.alpha * m.data[i] / (math32.Sqrt(v.data[i]) + a.eps)
 		}
 	}
