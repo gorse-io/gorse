@@ -27,11 +27,11 @@ const (
 )
 
 func numericalDiff(f func(*Tensor) *Tensor, x *Tensor) *Tensor {
-	x0 := Sub(x, NewTensor([]float32{eps}))
-	x1 := Add(x, NewTensor([]float32{eps}))
+	x0 := Sub(x, NewVariable([]float32{eps}))
+	x1 := Add(x, NewVariable([]float32{eps}))
 	y0 := f(x0)
 	y1 := f(x1)
-	dx := Div(Sub(y1, y0), NewTensor([]float32{2 * eps}))
+	dx := Div(Sub(y1, y0), NewVariable([]float32{2 * eps}))
 	return dx
 }
 
@@ -49,14 +49,14 @@ func allClose(t *testing.T, a, b *Tensor) {
 
 func TestAdd(t *testing.T) {
 	// (2,3) + (2,3) -> (2,3)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y := NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := NewVariable([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
 	z := Add(x, y)
 	assert.Equal(t, []float32{3, 5, 7, 9, 11, 13}, z.data)
 
 	// Test gradient
-	x = RandN(2, 3)
-	y = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
+	y = RandN(2, 3).RequireGrad()
 	z = Add(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Add(x, y) }, x)
@@ -65,8 +65,8 @@ func TestAdd(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// (2,3) + () -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2})
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2})
 	z = Add(x, y)
 	assert.Equal(t, []float32{3, 4, 5, 6, 7, 8}, z.data)
 
@@ -76,8 +76,8 @@ func TestAdd(t *testing.T) {
 	assert.Equal(t, []float32{6}, y.grad.data)
 
 	// (2,3) + (3) -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2, 3, 4}, 3)
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2, 3, 4}, 3)
 	z = Add(x, y)
 	assert.Equal(t, []float32{3, 5, 7, 6, 8, 10}, z.data)
 
@@ -89,14 +89,14 @@ func TestAdd(t *testing.T) {
 
 func TestSub(t *testing.T) {
 	// (2,3) - (2,3) -> (2,3)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y := NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := NewVariable([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
 	z := Sub(x, y)
 	assert.Equal(t, []float32{-1, -1, -1, -1, -1, -1}, z.data)
 
 	// Test gradient
-	x = RandN(2, 3)
-	y = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
+	y = RandN(2, 3).RequireGrad()
 	z = Sub(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Sub(x, y) }, x)
@@ -105,8 +105,8 @@ func TestSub(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// (2,3) - () -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2})
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2})
 	z = Sub(x, y)
 	assert.Equal(t, []float32{-1, 0, 1, 2, 3, 4}, z.data)
 
@@ -116,8 +116,8 @@ func TestSub(t *testing.T) {
 	assert.Equal(t, []float32{-6}, y.grad.data)
 
 	// (2,3) - (3) -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2, 3, 4}, 3)
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2, 3, 4}, 3)
 	z = Sub(x, y)
 	assert.Equal(t, []float32{-1, -1, -1, 2, 2, 2}, z.data)
 
@@ -129,14 +129,14 @@ func TestSub(t *testing.T) {
 
 func TestMul(t *testing.T) {
 	// (2,3) * (2,3) -> (2,3)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y := NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := NewVariable([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
 	z := Mul(x, y)
 	assert.Equal(t, []float32{2, 6, 12, 20, 30, 42}, z.data)
 
 	// Test gradient
-	x = RandN(2, 3)
-	y = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
+	y = RandN(2, 3).RequireGrad()
 	z = Mul(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Mul(x, y) }, x)
@@ -145,8 +145,8 @@ func TestMul(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// (2,3) * () -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2})
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2})
 	z = Mul(x, y)
 	assert.Equal(t, []float32{2, 4, 6, 8, 10, 12}, z.data)
 
@@ -156,8 +156,8 @@ func TestMul(t *testing.T) {
 	assert.Equal(t, []float32{21}, y.grad.data)
 
 	// (2,3) * (3) -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2, 3, 4}, 3)
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2, 3, 4}, 3)
 	z = Mul(x, y)
 	assert.Equal(t, []float32{2, 6, 12, 8, 15, 24}, z.data)
 
@@ -169,14 +169,14 @@ func TestMul(t *testing.T) {
 
 func TestDiv(t *testing.T) {
 	// (2,3) / (2,3) -> (2,3)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y := NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := NewVariable([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
 	z := Div(x, y)
 	assert.InDeltaSlice(t, []float32{0.5, 2.0 / 3.0, 0.75, 4.0 / 5.0, 5.0 / 6.0, 6.0 / 7.0}, z.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3)
-	y = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
+	y = RandN(2, 3).RequireGrad()
 	z = Div(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Div(x, y) }, x)
@@ -185,8 +185,8 @@ func TestDiv(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// (2,3) / () -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2})
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2})
 	z = Div(x, y)
 	assert.InDeltaSlice(t, []float32{0.5, 1, 1.5, 2, 2.5, 3}, z.data, 1e-6)
 
@@ -196,8 +196,8 @@ func TestDiv(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{-21.0 / 4.0}, y.grad.data, 1e-6)
 
 	// (2,3) / (3) -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2, 3, 4}, 3)
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2, 3, 4}, 3)
 	z = Div(x, y)
 	assert.InDeltaSlice(t, []float32{0.5, 2.0 / 3.0, 3.0 / 4.0, 2, 5.0 / 3.0, 1.5}, z.data, 1e-6)
 
@@ -209,12 +209,12 @@ func TestDiv(t *testing.T) {
 
 func TestSquare(t *testing.T) {
 	// (2,3) -> (2,3)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := Square(x)
 	assert.Equal(t, []float32{1, 4, 9, 16, 25, 36}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Square(x)
 	y.Backward()
 	dx := numericalDiff(Square, x)
@@ -223,14 +223,14 @@ func TestSquare(t *testing.T) {
 
 func TestPow(t *testing.T) {
 	// (2,3) ** (2,3) -> (2,3)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y := NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := NewVariable([]float32{2, 3, 4, 5, 6, 7}, 2, 3)
 	z := Pow(x, y)
 	assert.InDeltaSlice(t, []float32{1, 8, 81, 1024, 15625, 279936}, z.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3)
-	y = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
+	y = RandN(2, 3).RequireGrad()
 	z = Pow(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Pow(x, y) }, x)
@@ -239,8 +239,8 @@ func TestPow(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// (2,3) ** () -> (2,3)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y = NewTensor([]float32{2})
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y = NewVariable([]float32{2})
 	z = Pow(x, y)
 	assert.InDeltaSlice(t, []float32{1, 4, 9, 16, 25, 36}, z.data, 1e-6)
 
@@ -259,12 +259,12 @@ func TestPow(t *testing.T) {
 
 func TestExp(t *testing.T) {
 	// (2,3) -> (2,3)
-	x := NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
+	x := NewVariable([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
 	y := Exp(x)
 	assert.InDeltaSlice(t, []float32{1, math32.Exp(1), math32.Exp(2), math32.Exp(3), math32.Exp(4), math32.Exp(5)}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Exp(x)
 	y.Backward()
 	dx := numericalDiff(Exp, x)
@@ -273,12 +273,12 @@ func TestExp(t *testing.T) {
 
 func TestLog(t *testing.T) {
 	// (2,3) -> (2,3)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := Log(x)
 	assert.InDeltaSlice(t, []float32{0, math32.Log(2), math32.Log(3), math32.Log(4), math32.Log(5), math32.Log(6)}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Log(x)
 	y.Backward()
 	dx := numericalDiff(Log, x)
@@ -287,24 +287,24 @@ func TestLog(t *testing.T) {
 
 func TestSum(t *testing.T) {
 	// (2,3) -> ()
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := Sum(x)
 	assert.Equal(t, []float32{21}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Sum(x)
 	y.Backward()
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
 
 	// (2,3,2) -> (2,2)
-	x = NewTensor([]float32{1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, 2, 3, 2)
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, 2, 3, 2)
 	y = Sum(x, 1)
 	assert.Equal(t, []int{2, 2}, y.shape)
 	assert.Equal(t, []float32{9, 12, 9, 12}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3, 2)
+	x = RandN(2, 3, 2).RequireGrad()
 	y = Sum(x, 1)
 	y.Backward()
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)
@@ -313,12 +313,12 @@ func TestSum(t *testing.T) {
 
 func TestMean(t *testing.T) {
 	// (2,3) -> ()
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := Mean(x)
 	assert.Equal(t, []float32{3.5}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Mean(x)
 	y.Backward()
 	assert.Equal(t, []float32{1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6}, x.grad.data)
@@ -326,12 +326,12 @@ func TestMean(t *testing.T) {
 
 func TestCos(t *testing.T) {
 	// (2,3) -> (2,3)
-	x := NewTensor([]float32{0, 0.1, 0.2, 0.3, 0.4, 0.5}, 2, 3)
+	x := NewVariable([]float32{0, 0.1, 0.2, 0.3, 0.4, 0.5}, 2, 3)
 	y := Cos(x)
 	assert.InDeltaSlice(t, []float32{1, 0.9950041652780258, 0.9800665778412416, 0.955336489125606, 0.9210609940028851, 0.8775825618903728}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Cos(x)
 	y.Backward()
 	dx := numericalDiff(Cos, x)
@@ -340,12 +340,12 @@ func TestCos(t *testing.T) {
 
 func TestSin(t *testing.T) {
 	// (2,3) -> (2,3)
-	x := NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
+	x := NewVariable([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
 	y := Sin(x)
 	assert.InDeltaSlice(t, []float32{0, 0.8414709848078965, 0.9092974268256817, 0.1411200080598672, -0.7568024953079282, -0.9589242746631385}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Sin(x)
 	y.Backward()
 	dx := numericalDiff(Sin, x)
@@ -354,8 +354,8 @@ func TestSin(t *testing.T) {
 
 func TestMatMul(t *testing.T) {
 	// (2,3) * (3,4) -> (2,4)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
-	y := NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 4)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	y := NewVariable([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 4)
 	z := MatMul(x, y)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	assert.Equal(t, []float32{38, 44, 50, 56, 83, 98, 113, 128}, z.data)
@@ -370,8 +370,8 @@ func TestMatMul(t *testing.T) {
 
 func TestBMM(t *testing.T) {
 	// (2,2,3) * (2,3,4) -> (2,2,4)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, 2, 2, 3)
-	y := NewTensor([]float32{
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, 2, 2, 3)
+	y := NewVariable([]float32{
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 	}, 2, 3, 4)
@@ -398,7 +398,7 @@ func TestBMM(t *testing.T) {
 
 func TestBroadcast(t *testing.T) {
 	// (2) -> (2,3)
-	x := NewTensor([]float32{1, 2}, 2)
+	x := NewVariable([]float32{1, 2}, 2)
 	y := Broadcast(x, 3)
 	assert.Equal(t, []float32{1, 1, 1, 2, 2, 2}, y.data)
 
@@ -409,8 +409,8 @@ func TestBroadcast(t *testing.T) {
 
 func TestEmbedding(t *testing.T) {
 	// (2,3) -> (2,3,2)
-	x := NewTensor([]float32{0, 1, 0, 3, 0, 5}, 2, 3)
-	w := NewTensor([]float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 6, 2)
+	x := NewVariable([]float32{0, 1, 0, 3, 0, 5}, 2, 3)
+	w := NewVariable([]float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 6, 2)
 	y := Embedding(w, x)
 	assert.Equal(t, []int{2, 3, 2}, y.shape)
 	assert.Equal(t, []float32{0, 1, 2, 3, 0, 1, 6, 7, 0, 1, 10, 11}, y.data)
@@ -421,8 +421,8 @@ func TestEmbedding(t *testing.T) {
 	assert.Equal(t, []float32{3, 3, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1}, w.grad.data)
 
 	// (2,3) -> (2,3,1,2)
-	x = NewTensor([]float32{0, 1, 0, 3, 0, 5}, 2, 3)
-	w = NewTensor([]float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 6, 1, 2)
+	x = NewVariable([]float32{0, 1, 0, 3, 0, 5}, 2, 3)
+	w = NewVariable([]float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 6, 1, 2)
 	y = Embedding(w, x)
 	assert.Equal(t, []int{2, 3, 1, 2}, y.shape)
 	assert.Equal(t, []float32{0, 1, 2, 3, 0, 1, 6, 7, 0, 1, 10, 11}, y.data)
@@ -435,12 +435,12 @@ func TestEmbedding(t *testing.T) {
 
 func TestSigmoid(t *testing.T) {
 	// (2,3) -> (2,3)
-	x := NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
+	x := NewVariable([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
 	y := Sigmoid(x)
 	assert.InDeltaSlice(t, []float32{0.5, 0.7310585786300049, 0.8807970779778823, 0.9525741268224334, 0.9820137900379085, 0.9933071490757153}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = Sigmoid(x)
 	y.Backward()
 	dx := numericalDiff(Sigmoid, x)
@@ -449,12 +449,12 @@ func TestSigmoid(t *testing.T) {
 
 func TestReLu(t *testing.T) {
 	// (2,3) -> (2,3)
-	x := NewTensor([]float32{-1, 0, 1, 2, 3, 4}, 2, 3)
+	x := NewVariable([]float32{-1, 0, 1, 2, 3, 4}, 2, 3)
 	y := ReLu(x)
 	assert.Equal(t, []float32{0, 0, 1, 2, 3, 4}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3)
+	x = RandN(2, 3).RequireGrad()
 	y = ReLu(x)
 	y.Backward()
 	dx := numericalDiff(ReLu, x)
@@ -463,7 +463,7 @@ func TestReLu(t *testing.T) {
 
 func TestFlatten(t *testing.T) {
 	// (2,3) -> (6)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := Flatten(x)
 	assert.Equal(t, []float32{1, 2, 3, 4, 5, 6}, y.data)
 
@@ -474,7 +474,7 @@ func TestFlatten(t *testing.T) {
 
 func TestReshape(t *testing.T) {
 	// (2,3) -> (3,2)
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := Reshape(x, 3, 2)
 	assert.Equal(t, []float32{1, 2, 3, 4, 5, 6}, y.data)
 
@@ -485,7 +485,7 @@ func TestReshape(t *testing.T) {
 
 func TestReuse(t *testing.T) {
 	// x + x
-	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := Add(x, x)
 	assert.Equal(t, []float32{2, 4, 6, 8, 10, 12}, y.data)
 

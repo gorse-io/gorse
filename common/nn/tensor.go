@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/google/uuid"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"math/rand"
 	"strings"
 )
@@ -44,6 +45,10 @@ func NewTensor(data []float32, shape ...int) *Tensor {
 		data:  data,
 		shape: shape,
 	}
+}
+
+func NewVariable(data []float32, shape ...int) *Tensor {
+	return NewTensor(data, shape...).RequireGrad()
 }
 
 func NewScalar(data float32) *Tensor {
@@ -358,10 +363,9 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 		m, n, p := t.shape[0], t.shape[1], other.shape[1]
 		result := make([]float32, m*p)
 		for i := 0; i < m; i++ {
-			for j := 0; j < p; j++ {
-				for k := 0; k < n; k++ {
-					result[i*p+j] += t.data[i*n+k] * other.data[k*p+j]
-				}
+			for j, aij := range t.data[i*n : (i+1)*n] {
+				// C_j += A_{ij} * B_i
+				floats.MulConstAddTo(other.data[j*p:(j+1)*p], aij, result[i*p:(i+1)*p])
 			}
 		}
 		return &Tensor{
@@ -378,10 +382,9 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 		m, n, p := t.shape[1], t.shape[0], other.shape[1]
 		result := make([]float32, m*p)
 		for i := 0; i < m; i++ {
-			for j := 0; j < p; j++ {
-				for k := 0; k < n; k++ {
-					result[i*p+j] += t.data[k*m+i] * other.data[k*p+j]
-				}
+			for j := 0; j < n; j++ {
+				// C_j += A_{ji} * B_i
+				floats.MulConstAddTo(other.data[j*p:(j+1)*p], t.data[j*m+i], result[i*p:(i+1)*p])
 			}
 		}
 		return &Tensor{
@@ -399,9 +402,7 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 		result := make([]float32, m*p)
 		for i := 0; i < m; i++ {
 			for j := 0; j < p; j++ {
-				for k := 0; k < n; k++ {
-					result[i*p+j] += t.data[i*n+k] * other.data[j*n+k]
-				}
+				result[i*p+j] = floats.Dot(t.data[i*n:(i+1)*n], other.data[j*n:(j+1)*n])
 			}
 		}
 		return &Tensor{
@@ -439,20 +440,19 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool) *Tensor
 		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[1] {
 			panic("BatchMatMul requires the shapes of tensors are compatible")
 		}
-		m, n, p := t.shape[0], t.shape[1], other.shape[2]
-		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
-					for l := 0; l < t.shape[2]; l++ {
-						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
-					}
+		batches, m, n, p := t.shape[0], t.shape[1], t.shape[2], other.shape[2]
+		result := make([]float32, batches*m*p)
+		for b := 0; b < batches; b++ {
+			for i := 0; i < m; i++ {
+				for j := 0; j < n; j++ {
+					// C_{bj} += A_{bij} * B_{bi}
+					floats.MulConstAddTo(other.data[b*n*p+j*p:b*n*p+(j+1)*p], t.data[b*m*n+i*n+j], result[b*m*p+i*p:b*m*p+(i+1)*p])
 				}
 			}
 		}
 		return &Tensor{
 			data:  result,
-			shape: []int{m, n, p},
+			shape: []int{batches, m, p},
 		}
 	} else if transpose1 && !transpose2 {
 		if len(t.shape) != 3 || len(other.shape) != 3 {
@@ -461,20 +461,18 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool) *Tensor
 		if t.shape[0] != other.shape[0] || t.shape[1] != other.shape[1] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
-		m, n, p := t.shape[0], t.shape[2], other.shape[2]
-		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
-					for l := 0; l < t.shape[1]; l++ {
-						result[i*n*p+j*p+k] += t.data[i*t.shape[1]*t.shape[2]+l*t.shape[2]+j] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
-					}
+		batches, m, n, p := t.shape[0], t.shape[2], t.shape[1], other.shape[2]
+		result := make([]float32, batches*m*p)
+		for b := 0; b < batches; b++ {
+			for i := 0; i < m; i++ {
+				for j := 0; j < n; j++ {
+					floats.MulConstAddTo(other.data[b*n*p+j*p:b*n*p+(j+1)*p], t.data[b*n*m+j*m+i], result[b*m*p+i*p:b*m*p+(i+1)*p])
 				}
 			}
 		}
 		return &Tensor{
 			data:  result,
-			shape: []int{m, n, p},
+			shape: []int{batches, m, p},
 		}
 	} else if !transpose1 && transpose2 {
 		if len(t.shape) != 3 || len(other.shape) != 3 {
@@ -483,20 +481,19 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool) *Tensor
 		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[2] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
-		m, n, p := t.shape[0], t.shape[1], other.shape[1]
-		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
-					for l := 0; l < t.shape[2]; l++ {
-						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+k*other.shape[2]+l]
-					}
+		batches, m, n, p := t.shape[0], t.shape[1], t.shape[2], other.shape[1]
+		result := make([]float32, batches*m*p)
+		for b := 0; b < batches; b++ {
+			for i := 0; i < m; i++ {
+				for j := 0; j < p; j++ {
+					result[b*m*p+i*p+j] = floats.Dot(t.data[b*m*n+i*n:b*m*n+(i+1)*n],
+						other.data[b*p*n+j*n:b*p*n+(j+1)*n])
 				}
 			}
 		}
 		return &Tensor{
 			data:  result,
-			shape: []int{m, n, p},
+			shape: []int{batches, m, p},
 		}
 	} else {
 		if len(t.shape) != 3 || len(other.shape) != 3 {
