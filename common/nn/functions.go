@@ -14,6 +14,10 @@
 
 package nn
 
+func Neg(x *Tensor) *Tensor {
+	return apply(&neg{}, x)
+}
+
 // Add returns the element-wise sum of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Add(x0, x1 *Tensor) *Tensor {
 	if len(x0.shape) < len(x1.shape) {
@@ -173,4 +177,21 @@ func ReLu(x *Tensor) *Tensor {
 
 func MSE(x, y *Tensor) *Tensor {
 	return Mean(Square(Sub(x, y)))
+}
+
+// BCEWithLogits is equivalent to:
+//
+//	(1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2 + (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
+func BCEWithLogits(target, prediction *Tensor) *Tensor {
+	return Add(
+		Div(
+			Mul(
+				Add(NewScalar(1), target),
+				Log(Add(NewScalar(1), Exp(Neg(prediction))))),
+			NewScalar(2)),
+		Div(
+			Mul(
+				Sub(NewScalar(1), target),
+				Log(Add(NewScalar(1), Exp(prediction)))),
+			NewScalar(2)))
 }

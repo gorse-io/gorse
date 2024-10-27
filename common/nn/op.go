@@ -52,6 +52,26 @@ func apply[T op](f T, inputs ...*Tensor) *Tensor {
 	return y
 }
 
+type neg struct {
+	base
+}
+
+func (n *neg) String() string {
+	return "Neg"
+}
+
+func (n *neg) forward(inputs ...*Tensor) *Tensor {
+	y := inputs[0].clone()
+	y.neg()
+	return y
+}
+
+func (n *neg) backward(dy *Tensor) []*Tensor {
+	dx := dy.clone()
+	dx.neg()
+	return []*Tensor{dx}
+}
+
 type add struct {
 	base
 }
