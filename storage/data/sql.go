@@ -231,6 +231,7 @@ func (d *SQLDatabase) Init() error {
 	case ClickHouse:
 		// create tables
 		type Items struct {
+			Namespace  string    `gorm:"column:namespace;type:String"`
 			ItemId     string    `gorm:"column:item_id;type:String"`
 			IsHidden   int       `gorm:"column:is_hidden;type:Boolean;default:0"`
 			Categories string    `gorm:"column:categories;type:String;default:'[]'"`
@@ -239,7 +240,7 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:String"`
 			Version    struct{}  `gorm:"column:version;type:DateTime"`
 		}
-		err := d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY item_id").AutoMigrate(Items{})
+		err := d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (namespace, item_id)").AutoMigrate(Items{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -255,6 +256,7 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		type Feedback struct {
+			Namespace    string    `gorm:"column:namespace;type:String"`
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
 			UserId       string    `gorm:"column:user_id;type:String;index:user_index,type:bloom_filter(0.01),granularity:1"`
 			ItemId       string    `gorm:"column:item_id;type:String;index:item_index,type:bloom_filter(0.01),granularity:1"`
@@ -262,7 +264,7 @@ func (d *SQLDatabase) Init() error {
 			Comment      string    `gorm:"column:comment;type:String"`
 			Version      struct{}  `gorm:"column:version;type:DateTime"`
 		}
-		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (namespace, feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -304,29 +306,12 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 	if len(items) == 0 {
 		return nil
 	}
-	rows := make([]SQLItem, 0, len(items))
-	memo := mapset.NewSet[ItemUID]()
-	for _, item := range items {
-		if !memo.Contains(item.ItemUID()) {
-			memo.Add(item.ItemUID())
-			row := NewSQLItem(item)
-			if d.driver == SQLite {
-				row.Timestamp = row.Timestamp.In(time.UTC)
-			}
-			rows = append(rows, row)
-		}
-	}
-	err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "namespace"}, {Name: "item_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
-	}).Create(rows).Error
-	return errors.Trace(err)
 	if d.driver == ClickHouse {
 		rows := make([]ClickHouseItem, 0, len(items))
-		memo := mapset.NewSet[string]()
+		memo := mapset.NewSet[ItemUID]()
 		for _, item := range items {
-			if !memo.Contains(item.ItemId) {
-				memo.Add(item.ItemId)
+			if !memo.Contains(item.ItemUID()) {
+				memo.Add(item.ItemUID())
 				rows = append(rows, NewClickHouseItem(item))
 			}
 		}
@@ -334,10 +319,10 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 		return errors.Trace(err)
 	} else {
 		rows := make([]SQLItem, 0, len(items))
-		memo := mapset.NewSet[string]()
+		memo := mapset.NewSet[ItemUID]()
 		for _, item := range items {
-			if !memo.Contains(item.ItemId) {
-				memo.Add(item.ItemId)
+			if !memo.Contains(item.ItemUID()) {
+				memo.Add(item.ItemUID())
 				row := NewSQLItem(item)
 				if d.driver == SQLite {
 					row.Timestamp = row.Timestamp.In(time.UTC)
@@ -346,7 +331,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 			}
 		}
 		err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "item_id"}},
+			Columns:   []clause.Column{{Name: "namespace"}, {Name: "item_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
 		}).Create(rows).Error
 		return errors.Trace(err)
@@ -377,10 +362,8 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, namespace string, itemI
 
 // DeleteItem deletes a item from MySQL.
 func (d *SQLDatabase) DeleteItem(ctx context.Context, namespace string, itemId string) error {
-	if err := d.gormDB.WithContext(ctx).Delete(&SQLItem{
-		Namespace: namespace,
-		ItemId:    itemId,
-	}).Error; err != nil {
+	if err := d.gormDB.WithContext(ctx).
+		Delete(&SQLItem{}, "namespace = ? and item_id = ?", namespace, itemId).Error; err != nil {
 		return errors.Trace(err)
 	}
 	if err := d.gormDB.WithContext(ctx).
@@ -811,27 +794,12 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	// insert items
 	if insertItem {
 		itemList := items.ToSlice()
-		err := tx.Clauses(clause.OnConflict{
-			Columns: []clause.Column{
-				{Name: "namespace"},
-				{Name: "item_id"},
-			},
-			DoNothing: true,
-		}).Create(lo.Map(itemList, func(uid ItemUID, _ int) SQLItem {
-			return SQLItem{
-				Namespace:  uid.Namespace,
-				ItemId:     uid.ItemId,
-				Labels:     "null",
-				Categories: "null",
-			}
-		})).Error
-		if err != nil {
-			return errors.Trace(err)
 		if d.driver == ClickHouse {
-			err := tx.Create(lo.Map(itemList, func(itemId string, _ int) ClickHouseItem {
+			err := tx.Create(lo.Map(itemList, func(uid ItemUID, _ int) ClickHouseItem {
 				return ClickHouseItem{
 					SQLItem: SQLItem{
-						ItemId:     itemId,
+						Namespace:  uid.Namespace,
+						ItemId:     uid.ItemId,
 						Labels:     "[]",
 						Categories: "[]",
 					},
@@ -842,11 +810,15 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			}
 		} else {
 			err := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "item_id"}},
+				Columns: []clause.Column{
+					{Name: "namespace"},
+					{Name: "item_id"},
+				},
 				DoNothing: true,
-			}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
+			}).Create(lo.Map(itemList, func(uid ItemUID, _ int) SQLItem {
 				return SQLItem{
-					ItemId:     itemId,
+					Namespace:  uid.Namespace,
+					ItemId:     uid.ItemId,
 					Labels:     "null",
 					Categories: "null",
 				}
@@ -871,40 +843,13 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}
 	}
 	// insert feedback
-	rows := make([]Feedback, 0, len(feedback))
-	memo := mapset.NewSet[FeedbackKey]()
-	for _, f := range feedback {
-		if users.Contains(f.UserId) && items.Contains(f.ItemUID()) {
-			if !memo.Contains(f.FeedbackKey) {
-				memo.Add(f.FeedbackKey)
-				if d.driver == SQLite {
-					f.Timestamp = f.Timestamp.In(time.UTC)
-				}
-				rows = append(rows, f)
-			}
-		}
-	}
-	if len(rows) == 0 {
-		return nil
-	}
-	err := tx.Clauses(clause.OnConflict{
-		Columns: []clause.Column{
-			{Name: "namespace"},
-			{Name: "feedback_type"},
-			{Name: "user_id"},
-			{Name: "item_id"},
-		},
-		DoNothing: !overwrite,
-		DoUpdates: lo.If(overwrite, clause.AssignmentColumns([]string{"time_stamp", "comment"})).Else(nil),
-	}).Create(rows).Error
-	return errors.Trace(err)
 	if d.driver == ClickHouse {
 		rows := make([]ClickHouseFeedback, 0, len(feedback))
-		memo := make(map[lo.Tuple3[string, string, string]]struct{})
+		memo := mapset.NewSet[FeedbackKey]()
 		for _, f := range feedback {
-			if users.Contains(f.UserId) && items.Contains(f.ItemId) {
-				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
-					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
+			if users.Contains(f.UserId) && items.Contains(f.ItemUID()) {
+				if !memo.Contains(f.FeedbackKey) {
+					memo.Add(f.FeedbackKey)
 					f.Timestamp = f.Timestamp.In(time.UTC)
 					rows = append(rows, ClickHouseFeedback{
 						Feedback: f,
@@ -920,11 +865,11 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		return errors.Trace(err)
 	} else {
 		rows := make([]Feedback, 0, len(feedback))
-		memo := make(map[lo.Tuple3[string, string, string]]struct{})
+		memo := mapset.NewSet[FeedbackKey]()
 		for _, f := range feedback {
-			if users.Contains(f.UserId) && items.Contains(f.ItemId) {
-				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
-					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
+			if users.Contains(f.UserId) && items.Contains(f.ItemUID()) {
+				if !memo.Contains(f.FeedbackKey) {
+					memo.Add(f.FeedbackKey)
 					if d.driver == SQLite {
 						f.Timestamp = f.Timestamp.In(time.UTC)
 					}
@@ -936,7 +881,12 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			return nil
 		}
 		err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
+			Columns: []clause.Column{
+				{Name: "namespace"},
+				{Name: "feedback_type"},
+				{Name: "user_id"},
+				{Name: "item_id"},
+			},
 			DoNothing: !overwrite,
 			DoUpdates: lo.If(overwrite, clause.AssignmentColumns([]string{"time_stamp", "comment"})).Else(nil),
 		}).Create(rows).Error
