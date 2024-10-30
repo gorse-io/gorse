@@ -19,6 +19,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/google/uuid"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"golang.org/x/exp/slices"
 	"math/rand"
 	"strings"
 )
@@ -216,6 +217,9 @@ func (t *Tensor) Backward() {
 		// Clear gradient of non-leaf tensor
 		output.grad = nil
 		for i := range grads {
+			if !slices.Equal(inputs[i].shape, grads[i].shape) {
+				panic(fmt.Sprintf("%s: shape %v does not match shape %v", op.String(), inputs[i].shape, grads[i].shape))
+			}
 			if inputs[i].grad == nil {
 				inputs[i].grad = grads[i]
 			} else {
@@ -410,13 +414,14 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 			shape: []int{m, p},
 		}
 	} else {
+		// (n,m).T @ (p,n).T = (m,p)
 		if len(t.shape) != 2 || len(other.shape) != 2 {
 			panic("matMul requires 2-D tensors")
 		}
-		if t.shape[0] != other.shape[0] {
+		if t.shape[0] != other.shape[1] {
 			panic("matMul requires the shapes of tensors are compatible")
 		}
-		m, n, p := t.shape[1], t.shape[0], other.shape[1]
+		m, n, p := t.shape[1], t.shape[0], other.shape[0]
 		result := make([]float32, m*p)
 		for i := 0; i < m; i++ {
 			for j := 0; j < p; j++ {
@@ -496,26 +501,27 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool) *Tensor
 			shape: []int{batches, m, p},
 		}
 	} else {
+		// (b,n,m).T @ (b,p,n).T = (b,m,p)
 		if len(t.shape) != 3 || len(other.shape) != 3 {
 			panic("batchMatMul requires 3-D tensors")
 		}
-		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[2] {
+		if t.shape[0] != other.shape[0] || t.shape[1] != other.shape[2] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
-		m, n, p := t.shape[1], t.shape[2], other.shape[2]
+		batches, m, n, p := t.shape[0], t.shape[2], t.shape[1], other.shape[1]
 		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
-					for l := 0; l < t.shape[0]; l++ {
-						result[i*n*p+j*p+k] += t.data[l*t.shape[1]*t.shape[2]+i*t.shape[2]+j] * other.data[l*other.shape[1]*other.shape[2]+j*other.shape[2]+k]
+		for b := 0; b < batches; b++ {
+			for i := 0; i < m; i++ {
+				for j := 0; j < n; j++ {
+					for k := 0; k < p; k++ {
+						result[i*n*p+j*p+k] += t.data[b*m*n+j*m+i] * other.data[b*p*n+k*n+j]
 					}
 				}
 			}
 		}
 		return &Tensor{
 			data:  result,
-			shape: []int{m, n, p},
+			shape: []int{batches, m, p},
 		}
 	}
 }
@@ -529,5 +535,31 @@ func (t *Tensor) maximum(other *Tensor) {
 		for i := range t.data {
 			t.data[i] = math32.Max(t.data[i], other.data[i])
 		}
+	}
+}
+
+func (t *Tensor) transpose() *Tensor {
+	if len(t.shape) < 2 {
+		panic("transpose requires at least 2-D tensor")
+	}
+	shape := make([]int, 0, len(t.shape))
+	batchSize := 0
+	for i := 0; i < len(t.shape)-2; i++ {
+		batchSize += t.shape[i]
+		shape = append(shape, t.shape[i])
+	}
+	m, n := t.shape[len(t.shape)-2], t.shape[len(t.shape)-1]
+	shape = append(shape, n, m)
+	data := make([]float32, batchSize*m*n)
+	for b := 0; b < batchSize; b++ {
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				data[b*m*n+j*m+i] = t.data[b*m*n+i*n+j]
+			}
+		}
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
 	}
 }

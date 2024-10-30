@@ -15,7 +15,9 @@
 package nn
 
 import (
+	"fmt"
 	"github.com/chewxy/math32"
+	"golang.org/x/exp/slices"
 )
 
 type op interface {
@@ -442,6 +444,8 @@ func (m *mean) backward(dy *Tensor) []*Tensor {
 
 type matMul struct {
 	base
+	transpose1 bool
+	transpose2 bool
 }
 
 func (m *matMul) String() string {
@@ -475,6 +479,9 @@ func (b *batchMatMul) forward(inputs ...*Tensor) *Tensor {
 func (b *batchMatMul) backward(dy *Tensor) []*Tensor {
 	dx0 := dy.batchMatMul(b.inputs[1], b.transpose1, !b.transpose2)
 	dx1 := b.inputs[0].batchMatMul(dy, !b.transpose1, b.transpose2)
+	if !slices.Equal(dx0.shape, b.inputs[0].shape) || !slices.Equal(dx1.shape, b.inputs[1].shape) {
+		panic(fmt.Sprintf("dy: %v, dx0: %v, dx1: %v, inputs[0]: %v, inputs[1]: %v\n", dy.shape, dx0.shape, dx1.shape, b.inputs[0].shape, b.inputs[1].shape))
+	}
 	return []*Tensor{dx0, dx1}
 }
 

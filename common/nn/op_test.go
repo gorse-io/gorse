@@ -366,6 +366,32 @@ func TestMatMul(t *testing.T) {
 	assert.Equal(t, []float32{10, 26, 42, 10, 26, 42}, x.grad.data)
 	assert.Equal(t, []int{3, 4}, y.grad.shape)
 	assert.Equal(t, []float32{5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9}, y.grad.data)
+
+	// (3,2).T * (3,4) -> (2,4)
+	x = RandN(3, 2).RequireGrad()
+	y = RandN(3, 4).RequireGrad()
+	z = x.matMul(y, true, false)
+	assert.Equal(t, []int{2, 4}, z.shape)
+	z.Backward()
+	assert.Equal(t, []int{3, 2}, x.grad.shape)
+	assert.Equal(t, []int{3, 4}, y.grad.shape)
+
+	// (2,3) * (4,3).T -> (2,4)
+	x = RandN(2, 3).RequireGrad()
+	y = RandN(4, 3).RequireGrad()
+	z = x.matMul(y, false, true)
+	assert.Equal(t, []int{2, 4}, z.shape)
+	z.Backward()
+	assert.Equal(t, []int{2, 3}, x.grad.shape)
+	assert.Equal(t, []int{4, 3}, y.grad.shape)
+
+	// (3,2).T * (4,3).T -> (2,4)
+	x = RandN(3, 2).RequireGrad()
+	y = RandN(4, 3).RequireGrad()
+	z = x.matMul(y, true, true)
+	assert.Equal(t, []int{2, 4}, z.shape)
+	z.Backward()
+	assert.Equal(t, []int{3, 2}, x.grad.shape)
 }
 
 func TestBMM(t *testing.T) {
@@ -394,6 +420,24 @@ func TestBMM(t *testing.T) {
 		5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9,
 		5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9,
 	}, y.grad.data)
+
+	// (2,3,2).T * (2,3,4) -> (2,2,4)
+	x = RandN(2, 3, 2).RequireGrad()
+	y = RandN(2, 3, 4).RequireGrad()
+	z = BMM(x, y, true, false)
+	assert.Equal(t, []int{2, 2, 4}, z.shape)
+
+	// (2,2,3) * (2,4,3).T -> (2,2,4)
+	x = RandN(2, 2, 3).RequireGrad()
+	y = RandN(2, 4, 3).RequireGrad()
+	z = BMM(x, y, false, true)
+	assert.Equal(t, []int{2, 2, 4}, z.shape)
+
+	// (2,3,2).T * (2,43).T -> (2,2,4)
+	x = RandN(2, 3, 2).RequireGrad()
+	y = RandN(2, 4, 3).RequireGrad()
+	z = BMM(x, y, true, true)
+	assert.Equal(t, []int{2, 2, 4}, z.shape)
 }
 
 func TestBroadcast(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
@@ -186,24 +187,54 @@ func (fm *DeepFMV2) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", 0, fm.nEpochs), fields...)
+
+	var x []lo.Tuple2[[]int32, []float32]
+	var y []float32
+	for i := 0; i < trainSet.Target.Len(); i++ {
+		fm.minTarget = math32.Min(fm.minTarget, trainSet.Target.Get(i))
+		fm.maxTarget = math32.Max(fm.maxTarget, trainSet.Target.Get(i))
+		indices, values, target := trainSet.Get(i)
+		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+		y = append(y, target)
+	}
+	indices, values, target := fm.convertToTensors(x, y)
+
+	//optimizer := nn.NewAdam(fm.Parameters(), fm.lr)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
+		fitStart := time.Now()
+		cost := float32(0)
+		for i := 0; i < trainSet.Count(); i += fm.batchSize {
+			batchIndices := indices.Slice(i, i+fm.batchSize)
+			batchValues := values.Slice(i, i+fm.batchSize)
+			batchTarget := target.Slice(i, i+fm.batchSize)
+			batchOutput := fm.Forward(batchIndices, batchValues)
+			batchOutput.Backward()
+			_ = batchTarget
+			//batchLoss := nn.BCEWithLogits(batchTarget, batchOutput)
+			//cost += batchLoss.Data()[0]
+			//optimizer.ZeroGrad()
+			//batchLoss.Backward()
+			//optimizer.Step()
+		}
+
+		fitTime := time.Since(fitStart)
 		// Cross validation
-		//if epoch%config.Verbose == 0 || epoch == fm.nEpochs {
-		//	evalStart = time.Now()
-		//	score = EvaluateClassification(fm, testSet)
-		//	evalTime = time.Since(evalStart)
-		//	fields = append([]zap.Field{
-		//		zap.String("fit_time", fitTime.String()),
-		//		zap.String("eval_time", evalTime.String()),
-		//		zap.Float32("loss", cost),
-		//	}, score.ZapFields()...)
-		//	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", epoch, fm.nEpochs), fields...)
-		//	// check NaN
-		//	if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
-		//		log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
-		//		break
-		//	}
-		//}
+		if epoch%config.Verbose == 0 || epoch == fm.nEpochs {
+			evalStart = time.Now()
+			score = EvaluateClassification(fm, testSet)
+			evalTime = time.Since(evalStart)
+			fields = append([]zap.Field{
+				zap.String("fit_time", fitTime.String()),
+				zap.String("eval_time", evalTime.String()),
+				zap.Float32("loss", cost),
+			}, score.ZapFields()...)
+			log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", epoch, fm.nEpochs), fields...)
+			// check NaN
+			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
+				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
+				break
+			}
+		}
 	}
 	return score
 }
@@ -298,6 +329,17 @@ func (fm *DeepFMV2) Forward(indices, values *nn.Tensor) *nn.Tensor {
 
 	// output
 	return nn.Add(fmOutput, dnnOutput)
+}
+
+func (fm *DeepFMV2) Parameters() []*nn.Tensor {
+	var params []*nn.Tensor
+	params = append(params, fm.bias)
+	params = append(params, fm.embeddingV.Parameters()...)
+	params = append(params, fm.embeddingW.Parameters()...)
+	for _, layer := range fm.linear {
+		params = append(params, layer.Parameters()...)
+	}
+	return params
 }
 
 func (fm *DeepFMV2) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, targetTensor *nn.Tensor) {

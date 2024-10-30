@@ -122,7 +122,7 @@ func Mean(x *Tensor) *Tensor {
 	return apply(&mean{}, x)
 }
 
-func MatMul(x, y *Tensor) *Tensor {
+func MatMul(x, y *Tensor, transpose ...bool) *Tensor {
 	return apply(&matMul{}, x, y)
 }
 
