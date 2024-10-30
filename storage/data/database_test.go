@@ -464,9 +464,6 @@ func (suite *baseTestSuite) TestItems() {
 	suite.True(errors.Is(err, errors.NotFound), err)
 
 	// test override
-	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
-	suite.NoError(err)
-	err = suite.Database.Optimize()
 	err = suite.Database.BatchInsertItems(ctx, []Item{{Namespace: "namespace", ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
 	err = suite.Database.Optimize()
@@ -589,8 +586,9 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 		// RowAffected isn't supported by ClickHouse,
 		suite.Equal(3, deleteCount)
 	}
-	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "2", "3")
 	err = suite.Database.Optimize()
+	suite.NoError(err)
+	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)
 	feedbackType1 := "type1"
@@ -600,11 +598,6 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 		suite.Equal(1, deleteCount)
 	}
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "1", "3", feedbackType2)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(1, deleteCount)
-	}
-	ret, err = suite.Database.GetUserItemFeedback(ctx, "1", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Empty(ret)
 }
