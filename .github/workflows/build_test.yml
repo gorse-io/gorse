@@ -120,6 +120,50 @@ jobs:
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
 
+  unit_test_m1:
+    name: unit tests (M1)
+    runs-on: macos-latest
+    steps:
+    - name: Set up dataset
+      run: |
+        mkdir -p ~/.gorse/dataset
+        mkdir -p ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/ml-100k.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/ml-1m.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
+        wget https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
+        unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+        unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
+        unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
+        unzip ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
+        unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
+        unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
+
+    - name: Set up Go 1.23.x
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.23.x
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        go get -v -t -d ./...
+        if [ -f Gopkg.toml ]; then
+            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+            dep ensure
+        fi
+        
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
+
   integrate_test:
     name: integrate tests
     runs-on: ubuntu-latest
