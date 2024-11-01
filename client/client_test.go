@@ -269,9 +269,11 @@ func (suite *GorseClientTestSuite) TestItems() {
 
 func (suite *GorseClientTestSuite) hSet(collection, subset string, scores []Score) {
 	for _, score := range scores {
-		err := suite.redis.HSet(context.TODO(), "documents:"+collection+":"+subset+":"+score.Id,
+		err := suite.redis.HSet(context.TODO(), "scores:"+collection+":"+subset+":"+score.Id,
+			"collection_ns", base64.RawStdEncoding.EncodeToString([]byte("_")),
 			"collection", collection,
 			"subset", subset,
+			"namespace", base64.RawStdEncoding.EncodeToString([]byte("_")),
 			"id", score.Id,
 			"score", score.Score,
 			"is_hidden", 0,
