@@ -30,3 +30,8 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:22
+    ports:
+      - 8123:8123

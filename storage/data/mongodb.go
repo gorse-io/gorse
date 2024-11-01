@@ -65,6 +65,11 @@ type MongoDB struct {
 	dbName string
 }
 
+// Optimize is used by ClickHouse only.
+func (db *MongoDB) Optimize() error {
+	return nil
+}
+
 // Init collections and indices in MongoDB.
 func (db *MongoDB) Init() error {
 	ctx := context.Background()

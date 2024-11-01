@@ -35,6 +35,7 @@ var (
 	positiveFeedbackType  = "positiveFeedbackType"
 	negativeFeedbackType  = "negativeFeedbackType"
 	duplicateFeedbackType = "duplicateFeedbackType"
+	dateTime64Zero        = time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 )
 
 type baseTestSuite struct {
@@ -126,6 +127,14 @@ func (suite *baseTestSuite) getFeedbackStream(ctx context.Context, batchSize int
 	return feedbacks
 }
 
+func (suite *baseTestSuite) isClickHouse() bool {
+	if sqlDB, isSQL := suite.Database.(*SQLDatabase); !isSQL {
+		return false
+	} else {
+		return sqlDB.driver == ClickHouse
+	}
+}
+
 func (suite *baseTestSuite) TearDownSuite() {
 	err := suite.Database.Close()
 	suite.NoError(err)
@@ -183,6 +192,8 @@ func (suite *baseTestSuite) TestUsers() {
 	// test override
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
 	suite.Equal("override", user.Comment)
@@ -192,6 +203,8 @@ func (suite *baseTestSuite) TestUsers() {
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Subscribe: []string{"d", "e", "f"}})
+	suite.NoError(err)
+	err = suite.Database.Optimize()
 	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
@@ -259,12 +272,19 @@ func (suite *baseTestSuite) TestFeedback() {
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginUserId("1"), WithEndUserId("3"), WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType))
 	suite.Equal(feedback[1:4], feedbackFromStream)
 	// Get items
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	items := suite.getItems(ctx, 3)
 	suite.Equal(5, len(items))
 	for i, item := range items {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
-			suite.Zero(item.Timestamp)
+			if suite.isClickHouse() {
+				// ClickHouse returns 1900-01-01 00:00:00 +0000 UTC as zero date.
+				suite.Equal(dateTime64Zero, item.Timestamp)
+			} else {
+				suite.Zero(item.Timestamp)
+			}
 			suite.Empty(item.Labels)
 			suite.Empty(item.Comment)
 		}
@@ -291,9 +311,10 @@ func (suite *baseTestSuite) TestFeedback() {
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
-	suite.Equal(1, len(ret))
-	suite.Equal("2", ret[0].UserId)
-	suite.Equal("4", ret[0].ItemId)
+	if suite.Equal(1, len(ret)) {
+		suite.Equal("2", ret[0].UserId)
+		suite.Equal("4", ret[0].ItemId)
+	}
 	// Get all feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "2", lo.ToPtr(time.Now()))
 	suite.NoError(err)
@@ -314,6 +335,8 @@ func (suite *baseTestSuite) TestFeedback() {
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
@@ -323,6 +346,8 @@ func (suite *baseTestSuite) TestFeedback() {
 		FeedbackKey: FeedbackKey{"namespace", positiveFeedbackType, "0", "8"},
 		Comment:     "not_override",
 	}}, true, true, false)
+	suite.NoError(err)
+	err = suite.Database.Optimize()
 	suite.NoError(err)
 	ret, err = suite.Database.GetUserFeedback(ctx, "namespace", "0", lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
@@ -441,6 +466,8 @@ func (suite *baseTestSuite) TestItems() {
 	// test override
 	err = suite.Database.BatchInsertItems(ctx, []Item{{Namespace: "namespace", ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	item, err := suite.Database.GetItem(ctx, "namespace", "4")
 	suite.NoError(err)
 	suite.False(item.IsHidden)
@@ -459,6 +486,8 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.ModifyItem(ctx, "namespace", "2", ItemPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "namespace", "2", ItemPatch{Timestamp: &timestamp})
+	suite.NoError(err)
+	err = suite.Database.Optimize()
 	suite.NoError(err)
 	item, err = suite.Database.GetItem(ctx, "namespace", "2")
 	suite.NoError(err)
@@ -553,14 +582,21 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 	// delete user-item feedback
 	deleteCount, err := suite.Database.DeleteUserItemFeedback(ctx, "namespace", "2", "3")
 	suite.NoError(err)
-	suite.Equal(3, deleteCount)
+	if !suite.isClickHouse() {
+		// RowAffected isn't supported by ClickHouse,
+		suite.Equal(3, deleteCount)
+	}
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "2", "3")
 	suite.NoError(err)
 	suite.Empty(ret)
 	feedbackType1 := "type1"
 	deleteCount, err = suite.Database.DeleteUserItemFeedback(ctx, "namespace", "1", "3", feedbackType1)
 	suite.NoError(err)
-	suite.Equal(1, deleteCount)
+	if !suite.isClickHouse() {
+		suite.Equal(1, deleteCount)
+	}
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "namespace", "1", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Empty(ret)
@@ -670,6 +706,8 @@ func (suite *baseTestSuite) TestTimezone() {
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "namespace", "200", ItemPatch{Timestamp: &now})
 	suite.NoError(err)
+	err = suite.Database.Optimize()
+	suite.NoError(err)
 	switch database := suite.Database.(type) {
 	case *SQLDatabase:
 		switch suite.Database.(*SQLDatabase).driver {
@@ -680,6 +718,13 @@ func (suite *baseTestSuite) TestTimezone() {
 			item, err = suite.Database.GetItem(ctx, "namespace", "200")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
+		case ClickHouse:
+			item, err := suite.Database.GetItem(ctx, "namespace", "100")
+			suite.NoError(err)
+			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
+			item, err = suite.Database.GetItem(ctx, "namespace", "200")
+			suite.NoError(err)
+			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
 		case SQLite:
 			item, err := suite.Database.GetItem(ctx, "namespace", "100")
 			suite.NoError(err)
@@ -742,9 +787,9 @@ func (suite *baseTestSuite) TestPurge() {
 func (suite *baseTestSuite) TestNamespace() {
 	// insert items
 	items := []Item{
-		{Namespace: "namespace1", ItemId: "0"},
-		{Namespace: "namespace1", ItemId: "1"},
-		{Namespace: "namespace2", ItemId: "0"},
+		{Namespace: "namespace1", ItemId: "0", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{Namespace: "namespace1", ItemId: "1", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{Namespace: "namespace2", ItemId: "0", Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 	}
 	err := suite.Database.BatchInsertItems(context.Background(), items)
 	suite.NoError(err)
@@ -754,11 +799,11 @@ func (suite *baseTestSuite) TestNamespace() {
 
 	// insert feedbacks
 	feedbacks := []Feedback{
-		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "0"}},
-		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "1"}},
-		{FeedbackKey: FeedbackKey{"namespace2", "type1", "0", "0"}},
-		{FeedbackKey: FeedbackKey{"namespace3", "type1", "0", "0"}},
-		{FeedbackKey: FeedbackKey{"namespace4", "type1", "0", "0"}},
+		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "0"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace1", "type1", "0", "1"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace2", "type1", "0", "0"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace3", "type1", "0", "0"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{FeedbackKey: FeedbackKey{"namespace4", "type1", "0", "0"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
 	}
 	err = suite.Database.BatchInsertFeedback(context.Background(), feedbacks, true, true, true)
 	suite.NoError(err)

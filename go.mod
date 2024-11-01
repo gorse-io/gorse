@@ -32,6 +32,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.3
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.10.6
+	github.com/mailru/go-clickhouse/v2 v2.0.1-0.20221121001540-b259988ad8e5
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.13.0
@@ -68,6 +69,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	gorgonia.org/gorgonia v0.9.18-0.20230327110624-d1c17944ed22
 	gorgonia.org/tensor v0.9.23
+	gorm.io/driver/clickhouse v0.4.2
 	gorm.io/driver/mysql v1.3.4
 	gorm.io/driver/postgres v1.3.5
 	gorm.io/driver/sqlite v1.3.4
@@ -101,6 +103,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v2.0.6+incompatible // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
+	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -179,8 +182,9 @@ require (
 	modernc.org/token v1.0.1 // indirect
 )
 
-replace gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
-
-replace gorgonia.org/tensor v0.9.23 => github.com/gorse-io/tensor v0.0.0-20230617102451-4c006ddc5162
-
-replace gorgonia.org/gorgonia v0.9.18-0.20230327110624-d1c17944ed22 => github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849
+replace (
+	gorgonia.org/gorgonia v0.9.18-0.20230327110624-d1c17944ed22 => github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849
+	gorgonia.org/tensor v0.9.23 => github.com/gorse-io/tensor v0.0.0-20230617102451-4c006ddc5162
+	gorm.io/driver/clickhouse v0.4.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb
+	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
+)
