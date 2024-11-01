@@ -37,7 +37,7 @@ require (
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rakyll/statik v0.1.7
 	github.com/redis/go-redis/extra/redisotel/v9 v9.5.3
-	github.com/redis/go-redis/v9 v9.7.0-beta.1
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/samber/lo v1.38.1
 	github.com/schollz/progressbar/v3 v3.9.0
 	github.com/sclevine/yj v0.0.0-20210612025309-737bdf40a5d1
