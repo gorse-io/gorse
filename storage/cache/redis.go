@@ -53,32 +53,21 @@ func (r *Redis) Init() error {
 	}
 	// create index
 	if !lo.Contains(indices, r.ScoresTable()) {
-		_, err = r.client.Do(context.TODO(), "FT.CREATE", r.ScoresTable(),
-			"ON", "HASH", "PREFIX", "1", r.ScoresTable()+":", "SCHEMA",
-			"collection_ns", "TAG",
-			"collection", "TAG",
-			"subset", "TAG",
-			"namespace", "TAG",
-			"id", "TAG",
-			"score", "NUMERIC", "SORTABLE",
-			"is_hidden", "NUMERIC",
-			"categories", "TAG", "SEPARATOR", ";",
-			"timestamp", "NUMERIC", "SORTABLE").
-			Result()
-		// Blocked by https://github.com/redis/go-redis/issues/3150
-		//_, err = r.client.FTCreate(context.TODO(), r.ScoresTable(),
-		//	&redis.FTCreateOptions{
-		//		OnHash: true,
-		//		Prefix: []any{r.ScoresTable() + ":"},
-		//	},
-		//	&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
-		//	&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
-		//	&redis.FieldSchema{FieldName: "id", FieldType: redis.SearchFieldTypeTag},
-		//	&redis.FieldSchema{FieldName: "score", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
-		//	&redis.FieldSchema{FieldName: "is_hidden", FieldType: redis.SearchFieldTypeNumeric},
-		//	&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Seperator: ";"},
-		//	&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
-		//).Result()
+		_, err = r.client.FTCreate(context.TODO(), r.ScoresTable(),
+			&redis.FTCreateOptions{
+				OnHash: true,
+				Prefix: []any{r.ScoresTable() + ":"},
+			},
+			&redis.FieldSchema{FieldName: "collection_ns", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "namespace", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "id", FieldType: redis.SearchFieldTypeTag},
+			&redis.FieldSchema{FieldName: "score", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+			&redis.FieldSchema{FieldName: "is_hidden", FieldType: redis.SearchFieldTypeNumeric},
+			&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Separator: ";"},
+			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+		).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -246,14 +235,14 @@ func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
 	return r.client.ZCard(ctx, r.Key(name)).Result()
 }
 
-func (r *Redis) documentKey(collection, subset, value string) string {
-	return r.ScoresTable() + ":" + collection + ":" + subset + ":" + value
+func (r *Redis) documentKey(namespace, collection, subset, value string) string {
+	return r.ScoresTable() + ":" + namespace + ":" + collection + ":" + subset + ":" + value
 }
 
 func (r *Redis) AddScores(ctx context.Context, collectionNamespace, collectionName, collectionSubset string, documents []Score) error {
 	p := r.client.Pipeline()
 	for _, document := range documents {
-		p.HSet(ctx, r.documentKey(collectionName, collectionSubset, document.Id),
+		p.HSet(ctx, r.documentKey(collectionNamespace, collectionName, collectionSubset, document.Id),
 			"collection_ns", encodeNamespace(collectionNamespace),
 			"collection", collectionName,
 			"subset", collectionSubset,
