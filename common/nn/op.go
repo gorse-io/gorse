@@ -15,9 +15,7 @@
 package nn
 
 import (
-	"fmt"
 	"github.com/chewxy/math32"
-	"golang.org/x/exp/slices"
 )
 
 type op interface {
@@ -453,12 +451,32 @@ func (m *matMul) String() string {
 }
 
 func (m *matMul) forward(inputs ...*Tensor) *Tensor {
-	return inputs[0].matMul(inputs[1], false, false)
+	return inputs[0].matMul(inputs[1], m.transpose1, m.transpose2)
 }
 
 func (m *matMul) backward(dy *Tensor) []*Tensor {
-	dx0 := dy.matMul(m.inputs[1], false, true)
-	dx1 := m.inputs[0].matMul(dy, true, false)
+	var dx0, dx1 *Tensor
+	if !m.transpose1 && !m.transpose2 { // y = x0 * x1
+		// dx0 = dy * x1^T
+		dx0 = dy.matMul(m.inputs[1], false, true)
+		// dx1 = x0^T * dy
+		dx1 = m.inputs[0].matMul(dy, true, false)
+	} else if m.transpose1 && !m.transpose2 { // y = x0^T * x1
+		// dx0 = dy * x1^T
+		dx0 = m.inputs[1].matMul(dy, false, true)
+		// dx1 = dy^T * x0
+		dx1 = m.inputs[0].matMul(dy, false, false)
+	} else if !m.transpose1 && m.transpose2 { // y = x0 * x1^T
+		// dx0 = dy * x1
+		dx0 = dy.matMul(m.inputs[1], false, false)
+		// dx1 = dy^T * x0
+		dx1 = dy.matMul(m.inputs[0], true, false)
+	} else { // y = x0^T * x1^T
+		// dx0 = x1 * dy^T
+		dx0 = m.inputs[1].matMul(dy, true, true)
+		// dx1 = dy * x0^T
+		dx1 = dy.matMul(m.inputs[0], true, true)
+	}
 	return []*Tensor{dx0, dx1}
 }
 
@@ -477,10 +495,27 @@ func (b *batchMatMul) forward(inputs ...*Tensor) *Tensor {
 }
 
 func (b *batchMatMul) backward(dy *Tensor) []*Tensor {
-	dx0 := dy.batchMatMul(b.inputs[1], b.transpose1, !b.transpose2)
-	dx1 := b.inputs[0].batchMatMul(dy, !b.transpose1, b.transpose2)
-	if !slices.Equal(dx0.shape, b.inputs[0].shape) || !slices.Equal(dx1.shape, b.inputs[1].shape) {
-		panic(fmt.Sprintf("dy: %v, dx0: %v, dx1: %v, inputs[0]: %v, inputs[1]: %v\n", dy.shape, dx0.shape, dx1.shape, b.inputs[0].shape, b.inputs[1].shape))
+	var dx0, dx1 *Tensor
+	if !b.transpose1 && !b.transpose2 { // y = x0 * x1
+		// dx0 = dy * x1^T
+		dx0 = dy.batchMatMul(b.inputs[1], false, true)
+		// dx1 = x0^T * dy
+		dx1 = b.inputs[0].batchMatMul(dy, true, false)
+	} else if b.transpose1 && !b.transpose2 { // y = x0^T * x1
+		// dx0 = dy * x1^T
+		dx0 = b.inputs[1].batchMatMul(dy, false, true)
+		// dx1 = dy^T * x0
+		dx1 = b.inputs[0].batchMatMul(dy, false, false)
+	} else if !b.transpose1 && b.transpose2 { // y = x0 * x1^T
+		// dx0 = dy * x1
+		dx0 = dy.batchMatMul(b.inputs[1], false, false)
+		// dx1 = dy^T * x0
+		dx1 = dy.batchMatMul(b.inputs[0], true, false)
+	} else { // y = x0^T * x1^T
+		// dx0 = x1 * dy^T
+		dx0 = b.inputs[1].batchMatMul(dy, true, true)
+		// dx1 = dy * x0^T
+		dx1 = dy.batchMatMul(b.inputs[0], true, true)
 	}
 	return []*Tensor{dx0, dx1}
 }

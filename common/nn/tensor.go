@@ -257,8 +257,12 @@ func (t *Tensor) add(other *Tensor) *Tensor {
 	for i := range other.shape {
 		wSize *= other.shape[i]
 	}
-	for i := range t.data {
-		t.data[i] += other.data[i%wSize]
+	if wSize == 1 {
+		floats.AddConst(t.data, other.data[0])
+	} else {
+		for i := 0; i < len(t.data); i += wSize {
+			floats.Add(t.data[i:i+wSize], other.data)
+		}
 	}
 	return t
 }

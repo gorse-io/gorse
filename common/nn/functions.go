@@ -123,7 +123,17 @@ func Mean(x *Tensor) *Tensor {
 }
 
 func MatMul(x, y *Tensor, transpose ...bool) *Tensor {
-	return apply(&matMul{}, x, y)
+	op := &matMul{}
+	if len(transpose) > 2 {
+		panic("only two transpose is allowed")
+	}
+	if len(transpose) > 0 {
+		op.transpose1 = transpose[0]
+	}
+	if len(transpose) > 1 {
+		op.transpose2 = transpose[1]
+	}
+	return apply(op, x, y)
 }
 
 func BMM(x, y *Tensor, transpose ...bool) *Tensor {
