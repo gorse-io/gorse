@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/expr-lang/expr/parser"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -104,6 +105,7 @@ type RecommendConfig struct {
 	CacheExpire   time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
 	ActiveUserTTL int                 `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource    DataSourceConfig    `mapstructure:"data_source"`
+	LeaderBoards  []LeaderBoardConfig `mapstructure:"leaderboards" validate:"dive"`
 	Popular       PopularConfig       `mapstructure:"popular"`
 	UserNeighbors NeighborsConfig     `mapstructure:"user_neighbors"`
 	ItemNeighbors NeighborsConfig     `mapstructure:"item_neighbors"`
@@ -118,6 +120,12 @@ type DataSourceConfig struct {
 	ReadFeedbackTypes     []string `mapstructure:"read_feedback_types"`                    // feedback type for read event
 	PositiveFeedbackTTL   uint     `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
 	ItemTTL               uint     `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
+}
+
+type LeaderBoardConfig struct {
+	Name   string `mapstructure:"name"`
+	Score  string `mapstructure:"score" validate:"required,item_expr"`
+	Filter string `mapstructure:"filter" validate:"item_expr"`
 }
 
 type PopularConfig struct {
@@ -645,6 +653,12 @@ func (config *Config) Validate(oneModel bool) error {
 	}); err != nil {
 		return errors.Trace(err)
 	}
+	if err := validate.RegisterValidation("item_expr", func(fl validator.FieldLevel) bool {
+		_, err := parser.Parse(fl.Field().String())
+		return err == nil
+	}); err != nil {
+		return errors.Trace(err)
+	}
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		return strings.SplitN(fld.Tag.Get("mapstructure"), ",", 2)[0]
 	})
@@ -667,6 +681,14 @@ func (config *Config) Validate(oneModel bool) error {
 			return ut.Add("cache_store", "unsupported cache storage backend", true) // see universal-translator for details
 		}, func(ut ut.Translator, fe validator.FieldError) string {
 			t, _ := ut.T("cache_store", fe.Field())
+			return t
+		}); err != nil {
+			return errors.Trace(err)
+		}
+		if err := validate.RegisterTranslation("item_expr", trans, func(ut ut.Translator) error {
+			return ut.Add("item_expr", "invalid item expression", true)
+		}, func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("item_expr", fe.Field())
 			return t
 		}); err != nil {
 			return errors.Trace(err)

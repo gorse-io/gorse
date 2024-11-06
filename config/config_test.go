@@ -90,6 +90,11 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, uint(0), config.Recommend.DataSource.ItemTTL)
 			// [recommend.popular]
 			assert.Equal(t, 30*24*time.Hour, config.Recommend.Popular.PopularWindow)
+			// [recommend.leaderboards]
+			assert.Len(t, config.Recommend.LeaderBoards, 1)
+			assert.Equal(t, "most_starred_weekly", config.Recommend.LeaderBoards[0].Name)
+			assert.Equal(t, "count(Feedback.FeedbackType, .FeedbackType == 'star')", config.Recommend.LeaderBoards[0].Score)
+			assert.Equal(t, "Item.Timestamp > now() < 7d", config.Recommend.LeaderBoards[0].Filter)
 			// [recommend.user_neighbors]
 			assert.Equal(t, "similar", config.Recommend.UserNeighbors.NeighborType)
 			assert.True(t, config.Recommend.UserNeighbors.EnableIndex)

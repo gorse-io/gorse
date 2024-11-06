@@ -116,6 +116,17 @@ item_ttl = 0
 # The time window of popular items. The default values is 4320h.
 popular_window = "720h"
 
+[[recommend.leaderboards]]
+
+# The name of the leaderboard.
+name = "most_starred_weekly"
+
+# The score function for items in the leaderboard.
+score = "count(Feedback.FeedbackType, .FeedbackType == 'star')"
+
+# The filter for items in the leaderboard.
+filter = "(Item.Timestamp > now()).Hours() < 168"
+
 [recommend.user_neighbors]
 
 # The type of neighbors for users. There are three types:
