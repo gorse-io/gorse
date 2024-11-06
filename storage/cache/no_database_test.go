@@ -62,13 +62,13 @@ func TestNoDatabase(t *testing.T) {
 	_, err = database.Remain(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	err = database.AddDocuments(ctx, "", "", nil)
+	err = database.AddScores(ctx, "", "", nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.SearchDocuments(ctx, "", "", nil, 0, 0)
+	_, err = database.SearchScores(ctx, "", "", nil, 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.UpdateDocuments(ctx, nil, "", DocumentPatch{})
+	err = database.UpdateScores(ctx, nil, "", ScorePatch{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.DeleteDocuments(ctx, nil, DocumentCondition{})
+	err = database.DeleteScores(ctx, nil, ScoreCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
 	err = database.AddTimeSeriesPoints(ctx, nil)

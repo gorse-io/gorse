@@ -67,29 +67,29 @@ func (suite *RedisTestSuite) TestEscapeCharacters() {
 			collection := fmt.Sprintf("a%s1", c)
 			subset := fmt.Sprintf("b%s2", c)
 			id := fmt.Sprintf("c%s3", c)
-			err := suite.AddDocuments(ctx, collection, subset, []Document{{
+			err := suite.AddScores(ctx, collection, subset, []Score{{
 				Id:         id,
 				Score:      math.MaxFloat64,
 				Categories: []string{"a", "b"},
 				Timestamp:  ts,
 			}})
 			suite.NoError(err)
-			documents, err := suite.SearchDocuments(ctx, collection, subset, []string{"b"}, 0, -1)
+			documents, err := suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
 			suite.NoError(err)
-			suite.Equal([]Document{{Id: id, Score: math.MaxFloat64, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
+			suite.Equal([]Score{{Id: id, Score: math.MaxFloat64, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
 
-			err = suite.UpdateDocuments(ctx, []string{collection}, id, DocumentPatch{Score: proto.Float64(1)})
+			err = suite.UpdateScores(ctx, []string{collection}, id, ScorePatch{Score: proto.Float64(1)})
 			suite.NoError(err)
-			documents, err = suite.SearchDocuments(ctx, collection, subset, []string{"b"}, 0, -1)
+			documents, err = suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
 			suite.NoError(err)
-			suite.Equal([]Document{{Id: id, Score: 1, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
+			suite.Equal([]Score{{Id: id, Score: 1, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
 
-			err = suite.DeleteDocuments(ctx, []string{collection}, DocumentCondition{
+			err = suite.DeleteScores(ctx, []string{collection}, ScoreCondition{
 				Subset: proto.String(subset),
 				Id:     proto.String(id),
 			})
 			suite.NoError(err)
-			documents, err = suite.SearchDocuments(ctx, collection, subset, []string{"b"}, 0, -1)
+			documents, err = suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
 			suite.NoError(err)
 			suite.Empty(documents)
 		})

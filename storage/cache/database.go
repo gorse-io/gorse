@@ -182,7 +182,7 @@ func (r *ReturnValue) Time() (time.Time, error) {
 	return t.In(time.UTC), nil
 }
 
-type Document struct {
+type Score struct {
 	Id         string
 	Score      float64
 	IsHidden   bool      `json:"-"`
@@ -190,13 +190,13 @@ type Document struct {
 	Timestamp  time.Time `json:"-"`
 }
 
-func SortDocuments(documents []Document) {
+func SortDocuments(documents []Score) {
 	sort.Slice(documents, func(i, j int) bool {
 		return documents[i].Score > documents[j].Score
 	})
 }
 
-func ConvertDocumentsToValues(documents []Document) []string {
+func ConvertDocumentsToValues(documents []Score) []string {
 	values := make([]string, len(documents))
 	for i := range values {
 		values[i] = documents[i].Id
@@ -208,13 +208,13 @@ func ConvertDocumentsToValues(documents []Document) []string {
 // In old recommender system, the recommendation is genereated per category.
 // In the new recommender system, the recommendation is generated globally.
 type DocumentAggregator struct {
-	Documents map[string]*Document
+	Documents map[string]*Score
 	Timestamp time.Time
 }
 
 func NewDocumentAggregator(timestamp time.Time) *DocumentAggregator {
 	return &DocumentAggregator{
-		Documents: make(map[string]*Document),
+		Documents: make(map[string]*Score),
 		Timestamp: timestamp,
 	}
 }
@@ -222,7 +222,7 @@ func NewDocumentAggregator(timestamp time.Time) *DocumentAggregator {
 func (aggregator *DocumentAggregator) Add(category string, values []string, scores []float64) {
 	for i, value := range values {
 		if _, ok := aggregator.Documents[value]; !ok {
-			aggregator.Documents[value] = &Document{
+			aggregator.Documents[value] = &Score{
 				Id:         value,
 				Score:      scores[i],
 				Categories: []string{category},
@@ -235,8 +235,8 @@ func (aggregator *DocumentAggregator) Add(category string, values []string, scor
 	}
 }
 
-func (aggregator *DocumentAggregator) ToSlice() []Document {
-	documents := make([]Document, 0, len(aggregator.Documents))
+func (aggregator *DocumentAggregator) ToSlice() []Score {
+	documents := make([]Score, 0, len(aggregator.Documents))
 	for _, document := range aggregator.Documents {
 		sort.Strings(document.Categories)
 		documents = append(documents, *document)
@@ -244,20 +244,20 @@ func (aggregator *DocumentAggregator) ToSlice() []Document {
 	return documents
 }
 
-type DocumentCondition struct {
+type ScoreCondition struct {
 	Subset *string
 	Id     *string
 	Before *time.Time
 }
 
-func (condition *DocumentCondition) Check() error {
+func (condition *ScoreCondition) Check() error {
 	if condition.Id == nil && condition.Before == nil && condition.Subset == nil {
 		return errors.NotValidf("document condition")
 	}
 	return nil
 }
 
-type DocumentPatch struct {
+type ScorePatch struct {
 	IsHidden   *bool
 	Categories []string
 	Score      *float64
@@ -290,10 +290,10 @@ type Database interface {
 	Pop(ctx context.Context, name string) (string, error)
 	Remain(ctx context.Context, name string) (int64, error)
 
-	AddDocuments(ctx context.Context, collection, subset string, documents []Document) error
-	SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error)
-	DeleteDocuments(ctx context.Context, collection []string, condition DocumentCondition) error
-	UpdateDocuments(ctx context.Context, collection []string, id string, patch DocumentPatch) error
+	AddScores(ctx context.Context, collection, subset string, documents []Score) error
+	SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error)
+	DeleteScores(ctx context.Context, collection []string, condition ScoreCondition) error
+	UpdateScores(ctx context.Context, collection []string, id string, patch ScorePatch) error
 
 	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
 	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error)

@@ -797,14 +797,14 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 	ctx := context.Background()
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
-			documents := make([]cache.Document, batchSize)
+			documents := make([]cache.Score, batchSize)
 			for i := range documents {
 				documents[i].Id = strconv.Itoa(i)
 				documents[i].Score = float64(i)
 				documents[i].Categories = []string{""}
 			}
 			lo.Reverse(documents)
-			err := s.CacheClient.AddDocuments(ctx, cache.PopularItems, "", documents)
+			err := s.CacheClient.AddScores(ctx, cache.PopularItems, "", documents)
 			require.NoError(b, err)
 			s.Config.Recommend.CacheSize = len(documents)
 
@@ -835,7 +835,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 	ctx := context.Background()
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
-			documents := make([]cache.Document, batchSize*2)
+			documents := make([]cache.Score, batchSize*2)
 			expects := make([]string, batchSize)
 			feedbacks := make([]data.Feedback, batchSize)
 			for i := range documents {
@@ -852,7 +852,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 			}
 			lo.Reverse(documents)
 			lo.Reverse(expects)
-			err := s.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "init_user_1", documents)
+			err := s.CacheClient.AddScores(ctx, cache.OfflineRecommend, "init_user_1", documents)
 			require.NoError(b, err)
 			err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 			require.NoError(b, err)
@@ -886,7 +886,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
-			documents := make([]cache.Document, batchSize*2)
+			documents := make([]cache.Score, batchSize*2)
 			expects := make([]string, batchSize)
 			feedbacks := make([]data.Feedback, batchSize)
 			for i := range documents {
@@ -903,7 +903,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 			}
 			lo.Reverse(documents)
 			lo.Reverse(expects)
-			err := s.CacheClient.AddDocuments(ctx, cache.LatestItems, "", documents)
+			err := s.CacheClient.AddScores(ctx, cache.LatestItems, "", documents)
 			require.NoError(b, err)
 			err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 			require.NoError(b, err)
@@ -938,7 +938,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
 			// insert user feedbacks
-			documents := make([]cache.Document, batchSize*2)
+			documents := make([]cache.Score, batchSize*2)
 			for i := range documents {
 				documents[i].Id = fmt.Sprintf("init_item_%d", i)
 				documents[i].Score = float64(i)
@@ -958,7 +958,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 
 			// insert user neighbors
 			for i := 0; i < s.Config.Recommend.Online.NumFeedbackFallbackItemBased; i++ {
-				err := s.CacheClient.AddDocuments(ctx, cache.ItemNeighbors, fmt.Sprintf("init_item_%d", i), documents)
+				err := s.CacheClient.AddScores(ctx, cache.ItemNeighbors, fmt.Sprintf("init_item_%d", i), documents)
 				require.NoError(b, err)
 			}
 
