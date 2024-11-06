@@ -215,7 +215,7 @@ func (t *Tensor) Backward() {
 		inputs, output := op.inputsAndOutput()
 		grads := op.backward(output.grad)
 		// Clear gradient of non-leaf tensor
-		output.grad = nil
+		//output.grad = nil
 		for i := range grads {
 			if !slices.Equal(inputs[i].shape, grads[i].shape) {
 				panic(fmt.Sprintf("%s: shape %v does not match shape %v", op.String(), inputs[i].shape, grads[i].shape))
@@ -229,7 +229,7 @@ func (t *Tensor) Backward() {
 				ops = append(ops, inputs[i].op)
 			} else if !inputs[i].requireGrad {
 				// Clear gradient if the leaf tensor does not require gradient
-				inputs[i].grad = nil
+				//inputs[i].grad = nil
 			}
 		}
 	}
@@ -366,7 +366,7 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 			panic("matMul requires 2-D tensors")
 		}
 		if t.shape[1] != other.shape[0] {
-			panic("matMul requires the shapes of tensors are compatible")
+			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, p := t.shape[0], t.shape[1], other.shape[1]
 		result := make([]float32, m*p)
@@ -385,7 +385,7 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 			panic("matMul requires 2-D tensors")
 		}
 		if t.shape[0] != other.shape[0] {
-			panic("matMul requires the shapes of tensors are compatible")
+			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, p := t.shape[1], t.shape[0], other.shape[1]
 		result := make([]float32, m*p)
@@ -404,7 +404,7 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 			panic("matMul requires 2-D tensors")
 		}
 		if t.shape[1] != other.shape[1] {
-			panic("matMul requires the shapes of tensors are compatible")
+			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, p := t.shape[0], t.shape[1], other.shape[0]
 		result := make([]float32, m*p)
@@ -423,7 +423,7 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 			panic("matMul requires 2-D tensors")
 		}
 		if t.shape[0] != other.shape[1] {
-			panic("matMul requires the shapes of tensors are compatible")
+			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, p := t.shape[1], t.shape[0], other.shape[0]
 		result := make([]float32, m*p)
@@ -533,11 +533,11 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool) *Tensor
 func (t *Tensor) maximum(other *Tensor) {
 	if other.IsScalar() {
 		for i := range t.data {
-			t.data[i] = math32.Max(t.data[i], other.data[0])
+			t.data[i] = max(t.data[i], other.data[0])
 		}
 	} else {
 		for i := range t.data {
-			t.data[i] = math32.Max(t.data[i], other.data[i])
+			t.data[i] = max(t.data[i], other.data[i])
 		}
 	}
 }

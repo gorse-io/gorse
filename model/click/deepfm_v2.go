@@ -199,7 +199,7 @@ func (fm *DeepFMV2) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset
 	}
 	indices, values, target := fm.convertToTensors(x, y)
 
-	//optimizer := nn.NewAdam(fm.Parameters(), fm.lr)
+	optimizer := nn.NewAdam(fm.Parameters(), fm.lr)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
@@ -208,13 +208,11 @@ func (fm *DeepFMV2) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset
 			batchValues := values.Slice(i, i+fm.batchSize)
 			batchTarget := target.Slice(i, i+fm.batchSize)
 			batchOutput := fm.Forward(batchIndices, batchValues)
-			batchOutput.Backward()
-			_ = batchTarget
-			//batchLoss := nn.BCEWithLogits(batchTarget, batchOutput)
-			//cost += batchLoss.Data()[0]
-			//optimizer.ZeroGrad()
-			//batchLoss.Backward()
-			//optimizer.Step()
+			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput)
+			cost += batchLoss.Data()[0]
+			optimizer.ZeroGrad()
+			batchLoss.Backward()
+			optimizer.Step()
 		}
 
 		fitTime := time.Since(fitStart)
