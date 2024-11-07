@@ -237,7 +237,7 @@ func (r *Redis) documentKey(collection, subset, value string) string {
 	return r.DocumentTable() + ":" + collection + ":" + subset + ":" + value
 }
 
-func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
+func (r *Redis) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
 	p := r.client.Pipeline()
 	for _, document := range documents {
 		p.HSet(ctx, r.documentKey(collection, subset, document.Id),
@@ -253,7 +253,7 @@ func (r *Redis) AddDocuments(ctx context.Context, collection, subset string, doc
 	return errors.Trace(err)
 }
 
-func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+func (r *Redis) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
@@ -278,9 +278,9 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	documents := make([]Document, 0, len(result.Docs))
+	documents := make([]Score, 0, len(result.Docs))
 	for _, doc := range result.Docs {
-		var document Document
+		var document Score
 		document.Id = doc.Fields["id"]
 		score, err := strconv.ParseFloat(doc.Fields["score"], 64)
 		if err != nil {
@@ -307,7 +307,7 @@ func (r *Redis) SearchDocuments(ctx context.Context, collection, subset string, 
 	return documents, nil
 }
 
-func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
+func (r *Redis) UpdateScores(ctx context.Context, collections []string, id string, patch ScorePatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
@@ -359,7 +359,7 @@ func (r *Redis) UpdateDocuments(ctx context.Context, collections []string, id st
 	return nil
 }
 
-func (r *Redis) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+func (r *Redis) DeleteScores(ctx context.Context, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}

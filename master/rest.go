@@ -881,7 +881,7 @@ func (m *Master) searchDocuments(collection, subset, category string, request *r
 		return
 	}
 	// Get the popular list
-	scores, err := m.CacheClient.SearchDocuments(ctx, collection, subset, []string{category}, offset, m.Config.Recommend.CacheSize)
+	scores, err := m.CacheClient.SearchScores(ctx, collection, subset, []string{category}, offset, m.Config.Recommend.CacheSize)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return

@@ -418,8 +418,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("user-id", "ID of the user to get recommendation").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/intermediate/recommend/{user-id}/{category}").To(s.getCollaborative).
 		Doc("Get the collaborative filtering recommendation for a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{DetractedAPITag}).
@@ -428,8 +428,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("category", "Category of returned items.").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 
 	// Get popular items
 	ws.Route(ws.GET("/popular").To(s.getPopular).
@@ -439,8 +439,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned recommendations").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned recommendations").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/popular/{category}").To(s.getPopular).
 		Doc("Get popular items in category.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -449,8 +449,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("Get the latest items.").
@@ -459,8 +459,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/latest/{category}").To(s.getLatest).
 		Doc("Get the latest items in category.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -469,8 +469,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
 		Doc("Get neighbors of a item").
@@ -479,8 +479,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("item-id", "ID of the item to get neighbors").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/item/{item-id}/neighbors/{category}").To(s.getItemNeighbors).
 		Doc("Get neighbors of a item in category.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -489,8 +489,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("category", "Category of returned items").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/user/{user-id}/neighbors/").To(s.getUserNeighbors).
 		Doc("Get neighbors of a user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -498,8 +498,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("user-id", "ID of the user to get neighbors").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned users").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned users").DataType("integer")).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -531,8 +531,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Reads([]Feedback{}).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.POST("/session/recommend/{category}").To(s.sessionRecommend).
 		Doc("Get recommendation for session.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -541,8 +541,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Reads([]Feedback{}).
-		Returns(http.StatusOK, "OK", []cache.Document{}).
-		Writes([]cache.Document{}))
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 
 	ws.Route(ws.GET("/measurements/{name}").To(s.getMeasurements).
 		Doc("Get measurements.").
@@ -612,7 +612,7 @@ func (s *RestServer) searchDocuments(collection, subset, category string, isItem
 	}
 
 	// Get the sorted list
-	items, err := s.CacheClient.SearchDocuments(ctx, collection, subset, []string{category}, offset, end)
+	items, err := s.CacheClient.SearchScores(ctx, collection, subset, []string{category}, offset, end)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -620,7 +620,7 @@ func (s *RestServer) searchDocuments(collection, subset, category string, isItem
 
 	// Remove read items
 	if userId != "" {
-		prunedItems := make([]cache.Document, 0, len(items))
+		prunedItems := make([]cache.Score, 0, len(items))
 		for _, item := range items {
 			if !readItems.Contains(item.Id) {
 				prunedItems = append(prunedItems, item)
@@ -799,7 +799,7 @@ type Recommender func(ctx *recommendContext) error
 func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		recommendation, err := s.CacheClient.SearchDocuments(ctx.context, cache.OfflineRecommend, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
+		recommendation, err := s.CacheClient.SearchScores(ctx.context, cache.OfflineRecommend, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -819,7 +819,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.SearchDocuments(ctx.context, cache.CollaborativeRecommend, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.SearchScores(ctx.context, cache.CollaborativeRecommend, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -841,7 +841,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		start := time.Now()
 		candidates := make(map[string]float64)
 		// load similar users
-		similarUsers, err := s.CacheClient.SearchDocuments(ctx.context, cache.UserNeighbors, ctx.userId, []string{""}, 0, s.Config.Recommend.CacheSize)
+		similarUsers, err := s.CacheClient.SearchScores(ctx.context, cache.UserNeighbors, ctx.userId, []string{""}, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -898,7 +898,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		candidates := make(map[string]float64)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.SearchDocuments(ctx.context, cache.ItemNeighbors, feedback.ItemId, ctx.categories, 0, s.Config.Recommend.CacheSize)
+			similarItems, err := s.CacheClient.SearchScores(ctx.context, cache.ItemNeighbors, feedback.ItemId, ctx.categories, 0, s.Config.Recommend.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -928,7 +928,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		items, err := s.CacheClient.SearchDocuments(ctx.context, cache.LatestItems, "", ctx.categories, 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.SearchScores(ctx.context, cache.LatestItems, "", ctx.categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -948,7 +948,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		items, err := s.CacheClient.SearchDocuments(ctx.context, cache.PopularItems, "", ctx.categories, 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.SearchScores(ctx.context, cache.PopularItems, "", ctx.categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1090,7 +1090,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	usedFeedbackCount := 0
 	for _, feedback := range userFeedback {
 		// load similar items
-		similarItems, err := s.CacheClient.SearchDocuments(ctx, cache.ItemNeighbors, feedback.ItemId, []string{category}, 0, s.Config.Recommend.CacheSize)
+		similarItems, err := s.CacheClient.SearchScores(ctx, cache.ItemNeighbors, feedback.ItemId, []string{category}, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			BadRequest(response, err)
 			return
@@ -1116,8 +1116,8 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		filter.Push(id, score)
 	}
 	names, scores := filter.PopAll()
-	result := lo.Map(names, func(_ string, i int) cache.Document {
-		return cache.Document{
+	result := lo.Map(names, func(_ string, i int) cache.Score {
+		return cache.Score{
 			Id:    names[i],
 			Score: scores[i],
 		}
@@ -1378,7 +1378,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 			Comment:    item.Comment,
 		})
 		// insert to latest items cache
-		if err = s.CacheClient.AddDocuments(ctx, cache.LatestItems, "", []cache.Document{{
+		if err = s.CacheClient.AddScores(ctx, cache.LatestItems, "", []cache.Score{{
 			Id:         item.ItemId,
 			Score:      float64(timestamp.Unix()),
 			Categories: withWildCard(item.Categories),
@@ -1388,7 +1388,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 			return
 		}
 		// update items cache
-		if err = s.CacheClient.UpdateDocuments(ctx, cache.ItemCache, item.ItemId, cache.DocumentPatch{
+		if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, item.ItemId, cache.ScorePatch{
 			Categories: withWildCard(item.Categories),
 			IsHidden:   &item.IsHidden,
 		}); err != nil {
@@ -1492,21 +1492,21 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	}
 	// remove hidden item from cache
 	if patch.IsHidden != nil {
-		if err := s.CacheClient.UpdateDocuments(ctx, cache.ItemCache, itemId, cache.DocumentPatch{IsHidden: patch.IsHidden}); err != nil {
+		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, itemId, cache.ScorePatch{IsHidden: patch.IsHidden}); err != nil {
 			InternalServerError(response, err)
 			return
 		}
 	}
 	// add item to latest items cache
 	if patch.Timestamp != nil {
-		if err := s.CacheClient.UpdateDocuments(ctx, []string{cache.LatestItems}, itemId, cache.DocumentPatch{Score: proto.Float64(float64(patch.Timestamp.Unix()))}); err != nil {
+		if err := s.CacheClient.UpdateScores(ctx, []string{cache.LatestItems}, itemId, cache.ScorePatch{Score: proto.Float64(float64(patch.Timestamp.Unix()))}); err != nil {
 			InternalServerError(response, err)
 			return
 		}
 	}
 	// update categories in cache
 	if patch.Categories != nil {
-		if err := s.CacheClient.UpdateDocuments(ctx, cache.ItemCache, itemId, cache.DocumentPatch{Categories: withWildCard(patch.Categories)}); err != nil {
+		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, itemId, cache.ScorePatch{Categories: withWildCard(patch.Categories)}); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1580,7 +1580,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		return
 	}
 	// delete item from cache
-	if err := s.CacheClient.DeleteDocuments(ctx, cache.ItemCache, cache.DocumentCondition{Id: &itemId}); err != nil {
+	if err := s.CacheClient.DeleteScores(ctx, cache.ItemCache, cache.ScoreCondition{Id: &itemId}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1610,7 +1610,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		return
 	}
 	// insert category to cache
-	if err = s.CacheClient.UpdateDocuments(ctx, cache.ItemCache, itemId, cache.DocumentPatch{Categories: withWildCard(item.Categories)}); err != nil {
+	if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, itemId, cache.ScorePatch{Categories: withWildCard(item.Categories)}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1639,7 +1639,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 	}
 	item.Categories = categories
 	// delete category from cache
-	if err = s.CacheClient.UpdateDocuments(ctx, cache.ItemCache, itemId, cache.DocumentPatch{Categories: withWildCard(categories)}); err != nil {
+	if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, itemId, cache.ScorePatch{Categories: withWildCard(categories)}); err != nil {
 		InternalServerError(response, err)
 		return
 	}

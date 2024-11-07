@@ -648,14 +648,14 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 	for i, operator := range operators {
 		t.Run(operator.Name, func(t *testing.T) {
 			// Put scores
-			scores := []cache.Document{
+			scores := []cache.Score{
 				{Id: strconv.Itoa(i) + "0", Score: 100, Categories: []string{operator.Category}},
 				{Id: strconv.Itoa(i) + "1", Score: 99, Categories: []string{operator.Category}},
 				{Id: strconv.Itoa(i) + "2", Score: 98, Categories: []string{operator.Category}},
 				{Id: strconv.Itoa(i) + "3", Score: 97, Categories: []string{operator.Category}},
 				{Id: strconv.Itoa(i) + "4", Score: 96, Categories: []string{operator.Category}},
 			}
-			err := s.CacheClient.AddDocuments(ctx, operator.Collection, operator.Subset, scores)
+			err := s.CacheClient.AddScores(ctx, operator.Collection, operator.Subset, scores)
 			assert.NoError(t, err)
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
@@ -699,14 +699,14 @@ func TestServer_SearchDocumentsOfUsers(t *testing.T) {
 	for _, operator := range operators {
 		t.Logf("test RESTful API: %v", operator.Get)
 		// Put scores
-		scores := []cache.Document{
+		scores := []cache.Score{
 			{Id: "0", Score: 100, Categories: []string{""}},
 			{Id: "1", Score: 99, Categories: []string{""}},
 			{Id: "2", Score: 98, Categories: []string{""}},
 			{Id: "3", Score: 97, Categories: []string{""}},
 			{Id: "4", Score: 96, Categories: []string{""}},
 		}
-		err := s.CacheClient.AddDocuments(ctx, operator.Prefix, operator.Label, scores)
+		err := s.CacheClient.AddScores(ctx, operator.Prefix, operator.Label, scores)
 		assert.NoError(t, err)
 		users := make([]ScoreUser, 0)
 		for _, score := range scores {
@@ -758,7 +758,7 @@ func TestServer_GetRecommends(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// inset recommendation
-	itemIds := []cache.Document{
+	itemIds := []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{""}},
 		{Id: "2", Score: 98, Categories: []string{""}},
 		{Id: "3", Score: 97, Categories: []string{""}},
@@ -769,7 +769,7 @@ func TestServer_GetRecommends(t *testing.T) {
 		{Id: "8", Score: 92, Categories: []string{""}},
 	}
 	ctx := context.Background()
-	err := s.CacheClient.AddDocuments(ctx, cache.OfflineRecommend, "0", itemIds)
+	err := s.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", itemIds)
 	assert.NoError(t, err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -825,14 +825,14 @@ func TestMaster_Purge(t *testing.T) {
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, set)
 
-	err = s.CacheClient.AddDocuments(ctx, "sorted", "", []cache.Document{
+	err = s.CacheClient.AddScores(ctx, "sorted", "", []cache.Score{
 		{Id: "a", Score: 1, Categories: []string{""}},
 		{Id: "b", Score: 2, Categories: []string{""}},
 		{Id: "c", Score: 3, Categories: []string{""}}})
 	assert.NoError(t, err)
-	z, err := s.CacheClient.SearchDocuments(ctx, "sorted", "", []string{""}, 0, -1)
+	z, err := s.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, []cache.Document{
+	assert.ElementsMatch(t, []cache.Score{
 		{Id: "a", Score: 1, Categories: []string{""}},
 		{Id: "b", Score: 2, Categories: []string{""}},
 		{Id: "c", Score: 3, Categories: []string{""}}}, z)
@@ -869,7 +869,7 @@ func TestMaster_Purge(t *testing.T) {
 	set, err = s.CacheClient.GetSet(ctx, "set")
 	assert.NoError(t, err)
 	assert.Empty(t, set)
-	z, err = s.CacheClient.SearchDocuments(ctx, "sorted", "", []string{""}, 0, -1)
+	z, err = s.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
 	assert.NoError(t, err)
 	assert.Empty(t, z)
 

@@ -391,11 +391,11 @@ func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, er
 	return
 }
 
-func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset string, documents []Document) error {
+func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
 	var rows any
 	switch db.driver {
 	case Postgres:
-		rows = lo.Map(documents, func(document Document, _ int) PostgresDocument {
+		rows = lo.Map(documents, func(document Score, _ int) PostgresDocument {
 			return PostgresDocument{
 				Collection: collection,
 				Subset:     subset,
@@ -407,7 +407,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset stri
 			}
 		})
 	case SQLite, MySQL:
-		rows = lo.Map(documents, func(document Document, _ int) SQLDocument {
+		rows = lo.Map(documents, func(document Score, _ int) SQLDocument {
 			return SQLDocument{
 				Collection: collection,
 				Subset:     subset,
@@ -426,7 +426,7 @@ func (db *SQLDatabase) AddDocuments(ctx context.Context, collection, subset stri
 	return nil
 }
 
-func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Document, error) {
+func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
@@ -451,7 +451,7 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	documents := make([]Document, 0, 10)
+	documents := make([]Score, 0, 10)
 	for rows.Next() {
 		switch db.driver {
 		case Postgres:
@@ -459,14 +459,14 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 			if err = rows.Scan(&document.Id, &document.Score, &document.Categories, &document.Timestamp); err != nil {
 				return nil, errors.Trace(err)
 			}
-			documents = append(documents, Document{
+			documents = append(documents, Score{
 				Id:         document.Id,
 				Score:      document.Score,
 				Categories: document.Categories,
 				Timestamp:  document.Timestamp,
 			})
 		case SQLite, MySQL:
-			var document Document
+			var document Score
 			if err = db.gormDB.ScanRows(rows, &document); err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -477,7 +477,7 @@ func (db *SQLDatabase) SearchDocuments(ctx context.Context, collection, subset s
 	return documents, nil
 }
 
-func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string, id string, patch DocumentPatch) error {
+func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, id string, patch ScorePatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
@@ -506,7 +506,7 @@ func (db *SQLDatabase) UpdateDocuments(ctx context.Context, collections []string
 	return tx.Error
 }
 
-func (db *SQLDatabase) DeleteDocuments(ctx context.Context, collections []string, condition DocumentCondition) error {
+func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
 		return errors.Trace(err)
 	}
