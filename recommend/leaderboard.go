@@ -17,21 +17,26 @@ package recommend
 import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
+	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"reflect"
+	"time"
 )
 
 type LeaderBoard struct {
+	timestamp  time.Time
 	scoreFunc  *vm.Program
 	filterFunc *vm.Program
-	heap       heap.TopKFilter[cache.Document, float64]
+	heap       *heap.TopKFilter[cache.Score, float64]
 }
 
-func NewLeaderBoard(cfg config.LeaderBoardConfig) (*LeaderBoard, error) {
+func NewLeaderBoard(cfg config.LeaderBoardConfig, n int, timestamp time.Time) (*LeaderBoard, error) {
 	// Compile score expression
 	scoreFunc, err := expr.Compile(cfg.Score, expr.Env(map[string]any{
 		"item":     data.Item{},
@@ -39,6 +44,11 @@ func NewLeaderBoard(cfg config.LeaderBoardConfig) (*LeaderBoard, error) {
 	}))
 	if err != nil {
 		return nil, err
+	}
+	switch scoreFunc.Node().Type().Kind() {
+	case reflect.Float64, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	default:
+		return nil, errors.New("score function must return float64")
 	}
 	// Compile filter expression
 	var filterFunc *vm.Program
@@ -50,14 +60,37 @@ func NewLeaderBoard(cfg config.LeaderBoardConfig) (*LeaderBoard, error) {
 		if err != nil {
 			return nil, err
 		}
+		if filterFunc.Node().Type().Kind() != reflect.Bool {
+			return nil, errors.New("filter function must return bool")
+		}
 	}
 	return &LeaderBoard{
+		timestamp:  timestamp,
 		scoreFunc:  scoreFunc,
 		filterFunc: filterFunc,
+		heap:       heap.NewTopKFilter[cache.Score, float64](n),
 	}, nil
 }
 
+func NewLatest(n int, timestamp time.Time) *LeaderBoard {
+	return lo.Must(NewLeaderBoard(config.LeaderBoardConfig{
+		Name:  "latest",
+		Score: "item.Timestamp.Unix()",
+	}, n, timestamp))
+}
+
+func NewPopular(n int, timestamp time.Time) *LeaderBoard {
+	return lo.Must(NewLeaderBoard(config.LeaderBoardConfig{
+		Name:  "popular",
+		Score: "len(feedback)",
+	}, n, timestamp))
+}
+
 func (l *LeaderBoard) Push(item data.Item, feedback []data.Feedback) {
+	// Skip hidden items
+	if item.IsHidden {
+		return
+	}
 	// Evaluate filter function
 	if l.filterFunc != nil {
 		result, err := expr.Run(l.filterFunc, map[string]any{
@@ -81,10 +114,34 @@ func (l *LeaderBoard) Push(item data.Item, feedback []data.Feedback) {
 		log.Logger().Error("evaluate score function", zap.Error(err))
 		return
 	}
-	score := result.(float64)
-	l.heap.Push(item, score)
+	var score float64
+	switch typed := result.(type) {
+	case float64:
+		score = typed
+	case int:
+		score = float64(typed)
+	case int8:
+		score = float64(typed)
+	case int16:
+		score = float64(typed)
+	case int32:
+		score = float64(typed)
+	case int64:
+		score = float64(typed)
+	default:
+		log.Logger().Error("score function must return float64", zap.Any("result", result))
+		return
+	}
+	l.heap.Push(cache.Score{
+		Id:         item.ItemId,
+		Score:      score,
+		IsHidden:   item.IsHidden,
+		Categories: item.Categories,
+		Timestamp:  l.timestamp,
+	}, score)
 }
 
-func (l *LeaderBoard) PopAll() []data.Item {
-	return nil
+func (l *LeaderBoard) PopAll() []cache.Score {
+	scores, _ := l.heap.PopAll()
+	return scores
 }
