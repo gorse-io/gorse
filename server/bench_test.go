@@ -804,7 +804,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 				documents[i].Categories = []string{""}
 			}
 			lo.Reverse(documents)
-			err := s.CacheClient.AddScores(ctx, cache.PopularItems, "", documents)
+			err := s.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Popular, documents)
 			require.NoError(b, err)
 			s.Config.Recommend.CacheSize = len(documents)
 
@@ -903,7 +903,7 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 			}
 			lo.Reverse(documents)
 			lo.Reverse(expects)
-			err := s.CacheClient.AddScores(ctx, cache.LatestItems, "", documents)
+			err := s.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Latest, documents)
 			require.NoError(b, err)
 			err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 			require.NoError(b, err)

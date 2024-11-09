@@ -477,14 +477,16 @@ func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset stri
 	return documents, nil
 }
 
-func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, id string, patch ScorePatch) error {
+func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, subset, id string, patch ScorePatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
 	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Where("collection in (?) and id = ?", collections, id)
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).
+		Where("collection in (?) and id = ? and (subset = ? or ? = '')",
+			collections, id, subset, subset)
 	if patch.Score != nil {
 		tx = tx.Update("score", *patch.Score)
 	}

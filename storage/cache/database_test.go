@@ -324,20 +324,20 @@ func (suite *baseTestSuite) TestDocument() {
 	suite.Equal("2", documents[0].Id)
 
 	// update categories
-	err = suite.UpdateScores(ctx, []string{"a"}, "2", ScorePatch{Categories: []string{"c", "s"}})
+	err = suite.UpdateScores(ctx, []string{"a"}, "", "2", ScorePatch{Categories: []string{"c", "s"}})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "", []string{"s"}, 0, 1)
 	suite.NoError(err)
 	suite.Len(documents, 1)
 	suite.Equal("2", documents[0].Id)
-	err = suite.UpdateScores(ctx, []string{"a"}, "2", ScorePatch{Categories: []string{"c"}})
+	err = suite.UpdateScores(ctx, []string{"a"}, "", "2", ScorePatch{Categories: []string{"c"}})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "", []string{"s"}, 0, 1)
 	suite.NoError(err)
 	suite.Empty(documents)
 
 	// update is hidden
-	err = suite.UpdateScores(ctx, []string{"a"}, "0", ScorePatch{IsHidden: proto.Bool(false)})
+	err = suite.UpdateScores(ctx, []string{"a"}, "", "0", ScorePatch{IsHidden: proto.Bool(false)})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
@@ -401,7 +401,7 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 	}, documents)
 
 	// update categories
-	err = suite.UpdateScores(ctx, []string{"a", "b"}, "2", ScorePatch{Categories: []string{"b", "s"}})
+	err = suite.UpdateScores(ctx, []string{"a", "b"}, "", "2", ScorePatch{Categories: []string{"b", "s"}})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "a", []string{"s"}, 0, 1)
 	suite.NoError(err)
@@ -551,7 +551,7 @@ func benchmarkUpdateDocuments(b *testing.B, database Database) {
 		// select a random number
 		n := rand.Intn(benchmarkDataSize) + 1
 		// update documents
-		err := database.UpdateScores(ctx, []string{"a"}, strconv.Itoa(n), ScorePatch{
+		err := database.UpdateScores(ctx, []string{"a"}, "", strconv.Itoa(n), ScorePatch{
 			Score: proto.Float64(float64(n)),
 		})
 		assert.NoError(b, err)

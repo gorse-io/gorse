@@ -76,15 +76,9 @@ const (
 	//	Recommendation digest      - offline_recommend_digest/{user_id}
 	OfflineRecommendDigest = "offline_recommend_digest"
 
-	// PopularItems is sorted set of popular items. The format of key:
-	//  Global popular items      - latest_items
-	//  Categorized popular items - latest_items/{category}
-	PopularItems = "popular_items"
-
-	// LatestItems is sorted set of the latest items. The format of key:
-	//  Global latest items      - latest_items
-	//  Categorized the latest items - latest_items/{category}
-	LatestItems = "latest_items"
+	Leaderboard = "leaderboard"
+	Latest      = "latest"
+	Popular     = "popular"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
@@ -115,7 +109,7 @@ const (
 	MatchingIndexRecall        = "matching_index_recall"
 )
 
-var ItemCache = []string{PopularItems, LatestItems, ItemNeighbors, OfflineRecommend}
+var ItemCache = []string{Leaderboard, ItemNeighbors, OfflineRecommend}
 
 var (
 	ErrObjectNotExist = errors.NotFoundf("object")
@@ -293,7 +287,7 @@ type Database interface {
 	AddScores(ctx context.Context, collection, subset string, documents []Score) error
 	SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error)
 	DeleteScores(ctx context.Context, collection []string, condition ScoreCondition) error
-	UpdateScores(ctx context.Context, collection []string, id string, patch ScorePatch) error
+	UpdateScores(ctx context.Context, collections []string, subset, id string, patch ScorePatch) error
 
 	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
 	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error)
