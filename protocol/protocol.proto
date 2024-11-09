@@ -17,6 +17,40 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 
 package protocol;
 
+message User {
+  string user_id = 1;
+  string labels = 2;
+  string comment = 3;
+}
+
+message Item {
+  string item_id = 1;
+  bool is_hidden = 2;
+  repeated string categories = 3;
+  string labels = 4;
+  string comment = 5;
+}
+
+message Feedback {
+  string feedback_type = 1;
+  string user_id = 2;
+  string item_id = 3;
+  int64 timestamp = 4;
+  string comment = 5;
+}
+
+message PutUsersResponse {}
+
+message PutItemsResponse {}
+
+message PutFeedbackResponse {}
+
+message GetUsersRequest {}
+
+message GetItemsRequest {}
+
+message GetFeedbackRequest {}
+
 enum NodeType {
   ServerNode = 0;
   WorkerNode = 1;
@@ -24,6 +58,13 @@ enum NodeType {
 }
 
 service Master {
+
+  rpc PutUsers(stream User) returns (PutUsersResponse) {}
+  rpc PutItems(stream Item) returns (PutItemsResponse) {}
+  rpc PutFeedback(stream Feedback) returns (PutFeedbackResponse) {}
+  rpc GetUsers(GetUsersRequest) returns (stream User) {}
+  rpc GetItems(GetItemsRequest) returns (stream Item) {}
+  rpc GetFeedback(GetFeedbackRequest) returns (stream Feedback) {}
 
   /* meta distribute */
   rpc GetMeta(NodeInfo) returns (Meta) {}
