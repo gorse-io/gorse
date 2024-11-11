@@ -991,3 +991,76 @@ func TestMaster_TokenLogin(t *testing.T) {
 		Status(http.StatusOK).
 		End()
 }
+
+func TestDumpAndRestore(t *testing.T) {
+	s, cookie := newMockServer(t)
+	defer s.Close(t)
+	ctx := context.Background()
+	// insert users
+	users := make([]data.User, batchSize+1)
+	for i := range users {
+		users[i] = data.User{
+			UserId: fmt.Sprintf("%05d", i),
+			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
+		}
+	}
+	err := s.DataClient.BatchInsertUsers(ctx, users)
+	assert.NoError(t, err)
+	// insert items
+	items := make([]data.Item, batchSize+1)
+	for i := range items {
+		items[i] = data.Item{
+			ItemId: fmt.Sprintf("%05d", i),
+			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
+		}
+	}
+	err = s.DataClient.BatchInsertItems(ctx, items)
+	assert.NoError(t, err)
+	// insert feedback
+	feedback := make([]data.Feedback, batchSize+1)
+	for i := range feedback {
+		feedback[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       fmt.Sprintf("%05d", i),
+				ItemId:       fmt.Sprintf("%05d", i),
+			},
+		}
+	}
+	err = s.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
+	assert.NoError(t, err)
+
+	// dump data
+	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	req.Header.Set("Cookie", cookie)
+	w := httptest.NewRecorder()
+	s.dump(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// restore data
+	err = s.DataClient.Purge()
+	assert.NoError(t, err)
+	req = httptest.NewRequest("POST", "https://example.com/", bytes.NewReader(w.Body.Bytes()))
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Content-Type", "application/octet-stream")
+	w = httptest.NewRecorder()
+	s.restore(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// check data
+	_, returnUsers, err := s.DataClient.GetUsers(ctx, "", len(users))
+	assert.NoError(t, err)
+	if assert.Equal(t, len(users), len(returnUsers)) {
+		assert.Equal(t, users, returnUsers)
+	}
+	_, returnItems, err := s.DataClient.GetItems(ctx, "", len(items), nil)
+	assert.NoError(t, err)
+	if assert.Equal(t, len(items), len(returnItems)) {
+		assert.Equal(t, items, returnItems)
+	}
+	_, returnFeedback, err := s.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
+	assert.NoError(t, err)
+	if assert.Equal(t, len(feedback), len(returnFeedback)) {
+		assert.Equal(t, feedback, returnFeedback)
+	}
+}

@@ -17,6 +17,33 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 
 package protocol;
 
+import "google/protobuf/timestamp.proto";
+
+message User {
+  string user_id = 1;
+  bytes labels = 2;
+  string comment = 3;
+}
+
+message Item {
+  string namespace = 1;
+  string item_id = 2;
+  bool is_hidden = 3;
+  repeated string categories = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  bytes labels = 6;
+  string comment = 7;
+}
+
+message Feedback {
+  string namespace = 1;
+  string feedback_type = 2;
+  string user_id = 3;
+  string item_id = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string comment = 6;
+}
+
 enum NodeType {
   ServerNode = 0;
   WorkerNode = 1;
