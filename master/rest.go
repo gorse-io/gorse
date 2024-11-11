@@ -1409,7 +1409,7 @@ func readDump[T proto.Message](r io.Reader, data T) (int64, error) {
 		return size, nil
 	}
 	bytes := make([]byte, size)
-	if _, err := r.Read(bytes); err != nil {
+	if _, err := io.ReadFull(r, bytes); err != nil {
 		return 0, err
 	}
 	return size, proto.Unmarshal(bytes, data)
@@ -1562,7 +1562,7 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 				if flag <= 0 {
 					break
 				}
-				labels := make(map[string]interface{})
+				var labels any
 				if err := json.Unmarshal(user.Labels, &labels); err != nil {
 					writeError(response, http.StatusInternalServerError, err.Error())
 					return
@@ -1598,7 +1598,7 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 				if flag <= 0 {
 					break
 				}
-				labels := make(map[string]interface{})
+				var labels any
 				if err := json.Unmarshal(item.Labels, &labels); err != nil {
 					writeError(response, http.StatusInternalServerError, err.Error())
 					return
