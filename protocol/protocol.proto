@@ -44,18 +44,6 @@ message Feedback {
   string comment = 6;
 }
 
-message PutUsersResponse {}
-
-message PutItemsResponse {}
-
-message PutFeedbackResponse {}
-
-message GetUsersRequest {}
-
-message GetItemsRequest {}
-
-message GetFeedbackRequest {}
-
 enum NodeType {
   ServerNode = 0;
   WorkerNode = 1;
