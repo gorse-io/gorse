@@ -33,12 +33,6 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Master_PutUsers_FullMethodName        = "/protocol.Master/PutUsers"
-	Master_PutItems_FullMethodName        = "/protocol.Master/PutItems"
-	Master_PutFeedback_FullMethodName     = "/protocol.Master/PutFeedback"
-	Master_GetUsers_FullMethodName        = "/protocol.Master/GetUsers"
-	Master_GetItems_FullMethodName        = "/protocol.Master/GetItems"
-	Master_GetFeedback_FullMethodName     = "/protocol.Master/GetFeedback"
 	Master_GetMeta_FullMethodName         = "/protocol.Master/GetMeta"
 	Master_GetRankingModel_FullMethodName = "/protocol.Master/GetRankingModel"
 	Master_GetClickModel_FullMethodName   = "/protocol.Master/GetClickModel"
@@ -49,12 +43,6 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MasterClient interface {
-	PutUsers(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[User, PutUsersResponse], error)
-	PutItems(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Item, PutItemsResponse], error)
-	PutFeedback(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Feedback, PutFeedbackResponse], error)
-	GetUsers(ctx context.Context, in *GetUsersRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[User], error)
-	GetItems(ctx context.Context, in *GetItemsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Item], error)
-	GetFeedback(ctx context.Context, in *GetFeedbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Feedback], error)
 	// meta distribute
 	GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Meta, error)
 	// data distribute
@@ -71,102 +59,6 @@ func NewMasterClient(cc grpc.ClientConnInterface) MasterClient {
 	return &masterClient{cc}
 }
 
-func (c *masterClient) PutUsers(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[User, PutUsersResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[0], Master_PutUsers_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[User, PutUsersResponse]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_PutUsersClient = grpc.ClientStreamingClient[User, PutUsersResponse]
-
-func (c *masterClient) PutItems(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Item, PutItemsResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[1], Master_PutItems_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[Item, PutItemsResponse]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_PutItemsClient = grpc.ClientStreamingClient[Item, PutItemsResponse]
-
-func (c *masterClient) PutFeedback(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Feedback, PutFeedbackResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[2], Master_PutFeedback_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[Feedback, PutFeedbackResponse]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_PutFeedbackClient = grpc.ClientStreamingClient[Feedback, PutFeedbackResponse]
-
-func (c *masterClient) GetUsers(ctx context.Context, in *GetUsersRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[User], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[3], Master_GetUsers_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[GetUsersRequest, User]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_GetUsersClient = grpc.ServerStreamingClient[User]
-
-func (c *masterClient) GetItems(ctx context.Context, in *GetItemsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Item], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[4], Master_GetItems_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[GetItemsRequest, Item]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_GetItemsClient = grpc.ServerStreamingClient[Item]
-
-func (c *masterClient) GetFeedback(ctx context.Context, in *GetFeedbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Feedback], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[5], Master_GetFeedback_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[GetFeedbackRequest, Feedback]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_GetFeedbackClient = grpc.ServerStreamingClient[Feedback]
-
 func (c *masterClient) GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Meta, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Meta)
@@ -179,7 +71,7 @@ func (c *masterClient) GetMeta(ctx context.Context, in *NodeInfo, opts ...grpc.C
 
 func (c *masterClient) GetRankingModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Fragment], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[6], Master_GetRankingModel_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[0], Master_GetRankingModel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +90,7 @@ type Master_GetRankingModelClient = grpc.ServerStreamingClient[Fragment]
 
 func (c *masterClient) GetClickModel(ctx context.Context, in *VersionInfo, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Fragment], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[7], Master_GetClickModel_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[1], Master_GetClickModel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -229,12 +121,6 @@ func (c *masterClient) PushProgress(ctx context.Context, in *PushProgressRequest
 // All implementations must embed UnimplementedMasterServer
 // for forward compatibility.
 type MasterServer interface {
-	PutUsers(grpc.ClientStreamingServer[User, PutUsersResponse]) error
-	PutItems(grpc.ClientStreamingServer[Item, PutItemsResponse]) error
-	PutFeedback(grpc.ClientStreamingServer[Feedback, PutFeedbackResponse]) error
-	GetUsers(*GetUsersRequest, grpc.ServerStreamingServer[User]) error
-	GetItems(*GetItemsRequest, grpc.ServerStreamingServer[Item]) error
-	GetFeedback(*GetFeedbackRequest, grpc.ServerStreamingServer[Feedback]) error
 	// meta distribute
 	GetMeta(context.Context, *NodeInfo) (*Meta, error)
 	// data distribute
@@ -251,24 +137,6 @@ type MasterServer interface {
 // pointer dereference when methods are called.
 type UnimplementedMasterServer struct{}
 
-func (UnimplementedMasterServer) PutUsers(grpc.ClientStreamingServer[User, PutUsersResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method PutUsers not implemented")
-}
-func (UnimplementedMasterServer) PutItems(grpc.ClientStreamingServer[Item, PutItemsResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method PutItems not implemented")
-}
-func (UnimplementedMasterServer) PutFeedback(grpc.ClientStreamingServer[Feedback, PutFeedbackResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method PutFeedback not implemented")
-}
-func (UnimplementedMasterServer) GetUsers(*GetUsersRequest, grpc.ServerStreamingServer[User]) error {
-	return status.Errorf(codes.Unimplemented, "method GetUsers not implemented")
-}
-func (UnimplementedMasterServer) GetItems(*GetItemsRequest, grpc.ServerStreamingServer[Item]) error {
-	return status.Errorf(codes.Unimplemented, "method GetItems not implemented")
-}
-func (UnimplementedMasterServer) GetFeedback(*GetFeedbackRequest, grpc.ServerStreamingServer[Feedback]) error {
-	return status.Errorf(codes.Unimplemented, "method GetFeedback not implemented")
-}
 func (UnimplementedMasterServer) GetMeta(context.Context, *NodeInfo) (*Meta, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMeta not implemented")
 }
@@ -301,60 +169,6 @@ func RegisterMasterServer(s grpc.ServiceRegistrar, srv MasterServer) {
 	}
 	s.RegisterService(&Master_ServiceDesc, srv)
 }
-
-func _Master_PutUsers_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(MasterServer).PutUsers(&grpc.GenericServerStream[User, PutUsersResponse]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_PutUsersServer = grpc.ClientStreamingServer[User, PutUsersResponse]
-
-func _Master_PutItems_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(MasterServer).PutItems(&grpc.GenericServerStream[Item, PutItemsResponse]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_PutItemsServer = grpc.ClientStreamingServer[Item, PutItemsResponse]
-
-func _Master_PutFeedback_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(MasterServer).PutFeedback(&grpc.GenericServerStream[Feedback, PutFeedbackResponse]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_PutFeedbackServer = grpc.ClientStreamingServer[Feedback, PutFeedbackResponse]
-
-func _Master_GetUsers_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetUsersRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MasterServer).GetUsers(m, &grpc.GenericServerStream[GetUsersRequest, User]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_GetUsersServer = grpc.ServerStreamingServer[User]
-
-func _Master_GetItems_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetItemsRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MasterServer).GetItems(m, &grpc.GenericServerStream[GetItemsRequest, Item]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_GetItemsServer = grpc.ServerStreamingServer[Item]
-
-func _Master_GetFeedback_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetFeedbackRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MasterServer).GetFeedback(m, &grpc.GenericServerStream[GetFeedbackRequest, Feedback]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_GetFeedbackServer = grpc.ServerStreamingServer[Feedback]
 
 func _Master_GetMeta_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeInfo)
@@ -431,36 +245,6 @@ var Master_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "PutUsers",
-			Handler:       _Master_PutUsers_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "PutItems",
-			Handler:       _Master_PutItems_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "PutFeedback",
-			Handler:       _Master_PutFeedback_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "GetUsers",
-			Handler:       _Master_GetUsers_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "GetItems",
-			Handler:       _Master_GetItems_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "GetFeedback",
-			Handler:       _Master_GetFeedback_Handler,
-			ServerStreams: true,
-		},
 		{
 			StreamName:    "GetRankingModel",
 			Handler:       _Master_GetRankingModel_Handler,

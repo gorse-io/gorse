@@ -17,7 +17,6 @@ package master
 import (
 	"context"
 	"encoding/json"
-	"google.golang.org/grpc"
 	"io"
 	"strings"
 
@@ -62,31 +61,6 @@ func NewNode(ctx context.Context, nodeInfo *protocol.NodeInfo) *Node {
 		node.Type = WorkerNode
 	}
 	return node
-}
-
-func (m *Master) PutUsers(grpc.ClientStreamingServer[protocol.User, protocol.PutUsersResponse]) error {
-	return nil
-}
-
-func (m *Master) PutItems(grpc.ClientStreamingServer[protocol.Item, protocol.PutItemsResponse]) error {
-	return nil
-}
-
-func (m *Master) PutFeedback(grpc.ClientStreamingServer[protocol.Feedback, protocol.PutFeedbackResponse]) error {
-	return nil
-}
-
-func (m *Master) GetUsers(_ *protocol.GetUsersRequest, stream grpc.ServerStreamingServer[protocol.User]) error {
-	m.DataClient.GetUserStream(stream.Context(), batchSize)
-	return nil
-}
-
-func (m *Master) GetItems(*protocol.GetItemsRequest, grpc.ServerStreamingServer[protocol.Item]) error {
-	return nil
-}
-
-func (m *Master) GetFeedback(*protocol.GetFeedbackRequest, grpc.ServerStreamingServer[protocol.Feedback]) error {
-	return nil
 }
 
 // GetMeta returns latest configuration.

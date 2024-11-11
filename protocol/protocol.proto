@@ -17,26 +17,31 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 
 package protocol;
 
+import "google/protobuf/timestamp.proto";
+
 message User {
   string user_id = 1;
-  string labels = 2;
+  bytes labels = 2;
   string comment = 3;
 }
 
 message Item {
-  string item_id = 1;
-  bool is_hidden = 2;
-  repeated string categories = 3;
-  string labels = 4;
-  string comment = 5;
+  string namespace = 1;
+  string item_id = 2;
+  bool is_hidden = 3;
+  repeated string categories = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  bytes labels = 6;
+  string comment = 7;
 }
 
 message Feedback {
-  string feedback_type = 1;
-  string user_id = 2;
-  string item_id = 3;
-  int64 timestamp = 4;
-  string comment = 5;
+  string namespace = 1;
+  string feedback_type = 2;
+  string user_id = 3;
+  string item_id = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string comment = 6;
 }
 
 message PutUsersResponse {}
@@ -58,13 +63,6 @@ enum NodeType {
 }
 
 service Master {
-
-  rpc PutUsers(stream User) returns (PutUsersResponse) {}
-  rpc PutItems(stream Item) returns (PutItemsResponse) {}
-  rpc PutFeedback(stream Feedback) returns (PutFeedbackResponse) {}
-  rpc GetUsers(GetUsersRequest) returns (stream User) {}
-  rpc GetItems(GetItemsRequest) returns (stream Item) {}
-  rpc GetFeedback(GetFeedbackRequest) returns (stream Feedback) {}
 
   /* meta distribute */
   rpc GetMeta(NodeInfo) returns (Meta) {}
