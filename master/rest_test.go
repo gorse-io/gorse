@@ -101,6 +101,16 @@ func marshal(t *testing.T, v interface{}) string {
 	return string(s)
 }
 
+func marshalJSONLines[T any](t *testing.T, v []T) string {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	for _, item := range v {
+		err := encoder.Encode(item)
+		assert.NoError(t, err)
+	}
+	return buf.String()
+}
+
 func convertToMapStructure(t *testing.T, v interface{}) map[string]interface{} {
 	var m map[string]interface{}
 	err := mapstructure.Decode(v, &m)
@@ -126,12 +136,9 @@ func TestMaster_ExportUsers(t *testing.T) {
 	w := httptest.NewRecorder()
 	s.importExportUsers(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
-	assert.Equal(t, "attachment;filename=users.csv", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, "user_id,labels\r\n"+
-		"1,\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"engineer\"\"}\"\r\n"+
-		"2,\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"lawyer\"\"}\"\r\n"+
-		"3,\"{\"\"gender\"\":\"\"female\"\",\"\"job\"\":\"\"teacher\"\"}\"\r\n", w.Body.String())
+	assert.Equal(t, "application/jsonl", w.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment;filename=users.jsonl", w.Header().Get("Content-Disposition"))
+	assert.Equal(t, marshalJSONLines(t, users), w.Body.String())
 }
 
 func TestMaster_ExportItems(t *testing.T) {
@@ -173,12 +180,9 @@ func TestMaster_ExportItems(t *testing.T) {
 	w := httptest.NewRecorder()
 	s.importExportItems(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
-	assert.Equal(t, "attachment;filename=items.csv", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, "item_id,is_hidden,categories,time_stamp,labels,description\r\n"+
-		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"genre\"\":[\"\"comedy\"\",\"\"sci-fi\"\"]}\",\"o,n,e\"\r\n"+
-		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"genre\"\":[\"\"documentary\"\",\"\"sci-fi\"\"]}\",\"t\r\nw\r\no\"\r\n"+
-		"3,true,,2022-01-01 01:01:01.000000001 +0000 UTC,null,\"\"\"three\"\"\"\r\n", w.Body.String())
+	assert.Equal(t, "application/jsonl", w.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment;filename=items.jsonl", w.Header().Get("Content-Disposition"))
+	assert.Equal(t, marshalJSONLines(t, items), w.Body.String())
 }
 
 func TestMaster_ExportFeedback(t *testing.T) {
@@ -189,8 +193,8 @@ func TestMaster_ExportFeedback(t *testing.T) {
 	// insert feedback
 	feedbacks := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 	}
 	err := s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	assert.NoError(t, err)
@@ -200,68 +204,23 @@ func TestMaster_ExportFeedback(t *testing.T) {
 	w := httptest.NewRecorder()
 	s.importExportFeedback(w, req)
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
-	assert.Equal(t, "attachment;filename=feedback.csv", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, "feedback_type,user_id,item_id,time_stamp\r\n"+
-		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n"+
-		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n"+
-		"share,1,4,0001-01-01 00:00:00 +0000 UTC\r\n", w.Body.String())
+	assert.Equal(t, "application/jsonl", w.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment;filename=feedback.jsonl", w.Header().Get("Content-Disposition"))
+	assert.Equal(t, marshalJSONLines(t, feedbacks), w.Body.String())
 }
 
 func TestMaster_ImportUsers(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
-
 	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
-	err := writer.WriteField("has-header", "false")
+	file, err := writer.CreateFormFile("file", "users.jsonl")
 	assert.NoError(t, err)
-	err = writer.WriteField("sep", "\t")
-	assert.NoError(t, err)
-	err = writer.WriteField("label-sep", "::")
-	assert.NoError(t, err)
-	err = writer.WriteField("format", "lu")
-	assert.NoError(t, err)
-	file, err := writer.CreateFormFile("file", "users.csv")
-	assert.NoError(t, err)
-	_, err = file.Write([]byte("\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"engineer\"\"}\"\t1\n" +
-		"\"{\"\"gender\"\":\"\"male\"\",\"\"job\"\":\"\"lawyer\"\"}\"\t2\n" +
-		"\"{\"\"gender\"\":\"\"female\"\",\"\"job\"\":\"\"teacher\"\"}\"\t\"3\"\n"))
-	assert.NoError(t, err)
-	err = writer.Close()
-	assert.NoError(t, err)
-	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	w := httptest.NewRecorder()
-	s.importExportUsers(w, req)
-	// check
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []data.User{
-		{UserId: "1", Labels: map[string]any{"gender": "male", "job": "engineer"}},
-		{UserId: "2", Labels: map[string]any{"gender": "male", "job": "lawyer"}},
-		{UserId: "3", Labels: map[string]any{"gender": "female", "job": "teacher"}},
-	}, items)
-}
-
-func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
-	ctx := context.Background()
-	// send request
-	buf := bytes.NewBuffer(nil)
-	writer := multipart.NewWriter(buf)
-	file, err := writer.CreateFormFile("file", "users.csv")
-	assert.NoError(t, err)
-	_, err = file.Write([]byte("user_id,labels\r\n" +
-		"1,\"{\"\"性别\"\":\"\"男\"\",\"\"职业\"\":\"\"工程师\"\"}\"\r\n" +
-		"2,\"{\"\"性别\"\":\"\"男\"\",\"\"职业\"\":\"\"律师\"\"}\"\r\n" +
-		"\"3\",\"{\"\"性别\"\":\"\"女\"\",\"\"职业\"\":\"\"教师\"\"}\"\r\n"))
+	_, err = file.Write([]byte(`{"UserId":"1","Labels":{"性别":"男","职业":"工程师"}}
+{"UserId":"2","Labels":{"性别":"男","职业":"律师"}}
+{"UserId":"3","Labels":{"性别":"女","职业":"教师"}}`))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -285,79 +244,15 @@ func TestMaster_ImportUsers_DefaultFormat(t *testing.T) {
 func TestMaster_ImportItems(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
-
 	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
-	err := writer.WriteField("has-header", "false")
+	file, err := writer.CreateFormFile("file", "items.jsonl")
 	assert.NoError(t, err)
-	err = writer.WriteField("sep", "\t")
-	assert.NoError(t, err)
-	err = writer.WriteField("label-sep", "::")
-	assert.NoError(t, err)
-	err = writer.WriteField("format", "ildtch")
-	assert.NoError(t, err)
-	file, err := writer.CreateFormFile("file", "items.csv")
-	assert.NoError(t, err)
-	_, err = file.Write([]byte("1\t\"{\"\"genre\"\":[\"\"comedy\"\",\"\"sci-fi\"\"]}\"\t\"o,n,e\"\t2020-01-01 01:01:01.000000001 +0000 UTC\tx\t0\n" +
-		"2\t\"{\"\"genre\"\":[\"\"documentary\"\",\"\"sci-fi\"\"]}\"\t\"t\r\nw\r\no\"\t2021-01-01 01:01:01.000000001 +0000 UTC\tx::y\t0\n" +
-		"\"3\"\t\"\"\t\"\"\"three\"\"\"\t\"2022-01-01 01:01:01.000000001 +0000 UTC\"\t\t\"1\"\n"))
-	assert.NoError(t, err)
-	err = writer.Close()
-	assert.NoError(t, err)
-	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	w := httptest.NewRecorder()
-	s.importExportItems(w, req)
-	// check
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, []data.Item{
-		{
-			ItemId:     "1",
-			IsHidden:   false,
-			Categories: []string{"x"},
-			Timestamp:  time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC),
-			Labels:     map[string]any{"genre": []any{"comedy", "sci-fi"}},
-			Comment:    "o,n,e",
-		},
-		{
-			ItemId:     "2",
-			IsHidden:   false,
-			Categories: []string{"x", "y"},
-			Timestamp:  time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC),
-			Labels:     map[string]any{"genre": []any{"documentary", "sci-fi"}},
-			Comment:    "t\r\nw\r\no",
-		},
-		{
-			ItemId:     "3",
-			IsHidden:   true,
-			Categories: nil,
-			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
-			Labels:     nil,
-			Comment:    "\"three\"",
-		},
-	}, items)
-}
-
-func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
-
-	ctx := context.Background()
-	// send request
-	buf := bytes.NewBuffer(nil)
-	writer := multipart.NewWriter(buf)
-	file, err := writer.CreateFormFile("file", "items.csv")
-	assert.NoError(t, err)
-	_, err = file.Write([]byte("item_id,is_hidden,categories,time_stamp,labels,description\r\n" +
-		"1,false,x,2020-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"类型\"\":[\"\"喜剧\"\",\"\"科幻\"\"]}\",one\r\n" +
-		"2,false,x|y,2021-01-01 01:01:01.000000001 +0000 UTC,\"{\"\"类型\"\":[\"\"卡通\"\",\"\"科幻\"\"]}\",two\r\n" +
-		"\"3\",\"true\",,\"2022-01-01 01:01:01.000000001 +0000 UTC\",,\"three\"\r\n"))
+	_, err = file.Write([]byte(`{"ItemId":"1","IsHidden":false,"Categories":["x"],"Timestamp":"2020-01-01 01:01:01.000000001 +0000 UTC","Labels":{"类型":["喜剧","科幻"]},"Comment":"one"}
+{"ItemId":"2","IsHidden":false,"Categories":["x","y"],"Timestamp":"2021-01-01 01:01:01.000000001 +0000 UTC","Labels":{"类型":["卡通","科幻"]},"Comment":"two"}
+{"ItemId":"3","IsHidden":true,"Timestamp":"2022-01-01 01:01:01.000000001 +0000 UTC","Comment":"three"}`))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -401,55 +296,15 @@ func TestMaster_ImportItems_DefaultFormat(t *testing.T) {
 func TestMaster_ImportFeedback(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
-
-	ctx := context.Background()
-	// send request
-	buf := bytes.NewBuffer(nil)
-	writer := multipart.NewWriter(buf)
-	err := writer.WriteField("format", "uift")
-	assert.NoError(t, err)
-	err = writer.WriteField("sep", "\t")
-	assert.NoError(t, err)
-	err = writer.WriteField("has-header", "false")
-	assert.NoError(t, err)
-	file, err := writer.CreateFormFile("file", "feedback.csv")
-	assert.NoError(t, err)
-	_, err = file.Write([]byte("0\t2\tclick\t0001-01-01 00:00:00 +0000 UTC\n" +
-		"2\t6\tread\t0001-01-01 00:00:00 +0000 UTC\n" +
-		"\"1\"\t\"4\"\t\"share\"\t\"0001-01-01 00:00:00 +0000 UTC\"\n"))
-	assert.NoError(t, err)
-	err = writer.Close()
-	assert.NoError(t, err)
-	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	w := httptest.NewRecorder()
-	s.importExportFeedback(w, req)
-	// check
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
-	assert.NoError(t, err)
-	assert.Equal(t, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
-	}, feedback)
-}
-
-func TestMaster_ImportFeedback_Default(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
 	// send request
 	ctx := context.Background()
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
-	file, err := writer.CreateFormFile("file", "feedback.csv")
+	file, err := writer.CreateFormFile("file", "feedback.jsonl")
 	assert.NoError(t, err)
-	_, err = file.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n" +
-		"click,0,2,0001-01-01 00:00:00 +0000 UTC\r\n" +
-		"read,2,6,0001-01-01 00:00:00 +0000 UTC\r\n" +
-		"\"share\",\"1\",\"4\",\"0001-01-01 00:00:00 +0000 UTC\"\r\n"))
+	_, err = file.Write([]byte(`{"FeedbackType":"click","UserId":"0","ItemId":"2","Timestamp":"0001-01-01 00:00:00 +0000 UTC"}
+{"FeedbackType":"read","UserId":"2","ItemId":"6","Timestamp":"0001-01-01 00:00:00 +0000 UTC"}
+{"FeedbackType":"share","UserId":"1","ItemId":"4","Timestamp":"0001-01-01 00:00:00 +0000 UTC"}`))
 	assert.NoError(t, err)
 	err = writer.Close()
 	assert.NoError(t, err)
@@ -1045,6 +900,132 @@ func TestDumpAndRestore(t *testing.T) {
 	req.Header.Set("Content-Type", "application/octet-stream")
 	w = httptest.NewRecorder()
 	s.restore(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// check data
+	_, returnUsers, err := s.DataClient.GetUsers(ctx, "", len(users))
+	assert.NoError(t, err)
+	if assert.Equal(t, len(users), len(returnUsers)) {
+		assert.Equal(t, users, returnUsers)
+	}
+	_, returnItems, err := s.DataClient.GetItems(ctx, "", len(items), nil)
+	assert.NoError(t, err)
+	if assert.Equal(t, len(items), len(returnItems)) {
+		assert.Equal(t, items, returnItems)
+	}
+	_, returnFeedback, err := s.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
+	assert.NoError(t, err)
+	if assert.Equal(t, len(feedback), len(returnFeedback)) {
+		assert.Equal(t, feedback, returnFeedback)
+	}
+}
+
+func TestExportAndImport(t *testing.T) {
+	s, cookie := newMockServer(t)
+	defer s.Close(t)
+	ctx := context.Background()
+	// insert users
+	users := make([]data.User, batchSize+1)
+	for i := range users {
+		users[i] = data.User{
+			UserId: fmt.Sprintf("%05d", i),
+			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
+		}
+	}
+	err := s.DataClient.BatchInsertUsers(ctx, users)
+	assert.NoError(t, err)
+	// insert items
+	items := make([]data.Item, batchSize+1)
+	for i := range items {
+		items[i] = data.Item{
+			ItemId: fmt.Sprintf("%05d", i),
+			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
+		}
+	}
+	err = s.DataClient.BatchInsertItems(ctx, items)
+	assert.NoError(t, err)
+	// insert feedback
+	feedback := make([]data.Feedback, batchSize+1)
+	for i := range feedback {
+		feedback[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       fmt.Sprintf("%05d", i),
+				ItemId:       fmt.Sprintf("%05d", i),
+			},
+		}
+	}
+	err = s.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
+	assert.NoError(t, err)
+
+	// export users
+	req := httptest.NewRequest("GET", "https://example.com/", nil)
+	req.Header.Set("Cookie", cookie)
+	w := httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	usersData := w.Body.Bytes()
+	// export items
+	req = httptest.NewRequest("GET", "https://example.com/", nil)
+	req.Header.Set("Cookie", cookie)
+	w = httptest.NewRecorder()
+	s.importExportItems(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	itemsData := w.Body.Bytes()
+	// export feedback
+	req = httptest.NewRequest("GET", "https://example.com/", nil)
+	req.Header.Set("Cookie", cookie)
+	w = httptest.NewRecorder()
+	s.importExportFeedback(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	feedbackData := w.Body.Bytes()
+
+	err = s.DataClient.Purge()
+	assert.NoError(t, err)
+	// import users
+	buf := bytes.NewBuffer(nil)
+	writer := multipart.NewWriter(buf)
+	file, err := writer.CreateFormFile("file", "users.jsonl")
+	assert.NoError(t, err)
+	_, err = file.Write(usersData)
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+	req = httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w = httptest.NewRecorder()
+	s.importExportUsers(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	// import items
+	buf = bytes.NewBuffer(nil)
+	writer = multipart.NewWriter(buf)
+	file, err = writer.CreateFormFile("file", "items.jsonl")
+	assert.NoError(t, err)
+	_, err = file.Write(itemsData)
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+	req = httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w = httptest.NewRecorder()
+	s.importExportItems(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	// import feedback
+	buf = bytes.NewBuffer(nil)
+	writer = multipart.NewWriter(buf)
+	file, err = writer.CreateFormFile("file", "feedback.jsonl")
+	assert.NoError(t, err)
+	_, err = file.Write(feedbackData)
+	assert.NoError(t, err)
+	err = writer.Close()
+	assert.NoError(t, err)
+	req = httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w = httptest.NewRecorder()
+	s.importExportFeedback(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// check data

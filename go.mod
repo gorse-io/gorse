@@ -1,8 +1,8 @@
 module github.com/zhenghaoz/gorse
 
-go 1.22
+go 1.23.2
 
-toolchain go1.23.1
+toolchain go1.23.3
 
 require (
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
@@ -23,7 +23,7 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20230729051855-6c53a42d2bd4
+	github.com/gorse-io/dashboard v0.0.0-20241112140226-19a1b322242c
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
 	github.com/json-iterator/go v1.1.12
