@@ -60,6 +60,7 @@ type Config struct {
 	Recommend    RecommendConfig    `mapstructure:"recommend"`
 	Tracing      TracingConfig      `mapstructure:"tracing"`
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
+	OAuth2       OAuth2Config       `mapstructure:"oauth2"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -177,6 +178,13 @@ type TracingConfig struct {
 type ExperimentalConfig struct {
 	EnableDeepLearning    bool `mapstructure:"enable_deep_learning"`
 	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
+}
+
+type OAuth2Config struct {
+	Endpoint     string `mapstructure:"endpoint"`
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+	RedirectURL  string `mapstructure:"redirect_url"`
 }
 
 func GetDefaultConfig() *Config {
@@ -558,6 +566,10 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
 		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
 		{"server.api_key", "GORSE_SERVER_API_KEY"},
+		{"oauth2.endpoint", "GORSE_OAUTH2_ENDPOINT"},
+		{"oauth2.client_id", "GORSE_OAUTH2_CLIENT_ID"},
+		{"oauth2.client_secret", "GORSE_OAUTH2_CLIENT_SECRET"},
+		{"oauth2.redirect_url", "GORSE_OAUTH2_REDIRECT_URL"},
 	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
