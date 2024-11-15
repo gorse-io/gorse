@@ -326,7 +326,7 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	_, err := staticFileSystem.Open(request.RequestURI)
 	if request.RequestURI == "/" || os.IsNotExist(err) {
 		if !m.checkLogin(request) {
-			if m.Config.OIDC.Issuer != "" {
+			if m.Config.OIDC.Enable {
 				// Redirect to OIDC login
 				http.Redirect(response, request, m.oauth2Config.AuthCodeURL(""), http.StatusFound)
 			} else {
@@ -430,7 +430,7 @@ func (m *Master) checkLogin(request *http.Request) bool {
 	if m.Config.Master.AdminAPIKey != "" && m.Config.Master.AdminAPIKey == request.Header.Get("X-Api-Key") {
 		return true
 	}
-	if m.Config.OIDC.Issuer != "" {
+	if m.Config.OIDC.Enable {
 		if tokenCookie, err := request.Cookie("token"); err == nil {
 			var token string
 			if err = cookieHandler.Decode("token", tokenCookie.Value, &token); err == nil {

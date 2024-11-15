@@ -72,11 +72,9 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 }
 
 func (m *mockMasterRPC) Start(t *testing.T) {
-	m.ttlCache = ttlcache.NewCache()
-	m.ttlCache.SetExpirationCallback(m.nodeDown)
-	m.ttlCache.SetNewItemCallback(m.nodeUp)
-	err := m.ttlCache.SetTTL(time.Second)
-	assert.NoError(t, err)
+	m.ttlCache = ttlcache.New(ttlcache.WithTTL[string, *Node](time.Second))
+	m.ttlCache.OnEviction(m.nodeDown)
+	m.ttlCache.OnInsertion(m.nodeUp)
 
 	listen, err := net.Listen("tcp", ":0")
 	assert.NoError(t, err)
