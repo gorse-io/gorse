@@ -5,7 +5,6 @@ go 1.23.2
 toolchain go1.23.3
 
 require (
-	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/XSAM/otelsql v0.35.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/benhoyt/goawk v1.20.0
@@ -26,6 +25,7 @@ require (
 	github.com/gorse-io/dashboard v0.0.0-20241112140226-19a1b322242c
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
+	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v1.0.0
 	github.com/klauspost/asmfmt v1.3.2

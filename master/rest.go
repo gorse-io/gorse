@@ -54,12 +54,29 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type UserInfo struct {
+	Name       string `json:"name"`
+	FamilyName string `json:"family_name"`
+	GivenName  string `json:"given_name"`
+	MiddleName string `json:"middle_name"`
+	NickName   string `json:"nickname"`
+	Picture    string `json:"picture"`
+	UpdatedAt  string `json:"updated_at"`
+	Email      string `json:"email"`
+	Verified   bool   `json:"email_verified"`
+}
+
 func (m *Master) CreateWebService() {
 	ws := m.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
 	ws.Filter(m.LoginFilter)
 
+	ws.Route(ws.GET("/dashboard/userinfo").To(m.handleUserInfo).
+		Doc("Get login user information.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", UserInfo{}).
+		Writes(UserInfo{}))
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -309,8 +326,13 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	_, err := staticFileSystem.Open(request.RequestURI)
 	if request.RequestURI == "/" || os.IsNotExist(err) {
 		if !m.checkLogin(request) {
-			http.Redirect(response, request, "/login", http.StatusFound)
-			log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
+			if m.Config.OIDC.Issuer != "" {
+				// Redirect to OIDC login
+				http.Redirect(response, request, m.oauth2Config.AuthCodeURL(""), http.StatusFound)
+			} else {
+				http.Redirect(response, request, "/login", http.StatusFound)
+				log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
+			}
 			return
 		}
 		noCache(staticFileServer).ServeHTTP(response, request)
@@ -320,21 +342,22 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 }
 
 func (m *Master) checkToken(token string) (bool, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/auth/dashboard/%s", m.Config.Master.DashboardAuthServer, token))
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	if resp.StatusCode == http.StatusOK {
-		return true, nil
-	} else if resp.StatusCode == http.StatusUnauthorized {
-		return false, nil
-	} else {
-		if message, err := io.ReadAll(resp.Body); err != nil {
-			return false, errors.Trace(err)
-		} else {
-			return false, errors.New(string(message))
-		}
-	}
+	// resp, err := http.Get(fmt.Sprintf("%s/auth/dashboard/%s", m.Config.Master.DashboardAuthServer, token))
+	// if err != nil {
+	// 	return false, errors.Trace(err)
+	// }
+	// if resp.StatusCode == http.StatusOK {
+	// 	return true, nil
+	// } else if resp.StatusCode == http.StatusUnauthorized {
+	// 	return false, nil
+	// } else {
+	// 	if message, err := io.ReadAll(resp.Body); err != nil {
+	// 		return false, errors.Trace(err)
+	// 	} else {
+	// 		return false, errors.New(string(message))
+	// 	}
+	// }
+	return false, nil
 }
 
 func (m *Master) login(response http.ResponseWriter, request *http.Request) {
@@ -343,35 +366,9 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 		log.Logger().Info("GET /login", zap.Int("status_code", http.StatusOK))
 		staticFileServer.ServeHTTP(response, request)
 	case http.MethodPost:
-		token := request.FormValue("token")
 		name := request.FormValue("user_name")
 		pass := request.FormValue("password")
-		if m.Config.Master.DashboardAuthServer != "" {
-			// check access token
-			if isValid, err := m.checkToken(token); err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			} else if !isValid {
-				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
-				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
-				return
-			}
-			// save token to cache
-			if encoded, err := cookieHandler.Encode("token", token); err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			} else {
-				cookie := &http.Cookie{
-					Name:  "token",
-					Value: encoded,
-					Path:  "/",
-				}
-				http.SetCookie(response, cookie)
-				http.Redirect(response, request, "/", http.StatusFound)
-				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
-				return
-			}
-		} else if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
+		if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
 			if name != m.Config.Master.DashboardUserName || pass != m.Config.Master.DashboardPassword {
 				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
@@ -433,7 +430,7 @@ func (m *Master) checkLogin(request *http.Request) bool {
 	if m.Config.Master.AdminAPIKey != "" && m.Config.Master.AdminAPIKey == request.Header.Get("X-Api-Key") {
 		return true
 	}
-	if m.Config.Master.DashboardAuthServer != "" {
+	if m.Config.OIDC.Issuer != "" {
 		if tokenCookie, err := request.Cookie("token"); err == nil {
 			var token string
 			if err = cookieHandler.Decode("token", tokenCookie.Value, &token); err == nil {
@@ -459,6 +456,20 @@ func (m *Master) checkLogin(request *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func (m *Master) handleUserInfo(request *restful.Request, response *restful.Response) {
+	server.Ok(response, UserInfo{
+		Name:       "Zhenghao Zhang",
+		FamilyName: "",
+		GivenName:  "",
+		MiddleName: "",
+		NickName:   "",
+		Picture:    "https://gravatar.com/avatar/949a846d05ecaef000202d9b2347c12acffc777e2a77e0ce4ef13edc1fdd0702?s=80",
+		UpdatedAt:  "",
+		Email:      "",
+		Verified:   true,
+	})
 }
 
 func (m *Master) getCategories(request *restful.Request, response *restful.Response) {
@@ -1673,4 +1684,33 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 		zap.Int("feedback", stats.Feedback),
 		zap.Duration("duration", stats.Duration))
 	server.Ok(restful.NewResponse(response), stats)
+}
+
+func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
+	// Verify state and errors.
+	oauth2Token, err := m.oauth2Config.Exchange(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	}
+	// Extract the ID Token from OAuth2 token.
+	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+	if !ok {
+		// handle missing token
+	}
+	// Parse and verify ID Token payload.
+	idToken, err := m.verifier.Verify(r.Context(), rawIDToken)
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	}
+	// Extract custom claims
+	var claims struct {
+		Email    string `json:"email"`
+		Verified bool   `json:"email_verified"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	}
 }

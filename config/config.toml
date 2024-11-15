@@ -260,3 +260,21 @@ enable_deep_learning = false
 
 # Batch size for deep learning recommenders. The default value is 128.
 deep_learning_batch_size = 128
+
+[oidc]
+
+# Enable OpenID Connect (OIDC) authentication. The default value is false.
+enable = false
+
+# The issuer of the OAuth provider.
+issuer = ""
+
+# Public identifier of the OAuth application.
+client_id = ""
+
+# Token access to the OAuth application.
+client_secret = ""
+
+# URL used by the OAuth provider to redirect users after they are successfully authenticated
+# (also referred to as the callback URL). You should set this to your Gorse dashboard URL.
+redirect_url = ""

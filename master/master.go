@@ -24,9 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
@@ -69,7 +69,7 @@ type Master struct {
 	managedMode    bool
 
 	// cluster meta cache
-	ttlCache       *ttlcache.Cache
+	ttlCache       *ttlcache.Cache[string, *Node]
 	nodesInfo      map[string]*Node
 	nodesInfoMutex sync.RWMutex
 
@@ -96,6 +96,8 @@ type Master struct {
 
 	// oauth2
 	oauth2Config oauth2.Config
+	verifier     *oidc.IDTokenVerifier
+	tokenCache   ttlcache.Cache[string, UserInfo]
 
 	localCache *LocalCache
 
@@ -215,12 +217,10 @@ func (m *Master) Serve() {
 	}
 
 	// create cluster meta cache
-	m.ttlCache = ttlcache.NewCache()
-	m.ttlCache.SetExpirationCallback(m.nodeDown)
-	m.ttlCache.SetNewItemCallback(m.nodeUp)
-	if err = m.ttlCache.SetTTL(m.Config.Master.MetaTimeout + 10*time.Second); err != nil {
-		log.Logger().Fatal("failed to set TTL", zap.Error(err))
-	}
+	m.ttlCache = ttlcache.New[string, *Node](
+		ttlcache.WithTTL[string, *Node](m.Config.Master.MetaTimeout + 10*time.Second))
+	m.ttlCache.OnInsertion(m.nodeUp)
+	m.ttlCache.OnEviction(m.nodeDown)
 
 	// connect data database
 	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix)
@@ -267,18 +267,19 @@ func (m *Master) Serve() {
 		}
 	}()
 
-	// create oa
-	if m.Config.OAuth2.Endpoint != "" {
-		provider, err := oidc.NewProvider(context.Background(), "https://accounts.google.com")
+	if m.Config.OIDC.Enable {
+		provider, err := oidc.NewProvider(context.Background(), m.Config.OIDC.Issuer)
 		if err != nil {
-			log.Logger().Fatal("failed to create oidc provider", zap.Error(err))
-		}
-		m.oauth2Config = oauth2.Config{
-			ClientID:     m.Config.OAuth2.ClientID,
-			ClientSecret: m.Config.OAuth2.ClientSecret,
-			RedirectURL:  m.Config.OAuth2.RedirectURL,
-			Endpoint:     provider.Endpoint(),
-			Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+			log.Logger().Error("failed to create oidc provider", zap.Error(err))
+		} else {
+			m.verifier = provider.Verifier(&oidc.Config{ClientID: m.Config.OIDC.ClientID})
+			m.oauth2Config = oauth2.Config{
+				ClientID:     m.Config.OIDC.ClientID,
+				ClientSecret: m.Config.OIDC.ClientSecret,
+				RedirectURL:  m.Config.OIDC.RedirectURL,
+				Endpoint:     provider.Endpoint(),
+				Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+			}
 		}
 	}
 

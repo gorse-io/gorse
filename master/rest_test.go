@@ -809,43 +809,43 @@ func (m *mockAuthServer) Addr() string {
 	return m.ln.Addr().String()
 }
 
-func TestMaster_TokenLogin(t *testing.T) {
-	s, _ := newMockServer(t)
-	defer s.Close(t)
+// func TestMaster_TokenLogin(t *testing.T) {
+// 	s, _ := newMockServer(t)
+// 	defer s.Close(t)
 
-	// start auth server
-	authServer := NewMockAuthServer("abc")
-	authServer.Start(t)
-	defer authServer.Close(t)
-	s.Config.Master.DashboardAuthServer = fmt.Sprintf("http://%s", authServer.Addr())
+// 	// start auth server
+// 	authServer := NewMockAuthServer("abc")
+// 	authServer.Start(t)
+// 	defer authServer.Close(t)
+// 	s.Config.Master.DashboardAuthServer = fmt.Sprintf("http://%s", authServer.Addr())
 
-	// login fail
-	req := httptest.NewRequest("POST", "https://example.com/",
-		strings.NewReader("token=123"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	w := httptest.NewRecorder()
-	s.login(w, req)
-	assert.Equal(t, http.StatusFound, w.Code)
-	assert.Empty(t, w.Result().Cookies())
+// 	// login fail
+// 	req := httptest.NewRequest("POST", "https://example.com/",
+// 		strings.NewReader("token=123"))
+// 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+// 	w := httptest.NewRecorder()
+// 	s.login(w, req)
+// 	assert.Equal(t, http.StatusFound, w.Code)
+// 	assert.Empty(t, w.Result().Cookies())
 
-	// login success
-	req = httptest.NewRequest("POST", "https://example.com/",
-		strings.NewReader("token=abc"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	w = httptest.NewRecorder()
-	s.login(w, req)
-	assert.Equal(t, http.StatusFound, w.Code)
-	assert.NotEmpty(t, w.Header().Get("Set-Cookie"))
+// 	// login success
+// 	req = httptest.NewRequest("POST", "https://example.com/",
+// 		strings.NewReader("token=abc"))
+// 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+// 	w = httptest.NewRecorder()
+// 	s.login(w, req)
+// 	assert.Equal(t, http.StatusFound, w.Code)
+// 	assert.NotEmpty(t, w.Header().Get("Set-Cookie"))
 
-	// validate cookie
-	apitest.New().
-		Handler(s.handler).
-		Get("/api/dashboard/config").
-		Header("Cookie", w.Header().Get("Set-Cookie")).
-		Expect(t).
-		Status(http.StatusOK).
-		End()
-}
+// 	// validate cookie
+// 	apitest.New().
+// 		Handler(s.handler).
+// 		Get("/api/dashboard/config").
+// 		Header("Cookie", w.Header().Get("Set-Cookie")).
+// 		Expect(t).
+// 		Status(http.StatusOK).
+// 		End()
+// }
 
 func TestDumpAndRestore(t *testing.T) {
 	s, cookie := newMockServer(t)
