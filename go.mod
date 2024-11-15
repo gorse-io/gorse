@@ -1,8 +1,6 @@
 module github.com/zhenghaoz/gorse
 
-go 1.23.2
-
-toolchain go1.23.3
+go 1.23.3
 
 require (
 	github.com/XSAM/otelsql v0.35.0
@@ -22,7 +20,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20241112140226-19a1b322242c
+	github.com/gorse-io/dashboard v0.0.0-20241115145254-4def1c814899
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
 	github.com/jellydator/ttlcache/v3 v3.3.0

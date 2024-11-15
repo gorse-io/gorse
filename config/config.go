@@ -623,7 +623,6 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.ClickhousePrefix,
 			storage.CHHTTPPrefix,
 			storage.CHHTTPSPrefix,
-			storage.SQLitePrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)
@@ -646,7 +645,6 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.MySQLPrefix,
 			storage.PostgresPrefix,
 			storage.PostgreSQLPrefix,
-			storage.SQLitePrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)
