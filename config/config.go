@@ -184,7 +184,7 @@ type OIDCConfig struct {
 	Issuer       string `mapstructure:"issuer"`
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
-	RedirectURL  string `mapstructure:"redirect_url" validate:"endswith=/callback/oauth2"`
+	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
 }
 
 func GetDefaultConfig() *Config {
