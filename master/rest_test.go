@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -764,88 +763,6 @@ func TestMaster_GetConfig(t *testing.T) {
 		Body(marshal(t, redactedConfig)).
 		End()
 }
-
-type mockAuthServer struct {
-	token string
-	srv   *http.Server
-	ln    net.Listener
-}
-
-func NewMockAuthServer(token string) *mockAuthServer {
-	return &mockAuthServer{token: token}
-}
-
-func (m *mockAuthServer) auth(request *restful.Request, response *restful.Response) {
-	token := request.PathParameter("token")
-	if token == m.token {
-		response.WriteHeader(http.StatusOK)
-	} else {
-		response.WriteHeader(http.StatusUnauthorized)
-	}
-}
-
-func (m *mockAuthServer) Start(t *testing.T) {
-	ws := new(restful.WebService)
-	ws.Route(ws.GET("/auth/dashboard/{token}").To(m.auth))
-	ct := restful.NewContainer()
-	ct.Add(ws)
-	m.srv = &http.Server{Handler: ct}
-	var err error
-	m.ln, err = net.Listen("tcp", "")
-	assert.NoError(t, err)
-	go func() {
-		if err = m.srv.Serve(m.ln); err != http.ErrServerClosed {
-			assert.NoError(t, err)
-		}
-	}()
-}
-
-func (m *mockAuthServer) Close(t *testing.T) {
-	err := m.srv.Close()
-	assert.NoError(t, err)
-}
-
-func (m *mockAuthServer) Addr() string {
-	return m.ln.Addr().String()
-}
-
-// func TestMaster_TokenLogin(t *testing.T) {
-// 	s, _ := newMockServer(t)
-// 	defer s.Close(t)
-
-// 	// start auth server
-// 	authServer := NewMockAuthServer("abc")
-// 	authServer.Start(t)
-// 	defer authServer.Close(t)
-// 	s.Config.Master.DashboardAuthServer = fmt.Sprintf("http://%s", authServer.Addr())
-
-// 	// login fail
-// 	req := httptest.NewRequest("POST", "https://example.com/",
-// 		strings.NewReader("token=123"))
-// 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-// 	w := httptest.NewRecorder()
-// 	s.login(w, req)
-// 	assert.Equal(t, http.StatusFound, w.Code)
-// 	assert.Empty(t, w.Result().Cookies())
-
-// 	// login success
-// 	req = httptest.NewRequest("POST", "https://example.com/",
-// 		strings.NewReader("token=abc"))
-// 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-// 	w = httptest.NewRecorder()
-// 	s.login(w, req)
-// 	assert.Equal(t, http.StatusFound, w.Code)
-// 	assert.NotEmpty(t, w.Header().Get("Set-Cookie"))
-
-// 	// validate cookie
-// 	apitest.New().
-// 		Handler(s.handler).
-// 		Get("/api/dashboard/config").
-// 		Header("Cookie", w.Header().Get("Set-Cookie")).
-// 		Expect(t).
-// 		Status(http.StatusOK).
-// 		End()
-// }
 
 func TestDumpAndRestore(t *testing.T) {
 	s, cookie := newMockServer(t)

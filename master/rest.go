@@ -1711,5 +1711,8 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 			Expires: idToken.Expiry,
 		})
 		http.Redirect(w, r, "/", http.StatusFound)
+		log.Logger().Info("login success via OIDC",
+			zap.String("name", claims.Name),
+			zap.String("email", claims.Email))
 	}
 }
