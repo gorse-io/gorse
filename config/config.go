@@ -60,6 +60,7 @@ type Config struct {
 	Recommend    RecommendConfig    `mapstructure:"recommend"`
 	Tracing      TracingConfig      `mapstructure:"tracing"`
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
+	OIDC         OIDCConfig         `mapstructure:"oidc"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -73,19 +74,18 @@ type DatabaseConfig struct {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port                int           `mapstructure:"port" validate:"gte=0"`        // master port
-	Host                string        `mapstructure:"host"`                         // master host
-	HttpPort            int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
-	HttpHost            string        `mapstructure:"http_host"`                    // HTTP host
-	HttpCorsDomains     []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
-	HttpCorsMethods     []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
-	NumJobs             int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
-	MetaTimeout         time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
-	DashboardUserName   string        `mapstructure:"dashboard_user_name"`          // dashboard user name
-	DashboardPassword   string        `mapstructure:"dashboard_password"`           // dashboard password
-	DashboardAuthServer string        `mapstructure:"dashboard_auth_server"`        // dashboard auth server
-	DashboardRedacted   bool          `mapstructure:"dashboard_redacted"`
-	AdminAPIKey         string        `mapstructure:"admin_api_key"`
+	Port              int           `mapstructure:"port" validate:"gte=0"`        // master port
+	Host              string        `mapstructure:"host"`                         // master host
+	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
+	HttpHost          string        `mapstructure:"http_host"`                    // HTTP host
+	HttpCorsDomains   []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
+	HttpCorsMethods   []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
+	NumJobs           int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
+	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
+	DashboardUserName string        `mapstructure:"dashboard_user_name"`          // dashboard user name
+	DashboardPassword string        `mapstructure:"dashboard_password"`           // dashboard password
+	DashboardRedacted bool          `mapstructure:"dashboard_redacted"`
+	AdminAPIKey       string        `mapstructure:"admin_api_key"`
 }
 
 // ServerConfig is the configuration for the server.
@@ -177,6 +177,14 @@ type TracingConfig struct {
 type ExperimentalConfig struct {
 	EnableDeepLearning    bool `mapstructure:"enable_deep_learning"`
 	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
+}
+
+type OIDCConfig struct {
+	Enable       bool   `mapstructure:"enable"`
+	Issuer       string `mapstructure:"issuer"`
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
 }
 
 func GetDefaultConfig() *Config {
@@ -558,6 +566,11 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
 		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
 		{"server.api_key", "GORSE_SERVER_API_KEY"},
+		{"oidc.enable", "GORSE_OIDC_ENABLE"},
+		{"oidc.issuer", "GORSE_OIDC_ISSUER"},
+		{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
+		{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
+		{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
 	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
