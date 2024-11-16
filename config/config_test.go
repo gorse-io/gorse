@@ -44,7 +44,7 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "issuer = \"\"", "issuer = \"https://accounts.google.com\"", -1)
 	text = strings.Replace(text, "client_id = \"\"", "client_id = \"client_id\"", -1)
 	text = strings.Replace(text, "client_secret = \"\"", "client_secret = \"client_secret\"", -1)
-	text = strings.Replace(text, "redirect_url = \"\"", "redirect_url = \"http://localhost:8088/oauth2/callback\"", -1)
+	text = strings.Replace(text, "redirect_url = \"\"", "redirect_url = \"http://localhost:8088/callback/oauth2\"", -1)
 	r, err := convert.TOML{}.Decode(bytes.NewBufferString(text))
 	assert.NoError(t, err)
 
@@ -150,7 +150,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
 			assert.Equal(t, "client_id", config.OIDC.ClientID)
 			assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
-			assert.Equal(t, "http://localhost:8088/oauth2/callback", config.OIDC.RedirectURL)
+			assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
 		})
 	}
 }
@@ -193,7 +193,7 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_OIDC_ISSUER", "https://accounts.google.com"},
 		{"GORSE_OIDC_CLIENT_ID", "client_id"},
 		{"GORSE_OIDC_CLIENT_SECRET", "client_secret"},
-		{"GORSE_OIDC_REDIRECT_URL", "http://localhost:8088/oauth2/callback"},
+		{"GORSE_OIDC_REDIRECT_URL", "http://localhost:8088/callback/oauth2"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -220,7 +220,7 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
 	assert.Equal(t, "client_id", config.OIDC.ClientID)
 	assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
-	assert.Equal(t, "http://localhost:8088/oauth2/callback", config.OIDC.RedirectURL)
+	assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)
