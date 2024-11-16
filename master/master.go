@@ -97,7 +97,7 @@ type Master struct {
 	// oauth2
 	oauth2Config oauth2.Config
 	verifier     *oidc.IDTokenVerifier
-	tokenCache   ttlcache.Cache[string, UserInfo]
+	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	localCache *LocalCache
 
@@ -219,8 +219,8 @@ func (m *Master) Serve() {
 	// create cluster meta cache
 	m.ttlCache = ttlcache.New[string, *Node](
 		ttlcache.WithTTL[string, *Node](m.Config.Master.MetaTimeout + 10*time.Second))
-	m.ttlCache.OnInsertion(m.nodeUp)
 	m.ttlCache.OnEviction(m.nodeDown)
+	go m.ttlCache.Start()
 
 	// connect data database
 	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix)
@@ -280,6 +280,8 @@ func (m *Master) Serve() {
 				Endpoint:     provider.Endpoint(),
 				Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 			}
+			m.tokenCache = ttlcache.New(ttlcache.WithTTL[string, UserInfo](time.Hour))
+			go m.tokenCache.Start()
 		}
 	}
 

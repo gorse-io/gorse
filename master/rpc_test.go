@@ -74,7 +74,7 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 func (m *mockMasterRPC) Start(t *testing.T) {
 	m.ttlCache = ttlcache.New(ttlcache.WithTTL[string, *Node](time.Second))
 	m.ttlCache.OnEviction(m.nodeDown)
-	m.ttlCache.OnInsertion(m.nodeUp)
+	go m.ttlCache.Start()
 
 	listen, err := net.Listen("tcp", ":0")
 	assert.NoError(t, err)

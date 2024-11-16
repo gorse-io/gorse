@@ -64,6 +64,7 @@ type UserInfo struct {
 	UpdatedAt  string `json:"updated_at"`
 	Email      string `json:"email"`
 	Verified   bool   `json:"email_verified"`
+	AuthType   string `json:"auth_type"`
 }
 
 func (m *Master) CreateWebService() {
@@ -241,6 +242,7 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/", http.HandlerFunc(m.dashboard))
 	container.Handle("/login", http.HandlerFunc(m.login))
 	container.Handle("/logout", http.HandlerFunc(m.logout))
+	container.Handle("/callback/oauth2", http.HandlerFunc(m.handleOAuth2Callback))
 	container.Handle("/api/purge", http.HandlerFunc(m.purge))
 	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
 	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
@@ -341,25 +343,6 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	staticFileServer.ServeHTTP(response, request)
 }
 
-func (m *Master) checkToken(token string) (bool, error) {
-	// resp, err := http.Get(fmt.Sprintf("%s/auth/dashboard/%s", m.Config.Master.DashboardAuthServer, token))
-	// if err != nil {
-	// 	return false, errors.Trace(err)
-	// }
-	// if resp.StatusCode == http.StatusOK {
-	// 	return true, nil
-	// } else if resp.StatusCode == http.StatusUnauthorized {
-	// 	return false, nil
-	// } else {
-	// 	if message, err := io.ReadAll(resp.Body); err != nil {
-	// 		return false, errors.Trace(err)
-	// 	} else {
-	// 		return false, errors.New(string(message))
-	// 	}
-	// }
-	return false, nil
-}
-
 func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 	switch request.Method {
 	case http.MethodGet:
@@ -431,12 +414,10 @@ func (m *Master) checkLogin(request *http.Request) bool {
 		return true
 	}
 	if m.Config.OIDC.Enable {
-		if tokenCookie, err := request.Cookie("token"); err == nil {
+		if tokenCookie, err := request.Cookie("id_token"); err == nil {
 			var token string
-			if err = cookieHandler.Decode("token", tokenCookie.Value, &token); err == nil {
-				if isValid, err := m.checkToken(token); err != nil {
-					log.Logger().Error("failed to check access token", zap.Error(err))
-				} else if isValid {
+			if err = cookieHandler.Decode("id_token", tokenCookie.Value, &token); err == nil {
+				if m.tokenCache.Get(token) != nil {
 					return true
 				}
 			}
@@ -459,17 +440,23 @@ func (m *Master) checkLogin(request *http.Request) bool {
 }
 
 func (m *Master) handleUserInfo(request *restful.Request, response *restful.Response) {
-	server.Ok(response, UserInfo{
-		Name:       "Zhenghao Zhang",
-		FamilyName: "",
-		GivenName:  "",
-		MiddleName: "",
-		NickName:   "",
-		Picture:    "https://gravatar.com/avatar/949a846d05ecaef000202d9b2347c12acffc777e2a77e0ce4ef13edc1fdd0702?s=80",
-		UpdatedAt:  "",
-		Email:      "",
-		Verified:   true,
-	})
+	if m.Config.OIDC.Enable {
+		if tokenCookie, err := request.Request.Cookie("id_token"); err == nil {
+			var token string
+			if err = cookieHandler.Decode("id_token", tokenCookie.Value, &token); err == nil {
+				if item := m.tokenCache.Get(token); item != nil {
+					userInfo := item.Value()
+					userInfo.AuthType = "OIDC"
+					server.Ok(response, userInfo)
+					return
+				}
+			}
+		}
+	} else if m.Config.Master.DashboardUserName != "" {
+		server.Ok(response, UserInfo{
+			Name: m.Config.Master.DashboardUserName,
+		})
+	}
 }
 
 func (m *Master) getCategories(request *restful.Request, response *restful.Response) {
@@ -1696,7 +1683,8 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	// Extract the ID Token from OAuth2 token.
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
-		// handle missing token
+		server.InternalServerError(restful.NewResponse(w), errors.New("missing id_token"))
+		return
 	}
 	// Parse and verify ID Token payload.
 	idToken, err := m.verifier.Verify(r.Context(), rawIDToken)
@@ -1705,12 +1693,23 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Extract custom claims
-	var claims struct {
-		Email    string `json:"email"`
-		Verified bool   `json:"email_verified"`
-	}
+	var claims UserInfo
 	if err := idToken.Claims(&claims); err != nil {
 		server.InternalServerError(restful.NewResponse(w), err)
 		return
+	}
+	// Set token cache and cookie
+	m.tokenCache.Set(rawIDToken, claims, time.Until(idToken.Expiry))
+	if encoded, err := cookieHandler.Encode("id_token", rawIDToken); err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	} else {
+		http.SetCookie(w, &http.Cookie{
+			Name:    "id_token",
+			Value:   encoded,
+			Path:    "/",
+			Expires: idToken.Expiry,
+		})
+		http.Redirect(w, r, "/", http.StatusFound)
 	}
 }

@@ -184,7 +184,7 @@ type OIDCConfig struct {
 	Issuer       string `mapstructure:"issuer"`
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
-	RedirectURL  string `mapstructure:"redirect_url"`
+	RedirectURL  string `mapstructure:"redirect_url" validate:"endswith=/callback/oauth2"`
 }
 
 func GetDefaultConfig() *Config {
@@ -623,6 +623,7 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.ClickhousePrefix,
 			storage.CHHTTPPrefix,
 			storage.CHHTTPSPrefix,
+			storage.SQLitePrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)
@@ -645,6 +646,7 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.MySQLPrefix,
 			storage.PostgresPrefix,
 			storage.PostgreSQLPrefix,
+			storage.SQLitePrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)

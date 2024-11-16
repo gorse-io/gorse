@@ -70,6 +70,9 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	node := NewNode(ctx, nodeInfo)
 	if node.Type != "" {
 		m.ttlCache.Set(nodeInfo.NodeName, node, ttlcache.DefaultTTL)
+		m.nodesInfoMutex.Lock()
+		m.nodesInfo[nodeInfo.NodeName] = node
+		m.nodesInfoMutex.Unlock()
 	}
 	// marshall config
 	s, err := json.Marshal(m.Config)
@@ -205,18 +208,6 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 		}
 	}
 	return encoderError
-}
-
-// nodeUp handles node information inserted events.
-func (m *Master) nodeUp(ctx context.Context, item *ttlcache.Item[string, *Node]) {
-	node := item.Value()
-	log.Logger().Info("node up",
-		zap.String("node_name", item.Key()),
-		zap.String("node_ip", node.IP),
-		zap.String("node_type", node.Type))
-	m.nodesInfoMutex.Lock()
-	defer m.nodesInfoMutex.Unlock()
-	m.nodesInfo[item.Key()] = node
 }
 
 // nodeDown handles node information timeout events.
