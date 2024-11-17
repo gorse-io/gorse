@@ -27,8 +27,9 @@ import (
 )
 
 var (
-	mySqlDSN    string
-	postgresDSN string
+	mySqlDSN      string
+	postgresDSN   string
+	clickhouseDSN string
 )
 
 func init() {
@@ -41,6 +42,7 @@ func init() {
 	}
 	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
+	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
 }
 
 type MySQLTestSuite struct {
@@ -104,6 +106,34 @@ func (suite *PostgresTestSuite) SetupSuite() {
 
 func TestPostgres(t *testing.T) {
 	suite.Run(t, new(PostgresTestSuite))
+}
+
+type ClickHouseTestSuite struct {
+	baseTestSuite
+}
+
+func (suite *ClickHouseTestSuite) SetupSuite() {
+	var err error
+	// create database
+	databaseComm, err := sql.Open("chhttp", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
+	suite.NoError(err)
+	const dbName = "gorse_data_test"
+	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
+	suite.NoError(err)
+	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	suite.NoError(err)
+	err = databaseComm.Close()
+	suite.NoError(err)
+	// connect database
+	suite.Database, err = Open(clickhouseDSN+dbName+"?mutations_sync=2", "gorse_")
+	suite.NoError(err)
+	// create schema
+	err = suite.Database.Init()
+	suite.NoError(err)
+}
+
+func TestClickHouse(t *testing.T) {
+	suite.Run(t, new(ClickHouseTestSuite))
 }
 
 type SQLiteTestSuite struct {

@@ -100,7 +100,7 @@ jobs:
       - run:
           name: Run tests
           no_output_timeout: 20m
-          command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis"
+          command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
   unit-test-windows:
     executor: win/server-2022
@@ -139,7 +139,7 @@ jobs:
       - run:
           name: Run tests
           no_output_timeout: 20m
-          command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis"
+          command: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
 workflows:
   unit-test:

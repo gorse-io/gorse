@@ -41,6 +41,10 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "data_table_prefix = \"gorse_\"", "data_table_prefix = \"gorse_data_\"", -1)
 	text = strings.Replace(text, "http_cors_domains = []", "http_cors_domains = [\".*\"]", -1)
 	text = strings.Replace(text, "http_cors_methods = []", "http_cors_methods = [\"GET\",\"PATCH\",\"POST\"]", -1)
+	text = strings.Replace(text, "issuer = \"\"", "issuer = \"https://accounts.google.com\"", -1)
+	text = strings.Replace(text, "client_id = \"\"", "client_id = \"client_id\"", -1)
+	text = strings.Replace(text, "client_secret = \"\"", "client_secret = \"client_secret\"", -1)
+	text = strings.Replace(text, "redirect_url = \"\"", "redirect_url = \"http://localhost:8088/callback/oauth2\"", -1)
 	r, err := convert.TOML{}.Decode(bytes.NewBufferString(text))
 	assert.NoError(t, err)
 
@@ -142,6 +146,11 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 1.0, config.Tracing.Ratio)
 			// [experimental]
 			assert.Equal(t, 128, config.Experimental.DeepLearningBatchSize)
+			// [oauth2]
+			assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
+			assert.Equal(t, "client_id", config.OIDC.ClientID)
+			assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
+			assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
 		})
 	}
 }
@@ -180,6 +189,11 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_DASHBOARD_REDACTED", "true"},
 		{"GORSE_ADMIN_API_KEY", "<admin_api_key>"},
 		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
+		{"GORSE_OIDC_ENABLE", "true"},
+		{"GORSE_OIDC_ISSUER", "https://accounts.google.com"},
+		{"GORSE_OIDC_CLIENT_ID", "client_id"},
+		{"GORSE_OIDC_CLIENT_SECRET", "client_secret"},
+		{"GORSE_OIDC_REDIRECT_URL", "http://localhost:8088/callback/oauth2"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -199,10 +213,14 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, 789, config.Master.NumJobs)
 	assert.Equal(t, "user_name", config.Master.DashboardUserName)
 	assert.Equal(t, "password", config.Master.DashboardPassword)
-	assert.Equal(t, "http://127.0.0.1:8888", config.Master.DashboardAuthServer)
 	assert.Equal(t, true, config.Master.DashboardRedacted)
 	assert.Equal(t, "<admin_api_key>", config.Master.AdminAPIKey)
 	assert.Equal(t, "<server_api_key>", config.Server.APIKey)
+	assert.Equal(t, true, config.OIDC.Enable)
+	assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
+	assert.Equal(t, "client_id", config.OIDC.ClientID)
+	assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
+	assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)

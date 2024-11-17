@@ -15,8 +15,8 @@
 package master
 
 import (
-	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -45,11 +45,27 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type UserInfo struct {
+	Name       string `json:"name"`
+	FamilyName string `json:"family_name"`
+	GivenName  string `json:"given_name"`
+	MiddleName string `json:"middle_name"`
+	NickName   string `json:"nickname"`
+	Picture    string `json:"picture"`
+	UpdatedAt  string `json:"updated_at"`
+	Email      string `json:"email"`
+	Verified   bool   `json:"email_verified"`
+	AuthType   string `json:"auth_type"`
+}
 
 func (m *Master) CreateWebService() {
 	ws := m.WebService
@@ -57,6 +73,11 @@ func (m *Master) CreateWebService() {
 	ws.Path("/api/")
 	ws.Filter(m.LoginFilter)
 
+	ws.Route(ws.GET("/dashboard/userinfo").To(m.handleUserInfo).
+		Doc("Get login user information.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", UserInfo{}).
+		Writes(UserInfo{}))
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -221,10 +242,13 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/", http.HandlerFunc(m.dashboard))
 	container.Handle("/login", http.HandlerFunc(m.login))
 	container.Handle("/logout", http.HandlerFunc(m.logout))
+	container.Handle("/callback/oauth2", http.HandlerFunc(m.handleOAuth2Callback))
 	container.Handle("/api/purge", http.HandlerFunc(m.purge))
 	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
 	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
+	container.Handle("/api/dump", http.HandlerFunc(m.dump))
+	container.Handle("/api/restore", http.HandlerFunc(m.restore))
 	if m.workerScheduleHandler == nil {
 		container.Handle("/api/admin/schedule", http.HandlerFunc(m.scheduleAPIHandler))
 	} else {
@@ -304,8 +328,13 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	_, err := staticFileSystem.Open(request.RequestURI)
 	if request.RequestURI == "/" || os.IsNotExist(err) {
 		if !m.checkLogin(request) {
-			http.Redirect(response, request, "/login", http.StatusFound)
-			log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
+			if m.Config.OIDC.Enable {
+				// Redirect to OIDC login
+				http.Redirect(response, request, m.oauth2Config.AuthCodeURL(""), http.StatusFound)
+			} else {
+				http.Redirect(response, request, "/login", http.StatusFound)
+				log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
+			}
 			return
 		}
 		noCache(staticFileServer).ServeHTTP(response, request)
@@ -314,59 +343,15 @@ func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) 
 	staticFileServer.ServeHTTP(response, request)
 }
 
-func (m *Master) checkToken(token string) (bool, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/auth/dashboard/%s", m.Config.Master.DashboardAuthServer, token))
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	if resp.StatusCode == http.StatusOK {
-		return true, nil
-	} else if resp.StatusCode == http.StatusUnauthorized {
-		return false, nil
-	} else {
-		if message, err := io.ReadAll(resp.Body); err != nil {
-			return false, errors.Trace(err)
-		} else {
-			return false, errors.New(string(message))
-		}
-	}
-}
-
 func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 	switch request.Method {
 	case http.MethodGet:
 		log.Logger().Info("GET /login", zap.Int("status_code", http.StatusOK))
 		staticFileServer.ServeHTTP(response, request)
 	case http.MethodPost:
-		token := request.FormValue("token")
 		name := request.FormValue("user_name")
 		pass := request.FormValue("password")
-		if m.Config.Master.DashboardAuthServer != "" {
-			// check access token
-			if isValid, err := m.checkToken(token); err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			} else if !isValid {
-				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
-				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
-				return
-			}
-			// save token to cache
-			if encoded, err := cookieHandler.Encode("token", token); err != nil {
-				server.InternalServerError(restful.NewResponse(response), err)
-				return
-			} else {
-				cookie := &http.Cookie{
-					Name:  "token",
-					Value: encoded,
-					Path:  "/",
-				}
-				http.SetCookie(response, cookie)
-				http.Redirect(response, request, "/", http.StatusFound)
-				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
-				return
-			}
-		} else if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
+		if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
 			if name != m.Config.Master.DashboardUserName || pass != m.Config.Master.DashboardPassword {
 				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
@@ -428,13 +413,11 @@ func (m *Master) checkLogin(request *http.Request) bool {
 	if m.Config.Master.AdminAPIKey != "" && m.Config.Master.AdminAPIKey == request.Header.Get("X-Api-Key") {
 		return true
 	}
-	if m.Config.Master.DashboardAuthServer != "" {
-		if tokenCookie, err := request.Cookie("token"); err == nil {
+	if m.Config.OIDC.Enable {
+		if tokenCookie, err := request.Cookie("id_token"); err == nil {
 			var token string
-			if err = cookieHandler.Decode("token", tokenCookie.Value, &token); err == nil {
-				if isValid, err := m.checkToken(token); err != nil {
-					log.Logger().Error("failed to check access token", zap.Error(err))
-				} else if isValid {
+			if err = cookieHandler.Decode("id_token", tokenCookie.Value, &token); err == nil {
+				if m.tokenCache.Get(token) != nil {
 					return true
 				}
 			}
@@ -454,6 +437,26 @@ func (m *Master) checkLogin(request *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func (m *Master) handleUserInfo(request *restful.Request, response *restful.Response) {
+	if m.Config.OIDC.Enable {
+		if tokenCookie, err := request.Request.Cookie("id_token"); err == nil {
+			var token string
+			if err = cookieHandler.Decode("id_token", tokenCookie.Value, &token); err == nil {
+				if item := m.tokenCache.Get(token); item != nil {
+					userInfo := item.Value()
+					userInfo.AuthType = "OIDC"
+					server.Ok(response, userInfo)
+					return
+				}
+			}
+		}
+	} else if m.Config.Master.DashboardUserName != "" {
+		server.Ok(response, UserInfo{
+			Name: m.Config.Master.DashboardUserName,
+		})
+	}
 }
 
 func (m *Master) getCategories(request *restful.Request, response *restful.Response) {
@@ -881,7 +884,7 @@ func (m *Master) searchDocuments(collection, subset, category string, request *r
 		return
 	}
 	// Get the popular list
-	scores, err := m.CacheClient.SearchDocuments(ctx, collection, subset, []string{category}, offset, m.Config.Recommend.CacheSize)
+	scores, err := m.CacheClient.SearchScores(ctx, collection, subset, []string{category}, offset, m.Config.Recommend.CacheSize)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -962,24 +965,13 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 	switch request.Method {
 	case http.MethodGet:
 		var err error
-		response.Header().Set("Content-Type", "text/csv")
-		response.Header().Set("Content-Disposition", "attachment;filename=users.csv")
-		// write header
-		if _, err = response.Write([]byte("user_id,labels\r\n")); err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-		// write rows
-		userChan, errChan := m.DataClient.GetUserStream(ctx, batchSize)
-		for users := range userChan {
+		response.Header().Set("Content-Type", "application/jsonl")
+		response.Header().Set("Content-Disposition", "attachment;filename=users.jsonl")
+		encoder := json.NewEncoder(response)
+		userStream, errChan := m.DataClient.GetUserStream(ctx, batchSize)
+		for users := range userStream {
 			for _, user := range users {
-				labels, err := json.Marshal(user.Labels)
-				if err != nil {
-					server.InternalServerError(restful.NewResponse(response), err)
-					return
-				}
-				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s\r\n",
-					base.Escape(user.UserId), base.Escape(string(labels))))); err != nil {
+				if err = encoder.Encode(user); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -990,89 +982,62 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 			return
 		}
 	case http.MethodPost:
-		hasHeader := formValue(request, "has-header", "true") == "true"
-		sep := formValue(request, "sep", ",")
-		// field separator must be a single character
-		if len(sep) != 1 {
-			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
-			return
-		}
-		labelSep := formValue(request, "label-sep", "|")
-		fmtString := formValue(request, "format", "ul")
+		// open file
 		file, _, err := request.FormFile("file")
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
 			return
 		}
 		defer file.Close()
-		m.importUsers(ctx, response, file, hasHeader, sep, labelSep, fmtString)
-	}
-}
-
-func (m *Master) importUsers(ctx context.Context, response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
-
-	lineCount := 0
-	timeStart := time.Now()
-	users := make([]data.User, 0)
-	err := base.ReadLines(bufio.NewScanner(file), sep, func(lineNumber int, splits []string) bool {
-		var err error
-		// skip header
-		if hasHeader {
-			hasHeader = false
-			return true
-		}
-		splits, err = format(fmtString, "ul", splits, lineNumber)
-		if err != nil {
-			server.BadRequest(restful.NewResponse(response), err)
-			return false
-		}
-		// 1. user id
-		if err = base.ValidateId(splits[0]); err != nil {
-			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
-			return false
-		}
-		user := data.User{UserId: splits[0]}
-		// 2. labels
-		if splits[1] != "" {
-			var labels any
-			if err = json.Unmarshal([]byte(splits[1]), &labels); err != nil {
-				server.BadRequest(restful.NewResponse(response),
-					fmt.Errorf("invalid labels `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
-				return false
+		// parse and import users
+		decoder := json.NewDecoder(file)
+		lineCount := 0
+		timeStart := time.Now()
+		users := make([]data.User, 0, batchSize)
+		for {
+			// parse line
+			var user data.User
+			if err = decoder.Decode(&user); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				server.BadRequest(restful.NewResponse(response), err)
+				return
 			}
-			user.Labels = labels
+			// validate user id
+			if err = base.ValidateId(user.UserId); err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("invalid user id `%v` at line %d (%s)", user.UserId, lineCount, err.Error()))
+				return
+			}
+			users = append(users, user)
+			// batch insert
+			if len(users) == batchSize {
+				err = m.DataClient.BatchInsertUsers(ctx, users)
+				if err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
+				users = make([]data.User, 0, batchSize)
+			}
+			lineCount++
 		}
-		users = append(users, user)
-		// batch insert
-		if len(users) == batchSize {
+		if len(users) > 0 {
 			err = m.DataClient.BatchInsertUsers(ctx, users)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
-				return false
+				return
 			}
-			users = nil
 		}
-		lineCount++
-		return true
-	})
-	if err != nil {
-		server.BadRequest(restful.NewResponse(response), err)
-		return
+		m.notifyDataImported()
+		timeUsed := time.Since(timeStart)
+		log.Logger().Info("complete import users",
+			zap.Duration("time_used", timeUsed),
+			zap.Int("num_users", lineCount))
+		server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
+	default:
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 	}
-	if len(users) > 0 {
-		err = m.DataClient.BatchInsertUsers(ctx, users)
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-	}
-	m.notifyDataImported()
-	timeUsed := time.Since(timeStart)
-	log.Logger().Info("complete import users",
-		zap.Duration("time_used", timeUsed),
-		zap.Int("num_users", lineCount))
-	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
 func (m *Master) importExportItems(response http.ResponseWriter, request *http.Request) {
@@ -1092,25 +1057,13 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 	switch request.Method {
 	case http.MethodGet:
 		var err error
-		response.Header().Set("Content-Type", "text/csv")
-		response.Header().Set("Content-Disposition", "attachment;filename=items.csv")
-		// write header
-		if _, err = response.Write([]byte("item_id,is_hidden,categories,time_stamp,labels,description\r\n")); err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-		// write rows
-		itemChan, errChan := m.DataClient.GetItemStream(ctx, batchSize, nil)
-		for items := range itemChan {
+		response.Header().Set("Content-Type", "application/jsonl")
+		response.Header().Set("Content-Disposition", "attachment;filename=items.jsonl")
+		encoder := json.NewEncoder(response)
+		itemStream, errChan := m.DataClient.GetItemStream(ctx, batchSize, nil)
+		for items := range itemStream {
 			for _, item := range items {
-				labels, err := json.Marshal(item.Labels)
-				if err != nil {
-					server.InternalServerError(restful.NewResponse(response), err)
-					return
-				}
-				if _, err = response.Write([]byte(fmt.Sprintf("%s,%t,%s,%v,%s,%s\r\n",
-					base.Escape(item.ItemId), item.IsHidden, base.Escape(strings.Join(item.Categories, "|")),
-					item.Timestamp, base.Escape(string(labels)), base.Escape(item.Comment)))); err != nil {
+				if err = encoder.Encode(item); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1121,150 +1074,87 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			return
 		}
 	case http.MethodPost:
-		hasHeader := formValue(request, "has-header", "true") == "true"
-		sep := formValue(request, "sep", ",")
-		// field separator must be a single character
-		if len(sep) != 1 {
-			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
-			return
-		}
-		labelSep := formValue(request, "label-sep", "|")
-		fmtString := formValue(request, "format", "ihctld")
+		// open file
 		file, _, err := request.FormFile("file")
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
 			return
 		}
 		defer file.Close()
-		m.importItems(ctx, response, file, hasHeader, sep, labelSep, fmtString)
-	default:
-		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
-	}
-}
-
-func (m *Master) importItems(ctx context.Context, response http.ResponseWriter, file io.Reader, hasHeader bool, sep, labelSep, fmtString string) {
-	lineCount := 0
-	timeStart := time.Now()
-	items := make([]data.Item, 0)
-	err := base.ReadLines(bufio.NewScanner(file), sep, func(lineNumber int, splits []string) bool {
-		var err error
-		// skip header
-		if hasHeader {
-			hasHeader = false
-			return true
-		}
-		splits, err = format(fmtString, "ihctld", splits, lineNumber)
-		if err != nil {
-			server.BadRequest(restful.NewResponse(response), err)
-			return false
-		}
-		// 1. item id
-		if err = base.ValidateId(splits[0]); err != nil {
-			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
-			return false
-		}
-		item := data.Item{ItemId: splits[0]}
-		// 2. hidden
-		if splits[1] != "" {
-			item.IsHidden, err = strconv.ParseBool(splits[1])
-			if err != nil {
-				server.BadRequest(restful.NewResponse(response),
-					fmt.Errorf("invalid hidden value `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
-				return false
+		// parse and import items
+		decoder := json.NewDecoder(file)
+		lineCount := 0
+		timeStart := time.Now()
+		items := make([]data.Item, 0, batchSize)
+		for {
+			// parse line
+			var item server.Item
+			if err = decoder.Decode(&item); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				server.BadRequest(restful.NewResponse(response), err)
+				return
 			}
-		}
-		// 3. categories
-		if splits[2] != "" {
-			item.Categories = strings.Split(splits[2], labelSep)
+			// validate item id
+			if err = base.ValidateId(item.ItemId); err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("invalid item id `%v` at line %d (%s)", item.ItemId, lineCount, err.Error()))
+				return
+			}
+			// validate categories
 			for _, category := range item.Categories {
 				if err = base.ValidateId(category); err != nil {
 					server.BadRequest(restful.NewResponse(response),
-						fmt.Errorf("invalid category `%v` at line %d (%s)", category, lineNumber, err.Error()))
-					return false
+						fmt.Errorf("invalid category `%v` at line %d (%s)", category, lineCount, err.Error()))
+					return
 				}
 			}
-		}
-		// 4. timestamp
-		if splits[3] != "" {
-			item.Timestamp, err = dateparse.ParseAny(splits[3])
-			if err != nil {
-				server.BadRequest(restful.NewResponse(response),
-					fmt.Errorf("failed to parse datetime `%v` at line %v", splits[1], lineNumber))
-				return false
+			// parse timestamp
+			var timestamp time.Time
+			if item.Timestamp != "" {
+				timestamp, err = dateparse.ParseAny(item.Timestamp)
+				if err != nil {
+					server.BadRequest(restful.NewResponse(response),
+						fmt.Errorf("failed to parse datetime `%v` at line %v", item.Timestamp, lineCount))
+					return
+				}
 			}
-		}
-		// 5. labels
-		if splits[4] != "" {
-			var labels any
-			if err = json.Unmarshal([]byte(splits[4]), &labels); err != nil {
-				server.BadRequest(restful.NewResponse(response),
-					fmt.Errorf("failed to parse labels `%v` at line %v", splits[4], lineNumber))
-				return false
+			items = append(items, data.Item{
+				ItemId:     item.ItemId,
+				IsHidden:   item.IsHidden,
+				Categories: item.Categories,
+				Timestamp:  timestamp,
+				Labels:     item.Labels,
+				Comment:    item.Comment,
+			})
+			// batch insert
+			if len(items) == batchSize {
+				err = m.DataClient.BatchInsertItems(ctx, items)
+				if err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
+				items = make([]data.Item, 0, batchSize)
 			}
-			item.Labels = labels
+			lineCount++
 		}
-		// 6. comment
-		item.Comment = splits[5]
-		items = append(items, item)
-		// batch insert
-		if len(items) == batchSize {
+		if len(items) > 0 {
 			err = m.DataClient.BatchInsertItems(ctx, items)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
-				return false
+				return
 			}
-			items = nil
 		}
-		lineCount++
-		return true
-	})
-	if err != nil {
-		server.BadRequest(restful.NewResponse(response), err)
-		return
+		m.notifyDataImported()
+		timeUsed := time.Since(timeStart)
+		log.Logger().Info("complete import items",
+			zap.Duration("time_used", timeUsed),
+			zap.Int("num_items", lineCount))
+		server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
+	default:
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 	}
-	if len(items) > 0 {
-		err = m.DataClient.BatchInsertItems(ctx, items)
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-	}
-	m.notifyDataImported()
-	timeUsed := time.Since(timeStart)
-	log.Logger().Info("complete import items",
-		zap.Duration("time_used", timeUsed),
-		zap.Int("num_items", lineCount))
-	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
-}
-
-func format(inFmt, outFmt string, s []string, lineCount int) ([]string, error) {
-	if len(s) < len(inFmt) {
-		log.Logger().Error("number of fields mismatch",
-			zap.Int("expect", len(inFmt)),
-			zap.Int("actual", len(s)))
-		return nil, fmt.Errorf("number of fields mismatch at line %v", lineCount)
-	}
-	if inFmt == outFmt {
-		return s, nil
-	}
-	pool := make(map[uint8]string)
-	for i := range inFmt {
-		pool[inFmt[i]] = s[i]
-	}
-	out := make([]string, len(outFmt))
-	for i, c := range outFmt {
-		out[i] = pool[uint8(c)]
-	}
-	return out, nil
-}
-
-func formValue(request *http.Request, fieldName, defaultValue string) string {
-	value := request.FormValue(fieldName)
-	if value == "" {
-		return defaultValue
-	}
-	return value
 }
 
 func (m *Master) importExportFeedback(response http.ResponseWriter, request *http.Request) {
@@ -1279,19 +1169,13 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 	switch request.Method {
 	case http.MethodGet:
 		var err error
-		response.Header().Set("Content-Type", "text/csv")
-		response.Header().Set("Content-Disposition", "attachment;filename=feedback.csv")
-		// write header
-		if _, err = response.Write([]byte("feedback_type,user_id,item_id,time_stamp\r\n")); err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-		// write rows
-		feedbackChan, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, data.WithEndTime(*m.Config.Now()))
-		for feedback := range feedbackChan {
+		response.Header().Set("Content-Type", "application/jsonl")
+		response.Header().Set("Content-Disposition", "attachment;filename=feedback.jsonl")
+		encoder := json.NewEncoder(response)
+		feedbackStream, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, data.WithEndTime(*m.Config.Now()))
+		for feedback := range feedbackStream {
 			for _, v := range feedback {
-				if _, err = response.Write([]byte(fmt.Sprintf("%s,%s,%s,%v\r\n",
-					base.Escape(v.FeedbackType), base.Escape(v.UserId), base.Escape(v.ItemId), v.Timestamp))); err != nil {
+				if err = encoder.Encode(v); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1302,109 +1186,95 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			return
 		}
 	case http.MethodPost:
-		hasHeader := formValue(request, "has-header", "true") == "true"
-		sep := formValue(request, "sep", ",")
-		// field separator must be a single character
-		if len(sep) != 1 {
-			server.BadRequest(restful.NewResponse(response), fmt.Errorf("field separator must be a single character"))
-			return
-		}
-		fmtString := formValue(request, "format", "fuit")
-		// import items
+		// open file
 		file, _, err := request.FormFile("file")
 		if err != nil {
 			server.BadRequest(restful.NewResponse(response), err)
 			return
 		}
 		defer file.Close()
-		m.importFeedback(ctx, response, file, hasHeader, sep, fmtString)
-	default:
-		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
-	}
-}
-
-func (m *Master) importFeedback(ctx context.Context, response http.ResponseWriter, file io.Reader, hasHeader bool, sep, fmtString string) {
-	var err error
-	scanner := bufio.NewScanner(file)
-	lineCount := 0
-	timeStart := time.Now()
-	feedbacks := make([]data.Feedback, 0)
-	err = base.ReadLines(scanner, sep, func(lineNumber int, splits []string) bool {
-		if hasHeader {
-			hasHeader = false
-			return true
+		// parse and import feedback
+		decoder := json.NewDecoder(file)
+		lineCount := 0
+		timeStart := time.Now()
+		feedbacks := make([]data.Feedback, 0, batchSize)
+		for {
+			// parse line
+			var feedback server.Feedback
+			if err = decoder.Decode(&feedback); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				server.BadRequest(restful.NewResponse(response), err)
+				return
+			}
+			// validate feedback type
+			if err = base.ValidateId(feedback.FeedbackType); err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("invalid feedback type `%v` at line %d (%s)", feedback.FeedbackType, lineCount, err.Error()))
+				return
+			}
+			// validate user id
+			if err = base.ValidateId(feedback.UserId); err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("invalid user id `%v` at line %d (%s)", feedback.UserId, lineCount, err.Error()))
+				return
+			}
+			// validate item id
+			if err = base.ValidateId(feedback.ItemId); err != nil {
+				server.BadRequest(restful.NewResponse(response),
+					fmt.Errorf("invalid item id `%v` at line %d (%s)", feedback.ItemId, lineCount, err.Error()))
+				return
+			}
+			// parse timestamp
+			var timestamp time.Time
+			if feedback.Timestamp != "" {
+				timestamp, err = dateparse.ParseAny(feedback.Timestamp)
+				if err != nil {
+					server.BadRequest(restful.NewResponse(response),
+						fmt.Errorf("failed to parse datetime `%v` at line %d", feedback.Timestamp, lineCount))
+					return
+				}
+			}
+			feedbacks = append(feedbacks, data.Feedback{
+				FeedbackKey: feedback.FeedbackKey,
+				Timestamp:   timestamp,
+				Comment:     feedback.Comment,
+			})
+			// batch insert
+			if len(feedbacks) == batchSize {
+				// batch insert to data store
+				err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
+					m.Config.Server.AutoInsertUser,
+					m.Config.Server.AutoInsertItem, true)
+				if err != nil {
+					server.InternalServerError(restful.NewResponse(response), err)
+					return
+				}
+				feedbacks = make([]data.Feedback, 0, batchSize)
+			}
+			lineCount++
 		}
-		// reorder fields
-		splits, err = format(fmtString, "fuit", splits, lineNumber)
-		if err != nil {
-			server.BadRequest(restful.NewResponse(response), err)
-			return false
-		}
-		feedback := data.Feedback{}
-		// 1. feedback type
-		feedback.FeedbackType = splits[0]
-		if err = base.ValidateId(splits[0]); err != nil {
-			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid feedback type `%v` at line %d (%s)", splits[0], lineNumber, err.Error()))
-			return false
-		}
-		// 2. user id
-		if err = base.ValidateId(splits[1]); err != nil {
-			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid user id `%v` at line %d (%s)", splits[1], lineNumber, err.Error()))
-			return false
-		}
-		feedback.UserId = splits[1]
-		// 3. item id
-		if err = base.ValidateId(splits[2]); err != nil {
-			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("invalid item id `%v` at line %d (%s)", splits[2], lineNumber, err.Error()))
-			return false
-		}
-		feedback.ItemId = splits[2]
-		feedback.Timestamp, err = dateparse.ParseAny(splits[3])
-		if err != nil {
-			server.BadRequest(restful.NewResponse(response),
-				fmt.Errorf("failed to parse datetime `%v` at line %d", splits[3], lineNumber))
-			return false
-		}
-		feedbacks = append(feedbacks, feedback)
-		// batch insert
-		if len(feedbacks) == batchSize {
-			// batch insert to data store
+		// insert to cache store
+		if len(feedbacks) > 0 {
+			// insert to data store
 			err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
 				m.Config.Server.AutoInsertUser,
 				m.Config.Server.AutoInsertItem, true)
 			if err != nil {
 				server.InternalServerError(restful.NewResponse(response), err)
-				return false
+				return
 			}
-			feedbacks = nil
 		}
-		lineCount++
-		return true
-	})
-	if err != nil {
-		server.BadRequest(restful.NewResponse(response), err)
-		return
+		m.notifyDataImported()
+		timeUsed := time.Since(timeStart)
+		log.Logger().Info("complete import feedback",
+			zap.Duration("time_used", timeUsed),
+			zap.Int("num_items", lineCount))
+		server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
+	default:
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 	}
-	// insert to cache store
-	if len(feedbacks) > 0 {
-		// insert to data store
-		err = m.DataClient.BatchInsertFeedback(ctx, feedbacks,
-			m.Config.Server.AutoInsertUser,
-			m.Config.Server.AutoInsertItem, true)
-		if err != nil {
-			server.InternalServerError(restful.NewResponse(response), err)
-			return
-		}
-	}
-	m.notifyDataImported()
-	timeUsed := time.Since(timeStart)
-	log.Logger().Info("complete import feedback",
-		zap.Duration("time_used", timeUsed),
-		zap.Int("num_items", lineCount))
-	server.Ok(restful.NewResponse(response), server.Success{RowAffected: lineCount})
 }
 
 var checkList = mapset.NewSet("delete_users", "delete_items", "delete_feedback", "delete_cache")
@@ -1498,4 +1368,351 @@ func (s *Master) checkAdmin(request *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+const (
+	EOF            = int64(0)
+	UserStream     = int64(-1)
+	ItemStream     = int64(-2)
+	FeedbackStream = int64(-3)
+)
+
+type DumpStats struct {
+	Users    int
+	Items    int
+	Feedback int
+	Duration time.Duration
+}
+
+func writeDump[T proto.Message](w io.Writer, data T) error {
+	bytes, err := proto.Marshal(data)
+	if err != nil {
+		return err
+	}
+	if err = binary.Write(w, binary.LittleEndian, int64(len(bytes))); err != nil {
+		return err
+	}
+	if _, err = w.Write(bytes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func readDump[T proto.Message](r io.Reader, data T) (int64, error) {
+	var size int64
+	if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
+		return 0, err
+	}
+	if size <= 0 {
+		return size, nil
+	}
+	bytes := make([]byte, size)
+	if _, err := io.ReadFull(r, bytes); err != nil {
+		return 0, err
+	}
+	return size, proto.Unmarshal(bytes, data)
+}
+
+func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
+	if !m.checkAdmin(request) {
+		writeError(response, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if request.Method != http.MethodGet {
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	response.Header().Set("Content-Type", "application/octet-stream")
+	var stats DumpStats
+	start := time.Now()
+	// dump users
+	if err := binary.Write(response, binary.LittleEndian, UserStream); err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	userStream, errChan := m.DataClient.GetUserStream(context.Background(), batchSize)
+	for users := range userStream {
+		for _, user := range users {
+			labels, err := json.Marshal(user.Labels)
+			if err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if err := writeDump(response, &protocol.User{
+				UserId:  user.UserId,
+				Labels:  labels,
+				Comment: user.Comment,
+			}); err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
+			stats.Users++
+		}
+	}
+	if err := <-errChan; err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// dump items
+	if err := binary.Write(response, binary.LittleEndian, ItemStream); err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	itemStream, errChan := m.DataClient.GetItemStream(context.Background(), batchSize, nil)
+	for items := range itemStream {
+		for _, item := range items {
+			labels, err := json.Marshal(item.Labels)
+			if err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if err := writeDump(response, &protocol.Item{
+				ItemId:     item.ItemId,
+				IsHidden:   item.IsHidden,
+				Categories: item.Categories,
+				Timestamp:  timestamppb.New(item.Timestamp),
+				Labels:     labels,
+				Comment:    item.Comment,
+			}); err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
+			stats.Items++
+		}
+	}
+	if err := <-errChan; err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// dump feedback
+	if err := binary.Write(response, binary.LittleEndian, FeedbackStream); err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	feedbackStream, errChan := m.DataClient.GetFeedbackStream(context.Background(), batchSize, data.WithEndTime(*m.Config.Now()))
+	for feedbacks := range feedbackStream {
+		for _, feedback := range feedbacks {
+			if err := writeDump(response, &protocol.Feedback{
+				FeedbackType: feedback.FeedbackType,
+				UserId:       feedback.UserId,
+				ItemId:       feedback.ItemId,
+				Timestamp:    timestamppb.New(feedback.Timestamp),
+				Comment:      feedback.Comment,
+			}); err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
+			stats.Feedback++
+		}
+	}
+	if err := <-errChan; err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// dump EOF
+	if err := binary.Write(response, binary.LittleEndian, EOF); err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	stats.Duration = time.Since(start)
+	log.Logger().Info("complete dump",
+		zap.Int("users", stats.Users),
+		zap.Int("items", stats.Items),
+		zap.Int("feedback", stats.Feedback),
+		zap.Duration("duration", stats.Duration))
+	server.Ok(restful.NewResponse(response), stats)
+}
+
+func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
+	if !m.checkAdmin(request) {
+		writeError(response, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if request.Method != http.MethodPost {
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var (
+		flag  int64
+		err   error
+		stats DumpStats
+		start = time.Now()
+	)
+	if err = binary.Read(request.Body, binary.LittleEndian, &flag); err != nil {
+		if errors.Is(err, io.EOF) {
+			server.Ok(restful.NewResponse(response), struct{}{})
+			return
+		} else {
+			writeError(response, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	for flag != EOF {
+		switch flag {
+		case UserStream:
+			users := make([]data.User, 0, batchSize)
+			for {
+				var user protocol.User
+				if flag, err = readDump(request.Body, &user); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+				if flag <= 0 {
+					break
+				}
+				var labels any
+				if err := json.Unmarshal(user.Labels, &labels); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+				users = append(users, data.User{
+					UserId:  user.UserId,
+					Labels:  labels,
+					Comment: user.Comment,
+				})
+				stats.Users++
+				if len(users) == batchSize {
+					if err := m.DataClient.BatchInsertUsers(context.Background(), users); err != nil {
+						writeError(response, http.StatusInternalServerError, err.Error())
+						return
+					}
+					users = users[:0]
+				}
+			}
+			if len(users) > 0 {
+				if err := m.DataClient.BatchInsertUsers(context.Background(), users); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+		case ItemStream:
+			items := make([]data.Item, 0, batchSize)
+			for {
+				var item protocol.Item
+				if flag, err = readDump(request.Body, &item); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+				if flag <= 0 {
+					break
+				}
+				var labels any
+				if err := json.Unmarshal(item.Labels, &labels); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+				items = append(items, data.Item{
+					ItemId:     item.ItemId,
+					IsHidden:   item.IsHidden,
+					Categories: item.Categories,
+					Timestamp:  item.Timestamp.AsTime(),
+					Labels:     labels,
+					Comment:    item.Comment,
+				})
+				stats.Items++
+				if len(items) == batchSize {
+					if err := m.DataClient.BatchInsertItems(context.Background(), items); err != nil {
+						writeError(response, http.StatusInternalServerError, err.Error())
+						return
+					}
+					items = items[:0]
+				}
+			}
+			if len(items) > 0 {
+				if err := m.DataClient.BatchInsertItems(context.Background(), items); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+		case FeedbackStream:
+			feedbacks := make([]data.Feedback, 0, batchSize)
+			for {
+				var feedback protocol.Feedback
+				if flag, err = readDump(request.Body, &feedback); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+				if flag <= 0 {
+					break
+				}
+				feedbacks = append(feedbacks, data.Feedback{
+					FeedbackKey: data.FeedbackKey{
+						FeedbackType: feedback.FeedbackType,
+						UserId:       feedback.UserId,
+						ItemId:       feedback.ItemId,
+					},
+					Timestamp: feedback.Timestamp.AsTime(),
+					Comment:   feedback.Comment,
+				})
+				stats.Feedback++
+				if len(feedbacks) == batchSize {
+					if err := m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
+						writeError(response, http.StatusInternalServerError, err.Error())
+						return
+					}
+					feedbacks = feedbacks[:0]
+				}
+			}
+			if len(feedbacks) > 0 {
+				if err := m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
+					writeError(response, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+		default:
+			writeError(response, http.StatusInternalServerError, fmt.Sprintf("unknown flag %v", flag))
+			return
+		}
+	}
+	stats.Duration = time.Since(start)
+	log.Logger().Info("complete restore",
+		zap.Int("users", stats.Users),
+		zap.Int("items", stats.Items),
+		zap.Int("feedback", stats.Feedback),
+		zap.Duration("duration", stats.Duration))
+	server.Ok(restful.NewResponse(response), stats)
+}
+
+func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
+	// Verify state and errors.
+	oauth2Token, err := m.oauth2Config.Exchange(r.Context(), r.URL.Query().Get("code"))
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	}
+	// Extract the ID Token from OAuth2 token.
+	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+	if !ok {
+		server.InternalServerError(restful.NewResponse(w), errors.New("missing id_token"))
+		return
+	}
+	// Parse and verify ID Token payload.
+	idToken, err := m.verifier.Verify(r.Context(), rawIDToken)
+	if err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	}
+	// Extract custom claims
+	var claims UserInfo
+	if err := idToken.Claims(&claims); err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	}
+	// Set token cache and cookie
+	m.tokenCache.Set(rawIDToken, claims, time.Until(idToken.Expiry))
+	if encoded, err := cookieHandler.Encode("id_token", rawIDToken); err != nil {
+		server.InternalServerError(restful.NewResponse(w), err)
+		return
+	} else {
+		http.SetCookie(w, &http.Cookie{
+			Name:    "id_token",
+			Value:   encoded,
+			Path:    "/",
+			Expires: idToken.Expiry,
+		})
+		http.Redirect(w, r, "/", http.StatusFound)
+		log.Logger().Info("login success via OIDC",
+			zap.String("name", claims.Name),
+			zap.String("email", claims.Email))
+	}
 }
