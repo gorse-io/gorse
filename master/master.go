@@ -41,6 +41,7 @@ import (
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.opentelemetry.io/otel"
@@ -223,7 +224,8 @@ func (m *Master) Serve() {
 	go m.ttlCache.Start()
 
 	// connect data database
-	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
@@ -233,7 +235,8 @@ func (m *Master) Serve() {
 	}
 
 	// connect cache database
-	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix)
+	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix,
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 	if err != nil {
 		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.CacheStore)))
