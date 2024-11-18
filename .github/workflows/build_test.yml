@@ -238,7 +238,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Test MariaDB
-        run: go test ./storage/data -run ^TestMySQL_
+        run: go test ./storage/data -run TestMySQL
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
 

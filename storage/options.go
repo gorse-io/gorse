@@ -14,7 +14,7 @@ func WithIsolationLevel(isolationLevel string) Option {
 
 func NewOptions(opts ...Option) Options {
 	opt := Options{
-		IsolationLevel: "READ-COMMITTED",
+		IsolationLevel: "READ-UNCOMMITTED",
 	}
 	for _, o := range opts {
 		o(&opt)
