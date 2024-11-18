@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -300,7 +301,7 @@ type Database interface {
 }
 
 // Open a connection to a database.
-func Open(path, tablePrefix string) (Database, error) {
+func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 	var err error
 	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) {
 		opt, err := redis.ParseURL(path)
@@ -350,6 +351,7 @@ func Open(path, tablePrefix string) (Database, error) {
 		return database, nil
 	} else if strings.HasPrefix(path, storage.MySQLPrefix) {
 		name := path[len(storage.MySQLPrefix):]
+		option := storage.NewOptions(opts...)
 		// probe isolation variable name
 		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
 		if err != nil {
@@ -357,7 +359,7 @@ func Open(path, tablePrefix string) (Database, error) {
 		}
 		// append parameters
 		if name, err = storage.AppendMySQLParams(name, map[string]string{
-			isolationVarName: "'READ-UNCOMMITTED'",
+			isolationVarName: fmt.Sprintf("'%s'", option.IsolationLevel),
 			"parseTime":      "true",
 		}); err != nil {
 			return nil, errors.Trace(err)

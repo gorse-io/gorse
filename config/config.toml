@@ -29,6 +29,11 @@ cache_table_prefix = ""
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
 data_table_prefix = ""
 
+[database.mysql]
+
+# Transaction isolation level. The default value is "READ-UNCOMMITTED".
+isolation_level = "READ-UNCOMMITTED"
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.

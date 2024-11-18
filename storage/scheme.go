@@ -77,7 +77,7 @@ func ProbeMySQLIsolationVariableName(dsn string) (string, error) {
 		return "", errors.Trace(err)
 	}
 	defer connection.Close()
-	rows, err := connection.Query("SHOW VARIABLES LIKE '%isolation%'")
+	rows, err := connection.Query("SHOW VARIABLES WHERE variable_name = 'transaction_isolation' OR variable_name = 'tx_isolation'")
 	if err != nil {
 		return "", errors.Trace(err)
 	}
