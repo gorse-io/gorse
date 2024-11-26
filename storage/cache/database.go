@@ -76,9 +76,9 @@ const (
 	//	Recommendation digest      - offline_recommend_digest/{user_id}
 	OfflineRecommendDigest = "offline_recommend_digest"
 
-	Leaderboard = "leaderboard"
-	Latest      = "latest"
-	Popular     = "popular"
+	NonPersonalized = "non-personalized"
+	Latest          = "latest"
+	Popular         = "popular"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
@@ -109,7 +109,7 @@ const (
 	MatchingIndexRecall        = "matching_index_recall"
 )
 
-var ItemCache = []string{Leaderboard, ItemNeighbors, OfflineRecommend}
+var ItemCache = []string{NonPersonalized, ItemNeighbors, OfflineRecommend}
 
 var (
 	ErrObjectNotExist = errors.NotFoundf("object")

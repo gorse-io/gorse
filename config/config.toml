@@ -116,7 +116,7 @@ item_ttl = 0
 # The time window of popular items. The default values is 4320h.
 popular_window = "720h"
 
-[[recommend.leaderboards]]
+[[recommend.non-personalized]]
 
 # The name of the leaderboard.
 name = "most_starred_weekly"

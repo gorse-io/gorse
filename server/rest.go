@@ -650,20 +650,20 @@ func (s *RestServer) searchDocuments(collection, subset, category string, isItem
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
 	log.ResponseLogger(response).Debug("get category popular items in category", zap.String("category", category))
-	s.searchDocuments(cache.Leaderboard, cache.Popular, category, true, request, response)
+	s.searchDocuments(cache.NonPersonalized, cache.Popular, category, true, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
 	log.ResponseLogger(response).Debug("get category latest items in category", zap.String("category", category))
-	s.searchDocuments(cache.Leaderboard, cache.Latest, category, true, request, response)
+	s.searchDocuments(cache.NonPersonalized, cache.Latest, category, true, request, response)
 }
 
 func (s *RestServer) getLeaderboard(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	category := request.QueryParameter("category")
 	log.ResponseLogger(response).Debug("get leaderboard", zap.String("name", name))
-	s.searchDocuments(cache.Leaderboard, name, category, false, request, response)
+	s.searchDocuments(cache.NonPersonalized, name, category, false, request, response)
 }
 
 // get feedback by item-id with feedback type
@@ -946,7 +946,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		items, err := s.CacheClient.SearchScores(ctx.context, cache.Leaderboard, cache.Latest, ctx.categories, 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Latest, ctx.categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -966,7 +966,7 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		items, err := s.CacheClient.SearchScores(ctx.context, cache.Leaderboard, cache.Popular, ctx.categories, 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Popular, ctx.categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1396,7 +1396,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 			Comment:    item.Comment,
 		})
 		// insert to latest items cache
-		if err = s.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Latest, []cache.Score{{
+		if err = s.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{{
 			Id:         item.ItemId,
 			Score:      float64(timestamp.Unix()),
 			Categories: withWildCard(item.Categories),
@@ -1517,7 +1517,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	}
 	// add item to latest items cache
 	if patch.Timestamp != nil {
-		if err := s.CacheClient.UpdateScores(ctx, []string{cache.Leaderboard}, cache.Latest, itemId, cache.ScorePatch{Score: proto.Float64(float64(patch.Timestamp.Unix()))}); err != nil {
+		if err := s.CacheClient.UpdateScores(ctx, []string{cache.NonPersonalized}, cache.Latest, itemId, cache.ScorePatch{Score: proto.Float64(float64(patch.Timestamp.Unix()))}); err != nil {
 			InternalServerError(response, err)
 			return
 		}

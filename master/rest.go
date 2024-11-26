@@ -924,12 +924,12 @@ func (m *Master) searchDocuments(collection, subset, category string, request *r
 // getPopular gets popular items from database.
 func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.searchDocuments(cache.PopularItems, "", category, request, response, data.Item{})
+	m.searchDocuments(cache.NonPersonalized, cache.Popular, category, request, response, data.Item{})
 }
 
 func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
 	category := request.PathParameter("category")
-	m.searchDocuments(cache.LatestItems, "", category, request, response, data.Item{})
+	m.searchDocuments(cache.NonPersonalized, cache.Latest, category, request, response, data.Item{})
 }
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {

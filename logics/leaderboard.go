@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package recommend
+package logics
 
 import (
 	"github.com/expr-lang/expr"
@@ -36,7 +36,7 @@ type LeaderBoard struct {
 	heap       *heap.TopKFilter[cache.Score, float64]
 }
 
-func NewLeaderBoard(cfg config.LeaderBoardConfig, n int, timestamp time.Time) (*LeaderBoard, error) {
+func NewLeaderBoard(cfg config.NonPersonalizedConfig, n int, timestamp time.Time) (*LeaderBoard, error) {
 	// Compile score expression
 	scoreFunc, err := expr.Compile(cfg.Score, expr.Env(map[string]any{
 		"item":     data.Item{},
@@ -73,14 +73,14 @@ func NewLeaderBoard(cfg config.LeaderBoardConfig, n int, timestamp time.Time) (*
 }
 
 func NewLatest(n int, timestamp time.Time) *LeaderBoard {
-	return lo.Must(NewLeaderBoard(config.LeaderBoardConfig{
+	return lo.Must(NewLeaderBoard(config.NonPersonalizedConfig{
 		Name:  "latest",
 		Score: "item.Timestamp.Unix()",
 	}, n, timestamp))
 }
 
 func NewPopular(n int, timestamp time.Time) *LeaderBoard {
-	return lo.Must(NewLeaderBoard(config.LeaderBoardConfig{
+	return lo.Must(NewLeaderBoard(config.NonPersonalizedConfig{
 		Name:  "popular",
 		Score: "len(feedback)",
 	}, n, timestamp))

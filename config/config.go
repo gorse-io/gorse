@@ -101,18 +101,18 @@ type ServerConfig struct {
 
 // RecommendConfig is the configuration of recommendation setup.
 type RecommendConfig struct {
-	CacheSize     int                 `mapstructure:"cache_size" validate:"gt=0"`
-	CacheExpire   time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
-	ActiveUserTTL int                 `mapstructure:"active_user_ttl" validate:"gte=0"`
-	DataSource    DataSourceConfig    `mapstructure:"data_source"`
-	LeaderBoards  []LeaderBoardConfig `mapstructure:"leaderboards" validate:"dive"`
-	Popular       PopularConfig       `mapstructure:"popular"`
-	UserNeighbors NeighborsConfig     `mapstructure:"user_neighbors"`
-	ItemNeighbors NeighborsConfig     `mapstructure:"item_neighbors"`
-	Collaborative CollaborativeConfig `mapstructure:"collaborative"`
-	Replacement   ReplacementConfig   `mapstructure:"replacement"`
-	Offline       OfflineConfig       `mapstructure:"offline"`
-	Online        OnlineConfig        `mapstructure:"online"`
+	CacheSize       int                     `mapstructure:"cache_size" validate:"gt=0"`
+	CacheExpire     time.Duration           `mapstructure:"cache_expire" validate:"gt=0"`
+	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
+	DataSource      DataSourceConfig        `mapstructure:"data_source"`
+	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
+	Popular         PopularConfig           `mapstructure:"popular"`
+	UserNeighbors   NeighborsConfig         `mapstructure:"user_neighbors"`
+	ItemNeighbors   NeighborsConfig         `mapstructure:"item_neighbors"`
+	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
+	Replacement     ReplacementConfig       `mapstructure:"replacement"`
+	Offline         OfflineConfig           `mapstructure:"offline"`
+	Online          OnlineConfig            `mapstructure:"online"`
 }
 
 type DataSourceConfig struct {
@@ -122,7 +122,7 @@ type DataSourceConfig struct {
 	ItemTTL               uint     `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
 }
 
-type LeaderBoardConfig struct {
+type NonPersonalizedConfig struct {
 	Name   string `mapstructure:"name"`
 	Score  string `mapstructure:"score" validate:"required,item_expr"`
 	Filter string `mapstructure:"filter" validate:"item_expr"`

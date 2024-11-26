@@ -243,7 +243,7 @@ func (suite *ServerTestSuite) TestItems() {
 		},
 	}
 	// insert popular scores
-	err := suite.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Popular, []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
 		{Id: "0", Score: 10},
 		{Id: "2", Score: 12},
 		{Id: "4", Score: 14},
@@ -822,12 +822,12 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 		//{"User Neighbors", cache.Collection(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
 		{"Item Neighbors", cache.ItemNeighbors, "0", "", "/api/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.ItemNeighbors, "0", "0", "/api/item/0/neighbors/0"},
-		{"LatestItems", cache.Leaderboard, cache.Latest, "", "/api/latest/"},
-		{"LatestItemsCategory", cache.Leaderboard, cache.Latest, "0", "/api/latest/0"},
-		{"PopularItems", cache.Leaderboard, cache.Popular, "", "/api/popular/"},
-		{"PopularItemsCategory", cache.Leaderboard, cache.Popular, "0", "/api/popular/0"},
-		{"Leaderboard", cache.Leaderboard, "trending", "", "/api/leaderboard/trending"},
-		{"LeaderboardCategory", cache.Leaderboard, "trending", "0", "/api/leaderboard/trending"},
+		{"LatestItems", cache.NonPersonalized, cache.Latest, "", "/api/latest/"},
+		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "0", "/api/latest/0"},
+		{"PopularItems", cache.NonPersonalized, cache.Popular, "", "/api/popular/"},
+		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "0", "/api/popular/0"},
+		{"NonPersonalized", cache.NonPersonalized, "trending", "", "/api/leaderboard/trending"},
+		{"LeaderboardCategory", cache.NonPersonalized, "trending", "0", "/api/leaderboard/trending"},
 		{"Offline Recommend", cache.OfflineRecommend, "0", "", "/api/intermediate/recommend/0"},
 		{"Offline Recommend in Category", cache.OfflineRecommend, "0", "0", "/api/intermediate/recommend/0/0"},
 	}
@@ -1417,26 +1417,26 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		{Id: "104", Score: 96, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert latest
-	err = suite.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Latest, []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
 		{Id: "5", Score: 95, Categories: []string{""}},
 		{Id: "6", Score: 94, Categories: []string{""}},
 		{Id: "7", Score: 93, Categories: []string{""}},
 		{Id: "8", Score: 92, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Latest, []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
 		{Id: "105", Score: 95, Categories: []string{"*"}},
 		{Id: "106", Score: 94, Categories: []string{"*"}},
 		{Id: "107", Score: 93, Categories: []string{"*"}},
 		{Id: "108", Score: 92, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert popular
-	err = suite.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Popular, []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
 		{Id: "9", Score: 91, Categories: []string{""}},
 		{Id: "10", Score: 90, Categories: []string{""}},
 		{Id: "11", Score: 89, Categories: []string{""}},
 		{Id: "12", Score: 88, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Popular, []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
 		{Id: "109", Score: 91, Categories: []string{"*"}},
 		{Id: "110", Score: 90, Categories: []string{"*"}},
 		{Id: "111", Score: 89, Categories: []string{"*"}},
@@ -1676,9 +1676,9 @@ func (suite *ServerTestSuite) TestVisibility() {
 		})
 	}
 	lo.Reverse(documents)
-	err := suite.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Latest, documents)
+	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, documents)
 	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.Leaderboard, cache.Popular, documents)
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, documents)
 	assert.NoError(t, err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemNeighbors, "100", documents)
 	assert.NoError(t, err)

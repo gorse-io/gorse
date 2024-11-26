@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package recommend
+package logics
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -60,7 +60,7 @@ func TestPopular(t *testing.T) {
 
 func TestFilter(t *testing.T) {
 	timestamp := time.Now()
-	latest, err := NewLeaderBoard(config.LeaderBoardConfig{
+	latest, err := NewLeaderBoard(config.NonPersonalizedConfig{
 		Name:   "latest",
 		Score:  "item.Timestamp.Unix()",
 		Filter: "!item.IsHidden",

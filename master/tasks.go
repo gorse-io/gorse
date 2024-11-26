@@ -91,10 +91,11 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save popular items to cache
-	if err = m.CacheClient.AddScores(ctx, cache.PopularItems, "", popularItems.ToSlice()); err != nil {
+	if err = m.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, popularItems.ToSlice()); err != nil {
 		log.Logger().Error("failed to cache popular items", zap.Error(err))
 	}
-	if err = m.CacheClient.DeleteScores(ctx, []string{cache.PopularItems}, cache.ScoreCondition{Before: &popularItems.Timestamp}); err != nil {
+	if err = m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized},
+		cache.ScoreCondition{Subset: proto.String(cache.Popular), Before: &popularItems.Timestamp}); err != nil {
 		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), time.Now())); err != nil {
@@ -102,10 +103,11 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// save the latest items to cache
-	if err = m.CacheClient.AddScores(ctx, cache.LatestItems, "", latestItems.ToSlice()); err != nil {
+	if err = m.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, latestItems.ToSlice()); err != nil {
 		log.Logger().Error("failed to cache latest items", zap.Error(err))
 	}
-	if err = m.CacheClient.DeleteScores(ctx, []string{cache.LatestItems}, cache.ScoreCondition{Before: &latestItems.Timestamp}); err != nil {
+	if err = m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized},
+		cache.ScoreCondition{Subset: proto.String(cache.Latest), Before: &latestItems.Timestamp}); err != nil {
 		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 	}
 	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime), time.Now())); err != nil {
