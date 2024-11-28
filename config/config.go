@@ -81,6 +81,10 @@ type MySQLConfig struct {
 type MasterConfig struct {
 	Port              int           `mapstructure:"port" validate:"gte=0"`        // master port
 	Host              string        `mapstructure:"host"`                         // master host
+	SSLMode           bool          `mapstructure:"ssl_mode"`                     // enable SSL mode
+	SSLCA             string        `mapstructure:"ssl_ca"`                       // SSL CA file
+	SSLCert           string        `mapstructure:"ssl_cert"`                     // SSL certificate file
+	SSLKey            string        `mapstructure:"ssl_key"`                      // SSL key file
 	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
 	HttpHost          string        `mapstructure:"http_host"`                    // HTTP host
 	HttpCorsDomains   []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
@@ -569,6 +573,10 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
 		{"master.port", "GORSE_MASTER_PORT"},
 		{"master.host", "GORSE_MASTER_HOST"},
+		{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
+		{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
+		{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
+		{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
 		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
 		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
 		{"master.n_jobs", "GORSE_MASTER_JOBS"},

@@ -82,6 +82,7 @@ type Worker struct {
 	httpPort   int
 	masterHost string
 	masterPort int
+	tlsConfig  *protocol.TLSConfig
 	cacheFile  string
 
 	// database connection path
@@ -114,7 +115,16 @@ type Worker struct {
 }
 
 // NewWorker creates a new worker node.
-func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, jobs int, cacheFile string, managedMode bool) *Worker {
+func NewWorker(
+	masterHost string,
+	masterPort int,
+	httpHost string,
+	httpPort int,
+	jobs int,
+	cacheFile string,
+	managedMode bool,
+	tlsConfig *protocol.TLSConfig,
+) *Worker {
 	return &Worker{
 		rankers:       make([]click.FactorizationMachine, jobs),
 		managedMode:   managedMode,
@@ -124,6 +134,7 @@ func NewWorker(masterHost string, masterPort int, httpHost string, httpPort, job
 		cacheFile:  cacheFile,
 		masterHost: masterHost,
 		masterPort: masterPort,
+		tlsConfig:  tlsConfig,
 		httpHost:   httpHost,
 		httpPort:   httpPort,
 		jobs:       jobs,
@@ -389,7 +400,17 @@ func (w *Worker) Serve() {
 	w.tracer = progress.NewTracer(w.workerName)
 
 	// connect to master
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var opts []grpc.DialOption
+	if w.tlsConfig != nil {
+		c, err := protocol.NewClientCreds(w.tlsConfig)
+		if err != nil {
+			log.Logger().Fatal("failed to create credentials", zap.Error(err))
+		}
+		opts = append(opts, grpc.WithTransportCredentials(c))
+	} else {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), opts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
