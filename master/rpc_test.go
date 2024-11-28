@@ -102,6 +102,7 @@ func (m *mockMasterRPC) StartTLS(t *testing.T, o *protocol.TLSConfig) {
 		SSLCert: o.SSLCert,
 		SSLKey:  o.SSLKey,
 	})
+	assert.NoError(t, err)
 	m.grpcServer = grpc.NewServer(grpc.Creds(creds))
 	protocol.RegisterMasterServer(m.grpcServer, m)
 	err = m.grpcServer.Serve(listen)
