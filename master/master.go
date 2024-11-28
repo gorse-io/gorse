@@ -255,12 +255,28 @@ func (m *Master) Serve() {
 	go func() {
 		log.Logger().Info("start rpc server",
 			zap.String("host", m.Config.Master.Host),
-			zap.Int("port", m.Config.Master.Port))
+			zap.Int("port", m.Config.Master.Port),
+			zap.Bool("ssl_mode", m.Config.Master.SSLMode),
+			zap.String("ssl_ca", m.Config.Master.SSLCA),
+			zap.String("ssl_cert", m.Config.Master.SSLCert),
+			zap.String("ssl_key", m.Config.Master.SSLKey))
+		opts := []grpc.ServerOption{grpc.MaxSendMsgSize(math.MaxInt)}
+		if m.Config.Master.SSLMode {
+			c, err := protocol.NewServerCreds(&protocol.TLSConfig{
+				SSLCA:   m.Config.Master.SSLCA,
+				SSLCert: m.Config.Master.SSLCert,
+				SSLKey:  m.Config.Master.SSLKey,
+			})
+			if err != nil {
+				log.Logger().Fatal("failed to load server TLS", zap.Error(err))
+			}
+			opts = append(opts, grpc.Creds(c))
+		}
 		lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
 		if err != nil {
 			log.Logger().Fatal("failed to listen", zap.Error(err))
 		}
-		m.grpcServer = grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
+		m.grpcServer = grpc.NewServer(opts...)
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
