@@ -18,10 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/madflojo/testcerts"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/config"
@@ -81,6 +84,25 @@ func (m *mockMasterRPC) Start(t *testing.T) {
 	m.addr <- listen.Addr().String()
 	var opts []grpc.ServerOption
 	m.grpcServer = grpc.NewServer(opts...)
+	protocol.RegisterMasterServer(m.grpcServer, m)
+	err = m.grpcServer.Serve(listen)
+	assert.NoError(t, err)
+}
+
+func (m *mockMasterRPC) StartTLS(t *testing.T, o *protocol.TLSConfig) {
+	m.ttlCache = ttlcache.New(ttlcache.WithTTL[string, *Node](time.Second))
+	m.ttlCache.OnEviction(m.nodeDown)
+	go m.ttlCache.Start()
+
+	listen, err := net.Listen("tcp", ":0")
+	assert.NoError(t, err)
+	m.addr <- listen.Addr().String()
+	creds, err := protocol.NewServerCreds(&protocol.TLSConfig{
+		SSLCA:   o.SSLCA,
+		SSLCert: o.SSLCert,
+		SSLKey:  o.SSLKey,
+	})
+	m.grpcServer = grpc.NewServer(grpc.Creds(creds))
 	protocol.RegisterMasterServer(m.grpcServer, m)
 	err = m.grpcServer.Serve(listen)
 	assert.NoError(t, err)
@@ -154,4 +176,65 @@ func TestRPC(t *testing.T) {
 	assert.Equal(t, []string{"worker2"}, metaResp.Workers)
 
 	rpcServer.Stop()
+}
+
+func generateToTempFile(t *testing.T) (string, string, string) {
+	// Generate Certificate Authority
+	ca := testcerts.NewCA()
+	// Create a signed Certificate and Key
+	certs, err := ca.NewKeyPair()
+	assert.NoError(t, err)
+	// Write certificates to a file
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	certFile := filepath.Join(t.TempDir(), "cert.pem")
+	keyFile := filepath.Join(t.TempDir(), "key.pem")
+	pem := ca.PublicKey()
+	err = os.WriteFile(caFile, pem, 0640)
+	assert.NoError(t, err)
+	err = certs.ToFile(certFile, keyFile)
+	assert.NoError(t, err)
+	return caFile, certFile, keyFile
+}
+
+func TestSSL(t *testing.T) {
+	caFile, certFile, keyFile := generateToTempFile(t)
+	o := &protocol.TLSConfig{
+		SSLCA:   caFile,
+		SSLCert: certFile,
+		SSLKey:  keyFile,
+	}
+	rpcServer := newMockMasterRPC(t)
+	go rpcServer.StartTLS(t, o)
+	address := <-rpcServer.addr
+
+	// success
+	c, err := protocol.NewClientCreds(o)
+	assert.NoError(t, err)
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(c))
+	assert.NoError(t, err)
+	client := protocol.NewMasterClient(conn)
+	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
+	assert.NoError(t, err)
+
+	// insecure
+	conn, err = grpc.Dial(address, grpc.WithInsecure())
+	assert.NoError(t, err)
+	client = protocol.NewMasterClient(conn)
+	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
+	assert.Error(t, err)
+
+	// certificate mismatch
+	caFile2, certFile2, keyFile2 := generateToTempFile(t)
+	o2 := &protocol.TLSConfig{
+		SSLCA:   caFile2,
+		SSLCert: certFile2,
+		SSLKey:  keyFile2,
+	}
+	c, err = protocol.NewClientCreds(o2)
+	assert.NoError(t, err)
+	conn, err = grpc.Dial(address, grpc.WithTransportCredentials(c))
+	assert.NoError(t, err)
+	client = protocol.NewMasterClient(conn)
+	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
+	assert.Error(t, err)
 }
