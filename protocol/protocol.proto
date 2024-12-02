@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 syntax = "proto3";
 
 option go_package = "github.com/zhenghaoz/gorse/protocol";
@@ -103,3 +104,137 @@ message PushProgressRequest {
 }
 
 message PushProgressResponse {}
+
+message Score {}
+
+message ScoreCondition {}
+
+message ScorePatch {}
+
+message TimeSeriesPoint {}
+
+message GetRequest {
+  string name = 1;
+}
+
+message GetResponse {
+  string value = 1;
+}
+
+message SetRequest {
+  string name = 1;
+  string value = 2;
+}
+
+message SetResponse {}
+
+message DeleteRequest {
+  string name = 1;
+}
+
+message DeleteResponse {}
+
+message GetSetRequest {
+  string key = 1;
+}
+
+message GetSetResponse {
+  repeated string members = 1;
+}
+
+message SetSetRequest {
+  string key = 1;
+  repeated string members = 2;
+}
+
+message SetSetResponse {}
+
+message AddSetRequest {
+  string key = 1;
+  repeated string members = 2;
+}
+
+message AddSetResponse {}
+
+message RemSetRequest {
+  string key = 1;
+  repeated string members = 2;
+}
+
+message RemSetResponse {}
+
+message PushRequest {
+  string name = 1;
+  string value = 2;
+}
+
+message PushResponse {}
+
+message PopRequest {
+  string name = 1;
+}
+
+message PopResponse {
+  string value = 1;
+}
+
+message RemainRequest {
+  string name = 1;
+}
+
+message RemainResponse {
+  int64 count = 1;
+}
+
+message AddScoresRequest {
+  string collection = 1;
+  string subset = 2;
+  repeated Score documents = 3;
+}
+
+message AddScoresResponse {}
+
+message SearchScoresRequest {
+  string collection = 1;
+  string subset = 2;
+  repeated string query = 3;
+  int32 begin = 4;
+  int32 end = 5;
+}
+
+message SearchScoresResponse {
+  repeated Score documents = 1;
+}
+
+message DeleteScoresRequest {
+  repeated string collection = 1;
+  ScoreCondition condition = 2;
+}
+
+message DeleteScoresResponse {}
+
+message UpdateScoresRequest {
+  repeated string collection = 1;
+  string id = 2;
+  ScorePatch patch = 3;
+}
+
+message UpdateScoresResponse {}
+
+message AddTimeSeriesPointsRequest {
+  repeated TimeSeriesPoint points = 1;
+}
+
+message AddTimeSeriesPointsResponse {}
+
+message GetTimeSeriesPointsRequest {
+  string name = 1;
+  google.protobuf.Timestamp begin = 2;
+  google.protobuf.Timestamp end = 3;
+}
+
+message GetTimeSeriesPointsResponse {
+  repeated TimeSeriesPoint points = 1;
+}
+
+

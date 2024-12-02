@@ -1,0 +1,229 @@
+// Copyright 2024 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+option go_package = "github.com/zhenghaoz/gorse/protocol";
+
+package protocol;
+
+import "google/protobuf/timestamp.proto";
+import "protocol.proto";
+
+message UserPatch {
+  bytes labels = 1;
+  optional string comment = 2;
+}
+
+message ItemPatch {
+  optional bool is_hidden = 1;
+  repeated string categories = 2;
+  optional google.protobuf.Timestamp timestamp = 3;
+  bytes labels = 4;
+  optional string comment = 5;
+}
+
+message ScanOptions {
+  optional string begin_user_id = 1;
+  optional string end_user_id = 2;
+  optional google.protobuf.Timestamp begin_time = 3;
+  optional google.protobuf.Timestamp end_time = 4;
+  repeated string feedback_types = 5;
+}
+
+message PingRequest {}
+
+message PingResponse {}
+
+message BatchInsertItemsRequest {
+  repeated Item items = 1;
+}
+
+message BatchInsertItemsResponse {}
+
+message BatchGetItemsRequest {
+  repeated string item_ids = 1;
+}
+
+message BatchGetItemsResponse {
+  repeated Item items = 1;
+}
+
+message DeleteItemRequest {
+  string item_id = 1;
+}
+
+message DeleteItemResponse {}
+
+message GetItemRequest {
+  string item_id = 1;
+}
+
+message GetItemResponse {
+  Item item = 1;
+}
+
+message ModifyItemRequest {
+  string item_id = 1;
+  ItemPatch patch = 2;
+}
+
+message ModifyItemResponse {}
+
+message GetItemsRequest {
+  string cursor = 1;
+  int32 n = 2;
+  google.protobuf.Timestamp begin_time = 3;
+}
+
+message GetItemsResponse {
+  string cursor = 1;
+  repeated Item items = 2;
+}
+
+message GetItemFeedbackRequest {
+  string item_id = 1;
+  repeated string feedback_types = 2;
+}
+
+message BatchInsertUsersRequest {
+  repeated User users = 1;
+}
+
+message BatchInsertUsersResponse {}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message DeleteUserResponse {}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message ModifyUserRequest {
+  string user_id = 1;
+  UserPatch patch = 2;
+}
+
+message ModifyUserResponse {}
+
+message GetUsersRequest {
+  string cursor = 1;
+  int32 n = 2;
+}
+
+message GetUsersResponse {
+  string cursor = 1;
+  repeated User users = 2;
+}
+
+message GetUserFeedbackRequest {
+  string user_id = 1;
+  google.protobuf.Timestamp end_time = 2;
+  repeated string feedback_types = 3;
+}
+
+message GetUserItemFeedbackRequest {
+  string user_id = 1;
+  string item_id = 2;
+  repeated string feedback_types = 3;
+}
+
+message DeleteUserItemFeedbackRequest {
+  string user_id = 1;
+  string item_id = 2;
+  repeated string feedback_types = 3;
+}
+
+message DeleteUserItemFeedbackResponse {
+  int32 count = 1;
+}
+
+message BatchInsertFeedbackRequest {
+  repeated Feedback feedback = 1;
+  bool insert_user = 2;
+  bool insert_item = 3;
+  bool overwrite = 4;
+}
+
+message BatchInsertFeedbackResponse {}
+
+message GetFeedbackRequest {
+  string cursor = 1;
+  int32 n = 2;
+  google.protobuf.Timestamp begin_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  repeated string feedback_types = 5;
+}
+
+message GetFeedbackResponse {
+  string cursor = 1;
+  repeated Feedback feedback = 2;
+}
+
+message GetUserStreamRequest {
+  int32 batch_size = 1;
+}
+
+message GetUserStreamResponse {
+  repeated User users = 1;
+}
+
+message GetItemStreamRequest {
+  int32 batch_size = 1;
+  google.protobuf.Timestamp time_limit = 2;
+}
+
+message GetItemStreamResponse {
+  repeated Item items = 1;
+}
+
+message GetFeedbackStreamRequest {
+  int32 batch_size = 1;
+  ScanOptions scan_options = 2;
+}
+
+message GetFeedbackStreamResponse {
+  repeated Feedback feedback = 1;
+}
+
+service DataStore {
+  rpc Ping(PingRequest) returns (PingResponse) {}
+  rpc BatchInsertItems(BatchInsertItemsRequest) returns (BatchInsertItemsResponse) {}
+  rpc BatchGetItems(BatchGetItemsRequest) returns (BatchGetItemsResponse) {}
+  rpc DeleteItem(DeleteItemRequest) returns (DeleteItemResponse) {}
+  rpc GetItem(GetItemRequest) returns (GetItemResponse) {}
+  rpc ModifyItem(ModifyItemRequest) returns (ModifyItemResponse) {}
+  rpc GetItems(GetItemsRequest) returns (GetItemsResponse) {}
+  rpc GetItemFeedback(GetItemFeedbackRequest) returns (GetFeedbackResponse) {}
+  rpc BatchInsertUsers(BatchInsertUsersRequest) returns (BatchInsertUsersResponse) {}
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {}
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
+  rpc ModifyUser(ModifyUserRequest) returns (ModifyUserResponse) {}
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse) {}
+  rpc GetUserFeedback(GetUserFeedbackRequest) returns (GetFeedbackResponse) {}
+  rpc GetUserItemFeedback(GetUserItemFeedbackRequest) returns (GetFeedbackResponse) {}
+  rpc DeleteUserItemFeedback(DeleteUserItemFeedbackRequest) returns (DeleteUserItemFeedbackResponse) {}
+  rpc BatchInsertFeedback(BatchInsertFeedbackRequest) returns (BatchInsertFeedbackResponse) {}
+  rpc GetFeedback(GetFeedbackRequest) returns (GetFeedbackResponse) {}
+  rpc GetUserStream(GetUserStreamRequest) returns (stream GetUserStreamResponse) {}
+  rpc GetItemStream(GetItemStreamRequest) returns (stream GetItemStreamResponse) {}
+  rpc GetFeedbackStream(GetFeedbackStreamRequest) returns (stream GetFeedbackStreamResponse) {}
+}
