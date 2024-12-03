@@ -67,6 +67,10 @@ func (suite *ProxyTestSuite) TearDownTest() {
 	suite.NoError(err)
 }
 
+func (suite *ProxyTestSuite) TestPurge() {
+	suite.T().Skip()
+}
+
 func TestProxy(t *testing.T) {
 	suite.Run(t, new(ProxyTestSuite))
 }

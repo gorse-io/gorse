@@ -18,7 +18,82 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 
 package protocol;
 
+import "google/protobuf/timestamp.proto";
 import "protocol.proto";
+
+message Score {
+  string id = 1;
+  double score = 2;
+  bool is_hidden = 3;
+  repeated string categories = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+message ScoreCondition {
+  optional string subset = 1;
+  optional string id = 2;
+  optional google.protobuf.Timestamp before = 3;
+}
+
+message ScorePatch {
+  optional bool is_hidden = 1;
+  repeated string categories = 2;
+  optional double score = 3;
+}
+
+message TimeSeriesPoint {}
+
+
+message AddScoresRequest {
+  string collection = 1;
+  string subset = 2;
+  repeated Score documents = 3;
+}
+
+message AddScoresResponse {}
+
+message SearchScoresRequest {
+  string collection = 1;
+  string subset = 2;
+  repeated string query = 3;
+  int32 begin = 4;
+  int32 end = 5;
+}
+
+message SearchScoresResponse {
+  repeated Score documents = 1;
+}
+
+message DeleteScoresRequest {
+  repeated string collection = 1;
+  ScoreCondition condition = 2;
+}
+
+message DeleteScoresResponse {}
+
+message UpdateScoresRequest {
+  repeated string collection = 1;
+  string id = 2;
+  ScorePatch patch = 3;
+}
+
+message UpdateScoresResponse {}
+
+message AddTimeSeriesPointsRequest {
+  repeated TimeSeriesPoint points = 1;
+}
+
+message AddTimeSeriesPointsResponse {}
+
+message GetTimeSeriesPointsRequest {
+  string name = 1;
+  google.protobuf.Timestamp begin = 2;
+  google.protobuf.Timestamp end = 3;
+}
+
+message GetTimeSeriesPointsResponse {
+  repeated TimeSeriesPoint points = 1;
+}
 
 service CacheStore {
   rpc Get(GetRequest) returns (GetResponse) {}

@@ -22,6 +22,7 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"io"
 	"net"
 	"time"
 )
@@ -53,7 +54,7 @@ func (p *ProxyServer) Ping(_ context.Context, _ *protocol.PingRequest) (*protoco
 func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchInsertItemsRequest) (*protocol.BatchInsertItemsResponse, error) {
 	items := make([]Item, len(in.Items))
 	for i, item := range in.Items {
-		labels := make(map[string]string)
+		var labels any
 		err := json.Unmarshal(item.Labels, &labels)
 		if err != nil {
 			return nil, err
@@ -102,6 +103,9 @@ func (p *ProxyServer) DeleteItem(ctx context.Context, in *protocol.DeleteItemReq
 func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) (*protocol.GetItemResponse, error) {
 	item, err := p.database.GetItem(ctx, in.ItemId)
 	if err != nil {
+		if errors.Is(err, errors.NotFound) {
+			return &protocol.GetItemResponse{}, nil
+		}
 		return nil, err
 	}
 	labels, err := json.Marshal(item.Labels)
@@ -121,11 +125,23 @@ func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) 
 }
 
 func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemRequest) (*protocol.ModifyItemResponse, error) {
+	var labels any
+	if in.Patch.Labels != nil {
+		err := json.Unmarshal(in.Patch.Labels, &labels)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var timestamp *time.Time
+	if in.Patch.Timestamp != nil {
+		timestamp = lo.ToPtr(in.Patch.Timestamp.AsTime())
+	}
 	err := p.database.ModifyItem(ctx, in.ItemId, ItemPatch{
 		IsHidden:   in.Patch.IsHidden,
 		Categories: in.Patch.Categories,
-		Labels:     in.Patch.Labels,
+		Labels:     labels,
 		Comment:    in.Patch.Comment,
+		Timestamp:  timestamp,
 	})
 	return &protocol.ModifyItemResponse{}, err
 }
@@ -178,15 +194,16 @@ func (p *ProxyServer) GetItemFeedback(ctx context.Context, in *protocol.GetItemF
 func (p *ProxyServer) BatchInsertUsers(ctx context.Context, in *protocol.BatchInsertUsersRequest) (*protocol.BatchInsertUsersResponse, error) {
 	users := make([]User, len(in.Users))
 	for i, user := range in.Users {
-		labels := make(map[string]string)
+		var labels any
 		err := json.Unmarshal(user.Labels, &labels)
 		if err != nil {
 			return nil, err
 		}
 		users[i] = User{
-			UserId:  user.UserId,
-			Labels:  labels,
-			Comment: user.Comment,
+			UserId:    user.UserId,
+			Labels:    labels,
+			Comment:   user.Comment,
+			Subscribe: user.Subscribe,
 		}
 	}
 	err := p.database.BatchInsertUsers(ctx, users)
@@ -201,6 +218,9 @@ func (p *ProxyServer) DeleteUser(ctx context.Context, in *protocol.DeleteUserReq
 func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) (*protocol.GetUserResponse, error) {
 	user, err := p.database.GetUser(ctx, in.UserId)
 	if err != nil {
+		if errors.Is(err, errors.NotFound) {
+			return &protocol.GetUserResponse{}, nil
+		}
 		return nil, err
 	}
 	labels, err := json.Marshal(user.Labels)
@@ -209,17 +229,26 @@ func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) 
 	}
 	return &protocol.GetUserResponse{
 		User: &protocol.User{
-			UserId:  user.UserId,
-			Labels:  labels,
-			Comment: user.Comment,
+			UserId:    user.UserId,
+			Labels:    labels,
+			Comment:   user.Comment,
+			Subscribe: user.Subscribe,
 		},
 	}, nil
 }
 
 func (p *ProxyServer) ModifyUser(ctx context.Context, in *protocol.ModifyUserRequest) (*protocol.ModifyUserResponse, error) {
+	var labels any
+	if in.Patch.Labels != nil {
+		err := json.Unmarshal(in.Patch.Labels, &labels)
+		if err != nil {
+			return nil, err
+		}
+	}
 	err := p.database.ModifyUser(ctx, in.UserId, UserPatch{
-		Labels:  in.Patch.Labels,
-		Comment: in.Patch.Comment,
+		Labels:    labels,
+		Comment:   in.Patch.Comment,
+		Subscribe: in.Patch.Subscribe,
 	})
 	return &protocol.ModifyUserResponse{}, err
 }
@@ -236,9 +265,10 @@ func (p *ProxyServer) GetUsers(ctx context.Context, in *protocol.GetUsersRequest
 			return nil, err
 		}
 		pbUsers[i] = &protocol.User{
-			UserId:  user.UserId,
-			Labels:  labels,
-			Comment: user.Comment,
+			UserId:    user.UserId,
+			Labels:    labels,
+			Comment:   user.Comment,
+			Subscribe: user.Subscribe,
 		}
 	}
 	return &protocol.GetUsersResponse{Cursor: cursor, Users: pbUsers}, nil
@@ -333,32 +363,26 @@ func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackR
 
 func (p *ProxyServer) GetUserStream(in *protocol.GetUserStreamRequest, stream grpc.ServerStreamingServer[protocol.GetUserStreamResponse]) error {
 	usersChan, errChan := p.database.GetUserStream(stream.Context(), int(in.BatchSize))
-	for {
-		select {
-		case users, ok := <-usersChan:
-			if !ok {
-				return nil
-			}
-			pbUsers := make([]*protocol.User, len(users))
-			for i, user := range users {
-				labels, err := json.Marshal(user.Labels)
-				if err != nil {
-					return err
-				}
-				pbUsers[i] = &protocol.User{
-					UserId:  user.UserId,
-					Labels:  labels,
-					Comment: user.Comment,
-				}
-			}
-			err := stream.Send(&protocol.GetUserStreamResponse{Users: pbUsers})
+	for users := range usersChan {
+		pbUsers := make([]*protocol.User, len(users))
+		for i, user := range users {
+			labels, err := json.Marshal(user.Labels)
 			if err != nil {
 				return err
 			}
-		case err := <-errChan:
+			pbUsers[i] = &protocol.User{
+				UserId:    user.UserId,
+				Labels:    labels,
+				Comment:   user.Comment,
+				Subscribe: user.Subscribe,
+			}
+		}
+		err := stream.Send(&protocol.GetUserStreamResponse{Users: pbUsers})
+		if err != nil {
 			return err
 		}
 	}
+	return <-errChan
 }
 
 func (p *ProxyServer) GetItemStream(in *protocol.GetItemStreamRequest, stream grpc.ServerStreamingServer[protocol.GetItemStreamResponse]) error {
@@ -367,63 +391,65 @@ func (p *ProxyServer) GetItemStream(in *protocol.GetItemStreamRequest, stream gr
 		timeLimit = lo.ToPtr(in.TimeLimit.AsTime())
 	}
 	itemsChan, errChan := p.database.GetItemStream(stream.Context(), int(in.BatchSize), timeLimit)
-	for {
-		select {
-		case items, ok := <-itemsChan:
-			if !ok {
-				return nil
-			}
-			pbItems := make([]*protocol.Item, len(items))
-			for i, item := range items {
-				labels, err := json.Marshal(item.Labels)
-				if err != nil {
-					return err
-				}
-				pbItems[i] = &protocol.Item{
-					ItemId:     item.ItemId,
-					IsHidden:   item.IsHidden,
-					Categories: item.Categories,
-					Timestamp:  timestamppb.New(item.Timestamp),
-					Labels:     labels,
-					Comment:    item.Comment,
-				}
-			}
-			err := stream.Send(&protocol.GetItemStreamResponse{Items: pbItems})
+	for items := range itemsChan {
+		pbItems := make([]*protocol.Item, len(items))
+		for i, item := range items {
+			labels, err := json.Marshal(item.Labels)
 			if err != nil {
 				return err
 			}
-		case err := <-errChan:
+			pbItems[i] = &protocol.Item{
+				ItemId:     item.ItemId,
+				IsHidden:   item.IsHidden,
+				Categories: item.Categories,
+				Timestamp:  timestamppb.New(item.Timestamp),
+				Labels:     labels,
+				Comment:    item.Comment,
+			}
+		}
+		err := stream.Send(&protocol.GetItemStreamResponse{Items: pbItems})
+		if err != nil {
 			return err
 		}
 	}
+	return <-errChan
 }
 
 func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, stream grpc.ServerStreamingServer[protocol.GetFeedbackStreamResponse]) error {
-	feedbackChan, errChan := p.database.GetFeedbackStream(stream.Context(), int(in.BatchSize))
-	for {
-		select {
-		case feedback, ok := <-feedbackChan:
-			if !ok {
-				return nil
+	var opts []ScanOption
+	if in.ScanOptions.BeginTime != nil {
+		opts = append(opts, WithBeginTime(in.ScanOptions.BeginTime.AsTime()))
+	}
+	if in.ScanOptions.EndTime != nil {
+		opts = append(opts, WithEndTime(in.ScanOptions.EndTime.AsTime()))
+	}
+	if in.ScanOptions.FeedbackTypes != nil {
+		opts = append(opts, WithFeedbackTypes(in.ScanOptions.FeedbackTypes...))
+	}
+	if in.ScanOptions.BeginUserId != nil {
+		opts = append(opts, WithBeginUserId(*in.ScanOptions.BeginUserId))
+	}
+	if in.ScanOptions.EndUserId != nil {
+		opts = append(opts, WithEndUserId(*in.ScanOptions.EndUserId))
+	}
+	feedbackChan, errChan := p.database.GetFeedbackStream(stream.Context(), int(in.BatchSize), opts...)
+	for feedback := range feedbackChan {
+		pbFeedback := make([]*protocol.Feedback, len(feedback))
+		for i, f := range feedback {
+			pbFeedback[i] = &protocol.Feedback{
+				FeedbackType: f.FeedbackType,
+				UserId:       f.UserId,
+				ItemId:       f.ItemId,
+				Timestamp:    timestamppb.New(f.Timestamp),
+				Comment:      f.Comment,
 			}
-			pbFeedback := make([]*protocol.Feedback, len(feedback))
-			for i, f := range feedback {
-				pbFeedback[i] = &protocol.Feedback{
-					FeedbackType: f.FeedbackType,
-					UserId:       f.UserId,
-					ItemId:       f.ItemId,
-					Timestamp:    timestamppb.New(f.Timestamp),
-					Comment:      f.Comment,
-				}
-			}
-			err := stream.Send(&protocol.GetFeedbackStreamResponse{Feedback: pbFeedback})
-			if err != nil {
-				return err
-			}
-		case err := <-errChan:
+		}
+		err := stream.Send(&protocol.GetFeedbackStreamResponse{Feedback: pbFeedback})
+		if err != nil {
 			return err
 		}
 	}
+	return <-errChan
 }
 
 type ProxyClient struct {
@@ -492,12 +518,17 @@ func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string) ([]Ite
 	}
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
+		var labels any
+		err = json.Unmarshal(item.Labels, &labels)
+		if err != nil {
+			return nil, err
+		}
 		items[i] = Item{
 			ItemId:     item.ItemId,
 			IsHidden:   item.IsHidden,
 			Categories: item.Categories,
 			Timestamp:  item.Timestamp.AsTime(),
-			Labels:     item.Labels,
+			Labels:     labels,
 			Comment:    item.Comment,
 		}
 	}
@@ -514,12 +545,19 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 	if err != nil {
 		return Item{}, err
 	}
+	if resp.Item == nil {
+		return Item{}, errors.Annotate(ErrItemNotExist, itemId)
+	}
+	var labels any
+	if err = json.Unmarshal(resp.Item.Labels, &labels); err != nil {
+		return Item{}, err
+	}
 	return Item{
 		ItemId:     resp.Item.ItemId,
 		IsHidden:   resp.Item.IsHidden,
 		Categories: resp.Item.Categories,
 		Timestamp:  resp.Item.Timestamp.AsTime(),
-		Labels:     resp.Item.Labels,
+		Labels:     labels,
 		Comment:    resp.Item.Comment,
 	}, nil
 }
@@ -533,6 +571,10 @@ func (p ProxyClient) ModifyItem(ctx context.Context, itemId string, patch ItemPa
 			return err
 		}
 	}
+	var timestamp *timestamppb.Timestamp
+	if patch.Timestamp != nil {
+		timestamp = timestamppb.New(*patch.Timestamp)
+	}
 	_, err := p.DataStoreClient.ModifyItem(ctx, &protocol.ModifyItemRequest{
 		ItemId: itemId,
 		Patch: &protocol.ItemPatch{
@@ -540,24 +582,34 @@ func (p ProxyClient) ModifyItem(ctx context.Context, itemId string, patch ItemPa
 			Categories: patch.Categories,
 			Labels:     labels,
 			Comment:    patch.Comment,
+			Timestamp:  timestamp,
 		},
 	})
 	return err
 }
 
 func (p ProxyClient) GetItems(ctx context.Context, cursor string, n int, beginTime *time.Time) (string, []Item, error) {
-	resp, err := p.DataStoreClient.GetItems(ctx, &protocol.GetItemsRequest{Cursor: cursor, N: int32(n)})
+	var beginTimeProto *timestamppb.Timestamp
+	if beginTime != nil {
+		beginTimeProto = timestamppb.New(*beginTime)
+	}
+	resp, err := p.DataStoreClient.GetItems(ctx, &protocol.GetItemsRequest{Cursor: cursor, N: int32(n), BeginTime: beginTimeProto})
 	if err != nil {
 		return "", nil, err
 	}
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
+		var labels any
+		err = json.Unmarshal(item.Labels, &labels)
+		if err != nil {
+			return "", nil, err
+		}
 		items[i] = Item{
 			ItemId:     item.ItemId,
 			IsHidden:   item.IsHidden,
 			Categories: item.Categories,
 			Timestamp:  item.Timestamp.AsTime(),
-			Labels:     item.Labels,
+			Labels:     labels,
 			Comment:    item.Comment,
 		}
 	}
@@ -595,9 +647,10 @@ func (p ProxyClient) BatchInsertUsers(ctx context.Context, users []User) error {
 			return err
 		}
 		pbUsers[i] = &protocol.User{
-			UserId:  user.UserId,
-			Labels:  labels,
-			Comment: user.Comment,
+			UserId:    user.UserId,
+			Labels:    labels,
+			Comment:   user.Comment,
+			Subscribe: user.Subscribe,
 		}
 	}
 	_, err := p.DataStoreClient.BatchInsertUsers(ctx, &protocol.BatchInsertUsersRequest{Users: pbUsers})
@@ -614,10 +667,18 @@ func (p ProxyClient) GetUser(ctx context.Context, userId string) (User, error) {
 	if err != nil {
 		return User{}, err
 	}
+	if resp.User == nil {
+		return User{}, errors.Annotate(ErrUserNotExist, userId)
+	}
+	var labels any
+	if err = json.Unmarshal(resp.User.Labels, &labels); err != nil {
+		return User{}, err
+	}
 	return User{
-		UserId:  resp.User.UserId,
-		Labels:  resp.User.Labels,
-		Comment: resp.User.Comment,
+		UserId:    resp.User.UserId,
+		Labels:    labels,
+		Comment:   resp.User.Comment,
+		Subscribe: resp.User.Subscribe,
 	}, nil
 }
 
@@ -633,8 +694,9 @@ func (p ProxyClient) ModifyUser(ctx context.Context, userId string, patch UserPa
 	_, err := p.DataStoreClient.ModifyUser(ctx, &protocol.ModifyUserRequest{
 		UserId: userId,
 		Patch: &protocol.UserPatch{
-			Labels:  labels,
-			Comment: patch.Comment,
+			Labels:    labels,
+			Comment:   patch.Comment,
+			Subscribe: patch.Subscribe,
 		},
 	})
 	return err
@@ -647,10 +709,16 @@ func (p ProxyClient) GetUsers(ctx context.Context, cursor string, n int) (string
 	}
 	users := make([]User, len(resp.Users))
 	for i, user := range resp.Users {
+		var labels any
+		err = json.Unmarshal(user.Labels, &labels)
+		if err != nil {
+			return "", nil, err
+		}
 		users[i] = User{
-			UserId:  user.UserId,
-			Labels:  user.Labels,
-			Comment: user.Comment,
+			UserId:    user.UserId,
+			Labels:    labels,
+			Comment:   user.Comment,
+			Subscribe: user.Subscribe,
 		}
 	}
 	return resp.Cursor, users, nil
@@ -786,15 +854,24 @@ func (p ProxyClient) GetUserStream(ctx context.Context, batchSize int) (chan []U
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				errChan <- err
 				return
 			}
 			users := make([]User, len(resp.Users))
 			for i, user := range resp.Users {
+				var labels any
+				if err = json.Unmarshal(user.Labels, &labels); err != nil {
+					errChan <- err
+					return
+				}
 				users[i] = User{
-					UserId:  user.UserId,
-					Labels:  user.Labels,
-					Comment: user.Comment,
+					UserId:    user.UserId,
+					Labels:    labels,
+					Comment:   user.Comment,
+					Subscribe: user.Subscribe,
 				}
 			}
 			usersChan <- users
@@ -817,17 +894,25 @@ func (p ProxyClient) GetItemStream(ctx context.Context, batchSize int, timeLimit
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				errChan <- err
 				return
 			}
 			items := make([]Item, len(resp.Items))
 			for i, item := range resp.Items {
+				var labels any
+				if err = json.Unmarshal(item.Labels, &labels); err != nil {
+					errChan <- err
+					return
+				}
 				items[i] = Item{
 					ItemId:     item.ItemId,
 					IsHidden:   item.IsHidden,
 					Categories: item.Categories,
 					Timestamp:  item.Timestamp.AsTime(),
-					Labels:     item.Labels,
+					Labels:     labels,
 					Comment:    item.Comment,
 				}
 			}
@@ -872,6 +957,9 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				errChan <- err
 				return
 			}

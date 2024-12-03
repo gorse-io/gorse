@@ -24,6 +24,7 @@ import "protocol.proto";
 message UserPatch {
   bytes labels = 1;
   optional string comment = 2;
+  repeated string subscribe = 3;
 }
 
 message ItemPatch {
@@ -71,7 +72,7 @@ message GetItemRequest {
 }
 
 message GetItemResponse {
-  Item item = 1;
+  optional Item item = 1;
 }
 
 message ModifyItemRequest {
@@ -114,7 +115,7 @@ message GetUserRequest {
 }
 
 message GetUserResponse {
-  User user = 1;
+  optional User user = 1;
 }
 
 message ModifyUserRequest {

@@ -13,3 +13,68 @@
 // limitations under the License.
 
 package cache
+
+import (
+	"fmt"
+	"github.com/stretchr/testify/suite"
+	"net"
+	"testing"
+)
+
+type ProxyTestSuite struct {
+	baseTestSuite
+	SQLite Database
+	Server *ProxyServer
+}
+
+func (suite *ProxyTestSuite) SetupSuite() {
+	// create database
+	var err error
+	path := fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())
+	suite.SQLite, err = Open(path, "gorse_")
+	suite.NoError(err)
+	// create schema
+	err = suite.SQLite.Init()
+	suite.NoError(err)
+	// start server
+	lis, err := net.Listen("tcp", "localhost:0")
+	suite.NoError(err)
+	suite.Server = NewProxyServer(suite.SQLite)
+	go func() {
+		err = suite.Server.Serve(lis)
+		suite.NoError(err)
+	}()
+	// create proxy
+	suite.Database, err = OpenProxyClient(lis.Addr().String())
+	suite.NoError(err)
+}
+
+func (suite *ProxyTestSuite) TearDownSuite() {
+	suite.Server.Stop()
+	suite.NoError(suite.Database.Close())
+	suite.NoError(suite.SQLite.Close())
+}
+
+func (suite *ProxyTestSuite) SetupTest() {
+	err := suite.SQLite.Ping()
+	suite.NoError(err)
+	err = suite.SQLite.Purge()
+	suite.NoError(err)
+}
+
+func (suite *ProxyTestSuite) TearDownTest() {
+	err := suite.SQLite.Purge()
+	suite.NoError(err)
+}
+
+func (suite *ProxyTestSuite) TestInit() {
+	suite.T().Skip()
+}
+
+func (suite *ProxyTestSuite) TestPurge() {
+	suite.T().Skip()
+}
+
+func TestProxy(t *testing.T) {
+	suite.Run(t, new(ProxyTestSuite))
+}

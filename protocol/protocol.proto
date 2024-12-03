@@ -24,6 +24,7 @@ message User {
   string user_id = 1;
   bytes labels = 2;
   string comment = 3;
+  repeated string subscribe = 4;
 }
 
 message Item {
@@ -105,14 +106,6 @@ message PushProgressRequest {
 
 message PushProgressResponse {}
 
-message Score {}
-
-message ScoreCondition {}
-
-message ScorePatch {}
-
-message TimeSeriesPoint {}
-
 message GetRequest {
   string name = 1;
 }
@@ -185,56 +178,3 @@ message RemainRequest {
 message RemainResponse {
   int64 count = 1;
 }
-
-message AddScoresRequest {
-  string collection = 1;
-  string subset = 2;
-  repeated Score documents = 3;
-}
-
-message AddScoresResponse {}
-
-message SearchScoresRequest {
-  string collection = 1;
-  string subset = 2;
-  repeated string query = 3;
-  int32 begin = 4;
-  int32 end = 5;
-}
-
-message SearchScoresResponse {
-  repeated Score documents = 1;
-}
-
-message DeleteScoresRequest {
-  repeated string collection = 1;
-  ScoreCondition condition = 2;
-}
-
-message DeleteScoresResponse {}
-
-message UpdateScoresRequest {
-  repeated string collection = 1;
-  string id = 2;
-  ScorePatch patch = 3;
-}
-
-message UpdateScoresResponse {}
-
-message AddTimeSeriesPointsRequest {
-  repeated TimeSeriesPoint points = 1;
-}
-
-message AddTimeSeriesPointsResponse {}
-
-message GetTimeSeriesPointsRequest {
-  string name = 1;
-  google.protobuf.Timestamp begin = 2;
-  google.protobuf.Timestamp end = 3;
-}
-
-message GetTimeSeriesPointsResponse {
-  repeated TimeSeriesPoint points = 1;
-}
-
-
