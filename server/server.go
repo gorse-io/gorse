@@ -49,15 +49,24 @@ type Server struct {
 	serverName   string
 	masterHost   string
 	masterPort   int
+	tlsConfig    *protocol.TLSConfig
 	testMode     bool
 	cacheFile    string
 }
 
 // NewServer creates a server node.
-func NewServer(masterHost string, masterPort int, serverHost string, serverPort int, cacheFile string) *Server {
+func NewServer(
+	masterHost string,
+	masterPort int,
+	serverHost string,
+	serverPort int,
+	cacheFile string,
+	tlsConfig *protocol.TLSConfig,
+) *Server {
 	s := &Server{
 		masterHost: masterHost,
 		masterPort: masterPort,
+		tlsConfig:  tlsConfig,
 		cacheFile:  cacheFile,
 		RestServer: RestServer{
 			Settings:   config.NewSettings(),
@@ -98,7 +107,17 @@ func (s *Server) Serve() {
 		zap.Int("master_port", s.masterPort))
 
 	// connect to master
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var opts []grpc.DialOption
+	if s.tlsConfig != nil {
+		c, err := protocol.NewClientCreds(s.tlsConfig)
+		if err != nil {
+			log.Logger().Fatal("failed to create credentials", zap.Error(err))
+		}
+		opts = append(opts, grpc.WithTransportCredentials(c))
+	} else {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), opts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
