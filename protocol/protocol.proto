@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 syntax = "proto3";
 
 option go_package = "github.com/zhenghaoz/gorse/protocol";
@@ -23,6 +24,7 @@ message User {
   string user_id = 1;
   bytes labels = 2;
   string comment = 3;
+  repeated string subscribe = 4;
 }
 
 message Item {
@@ -103,3 +105,7 @@ message PushProgressRequest {
 }
 
 message PushProgressResponse {}
+
+message PingRequest {}
+
+message PingResponse {}
