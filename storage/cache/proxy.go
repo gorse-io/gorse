@@ -20,7 +20,9 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"io"
 	"net"
 	"time"
 )
@@ -61,38 +63,46 @@ func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteReques
 }
 
 func (p *ProxyServer) GetSet(ctx context.Context, request *protocol.GetSetRequest) (*protocol.GetSetResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	members, err := p.database.GetSet(ctx, request.GetKey())
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.GetSetResponse{Members: members}, nil
 }
 
 func (p *ProxyServer) SetSet(ctx context.Context, request *protocol.SetSetRequest) (*protocol.SetSetResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	return &protocol.SetSetResponse{}, p.database.SetSet(ctx, request.GetKey(), request.GetMembers()...)
 }
 
 func (p *ProxyServer) AddSet(ctx context.Context, request *protocol.AddSetRequest) (*protocol.AddSetResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	return &protocol.AddSetResponse{}, p.database.AddSet(ctx, request.GetKey(), request.GetMembers()...)
 }
 
 func (p *ProxyServer) RemSet(ctx context.Context, request *protocol.RemSetRequest) (*protocol.RemSetResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	return &protocol.RemSetResponse{}, p.database.RemSet(ctx, request.GetKey(), request.GetMembers()...)
 }
 
 func (p *ProxyServer) Push(ctx context.Context, request *protocol.PushRequest) (*protocol.PushResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	return &protocol.PushResponse{}, p.database.Push(ctx, request.GetName(), request.GetValue())
 }
 
 func (p *ProxyServer) Pop(ctx context.Context, request *protocol.PopRequest) (*protocol.PopResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	value, err := p.database.Pop(ctx, request.GetName())
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return &protocol.PopResponse{}, nil
+		}
+		return nil, err
+	}
+	return &protocol.PopResponse{Value: proto.String(value)}, nil
 }
 
 func (p *ProxyServer) Remain(ctx context.Context, request *protocol.RemainRequest) (*protocol.RemainResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	count, err := p.database.Remain(ctx, request.GetName())
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.RemainResponse{Count: count}, nil
 }
 
 func (p *ProxyServer) AddScores(ctx context.Context, request *protocol.AddScoresRequest) (*protocol.AddScoresResponse, error) {
@@ -148,13 +158,31 @@ func (p *ProxyServer) UpdateScores(ctx context.Context, request *protocol.Update
 }
 
 func (p *ProxyServer) AddTimeSeriesPoints(ctx context.Context, request *protocol.AddTimeSeriesPointsRequest) (*protocol.AddTimeSeriesPointsResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	points := make([]TimeSeriesPoint, len(request.Points))
+	for i, point := range request.Points {
+		points[i] = TimeSeriesPoint{
+			Name:      point.Name,
+			Timestamp: point.Timestamp.AsTime(),
+			Value:     point.Value,
+		}
+	}
+	return &protocol.AddTimeSeriesPointsResponse{}, p.database.AddTimeSeriesPoints(ctx, points)
 }
 
 func (p *ProxyServer) GetTimeSeriesPoints(ctx context.Context, request *protocol.GetTimeSeriesPointsRequest) (*protocol.GetTimeSeriesPointsResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	resp, err := p.database.GetTimeSeriesPoints(ctx, request.GetName(), request.GetBegin().AsTime(), request.GetEnd().AsTime())
+	if err != nil {
+		return nil, err
+	}
+	points := make([]*protocol.TimeSeriesPoint, len(resp))
+	for i, point := range resp {
+		points[i] = &protocol.TimeSeriesPoint{
+			Name:      point.Name,
+			Timestamp: timestamppb.New(point.Timestamp),
+			Value:     point.Value,
+		}
+	}
+	return &protocol.GetTimeSeriesPointsResponse{Points: points}, nil
 }
 
 type ProxyClient struct {
@@ -168,8 +196,7 @@ func (p ProxyClient) Ping() error {
 }
 
 func (p ProxyClient) Init() error {
-	//TODO implement me
-	panic("implement me")
+	return errors.MethodNotAllowedf("init is not allowed in proxy client")
 }
 
 func (p ProxyClient) Scan(work func(string) error) error {
@@ -178,8 +205,7 @@ func (p ProxyClient) Scan(work func(string) error) error {
 }
 
 func (p ProxyClient) Purge() error {
-	//TODO implement me
-	panic("implement me")
+	return errors.MethodNotAllowedf("purge is not allowed in proxy client")
 }
 
 func (p ProxyClient) Set(ctx context.Context, values ...Value) error {
@@ -188,8 +214,13 @@ func (p ProxyClient) Set(ctx context.Context, values ...Value) error {
 }
 
 func (p ProxyClient) Get(ctx context.Context, name string) *ReturnValue {
-	//TODO implement me
-	panic("implement me")
+	resp, err := p.CacheStoreClient.Get(ctx, &protocol.GetRequest{
+		Name: name,
+	})
+	if err != nil {
+		return &ReturnValue{err: err}
+	}
+	return &ReturnValue{value: resp.GetValue(), err: err}
 }
 
 func (p ProxyClient) Delete(ctx context.Context, name string) error {
@@ -198,38 +229,68 @@ func (p ProxyClient) Delete(ctx context.Context, name string) error {
 }
 
 func (p ProxyClient) GetSet(ctx context.Context, key string) ([]string, error) {
-	//TODO implement me
-	panic("implement me")
+	resp, err := p.CacheStoreClient.GetSet(ctx, &protocol.GetSetRequest{
+		Key: key,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Members, nil
 }
 
 func (p ProxyClient) SetSet(ctx context.Context, key string, members ...string) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := p.CacheStoreClient.SetSet(ctx, &protocol.SetSetRequest{
+		Key:     key,
+		Members: members,
+	})
+	return err
 }
 
 func (p ProxyClient) AddSet(ctx context.Context, key string, members ...string) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := p.CacheStoreClient.AddSet(ctx, &protocol.AddSetRequest{
+		Key:     key,
+		Members: members,
+	})
+	return err
 }
 
 func (p ProxyClient) RemSet(ctx context.Context, key string, members ...string) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := p.CacheStoreClient.RemSet(ctx, &protocol.RemSetRequest{
+		Key:     key,
+		Members: members,
+	})
+	return err
 }
 
 func (p ProxyClient) Push(ctx context.Context, name, value string) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := p.CacheStoreClient.Push(ctx, &protocol.PushRequest{
+		Name:  name,
+		Value: value,
+	})
+	return err
 }
 
 func (p ProxyClient) Pop(ctx context.Context, name string) (string, error) {
-	//TODO implement me
-	panic("implement me")
+	resp, err := p.CacheStoreClient.Pop(ctx, &protocol.PopRequest{
+		Name: name,
+	})
+	if err != nil {
+		return "", err
+	}
+	if resp.Value == nil {
+		return "", io.EOF
+	}
+	return resp.GetValue(), nil
 }
 
 func (p ProxyClient) Remain(ctx context.Context, name string) (int64, error) {
-	//TODO implement me
-	panic("implement me")
+	resp, err := p.CacheStoreClient.Remain(ctx, &protocol.RemainRequest{
+		Name: name,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return resp.Count, nil
 }
 
 func (p ProxyClient) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
@@ -308,13 +369,38 @@ func (p ProxyClient) UpdateScores(ctx context.Context, collection []string, id s
 }
 
 func (p ProxyClient) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
-	//TODO implement me
-	panic("implement me")
+	pbPoints := make([]*protocol.TimeSeriesPoint, len(points))
+	for i, point := range points {
+		pbPoints[i] = &protocol.TimeSeriesPoint{
+			Name:      point.Name,
+			Timestamp: timestamppb.New(point.Timestamp),
+			Value:     point.Value,
+		}
+	}
+	_, err := p.CacheStoreClient.AddTimeSeriesPoints(ctx, &protocol.AddTimeSeriesPointsRequest{
+		Points: pbPoints,
+	})
+	return err
 }
 
 func (p ProxyClient) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
-	//TODO implement me
-	panic("implement me")
+	resp, err := p.CacheStoreClient.GetTimeSeriesPoints(ctx, &protocol.GetTimeSeriesPointsRequest{
+		Name:  name,
+		Begin: timestamppb.New(begin),
+		End:   timestamppb.New(end),
+	})
+	if err != nil {
+		return nil, err
+	}
+	points := make([]TimeSeriesPoint, len(resp.Points))
+	for i, point := range resp.Points {
+		points[i] = TimeSeriesPoint{
+			Name:      point.Name,
+			Timestamp: point.Timestamp.AsTime(),
+			Value:     point.Value,
+		}
+	}
+	return points, nil
 }
 
 func OpenProxyClient(address string) (*ProxyClient, error) {
