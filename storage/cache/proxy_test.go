@@ -75,6 +75,10 @@ func (suite *ProxyTestSuite) TestPurge() {
 	suite.T().Skip()
 }
 
+func (suite *ProxyTestSuite) TestScan() {
+	suite.T().Skip()
+}
+
 func TestProxy(t *testing.T) {
 	suite.Run(t, new(ProxyTestSuite))
 }

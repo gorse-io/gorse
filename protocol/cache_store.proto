@@ -19,6 +19,12 @@ option go_package = "github.com/zhenghaoz/gorse/protocol";
 package protocol;
 
 import "google/protobuf/timestamp.proto";
+import "protocol.proto";
+
+message Value {
+  string name = 1;
+  string value = 2;
+}
 
 message Score {
   string id = 1;
@@ -51,12 +57,11 @@ message GetRequest {
 }
 
 message GetResponse {
-  string value = 1;
+  optional string value = 1;
 }
 
 message SetRequest {
-  string name = 1;
-  string value = 2;
+  repeated Value values = 1;
 }
 
 message SetResponse {}
@@ -171,6 +176,7 @@ message GetTimeSeriesPointsResponse {
 }
 
 service CacheStore {
+  rpc Ping(PingRequest) returns (PingResponse) {}
   rpc Get(GetRequest) returns (GetResponse) {}
   rpc Set(SetRequest) returns (SetResponse) {}
   rpc Delete(DeleteRequest) returns (DeleteResponse) {}

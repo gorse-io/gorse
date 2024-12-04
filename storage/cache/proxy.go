@@ -47,19 +47,31 @@ func (p *ProxyServer) Stop() {
 	p.server.Stop()
 }
 
+func (p *ProxyServer) Ping(context.Context, *protocol.PingRequest) (*protocol.PingResponse, error) {
+	return &protocol.PingResponse{}, p.database.Ping()
+}
+
 func (p *ProxyServer) Get(ctx context.Context, request *protocol.GetRequest) (*protocol.GetResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	value := p.database.Get(ctx, request.GetName())
+	if errors.Is(value.err, errors.NotFound) {
+		return &protocol.GetResponse{}, nil
+	}
+	return &protocol.GetResponse{Value: proto.String(value.value)}, value.err
 }
 
 func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*protocol.SetResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	values := make([]Value, len(request.Values))
+	for i, value := range request.Values {
+		values[i] = Value{
+			name:  value.GetName(),
+			value: value.GetValue(),
+		}
+	}
+	return &protocol.SetResponse{}, p.database.Set(ctx, values...)
 }
 
 func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteRequest) (*protocol.DeleteResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
 }
 
 func (p *ProxyServer) GetSet(ctx context.Context, request *protocol.GetSetRequest) (*protocol.GetSetResponse, error) {
@@ -191,17 +203,16 @@ type ProxyClient struct {
 }
 
 func (p ProxyClient) Ping() error {
-	//TODO implement me
-	panic("implement me")
+	_, err := p.CacheStoreClient.Ping(context.Background(), &protocol.PingRequest{})
+	return err
 }
 
 func (p ProxyClient) Init() error {
 	return errors.MethodNotAllowedf("init is not allowed in proxy client")
 }
 
-func (p ProxyClient) Scan(work func(string) error) error {
-	//TODO implement me
-	panic("implement me")
+func (p ProxyClient) Scan(_ func(string) error) error {
+	return errors.MethodNotAllowedf("scan is not allowed in proxy client")
 }
 
 func (p ProxyClient) Purge() error {
@@ -209,8 +220,17 @@ func (p ProxyClient) Purge() error {
 }
 
 func (p ProxyClient) Set(ctx context.Context, values ...Value) error {
-	//TODO implement me
-	panic("implement me")
+	pbValues := make([]*protocol.Value, len(values))
+	for i, value := range values {
+		pbValues[i] = &protocol.Value{
+			Name:  value.name,
+			Value: value.value,
+		}
+	}
+	_, err := p.CacheStoreClient.Set(ctx, &protocol.SetRequest{
+		Values: pbValues,
+	})
+	return err
 }
 
 func (p ProxyClient) Get(ctx context.Context, name string) *ReturnValue {
@@ -220,12 +240,17 @@ func (p ProxyClient) Get(ctx context.Context, name string) *ReturnValue {
 	if err != nil {
 		return &ReturnValue{err: err}
 	}
+	if resp.Value == nil {
+		return &ReturnValue{err: errors.NotFound}
+	}
 	return &ReturnValue{value: resp.GetValue(), err: err}
 }
 
 func (p ProxyClient) Delete(ctx context.Context, name string) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := p.CacheStoreClient.Delete(ctx, &protocol.DeleteRequest{
+		Name: name,
+	})
+	return err
 }
 
 func (p ProxyClient) GetSet(ctx context.Context, key string) ([]string, error) {

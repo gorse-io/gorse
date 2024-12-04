@@ -43,10 +43,6 @@ message ScanOptions {
   repeated string feedback_types = 5;
 }
 
-message PingRequest {}
-
-message PingResponse {}
-
 message BatchInsertItemsRequest {
   repeated Item items = 1;
 }
