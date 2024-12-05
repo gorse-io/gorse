@@ -428,15 +428,9 @@ func (p ProxyClient) GetTimeSeriesPoints(ctx context.Context, name string, begin
 	return points, nil
 }
 
-func OpenProxyClient(address string) (*ProxyClient, error) {
-	// Create gRPC connection
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-	// Create client
+func NewProxyClient(conn *grpc.ClientConn) *ProxyClient {
 	return &ProxyClient{
 		ClientConn:       conn,
 		CacheStoreClient: protocol.NewCacheStoreClient(conn),
-	}, nil
+	}
 }

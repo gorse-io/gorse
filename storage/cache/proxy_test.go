@@ -17,6 +17,7 @@ package cache
 import (
 	"fmt"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc"
 	"net"
 	"testing"
 )
@@ -44,9 +45,10 @@ func (suite *ProxyTestSuite) SetupSuite() {
 		err = suite.Server.Serve(lis)
 		suite.NoError(err)
 	}()
-	// create proxy
-	suite.Database, err = OpenProxyClient(lis.Addr().String())
+	// create proxy client
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	suite.NoError(err)
+	suite.Database = NewProxyClient(conn)
 }
 
 func (suite *ProxyTestSuite) TearDownSuite() {

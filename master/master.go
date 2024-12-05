@@ -281,6 +281,8 @@ func (m *Master) Serve() {
 		}
 		m.grpcServer = grpc.NewServer(opts...)
 		protocol.RegisterMasterServer(m.grpcServer, m)
+		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
+		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
 		}
