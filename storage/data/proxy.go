@@ -453,13 +453,11 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 }
 
 type ProxyClient struct {
-	*grpc.ClientConn
 	protocol.DataStoreClient
 }
 
 func NewProxyClient(conn *grpc.ClientConn) *ProxyClient {
 	return &ProxyClient{
-		ClientConn:      conn,
 		DataStoreClient: protocol.NewDataStoreClient(conn),
 	}
 }
@@ -474,7 +472,7 @@ func (p ProxyClient) Ping() error {
 }
 
 func (p ProxyClient) Close() error {
-	return p.ClientConn.Close()
+	return nil
 }
 
 func (p ProxyClient) Optimize() error {
