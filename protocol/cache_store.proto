@@ -1,0 +1,196 @@
+// Copyright 2024 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+option go_package = "github.com/zhenghaoz/gorse/protocol";
+
+package protocol;
+
+import "google/protobuf/timestamp.proto";
+import "protocol.proto";
+
+message Value {
+  string name = 1;
+  string value = 2;
+}
+
+message Score {
+  string id = 1;
+  double score = 2;
+  bool is_hidden = 3;
+  repeated string categories = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+message ScoreCondition {
+  optional string subset = 1;
+  optional string id = 2;
+  optional google.protobuf.Timestamp before = 3;
+}
+
+message ScorePatch {
+  optional bool is_hidden = 1;
+  repeated string categories = 2;
+  optional double score = 3;
+}
+
+message TimeSeriesPoint {
+  string name = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double value = 3;
+}
+
+message GetRequest {
+  string name = 1;
+}
+
+message GetResponse {
+  optional string value = 1;
+}
+
+message SetRequest {
+  repeated Value values = 1;
+}
+
+message SetResponse {}
+
+message DeleteRequest {
+  string name = 1;
+}
+
+message DeleteResponse {}
+
+message GetSetRequest {
+  string key = 1;
+}
+
+message GetSetResponse {
+  repeated string members = 1;
+}
+
+message SetSetRequest {
+  string key = 1;
+  repeated string members = 2;
+}
+
+message SetSetResponse {}
+
+message AddSetRequest {
+  string key = 1;
+  repeated string members = 2;
+}
+
+message AddSetResponse {}
+
+message RemSetRequest {
+  string key = 1;
+  repeated string members = 2;
+}
+
+message RemSetResponse {}
+
+message PushRequest {
+  string name = 1;
+  string value = 2;
+}
+
+message PushResponse {}
+
+message PopRequest {
+  string name = 1;
+}
+
+message PopResponse {
+  optional string value = 1;
+}
+
+message RemainRequest {
+  string name = 1;
+}
+
+message RemainResponse {
+  int64 count = 1;
+}
+
+message AddScoresRequest {
+  string collection = 1;
+  string subset = 2;
+  repeated Score documents = 3;
+}
+
+message AddScoresResponse {}
+
+message SearchScoresRequest {
+  string collection = 1;
+  string subset = 2;
+  repeated string query = 3;
+  int32 begin = 4;
+  int32 end = 5;
+}
+
+message SearchScoresResponse {
+  repeated Score documents = 1;
+}
+
+message DeleteScoresRequest {
+  repeated string collection = 1;
+  ScoreCondition condition = 2;
+}
+
+message DeleteScoresResponse {}
+
+message UpdateScoresRequest {
+  repeated string collection = 1;
+  string id = 2;
+  ScorePatch patch = 3;
+}
+
+message UpdateScoresResponse {}
+
+message AddTimeSeriesPointsRequest {
+  repeated TimeSeriesPoint points = 1;
+}
+
+message AddTimeSeriesPointsResponse {}
+
+message GetTimeSeriesPointsRequest {
+  string name = 1;
+  google.protobuf.Timestamp begin = 2;
+  google.protobuf.Timestamp end = 3;
+}
+
+message GetTimeSeriesPointsResponse {
+  repeated TimeSeriesPoint points = 1;
+}
+
+service CacheStore {
+  rpc Ping(PingRequest) returns (PingResponse) {}
+  rpc Get(GetRequest) returns (GetResponse) {}
+  rpc Set(SetRequest) returns (SetResponse) {}
+  rpc Delete(DeleteRequest) returns (DeleteResponse) {}
+  rpc GetSet(GetSetRequest) returns (GetSetResponse) {}
+  rpc SetSet(SetSetRequest) returns (SetSetResponse) {}
+  rpc AddSet(AddSetRequest) returns (AddSetResponse) {}
+  rpc RemSet(RemSetRequest) returns (RemSetResponse) {}
+  rpc Push(PushRequest) returns (PushResponse) {}
+  rpc Pop(PopRequest) returns (PopResponse) {}
+  rpc Remain(RemainRequest) returns (RemainResponse) {}
+  rpc AddScores(AddScoresRequest) returns (AddScoresResponse) {}
+  rpc SearchScores(SearchScoresRequest) returns (SearchScoresResponse) {}
+  rpc DeleteScores(DeleteScoresRequest) returns (DeleteScoresResponse) {}
+  rpc UpdateScores(UpdateScoresRequest) returns (UpdateScoresResponse) {}
+  rpc AddTimeSeriesPoints(AddTimeSeriesPointsRequest) returns (AddTimeSeriesPointsResponse) {}
+  rpc GetTimeSeriesPoints(GetTimeSeriesPointsRequest) returns (GetTimeSeriesPointsResponse) {}
+}
