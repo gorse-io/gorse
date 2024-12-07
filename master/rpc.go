@@ -36,7 +36,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		Hostname:   nodeInfo.Hostname,
 		Type:       nodeInfo.NodeType.String(),
 		Version:    nodeInfo.BinaryVersion,
-		UpdateTime: time.Now(),
+		UpdateTime: time.Now().UTC(),
 	}
 	if err := m.metaStore.UpdateNode(node); err != nil {
 		return nil, err
@@ -70,9 +70,9 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	for _, n := range nodes {
 		switch n.Type {
 		case protocol.NodeType_Worker.String():
-			workers = append(workers, node.UUID)
+			workers = append(workers, n.UUID)
 		case protocol.NodeType_Server.String():
-			servers = append(servers, node.UUID)
+			servers = append(servers, n.UUID)
 		}
 	}
 	return &protocol.Meta{

@@ -36,9 +36,11 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/zhenghaoz/gorse/storage/meta"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -57,11 +59,15 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 	// open database
 	var err error
 	s.Settings = config.NewSettings()
+	s.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.db", t.TempDir()), s.Config.Master.MetaTimeout)
+	assert.NoError(t, err)
 	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", t.TempDir()), "")
 	assert.NoError(t, err)
 	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", t.TempDir()), "")
 	assert.NoError(t, err)
 	// init database
+	err = s.metaStore.Init()
+	assert.NoError(t, err)
 	err = s.DataClient.Init()
 	assert.NoError(t, err)
 	err = s.CacheClient.Init()
@@ -88,7 +94,9 @@ func newMockServer(t *testing.T) (*mockServer, string) {
 }
 
 func (s *mockServer) Close(t *testing.T) {
-	err := s.DataClient.Close()
+	err := s.metaStore.Close()
+	assert.NoError(t, err)
+	err = s.DataClient.Close()
 	assert.NoError(t, err)
 	err = s.CacheClient.Close()
 	assert.NoError(t, err)
@@ -328,11 +336,24 @@ func TestMaster_GetCluster(t *testing.T) {
 	s, cookie := newMockServer(t)
 	defer s.Close(t)
 	// add nodes
-	serverNode := &Node{"alan turnin", ServerNode, "192.168.1.100", 1080, "server_version"}
-	workerNode := &Node{"dennis ritchie", WorkerNode, "192.168.1.101", 1081, "worker_version"}
-	s.nodesInfo = make(map[string]*Node)
-	s.nodesInfo["alan turning"] = serverNode
-	s.nodesInfo["dennis ritchie"] = workerNode
+	serverNode := &meta.Node{
+		UUID:       "alan turnin",
+		Hostname:   "192.168.1.100",
+		Type:       protocol.NodeType_Server.String(),
+		Version:    "server_version",
+		UpdateTime: time.Now().UTC(),
+	}
+	workerNode := &meta.Node{
+		UUID:       "dennis ritchie",
+		Hostname:   "192.168.1.101",
+		Type:       protocol.NodeType_Worker.String(),
+		Version:    "worker_version",
+		UpdateTime: time.Now().UTC(),
+	}
+	err := s.metaStore.UpdateNode(serverNode)
+	assert.NoError(t, err)
+	err = s.metaStore.UpdateNode(workerNode)
+	assert.NoError(t, err)
 	// get nodes
 	apitest.New().
 		Handler(s.handler).
@@ -340,7 +361,7 @@ func TestMaster_GetCluster(t *testing.T) {
 		Header("Cookie", cookie).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(marshal(t, []*Node{workerNode, serverNode})).
+		Body(marshal(t, []*meta.Node{serverNode, workerNode})).
 		End()
 }
 

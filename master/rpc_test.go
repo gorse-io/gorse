@@ -17,13 +17,13 @@ package master
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/madflojo/testcerts"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/progress"
@@ -35,6 +35,7 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/zhenghaoz/gorse/storage/meta"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -45,7 +46,12 @@ type mockMasterRPC struct {
 	grpcServer *grpc.Server
 }
 
-func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
+func newMockMasterRPC(t *testing.T) *mockMasterRPC {
+	// create meta store
+	metaStore, err := meta.Open(fmt.Sprintf("sqlite://%s/meta.db", t.TempDir()), time.Second)
+	assert.NoError(t, err)
+	err = metaStore.Init()
+	assert.NoError(t, err)
 	// create click model
 	train, test := newClickDataset()
 	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
@@ -56,7 +62,6 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 	bpr.Fit(context.Background(), trainSet, testSet, nil)
 	return &mockMasterRPC{
 		Master: Master{
-			nodesInfo:        make(map[string]*Node),
 			rankingModelName: "bpr",
 			RestServer: server.RestServer{
 				Settings: &config.Settings{
@@ -69,16 +74,13 @@ func newMockMasterRPC(_ *testing.T) *mockMasterRPC {
 					ClickModelVersion:   456,
 				},
 			},
+			metaStore: metaStore,
 		},
 		addr: make(chan string),
 	}
 }
 
 func (m *mockMasterRPC) Start(t *testing.T) {
-	m.ttlCache = ttlcache.New(ttlcache.WithTTL[string, *Node](time.Second))
-	m.ttlCache.OnEviction(m.nodeDown)
-	go m.ttlCache.Start()
-
 	listen, err := net.Listen("tcp", ":0")
 	assert.NoError(t, err)
 	m.addr <- listen.Addr().String()
@@ -90,10 +92,6 @@ func (m *mockMasterRPC) Start(t *testing.T) {
 }
 
 func (m *mockMasterRPC) StartTLS(t *testing.T, o *protocol.TLSConfig) {
-	m.ttlCache = ttlcache.New(ttlcache.WithTTL[string, *Node](time.Second))
-	m.ttlCache.OnEviction(m.nodeDown)
-	go m.ttlCache.Start()
-
 	listen, err := net.Listen("tcp", ":0")
 	assert.NoError(t, err)
 	m.addr <- listen.Addr().String()
@@ -110,12 +108,14 @@ func (m *mockMasterRPC) StartTLS(t *testing.T, o *protocol.TLSConfig) {
 }
 
 func (m *mockMasterRPC) Stop() {
+	_ = m.metaStore.Close()
 	m.grpcServer.Stop()
 }
 
 func TestRPC(t *testing.T) {
 	rpcServer := newMockMasterRPC(t)
 	go rpcServer.Start(t)
+	defer rpcServer.Stop()
 	address := <-rpcServer.addr
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
@@ -155,10 +155,10 @@ func TestRPC(t *testing.T) {
 
 	// test get meta
 	_, err = client.GetMeta(ctx,
-		&protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
+		&protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
 	assert.NoError(t, err)
 	metaResp, err := client.GetMeta(ctx,
-		&protocol.NodeInfo{NodeType: protocol.NodeType_WorkerNode, NodeName: "worker1", HttpPort: 1234})
+		&protocol.NodeInfo{NodeType: protocol.NodeType_Worker, Uuid: "worker1", Hostname: "yoga"})
 	assert.NoError(t, err)
 	assert.Equal(t, int64(123), metaResp.RankingModelVersion)
 	assert.Equal(t, int64(456), metaResp.ClickModelVersion)
@@ -172,7 +172,7 @@ func TestRPC(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 	metaResp, err = client.GetMeta(ctx,
-		&protocol.NodeInfo{NodeType: protocol.NodeType_WorkerNode, NodeName: "worker2", HttpPort: 1234})
+		&protocol.NodeInfo{NodeType: protocol.NodeType_Worker, Uuid: "worker2", Hostname: "yoga"})
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"worker2"}, metaResp.Workers)
 
@@ -206,6 +206,7 @@ func TestSSL(t *testing.T) {
 	}
 	rpcServer := newMockMasterRPC(t)
 	go rpcServer.StartTLS(t, o)
+	defer rpcServer.Stop()
 	address := <-rpcServer.addr
 
 	// success
@@ -214,14 +215,14 @@ func TestSSL(t *testing.T) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(c))
 	assert.NoError(t, err)
 	client := protocol.NewMasterClient(conn)
-	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
+	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
 	assert.NoError(t, err)
 
 	// insecure
 	conn, err = grpc.Dial(address, grpc.WithInsecure())
 	assert.NoError(t, err)
 	client = protocol.NewMasterClient(conn)
-	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
+	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
 	assert.Error(t, err)
 
 	// certificate mismatch
@@ -236,6 +237,6 @@ func TestSSL(t *testing.T) {
 	conn, err = grpc.Dial(address, grpc.WithTransportCredentials(c))
 	assert.NoError(t, err)
 	client = protocol.NewMasterClient(conn)
-	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_ServerNode, NodeName: "server1", HttpPort: 1234})
+	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
 	assert.Error(t, err)
 }
