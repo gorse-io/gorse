@@ -19,15 +19,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/google/uuid"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.opentelemetry.io/otel"
@@ -45,6 +50,7 @@ type Server struct {
 	cachePrefix  string
 	dataPath     string
 	dataPrefix   string
+	conn         *grpc.ClientConn
 	masterClient protocol.MasterClient
 	serverName   string
 	masterHost   string
@@ -92,7 +98,7 @@ func (s *Server) Serve() {
 		}
 	}
 	if state.ServerName == "" {
-		state.ServerName = base.GetRandomName(0)
+		state.ServerName = uuid.New().String()
 		err = state.WriteLocalCache()
 		if err != nil {
 			log.Logger().Fatal("failed to write meta", zap.Error(err))
@@ -117,11 +123,11 @@ func (s *Server) Serve() {
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), opts...)
+	s.conn, err = grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), opts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
-	s.masterClient = protocol.NewMasterClient(conn)
+	s.masterClient = protocol.NewMasterClient(s.conn)
 
 	go s.Sync()
 	container := restful.NewContainer()
@@ -145,9 +151,9 @@ func (s *Server) Sync() {
 		if meta, err = s.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
 				NodeType:      protocol.NodeType_ServerNode,
-				NodeName:      s.serverName,
-				HttpPort:      int64(s.HttpPort),
+				Uuid:          s.serverName,
 				BinaryVersion: version.Version,
+				Hostname:      lo.Must(os.Hostname()),
 			}); err != nil {
 			log.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
@@ -162,11 +168,16 @@ func (s *Server) Sync() {
 
 		// connect to data store
 		if s.dataPath != s.Config.Database.DataStore || s.dataPrefix != s.Config.Database.DataTablePrefix {
-			log.Logger().Info("connect data store",
-				zap.String("database", log.RedactDBURL(s.Config.Database.DataStore)))
-			if s.DataClient, err = data.Open(s.Config.Database.DataStore, s.Config.Database.DataTablePrefix); err != nil {
-				log.Logger().Error("failed to connect data store", zap.Error(err))
-				goto sleep
+			if strings.HasPrefix(s.Config.Database.DataStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect cache store via master")
+				s.DataClient = data.NewProxyClient(s.conn)
+			} else {
+				log.Logger().Info("connect data store",
+					zap.String("database", log.RedactDBURL(s.Config.Database.DataStore)))
+				if s.DataClient, err = data.Open(s.Config.Database.DataStore, s.Config.Database.DataTablePrefix); err != nil {
+					log.Logger().Error("failed to connect data store", zap.Error(err))
+					goto sleep
+				}
 			}
 			s.dataPath = s.Config.Database.DataStore
 			s.dataPrefix = s.Config.Database.DataTablePrefix
@@ -174,11 +185,16 @@ func (s *Server) Sync() {
 
 		// connect to cache store
 		if s.cachePath != s.Config.Database.CacheStore || s.cachePrefix != s.Config.Database.CacheTablePrefix {
-			log.Logger().Info("connect cache store",
-				zap.String("database", log.RedactDBURL(s.Config.Database.CacheStore)))
-			if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore, s.Config.Database.CacheTablePrefix); err != nil {
-				log.Logger().Error("failed to connect cache store", zap.Error(err))
-				goto sleep
+			if strings.HasPrefix(s.Config.Database.CacheStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect cache store via master")
+				s.CacheClient = cache.NewProxyClient(s.conn)
+			} else {
+				log.Logger().Info("connect cache store",
+					zap.String("database", log.RedactDBURL(s.Config.Database.CacheStore)))
+				if s.CacheClient, err = cache.Open(s.Config.Database.CacheStore, s.Config.Database.CacheTablePrefix); err != nil {
+					log.Logger().Error("failed to connect cache store", zap.Error(err))
+					goto sleep
+				}
 			}
 			s.cachePath = s.Config.Database.CacheStore
 			s.cachePrefix = s.Config.Database.CacheTablePrefix

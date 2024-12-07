@@ -17,53 +17,56 @@ package cache
 import (
 	"fmt"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc"
 	"net"
 	"testing"
 )
 
 type ProxyTestSuite struct {
 	baseTestSuite
-	SQLite Database
-	Server *ProxyServer
+	sqlite     Database
+	server     *ProxyServer
+	clientConn *grpc.ClientConn
 }
 
 func (suite *ProxyTestSuite) SetupSuite() {
 	// create database
 	var err error
 	path := fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())
-	suite.SQLite, err = Open(path, "gorse_")
+	suite.sqlite, err = Open(path, "gorse_")
 	suite.NoError(err)
 	// create schema
-	err = suite.SQLite.Init()
+	err = suite.sqlite.Init()
 	suite.NoError(err)
 	// start server
 	lis, err := net.Listen("tcp", "localhost:0")
 	suite.NoError(err)
-	suite.Server = NewProxyServer(suite.SQLite)
+	suite.server = NewProxyServer(suite.sqlite)
 	go func() {
-		err = suite.Server.Serve(lis)
+		err = suite.server.Serve(lis)
 		suite.NoError(err)
 	}()
-	// create proxy
-	suite.Database, err = OpenProxyClient(lis.Addr().String())
+	// create proxy client
+	suite.clientConn, err = grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	suite.NoError(err)
+	suite.Database = NewProxyClient(suite.clientConn)
 }
 
 func (suite *ProxyTestSuite) TearDownSuite() {
-	suite.Server.Stop()
-	suite.NoError(suite.Database.Close())
-	suite.NoError(suite.SQLite.Close())
+	suite.server.Stop()
+	suite.NoError(suite.clientConn.Close())
+	suite.NoError(suite.sqlite.Close())
 }
 
 func (suite *ProxyTestSuite) SetupTest() {
-	err := suite.SQLite.Ping()
+	err := suite.sqlite.Ping()
 	suite.NoError(err)
-	err = suite.SQLite.Purge()
+	err = suite.sqlite.Purge()
 	suite.NoError(err)
 }
 
 func (suite *ProxyTestSuite) TearDownTest() {
-	err := suite.SQLite.Purge()
+	err := suite.sqlite.Purge()
 	suite.NoError(err)
 }
 

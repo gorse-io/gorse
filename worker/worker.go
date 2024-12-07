@@ -45,6 +45,7 @@ import (
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
@@ -92,6 +93,7 @@ type Worker struct {
 	dataPrefix  string
 
 	// master connection
+	conn         *grpc.ClientConn
 	masterClient protocol.MasterClient
 
 	latestRankingModelVersion int64
@@ -188,11 +190,16 @@ func (w *Worker) Sync() {
 
 		// connect to data store
 		if w.dataPath != w.Config.Database.DataStore || w.dataPrefix != w.Config.Database.DataTablePrefix {
-			log.Logger().Info("connect data store",
-				zap.String("database", log.RedactDBURL(w.Config.Database.DataStore)))
-			if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix); err != nil {
-				log.Logger().Error("failed to connect data store", zap.Error(err))
-				goto sleep
+			if strings.HasPrefix(w.Config.Database.DataStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect data store via master")
+				w.DataClient = data.NewProxyClient(w.conn)
+			} else {
+				log.Logger().Info("connect data store",
+					zap.String("database", log.RedactDBURL(w.Config.Database.DataStore)))
+				if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix); err != nil {
+					log.Logger().Error("failed to connect data store", zap.Error(err))
+					goto sleep
+				}
 			}
 			w.dataPath = w.Config.Database.DataStore
 			w.dataPrefix = w.Config.Database.DataTablePrefix
@@ -200,11 +207,16 @@ func (w *Worker) Sync() {
 
 		// connect to cache store
 		if w.cachePath != w.Config.Database.CacheStore || w.cachePrefix != w.Config.Database.CacheTablePrefix {
-			log.Logger().Info("connect cache store",
-				zap.String("database", log.RedactDBURL(w.Config.Database.CacheStore)))
-			if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix); err != nil {
-				log.Logger().Error("failed to connect cache store", zap.Error(err))
-				goto sleep
+			if strings.HasPrefix(w.Config.Database.CacheStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect cache store via master")
+				w.CacheClient = cache.NewProxyClient(w.conn)
+			} else {
+				log.Logger().Info("connect cache store",
+					zap.String("database", log.RedactDBURL(w.Config.Database.CacheStore)))
+				if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix); err != nil {
+					log.Logger().Error("failed to connect cache store", zap.Error(err))
+					goto sleep
+				}
 			}
 			w.cachePath = w.Config.Database.CacheStore
 			w.cachePrefix = w.Config.Database.CacheTablePrefix
@@ -410,11 +422,12 @@ func (w *Worker) Serve() {
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	conn, err := grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), opts...)
+	var err error
+	w.conn, err = grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), opts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
-	w.masterClient = protocol.NewMasterClient(conn)
+	w.masterClient = protocol.NewMasterClient(w.conn)
 
 	if w.oneMode {
 		w.peers = []string{w.workerName}

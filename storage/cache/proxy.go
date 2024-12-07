@@ -198,13 +198,16 @@ func (p *ProxyServer) GetTimeSeriesPoints(ctx context.Context, request *protocol
 }
 
 type ProxyClient struct {
-	*grpc.ClientConn
 	protocol.CacheStoreClient
 }
 
 func (p ProxyClient) Ping() error {
 	_, err := p.CacheStoreClient.Ping(context.Background(), &protocol.PingRequest{})
 	return err
+}
+
+func (p ProxyClient) Close() error {
+	return nil
 }
 
 func (p ProxyClient) Init() error {
@@ -428,15 +431,8 @@ func (p ProxyClient) GetTimeSeriesPoints(ctx context.Context, name string, begin
 	return points, nil
 }
 
-func OpenProxyClient(address string) (*ProxyClient, error) {
-	// Create gRPC connection
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-	// Create client
+func NewProxyClient(conn *grpc.ClientConn) *ProxyClient {
 	return &ProxyClient{
-		ClientConn:       conn,
 		CacheStoreClient: protocol.NewCacheStoreClient(conn),
-	}, nil
+	}
 }

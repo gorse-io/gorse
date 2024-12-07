@@ -643,9 +643,7 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.ClickhousePrefix,
 			storage.CHHTTPPrefix,
 			storage.CHHTTPSPrefix,
-		}
-		if oneModel {
-			prefixes = append(prefixes, storage.SQLitePrefix)
+			storage.SQLitePrefix,
 		}
 		for _, prefix := range prefixes {
 			if strings.HasPrefix(fl.Field().String(), prefix) {
@@ -665,9 +663,7 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.MySQLPrefix,
 			storage.PostgresPrefix,
 			storage.PostgreSQLPrefix,
-		}
-		if oneModel {
-			prefixes = append(prefixes, storage.SQLitePrefix)
+			storage.SQLitePrefix,
 		}
 		for _, prefix := range prefixes {
 			if strings.HasPrefix(fl.Field().String(), prefix) {
