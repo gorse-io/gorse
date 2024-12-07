@@ -24,12 +24,6 @@ import (
 	"time"
 )
 
-const (
-	MasterNode = "master"
-	WorkerNode = "worker"
-	ServerNode = "server"
-)
-
 type Node struct {
 	UUID       string
 	Hostname   string
@@ -38,24 +32,11 @@ type Node struct {
 	UpdateTime time.Time
 }
 
-type CronJob struct {
-	Name        string
-	Description string
-	Current     int
-	Total       int
-	StartTime   time.Time
-	EndTime     time.Time
-	UpdateTime  time.Time
-}
-
 type Database interface {
 	Close() error
 	Init() error
-	SetTTL(ttl time.Duration)
 	UpdateNode(node *Node) error
 	ListNodes() ([]*Node, error)
-	UpdateCronJob(cronJob *CronJob) error
-	ListCronJobs() ([]*CronJob, error)
 }
 
 // Open a connection to a database.
@@ -72,6 +53,7 @@ func Open(path string, ttl time.Duration) (Database, error) {
 		}
 		// connect to database
 		database := new(SQLite)
+		database.ttl = ttl
 		if database.db, err = otelsql.Open("sqlite", dataSourceName,
 			otelsql.WithAttributes(semconv.DBSystemSqlite),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),

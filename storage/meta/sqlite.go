@@ -16,6 +16,7 @@ package meta
 
 import (
 	"database/sql"
+	"fmt"
 	_ "modernc.org/sqlite"
 	"time"
 )
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS nodes (
 	hostname TEXT,
 	type TEXT,
 	version TEXT,
-	update_time TIMESTAMP
+	update_time DATETIME
 );`); err != nil {
 		return err
 	}
@@ -56,10 +57,6 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
 	return nil
 }
 
-func (s *SQLite) SetTTL(ttl time.Duration) {
-	s.ttl = ttl
-}
-
 func (s *SQLite) UpdateNode(node *Node) error {
 	_, err := s.db.Exec(`
 INSERT INTO nodes (uuid, hostname, type, version, update_time)
@@ -69,14 +66,16 @@ ON CONFLICT(uuid) DO UPDATE SET
 	type = excluded.type,
 	version = excluded.version,
 	update_time = excluded.update_time
-`, node.UUID, node.Hostname, node.Type, node.Version, node.UpdateTime)
+`, node.UUID, node.Hostname, node.Type, node.Version, node.UpdateTime.UTC())
 	return err
 }
 
 func (s *SQLite) ListNodes() ([]*Node, error) {
+	// List nodes within TTL
 	rs, err := s.db.Query(`
 SELECT uuid, hostname, type, version, update_time FROM nodes
-`)
+WHERE update_time > datetime('now', ?)
+`, fmt.Sprintf("-%.0f seconds", s.ttl.Seconds()))
 	if err != nil {
 		return nil, err
 	}
@@ -89,29 +88,11 @@ SELECT uuid, hostname, type, version, update_time FROM nodes
 		}
 		nodes = append(nodes, &node)
 	}
-	return nodes, nil
-}
-
-func (s *SQLite) UpdateCronJob(cronJob *CronJob) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *SQLite) ListCronJobs() ([]*CronJob, error) {
-	rs, err := s.db.Query(`
-SELECT name, description, current, total, start_time, end_time, update_time FROM cron_jobs
-`)
-	if err != nil {
+	// Delete outdated nodes
+	if _, err = s.db.Exec(`
+DELETE FROM nodes WHERE update_time < datetime('now', ?)
+`, fmt.Sprintf("-%.0f seconds", s.ttl.Seconds())); err != nil {
 		return nil, err
 	}
-	defer rs.Close()
-	var cronJobs []*CronJob
-	for rs.Next() {
-		var cronJob CronJob
-		if err = rs.Scan(&cronJob.Name, &cronJob.Description, &cronJob.Current, &cronJob.Total, &cronJob.StartTime, &cronJob.EndTime, &cronJob.UpdateTime); err != nil {
-			return nil, err
-		}
-		cronJobs = append(cronJobs, &cronJob)
-	}
-	return cronJobs, nil
+	return nodes, nil
 }

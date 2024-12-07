@@ -24,17 +24,12 @@ type baseTestSuite struct {
 	Database
 }
 
-func (suite *baseTestSuite) TestCronJobs() {
-	// Add cron job
-	suite.SetTTL(time.Second)
-}
-
 func (suite *baseTestSuite) TestNodes() {
 	// Add node
 	err := suite.Database.UpdateNode(&Node{
 		UUID:       "node-1",
 		Hostname:   "localhost",
-		Type:       MasterNode,
+		Type:       "master",
 		Version:    "v0.1.0",
 		UpdateTime: time.Now(),
 	})
@@ -43,7 +38,7 @@ func (suite *baseTestSuite) TestNodes() {
 	err = suite.Database.UpdateNode(&Node{
 		UUID:       "node-1",
 		Hostname:   "localhost",
-		Type:       MasterNode,
+		Type:       "master",
 		Version:    "v0.1.1",
 		UpdateTime: time.Now(),
 	})
@@ -52,7 +47,7 @@ func (suite *baseTestSuite) TestNodes() {
 	err = suite.Database.UpdateNode(&Node{
 		UUID:       "node-2",
 		Hostname:   "localhost",
-		Type:       MasterNode,
+		Type:       "master",
 		Version:    "v0.1.0",
 		UpdateTime: time.Now().Add(-time.Hour),
 	})
@@ -60,9 +55,10 @@ func (suite *baseTestSuite) TestNodes() {
 	// List nodes
 	nodes, err := suite.Database.ListNodes()
 	suite.NoError(err)
-	suite.Equal(1, len(nodes))
-	suite.Equal("node-1", nodes[0].UUID)
-	suite.Equal("localhost", nodes[0].Hostname)
-	suite.Equal(MasterNode, nodes[0].Type)
-	suite.Equal("v0.1.1", nodes[0].Version)
+	if suite.Equal(1, len(nodes)) {
+		suite.Equal("node-1", nodes[0].UUID)
+		suite.Equal("localhost", nodes[0].Hostname)
+		suite.Equal("master", nodes[0].Type)
+		suite.Equal("v0.1.1", nodes[0].Version)
+	}
 }
