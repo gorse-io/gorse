@@ -165,7 +165,7 @@ func (w *Worker) Sync() {
 		var err error
 		if meta, err = w.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType:      protocol.NodeType_WorkerNode,
+				NodeType:      protocol.NodeType_Worker,
 				Uuid:          w.workerName,
 				BinaryVersion: version.Version,
 				Hostname:      lo.Must(os.Hostname()),
