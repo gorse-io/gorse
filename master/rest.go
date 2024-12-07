@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -49,6 +50,7 @@ import (
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -81,8 +83,8 @@ func (m *Master) CreateWebService() {
 	ws.Route(ws.GET("/dashboard/cluster").To(m.getCluster).
 		Doc("Get nodes in the cluster.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Returns(http.StatusOK, "OK", []Node{}).
-		Writes([]Node{}))
+		Returns(http.StatusOK, "OK", []meta.Node{}).
+		Writes([]meta.Node{}))
 	ws.Route(ws.GET("/dashboard/categories").To(m.getCategories).
 		Doc("Get categories of items.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -473,23 +475,14 @@ func (m *Master) getCategories(request *restful.Request, response *restful.Respo
 }
 
 func (m *Master) getCluster(_ *restful.Request, response *restful.Response) {
-	// collect nodes
-	workers := make([]*Node, 0)
-	servers := make([]*Node, 0)
-	m.nodesInfoMutex.RLock()
-	for _, info := range m.nodesInfo {
-		switch info.Type {
-		case WorkerNode:
-			workers = append(workers, info)
-		case ServerNode:
-			servers = append(servers, info)
-		}
+	nodes, err := m.metaStore.ListNodes()
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
 	}
-	m.nodesInfoMutex.RUnlock()
-	// return nodes
-	nodes := make([]*Node, 0)
-	nodes = append(nodes, workers...)
-	nodes = append(nodes, servers...)
+	sort.Slice(nodes, func(i, j int) bool {
+		return nodes[i].Type < nodes[j].Type
+	})
 	server.Ok(response, nodes)
 }
 
@@ -584,16 +577,19 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 		log.ResponseLogger(response).Warn("failed to get number of valid negative feedbacks", zap.Error(err))
 	}
 	// count the number of workers and servers
-	m.nodesInfoMutex.Lock()
-	for _, node := range m.nodesInfo {
+	nodes, err := m.metaStore.ListNodes()
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	for _, node := range nodes {
 		switch node.Type {
-		case ServerNode:
+		case protocol.NodeType_Server.String():
 			status.NumServers++
-		case WorkerNode:
+		case protocol.NodeType_Worker.String():
 			status.NumWorkers++
 		}
 	}
-	m.nodesInfoMutex.Unlock()
 	// read popular items update time
 	if status.PopularItemsUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get popular items update time", zap.Error(err))
@@ -643,13 +639,16 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 	// List workers
 	workers := mapset.NewSet[string]()
-	m.nodesInfoMutex.RLock()
-	for _, info := range m.nodesInfo {
-		if info.Type == WorkerNode {
-			workers.Add(info.Name)
+	nodes, err := m.metaStore.ListNodes()
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	for _, node := range nodes {
+		if node.Type == protocol.NodeType_Worker.String() {
+			workers.Add(node.UUID)
 		}
 	}
-	m.nodesInfoMutex.RUnlock()
 	// List local progress
 	progressList := m.tracer.List()
 	// list remote progress

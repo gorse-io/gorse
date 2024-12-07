@@ -21,11 +21,13 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/google/uuid"
 	"github.com/juju/errors"
 	"github.com/lafikl/consistent"
 	cmap "github.com/orcaman/concurrent-map"
@@ -164,9 +166,9 @@ func (w *Worker) Sync() {
 		if meta, err = w.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
 				NodeType:      protocol.NodeType_WorkerNode,
-				NodeName:      w.workerName,
-				HttpPort:      int64(w.httpPort),
+				Uuid:          w.workerName,
 				BinaryVersion: version.Version,
+				Hostname:      lo.Must(os.Hostname()),
 			}); err != nil {
 			log.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep
@@ -395,7 +397,7 @@ func (w *Worker) Serve() {
 			}
 		}
 		if state.WorkerName == "" {
-			state.WorkerName = base.GetRandomName(0)
+			state.WorkerName = uuid.New().String()
 			err = state.WriteLocalCache()
 			if err != nil {
 				log.Logger().Fatal("failed to write meta", zap.Error(err))

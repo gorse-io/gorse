@@ -47,9 +47,9 @@ message Feedback {
 }
 
 enum NodeType {
-  ServerNode = 0;
-  WorkerNode = 1;
-  ClientNode = 2;
+  Server = 0;
+  Worker = 1;
+  Client = 2;
 }
 
 service Master {

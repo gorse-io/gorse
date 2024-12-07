@@ -150,7 +150,7 @@ func (s *Server) Sync() {
 		var err error
 		if meta, err = s.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType:      protocol.NodeType_ServerNode,
+				NodeType:      protocol.NodeType_Server,
 				Uuid:          s.serverName,
 				BinaryVersion: version.Version,
 				Hostname:      lo.Must(os.Hostname()),

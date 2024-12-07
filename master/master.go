@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
@@ -70,9 +72,7 @@ type Master struct {
 	managedMode    bool
 
 	// cluster meta cache
-	ttlCache       *ttlcache.Cache[string, *Node]
-	nodesInfo      map[string]*Node
-	nodesInfoMutex sync.RWMutex
+	metaStore meta.Database
 
 	// ranking dataset
 	rankingTrainSet  *ranking.DataSet
@@ -124,7 +124,6 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	otel.SetErrorHandler(log.GetErrorHandler())
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	m := &Master{
-		nodesInfo: make(map[string]*Node),
 		// create task monitor
 		cacheFile:     cacheFile,
 		managedMode:   managedMode,
@@ -217,11 +216,14 @@ func (m *Master) Serve() {
 		MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(m.ClickModel)))
 	}
 
-	// create cluster meta cache
-	m.ttlCache = ttlcache.New[string, *Node](
-		ttlcache.WithTTL[string, *Node](m.Config.Master.MetaTimeout + 10*time.Second))
-	m.ttlCache.OnEviction(m.nodeDown)
-	go m.ttlCache.Start()
+	// connect meta database
+	m.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/gorse_meta.db", os.TempDir()), m.Config.Master.MetaTimeout)
+	if err != nil {
+		log.Logger().Fatal("failed to connect meta database", zap.Error(err))
+	}
+	if err = m.metaStore.Init(); err != nil {
+		log.Logger().Fatal("failed to init meta database", zap.Error(err))
+	}
 
 	// connect data database
 	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
