@@ -153,8 +153,9 @@ message DeleteScoresResponse {}
 
 message UpdateScoresRequest {
   repeated string collection = 1;
-  string id = 2;
-  ScorePatch patch = 3;
+  optional string subset = 2;
+  string id = 3;
+  ScorePatch patch = 4;
 }
 
 message UpdateScoresResponse {}
