@@ -471,9 +471,9 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
-	// Get leaderboard
-	ws.Route(ws.GET("/leaderboard/{name}").To(s.getLeaderboard).
-		Doc("Get the leaderboard.").
+	// Get non-personalized
+	ws.Route(ws.GET("/non-personalized/{name}").To(s.getNonPersonalized).
+		Doc("Get non-personalized recommendations.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
@@ -659,7 +659,7 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 	s.searchDocuments(cache.NonPersonalized, cache.Latest, category, true, request, response)
 }
 
-func (s *RestServer) getLeaderboard(request *restful.Request, response *restful.Response) {
+func (s *RestServer) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	category := request.QueryParameter("category")
 	log.ResponseLogger(response).Debug("get leaderboard", zap.String("name", name))

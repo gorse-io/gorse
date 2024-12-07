@@ -826,8 +826,8 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "0", "/api/latest/0"},
 		{"PopularItems", cache.NonPersonalized, cache.Popular, "", "/api/popular/"},
 		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "0", "/api/popular/0"},
-		{"NonPersonalized", cache.NonPersonalized, "trending", "", "/api/leaderboard/trending"},
-		{"LeaderboardCategory", cache.NonPersonalized, "trending", "0", "/api/leaderboard/trending"},
+		{"NonPersonalized", cache.NonPersonalized, "trending", "", "/api/non-personalized/trending"},
+		{"NonPersonalizedCategory", cache.NonPersonalized, "trending", "0", "/api/non-personalized/trending"},
 		{"Offline Recommend", cache.OfflineRecommend, "0", "", "/api/intermediate/recommend/0"},
 		{"Offline Recommend in Category", cache.OfflineRecommend, "0", "0", "/api/intermediate/recommend/0/0"},
 	}
@@ -1168,8 +1168,8 @@ func (suite *ServerTestSuite) TestGetRecommendsWithMultiCategories() {
 		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
 		QueryCollection(map[string][]string{
-			"n":        []string{"3"},
-			"category": []string{"2", "3"},
+			"n":        {"3"},
+			"category": {"2", "3"},
 		}).
 		Expect(t).
 		Status(http.StatusOK).
@@ -1721,7 +1721,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal((documents[:2]))).
+		Body(suite.marshal(documents[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1730,7 +1730,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal((documents[:2]))).
+		Body(suite.marshal(documents[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1739,7 +1739,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal((documents[:2]))).
+		Body(suite.marshal(documents[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
