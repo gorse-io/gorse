@@ -1406,7 +1406,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 			return
 		}
 		// update items cache
-		if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, "", item.ItemId, cache.ScorePatch{
+		if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, item.ItemId, cache.ScorePatch{
 			Categories: withWildCard(item.Categories),
 			IsHidden:   &item.IsHidden,
 		}); err != nil {
@@ -1510,21 +1510,21 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	}
 	// remove hidden item from cache
 	if patch.IsHidden != nil {
-		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, "", itemId, cache.ScorePatch{IsHidden: patch.IsHidden}); err != nil {
+		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, itemId, cache.ScorePatch{IsHidden: patch.IsHidden}); err != nil {
 			InternalServerError(response, err)
 			return
 		}
 	}
 	// add item to latest items cache
 	if patch.Timestamp != nil {
-		if err := s.CacheClient.UpdateScores(ctx, []string{cache.NonPersonalized}, cache.Latest, itemId, cache.ScorePatch{Score: proto.Float64(float64(patch.Timestamp.Unix()))}); err != nil {
+		if err := s.CacheClient.UpdateScores(ctx, []string{cache.NonPersonalized}, proto.String(cache.Latest), itemId, cache.ScorePatch{Score: proto.Float64(float64(patch.Timestamp.Unix()))}); err != nil {
 			InternalServerError(response, err)
 			return
 		}
 	}
 	// update categories in cache
 	if patch.Categories != nil {
-		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, "", itemId, cache.ScorePatch{Categories: withWildCard(patch.Categories)}); err != nil {
+		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, itemId, cache.ScorePatch{Categories: withWildCard(patch.Categories)}); err != nil {
 			InternalServerError(response, err)
 			return
 		}
@@ -1628,7 +1628,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		return
 	}
 	// insert category to cache
-	if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, "", itemId, cache.ScorePatch{Categories: withWildCard(item.Categories)}); err != nil {
+	if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, itemId, cache.ScorePatch{Categories: withWildCard(item.Categories)}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
@@ -1657,7 +1657,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 	}
 	item.Categories = categories
 	// delete category from cache
-	if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, "", itemId, cache.ScorePatch{Categories: withWildCard(categories)}); err != nil {
+	if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, itemId, cache.ScorePatch{Categories: withWildCard(categories)}); err != nil {
 		InternalServerError(response, err)
 		return
 	}
