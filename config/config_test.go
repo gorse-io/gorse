@@ -32,6 +32,10 @@ func TestUnmarshal(t *testing.T) {
 	data, err := os.ReadFile("config.toml")
 	assert.NoError(t, err)
 	text := string(data)
+	text = strings.Replace(text, "ssl_mode = false", "ssl_mode = true", -1)
+	text = strings.Replace(text, "ssl_ca = \"\"", "ssl_ca = \"ca.pem\"", -1)
+	text = strings.Replace(text, "ssl_cert = \"\"", "ssl_cert = \"cert.pem\"", -1)
+	text = strings.Replace(text, "ssl_key = \"\"", "ssl_key = \"key.pem\"", -1)
 	text = strings.Replace(text, "dashboard_user_name = \"\"", "dashboard_user_name = \"admin\"", -1)
 	text = strings.Replace(text, "dashboard_password = \"\"", "dashboard_password = \"password\"", -1)
 	text = strings.Replace(text, "admin_api_key = \"\"", "admin_api_key = \"super_api_key\"", -1)
@@ -65,9 +69,14 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "gorse_", config.Database.TablePrefix)
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
 			assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
+			assert.Equal(t, "READ-UNCOMMITTED", config.Database.MySQL.IsolationLevel)
 			// [master]
 			assert.Equal(t, 8086, config.Master.Port)
 			assert.Equal(t, "0.0.0.0", config.Master.Host)
+			assert.Equal(t, true, config.Master.SSLMode)
+			assert.Equal(t, "ca.pem", config.Master.SSLCA)
+			assert.Equal(t, "cert.pem", config.Master.SSLCert)
+			assert.Equal(t, "key.pem", config.Master.SSLKey)
 			assert.Equal(t, 8088, config.Master.HttpPort)
 			assert.Equal(t, "0.0.0.0", config.Master.HttpHost)
 			assert.Equal(t, []string{".*"}, config.Master.HttpCorsDomains)
@@ -185,6 +194,10 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_CACHE_TABLE_PREFIX", "gorse_cache_"},
 		{"GORSE_MASTER_PORT", "123"},
 		{"GORSE_MASTER_HOST", "<master_host>"},
+		{"GORSE_MASTER_SSL_MODE", "true"},
+		{"GORSE_MASTER_SSL_CA", "ca.pem"},
+		{"GORSE_MASTER_SSL_CERT", "cert.pem"},
+		{"GORSE_MASTER_SSL_KEY", "key.pem"},
 		{"GORSE_MASTER_HTTP_PORT", "456"},
 		{"GORSE_MASTER_HTTP_HOST", "<master_http_host>"},
 		{"GORSE_MASTER_JOBS", "789"},
@@ -213,6 +226,10 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
 	assert.Equal(t, 123, config.Master.Port)
 	assert.Equal(t, "<master_host>", config.Master.Host)
+	assert.Equal(t, true, config.Master.SSLMode)
+	assert.Equal(t, "ca.pem", config.Master.SSLCA)
+	assert.Equal(t, "cert.pem", config.Master.SSLCert)
+	assert.Equal(t, "key.pem", config.Master.SSLKey)
 	assert.Equal(t, 456, config.Master.HttpPort)
 	assert.Equal(t, "<master_http_host>", config.Master.HttpHost)
 	assert.Equal(t, 789, config.Master.NumJobs)

@@ -103,7 +103,7 @@ var oneCommand = &cobra.Command{
 		// Start worker
 		workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
 		w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-			0, workerJobs, "", managedMode)
+			0, workerJobs, "", managedMode, nil)
 		go func() {
 			w.SetOneMode(m.Settings)
 			w.Serve()

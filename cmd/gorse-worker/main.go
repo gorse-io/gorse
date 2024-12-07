@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
+	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/worker"
 	"go.uber.org/zap"
 )
@@ -45,7 +46,25 @@ var workerCommand = &cobra.Command{
 		log.SetLogger(cmd.PersistentFlags(), debug)
 		// create worker
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, managedModel)
+		caFile, _ := cmd.PersistentFlags().GetString("ssl-ca")
+		certFile, _ := cmd.PersistentFlags().GetString("ssl-cert")
+		keyFile, _ := cmd.PersistentFlags().GetString("ssl-key")
+		var tlsConfig *protocol.TLSConfig
+		if caFile != "" && certFile != "" && keyFile != "" {
+			tlsConfig = &protocol.TLSConfig{
+				SSLCA:   caFile,
+				SSLCert: certFile,
+				SSLKey:  keyFile,
+			}
+		} else if caFile == "" && certFile == "" && keyFile == "" {
+			tlsConfig = nil
+		} else {
+			log.Logger().Fatal("incomplete SSL configuration",
+				zap.String("ssl_ca", caFile),
+				zap.String("ssl_cert", certFile),
+				zap.String("ssl_key", keyFile))
+		}
+		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, managedModel, tlsConfig)
 		w.Serve()
 	},
 }
@@ -61,6 +80,9 @@ func init() {
 	workerCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
 	workerCommand.PersistentFlags().String("cache-path", "worker_cache.data", "path of cache file")
+	workerCommand.PersistentFlags().String("ssl-ca", "", "path of SSL CA")
+	workerCommand.PersistentFlags().String("ssl-cert", "", "path to SSL certificate")
+	workerCommand.PersistentFlags().String("ssl-key", "", "path to SSL key")
 }
 
 func main() {

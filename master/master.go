@@ -41,6 +41,7 @@ import (
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.opentelemetry.io/otel"
@@ -223,7 +224,8 @@ func (m *Master) Serve() {
 	go m.ttlCache.Start()
 
 	// connect data database
-	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
@@ -233,7 +235,8 @@ func (m *Master) Serve() {
 	}
 
 	// connect cache database
-	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix)
+	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix,
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 	if err != nil {
 		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.CacheStore)))
@@ -255,12 +258,28 @@ func (m *Master) Serve() {
 	go func() {
 		log.Logger().Info("start rpc server",
 			zap.String("host", m.Config.Master.Host),
-			zap.Int("port", m.Config.Master.Port))
+			zap.Int("port", m.Config.Master.Port),
+			zap.Bool("ssl_mode", m.Config.Master.SSLMode),
+			zap.String("ssl_ca", m.Config.Master.SSLCA),
+			zap.String("ssl_cert", m.Config.Master.SSLCert),
+			zap.String("ssl_key", m.Config.Master.SSLKey))
+		opts := []grpc.ServerOption{grpc.MaxSendMsgSize(math.MaxInt)}
+		if m.Config.Master.SSLMode {
+			c, err := protocol.NewServerCreds(&protocol.TLSConfig{
+				SSLCA:   m.Config.Master.SSLCA,
+				SSLCert: m.Config.Master.SSLCert,
+				SSLKey:  m.Config.Master.SSLKey,
+			})
+			if err != nil {
+				log.Logger().Fatal("failed to load server TLS", zap.Error(err))
+			}
+			opts = append(opts, grpc.Creds(c))
+		}
 		lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
 		if err != nil {
 			log.Logger().Fatal("failed to listen", zap.Error(err))
 		}
-		m.grpcServer = grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
+		m.grpcServer = grpc.NewServer(opts...)
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))

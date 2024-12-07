@@ -29,6 +29,11 @@ cache_table_prefix = ""
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
 data_table_prefix = ""
 
+[database.mysql]
+
+# Transaction isolation level. The default value is "READ-UNCOMMITTED".
+isolation_level = "READ-UNCOMMITTED"
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.
@@ -36,6 +41,18 @@ port = 8086
 
 # gRPC host of the master node. The default values is "0.0.0.0".
 host = "0.0.0.0"
+
+# Enable SSL for the gRPC communication. The default value is false.
+ssl_mode = false
+
+# SSL certification authority for the gRPC communication.
+ssl_ca = ""
+
+# SSL certification for the gRPC communication.
+ssl_cert = ""
+
+# SSL certification key for the gRPC communication.
+ssl_key = ""
 
 # HTTP port of the master node. The default values is 8088.
 http_port = 8088
