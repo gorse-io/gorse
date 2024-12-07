@@ -307,7 +307,7 @@ func (r *Redis) SearchScores(ctx context.Context, collection, subset string, que
 	return documents, nil
 }
 
-func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset, id string, patch ScorePatch) error {
+func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *string, id string, patch ScorePatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
@@ -317,8 +317,8 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset, 
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
 	builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(id)))
-	if subset != "" {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(subset)))
+	if subset != nil {
+		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(*subset)))
 	}
 	for {
 		// search documents

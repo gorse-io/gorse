@@ -369,7 +369,7 @@ func (m MongoDB) SearchScores(ctx context.Context, collection, subset string, qu
 	return documents, nil
 }
 
-func (m MongoDB) UpdateScores(ctx context.Context, collections []string, subset, id string, patch ScorePatch) error {
+func (m MongoDB) UpdateScores(ctx context.Context, collections []string, subset *string, id string, patch ScorePatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
@@ -380,7 +380,7 @@ func (m MongoDB) UpdateScores(ctx context.Context, collections []string, subset,
 		"collection": bson.M{"$in": collections},
 		"id":         id,
 	}
-	if subset != "" {
+	if subset != nil {
 		filter["subset"] = subset
 	}
 	update := bson.D{}

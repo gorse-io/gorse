@@ -162,7 +162,7 @@ func (p *ProxyServer) DeleteScores(ctx context.Context, request *protocol.Delete
 }
 
 func (p *ProxyServer) UpdateScores(ctx context.Context, request *protocol.UpdateScoresRequest) (*protocol.UpdateScoresResponse, error) {
-	return &protocol.UpdateScoresResponse{}, p.database.UpdateScores(ctx, request.GetCollection(), request.GetId(), ScorePatch{
+	return &protocol.UpdateScoresResponse{}, p.database.UpdateScores(ctx, request.GetCollection(), request.Subset, request.GetId(), ScorePatch{
 		IsHidden:   request.GetPatch().IsHidden,
 		Categories: request.GetPatch().Categories,
 		Score:      request.GetPatch().Score,
@@ -380,9 +380,10 @@ func (p ProxyClient) DeleteScores(ctx context.Context, collection []string, cond
 	return err
 }
 
-func (p ProxyClient) UpdateScores(ctx context.Context, collection []string, id string, patch ScorePatch) error {
+func (p ProxyClient) UpdateScores(ctx context.Context, collection []string, subset *string, id string, patch ScorePatch) error {
 	_, err := p.CacheStoreClient.UpdateScores(ctx, &protocol.UpdateScoresRequest{
 		Collection: collection,
+		Subset:     subset,
 		Id:         id,
 		Patch: &protocol.ScorePatch{
 			Score:      patch.Score,
