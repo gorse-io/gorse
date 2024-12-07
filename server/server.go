@@ -19,11 +19,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/google/uuid"
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
@@ -95,7 +98,7 @@ func (s *Server) Serve() {
 		}
 	}
 	if state.ServerName == "" {
-		state.ServerName = base.GetRandomName(0)
+		state.ServerName = uuid.New().String()
 		err = state.WriteLocalCache()
 		if err != nil {
 			log.Logger().Fatal("failed to write meta", zap.Error(err))
@@ -147,10 +150,10 @@ func (s *Server) Sync() {
 		var err error
 		if meta, err = s.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
-				NodeType:      protocol.NodeType_ServerNode,
-				NodeName:      s.serverName,
-				HttpPort:      int64(s.HttpPort),
+				NodeType:      protocol.NodeType_Server,
+				Uuid:          s.serverName,
 				BinaryVersion: version.Version,
+				Hostname:      lo.Must(os.Hostname()),
 			}); err != nil {
 			log.Logger().Error("failed to get meta", zap.Error(err))
 			goto sleep

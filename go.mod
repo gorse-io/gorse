@@ -20,7 +20,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20241115145254-4def1c814899
+	github.com/gorse-io/dashboard v0.0.0-20241207032532-3b75acd211c4
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
 	github.com/jellydator/ttlcache/v3 v3.3.0

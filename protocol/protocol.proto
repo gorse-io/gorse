@@ -47,9 +47,9 @@ message Feedback {
 }
 
 enum NodeType {
-  ServerNode = 0;
-  WorkerNode = 1;
-  ClientNode = 2;
+  Server = 0;
+  Worker = 1;
+  Client = 2;
 }
 
 service Master {
@@ -84,9 +84,9 @@ message VersionInfo {
 
 message NodeInfo {
   NodeType node_type = 1;
-  string node_name = 2;
-  int64 http_port = 3;
+  string uuid = 2;
   string binary_version = 4;
+  string hostname = 5;
 }
 
 message Progress {
