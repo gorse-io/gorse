@@ -1360,11 +1360,11 @@ func writeError(response http.ResponseWriter, httpStatus int, message string) {
 	}
 }
 
-func (s *Master) checkAdmin(request *http.Request) bool {
-	if s.Config.Master.AdminAPIKey == "" {
+func (m *Master) checkAdmin(request *http.Request) bool {
+	if m.Config.Master.AdminAPIKey == "" {
 		return true
 	}
-	if request.FormValue("X-API-Key") == s.Config.Master.AdminAPIKey {
+	if request.FormValue("X-API-Key") == m.Config.Master.AdminAPIKey {
 		return true
 	}
 	return false
