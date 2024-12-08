@@ -60,32 +60,41 @@ type Config struct {
 	Recommend    RecommendConfig    `mapstructure:"recommend"`
 	Tracing      TracingConfig      `mapstructure:"tracing"`
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
+	OIDC         OIDCConfig         `mapstructure:"oidc"`
 }
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore        string `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
-	CacheStore       string `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
-	TablePrefix      string `mapstructure:"table_prefix"`
-	DataTablePrefix  string `mapstructure:"data_table_prefix"`
-	CacheTablePrefix string `mapstructure:"cache_table_prefix"`
+	DataStore        string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
+	CacheStore       string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	TablePrefix      string      `mapstructure:"table_prefix"`
+	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
+	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
+	MySQL            MySQLConfig `mapstructure:"mysql"`
+}
+
+type MySQLConfig struct {
+	IsolationLevel string `mapstructure:"isolation_level" validate:"oneof=READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE"`
 }
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port                int           `mapstructure:"port" validate:"gte=0"`        // master port
-	Host                string        `mapstructure:"host"`                         // master host
-	HttpPort            int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
-	HttpHost            string        `mapstructure:"http_host"`                    // HTTP host
-	HttpCorsDomains     []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
-	HttpCorsMethods     []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
-	NumJobs             int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
-	MetaTimeout         time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
-	DashboardUserName   string        `mapstructure:"dashboard_user_name"`          // dashboard user name
-	DashboardPassword   string        `mapstructure:"dashboard_password"`           // dashboard password
-	DashboardAuthServer string        `mapstructure:"dashboard_auth_server"`        // dashboard auth server
-	DashboardRedacted   bool          `mapstructure:"dashboard_redacted"`
-	AdminAPIKey         string        `mapstructure:"admin_api_key"`
+	Port              int           `mapstructure:"port" validate:"gte=0"`        // master port
+	Host              string        `mapstructure:"host"`                         // master host
+	SSLMode           bool          `mapstructure:"ssl_mode"`                     // enable SSL mode
+	SSLCA             string        `mapstructure:"ssl_ca"`                       // SSL CA file
+	SSLCert           string        `mapstructure:"ssl_cert"`                     // SSL certificate file
+	SSLKey            string        `mapstructure:"ssl_key"`                      // SSL key file
+	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
+	HttpHost          string        `mapstructure:"http_host"`                    // HTTP host
+	HttpCorsDomains   []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
+	HttpCorsMethods   []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
+	NumJobs           int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
+	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
+	DashboardUserName string        `mapstructure:"dashboard_user_name"`          // dashboard user name
+	DashboardPassword string        `mapstructure:"dashboard_password"`           // dashboard password
+	DashboardRedacted bool          `mapstructure:"dashboard_redacted"`
+	AdminAPIKey       string        `mapstructure:"admin_api_key"`
 }
 
 // ServerConfig is the configuration for the server.
@@ -179,8 +188,21 @@ type ExperimentalConfig struct {
 	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
 }
 
+type OIDCConfig struct {
+	Enable       bool   `mapstructure:"enable"`
+	Issuer       string `mapstructure:"issuer"`
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
+}
+
 func GetDefaultConfig() *Config {
 	return &Config{
+		Database: DatabaseConfig{
+			MySQL: MySQLConfig{
+				IsolationLevel: "READ-UNCOMMITTED",
+			},
+		},
 		Master: MasterConfig{
 			Port:            8086,
 			Host:            "0.0.0.0",
@@ -468,6 +490,8 @@ func (config *TracingConfig) Equal(other TracingConfig) bool {
 
 func setDefault() {
 	defaultConfig := GetDefaultConfig()
+	// [database.mysql]
+	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
 	// [master]
 	viper.SetDefault("master.port", defaultConfig.Master.Port)
 	viper.SetDefault("master.host", defaultConfig.Master.Host)
@@ -549,6 +573,10 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
 		{"master.port", "GORSE_MASTER_PORT"},
 		{"master.host", "GORSE_MASTER_HOST"},
+		{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
+		{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
+		{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
+		{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
 		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
 		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
 		{"master.n_jobs", "GORSE_MASTER_JOBS"},
@@ -558,6 +586,11 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 		{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
 		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
 		{"server.api_key", "GORSE_SERVER_API_KEY"},
+		{"oidc.enable", "GORSE_OIDC_ENABLE"},
+		{"oidc.issuer", "GORSE_OIDC_ISSUER"},
+		{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
+		{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
+		{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
 	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
@@ -607,6 +640,9 @@ func (config *Config) Validate(oneModel bool) error {
 			storage.MySQLPrefix,
 			storage.PostgresPrefix,
 			storage.PostgreSQLPrefix,
+			storage.ClickhousePrefix,
+			storage.CHHTTPPrefix,
+			storage.CHHTTPSPrefix,
 		}
 		if oneModel {
 			prefixes = append(prefixes, storage.SQLitePrefix)

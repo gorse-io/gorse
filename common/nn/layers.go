@@ -74,6 +74,20 @@ func (e *embeddingLayer) Forward(x *Tensor) *Tensor {
 	return Embedding(e.w, x)
 }
 
+type reluLayer struct{}
+
+func NewReLU() Layer {
+	return &reluLayer{}
+}
+
+func (r *reluLayer) Parameters() []*Tensor {
+	return nil
+}
+
+func (r *reluLayer) Forward(x *Tensor) *Tensor {
+	return ReLu(x)
+}
+
 type Sequential struct {
 	layers []Layer
 }

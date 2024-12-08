@@ -17,6 +17,8 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"reflect"
 	"sort"
 	"strings"
@@ -33,6 +35,7 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
+	"gorm.io/driver/clickhouse"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -145,6 +148,10 @@ type Feedback struct {
 	Comment     string    `gorm:"column:comment" mapsstructure:"comment"`
 }
 
+type UserFeedback Feedback
+
+type ItemFeedback Feedback
+
 // SortFeedbacks sorts feedback from latest to oldest.
 func SortFeedbacks(feedback []Feedback) {
 	sort.Sort(feedbackSorter(feedback))
@@ -223,6 +230,7 @@ type Database interface {
 	Init() error
 	Ping() error
 	Close() error
+	Optimize() error
 	Purge() error
 	BatchInsertItems(ctx context.Context, items []Item) error
 	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)
@@ -247,10 +255,11 @@ type Database interface {
 }
 
 // Open a connection to a database.
-func Open(path, tablePrefix string) (Database, error) {
+func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 	var err error
 	if strings.HasPrefix(path, storage.MySQLPrefix) {
 		name := path[len(storage.MySQLPrefix):]
+		option := storage.NewOptions(opts...)
 		// probe isolation variable name
 		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
 		if err != nil {
@@ -259,7 +268,7 @@ func Open(path, tablePrefix string) (Database, error) {
 		// append parameters
 		if name, err = storage.AppendMySQLParams(name, map[string]string{
 			"sql_mode":       "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
-			isolationVarName: "'READ-UNCOMMITTED'",
+			isolationVarName: fmt.Sprintf("'%s'", option.IsolationLevel),
 			"parseTime":      "true",
 		}); err != nil {
 			return nil, errors.Trace(err)
@@ -293,6 +302,32 @@ func Open(path, tablePrefix string) (Database, error) {
 		database.client.SetMaxOpenConns(maxOpenConns)
 		database.client.SetConnMaxLifetime(maxLifetime)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	} else if strings.HasPrefix(path, storage.ClickhousePrefix) || strings.HasPrefix(path, storage.CHHTTPPrefix) || strings.HasPrefix(path, storage.CHHTTPSPrefix) {
+		// replace schema
+		parsed, err := url.Parse(path)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if strings.HasPrefix(path, storage.CHHTTPSPrefix) {
+			parsed.Scheme = "https"
+		} else {
+			parsed.Scheme = "http"
+		}
+		uri := parsed.String()
+		database := new(SQLDatabase)
+		database.driver = ClickHouse
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		if database.client, err = otelsql.Open("chhttp", uri,
+			otelsql.WithAttributes(semconv.DBSystemKey.String("clickhouse")),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

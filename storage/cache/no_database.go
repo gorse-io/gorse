@@ -90,19 +90,19 @@ func (NoDatabase) Remain(_ context.Context, _ string) (int64, error) {
 	return 0, ErrNoDatabase
 }
 
-func (NoDatabase) AddDocuments(_ context.Context, _, _ string, _ []Document) error {
+func (NoDatabase) AddScores(_ context.Context, _, _ string, _ []Score) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) SearchDocuments(_ context.Context, _, _ string, _ []string, _, _ int) ([]Document, error) {
+func (NoDatabase) SearchScores(_ context.Context, _, _ string, _ []string, _, _ int) ([]Score, error) {
 	return nil, ErrNoDatabase
 }
 
-func (NoDatabase) UpdateDocuments(_ context.Context, _ []string, _ string, _ DocumentPatch) error {
+func (NoDatabase) UpdateScores(_ context.Context, _ []string, _ string, _ ScorePatch) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) DeleteDocuments(_ context.Context, _ []string, _ DocumentCondition) error {
+func (NoDatabase) DeleteScores(_ context.Context, _ []string, _ ScoreCondition) error {
 	return ErrNoDatabase
 }
 

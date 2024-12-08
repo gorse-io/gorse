@@ -34,6 +34,9 @@ const (
 	MongoSrvPrefix   = "mongodb+srv://"
 	PostgresPrefix   = "postgres://"
 	PostgreSQLPrefix = "postgresql://"
+	ClickhousePrefix = "clickhouse://"
+	CHHTTPPrefix     = "chhttp://"
+	CHHTTPSPrefix    = "chhttps://"
 	SQLitePrefix     = "sqlite://"
 	RedisPrefix      = "redis://"
 	RedissPrefix     = "rediss://"
@@ -74,7 +77,7 @@ func ProbeMySQLIsolationVariableName(dsn string) (string, error) {
 		return "", errors.Trace(err)
 	}
 	defer connection.Close()
-	rows, err := connection.Query("SHOW VARIABLES LIKE '%isolation%'")
+	rows, err := connection.Query("SHOW VARIABLES WHERE variable_name = 'transaction_isolation' OR variable_name = 'tx_isolation'")
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -122,6 +125,16 @@ func (tp TablePrefix) FeedbackTable() string {
 	return string(tp) + "feedback"
 }
 
+// UserFeedbackTable returns the materialized view of user feedback.
+func (tp TablePrefix) UserFeedbackTable() string {
+	return string(tp) + "user_feedback"
+}
+
+// ItemFeedbackTable returns the materialized view of item feedback.
+func (tp TablePrefix) ItemFeedbackTable() string {
+	return string(tp) + "item_feedback"
+}
+
 func (tp TablePrefix) Key(key string) string {
 	return string(tp) + key
 }
@@ -143,6 +156,9 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 				"SQLDocument", "Documents",
 				"PostgresDocument", "Documents",
 				"TimeSeriesPoint", "time_series_points",
+				"ClickhouseUser", "Users",
+				"ClickHouseItem", "Items",
+				"ClickHouseFeedback", "Feedback",
 			),
 		},
 	}

@@ -32,6 +32,10 @@ func TestUnmarshal(t *testing.T) {
 	data, err := os.ReadFile("config.toml")
 	assert.NoError(t, err)
 	text := string(data)
+	text = strings.Replace(text, "ssl_mode = false", "ssl_mode = true", -1)
+	text = strings.Replace(text, "ssl_ca = \"\"", "ssl_ca = \"ca.pem\"", -1)
+	text = strings.Replace(text, "ssl_cert = \"\"", "ssl_cert = \"cert.pem\"", -1)
+	text = strings.Replace(text, "ssl_key = \"\"", "ssl_key = \"key.pem\"", -1)
 	text = strings.Replace(text, "dashboard_user_name = \"\"", "dashboard_user_name = \"admin\"", -1)
 	text = strings.Replace(text, "dashboard_password = \"\"", "dashboard_password = \"password\"", -1)
 	text = strings.Replace(text, "admin_api_key = \"\"", "admin_api_key = \"super_api_key\"", -1)
@@ -41,6 +45,10 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "data_table_prefix = \"gorse_\"", "data_table_prefix = \"gorse_data_\"", -1)
 	text = strings.Replace(text, "http_cors_domains = []", "http_cors_domains = [\".*\"]", -1)
 	text = strings.Replace(text, "http_cors_methods = []", "http_cors_methods = [\"GET\",\"PATCH\",\"POST\"]", -1)
+	text = strings.Replace(text, "issuer = \"\"", "issuer = \"https://accounts.google.com\"", -1)
+	text = strings.Replace(text, "client_id = \"\"", "client_id = \"client_id\"", -1)
+	text = strings.Replace(text, "client_secret = \"\"", "client_secret = \"client_secret\"", -1)
+	text = strings.Replace(text, "redirect_url = \"\"", "redirect_url = \"http://localhost:8088/callback/oauth2\"", -1)
 	r, err := convert.TOML{}.Decode(bytes.NewBufferString(text))
 	assert.NoError(t, err)
 
@@ -61,9 +69,14 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "gorse_", config.Database.TablePrefix)
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
 			assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
+			assert.Equal(t, "READ-UNCOMMITTED", config.Database.MySQL.IsolationLevel)
 			// [master]
 			assert.Equal(t, 8086, config.Master.Port)
 			assert.Equal(t, "0.0.0.0", config.Master.Host)
+			assert.Equal(t, true, config.Master.SSLMode)
+			assert.Equal(t, "ca.pem", config.Master.SSLCA)
+			assert.Equal(t, "cert.pem", config.Master.SSLCert)
+			assert.Equal(t, "key.pem", config.Master.SSLKey)
 			assert.Equal(t, 8088, config.Master.HttpPort)
 			assert.Equal(t, "0.0.0.0", config.Master.HttpHost)
 			assert.Equal(t, []string{".*"}, config.Master.HttpCorsDomains)
@@ -142,6 +155,11 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 1.0, config.Tracing.Ratio)
 			// [experimental]
 			assert.Equal(t, 128, config.Experimental.DeepLearningBatchSize)
+			// [oauth2]
+			assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
+			assert.Equal(t, "client_id", config.OIDC.ClientID)
+			assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
+			assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
 		})
 	}
 }
@@ -171,6 +189,10 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_CACHE_TABLE_PREFIX", "gorse_cache_"},
 		{"GORSE_MASTER_PORT", "123"},
 		{"GORSE_MASTER_HOST", "<master_host>"},
+		{"GORSE_MASTER_SSL_MODE", "true"},
+		{"GORSE_MASTER_SSL_CA", "ca.pem"},
+		{"GORSE_MASTER_SSL_CERT", "cert.pem"},
+		{"GORSE_MASTER_SSL_KEY", "key.pem"},
 		{"GORSE_MASTER_HTTP_PORT", "456"},
 		{"GORSE_MASTER_HTTP_HOST", "<master_http_host>"},
 		{"GORSE_MASTER_JOBS", "789"},
@@ -180,6 +202,11 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_DASHBOARD_REDACTED", "true"},
 		{"GORSE_ADMIN_API_KEY", "<admin_api_key>"},
 		{"GORSE_SERVER_API_KEY", "<server_api_key>"},
+		{"GORSE_OIDC_ENABLE", "true"},
+		{"GORSE_OIDC_ISSUER", "https://accounts.google.com"},
+		{"GORSE_OIDC_CLIENT_ID", "client_id"},
+		{"GORSE_OIDC_CLIENT_SECRET", "client_secret"},
+		{"GORSE_OIDC_REDIRECT_URL", "http://localhost:8088/callback/oauth2"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -194,15 +221,23 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
 	assert.Equal(t, 123, config.Master.Port)
 	assert.Equal(t, "<master_host>", config.Master.Host)
+	assert.Equal(t, true, config.Master.SSLMode)
+	assert.Equal(t, "ca.pem", config.Master.SSLCA)
+	assert.Equal(t, "cert.pem", config.Master.SSLCert)
+	assert.Equal(t, "key.pem", config.Master.SSLKey)
 	assert.Equal(t, 456, config.Master.HttpPort)
 	assert.Equal(t, "<master_http_host>", config.Master.HttpHost)
 	assert.Equal(t, 789, config.Master.NumJobs)
 	assert.Equal(t, "user_name", config.Master.DashboardUserName)
 	assert.Equal(t, "password", config.Master.DashboardPassword)
-	assert.Equal(t, "http://127.0.0.1:8888", config.Master.DashboardAuthServer)
 	assert.Equal(t, true, config.Master.DashboardRedacted)
 	assert.Equal(t, "<admin_api_key>", config.Master.AdminAPIKey)
 	assert.Equal(t, "<server_api_key>", config.Server.APIKey)
+	assert.Equal(t, true, config.OIDC.Enable)
+	assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
+	assert.Equal(t, "client_id", config.OIDC.ClientID)
+	assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
+	assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)

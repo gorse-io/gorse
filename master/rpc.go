@@ -20,6 +20,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -68,10 +69,10 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	// register node
 	node := NewNode(ctx, nodeInfo)
 	if node.Type != "" {
-		if err := m.ttlCache.Set(nodeInfo.NodeName, node); err != nil {
-			log.Logger().Error("failed to set ttl cache", zap.Error(err))
-			return nil, err
-		}
+		m.ttlCache.Set(nodeInfo.NodeName, node, ttlcache.DefaultTTL)
+		m.nodesInfoMutex.Lock()
+		m.nodesInfo[nodeInfo.NodeName] = node
+		m.nodesInfoMutex.Unlock()
 	}
 	// marshall config
 	s, err := json.Marshal(m.Config)
@@ -209,28 +210,16 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 	return encoderError
 }
 
-// nodeUp handles node information inserted events.
-func (m *Master) nodeUp(key string, value interface{}) {
-	node := value.(*Node)
-	log.Logger().Info("node up",
-		zap.String("node_name", key),
-		zap.String("node_ip", node.IP),
-		zap.String("node_type", node.Type))
-	m.nodesInfoMutex.Lock()
-	defer m.nodesInfoMutex.Unlock()
-	m.nodesInfo[key] = node
-}
-
 // nodeDown handles node information timeout events.
-func (m *Master) nodeDown(key string, value interface{}) {
-	node := value.(*Node)
+func (m *Master) nodeDown(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Node]) {
+	node := item.Value()
 	log.Logger().Info("node down",
-		zap.String("node_name", key),
+		zap.String("node_name", item.Key()),
 		zap.String("node_ip", node.IP),
 		zap.String("node_type", node.Type))
 	m.nodesInfoMutex.Lock()
 	defer m.nodesInfoMutex.Unlock()
-	delete(m.nodesInfo, key)
+	delete(m.nodesInfo, item.Key())
 }
 
 func (m *Master) PushProgress(

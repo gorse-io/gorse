@@ -9,10 +9,13 @@
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 cache_store = "redis://localhost:6379/0"
 
-# The database for persist data, support MySQL, Postgres and MongoDB:
+# The database for persist data, support MySQL, Postgres, ClickHouse and MongoDB:
 #   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
 #   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   chhttp://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   chhttps://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
@@ -26,6 +29,11 @@ cache_table_prefix = ""
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
 data_table_prefix = ""
 
+[database.mysql]
+
+# Transaction isolation level. The default value is "READ-UNCOMMITTED".
+isolation_level = "READ-UNCOMMITTED"
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.
@@ -33,6 +41,18 @@ port = 8086
 
 # gRPC host of the master node. The default values is "0.0.0.0".
 host = "0.0.0.0"
+
+# Enable SSL for the gRPC communication. The default value is false.
+ssl_mode = false
+
+# SSL certification authority for the gRPC communication.
+ssl_ca = ""
+
+# SSL certification for the gRPC communication.
+ssl_cert = ""
+
+# SSL certification key for the gRPC communication.
+ssl_key = ""
 
 # HTTP port of the master node. The default values is 8088.
 http_port = 8088
@@ -257,3 +277,23 @@ enable_deep_learning = false
 
 # Batch size for deep learning recommenders. The default value is 128.
 deep_learning_batch_size = 128
+
+[oidc]
+
+# Enable OpenID Connect (OIDC) authentication. The default value is false.
+enable = false
+
+# The issuer of the OAuth provider.
+issuer = ""
+
+# Public identifier of the OAuth application.
+client_id = ""
+
+# Token access to the OAuth application.
+client_secret = ""
+
+# URL used by the OAuth provider to redirect users after they are successfully authenticated
+# (also referred to as the callback URL). You should set this to the concatenation of the 
+# Gorse dashboard URL and "/callback/oauth2". For example, if the Gorse dashboard URL is 
+# http://localhost:8088, the redirect URL should be: http://localhost:8088/callback/oauth2
+redirect_url = ""

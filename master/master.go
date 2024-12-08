@@ -24,8 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
@@ -40,11 +41,13 @@ import (
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
+	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 )
 
@@ -67,7 +70,7 @@ type Master struct {
 	managedMode    bool
 
 	// cluster meta cache
-	ttlCache       *ttlcache.Cache
+	ttlCache       *ttlcache.Cache[string, *Node]
 	nodesInfo      map[string]*Node
 	nodesInfoMutex sync.RWMutex
 
@@ -91,6 +94,11 @@ type Master struct {
 	clickScore         click.Score
 	clickModelMutex    sync.RWMutex
 	clickModelSearcher *click.ModelSearcher
+
+	// oauth2
+	oauth2Config oauth2.Config
+	verifier     *oidc.IDTokenVerifier
+	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	localCache *LocalCache
 
@@ -210,15 +218,14 @@ func (m *Master) Serve() {
 	}
 
 	// create cluster meta cache
-	m.ttlCache = ttlcache.NewCache()
-	m.ttlCache.SetExpirationCallback(m.nodeDown)
-	m.ttlCache.SetNewItemCallback(m.nodeUp)
-	if err = m.ttlCache.SetTTL(m.Config.Master.MetaTimeout + 10*time.Second); err != nil {
-		log.Logger().Fatal("failed to set TTL", zap.Error(err))
-	}
+	m.ttlCache = ttlcache.New[string, *Node](
+		ttlcache.WithTTL[string, *Node](m.Config.Master.MetaTimeout + 10*time.Second))
+	m.ttlCache.OnEviction(m.nodeDown)
+	go m.ttlCache.Start()
 
 	// connect data database
-	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
@@ -228,7 +235,8 @@ func (m *Master) Serve() {
 	}
 
 	// connect cache database
-	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix)
+	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix,
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 	if err != nil {
 		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.CacheStore)))
@@ -250,17 +258,51 @@ func (m *Master) Serve() {
 	go func() {
 		log.Logger().Info("start rpc server",
 			zap.String("host", m.Config.Master.Host),
-			zap.Int("port", m.Config.Master.Port))
+			zap.Int("port", m.Config.Master.Port),
+			zap.Bool("ssl_mode", m.Config.Master.SSLMode),
+			zap.String("ssl_ca", m.Config.Master.SSLCA),
+			zap.String("ssl_cert", m.Config.Master.SSLCert),
+			zap.String("ssl_key", m.Config.Master.SSLKey))
+		opts := []grpc.ServerOption{grpc.MaxSendMsgSize(math.MaxInt)}
+		if m.Config.Master.SSLMode {
+			c, err := protocol.NewServerCreds(&protocol.TLSConfig{
+				SSLCA:   m.Config.Master.SSLCA,
+				SSLCert: m.Config.Master.SSLCert,
+				SSLKey:  m.Config.Master.SSLKey,
+			})
+			if err != nil {
+				log.Logger().Fatal("failed to load server TLS", zap.Error(err))
+			}
+			opts = append(opts, grpc.Creds(c))
+		}
 		lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", m.Config.Master.Host, m.Config.Master.Port))
 		if err != nil {
 			log.Logger().Fatal("failed to listen", zap.Error(err))
 		}
-		m.grpcServer = grpc.NewServer(grpc.MaxSendMsgSize(math.MaxInt))
+		m.grpcServer = grpc.NewServer(opts...)
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
 		}
 	}()
+
+	if m.Config.OIDC.Enable {
+		provider, err := oidc.NewProvider(context.Background(), m.Config.OIDC.Issuer)
+		if err != nil {
+			log.Logger().Error("failed to create oidc provider", zap.Error(err))
+		} else {
+			m.verifier = provider.Verifier(&oidc.Config{ClientID: m.Config.OIDC.ClientID})
+			m.oauth2Config = oauth2.Config{
+				ClientID:     m.Config.OIDC.ClientID,
+				ClientSecret: m.Config.OIDC.ClientSecret,
+				RedirectURL:  m.Config.OIDC.RedirectURL,
+				Endpoint:     provider.Endpoint(),
+				Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+			}
+			m.tokenCache = ttlcache.New(ttlcache.WithTTL[string, UserInfo](time.Hour))
+			go m.tokenCache.Start()
+		}
+	}
 
 	// start http server
 	m.StartHttpServer()
