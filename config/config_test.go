@@ -106,8 +106,8 @@ func TestUnmarshal(t *testing.T) {
 			// [recommend.leaderboards]
 			assert.Len(t, config.Recommend.NonPersonalized, 1)
 			assert.Equal(t, "most_starred_weekly", config.Recommend.NonPersonalized[0].Name)
-			assert.Equal(t, "count(Feedback.FeedbackType, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
-			assert.Equal(t, "(Item.Timestamp > now()).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
+			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
+			assert.Equal(t, "(now() - item.Timestamp).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
 			// [recommend.user_neighbors]
 			assert.Equal(t, "similar", config.Recommend.UserNeighbors.NeighborType)
 			assert.True(t, config.Recommend.UserNeighbors.EnableIndex)

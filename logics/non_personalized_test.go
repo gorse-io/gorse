@@ -41,13 +41,10 @@ func TestLatest(t *testing.T) {
 
 func TestPopular(t *testing.T) {
 	timestamp := time.Now()
-	popular := NewPopular(10, timestamp)
+	popular := NewPopular(0, 10, timestamp)
 	for i := 0; i < 100; i++ {
 		item := data.Item{ItemId: strconv.Itoa(i)}
-		var feedback []data.Feedback
-		for j := 0; j < i; j++ {
-			feedback = append(feedback, data.Feedback{FeedbackKey: data.FeedbackKey{UserId: strconv.Itoa(j)}, Timestamp: timestamp})
-		}
+		feedback := make([]data.Feedback, i)
 		popular.Push(item, feedback)
 	}
 	scores := popular.PopAll()
@@ -58,9 +55,37 @@ func TestPopular(t *testing.T) {
 	}
 }
 
+func TestPopularWindow(t *testing.T) {
+	// Create popular recommender
+	timestamp := time.Now()
+	popular := NewPopular(time.Hour, 10, timestamp)
+
+	// Add items
+	for i := 0; i < 100; i++ {
+		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Second - time.Hour)}
+		feedback := make([]data.Feedback, i)
+		popular.Push(item, feedback)
+	}
+
+	// Add outdated items
+	for i := 100; i < 110; i++ {
+		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(-time.Hour)}
+		feedback := make([]data.Feedback, i)
+		popular.Push(item, feedback)
+	}
+
+	// Check result
+	scores := popular.PopAll()
+	assert.Len(t, scores, 10)
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, strconv.Itoa(99-i), scores[i].Id)
+		assert.Equal(t, float64(99-i), scores[i].Score)
+	}
+}
+
 func TestFilter(t *testing.T) {
 	timestamp := time.Now()
-	latest, err := NewLeaderBoard(config.NonPersonalizedConfig{
+	latest, err := NewNonPersonalized(config.NonPersonalizedConfig{
 		Name:   "latest",
 		Score:  "item.Timestamp.Unix()",
 		Filter: "!item.IsHidden",
@@ -94,5 +119,66 @@ func TestHidden(t *testing.T) {
 		assert.Equal(t, strconv.Itoa(i+10), scores[i].Id)
 		assert.Equal(t, float64(timestamp.Add(time.Duration(-i-10)*time.Second).Unix()), scores[i].Score)
 		assert.Equal(t, timestamp, scores[i].Timestamp)
+	}
+}
+
+func TestMostStarredWeekly(t *testing.T) {
+	// Create non-personalized recommender
+	timestamp := time.Now()
+	mostStarredWeekly, err := NewNonPersonalized(config.NonPersonalizedConfig{
+		Name:   "most_starred_weekly",
+		Score:  "count(feedback, .FeedbackType == 'star')",
+		Filter: "(now() - item.Timestamp).Hours() < 168",
+	}, 10, timestamp)
+	assert.NoError(t, err)
+
+	// Add items
+	for i := 0; i < 100; i++ {
+		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(-167 * time.Hour)}
+		var feedback []data.Feedback
+		for j := 0; j < i; j++ {
+			feedback = append(feedback, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					FeedbackType: "star",
+					UserId:       strconv.Itoa(j),
+					ItemId:       strconv.Itoa(i),
+				},
+				Timestamp: timestamp,
+			})
+			feedback = append(feedback, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					FeedbackType: "like",
+					UserId:       strconv.Itoa(j),
+					ItemId:       strconv.Itoa(i),
+				},
+				Timestamp: timestamp,
+			})
+		}
+		mostStarredWeekly.Push(item, feedback)
+	}
+
+	// Add outdated items
+	for i := 100; i < 110; i++ {
+		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(-168 * time.Hour)}
+		var feedback []data.Feedback
+		for j := 0; j < i; j++ {
+			feedback = append(feedback, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					FeedbackType: "star",
+					UserId:       strconv.Itoa(j),
+					ItemId:       strconv.Itoa(i),
+				},
+				Timestamp: timestamp.Add(-time.Hour * 169),
+			})
+		}
+		mostStarredWeekly.Push(item, feedback)
+	}
+
+	// Check result
+	scores := mostStarredWeekly.PopAll()
+	assert.Len(t, scores, 10)
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, strconv.Itoa(99-i), scores[i].Id)
+		assert.Equal(t, float64(99-i), scores[i].Score)
 	}
 }

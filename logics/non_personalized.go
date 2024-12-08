@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"fmt"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/juju/errors"
@@ -29,14 +30,15 @@ import (
 	"time"
 )
 
-type LeaderBoard struct {
+type NonPersonalized struct {
+	name       string
 	timestamp  time.Time
 	scoreFunc  *vm.Program
 	filterFunc *vm.Program
 	heap       *heap.TopKFilter[cache.Score, float64]
 }
 
-func NewLeaderBoard(cfg config.NonPersonalizedConfig, n int, timestamp time.Time) (*LeaderBoard, error) {
+func NewNonPersonalized(cfg config.NonPersonalizedConfig, n int, timestamp time.Time) (*NonPersonalized, error) {
 	// Compile score expression
 	scoreFunc, err := expr.Compile(cfg.Score, expr.Env(map[string]any{
 		"item":     data.Item{},
@@ -64,7 +66,8 @@ func NewLeaderBoard(cfg config.NonPersonalizedConfig, n int, timestamp time.Time
 			return nil, errors.New("filter function must return bool")
 		}
 	}
-	return &LeaderBoard{
+	return &NonPersonalized{
+		name:       cfg.Name,
 		timestamp:  timestamp,
 		scoreFunc:  scoreFunc,
 		filterFunc: filterFunc,
@@ -72,21 +75,26 @@ func NewLeaderBoard(cfg config.NonPersonalizedConfig, n int, timestamp time.Time
 	}, nil
 }
 
-func NewLatest(n int, timestamp time.Time) *LeaderBoard {
-	return lo.Must(NewLeaderBoard(config.NonPersonalizedConfig{
+func NewLatest(n int, timestamp time.Time) *NonPersonalized {
+	return lo.Must(NewNonPersonalized(config.NonPersonalizedConfig{
 		Name:  "latest",
 		Score: "item.Timestamp.Unix()",
 	}, n, timestamp))
 }
 
-func NewPopular(n int, timestamp time.Time) *LeaderBoard {
-	return lo.Must(NewLeaderBoard(config.NonPersonalizedConfig{
-		Name:  "popular",
-		Score: "len(feedback)",
+func NewPopular(window time.Duration, n int, timestamp time.Time) *NonPersonalized {
+	var filter string
+	if window > 0 {
+		filter = fmt.Sprintf("(now() - item.Timestamp).Nanoseconds() < %d", window.Nanoseconds())
+	}
+	return lo.Must(NewNonPersonalized(config.NonPersonalizedConfig{
+		Name:   "popular",
+		Score:  "len(feedback)",
+		Filter: filter,
 	}, n, timestamp))
 }
 
-func (l *LeaderBoard) Push(item data.Item, feedback []data.Feedback) {
+func (l *NonPersonalized) Push(item data.Item, feedback []data.Feedback) {
 	// Skip hidden items
 	if item.IsHidden {
 		return
@@ -141,7 +149,15 @@ func (l *LeaderBoard) Push(item data.Item, feedback []data.Feedback) {
 	}, score)
 }
 
-func (l *LeaderBoard) PopAll() []cache.Score {
+func (l *NonPersonalized) PopAll() []cache.Score {
 	scores, _ := l.heap.PopAll()
 	return scores
+}
+
+func (l *NonPersonalized) Name() string {
+	return l.name
+}
+
+func (l *NonPersonalized) Timestamp() time.Time {
+	return l.timestamp
 }
