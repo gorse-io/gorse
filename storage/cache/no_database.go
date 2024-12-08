@@ -98,7 +98,7 @@ func (NoDatabase) SearchScores(_ context.Context, _, _ string, _ []string, _, _ 
 	return nil, ErrNoDatabase
 }
 
-func (NoDatabase) UpdateScores(_ context.Context, _ []string, _ string, _ ScorePatch) error {
+func (NoDatabase) UpdateScores(context.Context, []string, *string, string, ScorePatch) error {
 	return ErrNoDatabase
 }
 
