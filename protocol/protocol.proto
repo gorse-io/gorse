@@ -62,7 +62,6 @@ service Master {
   rpc GetClickModel(VersionInfo) returns (stream Fragment) {}
 
   rpc PushProgress(PushProgressRequest) returns (PushProgressResponse) {}
-
 }
 
 message Meta {
@@ -109,3 +108,33 @@ message PushProgressResponse {}
 message PingRequest {}
 
 message PingResponse {}
+
+message UploadBlobRequest {
+  string name = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  bytes data = 3;
+}
+
+message UploadBlobResponse {}
+
+message FetchBlobRequest {
+  string name = 1;
+}
+
+message FetchBlobResponse {
+  google.protobuf.Timestamp timestamp = 1;
+}
+
+message DownloadBlobRequest {
+  string name = 1;
+}
+
+message DownloadBlobResponse {
+  bytes data = 1;
+}
+
+service BlobStore {
+  rpc UploadBlob(stream UploadBlobRequest) returns (UploadBlobResponse) {}
+  rpc FetchBlob(FetchBlobRequest) returns (FetchBlobResponse) {}
+  rpc DownloadBlob(DownloadBlobRequest) returns (stream DownloadBlobResponse) {}
+}
