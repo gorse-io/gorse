@@ -226,6 +226,9 @@ func (c *MasterStoreClient) DownloadBlob(name, path string) error {
 			return err
 		}
 		_, err = file.Write(resp.Data)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
