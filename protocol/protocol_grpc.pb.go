@@ -258,3 +258,178 @@ var Master_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "protocol.proto",
 }
+
+const (
+	BlobStore_UploadBlob_FullMethodName   = "/protocol.BlobStore/UploadBlob"
+	BlobStore_FetchBlob_FullMethodName    = "/protocol.BlobStore/FetchBlob"
+	BlobStore_DownloadBlob_FullMethodName = "/protocol.BlobStore/DownloadBlob"
+)
+
+// BlobStoreClient is the client API for BlobStore service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type BlobStoreClient interface {
+	UploadBlob(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadBlobRequest, UploadBlobResponse], error)
+	FetchBlob(ctx context.Context, in *FetchBlobRequest, opts ...grpc.CallOption) (*FetchBlobResponse, error)
+	DownloadBlob(ctx context.Context, in *DownloadBlobRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadBlobResponse], error)
+}
+
+type blobStoreClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBlobStoreClient(cc grpc.ClientConnInterface) BlobStoreClient {
+	return &blobStoreClient{cc}
+}
+
+func (c *blobStoreClient) UploadBlob(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadBlobRequest, UploadBlobResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BlobStore_ServiceDesc.Streams[0], BlobStore_UploadBlob_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadBlobRequest, UploadBlobResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobStore_UploadBlobClient = grpc.ClientStreamingClient[UploadBlobRequest, UploadBlobResponse]
+
+func (c *blobStoreClient) FetchBlob(ctx context.Context, in *FetchBlobRequest, opts ...grpc.CallOption) (*FetchBlobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FetchBlobResponse)
+	err := c.cc.Invoke(ctx, BlobStore_FetchBlob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *blobStoreClient) DownloadBlob(ctx context.Context, in *DownloadBlobRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadBlobResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BlobStore_ServiceDesc.Streams[1], BlobStore_DownloadBlob_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadBlobRequest, DownloadBlobResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobStore_DownloadBlobClient = grpc.ServerStreamingClient[DownloadBlobResponse]
+
+// BlobStoreServer is the server API for BlobStore service.
+// All implementations must embed UnimplementedBlobStoreServer
+// for forward compatibility.
+type BlobStoreServer interface {
+	UploadBlob(grpc.ClientStreamingServer[UploadBlobRequest, UploadBlobResponse]) error
+	FetchBlob(context.Context, *FetchBlobRequest) (*FetchBlobResponse, error)
+	DownloadBlob(*DownloadBlobRequest, grpc.ServerStreamingServer[DownloadBlobResponse]) error
+	mustEmbedUnimplementedBlobStoreServer()
+}
+
+// UnimplementedBlobStoreServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedBlobStoreServer struct{}
+
+func (UnimplementedBlobStoreServer) UploadBlob(grpc.ClientStreamingServer[UploadBlobRequest, UploadBlobResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method UploadBlob not implemented")
+}
+func (UnimplementedBlobStoreServer) FetchBlob(context.Context, *FetchBlobRequest) (*FetchBlobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FetchBlob not implemented")
+}
+func (UnimplementedBlobStoreServer) DownloadBlob(*DownloadBlobRequest, grpc.ServerStreamingServer[DownloadBlobResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method DownloadBlob not implemented")
+}
+func (UnimplementedBlobStoreServer) mustEmbedUnimplementedBlobStoreServer() {}
+func (UnimplementedBlobStoreServer) testEmbeddedByValue()                   {}
+
+// UnsafeBlobStoreServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BlobStoreServer will
+// result in compilation errors.
+type UnsafeBlobStoreServer interface {
+	mustEmbedUnimplementedBlobStoreServer()
+}
+
+func RegisterBlobStoreServer(s grpc.ServiceRegistrar, srv BlobStoreServer) {
+	// If the following call pancis, it indicates UnimplementedBlobStoreServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&BlobStore_ServiceDesc, srv)
+}
+
+func _BlobStore_UploadBlob_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BlobStoreServer).UploadBlob(&grpc.GenericServerStream[UploadBlobRequest, UploadBlobResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobStore_UploadBlobServer = grpc.ClientStreamingServer[UploadBlobRequest, UploadBlobResponse]
+
+func _BlobStore_FetchBlob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FetchBlobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BlobStoreServer).FetchBlob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BlobStore_FetchBlob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BlobStoreServer).FetchBlob(ctx, req.(*FetchBlobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BlobStore_DownloadBlob_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadBlobRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BlobStoreServer).DownloadBlob(m, &grpc.GenericServerStream[DownloadBlobRequest, DownloadBlobResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobStore_DownloadBlobServer = grpc.ServerStreamingServer[DownloadBlobResponse]
+
+// BlobStore_ServiceDesc is the grpc.ServiceDesc for BlobStore service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BlobStore_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "protocol.BlobStore",
+	HandlerType: (*BlobStoreServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "FetchBlob",
+			Handler:    _BlobStore_FetchBlob_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadBlob",
+			Handler:       _BlobStore_UploadBlob_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "DownloadBlob",
+			Handler:       _BlobStore_DownloadBlob_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "protocol.proto",
+}
