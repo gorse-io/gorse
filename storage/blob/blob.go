@@ -16,6 +16,7 @@ package blob
 
 import (
 	"context"
+	"fmt"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -33,10 +34,13 @@ type MasterStoreServer struct {
 	dir string
 }
 
-func NewMasterStoreServer(server *grpc.Server, dir string) *MasterStoreServer {
-	s := &MasterStoreServer{dir: dir}
-	protocol.RegisterBlobStoreServer(server, s)
-	return s
+func NewMasterStoreServer(dir string) *MasterStoreServer {
+	// Create directory if not exists
+	err := os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		log.Logger().Fatal("failed to create directory", zap.Error(err))
+	}
+	return &MasterStoreServer{dir: dir}
 }
 
 func (s *MasterStoreServer) UploadBlob(stream grpc.ClientStreamingServer[protocol.UploadBlobRequest, protocol.UploadBlobResponse]) error {
@@ -46,10 +50,7 @@ func (s *MasterStoreServer) UploadBlob(stream grpc.ClientStreamingServer[protoco
 		return err
 	}
 	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			log.Logger().Error("failed to close file", zap.Error(err))
-		}
+		_ = file.Close()
 	}(file)
 	// Write data
 	var (
@@ -64,10 +65,28 @@ func (s *MasterStoreServer) UploadBlob(stream grpc.ClientStreamingServer[protoco
 			}
 			return err
 		}
+		// Assign name
+		if name == "" {
+			name = req.Name
+		} else if name != req.Name {
+			return errors.New("inconsistent name")
+		}
+		// Assign timestamp
+		if timestamp.IsZero() {
+			timestamp = req.Timestamp.AsTime()
+		} else if !timestamp.Equal(req.Timestamp.AsTime()) {
+			return errors.New("inconsistent timestamp")
+		}
+		// Write data
 		_, err = file.Write(req.Data)
 		if err != nil {
 			return err
 		}
+	}
+	// Close file
+	err = file.Close()
+	if err != nil {
+		return err
 	}
 	// Rename file
 	err = os.Rename(file.Name(), path.Join(s.dir, name))
@@ -75,6 +94,7 @@ func (s *MasterStoreServer) UploadBlob(stream grpc.ClientStreamingServer[protoco
 		return err
 	}
 	// Change timestamp
+	fmt.Println(timestamp)
 	err = os.Chtimes(path.Join(s.dir, name), timestamp, timestamp)
 	if err != nil {
 		return err
@@ -124,7 +144,16 @@ type MasterStoreClient struct {
 	client protocol.BlobStoreClient
 }
 
+func NewMasterStoreClient(clientConn *grpc.ClientConn) *MasterStoreClient {
+	return &MasterStoreClient{client: protocol.NewBlobStoreClient(clientConn)}
+}
+
 func (c *MasterStoreClient) UploadBlob(name, path string) error {
+	// Stat file
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
 	// Open file
 	file, err := os.Open(path)
 	if err != nil {
@@ -150,7 +179,11 @@ func (c *MasterStoreClient) UploadBlob(name, path string) error {
 			}
 			return err
 		}
-		err = stream.Send(&protocol.UploadBlobRequest{Name: name, Data: data[:n]})
+		err = stream.Send(&protocol.UploadBlobRequest{
+			Name:      name,
+			Timestamp: timestamppb.New(fileInfo.ModTime()),
+			Data:      data[:n],
+		})
 		if err != nil {
 			return err
 		}
