@@ -976,6 +976,12 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		if scan.EndUserId != nil {
 			tx.Where("user_id <= ?", scan.EndUserId)
 		}
+		if scan.BeginItemId != nil {
+			tx.Where("item_id >= ?", scan.BeginItemId)
+		}
+		if scan.EndItemId != nil {
+			tx.Where("item_id <= ?", scan.EndItemId)
+		}
 		result, err := tx.Rows()
 		if err != nil {
 			errChan <- errors.Trace(err)

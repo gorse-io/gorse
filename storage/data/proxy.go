@@ -432,6 +432,12 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 	if in.ScanOptions.EndUserId != nil {
 		opts = append(opts, WithEndUserId(*in.ScanOptions.EndUserId))
 	}
+	if in.ScanOptions.BeginItemId != nil {
+		opts = append(opts, WithBeginItemId(*in.ScanOptions.BeginItemId))
+	}
+	if in.ScanOptions.EndItemId != nil {
+		opts = append(opts, WithEndItemId(*in.ScanOptions.EndItemId))
+	}
 	feedbackChan, errChan := p.database.GetFeedbackStream(stream.Context(), int(in.BatchSize), opts...)
 	for feedback := range feedbackChan {
 		pbFeedback := make([]*protocol.Feedback, len(feedback))
@@ -930,6 +936,8 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 	pbOptions := &protocol.ScanOptions{
 		BeginUserId:   o.BeginUserId,
 		EndUserId:     o.EndUserId,
+		BeginItemId:   o.BeginItemId,
+		EndItemId:     o.EndItemId,
 		FeedbackTypes: o.FeedbackTypes,
 	}
 	if o.BeginTime != nil {

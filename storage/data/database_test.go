@@ -271,6 +271,8 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.Empty(feedbackFromStream)
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginUserId("1"), WithEndUserId("3"), WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType))
 	suite.Equal(feedback[1:4], feedbackFromStream)
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginItemId("2"), WithEndItemId("6"), WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType))
+	suite.Equal(feedback[1:4], feedbackFromStream)
 	// Get items
 	err = suite.Database.Optimize()
 	suite.NoError(err)

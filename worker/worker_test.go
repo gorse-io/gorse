@@ -442,7 +442,7 @@ func (suite *WorkerTestSuite) TestRecommendPopular() {
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnablePopularRecommend = true
 	// insert popular items
-	err := suite.CacheClient.AddScores(ctx, cache.PopularItems, "", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
 		{Id: "11", Score: 11, Categories: []string{""}},
 		{Id: "10", Score: 10, Categories: []string{""}},
 		{Id: "9", Score: 9, Categories: []string{""}},
@@ -491,7 +491,7 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnableLatestRecommend = true
 	// insert latest items
-	err := suite.CacheClient.AddScores(ctx, cache.LatestItems, "", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
 		{Id: "11", Score: 11, Categories: []string{""}},
 		{Id: "10", Score: 10, Categories: []string{""}},
 		{Id: "9", Score: 9, Categories: []string{""}},
@@ -539,7 +539,7 @@ func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	suite.Config.Recommend.Offline.EnableColRecommend = true
 	suite.Config.Recommend.Offline.EnableLatestRecommend = true
 	// insert latest items
-	err := suite.CacheClient.AddScores(ctx, cache.LatestItems, "", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
 		{Id: "11", Score: 11, Categories: []string{""}},
 		{Id: "10", Score: 10, Categories: []string{""}},
 		{Id: "9", Score: 9, Categories: []string{""}},
@@ -591,10 +591,10 @@ func (suite *WorkerTestSuite) TestExploreRecommend() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.ExploreRecommend = map[string]float64{"popular": 0.3, "latest": 0.3}
 	// insert popular items
-	err := suite.CacheClient.AddScores(ctx, cache.PopularItems, "", []cache.Score{{Id: "popular", Score: 0, Categories: []string{""}, Timestamp: time.Now()}})
+	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{{Id: "popular", Score: 0, Categories: []string{""}, Timestamp: time.Now()}})
 	suite.NoError(err)
 	// insert latest items
-	err = suite.CacheClient.AddScores(ctx, cache.LatestItems, "", []cache.Score{{Id: "latest", Score: 0, Categories: []string{""}, Timestamp: time.Now()}})
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{{Id: "latest", Score: 0, Categories: []string{""}, Timestamp: time.Now()}})
 	suite.NoError(err)
 
 	recommend, err := suite.exploreRecommend([]cache.Score{
@@ -940,7 +940,7 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
 	suite.NoError(err)
 	// insert popular items
-	err = suite.CacheClient.AddScores(ctx, cache.PopularItems, "", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
 		{Id: "7", Score: 10, Categories: []string{""}},
 		{Id: "6", Score: 9, Categories: []string{""}},
 		{Id: "5", Score: 8, Categories: []string{""}},
@@ -1005,7 +1005,7 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().AddDate(-1, 0, 0)))
 	suite.NoError(err)
 	// insert popular items
-	err = suite.CacheClient.AddScores(ctx, cache.PopularItems, "", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
 		{Id: "7", Score: 10, Categories: []string{""}},
 		{Id: "6", Score: 9, Categories: []string{""}},
 		{Id: "5", Score: 8, Categories: []string{""}}})

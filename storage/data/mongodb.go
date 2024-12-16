@@ -726,6 +726,16 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 			}
 			filter["feedbackkey.userid"] = userIdConditions
 		}
+		if scan.BeginItemId != nil || scan.EndItemId != nil {
+			itemIdConditions := bson.M{}
+			if scan.BeginItemId != nil {
+				itemIdConditions["$gte"] = *scan.BeginItemId
+			}
+			if scan.EndItemId != nil {
+				itemIdConditions["$lte"] = *scan.EndItemId
+			}
+			filter["feedbackkey.itemid"] = itemIdConditions
+		}
 
 		r, err := c.Find(ctx, filter, opt)
 		if err != nil {

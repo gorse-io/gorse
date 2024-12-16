@@ -38,9 +38,11 @@ message ItemPatch {
 message ScanOptions {
   optional string begin_user_id = 1;
   optional string end_user_id = 2;
-  optional google.protobuf.Timestamp begin_time = 3;
-  optional google.protobuf.Timestamp end_time = 4;
-  repeated string feedback_types = 5;
+  optional string begin_item_id = 3;
+  optional string end_item_id = 4;
+  optional google.protobuf.Timestamp begin_time = 5;
+  optional google.protobuf.Timestamp end_time = 6;
+  repeated string feedback_types = 7;
 }
 
 message BatchInsertItemsRequest {
