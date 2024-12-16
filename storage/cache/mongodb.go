@@ -381,7 +381,7 @@ func (m MongoDB) UpdateScores(ctx context.Context, collections []string, subset 
 		"id":         id,
 	}
 	if subset != nil {
-		filter["subset"] = subset
+		filter["subset"] = *subset
 	}
 	update := bson.D{}
 	if patch.IsHidden != nil {
@@ -393,7 +393,7 @@ func (m MongoDB) UpdateScores(ctx context.Context, collections []string, subset 
 	if patch.Score != nil {
 		update = append(update, bson.E{Key: "$set", Value: bson.M{"score": *patch.Score}})
 	}
-	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, subset, update)
+	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, filter, update)
 	return errors.Trace(err)
 }
 
