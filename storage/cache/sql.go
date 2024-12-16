@@ -484,9 +484,12 @@ func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, s
 	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).
-		Where("collection in (?) and id = ? and (subset = ? or ? is null)",
-			collections, id, subset, subset)
+	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{})
+	if subset != nil {
+		tx = tx.Where("collection in (?) and id = ? and subset = ?", collections, id, subset)
+	} else {
+		tx = tx.Where("collection in (?) and id = ?", collections, id)
+	}
 	if patch.Score != nil {
 		tx = tx.Update("score", *patch.Score)
 	}
