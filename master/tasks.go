@@ -1525,6 +1525,15 @@ func (m *Master) LoadDataFromDatabase(
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
 			}
+			// TODO: Refactor
+			// add item to non-personalized recommenders
+			feedback, err := database.GetItemFeedback(newCtx, item.ItemId, posFeedbackTypes...)
+			if err != nil {
+				return nil, nil, errors.Trace(err)
+			}
+			for _, recommender := range nonPersonalizedRecommenders {
+				recommender.Push(item, feedback)
+			}
 		}
 	}
 	if err = <-errChan; err != nil {

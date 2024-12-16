@@ -532,7 +532,8 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 					UserId:       strconv.Itoa(j),
 					FeedbackType: "positive",
 				},
-				Timestamp: time.Now(),
+				// TODO: Refactor
+				Timestamp: time.Now().Add(-time.Second),
 			})
 		}
 		// negative feedback
