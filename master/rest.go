@@ -137,38 +137,16 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("cursor", "cursor for next page").DataType("string")).
 		Returns(http.StatusOK, "OK", UserIterator{}).
 		Writes(UserIterator{}))
-	// Get popular items
-	ws.Route(ws.GET("/dashboard/popular/").To(m.getPopular).
-		Doc("get popular items").
+	// Get non-personalized recommendation
+	ws.Route(ws.GET("/non-personalized/{name}").To(m.getNonPersonalized).
+		Doc("Get non-personalized recommendations.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Returns(http.StatusOK, "OK", []ScoredItem{}).
-		Writes([]ScoredItem{}))
-	ws.Route(ws.GET("/dashboard/popular/{category}").To(m.getPopular).
-		Doc("get popular items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Param(ws.PathParameter("category", "category of items").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Returns(http.StatusOK, "OK", []ScoredItem{}).
-		Writes([]ScoredItem{}))
-	// Get latest items
-	ws.Route(ws.GET("/dashboard/latest/").To(m.getLatest).
-		Doc("get latest items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Returns(http.StatusOK, "OK", []ScoredItem{}).
-		Writes([]ScoredItem{}))
-	ws.Route(ws.GET("/dashboard/latest/{category}").To(m.getLatest).
-		Doc("get latest items").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Param(ws.PathParameter("category", "category of items").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Returns(http.StatusOK, "OK", []ScoredItem{}).
-		Writes([]ScoredItem{}))
+		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned users").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned users").DataType("integer")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/dashboard/recommend/{user-id}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -920,15 +898,10 @@ func (m *Master) searchDocuments(collection, subset, category string, request *r
 	}
 }
 
-// getPopular gets popular items from database.
-func (m *Master) getPopular(request *restful.Request, response *restful.Response) {
-	category := request.PathParameter("category")
-	m.searchDocuments(cache.NonPersonalized, cache.Popular, category, request, response, data.Item{})
-}
-
-func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
-	category := request.PathParameter("category")
-	m.searchDocuments(cache.NonPersonalized, cache.Latest, category, request, response, data.Item{})
+func (m *Master) getNonPersonalized(request *restful.Request, response *restful.Response) {
+	name := request.PathParameter("name")
+	category := request.QueryParameter("category")
+	m.searchDocuments(cache.NonPersonalized, name, category, request, response, data.Item{})
 }
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
