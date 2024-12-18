@@ -43,6 +43,7 @@ message ScanOptions {
   optional google.protobuf.Timestamp begin_time = 5;
   optional google.protobuf.Timestamp end_time = 6;
   repeated string feedback_types = 7;
+  bool order_by_item_id = 8;
 }
 
 message BatchInsertItemsRequest {
