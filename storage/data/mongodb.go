@@ -736,6 +736,9 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 			}
 			filter["feedbackkey.itemid"] = itemIdConditions
 		}
+		if scan.OrderByItemId {
+			opt.SetSort(bson.D{{"feedbackkey.itemid", 1}})
+		}
 
 		r, err := c.Find(ctx, filter, opt)
 		if err != nil {

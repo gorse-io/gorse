@@ -179,6 +179,7 @@ type ScanOptions struct {
 	BeginTime     *time.Time
 	EndTime       *time.Time
 	FeedbackTypes []string
+	OrderByItemId bool
 }
 
 type ScanOption func(options *ScanOptions)
@@ -229,6 +230,13 @@ func WithEndTime(t time.Time) ScanOption {
 func WithFeedbackTypes(feedbackTypes ...string) ScanOption {
 	return func(options *ScanOptions) {
 		options.FeedbackTypes = feedbackTypes
+	}
+}
+
+// WithOrderByItemId sets the order by item id.
+func WithOrderByItemId() ScanOption {
+	return func(options *ScanOptions) {
+		options.OrderByItemId = true
 	}
 }
 

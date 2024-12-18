@@ -17,14 +17,15 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"io"
-	"net"
-	"time"
 )
 
 type ProxyServer struct {
@@ -437,6 +438,9 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 	}
 	if in.ScanOptions.EndItemId != nil {
 		opts = append(opts, WithEndItemId(*in.ScanOptions.EndItemId))
+	}
+	if in.ScanOptions.OrderByItemId {
+		opts = append(opts, WithOrderByItemId())
 	}
 	feedbackChan, errChan := p.database.GetFeedbackStream(stream.Context(), int(in.BatchSize), opts...)
 	for feedback := range feedbackChan {
@@ -939,6 +943,7 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 		BeginItemId:   o.BeginItemId,
 		EndItemId:     o.EndItemId,
 		FeedbackTypes: o.FeedbackTypes,
+		OrderByItemId:  o.OrderByItemId,
 	}
 	if o.BeginTime != nil {
 		pbOptions.BeginTime = timestamppb.New(*o.BeginTime)
