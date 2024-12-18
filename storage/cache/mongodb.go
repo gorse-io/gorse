@@ -369,12 +369,19 @@ func (m MongoDB) SearchScores(ctx context.Context, collection, subset string, qu
 	return documents, nil
 }
 
-func (m MongoDB) UpdateScores(ctx context.Context, collections []string, id string, patch ScorePatch) error {
+func (m MongoDB) UpdateScores(ctx context.Context, collections []string, subset *string, id string, patch ScorePatch) error {
 	if len(collections) == 0 {
 		return nil
 	}
 	if patch.IsHidden == nil && patch.Categories == nil && patch.Score == nil {
 		return nil
+	}
+	filter := bson.M{
+		"collection": bson.M{"$in": collections},
+		"id":         id,
+	}
+	if subset != nil {
+		filter["subset"] = *subset
 	}
 	update := bson.D{}
 	if patch.IsHidden != nil {
@@ -386,10 +393,7 @@ func (m MongoDB) UpdateScores(ctx context.Context, collections []string, id stri
 	if patch.Score != nil {
 		update = append(update, bson.E{Key: "$set", Value: bson.M{"score": *patch.Score}})
 	}
-	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, bson.M{
-		"collection": bson.M{"$in": collections},
-		"id":         id,
-	}, update)
+	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, filter, update)
 	return errors.Trace(err)
 }
 

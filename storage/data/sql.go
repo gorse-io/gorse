@@ -958,9 +958,9 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		defer close(feedbackChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
-			Select("feedback_type, user_id, item_id, time_stamp, comment").
-			Order("feedback_type, user_id, item_id")
+		tx := d.gormDB.WithContext(ctx).
+			Table(d.FeedbackTable()).
+			Select("feedback_type, user_id, item_id, time_stamp, comment")
 		if len(scan.FeedbackTypes) > 0 {
 			tx.Where("feedback_type IN ?", scan.FeedbackTypes)
 		}
@@ -975,6 +975,17 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		}
 		if scan.EndUserId != nil {
 			tx.Where("user_id <= ?", scan.EndUserId)
+		}
+		if scan.BeginItemId != nil {
+			tx.Where("item_id >= ?", scan.BeginItemId)
+		}
+		if scan.EndItemId != nil {
+			tx.Where("item_id <= ?", scan.EndItemId)
+		}
+		if scan.OrderByItemId {
+			tx.Order("item_id")
+		} else {
+			tx.Order("feedback_type, user_id, item_id")
 		}
 		result, err := tx.Rows()
 		if err != nil {

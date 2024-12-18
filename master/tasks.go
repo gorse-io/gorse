@@ -17,6 +17,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/zhenghaoz/gorse/logics"
 	"sort"
 	"strings"
 	"sync"
@@ -49,7 +50,6 @@ import (
 const (
 	PositiveFeedbackRate = "PositiveFeedbackRate"
 
-	TaskLoadDataset            = "Load dataset"
 	TaskFindItemNeighbors      = "Find neighbors of items"
 	TaskFindUserNeighbors      = "Find neighbors of users"
 	TaskFitRankingModel        = "Fit collaborative filtering model"
@@ -73,43 +73,49 @@ func (m *Master) runLoadDatasetTask() error {
 	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
 	defer span.End()
 
+	// Build non-personalized recommenders
 	initialStartTime := time.Now()
+	nonPersonalizedRecommenders := []*logics.NonPersonalized{
+		logics.NewLatest(m.Config.Recommend.CacheSize, initialStartTime),
+		logics.NewPopular(m.Config.Recommend.Popular.PopularWindow, m.Config.Recommend.CacheSize, initialStartTime),
+	}
+	for _, cfg := range m.Config.Recommend.NonPersonalized {
+		recommender, err := logics.NewNonPersonalized(cfg, m.Config.Recommend.CacheSize, initialStartTime)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		nonPersonalizedRecommenders = append(nonPersonalizedRecommenders, recommender)
+	}
+
 	log.Logger().Info("load dataset",
 		zap.Strings("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
 		zap.Strings("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
-	rankingDataset, clickDataset, latestItems, popularItems, err := m.LoadDataFromDatabase(ctx, m.DataClient,
+	rankingDataset, clickDataset, err := m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
 		m.Config.Recommend.DataSource.PositiveFeedbackTTL,
-		evaluator)
+		evaluator, nonPersonalizedRecommenders)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	// save popular items to cache
-	if err = m.CacheClient.AddScores(ctx, cache.PopularItems, "", popularItems.ToSlice()); err != nil {
-		log.Logger().Error("failed to cache popular items", zap.Error(err))
-	}
-	if err = m.CacheClient.DeleteScores(ctx, []string{cache.PopularItems}, cache.ScoreCondition{Before: &popularItems.Timestamp}); err != nil {
-		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
-	}
-	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), time.Now())); err != nil {
-		log.Logger().Error("failed to write latest update popular items time", zap.Error(err))
-	}
-
-	// save the latest items to cache
-	if err = m.CacheClient.AddScores(ctx, cache.LatestItems, "", latestItems.ToSlice()); err != nil {
-		log.Logger().Error("failed to cache latest items", zap.Error(err))
-	}
-	if err = m.CacheClient.DeleteScores(ctx, []string{cache.LatestItems}, cache.ScoreCondition{Before: &latestItems.Timestamp}); err != nil {
-		log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
-	}
-	if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime), time.Now())); err != nil {
-		log.Logger().Error("failed to write latest update latest items time", zap.Error(err))
+	// save non-personalized recommenders to cache
+	for _, recommender := range nonPersonalizedRecommenders {
+		scores := recommender.PopAll()
+		if err = m.CacheClient.AddScores(ctx, cache.NonPersonalized, recommender.Name(), scores); err != nil {
+			log.Logger().Error("failed to cache non-personalized recommenders", zap.Error(err))
+		}
+		if err = m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized},
+			cache.ScoreCondition{
+				Subset: proto.String(recommender.Name()),
+				Before: lo.ToPtr(recommender.Timestamp()),
+			}); err != nil {
+			log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
+		}
 	}
 
 	// write statistics to database
@@ -1394,12 +1400,17 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 }
 
 // LoadDataFromDatabase loads dataset from data store.
-func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Database, posFeedbackTypes, readTypes []string, itemTTL, positiveFeedbackTTL uint, evaluator *OnlineEvaluator) (
-	rankingDataset *ranking.DataSet, clickDataset *click.Dataset, latestItems *cache.DocumentAggregator, popularItems *cache.DocumentAggregator, err error) {
+func (m *Master) LoadDataFromDatabase(
+	ctx context.Context,
+	database data.Database,
+	posFeedbackTypes, readTypes []string,
+	itemTTL, positiveFeedbackTTL uint,
+	evaluator *OnlineEvaluator,
+	nonPersonalizedRecommenders []*logics.NonPersonalized,
+) (rankingDataset *ranking.DataSet, clickDataset *click.Dataset, err error) {
 	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase", 4)
 	defer span.End()
 
-	startLoadTime := time.Now()
 	// setup time limit
 	var feedbackTimeLimit data.ScanOption
 	var itemTimeLimit *time.Time
@@ -1416,10 +1427,6 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		timeWindowLimit = time.Now().Add(-m.Config.Recommend.Popular.PopularWindow)
 	}
 	rankingDataset = ranking.NewMapIndexDataset()
-
-	// create filers for latest items
-	latestItemsFilters := make(map[string]*heap.TopKFilter[string, float64])
-	latestItemsFilters[""] = heap.NewTopKFilter[string, float64](m.Config.Recommend.CacheSize)
 
 	// STEP 1: pull users
 	userLabelCount := make(map[string]int)
@@ -1463,7 +1470,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		}
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumUserLabels = userLabelIndex.Len()
 	log.Logger().Debug("pulled users from database",
@@ -1474,13 +1481,15 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	span.Add(1)
 
 	// STEP 2: pull items
+	var items []data.Item
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
 	itemLabelIndex := base.NewMapIndex()
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
-	for items := range itemChan {
-		for _, item := range items {
+	for batchItems := range itemChan {
+		items = append(items, batchItems...)
+		for _, item := range batchItems {
 			rankingDataset.AddItem(item.ItemId)
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
 			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
@@ -1517,19 +1526,11 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 			}
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
-			} else if !item.Timestamp.IsZero() { // add items to the latest items filter
-				latestItemsFilters[""].Push(item.ItemId, float64(item.Timestamp.Unix()))
-				for _, category := range item.Categories {
-					if _, exist := latestItemsFilters[category]; !exist {
-						latestItemsFilters[category] = heap.NewTopKFilter[string, float64](m.Config.Recommend.CacheSize)
-					}
-					latestItemsFilters[category].Push(item.ItemId, float64(item.Timestamp.Unix()))
-				}
 			}
 		}
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumItemLabels = itemLabelIndex.Len()
 	log.Logger().Debug("pulled items from database",
@@ -1546,22 +1547,26 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		positiveSet[i] = mapset.NewSet[int32]()
 	}
 
-	// split user groups
-	users := rankingDataset.UserIndex.GetNames()
-	sort.Strings(users)
-	userGroups := parallel.Split(users, m.Config.Master.NumJobs)
+	// split item groups
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].ItemId < items[j].ItemId
+	})
+	itemGroups := parallel.Split(items, m.Config.Master.NumJobs)
 
 	// STEP 3: pull positive feedback
 	var mu sync.Mutex
 	var posFeedbackCount int
 	start = time.Now()
-	err = parallel.Parallel(len(userGroups), m.Config.Master.NumJobs, func(_, userIndex int) error {
+	err = parallel.Parallel(len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+		var itemFeedback []data.Feedback
+		var itemGroupIndex int
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
-			data.WithBeginUserId(userGroups[userIndex][0]),
-			data.WithEndUserId(userGroups[userIndex][len(userGroups[userIndex])-1]),
+			data.WithBeginItemId(itemGroups[i][0].ItemId),
+			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
 			feedbackTimeLimit,
 			data.WithEndTime(*m.Config.Now()),
-			data.WithFeedbackTypes(posFeedbackTypes...))
+			data.WithFeedbackTypes(posFeedbackTypes...),
+			data.WithOrderByItemId())
 		for feedback := range feedbackChan {
 			for _, f := range feedback {
 				// convert user and item id to index
@@ -1587,6 +1592,29 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 				// insert feedback to evaluator
 				evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
+
+				// append item feedback
+				if len(itemFeedback) == 0 || itemFeedback[len(itemFeedback)-1].ItemId == f.ItemId {
+					itemFeedback = append(itemFeedback, f)
+				} else {
+					// add item to non-personalized recommenders
+					for _, recommender := range nonPersonalizedRecommenders {
+						recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
+					}
+					itemFeedback = itemFeedback[:0]
+					itemFeedback = append(itemFeedback, f)
+				}
+				// find item group index
+				for itemGroupIndex = 0; itemGroupIndex < len(itemGroups[i]); itemGroupIndex++ {
+					if itemGroups[i][itemGroupIndex].ItemId == f.ItemId {
+						break
+					}
+				}
+			}
+
+			// add item to non-personalized recommenders
+			for _, recommender := range nonPersonalizedRecommenders {
+				recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
 			}
 		}
 		if err = <-errChan; err != nil {
@@ -1595,7 +1623,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -1612,10 +1640,10 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 	// STEP 4: pull negative feedback
 	start = time.Now()
 	var negativeFeedbackCount float64
-	err = parallel.Parallel(len(userGroups), m.Config.Master.NumJobs, func(_, userIndex int) error {
+	err = parallel.Parallel(len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
-			data.WithBeginUserId(userGroups[userIndex][0]),
-			data.WithEndUserId(userGroups[userIndex][len(userGroups[userIndex])-1]),
+			data.WithBeginItemId(itemGroups[i][0].ItemId),
+			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
 			feedbackTimeLimit,
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(readTypes...))
@@ -1645,7 +1673,7 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled negative feedback from database",
 		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
@@ -1695,32 +1723,5 @@ func (m *Master) LoadDataFromDatabase(ctx context.Context, database data.Databas
 		zap.Int("n_valid_negative", clickDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
-
-	// collect latest items
-	latestItems = cache.NewDocumentAggregator(startLoadTime)
-	for category, latestItemsFilter := range latestItemsFilters {
-		items, scores := latestItemsFilter.PopAll()
-		latestItems.Add(category, items, scores)
-	}
-
-	// collect popular items
-	popularItemFilters := make(map[string]*heap.TopKFilter[string, float64])
-	popularItemFilters[""] = heap.NewTopKFilter[string, float64](m.Config.Recommend.CacheSize)
-	for itemIndex, val := range popularCount {
-		itemId := rankingDataset.ItemIndex.ToName(int32(itemIndex))
-		popularItemFilters[""].Push(itemId, float64(val))
-		for _, category := range rankingDataset.ItemCategories[itemIndex] {
-			if _, exist := popularItemFilters[category]; !exist {
-				popularItemFilters[category] = heap.NewTopKFilter[string, float64](m.Config.Recommend.CacheSize)
-			}
-			popularItemFilters[category].Push(itemId, float64(val))
-		}
-	}
-	popularItems = cache.NewDocumentAggregator(startLoadTime)
-	for category, popularItemFilter := range popularItemFilters {
-		items, scores := popularItemFilter.PopAll()
-		popularItems.Add(category, items, scores)
-	}
-
-	return rankingDataset, clickDataset, latestItems, popularItems, nil
+	return rankingDataset, clickDataset, nil
 }

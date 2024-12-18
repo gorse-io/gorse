@@ -515,10 +515,10 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 	operators := []ListOperator{
 		{"Item Neighbors", cache.ItemNeighbors, "0", "", "/api/dashboard/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.ItemNeighbors, "0", "*", "/api/dashboard/item/0/neighbors/*"},
-		{"Latest Items", cache.LatestItems, "", "", "/api/dashboard/latest/"},
-		{"Popular Items", cache.PopularItems, "", "", "/api/dashboard/popular/"},
-		{"Latest Items in Category", cache.LatestItems, "", "*", "/api/dashboard/latest/*"},
-		{"Popular Items in Category", cache.PopularItems, "", "*", "/api/dashboard/popular/*"},
+		{"Latest Items", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/latest/"},
+		{"Popular Items", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/popular/"},
+		{"Latest Items in Category", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/latest/*"},
+		{"Popular Items in Category", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/popular/*"},
 	}
 	for i, operator := range operators {
 		t.Run(operator.Name, func(t *testing.T) {

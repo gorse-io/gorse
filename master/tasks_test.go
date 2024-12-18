@@ -81,7 +81,8 @@ func (s *MasterTestSuite) TestFindItemNeighborsBruteForce() {
 	}
 
 	// load mock dataset
-	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	dataset, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataset
 
@@ -186,7 +187,8 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF() {
 	}
 
 	// load mock dataset
-	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	dataset, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataset
 
@@ -253,7 +255,8 @@ func (s *MasterTestSuite) TestFindItemNeighborsIVF_ZeroIDF() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "0", ItemId: "1"}},
 	}, true, true, true)
 	s.NoError(err)
-	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	dataset, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataset
 
@@ -313,7 +316,8 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	dataset, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataset
 
@@ -393,7 +397,8 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	dataset, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataset
 
@@ -452,7 +457,8 @@ func (s *MasterTestSuite) TestFindUserNeighborsIVF_ZeroIDF() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "FeedbackType", UserId: "1", ItemId: "0"}},
 	}, true, true, true)
 	s.NoError(err)
-	dataset, _, _, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"}, nil, 0, 0, NewOnlineEvaluator())
+	dataset, _, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataset
 
@@ -568,7 +574,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Equal(45, s.clickTrainSet.NegativeCount+s.clickTestSet.NegativeCount)
 
 	// check latest items
-	latest, err := s.CacheClient.SearchScores(ctx, cache.LatestItems, "", []string{""}, 0, 100)
+	latest, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]cache.Score{
 		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
@@ -577,7 +583,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	}, lo.Map(latest, func(document cache.Score, _ int) cache.Score {
 		return cache.Score{Id: document.Id, Score: document.Score}
 	}))
-	latest, err = s.CacheClient.SearchScores(ctx, cache.LatestItems, "", []string{"2"}, 0, 100)
+	latest, err = s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{"2"}, 0, 100)
 	s.NoError(err)
 	s.Equal([]cache.Score{
 		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
@@ -588,7 +594,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	}))
 
 	// check popular items
-	popular, err := s.CacheClient.SearchScores(ctx, cache.PopularItems, "", []string{""}, 0, 3)
+	popular, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{""}, 0, 3)
 	s.NoError(err)
 	s.Equal([]cache.Score{
 		{Id: items[8].ItemId, Score: 9},
@@ -597,7 +603,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	}, lo.Map(popular, func(document cache.Score, _ int) cache.Score {
 		return cache.Score{Id: document.Id, Score: document.Score}
 	}))
-	popular, err = s.CacheClient.SearchScores(ctx, cache.PopularItems, "", []string{"2"}, 0, 3)
+	popular, err = s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{"2"}, 0, 3)
 	s.NoError(err)
 	s.Equal([]cache.Score{
 		{Id: items[8].ItemId, Score: 9},

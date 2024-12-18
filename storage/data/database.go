@@ -174,9 +174,12 @@ func (sorter feedbackSorter) Swap(i, j int) {
 type ScanOptions struct {
 	BeginUserId   *string
 	EndUserId     *string
+	BeginItemId   *string
+	EndItemId     *string
 	BeginTime     *time.Time
 	EndTime       *time.Time
 	FeedbackTypes []string
+	OrderByItemId bool
 }
 
 type ScanOption func(options *ScanOptions)
@@ -192,6 +195,20 @@ func WithBeginUserId(userId string) ScanOption {
 func WithEndUserId(userId string) ScanOption {
 	return func(options *ScanOptions) {
 		options.EndUserId = &userId
+	}
+}
+
+// WithBeginItemId sets the beginning item id. The beginning item id is included in the result.
+func WithBeginItemId(itemId string) ScanOption {
+	return func(options *ScanOptions) {
+		options.BeginItemId = &itemId
+	}
+}
+
+// WithEndItemId sets the end item id. The end item id is included in the result.
+func WithEndItemId(itemId string) ScanOption {
+	return func(options *ScanOptions) {
+		options.EndItemId = &itemId
 	}
 }
 
@@ -213,6 +230,13 @@ func WithEndTime(t time.Time) ScanOption {
 func WithFeedbackTypes(feedbackTypes ...string) ScanOption {
 	return func(options *ScanOptions) {
 		options.FeedbackTypes = feedbackTypes
+	}
+}
+
+// WithOrderByItemId sets the order by item id.
+func WithOrderByItemId() ScanOption {
+	return func(options *ScanOptions) {
+		options.OrderByItemId = true
 	}
 }
 

@@ -66,7 +66,7 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.SearchScores(ctx, "", "", nil, 0, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.UpdateScores(ctx, nil, "", ScorePatch{})
+	err = database.UpdateScores(ctx, nil, nil, "", ScorePatch{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.DeleteScores(ctx, nil, ScoreCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)

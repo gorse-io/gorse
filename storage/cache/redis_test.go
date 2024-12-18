@@ -78,7 +78,7 @@ func (suite *RedisTestSuite) TestEscapeCharacters() {
 			suite.NoError(err)
 			suite.Equal([]Score{{Id: id, Score: math.MaxFloat64, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
 
-			err = suite.UpdateScores(ctx, []string{collection}, id, ScorePatch{Score: proto.Float64(1)})
+			err = suite.UpdateScores(ctx, []string{collection}, nil, id, ScorePatch{Score: proto.Float64(1)})
 			suite.NoError(err)
 			documents, err = suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
 			suite.NoError(err)
