@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/juju/errors"
-	"github.com/mitchellh/mapstructure"
 	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
@@ -515,10 +515,10 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 	operators := []ListOperator{
 		{"Item Neighbors", cache.ItemNeighbors, "0", "", "/api/dashboard/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.ItemNeighbors, "0", "*", "/api/dashboard/item/0/neighbors/*"},
-		{"Latest Items", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/latest/"},
-		{"Popular Items", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/popular/"},
-		{"Latest Items in Category", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/latest/*"},
-		{"Popular Items in Category", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/popular/*"},
+		{"Latest Items", cache.NonPersonalized, cache.Latest, "", "/api/non-personalized/latest/"},
+		{"Popular Items", cache.NonPersonalized, cache.Popular, "", "/api/non-personalized/popular/"},
+		{"Latest Items in Category", cache.NonPersonalized, cache.Latest, "*", "/api/non-personalized/latest/"},
+		{"Popular Items in Category", cache.NonPersonalized, cache.Popular, "*", "/api/non-personalized/popular/"},
 	}
 	for i, operator := range operators {
 		t.Run(operator.Name, func(t *testing.T) {
@@ -551,6 +551,7 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 				Handler(s.handler).
 				Get(operator.Get).
 				Header("Cookie", cookie).
+				Query("category", operator.Category).
 				Expect(t).
 				Status(http.StatusOK).
 				Body(marshal(t, []ScoredItem{items[0], items[1], items[2], items[4]})).
