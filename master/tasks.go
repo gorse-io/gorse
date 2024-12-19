@@ -1560,6 +1560,7 @@ func (m *Master) LoadDataFromDatabase(
 	err = parallel.Parallel(len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
 		var itemFeedback []data.Feedback
 		var itemGroupIndex int
+		itemHasFeedback := make([]bool, len(itemGroups[i]))
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
 			data.WithBeginItemId(itemGroups[i][0].ItemId),
 			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
@@ -1598,6 +1599,7 @@ func (m *Master) LoadDataFromDatabase(
 					itemFeedback = append(itemFeedback, f)
 				} else {
 					// add item to non-personalized recommenders
+					itemHasFeedback[itemGroupIndex] = true
 					for _, recommender := range nonPersonalizedRecommenders {
 						recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
 					}
@@ -1611,10 +1613,20 @@ func (m *Master) LoadDataFromDatabase(
 					}
 				}
 			}
+		}
 
-			// add item to non-personalized recommenders
+		// add item to non-personalized recommenders
+		if len(itemFeedback) > 0 {
+			itemHasFeedback[itemGroupIndex] = true
 			for _, recommender := range nonPersonalizedRecommenders {
 				recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
+			}
+		}
+		for index, hasFeedback := range itemHasFeedback {
+			if !hasFeedback {
+				for _, recommender := range nonPersonalizedRecommenders {
+					recommender.Push(itemGroups[i][index], nil)
+				}
 			}
 		}
 		if err = <-errChan; err != nil {
