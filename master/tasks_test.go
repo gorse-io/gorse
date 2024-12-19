@@ -619,6 +619,86 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Equal([]string{"0", "1", "2"}, categories)
 }
 
+func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
+	ctx := context.Background()
+	// create config
+	s.Config = &config.Config{}
+	s.Config.Recommend.CacheSize = 3
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
+	s.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"negative"}
+	s.Config.Master.NumJobs = runtime.NumCPU()
+
+	// insert items
+	var items []data.Item
+	for i := 0; i < 10; i++ {
+		items = append(items, data.Item{
+			ItemId:    strconv.Itoa(i),
+			Timestamp: time.Date(2000+i%2, 1, 1, i, 1, 0, 0, time.UTC),
+		})
+	}
+	err := s.DataClient.BatchInsertItems(ctx, items)
+	s.NoError(err)
+
+	// insert users
+	var users []data.User
+	for i := 0; i < 10; i++ {
+		users = append(users, data.User{
+			UserId: strconv.Itoa(i),
+		})
+	}
+	err = s.DataClient.BatchInsertUsers(ctx, users)
+	s.NoError(err)
+
+	// insert feedback
+	feedbacks := make([]data.Feedback, 0)
+	for i := 0; i < 10; i++ {
+		// positive feedback
+		// item 0: user 0
+		// ...
+		// item 8: user 0 ... user 8
+		if i%2 == 0 {
+			for j := 0; j <= i; j++ {
+				feedbacks = append(feedbacks, data.Feedback{
+					FeedbackKey: data.FeedbackKey{
+						ItemId:       strconv.Itoa(i),
+						UserId:       strconv.Itoa(j),
+						FeedbackType: "positive",
+					},
+					Timestamp: time.Now(),
+				})
+			}
+		}
+	}
+	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, true)
+	s.NoError(err)
+
+	// load dataset
+	err = s.runLoadDatasetTask()
+	s.NoError(err)
+
+	// check latest items
+	latest, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{""}, 0, 3)
+	s.NoError(err)
+	s.Equal([]cache.Score{
+		{Id: items[9].ItemId, Score: float64(items[9].Timestamp.Unix())},
+		{Id: items[7].ItemId, Score: float64(items[7].Timestamp.Unix())},
+		{Id: items[5].ItemId, Score: float64(items[5].Timestamp.Unix())},
+	}, lo.Map(latest, func(document cache.Score, _ int) cache.Score {
+		return cache.Score{Id: document.Id, Score: document.Score}
+	}))
+
+	// check popular items
+	popular, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{""}, 0, 3)
+	s.NoError(err)
+	s.Equal([]cache.Score{
+		{Id: items[8].ItemId, Score: 9},
+		{Id: items[6].ItemId, Score: 7},
+		{Id: items[4].ItemId, Score: 5},
+	}, lo.Map(popular, func(document cache.Score, _ int) cache.Score {
+		return cache.Score{Id: document.Id, Score: document.Score}
+	}))
+}
+
 func (s *MasterTestSuite) TestCheckItemNeighborCacheTimeout() {
 	s.Config = config.GetDefaultConfig()
 	ctx := context.Background()

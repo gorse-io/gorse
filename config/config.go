@@ -132,9 +132,9 @@ type DataSourceConfig struct {
 }
 
 type NonPersonalizedConfig struct {
-	Name   string `mapstructure:"name"`
-	Score  string `mapstructure:"score" validate:"required,item_expr"`
-	Filter string `mapstructure:"filter" validate:"item_expr"`
+	Name   string `mapstructure:"name" json:"name"`
+	Score  string `mapstructure:"score" json:"score" validate:"required,item_expr"`
+	Filter string `mapstructure:"filter" json:"filter" validate:"item_expr"`
 }
 
 type PopularConfig struct {
