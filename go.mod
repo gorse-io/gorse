@@ -1,6 +1,6 @@
 module github.com/zhenghaoz/gorse
 
-go 1.23.3
+go 1.23.4
 
 require (
 	github.com/XSAM/otelsql v0.35.0
@@ -19,9 +19,10 @@ require (
 	github.com/go-playground/validator/v10 v10.22.1
 	github.com/go-resty/resty/v2 v2.7.0
 	github.com/go-sql-driver/mysql v1.6.0
+	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20241207032532-3b75acd211c4
+	github.com/gorse-io/dashboard v0.0.0-20241219140402-1035820fbe77
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
 	github.com/jellydator/ttlcache/v3 v3.3.0
@@ -33,7 +34,6 @@ require (
 	github.com/lib/pq v1.10.6
 	github.com/madflojo/testcerts v1.3.0
 	github.com/mailru/go-clickhouse/v2 v2.0.1-0.20221121001540-b259988ad8e5
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rakyll/statik v0.1.7
@@ -133,6 +133,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect

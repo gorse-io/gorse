@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/juju/errors"
-	"github.com/mitchellh/mapstructure"
 	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
