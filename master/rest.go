@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -138,7 +137,7 @@ func (m *Master) CreateWebService() {
 		Returns(http.StatusOK, "OK", UserIterator{}).
 		Writes(UserIterator{}))
 	// Get non-personalized recommendation
-	ws.Route(ws.GET("/non-personalized/{name}").To(m.getNonPersonalized).
+	ws.Route(ws.GET("/dashboard/non-personalized/{name}").To(m.getNonPersonalized).
 		Doc("Get non-personalized recommendations.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
@@ -151,6 +150,7 @@ func (m *Master) CreateWebService() {
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
@@ -159,6 +159,7 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
+		Param(ws.QueryParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
@@ -175,6 +176,7 @@ func (m *Master) CreateWebService() {
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
+		Param(ws.QueryParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Returns(http.StatusOK, "OK", []ScoredItem{}).
@@ -743,7 +745,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// parse arguments
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
-	categories := []string{request.PathParameter("category")}
+	categories := server.ReadCategories(request)
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
@@ -844,80 +846,49 @@ type ScoreUser struct {
 	Score float64
 }
 
-func (m *Master) searchDocuments(collection, subset, category string, request *restful.Request, response *restful.Response, retType interface{}) {
-	ctx := context.Background()
-	if request != nil && request.Request != nil {
-		ctx = request.Request.Context()
-	}
-	var n, offset int
+func (m *Master) GetItem(score cache.Score) (any, error) {
+	var item ScoredItem
 	var err error
-	// read arguments
-	if offset, err = server.ParseInt(request, "offset", 0); err != nil {
-		server.BadRequest(response, err)
-		return
-	}
-	if n, err = server.ParseInt(request, "n", m.Config.Server.DefaultN); err != nil {
-		server.BadRequest(response, err)
-		return
-	}
-	// Get the popular list
-	scores, err := m.CacheClient.SearchScores(ctx, collection, subset, []string{category}, offset, m.Config.Recommend.CacheSize)
+	item.Score = score.Score
+	item.Item, err = m.DataClient.GetItem(context.Background(), score.Id)
 	if err != nil {
-		server.InternalServerError(response, err)
-		return
+		return nil, err
 	}
-	if n > 0 && len(scores) > n {
-		scores = scores[:n]
+	return item, nil
+}
+
+func (m *Master) GetUser(score cache.Score) (any, error) {
+	var user ScoreUser
+	var err error
+	user.Score = score.Score
+	user.User, err = m.DataClient.GetUser(context.Background(), score.Id)
+	if err != nil {
+		return nil, err
 	}
-	// Send result
-	switch retType.(type) {
-	case data.Item:
-		details := make([]ScoredItem, len(scores))
-		for i := range scores {
-			details[i].Score = scores[i].Score
-			details[i].Item, err = m.DataClient.GetItem(ctx, scores[i].Id)
-			if err != nil {
-				server.InternalServerError(response, err)
-				return
-			}
-		}
-		server.Ok(response, details)
-	case data.User:
-		details := make([]ScoreUser, len(scores))
-		for i := range scores {
-			details[i].Score = scores[i].Score
-			details[i].User, err = m.DataClient.GetUser(ctx, scores[i].Id)
-			if err != nil {
-				server.InternalServerError(response, err)
-				return
-			}
-		}
-		server.Ok(response, details)
-	default:
-		log.ResponseLogger(response).Fatal("unknown return type", zap.Any("ret_type", reflect.TypeOf(retType)))
-	}
+	return user, nil
 }
 
 func (m *Master) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
-	category := request.QueryParameter("category")
-	m.searchDocuments(cache.NonPersonalized, name, category, request, response, data.Item{})
+	categories := server.ReadCategories(request)
+	m.SearchDocuments(cache.NonPersonalized, name, categories, m.GetItem, request, response)
 }
 
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	m.searchDocuments(cache.ItemNeighbors, itemId, "", request, response, data.Item{})
+	categories := server.ReadCategories(request)
+	m.SearchDocuments(cache.ItemNeighbors, itemId, categories, m.GetItem, request, response)
 }
 
 func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	category := request.PathParameter("category")
-	m.searchDocuments(cache.ItemNeighbors, itemId, category, request, response, data.Item{})
+	categories := server.ReadCategories(request)
+	m.SearchDocuments(cache.ItemNeighbors, itemId, categories, m.GetItem, request, response)
 }
 
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
-	m.searchDocuments(cache.UserNeighbors, userId, "", request, response, data.User{})
+	m.SearchDocuments(cache.UserNeighbors, userId, []string{""}, m.GetUser, request, response)
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
