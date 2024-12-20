@@ -587,7 +587,10 @@ func ParseDuration(request *restful.Request, name string) (time.Duration, error)
 	return time.ParseDuration(valueString)
 }
 
-func (s *RestServer) searchDocuments(collection, subset string, categories []string, isItem bool, request *restful.Request, response *restful.Response) {
+func (s *RestServer) SearchDocuments(collection, subset string, categories []string,
+	iteratee func(item cache.Score) (any, error),
+	request *restful.Request, response *restful.Response,
+) {
 	var (
 		ctx    = request.Request.Context()
 		n      int
@@ -646,26 +649,39 @@ func (s *RestServer) searchDocuments(collection, subset string, categories []str
 	if n > 0 && len(items) > n {
 		items = items[:n]
 	}
-	Ok(response, items)
+	if iteratee != nil {
+		var results []any
+		for _, item := range items {
+			result, err := iteratee(item)
+			if err != nil {
+				InternalServerError(response, err)
+				return
+			}
+			results = append(results, result)
+		}
+		Ok(response, results)
+	} else {
+		Ok(response, items)
+	}
 }
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
-	categories := readCategories(request)
+	categories := ReadCategories(request)
 	log.ResponseLogger(response).Debug("get category popular items in category", zap.Strings("categories", categories))
-	s.searchDocuments(cache.NonPersonalized, cache.Popular, categories, true, request, response)
+	s.SearchDocuments(cache.NonPersonalized, cache.Popular, categories, nil, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
-	categories := readCategories(request)
+	categories := ReadCategories(request)
 	log.ResponseLogger(response).Debug("get category latest items in category", zap.Strings("categories", categories))
-	s.searchDocuments(cache.NonPersonalized, cache.Latest, categories, true, request, response)
+	s.SearchDocuments(cache.NonPersonalized, cache.Latest, categories, nil, request, response)
 }
 
 func (s *RestServer) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
-	categories := readCategories(request)
+	categories := ReadCategories(request)
 	log.ResponseLogger(response).Debug("get leaderboard", zap.String("name", name))
-	s.searchDocuments(cache.NonPersonalized, name, categories, false, request, response)
+	s.SearchDocuments(cache.NonPersonalized, name, categories, nil, request, response)
 }
 
 // get feedback by item-id with feedback type
@@ -703,23 +719,23 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 func (s *RestServer) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
-	categories := readCategories(request)
-	s.searchDocuments(cache.ItemNeighbors, itemId, categories, true, request, response)
+	categories := ReadCategories(request)
+	s.SearchDocuments(cache.ItemNeighbors, itemId, categories, nil, request, response)
 }
 
 // getUserNeighbors gets neighbors of a user from database.
 func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	userId := request.PathParameter("user-id")
-	s.searchDocuments(cache.UserNeighbors, userId, []string{""}, false, request, response)
+	s.SearchDocuments(cache.UserNeighbors, userId, []string{""}, nil, request, response)
 }
 
 // getCollaborative gets cached recommended items from database.
 func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
 	// Get user id
 	userId := request.PathParameter("user-id")
-	categories := readCategories(request)
-	s.searchDocuments(cache.OfflineRecommend, userId, categories, true, request, response)
+	categories := ReadCategories(request)
+	s.SearchDocuments(cache.OfflineRecommend, userId, categories, nil, request, response)
 }
 
 // Recommend items to users.
@@ -997,10 +1013,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		BadRequest(response, err)
 		return
 	}
-	categories := request.QueryParameters("category")
-	if len(categories) == 0 {
-		categories = []string{request.PathParameter("category")}
-	}
+	categories := ReadCategories(request)
 	offset, err := ParseInt(request, "offset", 0)
 	if err != nil {
 		BadRequest(response, err)
@@ -1966,7 +1979,7 @@ func withWildCard(categories []string) []string {
 	return result
 }
 
-func readCategories(request *restful.Request) []string {
+func ReadCategories(request *restful.Request) []string {
 	if pathValue := request.PathParameter("category"); pathValue != "" {
 		return []string{pathValue}
 	} else if queryValues := request.QueryParameters("category"); len(queryValues) > 0 {
