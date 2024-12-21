@@ -1,0 +1,266 @@
+// Copyright 2024 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package nn
+
+import (
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
+
+func TestTensor_Slice(t *testing.T) {
+	x := RandN(3, 4, 5)
+	y := x.Slice(1, 3)
+	assert.Equal(t, []int{2, 4, 5}, y.Shape())
+	for i := 0; i < 2; i++ {
+		for j := 0; j < 4; j++ {
+			for k := 0; k < 5; k++ {
+				assert.Equal(t, x.Get(i+1, j, k), y.Get(i, j, k))
+			}
+		}
+	}
+}
+
+func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tensor {
+	if !transpose1 && !transpose2 {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[1] != other.shape[0] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[0], t.shape[1], other.shape[1]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[i*n+k] * other.data[k*p+j]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	} else if transpose1 && !transpose2 {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[0] != other.shape[0] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[1], t.shape[0], other.shape[1]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[k*m+i] * other.data[k*p+j]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	} else if !transpose1 && transpose2 {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[1] != other.shape[1] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[0], t.shape[1], other.shape[0]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[i*n+k] * other.data[j*n+k]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	} else {
+		if len(t.shape) != 2 || len(other.shape) != 2 {
+			panic("matMul requires 2-D tensors")
+		}
+		if t.shape[0] != other.shape[0] {
+			panic("matMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[1], t.shape[0], other.shape[1]
+		result := make([]float32, m*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < p; j++ {
+				for k := 0; k < n; k++ {
+					result[i*p+j] += t.data[k*m+i] * other.data[j*n+k]
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, p},
+		}
+	}
+}
+
+func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tensor {
+	if !transpose1 && !transpose2 {
+		if len(t.shape) != 3 || len(other.shape) != 3 {
+			panic("BatchMatMul requires 3-D tensors")
+		}
+		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[1] {
+			panic("BatchMatMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[0], t.shape[1], other.shape[2]
+		result := make([]float32, m*n*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				for k := 0; k < p; k++ {
+					for l := 0; l < t.shape[2]; l++ {
+						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
+					}
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, n, p},
+		}
+	} else if transpose1 && !transpose2 {
+		if len(t.shape) != 3 || len(other.shape) != 3 {
+			panic("batchMatMul requires 3-D tensors")
+		}
+		if t.shape[0] != other.shape[0] || t.shape[1] != other.shape[1] {
+			panic("batchMatMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[0], t.shape[2], other.shape[2]
+		result := make([]float32, m*n*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				for k := 0; k < p; k++ {
+					for l := 0; l < t.shape[1]; l++ {
+						result[i*n*p+j*p+k] += t.data[i*t.shape[1]*t.shape[2]+l*t.shape[2]+j] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
+					}
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, n, p},
+		}
+	} else if !transpose1 && transpose2 {
+		if len(t.shape) != 3 || len(other.shape) != 3 {
+			panic("batchMatMul requires 3-D tensors")
+		}
+		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[2] {
+			panic("batchMatMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[0], t.shape[1], other.shape[1]
+		result := make([]float32, m*n*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				for k := 0; k < p; k++ {
+					for l := 0; l < t.shape[2]; l++ {
+						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+k*other.shape[2]+l]
+					}
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, n, p},
+		}
+	} else {
+		if len(t.shape) != 3 || len(other.shape) != 3 {
+			panic("batchMatMul requires 3-D tensors")
+		}
+		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[2] {
+			panic("batchMatMul requires the shapes of tensors are compatible")
+		}
+		m, n, p := t.shape[1], t.shape[2], other.shape[2]
+		result := make([]float32, m*n*p)
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				for k := 0; k < p; k++ {
+					for l := 0; l < t.shape[0]; l++ {
+						result[i*n*p+j*p+k] += t.data[l*t.shape[1]*t.shape[2]+i*t.shape[2]+j] * other.data[l*other.shape[1]*other.shape[2]+j*other.shape[2]+k]
+					}
+				}
+			}
+		}
+		return &Tensor{
+			data:  result,
+			shape: []int{m, n, p},
+		}
+	}
+}
+
+func BenchmarkMatMulLegacy64(b *testing.B) {
+	x := RandN(64, 64)
+	y := RandN(64, 64)
+	for t1 := 0; t1 < 2; t1++ {
+		for t2 := 0; t2 < 2; t2++ {
+			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					x.matMulLegacy(y, t1 == 1, t2 == 1)
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkMatMul64(b *testing.B) {
+	x := RandN(64, 64)
+	y := RandN(64, 64)
+	for t1 := 0; t1 < 2; t1++ {
+		for t2 := 0; t2 < 2; t2++ {
+			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					x.matMul(y, t1 == 1, t2 == 1)
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkBatchMatMulLegacy64(b *testing.B) {
+	x := RandN(64, 64, 64)
+	y := RandN(64, 64, 64)
+	for t1 := 0; t1 < 2; t1++ {
+		for t2 := 0; t2 < 2; t2++ {
+			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					x.batchMatMulLegacy(y, t1 == 1, t2 == 1)
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkBatchMatMul64(b *testing.B) {
+	x := RandN(64, 64, 64)
+	y := RandN(64, 64, 64)
+	for t1 := 0; t1 < 2; t1++ {
+		for t2 := 0; t2 < 2; t2++ {
+			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					x.batchMatMul(y, t1 == 1, t2 == 1)
+				}
+			})
+		}
+	}
+}
