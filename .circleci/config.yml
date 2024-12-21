@@ -34,12 +34,14 @@ jobs:
             wget https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
             wget https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
             wget https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
+            wget https://pub-64226d9f34c64d6f829f5b63a5540d27.r2.dev/datasets/mnist.zip -P ~/.gorse/download
             unzip ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
             unzip ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
             unzip ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
             unzip ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
             unzip ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
             unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
+            unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
       - run:
           name: Upgrade Go
           command: |
