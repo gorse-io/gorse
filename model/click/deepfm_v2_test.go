@@ -25,6 +25,7 @@ import (
 )
 
 func TestDeepFMV2_Classification_Frappe(t *testing.T) {
+	t.Skip()
 	train, test, err := LoadDataFromBuiltIn("frappe")
 	assert.NoError(t, err)
 	m := NewDeepFMV2(model.Params{

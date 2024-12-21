@@ -19,13 +19,13 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/util"
 	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -67,7 +67,7 @@ func LoadIris() ([][]float32, []int, error) {
 	for i, row := range rows {
 		data[i] = make([]float32, 4)
 		for j, cell := range row[:4] {
-			data[i][j], err = strconv.ParseFloat(cell, 64)
+			data[i][j], err = util.ParseFloat32(cell)
 			if err != nil {
 				return nil, nil, err
 			}
