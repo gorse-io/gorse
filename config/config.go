@@ -116,6 +116,7 @@ type RecommendConfig struct {
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	Popular         PopularConfig           `mapstructure:"popular"`
+	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item"`
 	UserNeighbors   NeighborsConfig         `mapstructure:"user_neighbors"`
 	ItemNeighbors   NeighborsConfig         `mapstructure:"item_neighbors"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
@@ -146,6 +147,10 @@ type NeighborsConfig struct {
 	EnableIndex   bool    `mapstructure:"enable_index"`
 	IndexRecall   float32 `mapstructure:"index_recall" validate:"gt=0"`
 	IndexFitEpoch int     `mapstructure:"index_fit_epoch" validate:"gt=0"`
+}
+
+type ItemToItemConfig struct {
+	Name string `mapstructure:"name" json:"name"`
 }
 
 type CollaborativeConfig struct {

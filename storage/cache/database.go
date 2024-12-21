@@ -81,6 +81,8 @@ const (
 	Latest          = "latest"
 	Popular         = "popular"
 
+	ItemToItem = "item-to-item"
+
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	ItemCategories = "item_categories"
