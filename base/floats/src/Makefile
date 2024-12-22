@@ -13,7 +13,7 @@ DEPENDENCES	= $(SOURCES:.c=.d)
 EXECUTE		= floats_test
 
 $(EXECUTE): $(OBJECTS) 
-	$(CC) $(OBJECTS) -o $(EXECUTE)
+	$(CC) $(OBJECTS) -lm -o $(EXECUTE)
 
 test: $(EXECUTE)
 	./${EXECUTE}
