@@ -18,7 +18,7 @@ package floats
 
 import "unsafe"
 
-//go:generate go run ../../cmd/goat src/floats_neon.c -O3
+//go:generate goat src/floats_neon.c -O3
 
 var impl = Neon
 
