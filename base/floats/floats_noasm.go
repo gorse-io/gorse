@@ -36,3 +36,7 @@ func (implementation) mulConst(a []float32, b float32) {
 func (implementation) dot(a, b []float32) float32 {
 	return dot(a, b)
 }
+
+func (implementation) euclidean(a, b []float32) float32 {
+	return euclidean(a, b)
+}

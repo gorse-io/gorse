@@ -194,3 +194,73 @@ void _mm512_dot(float *a, float *b, int64_t n, float *ret)
         *ret += a[i] * b[i];
     }
 }
+
+void _mm512_euclidean(float *a, float *b, int64_t n, float *ret)
+{
+    int epoch = n / 16;
+    int remain = n % 16;
+    __m512 s;
+    if (epoch > 0)
+    {
+        __m512 v1 = _mm512_loadu_ps(a);
+        __m512 v2 = _mm512_loadu_ps(b);
+        __m512 v = _mm512_sub_ps(v1, v2);
+        s = _mm512_mul_ps(v, v);
+        a += 16;
+        b += 16;
+    }
+    for (int i = 1; i < epoch; i++)
+    {
+        __m512 v1 = _mm512_loadu_ps(a);
+        __m512 v2 = _mm512_loadu_ps(b);
+        __m512 v = _mm512_sub_ps(v1, v2);
+        v = _mm512_mul_ps(v, v);
+        s = _mm512_add_ps(v, s);
+        a += 16;
+        b += 16;
+    }
+    __m256 sf_e_d_c_b_a_9_8 = _mm512_extractf32x8_ps(s, 1);
+    __m256 s7_6_5_4_3_2_1_0 = _mm512_castps512_ps256(s);
+    __m256 s7f_6e_5d_4c_3b_2a_19_08 = _mm256_add_ps(sf_e_d_c_b_a_9_8, s7_6_5_4_3_2_1_0);
+    __m128 s7f_6e_5d_4c = _mm256_extractf128_ps(s7f_6e_5d_4c_3b_2a_19_08, 1);
+    __m128 s3b_2a_19_08 = _mm256_castps256_ps128(s7f_6e_5d_4c_3b_2a_19_08);
+    __m128 s37bf_26ae_159d_048c = _mm_add_ps(s7f_6e_5d_4c, s3b_2a_19_08);
+    __m128 sxx_159d_048c = s37bf_26ae_159d_048c;
+    __m128 sxx_37bf_26ae = _mm_movehl_ps(sxx_159d_048c, s37bf_26ae_159d_048c);
+    const __m128 sxx_13579bdf_02468ace = _mm_add_ps(sxx_159d_048c, sxx_37bf_26ae);
+    const __m128 sxxx_02468ace = sxx_13579bdf_02468ace;
+    const __m128 sxxx_13579bdf = _mm_shuffle_ps(sxx_13579bdf_02468ace, sxx_13579bdf_02468ace, 0x1);
+    __m128 sxxx_0123456789abcdef = _mm_add_ps(sxxx_02468ace, sxxx_13579bdf);
+    *ret = _mm_cvtss_f32(sxxx_0123456789abcdef);
+
+    if (remain >= 8)
+    {
+        __m256 s;
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_loadu_ps(b);
+        __m256 v = _mm256_sub_ps(v1, v2);
+        v = _mm256_mul_ps(v, v);
+        a += 8;
+        b += 8;
+        __m128 s7_6_5_4 = _mm256_extractf128_ps(v, 1);
+        __m128 s3_2_1_0 = _mm256_castps256_ps128(v);
+        __m128 s37_26_15_04 = _mm_add_ps(s7_6_5_4, s3_2_1_0);
+        __m128 sxx_15_04 = s37_26_15_04;
+        __m128 sxx_37_26 = _mm_movehl_ps(s37_26_15_04, s37_26_15_04);
+        const __m128 sxx_1357_0246 = _mm_add_ps(sxx_15_04, sxx_37_26);
+        const __m128 sxxx_0246 = sxx_1357_0246;
+        const __m128 sxxx_1357 = _mm_shuffle_ps(sxx_1357_0246, sxx_1357_0246, 0x1);
+        __m128 sxxx_01234567 = _mm_add_ss(sxxx_0246, sxxx_1357);
+        *ret += _mm_cvtss_f32(sxxx_01234567);
+        remain -= 8;
+    }
+
+    for (int i = 0; i < remain; i++)
+    {
+        *ret += (a[i] - b[i]) * (a[i] - b[i]);
+    }
+
+    __m128 v = _mm_set1_ps(*ret);
+    __m128 r = _mm_sqrt_ss(v);
+    *ret = _mm_cvtss_f32(r);
+}
