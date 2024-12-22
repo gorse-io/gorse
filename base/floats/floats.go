@@ -14,13 +14,24 @@
 
 package floats
 
-import "math"
+import (
+	"math"
+
+	"github.com/chewxy/math32"
+)
 
 func dot(a, b []float32) (ret float32) {
 	for i := range a {
 		ret += a[i] * b[i]
 	}
 	return
+}
+
+func euclidean(a, b []float32) (ret float32) {
+	for i := range a {
+		ret += (a[i] - b[i]) * (a[i] - b[i])
+	}
+	return math32.Sqrt(ret)
 }
 
 func mulTo(a, b, c []float32) {
@@ -169,4 +180,11 @@ func Dot(a, b []float32) (ret float32) {
 		panic("floats: slice lengths do not match")
 	}
 	return impl.dot(a, b)
+}
+
+func Euclidean(a, b []float32) float32 {
+	if len(a) != len(b) {
+		panic("floats: slice lengths do not match")
+	}
+	return impl.euclidean(a, b)
 }

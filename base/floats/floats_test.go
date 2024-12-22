@@ -142,10 +142,23 @@ func TestDot(t *testing.T) {
 	assert.Panics(t, func() { Dot([]float32{1}, nil) })
 }
 
+func TestEuclidean(t *testing.T) {
+	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
+	assert.Equal(t, float32(19.621416), Euclidean(a, b))
+	assert.Panics(t, func() { Euclidean([]float32{1}, nil) })
+}
+
 func TestNative_Dot(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	assert.Equal(t, float32(770), dot(a, b))
+}
+
+func TestNative_Euclidean(t *testing.T) {
+	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
+	assert.Equal(t, float32(19.621416), euclidean(a, b))
 }
 
 func TestNative_MulConstAddTo(t *testing.T) {
