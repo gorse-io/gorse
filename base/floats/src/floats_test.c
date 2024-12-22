@@ -422,7 +422,7 @@ MunitTest svtests[] = {
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite svsuite = {
-    "v", svtests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
+    "sv", svtests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
 
 int main(int argc, char *const argv[MUNIT_ARRAY_PARAM(argc + 1)])
 {
