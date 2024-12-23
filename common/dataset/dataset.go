@@ -45,7 +45,7 @@ func init() {
 
 func LoadIris() ([][]float32, []int, error) {
 	// Download dataset
-	path, err := downloadAndUnzip("iris")
+	path, err := DownloadAndUnzip("iris")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -80,7 +80,7 @@ func LoadIris() ([][]float32, []int, error) {
 	return data, target, nil
 }
 
-func downloadAndUnzip(name string) (string, error) {
+func DownloadAndUnzip(name string) (string, error) {
 	url := fmt.Sprintf("https://pub-64226d9f34c64d6f829f5b63a5540d27.r2.dev/datasets/%s.zip", name)
 	path := filepath.Join(datasetDir, name)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
