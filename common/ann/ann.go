@@ -15,20 +15,11 @@
 package search
 
 import (
-	"github.com/chewxy/math32"
 	"github.com/samber/lo"
 )
 
 type Index interface {
 	Add(v []float32) (int, error)
-	Search(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error)
-}
-
-func Euclidean(a, b []float32) float32 {
-	var sum float32
-	for i := range a {
-		d := a[i] - b[i]
-		sum += d * d
-	}
-	return math32.Sqrt(sum)
+	SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error)
+	SearchVector(q []float32, k int, prune0 bool) ([]lo.Tuple2[int, float32], error)
 }
