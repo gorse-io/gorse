@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search
+package ann
 
 import (
 	"bufio"
@@ -136,11 +136,9 @@ func TestMNIST(t *testing.T) {
 	// Test search
 	r := 0.0
 	for _, image := range dat.TestImages[:testSize] {
-		gt, err := bf.SearchVector(image, 100, false)
-		assert.NoError(t, err)
+		gt := bf.SearchVector(image, 100, false)
 		assert.Len(t, gt, 100)
-		scores, err := hnsw.SearchVector(image, 100, false)
-		assert.NoError(t, err)
+		scores := hnsw.SearchVector(image, 100, false)
 		assert.Len(t, scores, 100)
 		r += recall(gt, scores)
 	}

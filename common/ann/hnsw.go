@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search
+package ann
 
 import (
 	"errors"
@@ -66,7 +66,7 @@ func (h *HNSW[T]) Add(v []T) (int, error) {
 	return len(h.vectors) - 1, nil
 }
 
-func (h *HNSW[T]) Search(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
+func (h *HNSW[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
 	w := h.knnSearch(h.vectors[q], k, h.efSearchValue(k))
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {
@@ -78,7 +78,7 @@ func (h *HNSW[T]) Search(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], erro
 	return scores, nil
 }
 
-func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
+func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int, float32] {
 	w := h.knnSearch(q, k, h.efSearchValue(k))
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {
@@ -87,7 +87,7 @@ func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) ([]lo.Tuple2[int, floa
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
-	return scores, nil
+	return scores
 }
 
 func (h *HNSW[T]) knnSearch(q []T, k, ef int) *heap.PriorityQueue {
