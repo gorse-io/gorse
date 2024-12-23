@@ -105,3 +105,37 @@ void vdot(float *a, float *b, long n, float* ret) {
         *ret += a[i] * b[i];
     }
 }
+
+void veuclidean(float *a, float *b, long n, float *ret) {
+    int epoch = n / 4;
+    int remain = n % 4;
+    float32x4_t s;
+    if (epoch > 0) {
+        float32x4_t v1 = vld1q_f32(a);
+        float32x4_t v2 = vld1q_f32(b);
+        float32x4_t v = vsubq_f32(v1, v2);
+        s = vmulq_f32(v, v);
+        a += 4;
+        b += 4;
+    }
+    for (int i = 1; i < epoch; i++) {
+        float32x4_t v1 = vld1q_f32(a);
+        float32x4_t v2 = vld1q_f32(b);
+        float32x4_t v = vsubq_f32(v1, v2);
+        s = vmlaq_f32(s, v, v);
+        a += 4;
+        b += 4;
+    }
+    float partial[4];
+    vst1q_f32(partial, s);
+    *ret = 0;
+    for (int i = 0; i < 4; i++) {
+        *ret += partial[i];
+    }
+    for (int i = 0; i < remain; i++) {
+        *ret += (a[i] - b[i]) * (a[i] - b[i]);
+    }
+    float32x2_t v = vld1_f32(ret);
+    float32x2_t r = vsqrt_f32(v);
+    *ret = vget_lane_f32(r, 0);
+}

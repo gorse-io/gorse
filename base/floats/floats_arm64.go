@@ -18,7 +18,7 @@ package floats
 
 import "unsafe"
 
-//go:generate go run ../../cmd/goat src/floats_neon.c -O3
+//go:generate goat src/floats_neon.c -O3
 
 var impl = Neon
 
@@ -77,5 +77,15 @@ func (i implementation) dot(a, b []float32) float32 {
 		return ret
 	} else {
 		return dot(a, b)
+	}
+}
+
+func (i implementation) euclidean(a, b []float32) float32 {
+	if i == Neon {
+		var ret float32
+		veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
+		return ret
+	} else {
+		return euclidean(a, b)
 	}
 }

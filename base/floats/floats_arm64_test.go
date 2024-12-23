@@ -67,6 +67,14 @@ func TestNEON_Dot(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func TestNEON_Euclidean(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	actual := Neon.euclidean(a, b)
+	expected := Default.euclidean(a, b)
+	assert.Equal(t, expected, actual)
+}
+
 func initializeFloat32Array(n int) []float32 {
 	x := make([]float32, n)
 	for i := 0; i < n; i++ {
@@ -85,6 +93,23 @@ func BenchmarkDot(b *testing.B) {
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
 						impl.dot(v1, v2)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkEuclidean(b *testing.B) {
+	for _, impl := range []implementation{Default, Neon} {
+		b.Run(impl.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						impl.euclidean(v1, v2)
 					}
 				})
 			}

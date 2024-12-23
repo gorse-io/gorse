@@ -17,12 +17,13 @@
 package floats
 
 import (
-	"github.com/klauspost/cpuid/v2"
 	"unsafe"
+
+	"github.com/klauspost/cpuid/v2"
 )
 
-//go:generate go run ../../cmd/goat src/floats_avx.c -O3 -mavx
-//go:generate go run ../../cmd/goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f -mavx512dq
+//go:generate goat src/floats_avx.c -O3 -mavx
+//go:generate goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f -mavx512dq
 
 var impl = Default
 
@@ -109,5 +110,20 @@ func (i implementation) dot(a, b []float32) float32 {
 		return ret
 	default:
 		return dot(a, b)
+	}
+}
+
+func (i implementation) euclidean(a, b []float32) float32 {
+	switch i {
+	case AVX:
+		var ret float32
+		_mm256_euclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
+		return ret
+	case AVX512:
+		var ret float32
+		_mm512_euclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
+		return ret
+	default:
+		return euclidean(a, b)
 	}
 }
