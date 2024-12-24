@@ -427,25 +427,27 @@ func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string,
 }
 
 func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
-	if len(query) == 0 {
-		return nil, nil
-	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{}).Select("id, score, categories, timestamp")
-	switch db.driver {
-	case Postgres:
-		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and categories @> ?", collection, subset, pq.StringArray(query))
-	case SQLite, MySQL:
-		q, err := json.Marshal(query)
-		if err != nil {
-			return nil, errors.Trace(err)
+	tx := db.gormDB.WithContext(ctx).
+		Model(&PostgresDocument{}).
+		Select("id, score, categories, timestamp").
+		Where("collection = ? and subset = ? and is_hidden = false", collection, subset)
+	if len(query) > 0 {
+		switch db.driver {
+		case Postgres:
+			tx.Where("categories @> ?", pq.StringArray(query))
+		case SQLite, MySQL:
+			q, err := json.Marshal(query)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			tx.Where("JSON_CONTAINS(categories,?)", string(q))
 		}
-		tx = tx.Where("collection = ? and subset = ? and is_hidden = false and JSON_CONTAINS(categories,?)", collection, subset, string(q))
 	}
-	tx = tx.Order("score desc").Offset(begin)
+	tx.Order("score desc").Offset(begin)
 	if end != -1 {
-		tx = tx.Limit(end - begin)
+		tx.Limit(end - begin)
 	} else {
-		tx = tx.Limit(math.MaxInt64)
+		tx.Limit(math.MaxInt64)
 	}
 	rows, err := tx.Rows()
 	if err != nil {
@@ -484,28 +486,28 @@ func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, s
 	if patch.Score == nil && patch.IsHidden == nil && patch.Categories == nil {
 		return nil
 	}
-	tx := db.gormDB.WithContext(ctx).Model(&PostgresDocument{})
+	tx := db.gormDB.WithContext(ctx).
+		Model(&PostgresDocument{}).
+		Where("collection in (?) and id = ?", collections, id)
 	if subset != nil {
-		tx = tx.Where("collection in (?) and id = ? and subset = ?", collections, id, subset)
-	} else {
-		tx = tx.Where("collection in (?) and id = ?", collections, id)
+		tx.Where("subset = ?", subset)
 	}
 	if patch.Score != nil {
-		tx = tx.Update("score", *patch.Score)
+		tx.Update("score", *patch.Score)
 	}
 	if patch.IsHidden != nil {
-		tx = tx.Update("is_hidden", *patch.IsHidden)
+		tx.Update("is_hidden", *patch.IsHidden)
 	}
 	if patch.Categories != nil {
 		switch db.driver {
 		case Postgres:
-			tx = tx.Update("categories", pq.StringArray(patch.Categories))
+			tx.Update("categories", pq.StringArray(patch.Categories))
 		case SQLite, MySQL:
 			q, err := json.Marshal(patch.Categories)
 			if err != nil {
 				return errors.Trace(err)
 			}
-			tx = tx.Update("categories", string(q))
+			tx.Update("categories", string(q))
 		}
 	}
 	return tx.Error

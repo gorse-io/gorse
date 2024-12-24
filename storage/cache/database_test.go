@@ -300,6 +300,17 @@ func (suite *baseTestSuite) TestDocument() {
 		{Id: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
 	}, documents)
 
+	// search documents with nil category
+	documents, err = suite.SearchScores(ctx, "a", "", nil, 0, -1)
+	suite.NoError(err)
+	suite.Equal([]Score{
+		{Id: "5", Score: 5, Categories: []string{"b"}, Timestamp: ts},
+		{Id: "4", Score: 4, Categories: []string{""}, Timestamp: ts},
+		{Id: "3", Score: 3, Categories: []string{"b"}, Timestamp: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{Id: "2", Score: 2, Categories: []string{"b", "c"}, Timestamp: ts},
+		{Id: "1", Score: 1, Categories: []string{"a", "b"}, Timestamp: ts},
+	}, documents)
+
 	// search documents with empty category
 	documents, err = suite.SearchScores(ctx, "a", "", []string{""}, 0, -1)
 	suite.NoError(err)

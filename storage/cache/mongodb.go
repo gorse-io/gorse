@@ -342,19 +342,19 @@ func (m MongoDB) AddScores(ctx context.Context, collection, subset string, docum
 }
 
 func (m MongoDB) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
-	if len(query) == 0 {
-		return nil, nil
-	}
 	opt := options.Find().SetSkip(int64(begin)).SetSort(bson.M{"score": -1})
 	if end != -1 {
 		opt.SetLimit(int64(end - begin))
 	}
-	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{
+	filter := bson.M{
 		"collection": collection,
 		"subset":     subset,
 		"is_hidden":  false,
-		"categories": bson.M{"$all": query},
-	}, opt)
+	}
+	if len(query) > 0 {
+		filter["categories"] = bson.M{"$all": query}
+	}
+	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, filter, opt)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
