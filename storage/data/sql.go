@@ -532,9 +532,9 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
-		tx.Table(d.ItemFeedbackTable())
+		tx = tx.Table(d.ItemFeedbackTable())
 	} else {
-		tx.Table(d.FeedbackTable())
+		tx = tx.Table(d.FeedbackTable())
 	}
 	tx.Select("user_id, item_id, feedback_type, time_stamp")
 	switch d.driver {
@@ -733,9 +733,9 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
-		tx.Table(d.UserFeedbackTable())
+		tx = tx.Table(d.UserFeedbackTable())
 	} else {
-		tx.Table(d.FeedbackTable())
+		tx = tx.Table(d.FeedbackTable())
 	}
 	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
 		Where("user_id = ?", userId)
@@ -1030,9 +1030,9 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
-		tx.Table(d.UserFeedbackTable())
+		tx = tx.Table(d.UserFeedbackTable())
 	} else {
-		tx.Table(d.FeedbackTable())
+		tx = tx.Table(d.FeedbackTable())
 	}
 	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
 		Where("user_id = ? AND item_id = ?", userId, itemId)
