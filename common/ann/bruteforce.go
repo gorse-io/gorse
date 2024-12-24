@@ -23,7 +23,6 @@ import (
 // Bruteforce is a naive implementation of vector index.
 type Bruteforce[T any] struct {
 	distanceFunc func(a, b []T) float32
-	dimension    int
 	vectors      [][]T
 }
 
@@ -32,12 +31,6 @@ func NewBruteforce[T any](distanceFunc func(a, b []T) float32) *Bruteforce[T] {
 }
 
 func (b *Bruteforce[T]) Add(v []T) (int, error) {
-	// Check dimension
-	if b.dimension == 0 {
-		b.dimension = len(v)
-	} else if b.dimension != len(v) {
-		return 0, errors.Errorf("dimension mismatch: %v != %v", b.dimension, len(v))
-	}
 	// Add vector
 	b.vectors = append(b.vectors, v)
 	return len(b.vectors), nil

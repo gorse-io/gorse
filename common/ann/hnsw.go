@@ -15,7 +15,6 @@
 package ann
 
 import (
-	"errors"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
@@ -28,7 +27,6 @@ import (
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
 type HNSW[T any] struct {
 	distanceFunc    func(a, b []T) float32
-	dimension       int
 	vectors         [][]T
 	bottomNeighbors []*heap.PriorityQueue
 	upperNeighbors  []map[int32]*heap.PriorityQueue
@@ -53,12 +51,6 @@ func NewHNSW[T any](distanceFunc func(a, b []T) float32) *HNSW[T] {
 }
 
 func (h *HNSW[T]) Add(v []T) (int, error) {
-	// Check dimension
-	if h.dimension == 0 {
-		h.dimension = len(v)
-	} else if h.dimension != len(v) {
-		return 0, errors.New("dimension mismatch")
-	}
 	// Add vector
 	h.vectors = append(h.vectors, v)
 	h.bottomNeighbors = append(h.bottomNeighbors, heap.NewPriorityQueue(false))
