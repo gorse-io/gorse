@@ -254,9 +254,6 @@ func (r *Redis) AddScores(ctx context.Context, collection, subset string, docume
 }
 
 func (r *Redis) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
-	if len(query) == 0 {
-		return nil, nil
-	}
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collection)))
 	if subset != "" {
